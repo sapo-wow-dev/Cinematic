@@ -2169,6 +2169,7 @@ do
 		{ name = "Dev", pages = {
 			{ "Held Game Settings", "Interface\\Icons\\INV_Gizmo_02", dev = true }, -- (HeldSettingsPage.lua)
 			{ "Demo Commands", "Interface\\Icons\\INV_Misc_Film_01", dev = true }, -- (DemoHub.lua)
+			{ "Minimap Copy", "Interface\\Icons\\INV_Misc_Map_01", dev = true }, -- (MinimapCopy.lua)
 		} },
 	}
 	-- Pages sharing one icon, a folder tab each, where this client has more
@@ -3492,9 +3493,23 @@ local function CreateBuffsPanel()
 	buffCollapse:SetPoint("TOPLEFT", buffOnlyNew, "BOTTOMLEFT", BUFF_INDENT, -2)
 	GreyUnless(buffCollapse, function(db) return db.buffPeek and db.buffPeekOnlyNew end)
 
+	-- (Buffs only: the debuffs' own hold is "Keep them up until the debuff is gone".)
+	local shortFull = Check(content, "buffPeekShortFull", L["Keep ones lasting less than up until they run out"],
+		L["A buff shorter than this (its full time: a heal over time, a shield...) stays up for as long as it " ..
+		"lasts, so you can see you still have it. Not in fights, when its time can't be seen; a fight " ..
+		"starting ends it."], function(value)
+			ns.GetDB().buffPeekShortFull = value
+			Refresh()
+		end)
+	shortFull:SetPoint("TOPLEFT", buffCollapse, "BOTTOMLEFT", -BUFF_INDENT, -2)
+	GreyUnless(shortFull, IfBuffPeek)
+	local shortSeconds = Slider(content, "buffPeekShortSeconds", "", 5, 60, 1, L["%d sec"])
+	shortSeconds:SetPoint("TOPLEFT", shortFull, "BOTTOMLEFT", 24, -10)
+	GreyUnless(shortSeconds, function(db) return IfBuffPeek(db) and db.buffPeekShortFull end)
+
 	local debuffPeek = Check(content, "debuffPeek", L["Show debuffs when you gain or refresh one"],
 		L["Gaining or refreshing a debuff briefly shows your debuffs (not your buffs), in fights too. Not on flights."])
-	debuffPeek:SetPoint("TOPLEFT", buffCollapse, "BOTTOMLEFT", -2 * BUFF_INDENT, -2)
+	debuffPeek:SetPoint("TOPLEFT", shortSeconds, "BOTTOMLEFT", -24 - BUFF_INDENT, -16)
 	debuffPeek:HookScript("OnClick", Refresh)
 
 	local debuffAfterCombat = Check(content, "debuffPeekAfterCombat", L["Only after combat"],
@@ -17628,6 +17643,9 @@ ns.OnLanguage(function()
 	end
 	if ns.isDev and ns.CreateDemoHubPage then -- (DemoHub.lua: the Dev hub)
 		ns.CreateDemoHubPage(ns.lowHealthKit)
+	end
+	if ns.isDev and ns.CreateMinimapCopyPage then -- (MinimapCopy.lua: the Dev hub)
+		ns.CreateMinimapCopyPage(ns.lowHealthKit)
 	end
 	GuardGamepadClose()
 end)

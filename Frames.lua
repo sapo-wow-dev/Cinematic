@@ -4356,6 +4356,38 @@ function ns.IsLongAura(aura)
 	return duration > (ns.db.buffPeekLongMinutes or 30) * 60
 end
 
+-- One buff's data: with buffPeekShortFull, its full time is under
+-- buffPeekShortSeconds (a heal over time, say), so it stays up as long as it
+-- lasts: the seconds it has left, or nil. (Nil when unsure: secret values, or
+-- no time at all.)
+function ns.ShortAuraLeft(aura)
+	if type(aura) ~= "table" or not ns.db.buffPeekShortFull then
+		return nil
+	end
+	local duration, ending = aura.duration, aura.expirationTime
+	if type(duration) ~= "number" or type(ending) ~= "number"
+		or (issecretvalue and (issecretvalue(duration) or issecretvalue(ending))) then
+		return nil
+	end
+	if duration <= 0 or duration > (ns.db.buffPeekShortSeconds or 30) then
+		return nil
+	end
+	local left = ending - GetTime()
+	return left > 0 and left or nil
+end
+
+-- In a fight, where a buff's time is secret: your cast's buff (its spell's
+-- picture) held for its full time as last read out of a fight
+-- (ns.buffDurations), when that's under buffPeekShortSeconds and longer than
+-- hold. Nil otherwise (not known yet, a long one, the setting off).
+function ns.ShortCastHold(castIcon, hold)
+	local lasts = castIcon and ns.db.buffPeekShortFull and ns.buffDurations[castIcon]
+	if not lasts or lasts > (ns.db.buffPeekShortSeconds or 30) or lasts <= (hold or 0) then
+		return nil
+	end
+	return lasts
+end
+
 -- One aura's data: no timer and no stacks, so an update to it refreshed
 -- nothing. (Retail updates your mount's aura now and then as you ride: seen
 -- going into Tranquil Repose, Eversong Woods. False when unsure: no data, or
@@ -4504,6 +4536,11 @@ local function AuraHold(aura)
 	if hold and harmful then
 		ns.StartDebuffPeek(hold)
 		return nil
+	end
+	-- (A short buff: up for all it has left, if that's longer.)
+	local left = hold and ns.ShortAuraLeft(aura)
+	if left and left > hold then
+		return left
 	end
 	return hold
 end
@@ -4661,6 +4698,7 @@ end
 -- all show).
 ns.newBuffIcons, ns.newBuffUnknown = {}, false
 ns.foundBuffIcons = {} -- (one aura change's, filled by AnyAuraHold)
+ns.foundBuffHolds = {} -- (...and each icon's own hold: a short buff's is longer)
 
 -- The longest hold of any aura gained or refreshed, or nil. Updates (a stack
 -- ticking up, say) only give instance IDs, so each is looked up. Either kind
@@ -4676,6 +4714,7 @@ local function AnyAuraHold(updateInfo, found)
 			local icon = seconds and type(aura) == "table" and aura.icon
 			if icon and not (issecretvalue and issecretvalue(icon)) then
 				found[#found + 1] = icon
+				ns.foundBuffHolds[icon] = math.max(ns.foundBuffHolds[icon] or 0, seconds)
 			end
 			-- (/cine debug peeks: each aura, and why it didn't count.)
 			if ns.auraDebug and type(aura) == "table" then
@@ -4839,6 +4878,7 @@ do
 		end
 		local hold
 		local found = wipe(ns.foundBuffIcons)
+		wipe(ns.foundBuffHolds)
 		if type(updateInfo) == "table" then
 			hold = not IsFullUpdate(updateInfo.isFullUpdate) and AnyAuraHold(updateInfo, found)
 		else
@@ -4848,7 +4888,7 @@ do
 			ns.AuraSay(("  peek for %s, icons noted %d"):format(tostring(hold), #found))
 		end
 		if hold then
-			ns.StartBuffPeek(hold, found)
+			ns.StartBuffPeek(hold, found, nil, nil, ns.foundBuffHolds)
 		end
 	end))
 end
@@ -4856,7 +4896,9 @@ end
 -- A buff peek for hold seconds, for the buffs with these icons (none: can't
 -- be told, all show), for a weapon enchant (enchant), or for a fight's new
 -- ones told by their place (byPlace: ns.CheckNewBuffIcons notes them).
-function ns.StartBuffPeek(hold, found, enchant, byPlace)
+-- holds: icon -> its own seconds, where one differs (a short buff, up until
+-- it runs out); the rest hold.
+function ns.StartBuffPeek(hold, found, enchant, byPlace, holds)
 	-- (A new peek starts its own list; one while it's up adds to it.)
 	if buffPeekUntil <= GetTime() then
 		wipe(ns.newBuffIcons)
@@ -4868,7 +4910,7 @@ function ns.StartBuffPeek(hold, found, enchant, byPlace)
 	end
 	-- (Each its own time: the first ones fade as later ones come up.)
 	for _, icon in ipairs(found) do
-		ns.newBuffIcons[icon] = math.max(ns.newBuffIcons[icon] or 0, GetTime() + hold)
+		ns.newBuffIcons[icon] = math.max(ns.newBuffIcons[icon] or 0, GetTime() + (holds and holds[icon] or hold))
 	end
 	ns.newBuffEnchant = ns.newBuffEnchant or enchant or false
 	-- (a short buff peek doesn't cut a longer debuff one short)
@@ -5062,6 +5104,7 @@ end
 function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 	C_Timer.After(0, function()
 		local addedTail -- (one new buff: how many sit above it, when the timers placed it)
+		local castAdded = false -- (one new buff, taken as your cast's: castIcon)
 		local shown, total, secretAt, ends, pictureAt = {}, 0, {}, {}, {}
 		local flagAt, endAt = {}, {}
 		ns.ForEachBuffIcon(function(button)
@@ -5196,6 +5239,7 @@ function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 					if icon == castIcon then already = true end
 				end
 				if not already then
+					castAdded = true
 					known[total - tail] = castIcon
 					knownEnds[total - tail] = ns.buffDurations[castIcon] and GetTime() + ns.buffDurations[castIcon] or nil
 				end
@@ -5323,7 +5367,21 @@ function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 		end
 		if #found > 0 or added > 0 or refreshedPlace then
 			local hold = ns.HoldTime("buffPeekTime")
-			ns.StartBuffPeek(hold, found, nil, added > 0 or refreshedPlace ~= nil)
+			-- (Your cast's buff, new or refreshed, when it's a short one: up for
+			-- its full time, as last read out of a fight: buffPeekShortFull.)
+			local castHold = (castAdded and added == 1 or refreshedPlace) and ns.ShortCastHold(castIcon, hold)
+			if ns.auraDebug and castIcon and (castAdded or refreshedPlace) then
+				ns.AuraSay(("fight short buff: cast picture %s, lasts %s, held %s"):format(tostring(castIcon),
+					tostring(ns.buffDurations[castIcon] or "not known"), tostring(castHold or "no")))
+			end
+			local foundHolds
+			if castHold then
+				foundHolds = {}
+				for _, icon in ipairs(found) do
+					foundHolds[icon] = icon == castIcon and castHold or hold
+				end
+			end
+			ns.StartBuffPeek(castHold or hold, found, nil, added > 0 or refreshedPlace ~= nil, foundHolds)
 			-- (The new ones go on top, older ones' places moving down; on
 			-- Forever under other casters' buffs, which stay on top. A
 			-- readable one is by its picture already.)
@@ -5332,13 +5390,15 @@ function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 				ns.fightNewBuffs[place] = 0
 			end
 			for place = added, 1, -1 do
-				table.insert(ns.fightNewBuffs, tail + 1, secretAt[total - tail - place + 1] and GetTime() + hold or 0)
+				-- (The cast's own: one new buff, at tail + 1.)
+				local placeHold = castAdded and castHold or hold
+				table.insert(ns.fightNewBuffs, tail + 1, secretAt[total - tail - place + 1] and GetTime() + placeHold or 0)
 			end
 			if refreshedPlace then
 				for place = #ns.fightNewBuffs + 1, refreshedPlace - 1 do
 					ns.fightNewBuffs[place] = 0
 				end
-				ns.fightNewBuffs[refreshedPlace] = GetTime() + hold
+				ns.fightNewBuffs[refreshedPlace] = GetTime() + (castHold or hold)
 			end
 		end
 	end)
