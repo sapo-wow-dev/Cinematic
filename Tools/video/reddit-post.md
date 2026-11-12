@@ -31,7 +31,7 @@ Cinematic is about bringing Azeroth to life. Your screen changes with the moment
 There are hundreds of other things in there, and I'd love to hear what you think.
 
 - **Download:** https://www.curseforge.com/wow/addons/cinematic
-- **Discord** (ideas, bugs, chat): https://discord.gg/94v2Ynx9D
+- **Discord** (ideas, bugs, chat): https://discord.gg/W47caHZd29
 
 Thanks again for all the support!
 
