@@ -20,6 +20,7 @@ DEFAULTS.emoteVisionRepeats = true     -- the same person's same moment again ig
 DEFAULTS.emoteVisionRepeatMins = 1     -- ...for this many minutes
 DEFAULTS.emoteVisionGroupBuffs = false -- buffs from your own party or raid ignored (no card)
 DEFAULTS.emoteVisionHold = 10          -- seconds a card stays (paused while the mouse is over it)
+DEFAULTS.emoteVisionPadGrab = "PADRSTICK" -- gamepad: the button that lets the face buttons pick the card's emotes
 DEFAULTS.emoteVisionScale = 1
 DEFAULTS.emoteVisionPortrait = true    -- their face (or class icon) on the card
 DEFAULTS.emoteVisionPlayerMenu = true  -- an Emote section on a player's right-click menu
@@ -253,11 +254,6 @@ local MOMENTS = {
 			"everyone.",
 		sample = { name = "Edwin VanCleef", line = "defeated with your group", group = true,
 			icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01" } },
-	{ id = "Wipe", on = "emoteVisionWipe", name = "Your group wipes", emotes = { "SIGH", "CRY", "FACEPALM" },
-		maxAge = 300, tip = "A boss fight lost with your group: the emotes go to everyone. If you died, the " ..
-			"card waits until you're alive again (you can't emote while dead).",
-		sample = { name = "Edwin VanCleef", line = "your group wiped", group = true,
-			icon = "Interface\\Icons\\Ability_Rogue_FeignDeath" } },
 	{ id = "Guild", on = "emoteVisionGuild", name = "You run into a guild member", emotes = { "WAVE", "HELLO", "HUG" },
 		tip = "Someone from your guild (not in your group) comes into view: with friendly nameplates on, as " ..
 			"soon as you see them; otherwise when you mouse over or target them. Once an hour per person.",
@@ -301,7 +297,7 @@ end
 local MOMENT_GROUPS = {
 	{ name = "Help from others", "Buff", "Res", "Summon", "Trade" },
 	{ name = "Meeting people", "Emote", "Eyes", "Guild", "Ally", "Achievement", "Duel" },
-	{ name = "Your group", "Join", "Leave", "Joined", "Level", "Boss", "Dungeon", "Wipe" },
+	{ name = "Your group", "Join", "Leave", "Joined", "Level", "Boss", "Dungeon" },
 	{ name = "Yourself", "YouLevel", "Campfire" },
 }
 do
@@ -394,11 +390,8 @@ end
 local function SetUpOnce()
 	local db = ns.db
 	if not db then return end
-	-- (Your group wipes started off in the dev copy, then on: on, once.)
-	if not db.emoteVisionWipeOnV1 then
-		db.emoteVisionWipeOnV1 = true
-		db.emoteVisionWipe = true
-	end
+	-- (The Your group wipes card is gone: its leftovers too.)
+	db.emoteVisionWipeOnV1, db.emoteVisionWipe, db.emoteVisionWipeEmotes, db.emoteVisionAlwaysWipe = nil, nil, nil, nil
 	-- (Repeats were ignored for 10 minutes to start with, then 1: moved once
 	-- if still 10.)
 	if not db.emoteVisionRepeatV2 then
@@ -644,7 +637,7 @@ DEFAULTS.emoteVisionLook = "classic"
 -- The banner's heading over the name, by moment.
 local HEADINGS = { Buff = "A KINDNESS", Res = "SAVED", Emote = "A GREETING", Summon = "SUMMONED",
 	Trade = "A FAIR TRADE", Level = "LEVEL UP", Dungeon = "VICTORY", Duel = "THE DUEL", Join = "WELCOME",
-	Leave = "FAREWELL", Joined = "WELL MET", Achievement = "WELL DONE", Boss = "VICTORY", Wipe = "NEXT TIME",
+	Leave = "FAREWELL", Joined = "WELL MET", Achievement = "WELL DONE", Boss = "VICTORY",
 	YouLevel = "LEVEL UP", Guild = "WELL MET", Ally = "WELL MET", Eyes = "EYES MEET", Campfire = "A WARM FIRE" }
 local BUTTON_W, BUTTON_H, BUTTON_GAP, ROW_GAP = 84, 24, 8, 6
 -- The face's glow: circles this far out past the face, and how strong each.
@@ -1000,6 +993,186 @@ function nameLink.Place()
 	button:SetSize(face:GetWidth() * k, face:GetHeight() * k)
 	if not button:IsShown() then button:Show() end
 end
+-- In gamepad mode the card can be answered with the pad, no mouse needed,
+-- while taking as little from the game as can be: only the grab button
+-- (clicking the right stick in: the ping, little used) while the card is up.
+-- Pressing it grabs the face buttons: bottom (A on an Xbox pad) picks the
+-- first emote, left (X) the second, top (Y) the third; right (B) targets them
+-- (the face click's secure button, a press of ours: addons can't target), or
+-- closes a card with no one to target. They're given back once one's picked, the
+-- grab button's pressed again, you move, GRAB_FOR sec pass, or the card goes.
+-- Override bindings (as X-to-fish's: the gamepad bar takes presses itself),
+-- out of fights only (bindings can't change in one): all given back as one starts.
+nameLink.pad = { keys = { "PAD1", "PAD3", "PAD4" }, targetKey = "PAD2", bound = false, GRAB_FOR = 6 }
+-- The grab buttons to pick from (emoteVisionPadGrab), on the Settings tab: not
+-- the face buttons, which pick the emotes once grabbed.
+nameLink.pad.GRABS = {
+	{ value = "PADRSTICK", text = "Right stick click" },
+	{ value = "PADLSTICK", text = "Left stick click" },
+	{ value = "PADDDOWN", text = "D-pad down" },
+	{ value = "PADDUP", text = "D-pad up" },
+	{ value = "PADDLEFT", text = "D-pad left" },
+	{ value = "PADDRIGHT", text = "D-pad right" },
+}
+function nameLink.pad.GrabKey()
+	local key = DB().emoteVisionPadGrab
+	for _, choice in ipairs(nameLink.pad.GRABS) do
+		if choice.value == key then return key, choice.text end
+	end
+	return "PADRSTICK", "Right stick click"
+end
+function nameLink.pad.On()
+	return ns.IsGamePadOn and ns.IsGamePadOn() and not InCombatLockdown()
+end
+-- The game's own name for a button, as the pad prints it ("" if none).
+function nameLink.pad.Label(key)
+	return ns.PadButtonText and ns.PadButtonText(key) or ""
+end
+function nameLink.pad.Make()
+	if nameLink.pad.owner then return end
+	nameLink.pad.owner = CreateFrame("Frame")
+	-- (PLAYER_REGEN_DISABLED comes just before the lockdown: still free to unbind.)
+	nameLink.pad.owner:RegisterEvent("PLAYER_REGEN_DISABLED")
+	nameLink.pad.owner:SetScript("OnEvent", function() nameLink.pad.Clear() end)
+	-- (Down and up both: a binding's click comes on the one the game picks;
+	-- each acts on the first only.)
+	local function Make(name, run)
+		local button = CreateFrame("Button", name, UIParent)
+		button:Hide()
+		button:RegisterForClicks("AnyDown", "AnyUp")
+		button:SetScript("OnClick", function(self, _, down)
+			if down == false and self.downSeen then self.downSeen = nil return end
+			self.downSeen = down and true or nil
+			ns.Log("emote", ("Pad press %s (%s): card shown %s, leaving %s"):format(self:GetName(),
+				tostring(down), tostring(showing and card and card:IsShown() and true), tostring(card and card.leaving)))
+			if not (showing and card and card:IsShown()) or card.leaving then return end
+			run(self)
+		end)
+		return button
+	end
+	nameLink.pad.grab = Make("CinematicEmotePadGrab", function()
+		if nameLink.pad.grabbed then nameLink.pad.Release() else nameLink.pad.Grab() end
+	end)
+	nameLink.pad.buttons = {}
+	for i = 1, #nameLink.pad.keys do
+		nameLink.pad.buttons[i] = Make("CinematicEmotePad" .. i, function(self)
+			if self.token then Answer(self.token) else Hide() end
+			nameLink.pad.Clear()
+		end)
+	end
+	nameLink.pad.close = Make("CinematicEmotePadClose", function()
+		Hide()
+		nameLink.pad.Clear()
+	end)
+end
+-- Whether B targets them now: the face click's button is aimed at someone.
+function nameLink.pad.CanTarget()
+	local button = nameLink.button
+	return button and button.who and true or false
+end
+-- The line under the card saying what the pad does now.
+function nameLink.pad.Hint()
+	if not card.padHint then
+		card.padHint = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		card.padHint:SetPoint("TOP", card, "BOTTOM", 0, -4)
+		card.padHint:SetTextColor(1, 1, 1, 0.85)
+	end
+	local text
+	if nameLink.pad.grabbed then
+		local b = nameLink.pad.Label(nameLink.pad.targetKey)
+		b = b ~= "" and b or L["Right face button"]
+		text = (nameLink.pad.CanTarget() and L["Pick an emote, %s targets them, or move to cancel"]
+			or L["Pick an emote, %s closes, or move to cancel"]):format(b)
+	elseif nameLink.pad.bound then
+		local key, name = nameLink.pad.GrabKey()
+		local grab = nameLink.pad.Label(key)
+		text = L["%s: answer with the face buttons"]:format(grab ~= "" and grab or L[name])
+	end
+	card.padHint:SetText(text or "")
+	card.padHint:SetShown(text ~= nil)
+end
+-- With the card up: binds only the grab button, the face buttons kept for
+-- these card buttons (in order) till it's pressed.
+function nameLink.pad.Bind(list)
+	nameLink.pad.Clear()
+	nameLink.pad.list = list
+	if list and #list > 0 and nameLink.pad.On() then
+		nameLink.pad.Make()
+		SetOverrideBindingClick(nameLink.pad.owner, true, (nameLink.pad.GrabKey()), nameLink.pad.grab:GetName())
+		nameLink.pad.bound = true
+	end
+	ns.Log("emote", ("Pad: card up, grab button %s %s (gamepad on %s, fight %s, %d emotes)"):format(
+		(nameLink.pad.GrabKey()), nameLink.pad.bound and "bound" or "not bound",
+		tostring(ns.IsGamePadOn and ns.IsGamePadOn()), tostring(InCombatLockdown()), list and #list or 0))
+	nameLink.pad.Hint()
+end
+function nameLink.pad.Grab()
+	if not (nameLink.pad.bound and nameLink.pad.list) or InCombatLockdown() then return end
+	local list = nameLink.pad.list
+	for i, key in ipairs(nameLink.pad.keys) do
+		local button = nameLink.pad.buttons[i]
+		button.token = list[i] and list[i].token
+		if button.token then SetOverrideBindingClick(nameLink.pad.owner, true, key, button:GetName()) end
+	end
+	-- (B: targets them, or with no one to target closes the card. Their target
+	-- button's own click resets the grab's time: room to answer them after.)
+	local target = nameLink.pad.CanTarget() and nameLink.button
+	if target and not target.padHooked then
+		target.padHooked = true
+		target:HookScript("OnClick", function() nameLink.pad.grabAge = 0 end)
+	end
+	SetOverrideBindingClick(nameLink.pad.owner, true, nameLink.pad.targetKey,
+		(target or nameLink.pad.close):GetName(), "LeftButton")
+	nameLink.pad.grabbed, nameLink.pad.grabAge = true, 0
+	-- (Its time runs on, its bar still going down; grabbed near its end, it
+	-- gets a few seconds back to pick in.)
+	local hold = tonumber(DB().emoteVisionHold) or 10
+	if card and card.age and card.age > hold - 4 then card.age = math.max(FADE_IN, hold - 4) end
+	ns.Log("emote", ("Pad: grabbed: %s; %s %s"):format(nameLink.pad.Report(), nameLink.pad.targetKey,
+		target and "targets " .. tostring(target.who) or "closes"))
+	nameLink.pad.Hint()
+end
+-- The face buttons back to the game, the grab button kept.
+function nameLink.pad.Release()
+	if not nameLink.pad.grabbed or InCombatLockdown() then return end
+	for _, key in ipairs(nameLink.pad.keys) do SetOverrideBinding(nameLink.pad.owner, true, key, nil) end
+	SetOverrideBinding(nameLink.pad.owner, true, nameLink.pad.targetKey, nil)
+	nameLink.pad.grabbed = false
+	ns.Log("emote", ("Pad: face buttons given back (after %.1f sec, moving %s)"):format(nameLink.pad.grabAge or 0,
+		tostring(ns.Flag(IsPlayerMoving()))))
+	nameLink.pad.Hint()
+end
+-- Each frame of the card's: the grab ends as you move or its time's up.
+function nameLink.pad.Tick(elapsed)
+	if not nameLink.pad.grabbed then return end
+	nameLink.pad.grabAge = nameLink.pad.grabAge + elapsed
+	if nameLink.pad.grabAge >= nameLink.pad.GRAB_FOR or ns.Flag(IsPlayerMoving())
+		or (ns.PadMovementHeld and ns.PadMovementHeld()) then
+		nameLink.pad.Release()
+	end
+end
+-- What each pad button does now (its binding, ours or the game's), for the log.
+function nameLink.pad.Report()
+	local parts = {}
+	local keys = { (nameLink.pad.GrabKey()) }
+	for _, key in ipairs(nameLink.pad.keys) do keys[#keys + 1] = key end
+	keys[#keys + 1] = nameLink.pad.targetKey
+	for _, key in ipairs(keys) do
+		local ok, action = pcall(GetBindingAction, key, true)
+		parts[#parts + 1] = ("%s=%s"):format(key, ok and tostring(action) or "?")
+	end
+	return table.concat(parts, " ")
+end
+-- Everything back to the game.
+function nameLink.pad.Clear()
+	nameLink.pad.list = nil
+	if nameLink.pad.bound and not InCombatLockdown() then
+		ClearOverrideBindings(nameLink.pad.owner)
+		nameLink.pad.bound, nameLink.pad.grabbed = false, false
+	end
+	if card and card.padHint then nameLink.pad.Hint() end
+end
+
 -- (For the debug commands: the face's click button's state, and its last click.)
 function nameLink.Report(prefix)
 	local button, shown = nameLink.button, card and card.portrait
@@ -1021,6 +1194,9 @@ function nameLink.Report(prefix)
 		tostring(tx and math.floor(tx)), tostring(ty and math.floor(ty)), tostring(GetCVarBool("ActionButtonUseKeyDown")),
 		tostring(focus and (focus.GetName and focus:GetName() or "a frame without a name")),
 		clicked and ("%q %.0f s ago"):format(tostring(clicked.macro), GetTime() - clicked.at) or "none"))
+	ns.Print(("%sPad: gamepad on %s, bound %s, grabbed %s, can target %s; %s"):format(prefix,
+		tostring(ns.IsGamePadOn and ns.IsGamePadOn()), tostring(nameLink.pad.bound), tostring(nameLink.pad.grabbed),
+		tostring(nameLink.pad.CanTarget()), nameLink.pad.Report()))
 end
 
 local function Create()
@@ -1209,6 +1385,7 @@ local function Create()
 		nameLink.Place()
 		if moving or self.dragging then self:SetAlpha(1) return end
 		-- (The mouse over it: its time stands still.)
+		nameLink.pad.Tick(elapsed)
 		if not ns.Flag(self:IsMouseOver()) then self.age = self.age + elapsed end
 		local hold = tonumber(DB().emoteVisionHold) or 10
 		local age = self.age
@@ -1237,6 +1414,7 @@ local function Create()
 	card:SetScript("OnHide", function()
 		showing = nil
 		nameLink.Arm(nil)
+		nameLink.pad.Clear()
 		if not moving then C_Timer.After(0.3, function() Next() end) end
 	end)
 
@@ -1311,10 +1489,14 @@ end
 -- The emotes' buttons as the style has them, each with its token and width.
 local function EmoteButtons(style, emotes, look)
 	local list = {}
+	-- (In gamepad mode the first four show the face button that picks them.)
+	local padOn = nameLink.pad.On()
 	for i = 1, MAX_EMOTES do
 		local token = emotes[i]
 		if token then
-			local button = StyleButton(style, look, card.buttons[i], card.words[i], EmoteName(token))
+			local glyph = padOn and i <= #nameLink.pad.keys and nameLink.pad.Label(nameLink.pad.keys[i]) or ""
+			local text = glyph ~= "" and (glyph .. " " .. EmoteName(token)) or EmoteName(token)
+			local button = StyleButton(style, look, card.buttons[i], card.words[i], text)
 			button.token = token
 			list[#list + 1] = button
 		else
@@ -1519,6 +1701,7 @@ local function Show(moment)
 	card:SetSize(math.floor(width + 0.5), math.floor(height + 0.5))
 	nameLink.Fit(face)
 	nameLink.Arm(moment)
+	nameLink.pad.Bind(buttons)
 	card.age, card.leaving = 0, nil
 	card.UpdateCover()
 	card:SetAlpha(0)
@@ -1527,6 +1710,7 @@ local function Show(moment)
 end
 
 function Hide()
+	nameLink.pad.Clear() -- (the face buttons back at once, not after the fade)
 	moving = nil -- (closed while moving it: let go too)
 	if card and card:IsShown() and not card.leaving then card.leaving = 0 end
 end
@@ -1539,7 +1723,7 @@ end
 local function WhyWaiting(moment)
 	if not ns.Setting("emoteVision") then return "page off" end
 	if Fighting() then return "in a fight" end
-	-- (No emoting while dead or a ghost: a wipe's card waits until you're back.)
+	-- (No emoting while dead or a ghost: a card waits until you're back.)
 	if ns.Flag(UnitIsDeadOrGhost("player")) then return "dead" end
 	if DB().emoteVisionStill and ns.playerMoving then return "moving" end
 	local kind = moment and MOMENT[moment.kind]
@@ -1991,9 +2175,9 @@ local function RosterChanged(quiet)
 	end
 end
 
--- A boss fight's end in a group, in a dungeon or raid: a kill (the card for
--- all of you; a dungeon's last boss: the Dungeon moment's, a moment later)
--- or a wipe.
+-- A boss fight's end in a group, in a dungeon or raid: the last boss's kill
+-- (the card for all of you; in a dungeon: the Dungeon moment's, a moment
+-- later; earlier bosses: no card). A wipe: no card (you can't emote dead).
 local function EncounterEnded(encounterID, encounterName, success)
 	encounterID, success = Plain(encounterID), Plain(success)
 	local _, kind = IsInInstance()
@@ -2005,19 +2189,19 @@ local function EncounterEnded(encounterID, encounterName, success)
 	local name = Plain(encounterName)
 	if not name and EJ_GetEncounterInfo then name = Plain((EJ_GetEncounterInfo(encounterID))) end
 	name = name or L["A boss"]
-	if success ~= 1 then
-		Fire({ kind = "Wipe", name = name, line = L["your group wiped"], group = true,
-			icon = "Interface\\Icons\\Ability_Rogue_FeignDeath" })
-		return
-	end
+	if success ~= 1 then return end
+	-- Only the last boss gets a card: the ones before it pass quietly (where
+	-- the Journal doesn't know the place, every kill still gets one).
 	local last
 	local place = Plain((GetInstanceInfo()))
-	if kind == "party" and ns.EncounterIndex then
+	if ns.EncounterIndex then
 		local index, count = ns.EncounterIndex(encounterID)
 		last = index and index == count
 		ns.Log("emote", ("boss %s of %s in %s (Journal): %s"):format(tostring(index), tostring(count),
-			tostring(place), last and "the last, Dungeon moment" or "not the last, Boss moment"))
+			tostring(place), last and "the last, card" or index and "not the last, no card" or "unknown, card"))
+		if index and not last then return end
 	end
+	if kind ~= "party" then last = nil end
 	-- (Shown 2 seconds after the kill, once out of the fight: no calm to wait for.)
 	local after = GetTime() + KILL_WAIT
 	if last and place and place ~= "" and MOMENT.Dungeon and DB()[MOMENT.Dungeon.on] then
@@ -3493,6 +3677,24 @@ function ns.CreateEmoteVisionSettingsPanel(kit)
 		function(db) return db.emoteVision and db.emoteVisionRepeats end)
 	b.Number(L["Stays for:"], "emoteVisionHold", 3, 20, 1, 1, L["sec"],
 		L["How long a card stays before it fades. The mouse over it holds it."], On)
+	-- (Gamepad: the button that lets the face buttons answer a card.)
+	local grabList = {}
+	for _, choice in ipairs(nameLink.pad.GRABS) do
+		grabList[#grabList + 1] = { value = choice.value, text = L[choice.text] }
+	end
+	local grab = kit.Dropdown(content, "emoteVisionPadGrab", grabList, 200, Changed)
+	if grab then
+		local grabName = stack:Add(kit.Label(content, "GameFontHighlight", L["Gamepad answer button:"]), "label")
+		-- (As tall as its dropdown, so the dropdown keeps clear of the row above.)
+		grabName:SetHeight(30)
+		grabName:SetJustifyV("MIDDLE")
+		grab:SetPoint("LEFT", grabName, "RIGHT", 10, 0)
+		kit.GreyUnless(grab, On)
+		kit.Tooltip(grab, L["In gamepad mode, pressing this button while a card is up lets the face " ..
+			"buttons answer it: bottom picks the first emote, left the second, top the third, and right " ..
+			"targets them (or closes the card when there's no one to target). " ..
+			"They're yours again once you pick one, move, press it again or wait a few seconds."])
+	end
 	if ns.EmotePlayerMenuAvailable() then
 		stack:Header(content, L["Player menu"])
 		b.Toggles(L["Menu:"], {
