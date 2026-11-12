@@ -212,6 +212,33 @@ Scenario("hearth, the loading screen comes up as the way back begins", function(
 	T.notes[#T.notes + 1] = ("turn left at %.0f, tilt at %.0f"):format(T.cam.yaw - yaw, T.cam.pitch - pitch)
 end)
 
+-- (As in the game's log, 2026-11-12, a Teleport on Forever: the cast ends and
+-- the loading screen comes up before a frame has run, then frames do run under
+-- it for 4.5 s. The way back waited for nothing: it turned and zoomed mid-load.)
+Scenario("hearth, frames run under the loading screen", function(T)
+	local W = T.W
+	local yaw, pitch = T.cam.yaw, T.cam.pitch
+	W.Cast(HEARTH, 10)
+	local took = T.WaitFor("Tele camera", 3)
+	T.Expect(took, "the Tele camera never started")
+	W.Run(10 - (took or 3))
+	W.CastEnd("done")
+	W.Fire("LOADING_SCREEN_ENABLED")
+	W.Fire("PLAYER_LEAVING_WORLD")
+	local moved = false
+	for _ = 1, 90 do -- (4.5 s of frames)
+		W.Tick()
+		if T.cam.yawRate ~= 0 or T.cam.pitchRate ~= 0 then moved = true end
+	end
+	T.Expect(not moved, "the camera turned or tilted under the loading screen")
+	W.Fire("PLAYER_ENTERING_WORLD", false, false)
+	W.Fire("LOADING_SCREEN_DISABLED")
+	W.Run(5)
+	T.Expect(math.abs(T.cam.pitch - pitch) < 3,
+		("the camera was left tilted %.0f after the loading screen"):format(T.cam.pitch - pitch))
+	T.notes[#T.notes + 1] = ("turn left at %.0f, tilt at %.0f"):format(T.cam.yaw - yaw, T.cam.pitch - pitch)
+end)
+
 Scenario("hearth, gamepad + ConsolePort (mouselook reported for the cast)", { consolePort = true }, function(T)
 	local W = T.W
 	W.Pad(true)

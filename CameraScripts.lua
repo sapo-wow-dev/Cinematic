@@ -3117,6 +3117,11 @@ local function Update(elapsed)
 		zoomer.SnapBy(back)
 		return
 	end
+	-- (A loading screen up: everything waits for it, the rules too. Frames do
+	-- run under it on Forever, long and uneven: the cast's end seen there began
+	-- the way back mid-load, its zoom jumped 4 yards in one frame and its turn
+	-- and tilt back went by those frames, the camera left over your head.)
+	if zoomer.loading then return end
 	-- Your camera input since the last look: the zoom or the rest.
 	local input = ns.GetLastCameraInput and ns.GetLastCameraInput() or 0
 	local zoomed, moved = false, false
