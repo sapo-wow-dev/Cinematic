@@ -3422,7 +3422,12 @@ ns.SetOnUpdate(watcher, function(_, elapsed)
 	end
 	-- (The Stop button while its steps run; not in When it ends.)
 	if run and run.script.button and run.phase == "steps" and ns.ExitCameraBox then
-		exitBox = exitBox or ns.ExitCameraBox(L["Stop camera"], function() ns.StopCameraScript() end)
+		exitBox = exitBox or ns.ExitCameraBox(L["Stop camera"], function()
+			-- (The Death scene's: stopped for this death like the old camera's Exit
+			-- camera, so the death screen, song and card go with it too.)
+			if run and run.trigger == "Death" then ns.stoppedCam = "death" end
+			ns.StopCameraScript()
+		end)
 		exitBox:Place()
 	elseif exitBox and exitBox:IsShown() then
 		exitBox:Hide()
