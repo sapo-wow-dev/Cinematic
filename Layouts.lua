@@ -8,7 +8,8 @@
 --
 -- Each is the game's own: an account layout listed in Edit Mode beside the
 -- player's, which they can change there like any other. Making one never
--- touches their layouts. Edit Mode only takes one made or brought up to date
+-- touches their layouts, and one with a design is made on a copy of theirs
+-- (OwnBase), so only our frames move. Edit Mode only takes one made or brought up to date
 -- this session after a reload (and saving there before then would put its
 -- old copy back), so switching to one offers a reload (madeNow).
 
@@ -204,8 +205,10 @@ local DESIGN = {
 	{ 29, 1, "BOTTOM", "SwingTimerOffHandFrame", "TOP", 0, 4, { [3] = 0 } }, -- main hand
 	{ 20, 2, "BOTTOM", "SwingTimerMainHandFrame", "TOP", 0, 6 },            -- cooldown viewers: utility
 	{ 20, 1, "BOTTOM", "UtilityCooldownViewer", "TOP", 0, 4 },              -- essential
-	-- (No anchor: where Modern has it.)
-	{ UNIT_FRAME, PARTY, nil, nil, nil, nil, nil, { [RAID_STYLE_PARTY] = 1 } }, -- party frames: raid-style
+	-- (No anchor: where the base layout has it. presetOnly: only when made on
+	-- a game preset; on the player's own layout their party frames stay as
+	-- they set them.)
+	{ UNIT_FRAME, PARTY, nil, nil, nil, nil, nil, { [RAID_STYLE_PARTY] = 1 }, presetOnly = true }, -- party frames: raid-style
 }
 
 -- Pure Cinema's retail layout: the dev's PURE_CINEMA, as the game's Edit Mode
@@ -356,7 +359,9 @@ end
 
 -- Cinematic's own layouts, by the name Edit Mode lists them under. export:
 -- an Edit Mode export string (Share > Copy to Clipboard); without one, design:
--- changes to the Modern preset (as DESIGN). bars: the action bars it lays
+-- changes to the player's own layout (OwnBase; Modern if none), as DESIGN:
+-- only the frames it lists move, the rest stay where the player had them
+-- (party and raid frames, unit frames, minimap, chat...). bars: the action bars it lays
 -- out, switched on with it (SyncBars).
 ns.EDIT_MODE_LAYOUTS = {
 	[ns.LAYOUT_NAME] = { export = nil, design = DESIGN, bars = { 2, 3 },
@@ -390,11 +395,59 @@ local function ExportFromSystems(systems)
 	ns.Log("state", "edit mode layout: the game couldn't read the systems")
 end
 
-local function ApplyDesign(layout, design)
+local function Copy(source)
+	if type(source) ~= "table" then return source end
+	local result = {}
+	for k, v in pairs(source) do result[k] = Copy(v) end
+	return result
+end
+
+-- The layout ours with a design are made on (a copy, safe to change): the
+-- player's own, the one named (ns.ResetLayouts: the one they go back to),
+-- else the one on now, or, on one of ours, the one before a profile
+-- switched to it (chardb.layoutOwn). Never one of ours: Modern then.
+-- Second: whether it's a game preset (presetOnly rows apply).
+local function OwnBase(name)
+	local info = C_EditMode.GetLayouts()
+	local want = name or ActiveName(info)
+	if not want or ns.EDIT_MODE_LAYOUTS[want] then want = ns.chardb and ns.chardb.layoutOwn end
+	if want and not ns.EDIT_MODE_LAYOUTS[want] then
+		for _, layout in ipairs(info.layouts) do
+			if Named(layout) == want then return Copy(layout), false, want end
+		end
+		for _, preset in ipairs(Presets()) do
+			if preset.layoutName == want then return preset, true, want end
+		end
+	end
+	local modern = Presets()[1]
+	return modern, true, modern and modern.layoutName
+end
+
+-- A design's changes made on a layout (OwnBase's). A system it moves that the
+-- layout hasn't got (one saved before the game added it) taken from Modern.
+local function ApplyDesign(layout, design, onPreset)
+	layout.systems = layout.systems or {}
+	local modern
+	for _, saved in ipairs(design) do
+		local there = false
+		for _, system in ipairs(layout.systems) do
+			if system.system == saved[1] and system.systemIndex == saved[2] then there = true break end
+		end
+		if not there then
+			modern = modern or Presets()[1] or {}
+			for _, system in ipairs(modern.systems or {}) do
+				if system.system == saved[1] and system.systemIndex == saved[2] then
+					layout.systems[#layout.systems + 1] = Copy(system)
+					break
+				end
+			end
+		end
+	end
 	local found = {}
-	for _, system in ipairs(layout.systems or {}) do
+	for _, system in ipairs(layout.systems) do
 		for i, saved in ipairs(design) do
-			if system.system == saved[1] and system.systemIndex == saved[2] then
+			if (onPreset or not saved.presetOnly)
+				and system.system == saved[1] and system.systemIndex == saved[2] then
 				found[i] = true
 				if saved[3] then
 					system.isInDefaultPosition = false
@@ -409,7 +462,7 @@ local function ApplyDesign(layout, design)
 		end
 	end
 	for i, saved in ipairs(design) do
-		if not found[i] then
+		if not found[i] and (onPreset or not saved.presetOnly) then
 			ns.Log("state", ("edit mode layout: system %s index %s not in the preset"):format(
 				tostring(saved[1]), tostring(saved[2])))
 		end
@@ -481,7 +534,9 @@ function ns.DescribeLayouts()
 	end
 end
 
-local function BuildLayout(name)
+-- One of ours as a layout to save. base: the player's layout to make it on
+-- (OwnBase; nil: the one on now).
+local function BuildLayout(name, base)
 	local def = ns.EDIT_MODE_LAYOUTS[name]
 	if not def then return nil end
 	local layout
@@ -490,12 +545,168 @@ local function BuildLayout(name)
 	elseif def.systems then
 		layout = ExportFromSystems(def.systems)
 	else
-		layout = Presets()[1] -- (Modern)
-		if layout then ApplyDesign(layout, def.design or {}) end
+		local onPreset, baseName
+		layout, onPreset, baseName = OwnBase(base)
+		if layout then
+			ApplyDesign(layout, def.design or {}, onPreset)
+			ns.Log("state", ("edit mode layout %s made on %s"):format(name, tostring(baseName)))
+		end
 	end
 	if not layout then return nil end
 	layout.layoutName, layout.layoutType = name, AccountType()
 	return layout
+end
+
+-- /cine debug layoutbase: checks ours made on the player's layouts, saving
+-- nothing. For each of ours with a design (this client) on each layout the
+-- player has (saved and presets): every frame the design doesn't list kept
+-- exactly as in that layout, every one it lists moved, the party frames'
+-- raid-style as theirs (on a preset: on), and the game reading the result
+-- back. Then ours in Edit Mode now against one made on the layout they'd be
+-- made on now (OwnBase). Lines in db.layoutBaseLog (/reload to write it), a
+-- verdict per check in chat.
+function ns.LayoutBaseTest()
+	if not (C_EditMode and C_EditMode.GetLayouts) then ns.Print("layoutbase: no Edit Mode here") return end
+	local out, fails = {}, 0
+	local function Line(text) out[#out + 1] = text end
+	local function Verdict(ok, text)
+		if not ok then fails = fails + 1 end
+		Line((ok and "PASS " or "FAIL ") .. text)
+	end
+	local function Key(system) return tostring(system.system) .. ":" .. tostring(system.systemIndex) end
+	local function Systems(layout)
+		local map = {}
+		for _, system in ipairs(layout and layout.systems or {}) do map[Key(system)] = system end
+		return map
+	end
+	local function Anchor(a)
+		a = a or {}
+		return ("%s %s %s %s %s"):format(tostring(a.point), tostring(a.relativeTo), tostring(a.relativePoint),
+			tostring(a.offsetX), tostring(a.offsetY))
+	end
+	local function Describe(system)
+		if not system then return "missing" end
+		local settings = {}
+		for _, s in ipairs(system.settings or {}) do settings[#settings + 1] = s.setting .. "=" .. tostring(s.value) end
+		table.sort(settings)
+		return ("default %s, %s / %s, settings %s"):format(tostring(system.isInDefaultPosition),
+			Anchor(system.anchorInfo), Anchor(system.anchorInfo2), table.concat(settings, " "))
+	end
+	local function Setting(system, which)
+		for _, s in ipairs(system and system.settings or {}) do
+			if s.setting == which then return s.value end
+		end
+	end
+	local info = C_EditMode.GetLayouts()
+	local presets = Presets()
+	local accounts = 0
+	for _, layout in ipairs(info.layouts) do
+		if layout.layoutType == AccountType() then accounts = accounts + 1 end
+	end
+	Line(("client %s, in combat %s, Edit Mode open %s, on %s, layoutOwn %s, profile layout %s, account layouts %d"):format(
+		ns.CLIENT, tostring(InCombatLockdown()), tostring(_G.EditModeManagerFrame and _G.EditModeManagerFrame:IsShown()),
+		tostring(ActiveName(info)), tostring(ns.chardb and ns.chardb.layoutOwn),
+		tostring(ns.db and ns.db.editModeLayout), accounts))
+	-- (every layout the player has, not ours: the saved ones first, then the presets)
+	local bases = {}
+	for _, layout in ipairs(info.layouts) do
+		if not ns.EDIT_MODE_LAYOUTS[Named(layout)] then
+			bases[#bases + 1] = { name = Named(layout), preset = false, kind = layout.layoutType }
+		end
+	end
+	for _, preset in ipairs(presets) do bases[#bases + 1] = { name = preset.layoutName, preset = true } end
+	local ours = {}
+	for name, def in pairs(ns.EDIT_MODE_LAYOUTS) do
+		if def.design and (not def.client or def.client == ns.CLIENT) and not def.onDemand then ours[#ours + 1] = name end
+	end
+	table.sort(ours)
+	if #ours == 0 then Line("none of ours is made on the player's layout on this client") end
+	for _, name in ipairs(ours) do
+		local design = ns.EDIT_MODE_LAYOUTS[name].design
+		local listed = {}
+		for _, row in ipairs(design) do listed[tostring(row[1]) .. ":" .. tostring(row[2])] = row end
+		for _, base in ipairs(bases) do
+			Line(("-- %s on %s (%s)"):format(name, base.name, base.preset and "preset"
+				or ("saved, type " .. tostring(base.kind))))
+			local baseLayout, onPreset, baseName = OwnBase(base.name)
+			local built = BuildLayout(name, base.name)
+			Verdict(baseName == base.name and onPreset == base.preset,
+				("base picked: %s (preset %s)"):format(tostring(baseName), tostring(onPreset)))
+			if built then
+				local before, after = Systems(baseLayout), Systems(built)
+				local kept, moved, missing = 0, 0, {}
+				for key, system in pairs(before) do
+					local row = listed[key]
+					local partyOnly = row and row.presetOnly and not onPreset and not row[3]
+					if not row or partyOnly then
+						if Describe(system) == Describe(after[key]) then
+							kept = kept + 1
+						else
+							Verdict(false, ("%s changed but the design doesn't list it: was %s, now %s"):format(key,
+								Describe(system), Describe(after[key])))
+						end
+					end
+				end
+				for key, row in pairs(listed) do
+					local system = after[key]
+					if not system then
+						missing[#missing + 1] = key
+					elseif row[3] then
+						local a = system.anchorInfo or {}
+						local ok = a.point == row[3] and a.relativeTo == row[4] and a.relativePoint == row[5]
+							and a.offsetX == row[6] and a.offsetY == row[7] and system.isInDefaultPosition == false
+						if ok then moved = moved + 1 else
+							Verdict(false, ("%s not moved: %s"):format(key, Describe(system)))
+						end
+					end
+				end
+				Verdict(true, ("%d of the player's frames kept as they were, %d of ours moved"):format(kept, moved))
+				if #missing > 0 then
+					table.sort(missing)
+					Line("note: on neither this layout nor Modern (no such frame on this client): " .. table.concat(missing, ", "))
+				end
+				local partyKey = tostring(UNIT_FRAME) .. ":" .. tostring(PARTY)
+				local had, has = Setting(before[partyKey], RAID_STYLE_PARTY), Setting(after[partyKey], RAID_STYLE_PARTY)
+				-- (on a preset, 1 only where the design turns it on: Retail Inspired, not Personal Resource Centered)
+				local want = had
+				if onPreset and listed[partyKey] and listed[partyKey].presetOnly then want = 1 end
+				Verdict(has == want, ("party frames raid-style: theirs %s, ours %s (want %s)"):format(
+					tostring(had), tostring(has), tostring(want)))
+				local ok, text = pcall(C_EditMode.ConvertLayoutInfoToString, built)
+				local back = ok and text and C_EditMode.ConvertStringToLayoutInfo(text)
+				Verdict(back ~= nil and #(back.systems or {}) == #(built.systems or {}),
+					("the game reads it back: %s, %s systems (built %d)"):format(tostring(back ~= nil),
+						tostring(back and #(back.systems or {})), #(built.systems or {})))
+			else
+				Verdict(false, "not built")
+			end
+		end
+		-- (ours in Edit Mode now, against one made on the layout it'd be made on now)
+		local _, index = FindLayout(name)
+		local _, onPreset, nowBase = OwnBase(nil)
+		if not index then
+			Line(("%s: not in Edit Mode (would be made on %s)"):format(name, tostring(nowBase)))
+		else
+			local saved, fresh = Systems(info.layouts[index]), Systems(BuildLayout(name))
+			local differ = {}
+			for key, system in pairs(fresh) do
+				if Describe(system) ~= Describe(saved[key]) then differ[#differ + 1] = key end
+			end
+			table.sort(differ)
+			Line(("%s in Edit Mode: %s one made on %s (preset %s)%s"):format(name,
+				#differ == 0 and "same as" or ("%d frames differ from"):format(#differ), tostring(nowBase),
+				tostring(onPreset), #differ > 0 and (": " .. table.concat(differ, ", ")
+				.. " (made before, or changed in Edit Mode; Regenerate makes it on " .. tostring(nowBase) .. ")") or ""))
+		end
+	end
+	Line(fails == 0 and "ALL PASS" or (fails .. " FAIL"))
+	if ns.db then ns.db.layoutBaseLog = out end
+	for _, text in ipairs(out) do
+		if text:find("^FAIL") or text:find("^ALL PASS") or text:find("FAIL$") or text:find("in Edit Mode") then
+			ns.Print("layoutbase: " .. text)
+		end
+	end
+	ns.Print(("layoutbase: %d lines saved, /reload to write them"):format(#out))
 end
 
 -- Ours made or remade this session (by name). Edit Mode keeps the list it
@@ -755,7 +966,7 @@ function ns.ResetLayouts()
 		elseif def.client and def.client ~= ns.CLIENT then
 			removed = removed + 1
 		else
-			kept[#kept + 1] = BuildLayout(name) or layout
+			kept[#kept + 1] = BuildLayout(name, active) or layout
 			remade = remade + 1
 		end
 	end
