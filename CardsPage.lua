@@ -433,6 +433,7 @@ local function LookGrid(kit, content, stack, fieldOf, changed, own, icon)
 		{ "bar", L["Its own bar"], L["A bar as tall as your letterbox's comes in for the card."] },
 		{ "third", L["Lower third"], L["The card shows in the lower third."] },
 		{ "screen", L["Screen center"], L["The card shows in the middle of the screen."] },
+		{ "none", L["Don't show"], L["The card shows only while a letterbox is up."] },
 	}), L["Where the card shows while no letterbox is up."], InBar))
 	local barFallbackName = at.last
 	local barEnd = at.y - 4
@@ -656,6 +657,12 @@ local TIPS = {
 	levelUp = "As you reach a new level (after the fight, if you're in one): the level, the zone and how long " ..
 		"it took this session. Max level at the cap.",
 	achievement = "An achievement you earn: its name and points.",
+	explore = "How much of a zone you've explored (\"The Barrens: 7 of 25 explored\"), as you discover one of its " ..
+		"areas and as you come into it (once a session, until it's all done). At most once every 10 minutes.",
+	almost = "An achievement with one step left after you do one: which step it is (\"1 left: Camp Taurajo\"). At most once every 10 minutes.",
+	step = "A step of an achievement done (a dungeon for Classic Dungeoneer, a quest for a zone's quests): the " ..
+		"achievement, the step and how many are done. Explore achievements' areas: Explore progress. At most " ..
+		"once every 10 minutes.",
 	reputation = "As your standing with a faction changes (\"Honored\", with whom under it), a Renown level " ..
 		"or a friendship's rank: small in the top bar, but Exalted, Hated, the last Renown level and a " ..
 		"friendship's top rank big, as Level up looks.",
@@ -1445,7 +1452,8 @@ function ns.CreateCardSettingsPanel(kit)
 		end
 		stack:Note(content, L["Its look is on the Style tab, its sound on the Sounds tab."], NOTE_W)
 	end)
-	for _, id in ipairs({ "cleared", "discover", "arrival", "rested", "levelUp", "achievement", "reputation", "collect",
+	for _, id in ipairs({ "cleared", "discover", "arrival", "rested", "levelUp", "achievement", "explore", "almost", "step",
+		"reputation", "collect",
 		"profession", "quest", "rare", "battleground", "streak" }) do
 		parts.Part(id, function()
 			if SOULS_TIPS[id] then SoulsRow(id, L[SOULS_TIPS[id]]) end

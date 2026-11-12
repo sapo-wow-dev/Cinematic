@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-12", page = "Card Vision", title = "Achievement progress cards",
+		text = "Three new cards in the top bar: how much of a zone you've explored, an achievement with one step " ..
+		"left, and an achievement's step done. Each shows at most once every 10 minutes; on in the Cinema profile." },
 	{ date = "2026-11-12", page = "Advanced Frames", title = "MinimapButtonButton support",
 		text = "MinimapButtonButton's button and the bar of addon buttons it gathers now fade with the minimap's " ..
 		"Addon buttons row, and come back when you hover the minimap." },

@@ -6190,3 +6190,7 @@ L["Its names and numbers in General's text font."] = "Sus nombres y números en 
 L["The swing timer bars' frames in the theme's color. What fills them keeps its color."] = "Los marcos de las barras del temporizador de golpes en el color del tema. Lo que las llena mantiene su color."
 L["The bars' fill in General's bar texture, each weapon's in its own color."] = "El relleno de las barras con la textura de barra de General, el de cada arma en su propio color."
 L["The bars' words in General's text font."] = "El texto de las barras en la fuente de texto de General."
+
+-- What's new: achievement progress cards (Changelog.lua)
+L["Achievement progress cards"] = "Tarjetas de progreso de logros"
+L["Three new cards in the top bar: how much of a zone you've explored, an achievement with one step left, and an achievement's step done. Each shows at most once every 10 minutes; on in the Cinema profile."] = "Tres tarjetas nuevas en la barra superior: cuánto has explorado de una zona, un logro al que le falta un paso y un paso de un logro completado. Cada una sale como mucho una vez cada 10 minutos; activadas en el perfil Cine."

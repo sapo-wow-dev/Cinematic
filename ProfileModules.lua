@@ -536,10 +536,11 @@ ns.PROFILE_MODULES = {
 		end },
 	{ key = "story-cards", name = "Story cards", scope = { "Card Vision" },
 		tip = "The rest of your character's story as the Cards page's cards: an inn, a new standing or profession " ..
-			"rank, a story quest done, a rare spotted, a battleground and a kill streak.",
+			"rank, a story quest done, a rare spotted, a battleground, a kill streak, and achievements' progress " ..
+			"(a zone's explored areas, one step left, a step done).",
 		apply = function(set)
 			for _, key in ipairs({ "cardRestedOn", "cardReputationOn", "cardProfessionOn", "cardQuestOn", "cardRareOn",
-				"cardBattlegroundOn", "cardStreakOn" }) do
+				"cardBattlegroundOn", "cardStreakOn", "cardExploreOn", "cardAlmostOn", "cardStepOn" }) do
 				set(key, true)
 			end
 		end },

@@ -1489,7 +1489,8 @@ for page, keys in pairs({
 	-- The Cards page's rows (Cards.lua) and the time of day at login.
 	cards = { "combatOnEnter", "combatOnLeave", "cardBossOn", "storyZoneCard", "storyZoneSubzones", "storyRecap",
 		"timeOfDayMessage", "timeOfDayChange", "chatAttackAlert", "cardDuelOn", "cardDeathOn", "cardLevelUpOn",
-		"cardDiscoverOn", "cardDepartureOn", "cardArrivalOn", "cardRestedOn", "cardAchievementOn", "cardReputationOn", "cardCollectOn",
+		"cardDiscoverOn", "cardDepartureOn", "cardArrivalOn", "cardRestedOn", "cardAchievementOn", "cardExploreOn", "cardAlmostOn", "cardStepOn",
+		"cardReputationOn", "cardCollectOn",
 		"cardProfessionOn", "cardQuestOn", "cardClearedOn", "cardRareOn", "cardBattlegroundOn", "cardStreakOn",
 		"cardBossDownOn", "cardFelledOn", "cardRevivedOn" },
 	cameraModes = { "shoulderCam", "skyrideCam" }, -- Cameras > General's Enable Cameras: Shoulder Cam, Skyriding Cam
@@ -5810,6 +5811,18 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 				if type(saved) == "table" then saved.weatherTintStrength = 1 end
 			end
 			ns.db.weatherStrengthV1 = true
+		end
+		-- Cinema's Story cards now take in achievements' progress (Explore
+		-- progress, Almost there, Achievement step: ProfileModules.lua): on for
+		-- a player on Cinema and in their saved Cinema. Once.
+		if not ns.db.cinemaProgressCardsV1 then
+			local function On(t)
+				if type(t) ~= "table" then return end
+				t.cardExploreOn, t.cardAlmostOn, t.cardStepOn = true, true, true
+			end
+			if (ns.db.liveProfile or ns.db.profile) == "Cinema" then On(ns.db) end
+			On(ns.db.profiles and ns.db.profiles.Cinema)
+			ns.db.cinemaProgressCardsV1 = true
 		end
 		-- Pure Cinema shows the new target arrow on plates in CineMode (it has
 		-- no target frame): into the live settings while it's the profile in

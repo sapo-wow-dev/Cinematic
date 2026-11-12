@@ -20,6 +20,9 @@ DEFAULTS.cardDepartureClock = "minutes" -- the time left at its end: "minutes" (
 DEFAULTS.cardArrivalOn = false
 DEFAULTS.cardRestedOn = false
 DEFAULTS.cardAchievementOn = false
+DEFAULTS.cardExploreOn = false
+DEFAULTS.cardAlmostOn = false
+DEFAULTS.cardStepOn = false
 DEFAULTS.cardReputationOn = false
 DEFAULTS.cardCollectOn = false
 DEFAULTS.cardProfessionOn = false
@@ -127,6 +130,7 @@ local function Discovered(name, sub)
 	if name == "" or (name == lastFound and GetTime() - lastFoundAt < 30) then return end
 	lastFound, lastFoundAt = name, GetTime()
 	ns.Log("card", "Discovered: " .. name)
+	if ns.AchievementProgress then ns.AchievementProgress.Discovered(name) end
 	if ns.LetterboxOnDiscover then ns.LetterboxOnDiscover() end
 	if not ns.CardOn("discover") then return end
 	ns.Cards.Cut("zone")
@@ -248,6 +252,9 @@ function explore.Index()
 	if explore.index then return explore.index end
 	local index, walked = {}, {}
 	explore.index, explore.walked = index, 0
+	-- (Each Explore achievement, as areaAch[id]; its zone both ways, its
+	-- name less its first word: "Explore The Barrens", The Barrens.)
+	explore.areaAch, explore.zones, explore.zoneOf = {}, {}, {}
 	if not (GetCategoryList and GetCategoryNumAchievements and GetAchievementNumCriteria and GetAchievementCriteriaInfo) then
 		return index
 	end
@@ -259,8 +266,14 @@ function explore.Index()
 		for j = 1, (okNum and Plain(steps) or 0) do
 			local ok, name, kind, _, _, _, _, _, asset = pcall(GetAchievementCriteriaInfo, id, j)
 			name, kind = ok and Plain(name), ok and Plain(kind)
-			if kind == EXPLORE_AREA and name and name ~= "" and not index[name] then
-				index[name] = { id, j }
+			if kind == EXPLORE_AREA and name and name ~= "" then
+				if not explore.areaAch[id] then
+					explore.areaAch[id] = true
+					local okName, _, title = pcall(GetAchievementInfo, id)
+					local zone = okName and Plain(title) and Plain(title):match("^%S+%s+(.+)$")
+					if zone then explore.zones[zone], explore.zoneOf[id] = id, zone end
+				end
+				if not index[name] then index[name] = { id, j } end
 			elseif kind == ACHIEVEMENT then
 				Walk(Plain(asset), depth + 1)
 			end
@@ -458,6 +471,116 @@ end
 samples.achievement = function()
 	return { meta = L["Achievement"], name = L["Explore Elwynn Forest"], sub = L["%d points"]:format(10) }
 end
+
+---------------------------------------------------------------------------
+-- An achievement's steps getting done, in the top bar: Explore progress (an
+-- Explore achievement's areas, as you find one and as you come into its
+-- zone), Almost there (one step left) and Achievement step (any other's
+-- step). Steps done come from the game's CRITERIA_EARNED, and for areas
+-- from Discovered too (once the game counts it).
+local progress = { said = {}, zoneSaid = {}, shownAt = {} }
+-- Each card at most once in this long (seconds): one shown, the next of its
+-- own in that time doesn't show (not saved for later).
+local PROGRESS_COOLDOWN = 600
+function progress.Fire(id, card)
+	if GetTime() - (progress.shownAt[id] or -math.huge) < PROGRESS_COOLDOWN then
+		ns.Log("card", ("%s card skipped: shown %d sec ago"):format(id, GetTime() - progress.shownAt[id]))
+		return
+	end
+	if ns.Cards.Fire(id, card) then progress.shownAt[id] = GetTime() end
+end
+-- An achievement's steps: how many done, how many in all, the first one
+-- not done; nil for one with no steps (a single count).
+function progress.Steps(id)
+	local okNum, num = pcall(GetAchievementNumCriteria, id)
+	num = okNum and Plain(num) or 0
+	if num < 1 then return nil end
+	local done, left = 0, nil
+	for j = 1, num do
+		local ok, name, _, complete = pcall(GetAchievementCriteriaInfo, id, j)
+		if ok and ns.Flag(complete) then done = done + 1 elseif ok and not left then left = Plain(name) end
+	end
+	return done, num, left
+end
+function progress.Name(id)
+	local ok, _, name, _, completed = pcall(GetAchievementInfo, id)
+	return ok and Plain(name) or nil, ok and ns.Flag(completed) and true or false
+end
+-- (An Explore achievement's zone: Index's, from its name.)
+function progress.Zone(name, id)
+	explore.Index()
+	return explore.zoneOf[id] or name
+end
+local function ProgressCard(meta, name, sub)
+	return { meta = meta, name = name, sub = sub or "" }
+end
+-- A step of achievement id just done (step: its name, if known).
+function progress.StepDone(id, step)
+	id = Plain(id)
+	if not id then return end
+	explore.Index() -- (built first: which achievements are Explore ones, explore.areaAch)
+	local name, completed = progress.Name(id)
+	if not name or completed then return end -- (all done: the Achievement card's)
+	local done, total, left = progress.Steps(id)
+	if not done or done >= total then return end
+	local key = id .. ":" .. done
+	if progress.said[key] then return end
+	progress.said[key] = true
+	ns.Log("card", ("step done: %s (%s), %d of %d"):format(name, tostring(step), done, total))
+	if done == total - 1 and ns.CardOn("almost") then
+		progress.Fire("almost", ProgressCard(L["Almost there"], name,
+			left and L["1 left: %s"]:format(left) or L["1 left"]))
+	elseif explore.areaAch and explore.areaAch[id] then
+		if ns.CardOn("explore") then
+			progress.Fire("explore", ProgressCard(L["Explored"], progress.Zone(name, id),
+				L["%d of %d explored"]:format(done, total)))
+		end
+	elseif ns.CardOn("step") then
+		local under = { L["%d of %d"]:format(done, total) }
+		if step and step ~= "" and step ~= name then table.insert(under, 1, step) end
+		progress.Fire("step", ProgressCard(L["Achievement step"], name, table.concat(under, SEPARATOR)))
+	end
+end
+-- A place Discovered's card had: its area's step, once the game counts it.
+function progress.Discovered(place)
+	local at = explore.Index()[place or ""]
+	if not at then return end
+	local tries = 0
+	local function Check()
+		tries = tries + 1
+		if ns.PlaceExplored(place) then
+			progress.StepDone(at[1], place)
+		elseif tries < 5 then
+			C_Timer.After(1, Check)
+		end
+	end
+	C_Timer.After(1, Check)
+end
+-- Coming into a zone partly explored: how far along, once a session each.
+function progress.ZoneEntered(zone)
+	if not ns.CardOn("explore") or zone == "" or progress.zoneSaid[zone] then return end
+	explore.Index()
+	local id = explore.zones and explore.zones[zone]
+	if not id then return end
+	progress.zoneSaid[zone] = true
+	local name, completed = progress.Name(id)
+	if completed then return end
+	local done, total = progress.Steps(id)
+	if not done or done == 0 or done >= total then return end -- (none yet: Discovered's card has it)
+	progress.Fire("explore", ProgressCard(L["Explored"], zone, L["%d of %d explored"]:format(done, total)))
+	ns.Log("card", ("explore progress: %s (%s) %d of %d"):format(zone, tostring(name), done, total))
+end
+samples.explore = function()
+	return ProgressCard(L["Explored"], L["The Barrens"], L["%d of %d explored"]:format(7, 25))
+end
+samples.almost = function()
+	return ProgressCard(L["Almost there"], L["Explore The Barrens"], L["1 left: %s"]:format(L["Camp Taurajo"]))
+end
+samples.step = function()
+	return ProgressCard(L["Achievement step"], L["Classic Dungeoneer"],
+		L["The Deadmines"] .. SEPARATOR .. L["%d of %d"]:format(3, 12))
+end
+ns.AchievementProgress = progress
 
 ---------------------------------------------------------------------------
 -- Reputation: a new standing ("Honored"), with whom under it, up or down
@@ -948,7 +1071,7 @@ for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "ZONE_CHANG
 	"QUEST_TURNED_IN", "ENCOUNTER_END", "PLAYER_DEAD", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT",
 	"NAME_PLATE_UNIT_ADDED", "START_TIMER", "PVP_MATCH_ACTIVE", "UPDATE_BATTLEFIELD_STATUS", "PVP_MATCH_COMPLETE",
 	"PLAYER_PVP_KILLS_CHANGED", "CHAT_MSG_COMBAT_FACTION_CHANGE", "MAJOR_FACTION_RENOWN_LEVEL_CHANGED",
-	"PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
+	"PLAYER_ALIVE", "PLAYER_UNGHOST", "CRITERIA_EARNED" }) do
 	pcall(watcher.RegisterEvent, watcher, event) -- (each client that has it)
 end
 -- (Not on clients with secret values: there addons may not register the
@@ -986,6 +1109,14 @@ watcher:SetScript("OnEvent", function(_, event, ...)
 		end
 	elseif event == "ZONE_CHANGED_NEW_AREA" then
 		C_Timer.After(0.5, ZoneEntered)
+		-- (After the Zone card: how much of it you've explored. Not flying over.)
+		C_Timer.After(2, function()
+			if not ns.Flag(ns.OnTaxi()) then progress.ZoneEntered(Zone()) end
+		end)
+	elseif event == "CRITERIA_EARNED" then
+		local id, description = ...
+		ns.Log("card", ("CRITERIA_EARNED %s %s"):format(tostring(Plain(id)), tostring(Plain(description))))
+		progress.StepDone(id, Plain(description))
 	elseif event == "UI_INFO_MESSAGE" then
 		local first, second = ...
 		InfoLine(type(first) == "number" and second or first)

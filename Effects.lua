@@ -5275,6 +5275,13 @@ local immersiveProgress = 0
 -- cine: last tick's CineMode. One table: Lua's cap on a file's locals.)
 local bars = { untilAt = 0, key = nil, keyCine = false, wanted = false, forced = false, cine = false }
 
+-- True while the letterbox bars are up or coming in (CineMode's, a new
+-- place's, the key's), with some height: Cards.lua's No letterbox: Don't show.
+function ns.LetterboxUp()
+	if not (bars.target == 1 or letterboxProgress > 0) then return false end
+	return ns.LetterboxHeight(ns.LetterboxLook(), UIParent:GetWidth(), UIParent:GetHeight()) >= 1
+end
+
 function ns.LetterboxOnDiscover()
 	local db = ns.db
 	if not (db and db.letterboxOnDiscover) then return end
@@ -5317,6 +5324,7 @@ function ns.UpdateLetterbox(cinematic, elapsed)
 	end
 	ns.letterboxDirty = false
 	local look = ns.LetterboxLook()
+	bars.target = target
 	letterboxProgress = ns.Approach(letterboxProgress, target, elapsed,
 		ns.LetterboxTime(look, target > letterboxProgress))
 	immersiveProgress = ns.Approach(immersiveProgress, grow, elapsed, ns.LetterboxTime(look, grow > immersiveProgress))

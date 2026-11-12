@@ -94,6 +94,14 @@ local EVENTS = {
 		icon = "Interface\\Icons\\Spell_Holy_SurgeOfLight", inFight = "wait" },
 	{ id = "achievement", name = "Achievement", on = "cardAchievementOn", priority = 65,
 		icon = "Interface\\Icons\\Achievement_General", has = GetAchievementInfo ~= nil, inFight = "wait" },
+	-- (An achievement's steps getting done: CardMoments.lua.)
+	{ id = "explore", name = "Explore progress", on = "cardExploreOn", priority = 35,
+		icon = "Interface\\Icons\\INV_Misc_Map_01", has = GetAchievementCriteriaInfo ~= nil, inFight = "wait" },
+	{ id = "almost", name = "Almost there", on = "cardAlmostOn", priority = 50,
+		icon = "Interface\\Icons\\Achievement_Quests_Completed_08", has = GetAchievementCriteriaInfo ~= nil,
+		inFight = "wait" },
+	{ id = "step", name = "Achievement step", on = "cardStepOn", priority = 30,
+		icon = "Interface\\Icons\\INV_Misc_Note_01", has = GetAchievementCriteriaInfo ~= nil, inFight = "wait" },
 	{ id = "reputation", name = "Reputation", on = "cardReputationOn", priority = 45,
 		icon = "Interface\\Icons\\INV_Misc_Note_02", inFight = "wait" },
 	{ id = "collect", name = "New mount or pet", on = "cardCollectOn", priority = 45,
@@ -137,7 +145,7 @@ ns.CARD_GROUPS = {
 	{ name = "Bosses and rares", "boss", "bossDown", "cleared", "rare", "felled" },
 	{ name = "Places and travel", "zone", "subzone", "discover", "departure", "arrival", "rested" },
 	{ name = "Your story", "login", "time", "quest" },
-	{ name = "Progress", "levelUp", "achievement", "reputation", "collect", "profession" },
+	{ name = "Progress", "levelUp", "achievement", "explore", "almost", "step", "reputation", "collect", "profession" },
 	{ name = "Player vs. player", "duel", "battleground" },
 }
 -- The events in the tab's order, each with its group's name (event.group).
@@ -170,7 +178,7 @@ local FIELDS = {
 	{ "OffsetX", { "combatOffsetX" }, 0 },       -- moved right (left below 0), a share of the screen's width
 	{ "OffsetY", { "combatOffsetY" }, 0 },       -- ...and up, a share of its height
 	{ "BarScale", { "combatBarScale" }, 0.5 },   -- in a bar: the words' height, a share of the bar's
-	{ "BarFallback", { "combatBarFallback" }, "third" }, -- in a bar with no letterbox up: "bar" (one of its own), "third", "screen"
+	{ "BarFallback", { "combatBarFallback" }, "third" }, -- in a bar with no letterbox up: "bar" (one of its own), "third", "screen", "none" (not shown)
 	{ "Style", { "combatStyle" }, "chapter" },   -- "title", "subtitle", "chapter" or "banner"
 	{ "Anim", { "combatAnim" }, "track" },       -- "fade", "reveal", "track" or "type"
 	{ "Font", { "combatFont" }, "general" },     -- QUEST_ITEM_FONTS (general: General's)
@@ -284,7 +292,7 @@ local BASES = { combatIn = "danger", combatOut = "respite", attack = "danger", d
 	quest = "milestone", battleground = "place",
 	zone = "place", subzone = "follow", departure = "follow", arrival = "follow", login = "place", boss = "place", duel = "place",
 	time = "milestone",
-	reputation = "ticker", collect = "ticker", profession = "ticker", rested = "ticker",
+	reputation = "ticker", collect = "ticker", explore = "ticker", almost = "ticker", step = "ticker", profession = "ticker", rested = "ticker",
 	streak = "ticker", rare = "rare", bossDown = "triumph", felled = "victory", revived = "victory" }
 -- (What each started from before the families, for the update moving
 -- yours onto them: Core.lua's cardsV7.)
@@ -623,6 +631,14 @@ function ns.Cards.Fire(id, card, force)
 		return true
 	end
 	if not force and not ns.CardAllowed(id, card.edge, card.cine) then return false end
+	-- (In a bar, No letterbox: Don't show, and no letterbox up: none.)
+	if not force then
+		local look = card.look or ns.CardLook(id)
+		if look.combatBarFallback == "none" and (look.combatPlace == "top" or look.combatPlace == "bottom")
+			and not (ns.LetterboxUp and ns.LetterboxUp()) then
+			return false
+		end
+	end
 	-- (In a fight or just out of one: shown now, held till after, or not at all.)
 	local inFight = not force and not card.afterFight and event.inFight and ns.db["cardFight_" .. id]
 	if inFight and inFight ~= "show" and Unsettled() then
