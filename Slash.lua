@@ -191,6 +191,7 @@ local function PrintDebugHelp()
 	print("  /cine debug auras - whether your group's debuffs can be seen, and how (run in and out of combat, in different places)")
 	print("  /cine debug combatlog - log the Combat Log tab's lines, readable or not; stays on across reloads (again to stop)")
 	print("  /cine debug healplates - each nameplate Heal Vision's Nameplates tick fades, the parts and layers faded, the curves at full health")
+	print("  /cine debug platefont - test: does the game's nameplate font reach the plates it locks in dungeons? (watch your group's names)")
 	print("  /cine debug healwatch [seconds] - log each raid frame's alpha as it changes and who set it (5 seconds; /reload after)")
 	print("  /cine debug health - whether your group's health can be read and sorted (run in and out of combat)")
 	print("  /cine debug healthfade [percent] - test window: blocks that show only while someone's below the percent (again to close)")
@@ -230,6 +231,7 @@ local function PrintDebugHelp()
 	print("  /cine debug gameedge [number|back|blend|off] - step through the game's full-screen effect textures over the whole screen, one each time, to pick edges for Vitals Vision's Game art")
 	print("  /cine debug portal [number|file|back|near|far|up|down|turn|tilt|scale N|alpha N|reset|reel [seconds]|off] - (dev copy) show the game's portal and swirl models over the screen, one each time, to see which load and how they sit, for Vitals Vision")
 	print("  /cine debug bargap - the left and right edges of action bars 1-3 and their end buttons, to line up the gaps between bars")
+	print("  /cine debug explore - where you are in the game's Exploration achievements: discovered or not, and the zone's areas")
 	print("  /cine debug screenfx [number | id N | find words | speed N | tile N | shots [from] | back | off] - dev copy: the game's full-screen effects (all of them, from its data) animated over the screen, one at a time; Space: next, Backspace: back; shots: a screenshot of each")
 	if ns.isDev then print("  /cine debug cursorsize [value | cycle | back | cvars [word] | hardware 0/1/back | pic blank/small/red/tiny/off] - the game's Cursor Size setting (cursorSizePreferred): what it is, set it, step through -1 to 4 three seconds each, put yours back, list every game setting with cursor (or the word) in its name, switch the hardware cursor, or show a test picture as the cursor") end
 	print("  /cine debug cursor [log [seconds]] - Cursor Hide: on or off, its method, whether its Show in row is on here, what's holding it back, the turn speeds and camera; log: a record of it all for 30 seconds (or the seconds given), saved by a /reload")
@@ -705,6 +707,8 @@ local function HandleSlash(msg)
 		else
 			ns.Print("/cine debug portal is in the dev copy only.")
 		end
+	elseif cmd == "debug" and arg == "explore" then
+		if ns.DebugExplore then ns.DebugExplore() end
 	elseif cmd == "debug" and (arg == "screenfx" or arg:match("^screenfx ")) then
 		if ns.ScoutScreenEffects then
 			ns.ScoutScreenEffects(arg:match("^screenfx%s*(.-)$"))
@@ -1580,6 +1584,8 @@ local function HandleSlash(msg)
 		ns.LogRaidFrames()
 	elseif cmd == "debug" and arg == "healplates" then
 		ns.HealVisionPlatesDebug()
+	elseif cmd == "debug" and arg == "platefont" then
+		ns.PlateFontTest()
 	elseif cmd == "debug" and arg:find("^healwatch") then
 		ns.HealWatchDebug(arg:match("^healwatch%s+(%S+)"))
 	elseif cmd == "debug" and arg == "health" then

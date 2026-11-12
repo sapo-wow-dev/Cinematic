@@ -223,7 +223,7 @@ ns.BUILTIN_PROFILES = {
 		-- (Its own Visions and cards, apart from the slots' choices: picking a
 		-- choice for a slot then leaves them as they are.)
 		modules = With("zone-card", "travel-cards", "story-cards", "damage-vision", "vitals-vision",
-			"combat-vision", "heal-vision-everywhere", "cursor-hide", "music-calm", "weather-view-distance",
+			"combat-vision", "cursor-hide", "music-calm", "weather-view-distance",
 			"node-icons"),
 	},
 	-- Nothing on: for players who want just a few parts (Roll, Emote Vision,

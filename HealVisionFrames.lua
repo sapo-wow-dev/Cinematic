@@ -709,7 +709,7 @@ local applyPending = false
 local watcher = CreateFrame("Frame")
 for _, event in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_CONNECTION", "UNIT_IN_RANGE_UPDATE",
 	"UNIT_AURA", "PLAYER_SPECIALIZATION_CHANGED", "GROUP_ROSTER_UPDATE", "PLAYER_ROLES_ASSIGNED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
-	"PLAYER_TARGET_CHANGED" }) do
+	"PLAYER_TARGET_CHANGED", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do -- (dying, releasing, back: its rule may read dead)
 	pcall(watcher.RegisterEvent, watcher, event) -- (not every client has every event)
 end
 watcher:SetScript("OnEvent", function(_, event, unit)
@@ -1235,4 +1235,171 @@ function ns.HealVisionPlatesDebug()
 				tostring(PlateFrame(unit) ~= nil), #parts > 0 and table.concat(parts, ", ") or "none"))
 		end
 	end
+end
+
+-- /cine debug platefont: does the game's shared nameplate font reach the
+-- plates it locks (friendly ones in dungeons and raids)? Those can't be read,
+-- so the player looks: three timed steps in the test box (ns.PadTestBox), the
+-- middle one with every nameplate font object set to a big fancy font, then
+-- put back. Open plates' names are read before and during as the control:
+-- whether the game's plates follow the font object at all. Friendly plates
+-- switched on for the run when off (out of fights), put back after. Typed
+-- again while running: stops and puts everything back.
+function ns.PlateFontTest()
+	local test = ns.plateFontTest
+	if test then
+		test.Finish("stopped")
+		return
+	end
+	local FONT, SIZE, FLAGS = "Fonts\\MORPHEUS.TTF", 26, "THICKOUTLINE"
+	local OBJECTS = { "SystemFont_NamePlate", "SystemFont_NamePlateFixed", "SystemFont_LargeNamePlate",
+		"SystemFont_LargeNamePlateFixed", "SystemFont_NamePlateCastBar", "SystemFont_NamePlate_Outlined",
+		"SystemFont_LargeNamePlate_Outlined", "GameFontNormalSmall" }
+	local STEPS = {
+		{ length = 8, say = "1/3: LOOK at your GROUP's names over their heads. Remember how they look." },
+		{ length = 14, say = "2/3: WATCH your GROUP's names. Do they turn into BIG FANCY letters?", swap = true },
+		{ length = 5, say = "3/3: Fonts going back to normal. Just wait." },
+	}
+	test = { run = (ns.padTestRun or 0) + 1, saved = {}, cvars = {} }
+	ns.padTestRun = test.run
+	ns.plateFontTest = test
+	local function Say(text)
+		ns.Print(text)
+		ns.Log("platefont", text)
+	end
+	local function FontOf(region)
+		local ok, file, size, flags = pcall(region.GetFont, region)
+		if not ok then return "error" end
+		if file == nil then return "none" end
+		return ("%s %s %s"):format(tostring(file), tostring(size and math.floor(size + 0.5)), tostring(flags))
+	end
+	-- Plates: open ones (unit, name's font object, name's font) and how many locked.
+	local function Plates(label)
+		local okAll, all = pcall(C_NamePlate.GetNamePlates, true)
+		local locked, open = 0, {}
+		for _, plate in ipairs(okAll and type(all) == "table" and all or {}) do
+			local forbidden = Forbidden(plate)
+			if Secret(forbidden) or forbidden then
+				locked = locked + 1
+			else
+				local unitFrame = plate.UnitFrame
+				local name = unitFrame and unitFrame.name
+				if type(name) == "table" and name.GetFont and not Forbidden(name) then
+					local unit = plate.namePlateUnitToken or unitFrame.unit
+					local okObj, object = pcall(name.GetFontObject, name)
+					object = okObj and object and object.GetName and object:GetName() or "none"
+					local okKind, kind = pcall(function() return ns.PlateKind and ns.PlateKind(unit) end)
+					open[#open + 1] = { name = name, line = ("%s (%s): object %s, font %s"):format(tostring(unit),
+						okKind and tostring(kind) or "?", tostring(object), FontOf(name)) }
+				end
+			end
+		end
+		local lines = {}
+		for _, each in ipairs(open) do lines[#lines + 1] = each.line end
+		Say(("%s: %d locked plates, %d open; %s"):format(label, locked, #open,
+			#lines > 0 and table.concat(lines, "; ") or "no open plates"))
+		return locked, open
+	end
+	local function Swap(on)
+		for _, objectName in ipairs(OBJECTS) do
+			local object = _G[objectName]
+			if type(object) == "table" and object.SetFont then
+				if on and not test.saved[objectName] then
+					local file, size, flags = object:GetFont()
+					test.saved[objectName] = { file, size, flags }
+					pcall(object.SetFont, object, FONT, SIZE, FLAGS)
+				elseif not on and test.saved[objectName] then
+					local was = test.saved[objectName]
+					if was[1] then pcall(object.SetFont, object, was[1], was[2], was[3] or "") end
+					test.saved[objectName] = nil
+				end
+			end
+		end
+	end
+	function test.Finish(why, extra)
+		if test.ticker then test.ticker:Cancel() end
+		Swap(false)
+		if not InCombatLockdown() then
+			for cvar, was in pairs(test.cvars) do pcall(SetCVar, cvar, was) end
+		end
+		ns.plateFontTest = nil
+		Say("plate font test " .. why .. (extra and (": " .. extra) or ""))
+		local run = test.run
+		C_Timer.After(why == "done" and 25 or 10, function() ns.PadTestBoxHide(run) end)
+	end
+	-- Setup: where we are and what the game has.
+	local inInstance, instanceType = IsInInstance()
+	local objects = {}
+	for _, objectName in ipairs(OBJECTS) do
+		local object = _G[objectName]
+		objects[#objects + 1] = objectName .. "=" .. (type(object) == "table" and object.GetFont and FontOf(object) or "missing")
+	end
+	Say(("start: client %s, in instance %s (%s), in group %s, in combat %s, CineMode %s, nameplateShowFriends %s, "
+		.. "nameplateShowAll %s"):format(ns.isRetail and "retail" or "forever", tostring(inInstance), tostring(instanceType),
+		tostring(IsInGroup()), tostring(InCombatLockdown()), tostring(ns.IsCineModeOn and ns.IsCineModeOn()),
+		tostring(GetCVar("nameplateShowFriends")), tostring(GetCVar("nameplateShowAll"))))
+	Say("font objects: " .. table.concat(objects, "; "))
+	-- (Friendly plates on for the run, if off and we may.)
+	if not InCombatLockdown() and GetCVar("nameplateShowFriends") == "0" then
+		test.cvars.nameplateShowFriends = "0"
+		SetCVar("nameplateShowFriends", "1")
+		Say("switched friendly nameplates on for the test")
+	end
+	local started, at = GetTime(), 0
+	local results = {}
+	local function Tick()
+		local elapsed, from = GetTime() - started, 0
+		local index
+		for i, step in ipairs(STEPS) do
+			if elapsed < from + step.length then
+				index = i
+				break
+			end
+			from = from + step.length
+		end
+		if not index then
+			-- Verdicts: locked plates there to look at, and the control.
+			local before, during = results[1], results[2]
+			local lockedSeen = math.max(before and before.locked or 0, during and during.locked or 0)
+			local followed, readable = 0, 0
+			for name, font in pairs(before and before.fonts or {}) do
+				local now = during and during.fonts[name]
+				if now then
+					readable = readable + 1
+					if now ~= font and now:find("MORPHEUS", 1, true) then followed = followed + 1 end
+				end
+			end
+			local control = readable == 0 and "no open plate to check against"
+				or ("%d of %d open plates' names took the font"):format(followed, readable)
+			Say(("verdict: locked plates seen %d; control: %s"):format(lockedSeen, control))
+			test.Finish("done")
+			local ask = lockedSeen > 0 and "Did your GROUP's names turn into BIG FANCY letters in step 2? Tell me yes or no."
+				or "No locked plates were found: be in a dungeon with your group's nameplates showing (out of CineMode)."
+			ns.PadTestBox("Test done. " .. ask, control .. "  (say \"check log\")", 1, 0.82, 0)
+			return
+		end
+		local step = STEPS[index]
+		if index ~= at then
+			at = index
+			Swap(step.swap and true or false)
+			Say(step.say)
+		end
+		local into = elapsed - from
+		-- (Read the plates once a step, a second in: the swap has landed by then.)
+		if into >= 1 and not results[index] then
+			local locked, open = Plates(("step %d"):format(index))
+			local fonts = {}
+			for _, each in ipairs(open) do fonts[each.name] = FontOf(each.name) end
+			results[index] = { locked = locked, fonts = fonts }
+		end
+		ns.PadTestBox(step.say, ("%d sec left"):format(math.ceil(step.length - into)),
+			step.swap and 0.3 or 0.8, step.swap and 1 or 0.8, step.swap and 0.3 or 0.8)
+	end
+	test.ticker = C_Timer.NewTicker(0.1, function()
+		local ok, err = pcall(Tick)
+		if not ok then
+			test.Finish("error", tostring(err))
+			pcall(ns.PadTestBox, "Test stopped by an error", "say \"check log\"", 1, 0.35, 0.35)
+		end
+	end)
 end

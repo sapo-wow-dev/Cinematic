@@ -1678,6 +1678,8 @@ end
 ns.RULE_DEFAULTS = {}
 -- The Names grid's Service NPCs row: titles up whenever no camera plays.
 ns.RULE_DEFAULTS["name:ServiceNPCs"] = "not camera"
+-- Heal Vision: in dungeons and raids, but not while you're dead (no healing to aim).
+ns.RULE_DEFAULTS.healVision = "(dungeon or raid) and not dead"
 do
 	local OFF_GRID_ROWS, OLD_GRID_DEFAULTS = {}, {}
 
@@ -4399,6 +4401,45 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		MigrateReaches(ns.db)
 		for _, saved in pairs(ns.db.profiles or {}) do
 			if type(saved) == "table" then MigrateReaches(saved) end
+		end
+		-- Heal Vision's row has a default rule now ("(dungeon or raid) and not
+		-- dead"), and a rule decides instead of its ticks. Ticks of your own
+		-- become your rule first, so they still act; just Dungeons and Raids
+		-- (the old Heal Vision everywhere module's) take the new default.
+		local function MigrateHealVisionTicks(saved)
+			local rules = saved.frameRules
+			if type(rules) == "table" and rules.healVision ~= nil then return end
+			if saved.healVision == true then
+				saved.frameRules = type(rules) == "table" and rules or {}
+				saved.frameRules.healVision = "always"
+				return
+			end
+			local words, seen, count = {}, {}, 0
+			for _, pair in ipairs({ { "healVisionInCombat", "combat" }, { "healVisionCalm", "calm" },
+				{ "healVisionTargetEnemy", "enemy" }, { "healVisionTargetFriendly", "friendly" },
+				{ "healVisionInWorld", "world" }, { "healVisionInCities", "city" }, { "healVisionInBGs", "bg or arena" },
+				{ "healVisionInDungeons", "dungeon" }, { "healVisionInRaids", "raid" }, { "healVisionInParty", "group" },
+				{ "healVisionInRaid", "group" } }) do
+				if saved[pair[1]] == true then
+					count = count + 1
+					if not seen[pair[2]] then
+						seen[pair[2]] = true
+						words[#words + 1] = pair[2]
+					end
+				end
+			end
+			if count == 0 or (count == 2 and saved.healVisionInDungeons == true and saved.healVisionInRaids == true) then
+				return
+			end
+			saved.frameRules = type(rules) == "table" and rules or {}
+			saved.frameRules.healVision = table.concat(words, " or ")
+		end
+		MigrateHealVisionTicks(ns.db)
+		for _, saved in pairs(ns.db.profiles or {}) do
+			if type(saved) == "table" then
+				MigrateHealVisionTicks(saved)
+				if type(saved.settings) == "table" then MigrateHealVisionTicks(saved.settings) end
+			end
 		end
 		-- Minimap nodes' old Ping where it is box, untick: now Mark where it
 		-- is's Off (ticked takes the new default, our silent mark).

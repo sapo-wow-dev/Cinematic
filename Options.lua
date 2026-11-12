@@ -13828,6 +13828,30 @@ local function CreateVisionPanel()
 				[ns.GRID_LOCATION] = L["On while you're in any of these (Party and Raid: in one, wherever you are)."] },
 			rule = { key = function() return "healVision" end, label = function() return L["Heal Vision"] end,
 				changed = Apply },
+			-- (Its ticks as a rule, for the editor to start from. Party and Raid
+			-- are both "group": no word tells a party from a raid group.)
+			liveRule = function()
+				local db, words, seen = ns.GetDB(), {}, {}
+				if db.healVision then return "always" end
+				local function Add(key, word)
+					if db[key] and not seen[word] then
+						seen[word] = true
+						words[#words + 1] = word
+					end
+				end
+				Add("healVisionInCombat", "combat")
+				Add("healVisionCalm", "calm")
+				Add("healVisionTargetEnemy", "enemy")
+				Add("healVisionTargetFriendly", "friendly")
+				Add("healVisionInWorld", "world")
+				Add("healVisionInCities", "city")
+				Add("healVisionInBGs", "bg")
+				Add("healVisionInDungeons", "dungeon")
+				Add("healVisionInRaids", "raid")
+				Add("healVisionInParty", "group")
+				Add("healVisionInRaid", "group")
+				return #words > 0 and table.concat(words, " or ") or "never"
+			end,
 		}):SetPoint("LEFT", row, "LEFT", NAME_WIDTH, 0)
 
 		-- Default, Tank, Healer and Damage tabs: the settings below are the

@@ -2979,7 +2979,7 @@ ns.RULE_WORDS = {
 	bg = "bg", bgs = "bg", pvp = "bg", battleground = "battleground", arena = "arena", arenas = "arena",
 	world = "world", group = "group", grouped = "group", instance = "instance",
 	dungeon = "dungeon", raid = "raid", city = "city", inn = "inn",
-	flagged = "flagged", mounted = "mounted", casting = "casting", cast = "casting", channeling = "casting",
+	flagged = "flagged", mounted = "mounted", dead = "dead", ghost = "dead", casting = "casting", cast = "casting", channeling = "casting",
 	-- (CineMode on: always so for the rows read in it, the frames'; the Cards page's are read any time.)
 	cinemode = "cinemode", cine = "cinemode",
 	-- (A fight starting or ending: only the Cards page's fight rows are read then.)
@@ -3786,6 +3786,8 @@ do
 		facts.group = ns.InGroup() and true or false
 		facts.flagged = ns.IsPvPFlagged() and true or false
 		facts.mounted = ns.Flag(IsMounted()) and true or false
+		-- (You dead, or a ghost after releasing. A secret answer counts as alive.)
+		facts.dead = ns.Flag(UnitIsDeadOrGhost("player")) and true or false
 		-- (Casting or channeling. Secret in a fight on some clients, so false there.)
 		facts.casting = ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player"))
 		-- (A boss fight: an encounter on, the game's boss frames up, or a boss

@@ -447,12 +447,6 @@ ns.PROFILE_MODULES = {
 			set("tooltipStillMode", "off")
 			set("tooltipShowStill", 1)
 		end },
-	{ key = "heal-vision-everywhere", name = "Heal Vision everywhere", scope = { "Heal Vision" },
-		tip = "Heal Vision in dungeons and raids too.",
-		apply = function(set)
-			set("healVisionInDungeons", true)
-			set("healVisionInRaids", true)
-		end },
 
 	-- Cameras
 	{ key = "still-afk", name = "Standing still: AFK camera", scope = { "Scenes" },

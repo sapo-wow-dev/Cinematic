@@ -91,7 +91,7 @@ function ns.RulePieces()
 		{ L["Nearby"], { 1, 0.5, 0.8 }, { { "elite11", L["Elite near (11 yards)"] },
 			{ "elite28", L["Elite near (28 yards)"] }, { "elite40", L["Elite near (40 yards)"] } } },
 		{ L["Location"], { 0.45, 0.75, 1 }, location },
-		{ L["You"], { 0.8, 0.6, 1 }, { { "mounted", L["Mounted"] }, { "casting", L["Casting"] }, { "flagged", L["PvP flagged"] },
+		{ L["You"], { 0.8, 0.6, 1 }, { { "mounted", L["Mounted"] }, { "dead", L["Dead"] }, { "casting", L["Casting"] }, { "flagged", L["PvP flagged"] },
 			{ "group", L["Grouped"] }, { "cinemode", L["In CineMode"] } } },
 		{ L["Role"], { 0.4, 0.85, 0.5 }, { { "tank", L["Tank"] }, { "healer", L["Healer"] }, { "damage", L["Damage"] } } },
 		{ L["Class"], { 0.85, 0.75, 0.6 }, classes },
