@@ -1287,6 +1287,10 @@ DEFAULTS.healVisionHealerBelow = 0.7 -- healers below this
 DEFAULTS.healVisionHealerAlpha = 0.25
 DEFAULTS.healVisionPetBelow = 0.35 -- and pets below this
 DEFAULTS.healVisionPetAlpha = 0.25
+-- How much health above each kind's line they fade in over, not switch at
+-- once (0-1; 0: the old hard switch). Show below 80%, 10%: hidden from 90% up,
+-- fully shown from 80% down, eased in between (HealVisionFrames.lua's curves).
+DEFAULTS.healVisionFadeRange = 0.1
 DEFAULTS.healVisionDeadAlpha = 0.25 -- the dead: always hidden, this much shows
 DEFAULTS.healVisionOfflineAlpha = 0.25 -- and the offline
 DEFAULTS.healVisionFarAlpha = 0.25 -- those more than 100 yards away (another zone...), whatever else: 1, off
@@ -1302,7 +1306,7 @@ ns.HEAL_VISION_ROLE_KEYS = { "healVisionTankBelow", "healVisionTankAlpha", "heal
 	"healVisionHealerAlpha", "healVisionShowBelow", "healVisionMinAlpha", "healVisionPetBelow",
 	"healVisionPetAlpha", "healVisionTargetAlpha", "healVisionMouseoverAlpha", "healVisionDeadAlpha",
 	"healVisionOfflineAlpha",
-	"healVisionFarAlpha", "healVisionDispel", "healVisionAnyDebuff" }
+	"healVisionFarAlpha", "healVisionDispel", "healVisionAnyDebuff", "healVisionFadeRange" }
 ns.HEAL_VISION_ROLES = { "TANK", "HEALER", "DAMAGER" }
 local HEAL_VISION_ROLE_STARTS = {
 	TANK = { healVisionTankBelow = 1, healVisionHealerBelow = 0.95, healVisionShowBelow = 0.95 },
@@ -1382,10 +1386,12 @@ do
 		return db[key]
 	end
 
-	-- Whether any of its boxes is ticked.
+	-- Whether any of its boxes is ticked, or its row has a rule (which decides
+	-- instead of the ticks: none ticked then, its page's boxes stayed greyed).
 	function ns.HealVisionAny(db)
 		db = db or ns.db
 		if not db then return false end
+		if db == ns.db and ns.RuleTest and ns.RuleTest("healVision") then return true end
 		for _, key in ipairs(HEAL_VISION_KEYS) do
 			if db[key] then return true end
 		end

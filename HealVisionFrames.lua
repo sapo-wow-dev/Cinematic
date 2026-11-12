@@ -91,15 +91,46 @@ local function Shown(step, kind)
 	return floor + (1 - floor) * step / STEPS
 end
 
+-- The Fade range setting (0-1): how much health above a kind's line its
+-- members fade in over.
+local function FadeRange()
+	return math.max(0, math.min(tonumber(Setting("healVisionFadeRange")) or 0, 1))
+end
+
+-- A curve's points: shown (full) below the line, hidden (faded) from the
+-- line plus the fade range up, a straight blend in between (Linear, as
+-- LowHealth.lua's curves, proven in game; range 0: a hard switch, Step). The
+-- game works it out with the health it keeps from us, so nothing here reads it.
+-- (below: a share of health, 0-1, as the settings keep it.)
+local function FadePoints(curve, below, shown, hidden)
+	local range = FadeRange()
+	local types = Enum.LuaCurveType
+	local smooth = range > 0 and below < 1 and below > 0 and types.Linear
+	curve:SetType(smooth or types.Step)
+	if below >= 1 then
+		curve:AddPoint(0, shown) -- (100%: always shown, at full health too, on every line)
+	elseif below <= 0 then
+		curve:AddPoint(0, hidden) -- (0%: never by health)
+	elseif smooth then
+		curve:AddPoint(0, shown)
+		curve:AddPoint(below, shown)
+		curve:AddPoint(math.min(below + range, 1), hidden)
+	else
+		curve:AddPoint(0, shown)
+		curve:AddPoint(below, hidden)
+	end
+end
+
 -- Health percent to alpha: 1 below the kind's health setting; at or above
--- it, Shown(step). 100% there means always (full health too), on every
--- line, as tanks' always did; 99% is any damage. 0% never.
+-- it (and past the fade range), Shown(step). 100% there means always (full
+-- health too), on every line, as tanks' always did; 99% is any damage. 0% never.
 local function Curve(step, kind)
 	local floor = Floor(kind)
 	local below = Setting(kind.below)
+	local range = FadeRange()
 	local made = curves[kind]
-	if not made or made.floor ~= floor or made.below ~= below then
-		made = { floor = floor, below = below }
+	if not made or made.floor ~= floor or made.below ~= below or made.range ~= range then
+		made = { floor = floor, below = below, range = range }
 		curves[kind] = made
 	end
 	if made[step] ~= nil then return made[step] end
@@ -109,16 +140,7 @@ local function Curve(step, kind)
 	end
 	local ok, curve = pcall(C_CurveUtil.CreateCurve)
 	if ok and curve then
-		curve:SetType(Enum.LuaCurveType.Step)
-		below = tonumber(below) or 0.95
-		if below >= 1 then
-			curve:AddPoint(0, 1) -- (100%: always shown, at full health too, on every line)
-		elseif below > 0 then
-			curve:AddPoint(0, 1)
-			curve:AddPoint(below, Shown(step, kind))
-		else
-			curve:AddPoint(0, Shown(step, kind)) -- (0%: never by health)
-		end
+		FadePoints(curve, tonumber(below) or 0.95, 1, Shown(step, kind))
 		made[step] = curve
 	end
 	return made[step]
@@ -973,10 +995,10 @@ end
 -- alpha. [kind] = { below, floor, [own] = curve (false: none) }.
 local scaledCurves = {}
 local function ScaledCurve(kind, own)
-	local below, floor = Setting(kind.below), Shown(0, kind)
+	local below, floor, range = Setting(kind.below), Shown(0, kind), FadeRange()
 	local made = scaledCurves[kind]
-	if not made or made.below ~= below or made.floor ~= floor then
-		made = { below = below, floor = floor }
+	if not made or made.below ~= below or made.floor ~= floor or made.range ~= range then
+		made = { below = below, floor = floor, range = range }
 		scaledCurves[kind] = made
 	end
 	own = math.floor(own * 100 + 0.5) / 100
@@ -985,16 +1007,7 @@ local function ScaledCurve(kind, own)
 	if not (C_CurveUtil and C_CurveUtil.CreateCurve and Enum.LuaCurveType and UnitHealthPercent) then return false end
 	local ok, curve = pcall(C_CurveUtil.CreateCurve)
 	if ok and curve then
-		curve:SetType(Enum.LuaCurveType.Step)
-		below = tonumber(below) or 0.95
-		if below >= 1 then
-			curve:AddPoint(0, own) -- (100%: always shown)
-		elseif below > 0 then
-			curve:AddPoint(0, own)
-			curve:AddPoint(below, floor * own)
-		else
-			curve:AddPoint(0, floor * own)
-		end
+		FadePoints(curve, tonumber(below) or 0.95, own, floor * own)
 		made[own] = curve
 	end
 	return made[own]
@@ -1201,8 +1214,10 @@ function ns.HealVisionPlatesDebug()
 	for _, part in ipairs(ns.HEAL_PLATE_PARTS) do
 		if ns.Setting("healVisionPlatesKeep" .. part) then kept[#kept + 1] = part end
 	end
-	ns.Print(("heal vision plates: tick %s, page %s, don't fade: %s"):format(tostring(ns.db and ns.db.healVisionPlates),
-		tostring(ns.Setting("handleHealVision")), #kept > 0 and table.concat(kept, ", ") or "nothing"))
+	ns.Print(("heal vision plates: tick %s, page %s, don't fade: %s, fade range %s (Linear curve type %s)"):format(
+		tostring(ns.db and ns.db.healVisionPlates), tostring(ns.Setting("handleHealVision")),
+		#kept > 0 and table.concat(kept, ", ") or "nothing", tostring(FadeRange()),
+		tostring(Enum.LuaCurveType and Enum.LuaCurveType.Linear)))
 	-- (Plates the game locks from addons, friendly ones in dungeons and raids:
 	-- listed only when asked for, and then only counted.)
 	local okAll, all = pcall(C_NamePlate.GetNamePlates, true)
@@ -1375,7 +1390,10 @@ function ns.PlateFontTest()
 			test.Finish("done")
 			local ask = lockedSeen > 0 and "Did your GROUP's names turn into BIG FANCY letters in step 2? Tell me yes or no."
 				or "No locked plates were found: be in a dungeon with your group's nameplates showing (out of CineMode)."
-			ns.PadTestBox("Test done. " .. ask, control .. "  (say \"check log\")", 1, 0.82, 0)
+			-- (Putting the fonts back loses the size the game gave each plate's
+			-- name on retail (15 back as 9, seen 2026-11-12): /reload gives it back.)
+			ns.PadTestBox("Test done. " .. ask, control .. "  Then /reload (names may be smaller till then), "
+				.. "and say \"check log\".", 1, 0.82, 0)
 			return
 		end
 		local step = STEPS[index]

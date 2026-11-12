@@ -14071,6 +14071,11 @@ local function CreateVisionPanel()
 			L["A pet shows once its health drops below this. 100% shows it always, at full health too; 99% at " ..
 				"any damage."],
 			"healVisionPetAlpha", L["How much of a hidden pet still shows. 0% hides them completely."])
+		-- (One for every kind above: how much health over its line they fade in over.)
+		Cell(Row("", L["Fade range"], 12), 1, Field("healVisionFadeRange"), L["Fade range"],
+			L["Members fade in gradually as their health drops toward the Show below health line, instead of " ..
+			"popping in all at once. With Show below 80% and 5% here, they start showing at 85% health and are " ..
+			"fully shown at 80%. 0% switches them at the line, all at once."])
 
 		Cell(Row(TARGET_ICON, L["Your target, at least"], 12), 2, Field("healVisionTargetAlpha"),
 			L["Target min opacity"], L["The least of the member you've targeted that shows while they'd be hidden. " ..
