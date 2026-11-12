@@ -3354,8 +3354,13 @@ local function CreateRevealPanel()
 	local raids = Check(content, "offInRaids", L["In raids"])
 	stack:Add(raids, "check")
 
-	local pvp = Check(content, "offInPvP", L["In PvP"], PVP_TIP)
+	local pvp = Check(content, "offInPvP", L["In PvP"],
+		L["While you're flagged for PvP out in the world (not in dungeons, raids, battlegrounds or arenas, " ..
+		"nor on flights)."])
 	stack:Add(pvp, "check")
+
+	local bgs = Check(content, "offInBGs", L["In battlegrounds"], L["Battlegrounds and arenas."])
+	stack:Add(bgs, "check")
 
 	local party = Check(content, "offInParty", L["In a party"],
 		L["Keep the normal UI while you're in a party (but not a raid group)."])

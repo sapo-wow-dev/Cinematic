@@ -174,7 +174,7 @@ ns.PROFILE_MODULES = {
 	{ key = "solo-only", name = "Solo in the world only", scope = { "CineMode/Exit CineMode" },
 		tip = "On only while you're out in the world on your own: off in dungeons, raids, PvP and groups.",
 		apply = function(set)
-			for _, where in ipairs({ "Dungeons", "Raids", "PvP", "Party", "RaidGroup" }) do
+			for _, where in ipairs({ "Dungeons", "Raids", "PvP", "BGs", "Party", "RaidGroup" }) do
 				set("offIn" .. where, true)
 			end
 		end },

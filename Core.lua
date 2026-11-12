@@ -71,7 +71,8 @@ local DEFAULTS = {
 	                          -- changes, with a fitting sound (rooster, bells, frogs, owl, wolf)
 	offInDungeons = false,    -- no cinematic mode in dungeons (and scenarios)
 	offInRaids = false,
-	offInPvP = false,         -- PvP flagged, battlegrounds and arenas
+	offInPvP = false,         -- PvP flagged out in the world (not dungeons, raids, battlegrounds or arenas)
+	offInBGs = false,         -- battlegrounds and arenas
 	offInCities = false,      -- capital cities
 	offInWorld = false,       -- the open world: anywhere outside instances, cities and inns
 	offInParty = false,       -- while in a party (not a raid group)
@@ -2546,6 +2547,10 @@ local function IsInDisabledZone()
 		-- The open world (inns too). Flights still go cinematic, as they do leaving a city.
 		return ns.db.offInWorld and not ns.OnTaxi() and not IsInInstance() or false
 	end
+	-- (PvP here is flagged out in the world: battlegrounds and arenas have a box of their own.)
+	if place == "pvp" and ns.GetPlaceType() == "pvp" then
+		return ns.db.offInBGs or false
+	end
 	return ns.db[OFF_IN[place]] or false
 end
 
@@ -2577,7 +2582,7 @@ local snoozeUntil = 0
 -- after" wait. Until CineMode starts.
 local switchedOn = false
 local OFF_IN_KEYS = {
-	"stayInCombat", "offInWorld", "offInCities", "offInDungeons", "offInRaids", "offInPvP", "offInParty",
+	"stayInCombat", "offInWorld", "offInCities", "offInDungeons", "offInRaids", "offInPvP", "offInBGs", "offInParty",
 	"offInRaidGroup", "offWhileMoving",
 }
 local offInWas = {}
@@ -2704,7 +2709,8 @@ function ns.CineOffReason()
 		return L["You turned it off for a while from the minimap button's menu."]
 	elseif code == "place" then
 		local place = ns.GetOptionPlace()
-		return L["CineMode is set to stay off here."] .. " " .. exit:format(L[PLACE_BOX[place] or "In the open world"])
+		local box = ns.GetPlaceType() == "pvp" and "In battlegrounds" or PLACE_BOX[place] or "In the open world"
+		return L["CineMode is set to stay off here."] .. " " .. exit:format(L[box])
 	elseif code == "group" then
 		return L["CineMode is set to stay off in your group."] .. " "
 			.. exit:format(ns.InRaid() and L["In a raid group"] or L["In a party"])
@@ -7869,6 +7875,24 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 				if type(point) == "table" then Wins(point) end
 			end
 			ns.db.cardsV14 = true
+		end
+		-- Exit CineMode's In PvP box covered battlegrounds and arenas too; they
+		-- have a box of their own now (2026-11-12), ticked wherever In PvP was.
+		if not ns.db.offInBGsV1 then
+			local function SplitBGs(t)
+				if t.offInBGs == nil and t.offInPvP ~= nil then t.offInBGs = t.offInPvP end
+			end
+			SplitBGs(ns.db)
+			for _, saved in pairs(ns.db.profiles or {}) do
+				if type(saved) == "table" then
+					SplitBGs(saved)
+					if type(saved.settings) == "table" then SplitBGs(saved.settings) end
+				end
+			end
+			for _, point in pairs(ns.db.profileResetPoints or {}) do
+				if type(point) == "table" then SplitBGs(point) end
+			end
+			ns.db.offInBGsV1 = true
 		end
 		-- New settings start as the active profile has them (a built-in's
 		-- changes to the defaults included). A fresh install (or Reset addon)
