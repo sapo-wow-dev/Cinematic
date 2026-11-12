@@ -49,7 +49,7 @@ end
 local function Sections()
 	local UNIT = {
 		{ "Portrait", L["Portrait"] }, { "Name", L["Name"] }, { "NameBack", L["Name background"] }, { "Level", L["Level"] },
-		{ "LevelBack", L["Level background"] }, { "Health", L["Health bar"] }, { "Power", L["Power bar"] }, { "Numbers", L["Bar numbers"] },
+		{ "LevelBack", L["Level background"] }, { "Health", L["Health bar"] }, { "DeadText", L["Dead text"] }, { "Power", L["Power bar"] }, { "Numbers", L["Bar numbers"] },
 		{ "Art", L["Frame art"] }, { "PvP", L["PvP icon"] }, { "Icons", L["Icons"] }, { "Auras", L["Auras"] },
 		{ "CombatText", L["Hit text"] }, { "Threat", L["Threat"] }, { "CastBar", L["Cast bar"] },
 	}

@@ -12410,6 +12410,10 @@ do
 		-- own inside HealthBarsContainer.)
 		Health = { "TargetFrameContent.TargetFrameContentMain.HealthBarsContainer", "healthbar",
 			"@TextureFrameDeadText", "@TextureFrameUnconsciousText" },
+		-- (The "Dead" and "Unconscious" labels alone, keeping the bar.)
+		DeadText = { "TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.DeadText",
+			"TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.UnconsciousText",
+			"@TextureFrameDeadText", "@TextureFrameUnconsciousText" },
 		Power = { "TargetFrameContent.TargetFrameContentMain.ManaBar", "manabar" },
 		Numbers = { "healthbar.TextString", "healthbar.LeftText", "healthbar.RightText",
 			"manabar.TextString", "manabar.LeftText", "manabar.RightText" },
