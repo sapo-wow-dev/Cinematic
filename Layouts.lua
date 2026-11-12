@@ -50,6 +50,24 @@ local function FindLayout(name)
 	return info, nil
 end
 
+-- A whole-UI addon keeping Edit Mode on a layout of its own (ns.layoutKeeper,
+-- set by its support file: fn() -> its name while it does). Profiles' layouts
+-- are left to it then: it puts its own back on every login, so the two
+-- would take turns, each asking for a reload.
+local function KeptBy()
+	local keeper = ns.layoutKeeper
+	return keeper and keeper() or nil
+end
+local keptSaid = false
+local function LeftToKeeper()
+	local keeper = KeptBy()
+	if keeper and not keptSaid then
+		keptSaid = true
+		ns.Log("state", "edit mode layout left to " .. keeper)
+	end
+	return keeper ~= nil
+end
+
 -- A layout's number for SetActiveLayout by name (a preset's too); nil if gone.
 local function IndexOf(info, name)
 	local presets = Presets()
@@ -863,7 +881,7 @@ login:SetScript("OnEvent", function(self)
 			if ns.ProfileChosen() then ns.ApplyProfileLayout() end
 			return
 		end
-		if InCombatLockdown() then return end
+		if InCombatLockdown() or LeftToKeeper() then return end
 		local info = C_EditMode.GetLayouts()
 		local index = IndexOf(info, name)
 		if index and info.activeLayout ~= index then
@@ -893,6 +911,7 @@ function ns.ApplyProfileLayout()
 	end
 	local manager = _G.EditModeManagerFrame
 	if manager and manager:IsShown() then return end -- (the player's choosing there)
+	if LeftToKeeper() then return end
 	local name = ns.db.editModeLayout or ""
 	local info = C_EditMode.GetLayouts()
 	if name == "" then
@@ -951,6 +970,9 @@ function ns.ResetLayouts()
 	local info = C_EditMode.GetLayouts()
 	local own = ns.chardb.layoutOwn
 	local active = ActiveName(info)
+	if KeptBy() then
+		own = nil -- (its addon's layout stays on)
+	end
 	if own and IndexOf(info, own) then
 		active = own
 	elseif active and ns.EDIT_MODE_LAYOUTS[active] then
@@ -992,7 +1014,7 @@ function ns.LayoutWouldChange()
 		return false
 	end
 	local manager = _G.EditModeManagerFrame
-	if manager and manager:IsShown() then return false end
+	if manager and manager:IsShown() or KeptBy() then return false end
 	local name = ns.db.editModeLayout or ""
 	local info = C_EditMode.GetLayouts()
 	if name == "" then
@@ -1037,7 +1059,7 @@ end
 -- own stays so while it's a preset), so logging in, or switching back to the
 -- profile, puts the player's own pick back.
 local function AdoptLayout()
-	if not ns.db or not ns.chardb or not ns.ProfileChosen() then return end
+	if not ns.db or not ns.chardb or not ns.ProfileChosen() or KeptBy() then return end
 	local want = ns.db.editModeLayout or ""
 	if want == "" then return end
 	local info = C_EditMode.GetLayouts()

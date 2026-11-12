@@ -194,6 +194,28 @@ ns.WhenAddonLoads("DaylightUI_ActionBars", function()
 	ns.FadeWithRows(rows)
 end)
 
+-- Its own Edit Mode layout: once a character's set up with it (or is on
+-- one of its layouts), it puts that layout back on every login, asking for a
+-- reload. A profile's layout of ours switching it away each login too made
+-- the two take turns, so its layout is left to it (Layouts.lua). A
+-- character that said "not now" to its setup, on another layout, isn't
+-- kept: profiles' layouts work there as without it.
+ns.WhenAddonLoads("DaylightUI", function()
+	ns.layoutKeeper = function()
+		local DUI = _G.DaylightUI
+		local editMode, installer = DUI and DUI.EditMode, DUI and DUI.Installer
+		if not editMode then
+			return nil
+		end
+		local okSet, state = pcall(function() return installer and installer.State() end)
+		local okOn, on = pcall(editMode.AnyActive)
+		if (okSet and state == "installed") or (okOn and on) then
+			return "DaylightUI"
+		end
+		return nil
+	end
+end)
+
 ns.WhenAddonLoads("DaylightUI_UnitFrames", function()
 	ns.FadeWithRow("swing", "swing", { "DaylightUISwingTimer" }, true, true)
 	ns.AddPortraitFrame("DaylightUIFrame_player")
