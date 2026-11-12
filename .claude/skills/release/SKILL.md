@@ -1,7 +1,7 @@
 ---
 name: release
-description: The user typed /release. Gather everything uncommitted in C:\dev\Cinematic, run the checks, review it, find missing translations and guidebook updates, and stop for the user's review; on their go-ahead, commit it in player-readable commits, push, tag the next version and push the tag (the GitHub Action uploads to CurseForge).
-argument-hint: "[quick] [version, default next patch] [anything to leave out or note]"
+description: The user typed /release. Gather everything uncommitted in C:\dev\Cinematic, run the checks, review it (with `full`, also find missing translations and guidebook updates), and stop for the user's review; on their go-ahead, commit it in player-readable commits, push, tag the next version and push the tag (the GitHub Action uploads to CurseForge).
+argument-hint: "[quick|full] [version, default next patch] [anything to leave out or note]"
 disable-model-invocation: true
 ---
 
@@ -12,8 +12,16 @@ here, other sessions' work is the user's own work and is included, unless the
 user's words after /release leave something out. Two phases with a hard stop
 between them: nothing is committed, pushed or tagged until the user says go.
 
-**`/release quick`** (the first word is `quick`) skips all of that: see
-"Quick release" at the end. Anything else runs the full two phases below.
+Three modes, picked by the first word after /release:
+- **`/release`** (no mode word): the two phases below, **without**
+  translations and the guidebook: skip steps 5, 6, 11 and 12. Most players
+  never see those, so they wait for a full release.
+- **`/release full`**: everything below, steps 5, 6, 11 and 12 included.
+  It catches up on what plain releases left behind: the translation script
+  already sees every key, and the guidebook check (step 6) covers the
+  player-facing commits since the last commit that touched `docs/`
+  (`git log -1 --format=%h -- docs/`), not just this diff.
+- **`/release quick`**: skips almost all of it: see "Quick release" at the end.
 
 ## Phase 1: gather, check, review (no commits)
 
@@ -61,14 +69,14 @@ between them: nothing is committed, pushed or tagged until the user says go.
    or missing from `Locales/esES.lua`, a dev-only feature that leaked into
    `Cinematic.toc`. Note what each change does for players.
 
-5. **Translations.** `python -I .claude/skills/release/translations.py`
+5. **Translations** (`full` only). `python -I .claude/skills/release/translations.py`
    lists, per language (all nine in `Locales/`, esES included), the new
    `L["..."]` keys each one lacks, and stale keys whose English was reworded
    or removed. It only sees literal `L["..."]`: also look in the diff for
    new or renamed page names (`RegisterSubpage`), and tables run through
    `ns.TranslateFields`. Count what's missing; it's written in phase 2.
 
-6. **Guidebook.** The site in `docs/` (GitHub Pages, updated on every push
+6. **Guidebook** (`full` only). The site in `docs/` (GitHub Pages, updated on every push
    to main) is hand-written from the addon's player text. For each change a
    player would notice, find the page that covers it (`grep -ril` the
    feature's words in `docs/`; the page list is PAGES in
@@ -91,8 +99,8 @@ between them: nothing is committed, pushed or tagged until the user says go.
    - the version it will be (vX.Y.Z),
    - each planned commit: subject + its files,
    - check results (pass, or the exact failure),
-   - translations: how many keys missing / stale, per language,
-   - guidebook: each page and what it needs (one line each),
+   - `full` only: translations, how many keys missing / stale, per language,
+   - `full` only: guidebook, each page and what it needs (one line each),
    - review findings, worst first, each with file:line and a proposed fix,
    - untracked files you'd leave out, and why.
    Then ask with AskUserQuestion what to do: fix the findings first
@@ -115,7 +123,7 @@ between them: nothing is committed, pushed or tagged until the user says go.
 10. **What's new**: run the whats-new skill over the whole release; any New
     features entry only with the user's yes (it goes in the matching commit).
 
-11. **Translations**: write every missing key into each locale file, in that
+11. **Translations** (`full` only): write every missing key into each locale file, in that
     language, under a comment naming the source file (as the files do now);
     for a stale key, move its translation onto the new English key (reworded
     to match) and delete the old line. Keep `%s`/`%d`, `|c...|r` color codes,
@@ -125,7 +133,7 @@ between them: nothing is committed, pushed or tagged until the user says go.
     luacheck + luacompile the locale files. They go in the matching topic's
     commit (they're shared files: split by topic like any other).
 
-12. **Guidebook**: make the page edits from step 6 in plain player wording,
+12. **Guidebook** (`full` only): make the page edits from step 6 in plain player wording,
     American spelling, no file names, dev tools or CI; a new page gets the
     site's head lines and an entry in PAGES. Preview with the `guidebook`
     launch config if layout changed. Docs edits go in the matching topic's
@@ -196,4 +204,4 @@ offline check still runs (step 2a): GitHub runs it on every push.
 5. Push, tag, push the tag (step 14; while GitHub is down, its manual
    zip instead), then report the version, the commit,
    the Actions link, and what was left out. Mention that translations and
-   the guidebook can catch up in the next full `/release`.
+   the guidebook can catch up in the next `/release full`.
