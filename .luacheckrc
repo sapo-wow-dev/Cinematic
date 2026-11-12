@@ -397,7 +397,8 @@ read_globals = {
 	"seterrorhandler",
 	"tinsert",
 	-- CardMoments.lua
-	"MAX_PLAYER_LEVEL", "ERR_ZONE_EXPLORED", "ERR_ZONE_EXPLORED_XP", "C_MapExplorationInfo", "GetAchievementInfo",
+	"MAX_PLAYER_LEVEL", "ERR_ZONE_EXPLORED", "ERR_ZONE_EXPLORED_XP", "C_MapExplorationInfo", "GetAchievementInfo", "GetCategoryList", "GetCategoryInfo", "GetCategoryNumAchievements",
+	"GetAchievementNumCriteria", "GetAchievementCriteriaInfo",
 	"FACTION_STANDING_CHANGED", "C_PetJournal", "GetProfessions", "GetProfessionInfo", "GetNumSkillLines",
 	"GetSkillLineInfo", "TRADE_SKILLS", "SECONDARY_SKILLS", "GetQuestTagInfo", "GetBattlefieldWinner",
 	"GetBattlefieldArenaFaction", "CombatLogGetCurrentEventInfo", "FACTION_STANDING_LABEL5", "FACTION_STANDING_LABEL1",
@@ -409,7 +410,7 @@ read_globals = {
 	"GetNumQuestChoices", "GetNumQuestItems", "GetNumQuestRewards", "GetQuestItemInfo", "GetQuestMoneyToGet",
 	"GetRewardMoney", "GetRewardXP", "IsQuestCompletable", "GetNumActiveQuests", "GetNumAvailableQuests",
 	"GetActiveTitle", "GetAvailableTitle", "GetAvailableQuestInfo", "SelectActiveQuest", "SelectAvailableQuest",
-	"C_CampaignInfo", "C_MajorFactions", "C_QuestInfoSystem", "C_QuestOffer", "BreakUpLargeNumbers", "AbbreviateLargeNumbers", "AbbreviateNumbers", "Ambiguate", "C_RestrictedActions",
+	"C_CampaignInfo", "C_MajorFactions", "C_QuestInfoSystem", "C_QuestOffer", "BreakUpLargeNumbers", "UnitXP", "UnitXPMax", "IsXPUserDisabled", "AbbreviateLargeNumbers", "AbbreviateNumbers", "Ambiguate", "C_RestrictedActions",
 	"GameFontHighlight", "IsModifierKeyDown", "IsModifiedClick", "GetQuestItemLink",
 	-- Reload.lua
 	"ToggleWorldMap", "ToggleQuestLog", "ToggleSpellBook", "PVEFrame_ToggleFrame", "InterfaceOptionsFrame", "OpenAllBags", "C_UI",

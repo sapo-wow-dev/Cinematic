@@ -7803,6 +7803,13 @@ local function CreateQualityPanel()
 		L["Lines brought back start with the time they were said. Not needed with the game's own Chat Timestamps " ..
 		"on: their lines have the time already, so nothing is added."]), "check", 24)
 	GreyUnless(chatTime, function(db) return db.chatHistory end)
+	-- (XpLeft.lua.)
+	stack:Add(Check(content, "xpLeft", L["Show XP left to level"],
+		L["The experience bar's text and its tooltip also say how much XP you still need for the next level."],
+		function(value)
+			KeyPut("xpLeft", value)
+			if ns.RefreshXpLeft then ns.RefreshXpLeft() end
+		end), "check")
 	-- (Camera.lua.)
 	local loginZoom = stack:Add(Check(content, "loginZoom", L["Reset the zoom on login and /reload"],
 		L["After you log in or /reload, the camera zooms to the distance below, rather than staying " ..

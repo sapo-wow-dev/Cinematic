@@ -379,6 +379,7 @@ local DEFAULTS = {
 	chatCopyColours = true,    -- ...its lines in their chat colours (the Colours tick in that window)
 	chatHistory = ADDON_NAME == "CinematicDev", -- chat windows keep their lines across a reload or logout (ChatCopy.lua; off for players, on in the dev copy)
 	chatHistoryTime = ADDON_NAME == "CinematicDev", -- ...each brought-back line starts with the time it was said
+	xpLeft = ADDON_NAME == "CinematicDev", -- the XP bar's text and tooltip say how much XP is left to the next level (XpLeft.lua; off for players, on in the dev copy)
 	loginZoom = false,         -- after a login or /reload, zoom to loginZoomDistance (Camera.lua)
 	loginZoomDistance = 15,    -- ...yards
 	reloadButton = false,      -- a Reload button on the screen (Reload.lua)
@@ -1480,7 +1481,7 @@ local PAGE_SWITCH = {}
 for page, keys in pairs({
 	handleQuality = { "campfireSitButton", "dragEquipCharacter", "talentLink", "talentCalc",
 		"centerPanels", "dragPanels", "chatCopyButton", "chatHistory", "chatHistoryTime", "loginZoom",
-		"reloadButton", "reloadKeepWindows" },
+		"reloadButton", "reloadKeepWindows", "xpLeft" },
 	handleHunter = { "hunterRightClickShot", "hunterAmmoSort", "hunterQuiverFill", "petUnhappyShow" },
 	handleAddonSupport = { "questieMoveIcons", "eqolMoveIcons" },
 	duelPlates = { "duelCC", "duelHideOthers" }, -- Duel Vision's page
