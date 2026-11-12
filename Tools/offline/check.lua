@@ -149,6 +149,42 @@ if arg[1] and not update then
 		db.idleOrbit, ns.stillSince, ns.activeCam, ns.playerMoving = kept[1], kept[2], kept[3], kept[4]
 		for name in pairs(keptApi) do _G[name] = keptApi[name] end
 	end
+	-- Addon Conflicts (AddonSupport.lua, Conflicts.lua): an unpicked row and
+	-- Theirs stand aside for the other addon's own version while it's on; Ours
+	-- and Both don't; a row with no Both reads Both as unpicked; a Style
+	-- page's switch stands aside only for Theirs.
+	do
+		local function Problem(text) print("problem\tAddon Conflicts: " .. text) end
+		local on, count = true, #ns.CONFLICTS
+		local picks = ns.db.conflictPicks
+		local row = { addon = "TestAddon", label = "Test", group = "style", styleSwitch = "tooltipStyle", noBoth = true }
+		ns.AddFeatureYield("card:conflictTest", function() return on and "TestAddon" or nil end, row)
+		if #ns.CONFLICTS ~= count + 1 or row.id ~= "TestAddon:card:conflictTest" then Problem("the row isn't listed") end
+		if ns.FeatureYieldedTo("card:conflictTest") ~= "TestAddon" then Problem("unpicked doesn't play theirs") end
+		if not ns.StyleSwitchYielded("tooltipStyle") then Problem("unpicked: the Style page doesn't stand aside") end
+		if not ns.FeatureYieldReason("card:conflictTest"):find("not picked") then Problem("no reason for unpicked") end
+		ns.SetConflictPick(row, "ours")
+		if ns.FeatureYieldedTo("card:conflictTest") then Problem("Ours still plays theirs") end
+		if ns.StyleSwitchYielded("tooltipStyle") then Problem("Ours: the Style page still stands aside") end
+		if select(2, ns.ConflictState("card:conflictTest")) ~= "ours" then Problem("ConflictState doesn't say Ours") end
+		picks[row.id] = "both"
+		if ns.ConflictPick(row) ~= "theirs" then Problem("Both on a row with no Both isn't read as unpicked") end
+		ns.SetConflictPick(row, "theirs")
+		if ns.FeatureYieldedTo("card:conflictTest") ~= "TestAddon" then Problem("Theirs doesn't play theirs") end
+		on = false
+		if ns.FeatureYieldedTo("card:conflictTest") or ns.StyleSwitchYielded("tooltipStyle") then
+			Problem("stands aside with the other addon's version off")
+		end
+		on = true
+		if not ns.ConflictStandsAside("card:conflictTest") then Problem("Theirs: ConflictStandsAside says no") end
+		picks[row.id] = nil
+		row.default = "ours"
+		if ns.ConflictPick(row) ~= "ours" or ns.FeatureYieldedTo("card:conflictTest") then
+			Problem("an unpicked row with default Ours doesn't play ours")
+		end
+		row.default = nil
+		table.remove(ns.CONFLICTS)
+	end
 	-- The camera director (Director.lua): decides once a frame at most, not
 	-- again with nothing changed until its tick, then on the tick, and at
 	-- once when woken (phase 2).

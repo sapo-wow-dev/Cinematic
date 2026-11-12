@@ -29,10 +29,6 @@ DEFAULTS.cardProfessionOn = false
 DEFAULTS.cardQuestOn = false
 DEFAULTS.cardClearedOn = false
 DEFAULTS.cardRareOn = false
--- With RareScanner loaded: whose alert a rare it finds shows as, "ours"
--- (Rare spotted's card, its button hidden) or "theirs" (its button, our
--- card quiet for that rare). Support/RareScanner.lua.
-DEFAULTS.rareScannerAlert = "ours"
 DEFAULTS.cardBattlegroundOn = false
 DEFAULTS.cardStreakOn = false
 DEFAULTS.cardBossDownOn = false
@@ -922,7 +918,7 @@ local function Spot(unit)
 	if not (name and key) or raresSeen[key] or raresSeen[name] then return end
 	-- (RareScanner's button wanted, which hears the same unit events: a
 	-- moment for it to say it has this one.)
-	if ns.Setting("rareScannerAlert") == "theirs" and ns.AddOnLoaded("RareScanner") then
+	if ns.RareScannerPick() == "theirs" and ns.AddOnLoaded("RareScanner") then
 		C_Timer.After(0.3, function() SpotNow(name, key, class == "rareelite") end)
 		return
 	end
@@ -937,7 +933,7 @@ end
 function ns.RareScannerFound(name, guid, displayID)
 	name = Plain(name)
 	if not name then return false end
-	if ns.Setting("rareScannerAlert") == "theirs" then
+	if ns.RareScannerPick() == "theirs" then
 		rareScannerHad[name] = true
 		return false
 	end

@@ -176,6 +176,7 @@ Profiles.lua
 Share.lua
 Backups.lua
 Welcome.lua
+Conflicts.lua
 ShowMe.lua
 Layouts.lua
 CameraScriptsPage.lua

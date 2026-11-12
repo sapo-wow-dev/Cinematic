@@ -28,6 +28,7 @@ local GLOBAL_KEYS = {
 	dockSpots = true, -- (Skin.lua's DockBeside: where you dragged popped-out windows)
 	peeksLog = true, -- (/cine debug peeks log)
 	addonSupportOff = true, -- (Addons page: supported addons switched off, AddonSupport.lua)
+	conflictPicks = true, -- (Addon Conflicts: whose version plays, AddonSupport.lua)
 }
 -- Lists kept as tables that belong to a profile (their defaults are in code;
 -- see EnsureTables in Core.lua). Missing from a profile: emptied, which means defaults.

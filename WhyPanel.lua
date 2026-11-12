@@ -642,7 +642,7 @@ function Fill()
 			"are off, or it has only just started. Give it a moment."])
 			or (search ~= "" and L["Nothing here is called \"%s\"."]:format(search))
 			or (filter == "addons" and L["No other addon's frames are being faded. Cinematic fades the addons it " ..
-				"knows and the frames you add on the Addons page. For any other frame, use Pick a frame on screen."])
+				"knows and the frames you add on Addons > Frames. For any other frame, use Pick a frame on screen."])
 			or L["Nothing in this list right now."])
 	end
 	-- (Addons: only those Cinematic fades have a row.)
@@ -795,7 +795,7 @@ local function MakeWindow()
 	window.note:SetWidth(LIST_WIDTH - 8)
 	window.note:SetJustifyH("LEFT")
 	window.note:SetText(L["Only frames Cinematic fades are listed: the addons it knows, and the frames you add on the " ..
-		"Addons page. For any other addon's frame, use Pick a frame on screen."])
+		"Addons > Frames. For any other addon's frame, use Pick a frame on screen."])
 	MakeDetail()
 
 	-- The Calm Timer bar (placed by Fill, at the list's top while it runs):

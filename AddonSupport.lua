@@ -3,6 +3,7 @@
 -- not) and any setup code, which only runs once that addon has loaded. So an
 -- addon that isn't loaded costs nothing beyond its rows.
 local ADDON_NAME, ns = ...
+local L = ns.L
 
 -- Other addons' frames faded out of the box, listed on the Advanced Frames page.
 -- Each fades as its own group ("addon:<key>") while its addon is loaded and
@@ -207,31 +208,123 @@ function ns.AddQuestFocusTracker(fn, name)
 	ns.questFocusTrackerNames[fn] = name
 end
 
--- Features another addon has its own version of, where the other addon's
--- wins while it's on (the player's pick, 2026-11-12; a tool to choose per
--- feature may come). fn() returns the addon's name while its version is on.
--- Features: "card:<event id>" (Cards.lua), "scene:<trigger key>" (camera
--- scenes: CameraRows.lua), "questObjectGlow" and "hideObjectIcons" (Quest
--- Vision's soft-target settings: Core.lua).
-local featureYields = {}
-function ns.AddFeatureYield(feature, fn)
-	featureYields[feature] = featureYields[feature] or {}
-	table.insert(featureYields[feature], fn)
+-- Features another addon has its own version of: the Addon Conflicts page and
+-- window pick whose plays, per feature (Conflicts.lua). Picks, saved for the
+-- account in db.conflictPicks by row id ("<addon>:<key>"): "theirs" (the
+-- default, and what an unpicked row does: Cinematic's stands aside while
+-- theirs is on), "ours" (Cinematic's plays and theirs is hidden at alpha 0
+-- while ours is on, its settings left be) or "both".
+-- ns.AddConflict(row) lists one: row.key (the feature), addon, label, group
+-- ("scenes", "quest" or "style"), about (a line on what it is), theirs (fn:
+-- true while the addon's own version is on), ours (fn: true while
+-- Cinematic's is; theirs is hidden only then), hide (their frames' global
+-- names, or fn returning frames: held at alpha 0 for "ours"), noBoth (one
+-- look wins: no Both), styleSwitch (a Style page's switch that stands aside
+-- for "theirs": ns.StyleOn), onPick (fn after its pick changes).
+ns.CONFLICTS = {}
+local conflictById = {}
+local PICKS = { theirs = true, ours = true, both = true }
+function ns.AddConflict(row)
+	row.id = row.addon .. ":" .. row.key
+	if conflictById[row.id] then return conflictById[row.id] end
+	conflictById[row.id] = row
+	table.insert(ns.CONFLICTS, row)
+	if ns.OnConflictAdded then ns.OnConflictAdded(row) end
+	return row
 end
 
--- The addon whose own version of a feature is on now, or nil.
+-- A row's pick, and whether the player made it (an unpicked row plays theirs,
+-- or its row.default: one that had a pick of its own before, RareScanner's).
+function ns.ConflictPick(row)
+	local picks = ns.db and ns.db.conflictPicks
+	local pick = type(picks) == "table" and picks[row.id]
+	if not PICKS[pick] or (pick == "both" and row.noBoth) then
+		return row.default or "theirs", false
+	end
+	return pick, true
+end
+
+-- Whether the addon's own version is on now.
+function ns.ConflictTheirsOn(row)
+	local ok, on = pcall(row.theirs)
+	return ok and on and true or false
+end
+
+-- The row for a feature whose other addon's version is on now, its pick and
+-- that addon, or nil.
+function ns.ConflictState(key)
+	for _, row in ipairs(ns.CONFLICTS) do
+		if row.key == key and ns.ConflictTheirsOn(row) then
+			return row, (ns.ConflictPick(row)), row.addon
+		end
+	end
+	return nil
+end
+
+-- Whether Cinematic's version of a feature stands aside now: an addon's own
+-- is on and its row's pick is theirs.
+function ns.ConflictStandsAside(key)
+	for _, row in ipairs(ns.CONFLICTS) do
+		if row.key == key and ns.ConflictPick(row) == "theirs" and ns.ConflictTheirsOn(row) then
+			return row
+		end
+	end
+	return nil
+end
+
+-- A Style page's switch standing aside: an addon's own look is on and its
+-- row's pick is theirs.
+function ns.StyleSwitchYielded(switchKey)
+	for _, row in ipairs(ns.CONFLICTS) do
+		if row.styleSwitch == switchKey and ns.ConflictPick(row) == "theirs" and ns.ConflictTheirsOn(row) then
+			return row
+		end
+	end
+	return nil
+end
+
+-- Features gated by a pick (ns.FeatureYieldedTo): "card:<event id>"
+-- (Cards.lua), "scene:<trigger key>" (camera scenes: CameraRows.lua),
+-- "questObjectGlow" and "hideObjectIcons" (Quest Vision's soft-target
+-- settings: Core.lua). fn() returns the addon's name while its version is
+-- on; row (ns.AddConflict's fields, its key the feature's unless it shares a
+-- row: row.key) lists it on the page.
+local featureYields = {}
+function ns.AddFeatureYield(feature, fn, row)
+	row = row or {}
+	row.key = row.key or feature
+	row.theirs = row.theirs or fn
+	if row.addon then row = ns.AddConflict(row) end
+	featureYields[feature] = featureYields[feature] or {}
+	table.insert(featureYields[feature], { fn = fn, row = row.id and row or nil })
+end
+
+-- The addon whose own version of a feature plays instead of Cinematic's now
+-- (on, and its row's pick theirs), and its row; or nil.
 function ns.FeatureYieldedTo(feature)
 	local list = featureYields[feature]
 	if not list then
 		return nil
 	end
-	for _, fn in ipairs(list) do
-		local ok, who = pcall(fn)
-		if ok and who then
-			return who
+	for _, each in ipairs(list) do
+		local ok, who = pcall(each.fn)
+		if ok and who and (not each.row or ns.ConflictPick(each.row) == "theirs") then
+			return who, each.row
 		end
 	end
 	return nil
+end
+
+-- Why a feature stands aside, in words (Cards' reasons, /cine why), or nil.
+function ns.FeatureYieldReason(feature)
+	local who, row = ns.FeatureYieldedTo(feature)
+	if not who then return nil end
+	local picked = false
+	if row then picked = select(2, ns.ConflictPick(row)) end
+	if picked then
+		return L["%s shows its own (Addon Conflicts: Theirs)"]:format(who)
+	end
+	return L["%s shows its own (Addon Conflicts: not picked yet, so Theirs)"]:format(who)
 end
 
 -- Its frames standing in for the game's, by Standard Frames row: each row is

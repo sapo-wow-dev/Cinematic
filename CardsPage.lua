@@ -1461,14 +1461,8 @@ function ns.CreateCardSettingsPanel(kit)
 			-- loaded. Support/RareScanner.lua.)
 			if id == "rare" and ns.AddOnWillLoad("RareScanner") then
 				Header(L["RareScanner"])
-				PickRow("rareScannerAlert", L["Rares it finds:"], {
-					{ "ours", L["This card"], L["Its button goes as it comes up for a rare, and this card shows " ..
-						"instead (a click on its icon targets the rare). Its sound and chat line play as you have " ..
-						"them in RareScanner."] },
-					{ "theirs", L["RareScanner's button"], L["Its button shows as usual, and this card stays " ..
-						"quiet for the rares it shows."] },
-				}, L["How a rare RareScanner finds shows: this card, or RareScanner's own button. Treasures and " ..
-					"events keep its button either way. With this card unticked, its button shows."])
+				stack:Note(content, L["Whose alert a rare RareScanner finds shows as (this card, or its own " ..
+					"button) is its row on Addons > Conflicts."], NOTE_W)
 			end
 			if ns.CARD_BY_ID[id] and ns.CARD_BY_ID[id].inFight then
 				FightRow(id)

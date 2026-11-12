@@ -205,3 +205,119 @@ ns.WhenAddonLoads("ElvUI", function()
 	end
 	ns.AddPlateAlpha(SetPlateAlpha)
 end)
+
+-- Its own versions of some of Cinematic's features (Addon Conflicts: whose
+-- plays, AddonSupport.lua and Conflicts.lua; theirs while unpicked).
+local function Elv()
+	local E = _G.ElvUI and _G.ElvUI[1]
+	return type(E) == "table" and E or nil
+end
+local function Private(path, key)
+	local E = Elv()
+	local t = E and E.private and E.private[path]
+	return type(t) == "table" and t[key] or nil
+end
+-- Its backdrop (SetTemplate: the backdrop pieces it adds, and its inner and
+-- outer edges) on each of these frames.
+local BACKDROP = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner", "TopEdge",
+	"BottomEdge", "LeftEdge", "RightEdge", "Center", "iborder", "oborder" }
+local function Backdrops(frames)
+	local out = {}
+	for _, frame in ipairs(frames) do
+		for _, key in ipairs(BACKDROP) do
+			local piece = frame[key]
+			if type(piece) == "table" and piece.SetAlpha then out[#out + 1] = piece end
+		end
+	end
+	return out
+end
+local TOOLTIPS = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "EmbeddedItemTooltip" }
+
+ns.WhenAddonLoads("ElvUI", function()
+	-- Its AFK mode: its own AFK screen, the UI hidden and the camera spun.
+	-- Ours: the AFK scene's camera plays, its screen is held hidden, its
+	-- spin doesn't start and the UI is left for CineMode.
+	local afkRow
+	local function OursPlays()
+		return afkRow and ns.ConflictPick(afkRow) == "ours" and ns.TriggerRowNow("AFK") ~= nil
+	end
+	local function AfkOn()
+		local E = Elv()
+		return E and E.db and E.db.general and E.db.general.afk == true and "ElvUI" or nil
+	end
+	afkRow = { key = "scene:AFK", addon = "ElvUI", label = "AFK scene", group = "scenes",
+		ours = function() return ns.TriggerRowNow("AFK") ~= nil end, hide = { "ElvUIAFKFrame" },
+		about = "What plays while you're away: Cinematic's AFK camera, or ElvUI's AFK mode (its own screen, " ..
+			"the UI hidden and the camera spinning)" }
+	ns.AddFeatureYield("scene:AFK", AfkOn, afkRow)
+	local E = Elv()
+	local AFK = E and E.GetModule and select(2, pcall(E.GetModule, E, "AFK"))
+	if type(AFK) == "table" and type(AFK.CameraSpin) == "function" and type(AFK.SetAFK) == "function" then
+		-- (Its spin, wrapped so it never starts while ours plays: a stop
+		-- after it would stop our own camera's turn too, and its start
+		-- counts as you turning the camera.)
+		local spin = AFK.CameraSpin
+		AFK.CameraSpin = function(self, status, ...)
+			if status and OursPlays() then return end
+			return spin(self, status, ...)
+		end
+		hooksecurefunc(AFK, "SetAFK", function(_, status)
+			if status and OursPlays() and not InCombatLockdown() and not UIParent:IsShown() then
+				UIParent:Show()
+			end
+		end)
+	end
+
+	ns.AddConflict({ key = "style:tooltip", addon = "ElvUI", label = "Tooltip look", group = "style", noBoth = true,
+		styleSwitch = "tooltipStyle",
+		about = "How tooltips look: the Style hub's Tooltip Style page, or ElvUI's tooltips",
+		theirs = function() return Private("tooltip", "enable") == true end,
+		ours = function() return ns.StyleOn("tooltipStyle") end,
+		hide = function()
+			local list = {}
+			for _, name in ipairs(TOOLTIPS) do
+				if type(_G[name]) == "table" then list[#list + 1] = _G[name] end
+			end
+			return Backdrops(list)
+		end,
+		onPick = function() if ns.RefreshTooltipStyle then ns.RefreshTooltipStyle() end end })
+
+	ns.AddConflict({ key = "style:bubbles", addon = "ElvUI", label = "Chat bubble look", group = "style",
+		noBoth = true, styleSwitch = "bubblesStyle",
+		about = "How chat bubbles look: the Style hub's Chat Bubble Style page, or ElvUI's bubbles",
+		theirs = function()
+			local option = Private("general", "chatBubbles")
+			return option ~= nil and option ~= "disabled"
+		end,
+		ours = function() return ns.StyleOn("bubblesStyle") end,
+		hide = function()
+			local list = {}
+			local all = C_ChatBubbles and C_ChatBubbles.GetAllChatBubbles and C_ChatBubbles.GetAllChatBubbles()
+			for _, bubble in pairs(type(all) == "table" and all or {}) do
+				if type(bubble) == "table" and not (bubble.IsForbidden and bubble:IsForbidden()) then
+					local holder = bubble:GetChildren()
+					if type(holder) == "table" and not (holder.IsForbidden and holder:IsForbidden()) then
+						list[#list + 1] = holder
+					end
+				end
+			end
+			return Backdrops(list)
+		end,
+		onPick = function() if ns.RefreshBubbleStyle then ns.RefreshBubbleStyle() end end })
+
+	-- Its Loot Roll (bars of its own for group loot rolls) against Roll
+	-- Vision's window (RollWindow.lua). Ours: its bars held hidden.
+	ns.AddConflict({ key = "rolls", addon = "ElvUI", label = "Loot roll window", group = "windows",
+		about = "Group loot rolls: Roll Vision's window, or ElvUI's Loot Roll bars",
+		theirs = function() return Private("general", "lootRoll") == true end,
+		ours = function() return ns.Setting("rollWindow") end,
+		hide = function()
+			local list = {}
+			for i = 1, 10 do
+				local bar = _G["ElvUI_LootRollFrame" .. i]
+				if type(bar) == "table" then list[#list + 1] = bar end
+			end
+			return list
+		end,
+		onPick = function() if ns.RefreshRollWindow then ns.RefreshRollWindow() end end })
+end)

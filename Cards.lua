@@ -527,8 +527,8 @@ function ns.CardAllowed(id, edge, cine)
 	if not event then return false, "no such card" end
 	if not ns.Setting("cards") then return false, "Card Vision is off" end
 	if not ns.Setting(event.on) then return false, event.name .. " is unticked" end
-	local other = ns.FeatureYieldedTo("card:" .. id)
-	if other then return false, other .. " shows its own" end
+	local other = ns.FeatureYieldReason("card:" .. id)
+	if other then return false, other end
 	if event.needs and not ns.CardOn(event.needs) then return false, BY_ID[event.needs].name .. " is unticked" end
 	if cine == nil then cine = ns.lastCinematic and true or false end
 	ns.combatEdge, ns.combatEdgeCine = edge, cine

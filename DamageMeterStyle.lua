@@ -149,7 +149,8 @@ end
 local function Refresh()
 	if not ns.db then return end
 	local look = ns.StyleLook("irStyle")
-	local on = ns.StyleOn("irStyle") and ns.ThemeRing() ~= nil
+	-- (Not over another addon's own look for it with its Addon Conflicts row on Theirs.)
+	local on = ns.StyleOn("irStyle") and ns.ThemeRing() ~= nil and not ns.ConflictStandsAside("style:damageMeter")
 	plan.path, plan.atlas = nil, nil
 	if on and look.dmBars ~= false then plan.path, plan.atlas = ns.StyleTexturePath(ns.db.styleTexture) end
 	plan.font = on and ROMAN and look.dmFont ~= false and ns.StyleFontFile and ns.StyleFontFile(ns.db.styleFont) or nil

@@ -2066,6 +2066,8 @@ local function HandleSlash(msg)
 		end
 	elseif cmd == "welcome" then
 		ns.ShowWelcome()
+	elseif cmd == "conflicts" then
+		ns.ShowConflicts(true)
 	elseif cmd == "profile" or cmd == "profiles" then
 		-- (The name's matched ignoring case: msg was lowered.)
 		local name = arg ~= "" and ns.FindProfile(arg)

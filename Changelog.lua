@@ -11,6 +11,10 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-12", page = "Addon Conflicts", title = "Addon Conflicts",
+		text = "Where another addon has its own version of a Cinematic feature (DaylightUI, ElvUI, Naowh Forever, " ..
+		"RareScanner), pick whose plays: theirs, ours or both. It's on the new Addons hub, which also holds your " ..
+		"addon settings and addon frames." },
 	{ date = "2026-11-12", page = "Advanced Frames", title = "ClassicUI Forever support", client = "forever",
 		text = "ClassicUI Forever's action bars, bar art and quest watch now fade with Cinematic, and come back " ..
 		"when you hover them." },

@@ -282,6 +282,11 @@ local function Dress(tooltip, look, r, g, b)
 		skins[tooltip] = skin
 	end
 	if skin then
+		-- (Another addon's tooltip look with its Addon Conflicts row on Ours: on
+		-- the tooltip itself, as that addon hides the game's art, ours with it.)
+		local _, pick = ns.ConflictState("style:tooltip")
+		local parent = (look and pick == "ours") and tooltip or slice
+		if skin:GetParent() ~= parent then skin:SetParent(parent) end
 		-- (Under the tooltip's own words, which are on the tooltip itself, not
 		-- over them; its lines and corners stay on top.)
 		local level = tooltip:GetFrameLevel()

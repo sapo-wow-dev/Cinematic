@@ -2,12 +2,12 @@
 -- rare's name, model and loot, a click to target it), at the bottom of the
 -- screen as it finds a rare, treasure or event. It fades as its own row on
 -- the Advanced Frames page. For a rare NPC, Rare spotted's card can stand in
--- for it (Card Settings > Rare spotted: rareScannerAlert, "ours" by default):
--- its button goes as it comes up and our card shows, with RareScanner's
--- sound and chat line as it has them. "theirs": its button as before, and
--- our card stays quiet for the rares it showed. Treasures and events keep its
--- button either way. Its button only comes up out of fights (it's a secure
--- button), so hiding it is too.
+-- for it (its row on Addons > Conflicts, Ours while
+-- unpicked): its button goes as it comes up and our card shows, with
+-- RareScanner's sound and chat line as it has them. Theirs: its button as
+-- before, and our card stays quiet for the rares it showed. Treasures and
+-- events keep its button either way. Its button only comes up out of fights
+-- (it's a secure button), so hiding it is too.
 local _, ns = ...
 local L = ns.L
 
@@ -24,7 +24,28 @@ local NPC_ATLAS = {
 	["Warfront-NeutralHero"] = true, ["Tormentors-Boss"] = true, ["WarlockPortal-Yellow-32x32"] = true,
 }
 
+-- Its Addon Conflicts row (Ours while unpicked, as before it was one).
+local row
+-- Whose alert a rare it finds shows as: "ours" (Rare spotted's card) or "theirs".
+function ns.RareScannerPick()
+	return row and (ns.ConflictPick(row)) or "ours"
+end
+
 ns.WhenAddonLoads("RareScanner", function()
+	row = ns.AddConflict({ key = "card:rare", addon = "RareScanner", label = "Rare spotted card", group = "scenes",
+		noBoth = true, default = "ours", theirs = function() return true end,
+		ours = function() return ns.CardOn("rare") end,
+		about = "A rare NPC it finds: Card Vision's Rare spotted card (its button goes as the card shows), or " ..
+			"its own alert button (the card stays quiet for it). Treasures and events keep its button either way" })
+	-- (The pick Card Settings had before, rareScannerAlert, carried over once.)
+	local db = ns.GetDB()
+	db.conflictPicks = db.conflictPicks or {}
+	if db.rareScannerAlert ~= nil then
+		if db.conflictPicks[row.id] == nil and (db.rareScannerAlert == "ours" or db.rareScannerAlert == "theirs") then
+			db.conflictPicks[row.id] = db.rareScannerAlert
+		end
+		db.rareScannerAlert = nil
+	end
 	local button = _G.RARESCANNER_BUTTON
 	if type(button) ~= "table" or type(button.ShowButton) ~= "function" then
 		ns.Log("error", "support for RareScanner: no RARESCANNER_BUTTON:ShowButton")

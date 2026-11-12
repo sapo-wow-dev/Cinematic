@@ -10,7 +10,7 @@
 -- their alpha. Those areas are what's faded here, found through that same
 -- list. Its own frames are hooked; the game's frames it sets (the chat
 -- frames, the quest tracker, the micro menu) are followed.
-local _, ns = ...
+local ADDON_NAME, ns = ...
 local L = ns.L
 
 -- Advanced Frames rows: one frame each. (from: the row that held it with
@@ -258,35 +258,167 @@ ns.WhenAddonLoads("DaylightUI_UnitFrames", function()
 end)
 
 -- Its Quality of Life part has its own version of some of Cinematic's
--- features. While its own is on, it wins and Cinematic's stands aside (the
--- player's pick, 2026-11-12): its AFK screen and campfire scene over those
--- scenes' cameras, its zone title, level-up and reputation banners over
--- those cards, and its object glow (soft targeting settings of its own) over
--- Quest Vision's object glow and Hide object icons. Its error text and quest
--- progress lines need nothing: they draw instead of the game's, which is all
--- Cinematic hides.
-ns.WhenAddonLoads("DaylightUI_QoL", function()
-	local function QoLOn(key)
-		return function()
-			local DUI = _G.DaylightUI
-			if DUI and DUI.Get and DUI:Get("QoL", key) == true then
-				return "DaylightUI"
-			end
-			return nil
+-- features: its AFK screen and campfire scene (those scenes' cameras), its
+-- zone title, level-up and reputation banners (those cards), and its object
+-- glow (soft targeting settings of its own: Quest Vision's object glow and
+-- Hide object icons). Whose plays is the Addon Conflicts pick (AddonSupport,
+-- Conflicts.lua): its own while unpicked (the player's pick, 2026-11-12).
+-- "Ours" holds its banner or screen at alpha 0 while Cinematic's is on. Its
+-- error text and quest progress lines need nothing: they draw instead of the
+-- game's, which is all Cinematic hides.
+local LABEL = "DaylightUI"
+local function DUI() return _G.DaylightUI end
+local function QoLOn(key)
+	return function()
+		local dui = DUI()
+		if dui and dui.Get and dui:Get("QoL", key) == true then
+			return LABEL
 		end
+		return nil
 	end
-	for feature, key in pairs({
-		["scene:AFK"] = "afkScreen",
-		["scene:Campfire"] = "campfire",
-		["card:zone"] = "zoneTitle",
-		["card:levelUp"] = "levelUp",
-		["card:reputation"] = "repBanner",
-		questObjectGlow = "objectGlow",
-		hideObjectIcons = "objectGlow",
+end
+ns.WhenAddonLoads("DaylightUI_QoL", function()
+	local function Scene(key)
+		return function() return ns.TriggerRowNow(key) ~= nil end
+	end
+	local function Card(id)
+		return function() return ns.CardOn(id) end
+	end
+	local function Glow()
+		return ns.QuestVisionSetting("questObjectGlow") or ns.QuestVisionSetting("hideObjectIcons")
+	end
+	for _, each in ipairs({
+		{ "scene:AFK", "afkScreen", "AFK scene", "scenes", Scene("AFK"), { "DaylightUIAfkScreen" },
+			"What plays while you're away: Cinematic's AFK camera, or DaylightUI's AFK screen" },
+		{ "scene:Campfire", "campfire", "Campfire scene", "scenes", Scene("Campfire"), { "DaylightUICampfire" },
+			"What plays as you sit by a campfire: Cinematic's Campfire camera, or DaylightUI's campfire scene" },
+		{ "card:zone", "zoneTitle", "Zone card", "scenes", Card("zone"), { "DaylightUIZoneTitle" },
+			"The banner as you enter a new zone" },
+		{ "card:levelUp", "levelUp", "Level-up card", "scenes", Card("levelUp"), { "DaylightUILevelUp" },
+			"The banner as you gain a level" },
+		{ "card:reputation", "repBanner", "Reputation card", "scenes", Card("reputation"), { "DaylightUIRepBanner" },
+			"The banner as you reach a new standing with a faction" },
+		{ "questObjectGlow", "objectGlow", "Object glow and icons", "quest", Glow, nil,
+			"Herbs, ore and quest objects lighting up near you: Quest Vision's object glow and Hide object " ..
+			"icons, or DaylightUI's object glow. Both set the game's soft targeting, so only one can", true },
 	}) do
-		ns.AddFeatureYield(feature, QoLOn(key))
+		local row = { key = each[1], addon = LABEL, label = each[3], group = each[4], ours = each[5],
+			hide = each[6], about = each[7], noBoth = each[8] }
+		ns.AddFeatureYield(each[1], QoLOn(each[2]), row)
+		-- (Hide object icons goes with the glow: one row.)
+		if each[1] == "questObjectGlow" then ns.AddFeatureYield("hideObjectIcons", QoLOn(each[2]), row) end
 	end
 end)
+
+-- Its looks against the Style hub's (Addon Conflicts' Style rows: one look
+-- wins, no Both). Theirs: Cinematic's page stands aside while its own is on
+-- (ns.StyleOn). Ours: Cinematic's look, and its own held at alpha 0 where it
+-- can be (its tooltip and bubble backgrounds); its settings left be.
+local TOOLTIPS = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "EmbeddedItemTooltip" }
+local function Shells(list)
+	local dui = DUI()
+	local get = dui and dui.Style and dui.Style.GetShell
+	local out = {}
+	if type(get) ~= "function" then return out end
+	for _, frame in ipairs(list) do
+		local ok, shell = pcall(get, frame)
+		if ok and type(shell) == "table" then out[#out + 1] = shell end
+	end
+	return out
+end
+local function ModuleOn(name)
+	local dui = DUI()
+	local mod = dui and dui.GetModule and dui:GetModule(name)
+	return type(mod) == "table" and mod.enabled and true or false
+end
+
+ns.WhenAddonLoads("DaylightUI_Tooltip", function()
+	ns.AddConflict({ key = "style:tooltip", addon = LABEL, label = "Tooltip look", group = "style", noBoth = true,
+		styleSwitch = "tooltipStyle",
+		about = "How tooltips look: the Style hub's Tooltip Style page, or DaylightUI's tooltips",
+		theirs = function()
+			local dui = DUI()
+			local aside = dui and dui.PrettyAside and dui.PrettyAside.Draws and dui.PrettyAside.Draws()
+			return ModuleOn("Tooltip") and not aside
+		end,
+		ours = function() return ns.StyleOn("tooltipStyle") end,
+		hide = function()
+			local list = {}
+			for _, name in ipairs(TOOLTIPS) do
+				if type(_G[name]) == "table" then list[#list + 1] = _G[name] end
+			end
+			return Shells(list)
+		end,
+		onPick = function() if ns.RefreshTooltipStyle then ns.RefreshTooltipStyle() end end })
+end)
+
+ns.WhenAddonLoads("DaylightUI_Chat", function()
+	ns.AddConflict({ key = "style:bubbles", addon = LABEL, label = "Chat bubble look", group = "style", noBoth = true,
+		styleSwitch = "bubblesStyle",
+		about = "How chat bubbles look: the Style hub's Chat Bubble Style page, or DaylightUI's bubbles",
+		theirs = function()
+			local dui = DUI()
+			return dui and dui.Get and dui:Get("Chat", "bubbles") == true or false
+		end,
+		ours = function() return ns.StyleOn("bubblesStyle") end,
+		hide = function()
+			local list = {}
+			local all = C_ChatBubbles and C_ChatBubbles.GetAllChatBubbles and C_ChatBubbles.GetAllChatBubbles()
+			for _, bubble in pairs(type(all) == "table" and all or {}) do
+				if type(bubble) == "table" and not (bubble.IsForbidden and bubble:IsForbidden()) then
+					local frame = bubble:GetChildren()
+					if type(frame) == "table" and not (frame.IsForbidden and frame:IsForbidden()) then
+						list[#list + 1] = frame
+					end
+				end
+			end
+			return Shells(list)
+		end,
+		onPick = function() if ns.RefreshBubbleStyle then ns.RefreshBubbleStyle() end end })
+end)
+
+ns.WhenAddonLoads("DaylightUI_InfoPanel", function()
+	ns.AddConflict({ key = "style:minimap", addon = LABEL, label = "Minimap look", group = "style", noBoth = true,
+		about = "Its square minimap: left as DaylightUI draws it, or dressed by the Style hub's Interface Recolor " ..
+			"page as well (its ring and buttons in the theme's color)",
+		theirs = function()
+			local dui = DUI()
+			return dui and dui.Get and dui:Get("InfoPanel", "map.enabled") == true or false
+		end,
+		ours = function() return ns.StyleOn("irStyle") end,
+		onPick = function() if ns.RefreshMinimapStyle then ns.RefreshMinimapStyle() end end })
+end)
+
+-- Its damage number font (DAMAGE_TEXT_FONT, set as it loads, after
+-- Cinematic's) against the Combat Text Style page's Hide all the game's
+-- floating text (a blank font: Core.lua). Theirs: its font. Ours: the blank
+-- one again after each time it sets its own. The game reads it at login, so
+-- either shows from the next game start.
+do
+	local BLANK = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Fonts\\Blank.ttf"
+	local function OursOn()
+		local db = ns.db
+		return db and db.hideWorldText and db.combatTextStyle and db.styleGeneral ~= false and true or false
+	end
+	local row
+	local function Apply()
+		if row and OursOn() and ns.ConflictPick(row) == "ours" then DAMAGE_TEXT_FONT = BLANK end
+	end
+	ns.WhenAddonLoads("DaylightUI", function()
+		local dui = DUI()
+		local fonts = dui and dui.GameFonts
+		if type(fonts) ~= "table" then return end
+		row = ns.AddConflict({ key = "style:damageFont", addon = LABEL, label = "Damage number font", group = "style",
+			noBoth = true, restart = true,
+			about = "The game's floating numbers: blanked by the Combat Text Style page's Hide all the game's " ..
+				"floating text, or in DaylightUI's damage font. Shows from the next game start",
+			theirs = function()
+				return type(fonts.DamageWanted) == "function" and fonts.DamageWanted() ~= nil or false
+			end,
+			ours = OursOn, onPick = Apply })
+		if type(fonts.Apply) == "function" then hooksecurefunc(fonts, "Apply", Apply) end
+	end)
+end
 
 -- Its nameplates are its own frames, one put on each game plate that shows a
 -- unit (parented to it), with the game's unit frame kept at alpha 0 under

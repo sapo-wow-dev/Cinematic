@@ -573,12 +573,24 @@ local function Explain(entry)
 	-- (Another addon's frame Cinematic doesn't fade: see AddonFrameUnderCursor.)
 	if entry.unmanaged then
 		local out, name = {}, entry.name
+		-- (Another addon's own version of a Cinematic feature: its Addon Conflicts pick.)
+		local conflict = ns.ConflictOfFrame and ns.ConflictOfFrame(entry.frame)
+		if conflict then
+			local pick, picked = ns.ConflictPick(conflict)
+			Add(out, pick == "ours" and "block" or "on", L["%s's own %s: Addon Conflicts has %s%s"]:format(
+				conflict.addon, L[conflict.label], ns.ConflictPickLabel(pick), picked and "" or L[" (not picked yet)"]),
+				"Addon Conflicts")
+			if pick == "theirs" then
+				Add(out, "off", L["Cinematic's stands aside while it's on. Ours plays Cinematic's instead"],
+					"Addon Conflicts")
+			end
+		end
 		if ns.db.ignoredFrames[name] then
-			Add(out, "on", L["You set it to always show (Custom frames, Addons page)"], "Advanced Frames")
+			Add(out, "on", L["You set it to always show (Custom frames, Addons > Frames)"], "Advanced Frames")
 		else
 			Add(out, "on", L["%s isn't a supported addon, so Cinematic leaves its frames as they are"]
 				:format(entry.unmanaged), "Advanced Frames")
-			Add(out, "off", L["/cine add %s fades it in CineMode, or add it on the Addons page"]:format(name),
+			Add(out, "off", L["/cine add %s fades it in CineMode, or add it on Addons > Frames"]:format(name),
 				"Advanced Frames")
 		end
 		return name, "unmanaged", out, "extra:" .. name

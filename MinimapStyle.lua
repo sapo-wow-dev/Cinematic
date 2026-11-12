@@ -33,6 +33,9 @@ local function Look()
 end
 
 local function OthersSkinIt()
+	-- (An addon's own square minimap with its Addon Conflicts row on Ours: dressed anyway.)
+	local _, pick = ns.ConflictState("style:minimap")
+	if pick == "ours" then return false end
 	local shape = type(_G.GetMinimapShape) == "function" and _G.GetMinimapShape()
 	if shape and shape ~= "ROUND" then return true end
 	local IsLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded

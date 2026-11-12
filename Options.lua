@@ -2016,7 +2016,8 @@ do
 		-- (sections: the grids of what shows (CineMode Autohide), then each frame's own rules
 		-- (Autohide Advanced: the HUD's, then what floats over heads). label: the
 		-- hub's name as shown, its pages' ids staying "UI Manager"'s.)
-		{ name = "UI Manager", label = "UI Visibility", colors = {
+		{ name = "UI Manager", label = "UI Visibility", note = { "Addon frames moved to the Addons hub >",
+			"Advanced Frames" }, colors = {
 			["CineMode Autohide"] = { 0.75, 0.65, 0.45 }, ["Autohide Advanced"] = { 0.35, 0.6, 0.9 },
 		}, pages = {
 			-- (A standard: your faction's battle banner.)
@@ -2025,7 +2026,6 @@ do
 					or "Interface\\Icons\\INV_BannerPVP_02"
 			end, label = "HUD", section = "CineMode Autohide" },
 			{ "Nameplates", "Interface\\Icons\\Ability_Hunter_SniperShot", section = "CineMode Autohide" },
-			{ "Advanced Frames", "Interface\\Icons\\INV_Misc_Gear_01", label = "Addons", section = "CineMode Autohide" },
 			{ "Mouseover groups", "Interface\\Icons\\Spell_Holy_MindVision", label = "Hover Groups", section = "CineMode Autohide" },
 			{ "Gamepad", "Interface\\Icons\\INV_Gizmo_01", label = "Gamepad Frames", section = "CineMode Autohide" },
 			{ "Cursor Hide", "Interface\\Icons\\INV_Misc_Eye_01", section = "CineMode Autohide" }, -- (CursorHide.lua)
@@ -2137,8 +2137,15 @@ do
 			{ "Fishing", "Interface\\Icons\\Trade_Fishing", section = "Helpers" },
 			{ "Hunter", "Interface\\Icons\\INV_Weapon_Bow_07", section = "Helpers" },
 			{ "Keyboard Map", "Interface\\Icons\\INV_Misc_Note_06", section = "Helpers" }, -- (KeyboardMap.lua)
-			-- (CreateQualityPanel's end: only with one of its addons loaded)
-			{ "Addon Support", "Interface\\Icons\\INV_Misc_Gear_02", section = "Helpers" },
+		} },
+		-- (Everything about other addons, listed after Quality of life. General:
+		-- CreateQualityPanel's end, only with one of its addons loaded;
+		-- Conflicts: Conflicts.lua, only with an addon that has rows loaded;
+		-- Frames: the Advanced Frames page, always, its ids kept.)
+		{ name = "Addons", after = "Quality of life", pages = {
+			{ "Addon Support", "Interface\\Icons\\INV_Misc_Gear_02", label = "General" },
+			{ "Addon Conflicts", "Interface\\Icons\\Ability_Warrior_Disarm", label = "Conflicts" },
+			{ "Advanced Frames", "Interface\\Icons\\INV_Misc_Gear_01", label = "Frames" },
 		} },
 		-- (WheelsPage.lua's pages; listed under Quality of life. The master wheel first, plain; the wheels it opens on a band.)
 		{ name = "Wheels", under = "Quality of life", colors = { Wheels = { 0.65, 0.45, 0.9 } }, pages = {
@@ -2448,6 +2455,19 @@ do
 			end
 		end)
 		hub.reset = reset
+		-- (hub.note: { a line, the page it opens }: in the bar at the top left,
+		-- where a page used to be. Colored on hover, not refonted: Cyrillic.)
+		if hub.note then
+			local note = CreateFrame("Button", nil, frame)
+			note.text = note:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+			note.text:SetPoint("LEFT")
+			note.text:SetText(L[hub.note[1]])
+			note:SetSize(note.text:GetStringWidth() + 4, 18)
+			note:SetPoint("LEFT", frame, "TOPLEFT", EDGE + 4, -19)
+			note:SetScript("OnClick", function() ns.OpenOptions(hub.note[2]) end)
+			note:SetScript("OnEnter", function() note.text:SetTextColor(1, 0.82, 0) end)
+			note:SetScript("OnLeave", function() note.text:SetTextColor(0.5, 0.5, 0.5) end)
+		end
 		hub.searchPages = {}
 		local box = CreateSearch(frame, frame, hub.searchPages)
 		box:SetPoint("RIGHT", reset, "LEFT", -12, 0)
@@ -7082,12 +7102,12 @@ local function CreateCombatPanel()
 		"its Fights dropdown, only while you fight or have something targeted; its Places dropdown, the " ..
 		"whole time while you're there (Grouped: in a party or raid). Edit turns a row into a rule, for AND, " ..
 		"NOT and more places. Frames fade in and out at the fade times on the CineMode page. Other addons' " ..
-		"frames are on the Addons page."]
+		"frames are on Addons > Frames."]
 		or L["Everything here is hidden in CineMode unless ticked. Tick a column to show that frame: " ..
 		"Always shows it the whole time, the next three only while you fight or have something " ..
 		"targeted, and the places the whole time while you're there (Grouped: in a party or raid). " ..
 		"Frames fade in and out at the fade times on the CineMode page. Other addons' " ..
-		"frames are on the Addons page."])
+		"frames are on Addons > Frames."])
 
 	-- The game's frames this client has, in sections (their page: see
 	-- ROW_SECTIONS), each a table of its own; the gamepad's are on the
@@ -13140,7 +13160,7 @@ local function CreateVisionPanel()
 		local QUESTIE_ICONS_TIP = L["Questie puts quest icons of its own on nameplates and the target frame. " ..
 			"Where Cinematic's quest mark shows on the same unit: Cinematic's wins hides Questie's there, " ..
 			"Questie's wins keeps Cinematic's off, Both show puts them side by side. Where they go on the " ..
-			"nameplate is set on Quality of Life > Addon Support."]
+			"nameplate is set on Addons > General."]
 		local questieIcons = Dropdown(content, "questieIcons", QUESTIE_ICONS, 180, function()
 			if ns.RefreshTargetQuestIcon then ns.RefreshTargetQuestIcon() end
 			if ns.RefreshClassIcon and C_NamePlate and C_NamePlate.GetNamePlates then
@@ -13683,8 +13703,9 @@ local function CreateVisionPanel()
 			end
 		end
 		local rollFade = stack:Add(Check(content, "rollFade", L["Fade if another addon competes"],
-			L["While another addon has the loot rolls (XLoot, ElvUI's Loot Roll, or any that takes over the " ..
-			"game's roll frames), the window stays away and leaves them to it. /cine rolls still opens it."],
+			L["While another addon has the loot rolls (XLoot, or any that takes over the game's roll frames), " ..
+			"the window stays away and leaves them to it. /cine rolls still opens it. ElvUI's Loot Roll goes by " ..
+			"its row on Addons > Conflicts instead."],
 			function(value)
 				ns.GetDB().rollFade = value
 				ns.RefreshRollWindow()
@@ -14587,7 +14608,7 @@ local function CreateExtrasPanel()
 	local canvas, content = CreateScrollPage()
 	extrasPanel = content
 
-	local title = Label(content, "GameFontNormalLarge", L["Addons"])
+	local title = Label(content, "GameFontNormalLarge", L["Addon Frames"])
 	title:SetPoint("TOPLEFT", 16, -16)
 
 	-- One grid for every addon's frames: the supported addons' and the custom
@@ -15481,7 +15502,7 @@ local function CreateExtrasPanel()
 		end
 	end, content))
 	canvas:Hide()
-	RegisterSubpage(canvas, L["Advanced Frames"], L["Addons"])
+	RegisterSubpage(canvas, L["Advanced Frames"], L["Addon Frames"])
 end
 
 -- Sub-page: keybinds. The same bindings as Key Bindings > AddOns, with two
@@ -17562,6 +17583,9 @@ ns.OnLanguage(function()
 	end
 	if ns.CreateBubbleStylePanel then -- (BubbleStyle.lua)
 		ns.CreateBubbleStylePanel(ns.lowHealthKit)
+	end
+	if ns.CreateConflictsPanel then -- (Conflicts.lua)
+		ns.CreateConflictsPanel(ns.lowHealthKit)
 	end
 	if ns.CreateCombatTextStylePanel then -- (CombatTextStyle.lua)
 		ns.CreateCombatTextStylePanel(ns.lowHealthKit)

@@ -418,7 +418,7 @@ function ns.BuildLinkBand(body, groupKey, onResize)
 				"addon's frame for a part, pick Find a frame... in its list."])
 		elseif clashes > 0 then
 			intro:SetText("|cffd9a441" .. (L["%s all have parts of this. A part two of them have stays " ..
-				"the game's own until you pick (here, or on the Addons page's Support files tab)."])
+				"the game's own until you pick (here, or on Addons > Frames, Support files tab)."])
 				:format(table.concat(addons, L[" and "])) .. "|r")
 		else
 			intro:SetText(L["Which frame each part is: the game's own, or another addon's that draws its own. " ..

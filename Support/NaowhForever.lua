@@ -77,3 +77,43 @@ Rows("NaowhForever_QoL", {
 ns.WhenAddonLoads("NaowhForever", function()
 	ns.FadeWithRow("quests", "quests", { "NaowhRXPWindow" })
 end)
+
+-- Its own versions of some of Cinematic's features (Addon Conflicts: whose
+-- plays, AddonSupport.lua and Conflicts.lua; theirs while unpicked).
+local function Naowh()
+	local naowh = _G.NaowhForever
+	return type(naowh) == "table" and naowh or nil
+end
+ns.WhenAddonLoads("NaowhForever_QoL", function()
+	-- Glimmer: herbs, ore, chests and quest objects lit up through the game's
+	-- soft targeting, as Quest Vision's object glow and Hide object icons do.
+	local function GlimmerOn()
+		local naowh = Naowh()
+		local glimmer = naowh and naowh.Glimmer
+		local ok, on = pcall(function() return glimmer and glimmer.On and glimmer.On() end)
+		return ok and on and "Naowh Forever" or nil
+	end
+	local row = { key = "questObjectGlow", addon = "Naowh Forever", label = "Object glow and icons", group = "quest",
+		noBoth = true, ours = function()
+			return ns.QuestVisionSetting("questObjectGlow") or ns.QuestVisionSetting("hideObjectIcons")
+		end,
+		about = "Herbs, ore and quest objects lighting up near you: Quest Vision's object glow and Hide object " ..
+			"icons, or Naowh Forever's Glimmer. Both set the game's soft targeting, so only one can" }
+	ns.AddFeatureYield("questObjectGlow", GlimmerOn, row)
+	ns.AddFeatureYield("hideObjectIcons", GlimmerOn, row)
+
+	-- Its Default Damage Meter: the game's meter in its own look, against the
+	-- Interface Recolor page's damage meter (DamageMeterStyle.lua).
+	ns.AddConflict({ key = "style:damageMeter", addon = "Naowh Forever", label = "Damage meter look", group = "style",
+		noBoth = true,
+		about = "How the game's damage meter looks: the Interface Recolor page's theme on it, or Naowh " ..
+			"Forever's Default Damage Meter. Ours puts the theme on over its look",
+		theirs = function()
+			local naowh = Naowh()
+			local settings = naowh and naowh.QoLSettings
+			local ok, on = pcall(function() return settings.Get("enabled") and settings.Get("damageMeterSkin") == true end)
+			return ok and on and true or false
+		end,
+		ours = function() return ns.StyleOn("irStyle") end,
+		onPick = function() if ns.RefreshDamageMeterStyle then ns.RefreshDamageMeterStyle() end end })
+end)

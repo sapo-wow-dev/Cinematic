@@ -1255,7 +1255,15 @@ local function ElvUIRolls()
 end
 
 -- What's got the rolls (a name, for the log and /cine debug rolls), or nil.
+-- A supported addon's own (ElvUI's Loot Roll) goes by its Addon Conflicts
+-- pick: Theirs (or unpicked) has the rolls; Ours or Both, ours shows (its
+-- bars, under it, turn off the game's roll frames, the other signs).
 local function Competitor()
+	local row, pick = ns.ConflictState("rolls")
+	if row then
+		if pick == "theirs" then return row.addon .. "'s Loot Roll" end
+		return nil
+	end
 	for _, name in ipairs(KNOWN) do
 		if IsLoaded and ns.Flag(IsLoaded(name)) then
 			return name
@@ -1276,6 +1284,8 @@ local function Competitor()
 end
 
 local function Competing()
+	local _, pick = ns.ConflictState("rolls")
+	if pick then return pick == "theirs" end -- (Addon Conflicts' pick, whatever rollFade says)
 	return ns.Setting("rollFade") and Competitor() ~= nil
 end
 

@@ -143,6 +143,8 @@ end
 -- Whether a Style page (its switch's key) is on: General's and its own.
 -- (db: the settings to ask, for the options' tests; else the saved ones.)
 function ns.StyleOn(switchKey, db)
+	-- (Live, a page standing aside for another addon's own look: Addon Conflicts' Theirs.)
+	if switchKey and (db == nil or db == ns.db) and ns.StyleSwitchYielded(switchKey) then return false end
 	db = db or ns.db
 	return db and db.styleGeneral and (not switchKey or db[switchKey]) and true or false
 end

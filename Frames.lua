@@ -11767,7 +11767,7 @@ do
 		if ns.db.ignoredFrames[name] then
 			skipped[name] = true
 			ns.Print(L["%s skipped: you set it to always show (untick its CineMode box under Custom frames " ..
-				"on the Addons page)."]:format(name))
+				"on Addons > Frames)."]:format(name))
 			return
 		end
 		pending[#pending + 1] = name

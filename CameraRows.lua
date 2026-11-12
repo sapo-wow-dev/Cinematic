@@ -937,8 +937,9 @@ function ns.DescribeCameraRows()
 	for _, trigger in ipairs(TRIGGERS) do
 		local ids = ns.TriggerRowIds(trigger.key)
 		local now = ns.TriggerRowNow(trigger.key)
-		lines[#lines + 1] = ("%s: %s -> %s (%s)"):format(trigger.key, table.concat(ids, ","), tostring(now),
-			tostring(ns.TriggerSetting(trigger.key, "camera")))
+		local aside = ns.FeatureYieldReason("scene:" .. trigger.key)
+		lines[#lines + 1] = ("%s: %s -> %s (%s)%s"):format(trigger.key, table.concat(ids, ","), tostring(now),
+			tostring(ns.TriggerSetting(trigger.key, "camera")), aside and " - " .. aside or "")
 	end
 	return lines
 end

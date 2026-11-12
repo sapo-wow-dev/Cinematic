@@ -1165,7 +1165,7 @@ DEFAULTS.questieIcons = "ours"
 -- of Life > Addon Support; PlateParts' RefreshQuestIcon.)
 DEFAULTS.questieMoveIcons = true
 -- EnhanceQoL's nameplate quest "!" moved the same way, off the faded part of
--- the plate (Quality of Life > Addon Support; PlateParts' ns.EQoLMark).
+-- the plate (Addons > General; PlateParts' ns.EQoLMark).
 DEFAULTS.eqolMoveIcons = true
 -- The nearest tracked quest's item to use on a big button at the extra ability button's spot (see QuestItemButton)
 DEFAULTS.questItemButton = false -- (off by default since 2026-11-09)
@@ -1483,7 +1483,7 @@ end
 -- of them as its page's switch leaves it.
 DEFAULTS.handleQuality = true -- Quality of life > General
 DEFAULTS.handleHunter = false
-DEFAULTS.handleAddonSupport = true -- Quality of life > Addon Support (only built with one of its addons loaded)
+DEFAULTS.handleAddonSupport = true -- Addons > General (only built with one of its addons loaded)
 DEFAULTS.handleHealVision = true -- (read by ns.HealVisionHere; Quest Vision's switch is questVision)
 local PAGE_SWITCH = {}
 for page, keys in pairs({
@@ -4032,6 +4032,7 @@ function ns.EnsureTables()
 	ns.db.ignoredFrames = ns.db.ignoredFrames or {}
 	ns.db.addonFrames = ns.db.addonFrames or {} -- Advanced Frames page: key -> false when switched off
 	ns.db.addonSupportOff = ns.db.addonSupportOff or {} -- the same, a supported addon's support: addon -> true (the account's)
+	ns.db.conflictPicks = ns.db.conflictPicks or {} -- Addon Conflicts: row id -> "theirs", "ours" or "both" (the account's)
 	-- Advanced Frames page: an addon's group (its name, or its suite's) ->
 	-- true when closed (they start open).
 	ns.db.addonGroupsClosed = ns.db.addonGroupsClosed or {}
