@@ -11033,6 +11033,9 @@ function ns.UpdateFrames(cinematic, elapsed)
 	-- Chat Cam's Ultra immersive: through a conversation the whole UI goes,
 	-- CineMode or not, hovering and all (typing still shows the input box).
 	local immersive = ns.ChatCamImmersive and ns.ChatCamImmersive() or false
+	-- Edit Mode open: every frame up, CineMode or not, so the frames being
+	-- placed can be seen (faded, the party frames showed only on hover).
+	local editingLayout = ns.EditModeActive and ns.EditModeActive() or false
 
 	-- Keep minimap open indoors (Minimap page): see RedrawMinimapWhenShown.
 	local keepIndoors = minimapPage and (ns.db.minimapIndoors and IsIndoors and ns.Flag(IsIndoors())
@@ -11204,6 +11207,9 @@ function ns.UpdateFrames(cinematic, elapsed)
 		elseif ns.previewRows and not immersive then
 			target = ns.previewRows[row] and 1 or 0
 		end
+		if editingLayout then
+			target = 1
+		end
 		-- A unit frame up only for a group: the parts unticked there stay hidden
 		-- (and while it fades out, or they'd show for the fade). Up for anything
 		-- else, a fight or a target, they're as they'd be.
@@ -11263,8 +11269,9 @@ function ns.UpdateFrames(cinematic, elapsed)
 			end
 		end
 		if clock then targetTime = targetTime + clock() - entryStart end
-		if typingShown and entry.alpha < 1 then
-			-- Pressing Enter shows the chat input (and its window) at once.
+		if (typingShown or editingLayout) and entry.alpha < 1 then
+			-- Pressing Enter shows the chat input (and its window) at once;
+			-- opening Edit Mode, every frame.
 			ns.SetEntryAlpha(entry, 1)
 		elseif target == 0 and entry.alpha == 0 and not entry.shrinkWhenFaded
 			and not LOOSE_PART_GROUPS[entry.group] and entry.frame ~= artStandIn then

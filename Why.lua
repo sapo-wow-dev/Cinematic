@@ -613,7 +613,9 @@ local function Explain(entry)
 		return title, status, out, key
 	end
 	-- What's keeping it hidden, over anything else.
-	if ns.layoutFadeUntil then
+	if ns.EditModeActive and ns.EditModeActive() then
+		Add(out, "on", L["Edit Mode is open: every frame is shown so you can place it"])
+	elseif ns.layoutFadeUntil then
 		Add(out, "block", L["Fading out for a layout change"])
 	elseif ns.previewRows then
 		Add(out, ns.previewRows[n.row] and "on" or "block", L["A profile preview shows just its own frames"])
