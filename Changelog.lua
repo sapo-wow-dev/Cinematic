@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-12", page = "Advanced Frames", title = "MinimapButtonButton support",
+		text = "MinimapButtonButton's button and the bar of addon buttons it gathers now fade with the minimap's " ..
+		"Addon buttons row, and come back when you hover the minimap." },
 	{ date = "2026-11-07", page = "Keyboard Map", title = "Keyboard Map",
 		text = "See your keyboard on screen with what every key does: its spell's icon, cooldown and count, or the " ..
 		"command's name. Hold its key to peek, tap it to keep it up, or type /cine keys. Hold Shift, Ctrl or Alt to " ..

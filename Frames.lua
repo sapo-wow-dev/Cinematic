@@ -1389,6 +1389,21 @@ do
 			AddFrame(ours, "minimapaddons")
 		end
 		-- Addons' buttons on the minimap (LibDBIcon's: LibDBIcon10_<addon>).
+		-- One an addon gathering minimap buttons took after we found it (no
+		-- longer the map's child) is let go: it shows in that addon's bar, which
+		-- must never fade a button of its own.
+		local gathered
+		for _, entry in ipairs(ns.managed) do
+			local frame = entry.frame
+			if entry.group == "minimapaddons" and type(entry.name) == "string" and entry.name:find("^LibDBIcon10_")
+				and type(Minimap) == "table" and frame:GetParent() ~= Minimap then
+				gathered = gathered or {}
+				gathered[#gathered + 1] = frame
+			end
+		end
+		if gathered then
+			for _, frame in ipairs(gathered) do RemoveFrame(frame) end
+		end
 		if type(Minimap) == "table" and Minimap.GetChildren and not leftAlone.Minimap and GroupHandled("minimapaddons") then
 			for _, child in ipairs({ Minimap:GetChildren() }) do
 				local ok, name = pcall(child.GetName, child)
