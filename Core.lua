@@ -4472,9 +4472,13 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			end
 		end
 		-- Minimap nodes' old Ping where it is box, untick: now Mark where it
-		-- is's Off (ticked takes the new default, our silent mark).
+		-- is's Off (ticked takes the new default, our silent mark). Once: the
+		-- box is back (the cursor sweep's ping), and unticking it now must not
+		-- turn the mark off too.
+		local markOnce = not ns.db.minimapNodeMarkV1
+		ns.db.minimapNodeMarkV1 = true
 		local function MigrateNodeMark(saved)
-			if saved.minimapNodePing == false and saved.minimapNodeMark == nil then saved.minimapNodeMark = "off" end
+			if markOnce and saved.minimapNodePing == false and saved.minimapNodeMark == nil then saved.minimapNodeMark = "off" end
 			-- (Ping, no sound went: it didn't mute the ping, tested.)
 			if saved.minimapNodeMark == "quietping" then saved.minimapNodeMark = "mark" end
 		end
@@ -7611,7 +7615,6 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		for _, key in ipairs({
 			"keepRaidMarkers", -- (now the Raid Markers grid)
 			"handleUnitFrames", -- (the parts follow the HUD page's switch)
-			"minimapNodePing", -- (now minimapNodeMark)
 			"rollMinQuality", "rollUsableOnly", "rollTopPick", -- (now roll<Rule><Group><Q>)
 			"rollBeside", "rollSeparate", -- (now rollPlace)
 			"rollFooter", -- (now rollFooterParty, rollFooterRaid)
