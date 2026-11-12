@@ -7598,7 +7598,8 @@ local function CreateCombatPanel()
 			macros:SetPoint("TOPLEFT", keys, "BOTTOMLEFT", 0, 0)
 			local book = Check(content, "barsWithSpellbook", L["Show while the spellbook is open"],
 				L["Your action bars stay up in CineMode while the spellbook or macros window is open, " ..
-				"so you can drag spells onto them. They fade again when you close it."])
+				"so you can drag spells onto them, and while the totem bar's flyout is open, " ..
+				"so you can see them while picking a totem. They fade again when you close it."])
 			book:SetParent(section.body)
 			book:SetPoint("TOPLEFT", macros, "BOTTOMLEFT", 0, 0)
 			section.last = book
