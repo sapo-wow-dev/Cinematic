@@ -43,7 +43,9 @@ ns.PROFILE_SLOTS = {
 -- by), label and line (what players read), client (only there),
 -- hidden (only for profiles, not offered; a client's name: not offered
 -- there), noCDM (made for the Cooldown Manager: not offered without one,
--- and a profile's pick of it is this choice there instead), made (a layout Cinematic makes
+-- and a profile's pick of it is this choice there instead), barAddon (a
+-- profile's pick of it is this choice instead while an addon that swaps the
+-- game's action bars for its own runs, Bartender4 or Dominos: ns.BarAddonRuns), made (a layout Cinematic makes
 -- and adds to Edit Mode for you, tagged so in Customize), and modules (each a module's key,
 -- or { forever = key, retail = key }).
 ns.SLOT_CHOICES = {
@@ -51,7 +53,8 @@ ns.SLOT_CHOICES = {
 		about = "The Edit Mode layout you play with: where your bars, menus and frames go.",
 		default = "own", choices = {
 		-- (Cinematic's own layouts first, then the player's and the game's)
-		{ part = "retail", client = "forever", label = "Retail Inspired", made = true,
+		-- (With Bartender4 or Dominos, whose bars Edit Mode can't move: your own layout.)
+		{ part = "retail", client = "forever", barAddon = "own", label = "Retail Inspired", made = true,
 			line = "Action bars centered along the bottom, menus in the corner", modules = { "layout-retail" } },
 		{ part = "pure", label = "Personal Resource Centered", made = true,
 			line = "Your resources in the middle, the Cooldown Manager above", modules = { "layout-pure" } },
@@ -86,7 +89,8 @@ ns.SLOT_CHOICES = {
 			line = "Point at one and the bars, menus and XP bar come up", modules = {} },
 		-- (Retail Group: on retail the client's own, standard, which is the
 		-- default there; on Forever, whose own is Classic Group, split.)
-		{ part = "split", hidden = "retail", label = "Retail group",
+		-- (With Bartender4 or Dominos: Classic group.)
+		{ part = "split", hidden = "retail", barAddon = "grouped", label = "Retail group",
 			line = "Point at the bars, the menus or the XP bar; fights bring up just the bars",
 			modules = { "retail-groups", "micro-off-in-fights" } },
 		{ part = "standard", client = "retail", label = "Retail group",

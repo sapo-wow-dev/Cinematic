@@ -755,6 +755,14 @@ function ns.HasCooldownManager()
 	return ns.AddOnLoaded("Blizzard_CooldownViewer") or ns.AddOnInstalled("ForeverEnhancedCooldownManager")
 end
 
+-- Whether an addon that swaps the game's action bars for its own runs
+-- (Bartender4, Dominos: Edit Mode layouts never move their bars.)
+-- (Offline: no.)
+function ns.BarAddonRuns()
+	local loaded = ns.AddOnLoaded
+	return loaded and (loaded("Bartender4") or loaded("Dominos")) and true or false
+end
+
 -- Whether this game has a personal resource display (Classic Era has none).
 -- (Offline: yes.)
 function ns.HasPersonalDisplay()
@@ -830,6 +838,9 @@ local function Picks(profile, client, byName, editOf)
 			-- one: its noCDM choice in its place.)
 			local choice = pick and client == ns.CLIENT and ns.GetChoice(slot, pick)
 			if choice and choice.noCDM and not ns.HasCooldownManager() then pick = choice.noCDM end
+			-- (Made for the game's own action bars, with an addon's in their
+			-- place: its barAddon choice.)
+			if choice and choice.barAddon and ns.BarAddonRuns() then pick = choice.barAddon end
 			if pick then picks[slot], by[slot] = pick, p.name end
 		end
 	end
