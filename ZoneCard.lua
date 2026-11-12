@@ -21,8 +21,9 @@ local SEPARATOR = " · "
 local LINES = { "ZoneTextString", "PVPInfoTextString", "PVPArenaTextString", "SubZoneTextString" }
 -- Seconds a card waits for the game's "Discovered:" line, which the server
 -- sends after the place's name: a place known to you, and one new to this
--- character (once each, so the Discovered card can have it alone).
-local KNOWN_WAIT, NEW_WAIT = 0.5, 3
+-- character (once each, so the Discovered card can have it alone). The
+-- line has come 3.3 sec late (Forever, 2026-11-12), so a new place waits 5.
+local KNOWN_WAIT, NEW_WAIT = 0.5, 5
 
 local function On() return ns.CardOn("zone") end
 -- (Discovered's card playing for the place: the game's lines go for that
@@ -155,6 +156,23 @@ local function Shows()
 	-- one waits, as the game's "Discovered:" line comes after its name.)
 	if ns.DiscoverHasIt and ns.CardOn("discover") then
 		if ns.DiscoverHasIt() then return end
+		-- (The game's own count first, its Exploration achievements: not yet
+		-- discovered, Discovered's card now; discovered, this one now.)
+		local explored = ns.PlaceExplored(place)
+		ns.Log("card", ("%s shown: game's explore count says %s"):format(place,
+			explored == nil and "nothing (not in it)" or explored and "discovered" or "not discovered"))
+		if explored == false then
+			ns.PlaceIsNew(zone, place)
+			if ns.DiscoverPlace(place, zone) then
+				discovered = true
+				HideGame()
+				return
+			end
+		elseif explored then
+			ns.PlaceIsNew(zone, place)
+			Card(zone, subzone, newArea)
+			return
+		end
 		local new = ns.PlaceIsNew(zone, place)
 		ns.Log("card", ("%s shown (%s): Zone card waits for a Discovered line"):format(place, new and "new here" or "known"))
 		Hold(place, new and NEW_WAIT or KNOWN_WAIT, zone, subzone, newArea)

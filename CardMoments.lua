@@ -123,7 +123,8 @@ local function Wanted()
 	return ns.CardOn("discover") or (ns.db and ns.db.letterboxOnDiscover) or false
 end
 local function Discovered(name, sub)
-	if name == "" or (name == lastFound and GetTime() - lastFoundAt < 10) then return end
+	-- (30 sec: the game's "Discovered:" line can come seconds after its card.)
+	if name == "" or (name == lastFound and GetTime() - lastFoundAt < 30) then return end
 	lastFound, lastFoundAt = name, GetTime()
 	ns.Log("card", "Discovered: " .. name)
 	if ns.LetterboxOnDiscover then ns.LetterboxOnDiscover() end
@@ -203,9 +204,13 @@ if UIErrorsFrame and UIErrorsFrame.AddMessage then
 		text = Plain(text)
 		if not text then return end
 		for _, pattern in ipairs(DISCOVERED) do
-			if text:match(pattern) then
+			local place = text:match(pattern)
+			if place then
 				InfoLine(text)
-				if GetTime() - shownAt < 5 and frame.Clear then pcall(frame.Clear, frame) end
+				-- (Its card just shown, or shown already for this place.)
+				local carded = GetTime() - shownAt < 5
+					or (place == lastFound and shownAt >= lastFoundAt and GetTime() - shownAt < 30)
+				if carded and frame.Clear then pcall(frame.Clear, frame) end
 				return
 			end
 		end
@@ -230,6 +235,91 @@ function ns.PlaceIsNew(zone, place)
 	if seen.places[key] then return false end
 	seen.places[key] = true
 	return true
+end
+-- The game's own record of where this character's been: the Explore
+-- achievements' steps ("Explore The Barrens": Ratchet, The Stagnant Oasis...),
+-- each an area, done once you've discovered it. On Forever they're found by
+-- following achievements made of achievements (Explore Azeroth, Explore
+-- Kalimdor, Explore The Barrens), not by their category. Built once, as
+-- { [place name] = { achievement id, step } }; areas in none aren't in it.
+local explore = {}
+local EXPLORE_AREA, ACHIEVEMENT = 43, 8 -- (a step's type: discover an area; earn an achievement)
+function explore.Index()
+	if explore.index then return explore.index end
+	local index, walked = {}, {}
+	explore.index, explore.walked = index, 0
+	if not (GetCategoryList and GetCategoryNumAchievements and GetAchievementNumCriteria and GetAchievementCriteriaInfo) then
+		return index
+	end
+	local function Walk(id, depth)
+		if not id or walked[id] or depth > 5 then return end
+		walked[id] = true
+		explore.walked = explore.walked + 1
+		local okNum, steps = pcall(GetAchievementNumCriteria, id)
+		for j = 1, (okNum and Plain(steps) or 0) do
+			local ok, name, kind, _, _, _, _, _, asset = pcall(GetAchievementCriteriaInfo, id, j)
+			name, kind = ok and Plain(name), ok and Plain(kind)
+			if kind == EXPLORE_AREA and name and name ~= "" and not index[name] then
+				index[name] = { id, j }
+			elseif kind == ACHIEVEMENT then
+				Walk(Plain(asset), depth + 1)
+			end
+		end
+	end
+	local okList, list = pcall(GetCategoryList)
+	if not okList or type(list) ~= "table" then return index end
+	for _, category in ipairs(list) do
+		local okCount, count = pcall(GetCategoryNumAchievements, category, true)
+		for i = 1, (okCount and Plain(count) or 0) do
+			local okAch, id = pcall(GetAchievementInfo, category, i)
+			if okAch then Walk(Plain(id), 0) end
+		end
+	end
+	return index
+end
+-- True: the game says this character's discovered the place; false: not yet
+-- (it's being discovered now); nil: the game keeps no count of it.
+function ns.PlaceExplored(place)
+	local at = explore.Index()[place or ""]
+	if not at then return nil end
+	local ok, _, _, done = pcall(GetAchievementCriteriaInfo, at[1], at[2])
+	if not ok then return nil end
+	return ns.Flag(done) and true or false
+end
+-- A place the game says you haven't discovered: Discovered's card now, not
+-- waiting for its "Discovered:" line (the line, when it comes, is the same
+-- place: skipped, and the game's yellow text goes).
+function ns.DiscoverPlace(place, zone)
+	if not ns.CardOn("discover") then return false end
+	Discovered(place, zone ~= place and zone or "")
+	return GetTime() - shownAt < 1
+end
+-- /cine debug explore: what the game's count says about where you are.
+function ns.DebugExplore()
+	local index = explore.Index()
+	local total = 0
+	for _ in pairs(index) do total = total + 1 end
+	local zone, sub = Zone(), Subzone()
+	ns.Print(("explore: %d areas in %d achievements walked; zone %s, subzone %s")
+		:format(total, explore.walked or 0, zone ~= "" and zone or "-", sub ~= "" and sub or "-"))
+	for _, place in ipairs({ zone, sub }) do
+		if place ~= "" then
+			local state = ns.PlaceExplored(place)
+			ns.Print(("  %s: %s"):format(place, state == nil and "not in any achievement"
+				or state and "discovered" or "NOT discovered"))
+		end
+	end
+	-- (The zone's own achievement, by name: each of its areas.)
+	local at = index[sub ~= "" and sub or zone]
+	if at then
+		local _, _, achName = pcall(GetAchievementInfo, at[1])
+		local okNum, num = pcall(GetAchievementNumCriteria, at[1])
+		ns.Print(("  %s (%s):"):format(tostring(Plain(achName)), tostring(at[1])))
+		for j = 1, (okNum and Plain(num) or 0) do
+			local ok, name, _, done = pcall(GetAchievementCriteriaInfo, at[1], j)
+			if ok then ns.Print(("    %s %s"):format(ns.Flag(done) and "+" or "-", tostring(Plain(name)))) end
+		end
+	end
 end
 samples.discover = function()
 	local sub, zone = Subzone(), Zone()
