@@ -44,6 +44,7 @@ Support\WeakAuras.lua
 Support\DBM.lua
 Support\Questie.lua
 Support\RestedXP.lua
+Support\ClassicUIForever.lua
 Support\NaowhForever.lua
 Support\DialogueUI.lua
 Support\Immersion.lua
@@ -179,6 +180,9 @@ Layouts.lua
 ModuleEditor.lua
 HeldSettingsPage.lua
 DemoHub.lua
+MinimapTiles.lua
+MinimapCopy.lua
+BarHoverTest.lua
 CameraScriptsPage.lua
 CameraManager.lua
 Options.lua

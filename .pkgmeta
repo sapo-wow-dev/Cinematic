@@ -26,6 +26,11 @@ ignore:
   - MouseTurn.lua
   # (Demo Hub: demo tools and recording scripts, in the dev copy only)
   - DemoHub.lua
+  # (Bar hover test: /cine debug bartest, action bar addons' fade, hover and clicks, dev copy only)
+  - BarHoverTest.lua
+  # (Minimap Copy: the Dev hub page drawing the minimap from the game's own tiles, dev copy only)
+  - MinimapTiles.lua
+  - MinimapCopy.lua
   # (Cursor Hide: test pictures for /cine debug cursorsize pic, not shipped)
   - Textures/CursorTestSmall.tga
   - Textures/CursorTestRed.tga

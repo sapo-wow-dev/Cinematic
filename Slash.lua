@@ -1669,6 +1669,12 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg:find("^cursorsweep") then
 		-- (One cursor sweep, the faded minimap under your mouse: NodeSweep.lua.)
 		ns.CursorSweepTest(arg:match("^cursorsweep%s*(.*)$"))
+	elseif cmd == "debug" and arg == "bartest" then
+		-- (Dev copy: one run recording an action bar addon's fade, hover and clicks, BarHoverTest.lua.)
+		if ns.BarHoverTest then ns.BarHoverTest() else ns.Print("/cine debug bartest is in the dev copy only.") end
+	elseif cmd == "debug" and arg:find("^minimapcopy") and ns.MinimapCopyCommand then
+		-- (Dev copy: minimap tile test and live copy, MinimapCopy.lua.)
+		ns.MinimapCopyCommand(arg:match("^minimapcopy%s*(%a*)"))
 	elseif cmd == "debug" and arg:find("^nodes") then
 		ns.NodesDebug(arg:match("^nodes%s*(.*)$"))
 	elseif cmd == "facing" then

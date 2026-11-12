@@ -1918,6 +1918,33 @@ local function IsInside(frame, ancestor)
 	return false
 end
 
+-- The mouse on one of an action bar's own buttons (frame.actionButtons) that
+-- an addon moved into a frame of its own (ClassicUI Forever's holders): it
+-- isn't inside the bar any more, but it's still the bar's. (Each bar's
+-- buttons as a set, made again when their count changes. A function on ns:
+-- this file is at Lua's 200-local cap.)
+do
+	local sets = setmetatable({}, { __mode = "k" })
+	function ns.FocusOnBarButton(frame, focus)
+		local buttons = frame.actionButtons
+		if not focus or type(buttons) ~= "table" or #buttons == 0 then return false end
+		local set = sets[frame]
+		if not set or set.n ~= #buttons then
+			set = { n = #buttons, has = {} }
+			for _, button in ipairs(buttons) do set.has[button] = true end
+			sets[frame] = set
+		end
+		-- (The button, or a part of it: its cooldown, flyout arrow...)
+		for _ = 1, 3 do
+			if set.has[focus] then return true end
+			if IsForbidden(focus) then return false end
+			focus = focus:GetParent()
+			if not focus then return false end
+		end
+		return false
+	end
+end
+
 -- An action bar's empty slots: the game hides a button with nothing on it, so
 -- the mouse there is on the 3D world. Over one's rect counts as over the bar,
 -- and so does the mouse within pad (UI units) of any of its buttons, shown or
@@ -2083,7 +2110,18 @@ function ns.IsEntryHovered(entry)
 			end
 		end
 	end
-	if not (ns.Flag(entry.frame:IsVisible()) and ns.Flag(entry.frame:IsMouseOver())) then
+	if (entry.group == "bars" or entry.group == "sidebars") and ns.FocusOnBarButton(entry.frame, MouseFocus()) then
+		return true
+	end
+	if not ns.Flag(entry.frame:IsVisible()) then
+		return false
+	end
+	-- (Outside its rect, the mouse can still be on one of its own children:
+	-- some addons' frames are 1x1 with all they draw around it, Bartender4's
+	-- bars and ClassicUI Forever's quest watch. Not chat windows, which go
+	-- by their rect.)
+	if not ns.Flag(entry.frame:IsMouseOver())
+		and (entry.group == "chat" or not IsInside(MouseFocus(), entry.frame)) then
 		return false
 	end
 	-- Container frames (the action bar holders, status bar managers, the

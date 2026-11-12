@@ -38,6 +38,8 @@ local ROWS = {
 	{ "bar8", "bars", "BT4Bar15" },
 	{ "pet", "bars", "BT4BarPetBar" },
 	{ "stance", "bars", "BT4BarStanceBar" },
+	-- (Its Totem Bar: shamans, on clients with the game's totem bar, Forever too.)
+	{ "totems", "bars", "BT4BarMultiCast" },
 	{ "micro", "bars", "BT4BarMicroMenu" },
 	-- (Classic clients have no Bags row: their bags go with the micro menu.)
 	{ _G.BagsBar and "bags" or "micro", "bars", "BT4BarBagBar" },

@@ -6194,3 +6194,7 @@ L["The bars' words in General's text font."] = "El texto de las barras en la fue
 -- What's new: achievement progress cards (Changelog.lua)
 L["Achievement progress cards"] = "Tarjetas de progreso de logros"
 L["Three new cards in the top bar: how much of a zone you've explored, an achievement with one step left, and an achievement's step done. Each shows at most once every 10 minutes; on in the Cinema profile."] = "Tres tarjetas nuevas en la barra superior: cuánto has explorado de una zona, un logro al que le falta un paso y un paso de un logro completado. Cada una sale como mucho una vez cada 10 minutos; activadas en el perfil Cine."
+
+-- What's new: ClassicUI Forever support (Changelog.lua)
+L["ClassicUI Forever support"] = "Compatibilidad con ClassicUI Forever"
+L["ClassicUI Forever's action bars, bar art and quest watch now fade with Cinematic, and come back when you hover them."] = "Las barras de acción, el arte de la barra y el seguimiento de misiones de ClassicUI Forever ahora se desvanecen con Cinematic y vuelven al pasar el ratón por encima."

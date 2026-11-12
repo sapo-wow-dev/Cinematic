@@ -53,6 +53,7 @@ Support\WeakAuras.lua
 Support\DBM.lua
 Support\Questie.lua
 Support\RestedXP.lua
+Support\ClassicUIForever.lua
 Support\NaowhForever.lua
 Support\DialogueUI.lua
 Support\Immersion.lua

@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-12", page = "Advanced Frames", title = "ClassicUI Forever support", client = "forever",
+		text = "ClassicUI Forever's action bars, bar art and quest watch now fade with Cinematic, and come back " ..
+		"when you hover them." },
 	{ date = "2026-11-12", page = "Card Vision", title = "Achievement progress cards",
 		text = "Three new cards in the top bar: how much of a zone you've explored, an achievement with one step " ..
 		"left, and an achievement's step done. Each shows at most once every 10 minutes; on in the Cinema profile." },
