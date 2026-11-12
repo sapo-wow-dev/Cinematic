@@ -121,7 +121,7 @@ local DEFAULTS = {
 	innGlow = true,        -- indoors in an inn: lift the outdoor tint and add a warm glow
 	innGlowAmount = 0.02,  -- light the inn glow adds at its brightest (0.1 = 10%)
 	weatherTint = true,    -- rain, snow and sandstorms grey or colour the scene (clients with C_Weather)
-	weatherTintStrength = 1,
+	weatherTintStrength = 0, -- (off to start with since 2026-11-12: Core.lua's weatherStrengthV2)
 	rainViewScale = 0,     -- in rain, the view distance comes in from yours (Graphics.lua); Cinema: 100% (weather-view-distance)
 	tintClock = "game",    -- time-of-day tint follows "game" (realm) time or "local" (computer) time
 	timeTintStrength = 1,  -- how strongly the time-of-day colour applies (both time presets)
@@ -5811,6 +5811,15 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 				if type(saved) == "table" then saved.weatherTintStrength = 1 end
 			end
 			ns.db.weatherStrengthV1 = true
+		end
+		-- The weather tint off to start with (2026-11-12): 0 here and in
+		-- every saved profile, whatever it had. Once.
+		if not ns.db.weatherStrengthV2 then
+			ns.db.weatherTintStrength = 0
+			for _, saved in pairs(ns.db.profiles or {}) do
+				if type(saved) == "table" then saved.weatherTintStrength = 0 end
+			end
+			ns.db.weatherStrengthV2 = true
 		end
 		-- Cinema's Story cards now take in achievements' progress (Explore
 		-- progress, Almost there, Achievement step: ProfileModules.lua): on for
