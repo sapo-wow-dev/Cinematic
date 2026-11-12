@@ -303,7 +303,12 @@ end
 -- shoulderCamTalkTime seconds, eased. While one of Cinematic's cameras holds
 -- the view (the quest or chat camera) they're stepped back down over the same
 -- time, and up again once it's done. The way back as the window closes is
--- still the game's 0.2 s: closed, the focus has no one to turn to. They go
+-- the game's 0.2 s, a snap: closed, the focus has no one to turn to, and
+-- nothing turns the camera beforehand (the "back" run, 2026-11-12: camera
+-- follow didn't move it). So after shoulderCamTalkHold seconds on them the
+-- strengths glide back down at the same pace, the window still open, and the
+-- close has nothing left to snap (0: they stay up till it closes). A new
+-- window (the quest's text after the gossip) turns to them again. They go
 -- back to 0 talk.grace after the last window closes (from gossip to a quest's
 -- text, one window closes before the next opens). Its own Show in row off
 -- (shoulder:cam) turns it off too; mounted, indoors and the rest don't.
@@ -320,6 +325,7 @@ local talk = {
 		"TAXIMAP_CLOSED", "AUCTION_HOUSE_CLOSED", "MAIL_CLOSED", "GUILDBANKFRAME_CLOSED",
 		"PLAYER_INTERACTION_MANAGER_FRAME_HIDE" },
 	on = false, closedAt = nil, share = 0, -- (a window open; when the last closed; how far the turn is, 0-1)
+	back = false, fullAt = nil, -- (gliding back now; when the turn got all the way there)
 }
 
 local function TalkOn()
@@ -346,27 +352,100 @@ local function GiveBack(yours, ...)
 	end
 end
 
+-- Closing slowly. Closing the panel before the glide back's done still
+-- snapped the rest (user, 2026-11-12: "it glides back in .5 seconds"; the
+-- game's 0.2 s). So the call that ends the conversation (whichever of
+-- closing.calls the panel makes) is held back: the panel's gone at once, the
+-- conversation stays open unseen while the turn glides back at its own pace,
+-- then the held call goes. Walking off ends it on the game's side: that still
+-- snaps. A new window meanwhile (another NPC, the vendor after the gossip)
+-- drops the held calls (the game's moved on to it; ending it would close the
+-- new one). Never in a fight; a timer ends it if the glide can't finish.
+-- Wrapped only once the talk turn's first on. Each is logged ("shoulder").
+-- Only gossip and quest text: a vendor, bank, mailbox, trainer or flight
+-- master held open unseen would still take a bag click (an item sold or
+-- banked), so those close at once and snap back as the game's do.
+local closing = {
+	calls = { { "C_GossipInfo", "CloseGossip" }, { nil, "CloseQuest" } },
+	wrapped = false, held = {}, since = nil,
+}
+
+local function CloseNow(why)
+	local held = closing.held
+	if #held == 0 then return end
+	closing.held = {}
+	ns.Log("shoulder", ("talk close: ending the conversation now (%s, turn at %.2f, %.2f s held)"):format(why,
+		talk.share, GetTime() - (closing.since or GetTime())))
+	closing.passing = true
+	for _, call in ipairs(held) do
+		local ok, err = pcall(call.fn, unpack(call.args, 1, call.n))
+		if not ok then ns.Log("shoulder", ("talk close: %s failed: %s"):format(call.label, tostring(err))) end
+	end
+	closing.passing = nil
+end
+
+local function WrapCloses()
+	if closing.wrapped then return end
+	closing.wrapped = true
+	local names = {}
+	for _, entry in ipairs(closing.calls) do
+		local owner = entry[1] and _G[entry[1]] or (not entry[1] and _G or nil)
+		local fn = owner and owner[entry[2]]
+		local label = (entry[1] and entry[1] .. "." or "") .. entry[2]
+		if type(fn) == "function" then
+			names[#names + 1] = label
+			owner[entry[2]] = function(...)
+				if closing.passing or not (TalkOn() and talk.on and talk.share > 0.02) or InCombatLockdown() then
+					return fn(...)
+				end
+				local held = closing.held
+				held[#held + 1] = { fn = fn, args = { ... }, n = select("#", ...), label = label }
+				if #held == 1 then
+					closing.since, talk.back = GetTime(), true
+					ns.Log("shoulder", ("talk close: %s held while the camera glides back (turn at %.2f)"):format(
+						label, talk.share))
+					local wait = (ns.db.shoulderCamTalkTime or 1.5) + 1
+					C_Timer.After(wait, function() CloseNow("timer") end)
+				else
+					ns.Log("shoulder", ("talk close: %s held too"):format(label))
+				end
+			end
+		end
+	end
+	ns.Log("shoulder", "talk close: watching " .. (#names > 0 and table.concat(names, ", ") or "nothing"))
+end
+
 -- Every frame while the Shoulder Cam's on.
 local function TalkTick(elapsed)
 	local yours = ns.db and ns.db.shoulderCamYours
 	if not (yours and TalkOn()) or ns.shoulderTestHold or (ns.DialogueUICameraOn and ns.DialogueUICameraOn()) then
+		CloseNow("talk turn off")
 		return
 	end
 	if talk.on and talk.closedAt and GetTime() - talk.closedAt >= talk.grace then
 		talk.on, talk.closedAt = false, nil
 	end
 	if not talk.on then
-		talk.share = 0
+		talk.share, talk.back, talk.fullAt = 0, false, nil
 	else
 		local step = elapsed / math.max(0.1, ns.db.shoulderCamTalkTime or 1.5)
 		local holder = ns.CameraHolder and ns.CameraHolder("talk")
-		if holder and holder ~= "you" then
+		if talk.back or holder and holder ~= "you" then
 			talk.share = math.max(0, talk.share - step)
 		else
 			talk.share = math.min(1, talk.share + step)
+			local hold = ns.db.shoulderCamTalkHold or 0
+			if talk.share >= 1 and hold > 0 then
+				talk.fullAt = talk.fullAt or GetTime()
+				if GetTime() - talk.fullAt >= hold then
+					talk.back = true
+					ns.LogDetail("cvar", "Shoulder Cam: talk turn glides back")
+				end
+			end
 		end
 	end
 	SetTalkShare(yours, talk.share)
+	if #closing.held > 0 and talk.share <= 0 then CloseNow("glided back") end
 end
 
 local poller = CreateFrame("Frame")
@@ -393,6 +472,7 @@ function ns.ApplyShoulderCam()
 			if TalkOn() then
 				SetTalkShare(yours, talk.share)
 				Write(yours, talk.enable, "1")
+				WrapCloses()
 			else
 				talk.share = 0
 				GiveBack(yours, talk.enable, talk.yawCVar, talk.pitchCVar)
@@ -400,6 +480,7 @@ function ns.ApplyShoulderCam()
 		end
 		poller:Show()
 	else
+		CloseNow("Shoulder Cam off")
 		poller:Hide()
 		if yours then
 			for cvar, value in pairs(yours) do
@@ -639,7 +720,7 @@ function ns.GetShoulderCamDebug()
 			return #names > 0 and table.concat(names, ", ") or "none"
 		end)(),
 		paused = db and PauseReason() or "no", always = db and db.shoulderCamAlways, key = GetBindingKey(SWAP_ACTION) or "none",
-		talkTurn = db and db.shoulderCamTalkTurn, talking = talk.on, talkShare = talk.share,
+		talkTurn = db and db.shoulderCamTalkTurn, talking = talk.on, talkShare = talk.share, talkBack = talk.back,
 		focus = GetCVar(talk.enable), focusYaw = GetCVar(talk.yawCVar), focusPitch = GetCVar(talk.pitchCVar),
 	}
 end
@@ -681,7 +762,12 @@ end
 events:SetScript("OnEvent", function(_, event)
 	if TALK_EVENT[event] == "open" then
 		if not talk.on then ns.LogDetail("cvar", ("Shoulder Cam: talk turn starts (%s)"):format(event)) end
-		talk.on, talk.closedAt = true, nil
+		if #closing.held > 0 then
+			ns.Log("shoulder", ("talk close: %d held call(s) dropped, %s opened"):format(#closing.held, event))
+			closing.held = {}
+		end
+		-- (A new window: toward them again, from wherever the turn is.)
+		talk.on, talk.closedAt, talk.back, talk.fullAt = true, nil, false, nil
 	elseif TALK_EVENT[event] == "close" then
 		if talk.on and not talk.closedAt then talk.closedAt = GetTime() end
 	elseif event == "UNIT_MODEL_CHANGED" then
@@ -751,13 +837,19 @@ function ns.CreateShoulderCamPanel(kit)
 	stack:Header(content, L["Talking"])
 	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTalkTurn", L["Turn to who you talk to"],
 		L["As you talk to an NPC (or open a vendor, bank, flight master or mailbox), the camera turns " ..
-		"slowly to bring them toward the middle of the screen, and goes back as the window closes. It " ..
-		"steps aside while Cinematic's quest or chat camera moves the view."], ns.ApplyShoulderCam), "check"), IfOn)
+		"slowly to bring them toward the middle of the screen, and glides back at the same pace as you " ..
+		"close the window. " ..
+		"It steps aside while Cinematic's quest or chat camera moves the view."], ns.ApplyShoulderCam), "check"), IfOn)
+	local function IfTalk() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTalkTurn end
 	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Turn takes"], 0.5, 4, 0.5,
 		L["%.1f sec"]), "slider")
-	kit.Tooltip(talkTime, L["How long the turn toward them takes. The way back, as the window closes, is " ..
-		"the game's own and always quick."])
-	kit.GreyUnless(talkTime, function() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTalkTurn end)
+	kit.Tooltip(talkTime, L["How long the turn toward them takes, and the glide back."])
+	kit.GreyUnless(talkTime, IfTalk)
+	local talkHold = stack:Add(kit.Slider(content, "shoulderCamTalkHold", L["Look at them for"], 0, 10, 0.5,
+		L["%.1f sec"]), "slider")
+	kit.Tooltip(talkHold, L["At 0 the camera stays on them till you close the window. Set a time and it " ..
+		"glides back on its own after that long, the window still open."])
+	kit.GreyUnless(talkHold, IfTalk)
 
 	stack:Header(content, L["Pause"])
 	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamNotMounted", L["Not while mounted"],

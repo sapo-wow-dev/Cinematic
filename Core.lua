@@ -469,6 +469,7 @@ local DEFAULTS = {
 	shoulderCamFramesStrength = 1, -- ...how far (1 = the worked-out place)
 	shoulderCamTalkTurn = true, -- ...the camera turns slowly to whoever you talk to (the game's interact focus, eased in)
 	shoulderCamTalkTime = 1.5, -- ...seconds that turn takes
+	shoulderCamTalkHold = 0, -- ...seconds it stays on them before gliding back (0: till the window closes)
 	shoulderCamAlways = true,  -- ...everywhere: its Show in row's Always (the rest: the row's ticks and rule)
 	indoorLimits = true,      -- indoors, keep the camera modes from pushing into walls:
 	indoorZoomOut = 1,        -- ...zoom out at most this many yards past your own distance

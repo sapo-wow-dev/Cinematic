@@ -202,6 +202,19 @@ So there's no speed setting: the turn's always about 0.2 s. The strengths are st
 
 So a slow turn to whoever you talk to is ours to make: focus on with strength 0, then step the strengths up per frame. The way back as the window closes is still the game's 0.2 s snap (not yet tried: easing it back down before the window closes, or whether the focus holds a moment after).
 
+#### Map: back (the same vendor, 2026-11-12, NPC 5.5% right of the middle)
+
+`map back`: slowing the way back as the window closes (the game's 0.2 s snap, "really fast").
+
+| Trial | The way back |
+| --- | --- |
+| As built (twice) | The snap: 90% back in 0.2 s |
+| Camera follow swinging you round behind (ns.CenterCamera), focus kept | **Nothing moved**: the same snap (camera follow doesn't turn a standing camera) |
+| The same, focus eased off as it swings | A glide back over 1.5 s, all of it the strength coming down; the follow added nothing |
+| Strengths eased to 0 before the close | **A smooth glide back over 1.5 s**, nothing left at the close |
+
+Your facing: the first click turned you from 23.9 to 49.1 degrees to face the NPC; later clicks, already facing them, none. So the only slow way back is the strengths coming down before the window closes: possible only if we know the close is coming.
+
 What the first two tries taught: a turn or tilt speed setting written low is put back by Core.lua's speed watch unless held with `ns.SetHeldSpeed`; `SetView` blends over about a second; the standing-still and chat cameras start mid-run unless the run holds the view (`ns.RegisterCamera`); the recording's clock ran 1.0 s ahead of the log; block matching fails on dark grass, tracking the hair's colour works.
 
 ## Build phases
