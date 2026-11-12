@@ -4381,6 +4381,14 @@ ticker:RegisterEvent("PLAYER_STARTED_MOVING")
 ticker:RegisterEvent("PLAYER_LEVEL_UP")
 ticker:RegisterEvent("PLAYER_STOPPED_MOVING")
 ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg1, arg2)
+	-- Font addons (ElvUI's combat font, NaowhForever, DaylightUI...) set the
+	-- floating text font too, after us; set the blank one again after each
+	-- addon loads and at login, so ours is the one the game reads. (Not while
+	-- an addon's own damage font wins: its Addon Conflicts row on Theirs.)
+	if ns.blankWorldFont and (event == "ADDON_LOADED" or event == "PLAYER_LOGIN")
+		and not ns.ConflictStandsAside("style:damageFont") then
+		DAMAGE_TEXT_FONT = ns.blankWorldFont
+	end
 	if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
 		-- (for the welcome window: Welcome.lua. resetKept: Reset addon's, Profiles.lua)
 		ns.newInstall = CinematicDB == nil or CinematicDB.resetKept == true
@@ -4398,7 +4406,8 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			ns.db.combatTextHideGame = false
 		end
 		if ns.db.hideWorldText and ns.db.combatTextStyle and ns.db.styleGeneral ~= false then
-			DAMAGE_TEXT_FONT = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Fonts\\Blank.ttf"
+			ns.blankWorldFont = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Fonts\\Blank.ttf"
+			DAMAGE_TEXT_FONT = ns.blankWorldFont
 		end
 		-- Vitals Vision's reaches: one for all four edges, now the top and
 		-- bottom's, with the sides' apart; the sides as they were. (Saved

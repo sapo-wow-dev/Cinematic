@@ -768,9 +768,25 @@ function ns.CreateCombatTextStylePanel(kit)
 		"own floating text turned off. The game draws its XP gains (\"XP: 35\") in the same font as its damage " ..
 		"numbers, so the only way to hide the XP is to hide all of its text and show ours instead."])
 
+	-- An Experimental notice (not a gate: it doesn't stop the page working):
+	-- a skull (the raid marker's: on every client) and a red Experimental.
+	local skull = content:CreateTexture(nil, "ARTWORK")
+	skull:SetSize(20, 20)
+	skull:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -10)
+	skull:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
+	local warnTitle = kit.Label(content, "GameFontNormalLarge", L["Experimental"])
+	warnTitle:SetPoint("LEFT", skull, "RIGHT", 6, 0)
+	warnTitle:SetTextColor(1, 0.25, 0.2)
+	local warnText = kit.Label(content, "GameFontHighlightSmall", L["This page is experimental: our numbers may " ..
+		"not show for every hit or heal, may not look quite like the game's everywhere, and may change in " ..
+		"later versions. If something looks wrong, turn the page off to get the game's own numbers back."])
+	warnText:SetPoint("TOPLEFT", skull, "BOTTOMLEFT", 0, -6)
+	warnText:SetWidth(520)
+	warnText:SetJustifyH("LEFT")
+
 	local function Changed() ns.RefreshCombatTextStyle() end
 	local switch = kit.PageSwitch(content, "combatTextStyle", L["Enable Page"],
-		L["On: this page's settings take hold. Off: the game's own floating text, as it was."], intro, Changed)
+		L["On: this page's settings take hold. Off: the game's own floating text, as it was."], warnText, Changed)
 	local stack = kit.Stack(switch, "check")
 	local rows = ns.StyleRows(kit, content, stack, Changed, "combatTextStyle")
 	local function Ours(db) return rows.On(db) and db.combatTextNumbers end
