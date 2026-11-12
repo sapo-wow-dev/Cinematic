@@ -207,6 +207,33 @@ function ns.AddQuestFocusTracker(fn, name)
 	ns.questFocusTrackerNames[fn] = name
 end
 
+-- Features another addon has its own version of, where the other addon's
+-- wins while it's on (the player's pick, 2026-11-12; a tool to choose per
+-- feature may come). fn() returns the addon's name while its version is on.
+-- Features: "card:<event id>" (Cards.lua), "scene:<trigger key>" (camera
+-- scenes: CameraRows.lua), "questObjectGlow" and "hideObjectIcons" (Quest
+-- Vision's soft-target settings: Core.lua).
+local featureYields = {}
+function ns.AddFeatureYield(feature, fn)
+	featureYields[feature] = featureYields[feature] or {}
+	table.insert(featureYields[feature], fn)
+end
+
+-- The addon whose own version of a feature is on now, or nil.
+function ns.FeatureYieldedTo(feature)
+	local list = featureYields[feature]
+	if not list then
+		return nil
+	end
+	for _, fn in ipairs(list) do
+		local ok, who = pcall(fn)
+		if ok and who then
+			return who
+		end
+	end
+	return nil
+end
+
 -- Its frames standing in for the game's, by Standard Frames row: each row is
 -- { row, fade group, frame names... }. They set their own alpha and are its
 -- own frames, so they're hooked.

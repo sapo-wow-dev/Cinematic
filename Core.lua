@@ -1525,8 +1525,10 @@ end
 function ns.PageSwitchOf(key)
 	return PAGE_SWITCH[key]
 end
--- A Quest Vision tick as its Enable leaves it.
+-- A Quest Vision tick as its Enable leaves it (off while another addon's own
+-- version of it is on: ns.FeatureYieldedTo).
 function ns.QuestVisionSetting(key)
+	if ns.FeatureYieldedTo and ns.FeatureYieldedTo(key) then return false end
 	return ns.Setting("questVision") and ns.Setting(key) or false
 end
 

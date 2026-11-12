@@ -73,6 +73,30 @@ for _, known in ipairs({
 		about = L["its quest marker"],
 		names = { "DaylightUIQuestMarker" },
 	},
+	{
+		key = "dlQuestProgress", addon = "DaylightUI_Quests",
+		label = "DaylightUI quest progress", short = "DaylightUI progress",
+		about = L["its quest progress lines over the world"],
+		names = { "DaylightUIQuestProgress" },
+	},
+	{
+		key = "dlDataBar", addon = "DaylightUI_InfoPanel",
+		label = "DaylightUI data bar", short = "DaylightUI data bar",
+		about = L["its data bar along the bottom of the screen"],
+		names = { "DaylightUIDataBar" },
+	},
+	{
+		key = "dlCursorRing", addon = "DaylightUI_QoL",
+		label = "DaylightUI cursor ring", short = "DaylightUI cursor ring",
+		about = L["its ring around the mouse cursor"],
+		names = { "DaylightUICursorRing" },
+	},
+	{
+		key = "dlLeaderTab", addon = "DaylightUI_UnitFrames",
+		label = "DaylightUI leader tab", short = "DaylightUI leader",
+		about = L["its group leader tab on the left edge of the screen"],
+		names = { "DaylightUILeaderTab" },
+	},
 }) do
 	known.suite, known.hookAlpha = "DaylightUI", true
 	table.insert(ns.ADDON_FRAMES, known)
@@ -100,6 +124,13 @@ local AREAS = {
 	["UnitFrames.focustarget"] = { "focustot", "target" },
 	["UnitFrames.party"] = { "party", "party" },
 	["UnitFrames.raid"] = { "raidplayers", "raidplayers" },
+	-- (Its bars at your feet, and the battleground's enemy flag carriers.)
+	["UnitFrames.personal"] = { "prd", "prd" },
+	["UnitFrames.arena"] = { "flags", "flags" },
+	-- (Its Cooldown Manager layout.)
+	["ActionBars.cdm"] = { "cooldowns", "cooldowns" },
+	["Chat.side"] = { "chat", "chat" },
+	["InfoPanel.xp"] = { "xp", "bars" },
 	["Buffs.buffs"] = { "buffs", "buffs" },
 	["Buffs.debuffs"] = { "buffs", "buffs" },
 	["ActionBars.stance"] = { "stance", "bars" },
@@ -219,6 +250,42 @@ end)
 ns.WhenAddonLoads("DaylightUI_UnitFrames", function()
 	ns.FadeWithRow("swing", "swing", { "DaylightUISwingTimer" }, true, true)
 	ns.AddPortraitFrame("DaylightUIFrame_player")
+	-- Its cast bars standing apart from their unit frames (named only then):
+	-- yours with the Cast bar row, the others with their unit's.
+	ns.FadeWithRow("castbar", "castbar", { "DaylightUICastBar_player" }, true, true)
+	ns.FadeWithRow("target", "target", { "DaylightUICastBar_target" }, true, true)
+	ns.FadeWithRow("focus", "target", { "DaylightUICastBar_focus" }, true, true)
+end)
+
+-- Its Quality of Life part has its own version of some of Cinematic's
+-- features. While its own is on, it wins and Cinematic's stands aside (the
+-- player's pick, 2026-11-12): its AFK screen and campfire scene over those
+-- scenes' cameras, its zone title, level-up and reputation banners over
+-- those cards, and its object glow (soft targeting settings of its own) over
+-- Quest Vision's object glow and Hide object icons. Its error text and quest
+-- progress lines need nothing: they draw instead of the game's, which is all
+-- Cinematic hides.
+ns.WhenAddonLoads("DaylightUI_QoL", function()
+	local function QoLOn(key)
+		return function()
+			local DUI = _G.DaylightUI
+			if DUI and DUI.Get and DUI:Get("QoL", key) == true then
+				return "DaylightUI"
+			end
+			return nil
+		end
+	end
+	for feature, key in pairs({
+		["scene:AFK"] = "afkScreen",
+		["scene:Campfire"] = "campfire",
+		["card:zone"] = "zoneTitle",
+		["card:levelUp"] = "levelUp",
+		["card:reputation"] = "repBanner",
+		questObjectGlow = "objectGlow",
+		hideObjectIcons = "objectGlow",
+	}) do
+		ns.AddFeatureYield(feature, QoLOn(key))
+	end
 end)
 
 -- Its nameplates are its own frames, one put on each game plate that shows a

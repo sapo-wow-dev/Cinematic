@@ -438,6 +438,7 @@ local NOW_HOLD = 0.1
 local nowCache = { at = -1 }
 function ns.TriggerRowNow(key)
 	if ns.db and DroppedSet()[key] then return nil end -- (taken off its scene's Triggers)
+	if ns.FeatureYieldedTo and ns.FeatureYieldedTo("scene:" .. key) then return nil end -- (another addon's own)
 	if ns.db and TRIGGER[key] then key = ns.SceneLead(key) end -- (a group's member: its lead's rows)
 	if not ns.db or not TRIGGER[key] or DeletedSet()[key] then return nil end
 	local now = GetTime()
