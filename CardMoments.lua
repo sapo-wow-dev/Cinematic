@@ -246,8 +246,26 @@ end
 -- following achievements made of achievements (Explore Azeroth, Explore
 -- Kalimdor, Explore The Barrens), not by their category. Built once, as
 -- { [place name] = { achievement id, step } }; areas in none aren't in it.
+-- Built a few milliseconds a frame, from a little after login (all at once,
+-- every achievement's every step, the game stopped it: "script ran too long"
+-- on retail, 2026-11-12). Asked before it's done: what's in it so far, so a
+-- place not in it yet is "no count", as one in none.
 local explore = {}
 local EXPLORE_AREA, ACHIEVEMENT = 43, 8 -- (a step's type: discover an area; earn an achievement)
+local EXPLORE_BUDGET = 4 -- milliseconds of building per frame
+function explore.Step()
+	local co = explore.co
+	if not co then return end
+	explore.stopAt = debugprofilestop() + EXPLORE_BUDGET
+	local ok, err = coroutine.resume(co)
+	if not ok or coroutine.status(co) == "dead" then
+		explore.co = nil
+		if explore.ticker then explore.ticker:Cancel() end
+		explore.ticker = nil
+		explore.built = ok
+		if not ok then ns.Log("card", "explore count build error: " .. tostring(err)) end
+	end
+end
 function explore.Index()
 	if explore.index then return explore.index end
 	local index, walked = {}, {}
@@ -256,7 +274,12 @@ function explore.Index()
 	-- name less its first word: "Explore The Barrens", The Barrens.)
 	explore.areaAch, explore.zones, explore.zoneOf = {}, {}, {}
 	if not (GetCategoryList and GetCategoryNumAchievements and GetAchievementNumCriteria and GetAchievementCriteriaInfo) then
+		explore.built = true
 		return index
+	end
+	-- (Out of this frame's time: the rest next frame. Never inside a pcall.)
+	local function Pause()
+		if debugprofilestop() > explore.stopAt then coroutine.yield() end
 	end
 	local function Walk(id, depth)
 		if not id or walked[id] or depth > 5 then return end
@@ -264,6 +287,7 @@ function explore.Index()
 		explore.walked = explore.walked + 1
 		local okNum, steps = pcall(GetAchievementNumCriteria, id)
 		for j = 1, (okNum and Plain(steps) or 0) do
+			Pause()
 			local ok, name, kind, _, _, _, _, _, asset = pcall(GetAchievementCriteriaInfo, id, j)
 			name, kind = ok and Plain(name), ok and Plain(kind)
 			if kind == EXPLORE_AREA and name and name ~= "" then
@@ -279,17 +303,23 @@ function explore.Index()
 			end
 		end
 	end
-	local okList, list = pcall(GetCategoryList)
-	if not okList or type(list) ~= "table" then return index end
-	for _, category in ipairs(list) do
-		local okCount, count = pcall(GetCategoryNumAchievements, category, true)
-		for i = 1, (okCount and Plain(count) or 0) do
-			local okAch, id = pcall(GetAchievementInfo, category, i)
-			if okAch then Walk(Plain(id), 0) end
+	explore.co = coroutine.create(function()
+		local okList, list = pcall(GetCategoryList)
+		if not okList or type(list) ~= "table" then return end
+		for _, category in ipairs(list) do
+			local okCount, count = pcall(GetCategoryNumAchievements, category, true)
+			for i = 1, (okCount and Plain(count) or 0) do
+				Pause()
+				local okAch, id = pcall(GetAchievementInfo, category, i)
+				if okAch then Walk(Plain(id), 0) end
+			end
 		end
-	end
+	end)
+	explore.ticker = C_Timer.NewTicker(0, function() explore.Step() end)
 	return index
 end
+-- (Started a little after login, so it's ready by the first zone change.)
+C_Timer.After(10, function() explore.Index() end)
 -- True: the game says this character's discovered the place; false: not yet
 -- (it's being discovered now); nil: the game keeps no count of it.
 function ns.PlaceExplored(place)
@@ -313,8 +343,9 @@ function ns.DebugExplore()
 	local total = 0
 	for _ in pairs(index) do total = total + 1 end
 	local zone, sub = Zone(), Subzone()
-	ns.Print(("explore: %d areas in %d achievements walked; zone %s, subzone %s")
-		:format(total, explore.walked or 0, zone ~= "" and zone or "-", sub ~= "" and sub or "-"))
+	ns.Print(("explore: %d areas in %d achievements walked (%s); zone %s, subzone %s")
+		:format(total, explore.walked or 0, explore.built and "done" or explore.co and "still building" or "build failed",
+		zone ~= "" and zone or "-", sub ~= "" and sub or "-"))
 	for _, place in ipairs({ zone, sub }) do
 		if place ~= "" then
 			local state = ns.PlaceExplored(place)
