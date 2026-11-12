@@ -20,7 +20,7 @@ local DIRS = { [0] = "Azeroth", [1] = "Kalimdor", [530] = "Expansion01", [571] =
 local KNOWN_THERE = "Interface\\Icons\\INV_Misc_QuestionMark"
 local KNOWN_MISSING = "World\\Minimaps\\NoSuchFolder\\map99_99"
 local MISSING_ID = 2147480000 -- (far past any file the game has)
-local UPDATE = 1 / 30 -- seconds between moves of the copy
+local UPDATE = 0 -- seconds between moves of the copy (every frame: at 1/30 it lagged the real one)
 
 local copy -- the live copy's frame
 local pattern -- the path shape that worked (a format: dir, column, row), once tested
@@ -122,7 +122,11 @@ function ns.MinimapCopyTest()
 	local col, row = math.floor(gx), math.floor(gy)
 	Say(("you: north %.1f, west %.1f -> folder %s, tile column %d row %d (%.2f, %.2f across)"):format(
 		north, west, dir, col, row, gx - col, gy - row))
+	if not (ns.minimapTiles and ns.minimapTiles[dir]) then
+		Say(("no file ID table for %s yet (MinimapTiles.lua; Tools/minimap-tiles makes one)"):format(dir))
+	end
 	pattern = nil
+	local guess
 	for i, shape in ipairs(SHAPES) do
 		local path = PathFor(shape, dir, col, row)
 		local try = path and Try(scratch, path) or { verdict = "no entry" }
@@ -132,9 +136,15 @@ function ns.MinimapCopyTest()
 		Say(("%d. %s (%s): set %s, file ID %s -> %s"):format(i, shape.id and shape[1] or tostring(path),
 			tostring(path), tostring(try.set), tostring(try.id), try.verdict:upper()))
 		if try.verdict == "loaded" and not pattern then pattern = shape end
+		-- (Forever reads any file ID back as itself, so an ID try can't be told
+		-- apart; the first one with an entry is used: column then row showed the
+		-- right art, tested 2026-11-12.)
+		if try.verdict == "can't tell" and shape.id and not guess then guess = shape end
 	end
+	pattern = pattern or guess
 	if pattern then
-		Say(("VERDICT: tiles LOAD (%s). Show copy draws from them."):format(pattern[1]))
+		Say(("VERDICT: using %s%s. Show copy draws from it."):format(pattern[1],
+			pattern == guess and " (can't be checked: look at its square)" or ", it loads"))
 	else
 		Say("VERDICT: no tile loaded. Look at the squares on the page: any map art in one?")
 	end
@@ -142,6 +152,78 @@ function ns.MinimapCopyTest()
 end
 
 -- The live copy ---------------------------------------------------------------
+
+-- The game's ring round the minimap (as MinimapStyle.lua: Forever's and
+-- retail's compass, classic clients' border), mirrored onto the copy every
+-- frame: its art, color, grey and place next to the minimap, so a Style
+-- theme's recolor comes along too.
+local RINGS = { "MinimapCompassTexture", "MinimapBorder" }
+
+-- Where a region sits next to the minimap's top left, in the minimap's units.
+local function Offsets(region)
+	local left, top, right, bottom = region:GetLeft(), region:GetTop(), region:GetRight(), region:GetBottom()
+	local mLeft, mTop = Minimap:GetLeft(), Minimap:GetTop()
+	if not (left and top and right and bottom and mLeft and mTop) then return nil end
+	local k = region:GetEffectiveScale() / Minimap:GetEffectiveScale()
+	return left * k - mLeft, top * k - mTop, right * k - mLeft, bottom * k - mTop
+end
+
+-- (Returns how far the rings stick out past the minimap's sides.)
+local function MirrorRings()
+	copy.rings = copy.rings or {}
+	local out = 0
+	for i, name in ipairs(RINGS) do
+		local game = _G[name]
+		local ours = copy.rings[i]
+		local left, top, right, bottom
+		if game and game.IsVisible and game:IsVisible() then left, top, right, bottom = Offsets(game) end
+		if left then
+			if not ours then
+				ours = copy:CreateTexture(nil, "OVERLAY", nil, 7)
+				copy.rings[i] = ours
+			end
+			local atlas = game.GetAtlas and game:GetAtlas()
+			if atlas then
+				if ours.atlas ~= atlas then ours:SetAtlas(atlas) end
+			else
+				local file = game:GetTexture()
+				if ours.file ~= file then ours:SetTexture(file) end
+				ours:SetTexCoord(game:GetTexCoord())
+				ours.file = file
+			end
+			ours.atlas = atlas
+			ours:SetVertexColor(game:GetVertexColor())
+			ours:SetDesaturated(game:IsDesaturated())
+			ours:SetBlendMode(game:GetBlendMode())
+			ours:ClearAllPoints()
+			ours:SetPoint("TOPLEFT", copy, "TOPLEFT", left, top)
+			ours:SetPoint("BOTTOMRIGHT", copy, "TOPLEFT", right, bottom)
+			ours:Show()
+			out = math.max(out, -left, right - Minimap:GetWidth())
+		elseif ours then
+			ours:Hide()
+		end
+	end
+	return out
+end
+
+-- What the copy's ring is made of, for the test's log.
+local function DescribeRings()
+	for _, name in ipairs(RINGS) do
+		local game = _G[name]
+		if not game then
+			Say(("ring %s: not on this client"):format(name))
+		else
+			local left, top, right, bottom = Offsets(game)
+			Say(("ring %s: shown %s, alpha %.2f, atlas %s, file %s, color %s, grey %s, layer %s, at %s"):format(name,
+				tostring(game:IsVisible()), game:GetAlpha(), tostring(game.GetAtlas and game:GetAtlas()),
+				tostring(game:GetTexture()), table.concat({ game:GetVertexColor() }, "/"),
+				tostring(game:IsDesaturated()), tostring(game:GetDrawLayer()), left and
+				("%.0f, %.0f to %.0f, %.0f (minimap %.0f x %.0f)"):format(left, top, right, bottom, Minimap:GetWidth(),
+				Minimap:GetHeight()) or "?"))
+		end
+	end
+end
 
 local function Build()
 	copy = CreateFrame("Frame") -- (not UIParent's: CineMode can't hide it)
@@ -184,7 +266,8 @@ function ns.MinimapCopyUpdate()
 	local size = Minimap:GetWidth()
 	copy:SetSize(size, Minimap:GetHeight())
 	copy:ClearAllPoints()
-	copy:SetPoint("TOPRIGHT", Minimap, "TOPLEFT", -12, 0) -- (scales match, so offsets do)
+	-- (scales match, so offsets do; both rings' overhang kept clear)
+	copy:SetPoint("TOPRIGHT", Minimap, "TOPLEFT", -12 - 2 * MirrorRings(), 0)
 	local dir, gx, gy = Where()
 	local radius = C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius()
 	local why = not pattern and "no tile path found yet: Test tiles first"
@@ -226,6 +309,7 @@ function ns.MinimapCopyShow(show)
 		copy:Show()
 		ns.MinimapCopyUpdate()
 		Say(pattern and "copy shown left of the minimap" or "copy shown, but no tile path loaded")
+		DescribeRings()
 	elseif copy then
 		copy:Hide()
 	end
@@ -287,7 +371,7 @@ function ns.CreateMinimapCopyPage(kit)
 		if #results == 0 then
 			status:SetText(dir and "Not tested yet." or ("Can't test here: " .. tostring(gx)))
 		else
-			status:SetText(pattern and ("|cff40ff40Tiles load:|r " .. pattern[1]) or
+			status:SetText(pattern and ("|cff40ff40Using:|r " .. pattern[1] .. ". Show copy draws from it.") or
 				"|cffff4040No tile loaded.|r Any map art in a square below?")
 		end
 		for i, try in ipairs(results) do
