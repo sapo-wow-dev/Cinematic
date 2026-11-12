@@ -202,12 +202,15 @@ end)
 -- Its nameplates are its own frames, one put on each game plate that shows a
 -- unit (parented to it), with the game's unit frame kept at alpha 0 under
 -- it. So the fade leaves that unit frame be (ns.addonPlateHidden: setting
--- its alpha would show the game's plate under its own) and sets its plate's
--- alpha instead, which it never sets itself. Its plates are pooled and move
--- from plate to plate: one moved takes the alpha of the plate it lands on.
+-- its alpha would show the game's plate under its own) and goes on its plate
+-- instead. It sets that plate's alpha itself too (back to full as a plate
+-- appears, and its Fade other plates), so it's hooked: ours times its own
+-- (ns.SetPlateFrameAlpha). Its plates are pooled and move from plate to
+-- plate: one moved takes the alpha of the plate it lands on.
 do
 	local plateAlpha = setmetatable({}, { __mode = "k" }) -- [game plate] = its fade, below 1
 	local hooked = setmetatable({}, { __mode = "k" })
+	local LABEL = "DaylightUI plate alpha"
 
 	local function Usable(frame)
 		return type(frame) == "table" and not (frame.IsForbidden and frame:IsForbidden())
@@ -234,7 +237,7 @@ do
 		end
 		hooked[ours] = true
 		hooksecurefunc(ours, "SetParent", function(self, parent)
-			self:SetAlpha(Usable(parent) and plateAlpha[parent] or 1)
+			ns.SetPlateFrameAlpha(self, Usable(parent) and plateAlpha[parent] or nil, LABEL)
 		end)
 	end
 
@@ -244,7 +247,7 @@ do
 		local ours = Ours(plate)
 		if ours then
 			Hook(ours)
-			ours:SetAlpha(alpha or 1)
+			ns.SetPlateFrameAlpha(ours, alpha, LABEL)
 		end
 	end
 
@@ -254,10 +257,23 @@ do
 			return Ours(plate) ~= nil
 		end)
 		-- A new plate gets its plate in its own handler, which runs after
-		-- ours (Effects: NAME_PLATE_UNIT_ADDED): give it the plate's alpha
-		-- straight after, before it's drawn.
-		ns.AfterPlateAdded(function(plate)
-			SetPlateAlpha(plate, plateAlpha[plate])
-		end)
+		-- ours (Effects: NAME_PLATE_UNIT_ADDED). Its own "last" handler runs
+		-- after that one: the new unit's alpha goes on then, before it's drawn
+		-- (the game plate's last alpha was its last unit's: a hidden enemy's
+		-- plate flashed up for a frame).
+		local DUI = _G.DaylightUI
+		if DUI and DUI.RegisterEvent then
+			DUI.RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit)
+				local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
+				if ns.db and ns.db.enabled and type(plate) == "table"
+					and not (plate.IsForbidden and plate:IsForbidden()) then
+					ns.RefreshPlateAlpha(plate)
+				end
+			end, true)
+		else
+			ns.AfterPlateAdded(function(plate)
+				SetPlateAlpha(plate, plateAlpha[plate])
+			end)
+		end
 	end)
 end
