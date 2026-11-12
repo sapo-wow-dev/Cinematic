@@ -1678,6 +1678,7 @@ function cursor.Begin()
 	s.underTestBefore = ns.minimapUnderTest
 	ns.minimapUnderTest = true
 	cursor.s = s
+	if ns.mmRec then ns.mmRec.Line("SWEEP START (minimap moved under the pointer, hover ignored)") end
 	return s
 end
 
@@ -1692,7 +1693,12 @@ function cursor.End()
 	-- for the frame it's put back in.)
 	C_Timer.After(0.2, function()
 		if not cursor.s then ns.minimapUnderTest = s.underTestBefore end
+		if ns.mmRec then ns.mmRec.Line("hover counts again (0.2 s after the sweep)") end
 	end)
+	if ns.mmRec then
+		ns.mmRec.Line(("SWEEP END after %d frames, %d points heard something, %d read again"):format(
+			s.frames or 0, s.heard or 0, s.again or 0))
+	end
 	last.frames, last.again, last.heard = s.frames, s.again, s.heard
 	local ok, _, _, _, x, y = pcall(Minimap.GetPoint, Minimap, 1)
 	local first = s.points[1]
@@ -2037,6 +2043,20 @@ local function Where(entry)
 	return ("%.0f yd %s"):format(yards, COMPASS[math.floor((angle + 22.5) / 45) % 8 + 1])
 end
 
+-- For /cine debug minimappulse (Diagnostics.lua): the sweep's and the
+-- reveal's state now, one line.
+function ns.MinimapSweepState()
+	local entry = MinimapEntry()
+	local now = GetTime()
+	return ("sweep %s (on %s, next in %.1fs, waits: %s), reveal held %s, last find %s, spot %s; " ..
+		"our fade alpha %s, shrunk %s, parked %s"):format(cursor.s and "RUNNING" or "idle", tostring(cursor.On()),
+		math.max(0, cursor.EVERY - (now - sweptAt)), tostring(cursor.NotReady() or "nothing"),
+		now - seenAt < HOLD and ("%.1fs more"):format(HOLD - (now - seenAt)) or "no",
+		tostring(revealedBy), tostring(cursor.spot and cursor.spot.name),
+		entry and tostring(entry.alpha) or "?", tostring(entry and entry.shrunk or false),
+		tostring(entry and entry.parkedFullSize or false))
+end
+
 -- /cine debug cursorsweep combat: sweeps in fights too, this session (a test).
 function ns.CursorSweepCombat()
 	cursor.combat = not cursor.combat
@@ -2347,12 +2367,14 @@ function ns.IsMinimapRevealed(now)
 		started = ns.framePassTimes and debugprofilestop()
 		local nodesUp = cursor.Reveal(now)
 		cursor.TimeNote("cursor sweep", started)
+		if ns.mmRec then ns.mmRec.Reveal(questie, quests, nodesUp, revealedBy) end
 		return quests or nodesUp or questie
 	end
 	if QuestReveal() then
 		local started = ns.framePassTimes and debugprofilestop()
 		local quests = QuestReveals(now, true)
 		cursor.TimeNote("quest areas", started)
+		if ns.mmRec then ns.mmRec.Reveal(questie, quests, nil, revealedBy) end
 		return quests or questie
 	end
 	if not AnyReveal() then

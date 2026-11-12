@@ -3029,3 +3029,170 @@ do
 		ns.Print(("tracing the alpha of %d frames for 10 seconds"):format(count))
 	end
 end
+
+-- /cine debug minimappulse: the minimap fading in and out over and over with
+-- nothing to show (video 2026-11-12, about every 4.5 s, cursor sweep on).
+-- One run, two steps: every pass, what decided each Minimap-page frame
+-- (hovered and by which frame, a reveal and which, a kept-up setting, an
+-- event), each cursor sweep's start and end, and a snapshot twice a second.
+-- To ns.db.minimapPulseLog; a verdict at the end. Run it again to stop.
+function ns.MinimapPulseTest()
+	if ns.mmRec then
+		ns.mmRec.Finish("stopped")
+		return
+	end
+	local STEPS = {
+		"1/2: STAND STILL where the minimap flashed, CineMode on.\nRest the mouse over the open world, "
+			.. "away from the minimap and any window. Don't touch anything.",
+		"2/2: STAND STILL. Rest the mouse on your action bars' spot,\nbottom middle of the screen. Don't touch anything.",
+	}
+	local LEAD, LENGTH = 4, 25
+	local log = {}
+	ns.db.minimapPulseLog = log
+	local rec = { over = {}, last = {}, ups = {}, sweepEnds = {}, step = 0 }
+	local started = GetTime()
+	ns.padTestRun = (ns.padTestRun or 0) + 1
+	local run = ns.padTestRun
+	local function Name(frame)
+		local ok, name = pcall(function()
+			return (frame.GetDebugName and frame:GetDebugName()) or (frame.GetName and frame:GetName())
+		end)
+		return ok and type(name) == "string" and name or tostring(frame)
+	end
+	function rec.Line(text)
+		if #log < 4000 then log[#log + 1] = ("%6.2f [%d] %s"):format(GetTime() - started, rec.step, text) end
+	end
+	function rec.Over(entry, still)
+		rec.over[entry.name or Name(entry.frame)] = { GetTime(), still }
+	end
+	function rec.Reveal(questie, quests, nodesUp, by)
+		rec.reveal = ("quest givers %s, quest areas %s, nodes %s (by %s)"):format(tostring(questie or false),
+			tostring(quests or false), tostring(nodesUp or false), tostring(by))
+	end
+	function rec.Entry(entry, target, row, cinematic, hov, holdUntil, tracking, trig, chatShowing, fightingShown,
+			follows, events)
+		local now = GetTime()
+		local why = {}
+		if hov then
+			local names = {}
+			for name, at in pairs(rec.over) do
+				if at[1] == now then names[#names + 1] = name .. (at[2] and " (kept answer)" or "") end
+			end
+			table.sort(names)
+			why[#why + 1] = #names > 0 and ("HOVER now: " .. table.concat(names, ", "))
+				or (holdUntil and holdUntil > now and ("HOVER held %.1fs more"):format(holdUntil - now))
+				or "HOVER (a Mouseover group it's in)"
+		end
+		if tracking then
+			if trig then
+				local on = {}
+				for key, value in pairs(events) do
+					if value then on[#on + 1] = key end
+				end
+				table.sort(on)
+				why[#why + 1] = "EVENT: " .. table.concat(on, ", ")
+				if events.tracking then why[#why + 1] = "tracking = " .. (rec.keep or rec.reveal or "?") end
+			else
+				why[#why + 1] = "KEPT UP (Always show minimap / indoors)"
+			end
+		end
+		if chatShowing then why[#why + 1] = "chat" end
+		if fightingShown then why[#why + 1] = "FIGHT/TARGET column" end
+		if follows then why[#why + 1] = "follows " .. tostring(follows) end
+		if not cinematic then why[#why + 1] = "CineMode off" end
+		local state = ("target %s: %s"):format(tostring(target), #why > 0 and table.concat(why, "; ") or "nothing")
+		local key = entry.name or Name(entry.frame)
+		if rec.last[key] ~= state then
+			local was = rec.last[key]
+			rec.last[key] = state
+			rec.Line(("%s (row %s, alpha %.2f) %s"):format(key, tostring(row), entry.alpha or -1, state))
+			-- (The Minimap's own turns up: what did it, for the verdict.)
+			if entry.frame == Minimap and target > 0 and was and was:find("^target 0") then
+				local lastEnd = rec.sweepEnds[#rec.sweepEnds]
+				local sweepAgo = rec.sweeping and 0 or (lastEnd and now - lastEnd)
+				rec.ups[#rec.ups + 1] = { why = #why > 0 and why[1] or "nothing", sweepAgo = sweepAgo }
+			end
+		end
+	end
+	local Line = rec.Line
+	function rec.Finish(how)
+		if rec.ticker then rec.ticker:Cancel() end
+		ns.mmRec = nil
+		local tally, order, afterSweep = {}, {}, 0
+		for _, up in ipairs(rec.ups) do
+			local reason = up.why:gsub(" %(kept answer%)", ""):gsub("held [%d%.]+s more", "held")
+			if not tally[reason] then order[#order + 1] = reason end
+			tally[reason] = (tally[reason] or 0) + 1
+			if up.sweepAgo and up.sweepAgo < 0.8 then afterSweep = afterSweep + 1 end
+		end
+		table.sort(order, function(a, b) return tally[a] > tally[b] end)
+		local parts = {}
+		for _, reason in ipairs(order) do parts[#parts + 1] = ("%dx %s"):format(tally[reason], reason) end
+		local verdict = #rec.ups == 0
+			and ("the minimap never came up (%d sweeps ran): no pulse this run"):format(#rec.sweepEnds)
+			or ("the minimap came up %d times, %d of them during a sweep or within 0.8 s after one (%d sweeps). Why: %s"):format(
+				#rec.ups, afterSweep, #rec.sweepEnds, table.concat(parts, " | "))
+		Line("VERDICT (" .. how .. "): " .. verdict)
+		ns.Print("minimappulse: " .. verdict .. ". Now /reload and say \"check log\".")
+		ns.PadTestBox("Test " .. how .. ". /reload, then say \"check log\".", verdict, 0.3, 1, 0.3)
+		C_Timer.After(20, function() ns.PadTestBoxHide(run) end)
+	end
+	-- (The sweep's ends, for the verdict: NodeSweep.lua writes the line.)
+	local baseLine = rec.Line
+	function rec.Line(text)
+		if text:find("^SWEEP START") then rec.sweeping = true end
+		if text:find("^SWEEP END") then
+			rec.sweeping = nil
+			rec.sweepEnds[#rec.sweepEnds + 1] = GetTime()
+		end
+		baseLine(text)
+	end
+	local nextSnap = 0
+	local function Tick()
+		local elapsed = GetTime() - started
+		local index = math.floor(elapsed / LENGTH) + 1
+		if index > #STEPS then
+			rec.Finish("done")
+			return
+		end
+		if index ~= rec.step then
+			rec.step = index
+			rec.Line("STEP " .. STEPS[index]:gsub("\n", " "))
+		end
+		local into = elapsed - (index - 1) * LENGTH
+		if into < LEAD then
+			ns.PadTestBox(STEPS[index], ("GET READY: recording starts in %d"):format(math.ceil(LEAD - into)), 1, 0.82, 0)
+		else
+			ns.PadTestBox(STEPS[index], ("RECORDING: keep still, %d sec left"):format(math.ceil(LENGTH - into)),
+				0.3, 1, 0.3)
+		end
+		if GetTime() >= nextSnap then
+			nextSnap = GetTime() + 0.5
+			local foci = GetMouseFoci and GetMouseFoci()
+			local focus = type(foci) == "table" and foci[1] or (GetMouseFocus and GetMouseFocus())
+			local x, y = GetCursorPosition()
+			local okOver, over = pcall(function() return ns.Flag(Minimap:IsMouseOver()) end)
+			local okSweep, sweep = pcall(ns.MinimapSweepState or function() return "no sweep code" end)
+			Line(("snap: Minimap alpha %.2f (seen %.2f), shown %s, mouse over it %s, under test %s; pointer %.0f,%.0f on %s; " ..
+				"CineMode %s; %s; tracking keep %s; reveal %s"):format(Minimap:GetAlpha(), Minimap:GetEffectiveAlpha(),
+				tostring(Minimap:IsVisible()), okOver and tostring(over) or "?", tostring(ns.minimapUnderTest or false),
+				x or -1, y or -1, focus and Name(focus) or "nothing", tostring(ns.IsCineModeOn()),
+				okSweep and tostring(sweep) or ("sweep state failed: " .. tostring(sweep)), tostring(rec.keep),
+				tostring(rec.reveal)))
+		end
+	end
+	ns.mmRec = rec
+	Line(("start: client %s, Minimap page %s, mouseover %s, nodes by cursor %s, reveal areas %s, turn-ins %s, " ..
+		"quest givers %s, hold %s, fade out %s"):format(
+		tostring((select(4, GetBuildInfo()))), tostring(ns.PageOn("handleMinimap")), tostring(ns.db.mouseover),
+		tostring(ns.db.minimapNodesByCursor), tostring(ns.db.minimapRevealAreas), tostring(ns.db.minimapRevealTurnIns),
+		tostring(ns.db.minimapQuestGivers), tostring(ns.HoldTime("mouseoverHold")), tostring(ns.FadeOutTime())))
+	rec.ticker = C_Timer.NewTicker(0.1, function()
+		local ok, err = pcall(Tick)
+		if not ok then
+			Line("ERROR: " .. tostring(err))
+			pcall(rec.Finish, "stopped by an error")
+		end
+	end)
+	ns.Print("minimappulse: recording for 58 seconds, follow the box at the top. Type it again to stop.")
+end

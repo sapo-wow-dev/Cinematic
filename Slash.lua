@@ -1667,6 +1667,8 @@ local function HandleSlash(msg)
 		ns.Print(("minimap mask %s: %s; minimap alpha %.2f, shown %s, in combat %s"):format(which ~= "" and which or "off",
 			ok and "set" or ("failed: " .. tostring(err)), Minimap:GetEffectiveAlpha(), tostring(Minimap:IsVisible()),
 			tostring(InCombatLockdown())))
+	elseif cmd == "debug" and arg:find("^minimappulse") then
+		ns.MinimapPulseTest()
 	elseif cmd == "debug" and arg:find("^cursorsweep%s+combat") then
 		ns.CursorSweepCombat()
 	elseif cmd == "debug" and arg:find("^cursorsweep") then

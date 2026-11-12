@@ -2049,8 +2049,11 @@ function ns.IsEntryHovered(entry)
 	if PART_GROUPS[entry.group] then
 		return false
 	end
-	-- (/cine debug offers moves the minimap under your mouse: not a hover.)
-	if ns.minimapUnderTest and entry.frame == Minimap then
+	-- (/cine debug offers and the cursor sweep move the minimap under your
+	-- mouse: not a hover. Nor of its cluster, which holds it: that hover
+	-- brought the whole minimap up after every sweep, and cut the sweep
+	-- short, every 4 s, /cine debug minimappulse 2026-11-12.)
+	if ns.minimapUnderTest and (entry.frame == Minimap or entry.group == "minimap") then
 		return false
 	end
 	if entry.shrunk or entry.parkedFullSize then
@@ -10881,6 +10884,8 @@ function ns.UpdateFrames(cinematic, elapsed)
 			end
 			if over then
 				mouseRows[ownPartyRows and entry.rspGroup or entry.row] = true
+				-- (/cine debug minimappulse: which frames count as hovered.)
+				if ns.mmRec then ns.mmRec.Over(entry, still) end
 			end
 		end
 		-- Rows linger after the mouse leaves. The hold time counts the fade
@@ -10945,6 +10950,10 @@ function ns.UpdateFrames(cinematic, elapsed)
 	-- (Not on flight paths, Minimap page: no pings, reveals or tracking bring it up then.)
 	local taxiHidesMinimap = minimapPage and ns.db.minimapHideOnTaxi and ns.Flag(ns.OnTaxi())
 	events.ping = minimapPage and pingReveal and not taxiHidesMinimap
+	if ns.mmRec then
+		ns.mmRec.keep = (keepForGathering and not trackingPaused and "gathering tracking")
+			or (keepForCreatures and "creature tracking") or nil
+	end
 	-- (Keep open and Reveal, Minimap page: "Except in" is for gathering tracking only.)
 	events.tracking = minimapPage and not taxiHidesMinimap and ((keepForGathering and not trackingPaused) or keepForCreatures
 		or ns.IsMinimapRevealed(now))
@@ -11223,6 +11232,11 @@ function ns.UpdateFrames(cinematic, elapsed)
 			ns.WhyNote(entry, target, row, cinematic, hovered, triggered, tracking, listShown, fightingShown,
 				chatShowing, typingShown, deathFade, deathKept[row], immersive, follows, events, keepIndoors,
 				questTimerUp, durabilityUp, petUnhappyUp, hoverGroups, offWhen, combatShown)
+		end
+		-- (/cine debug minimappulse, Diagnostics.lua: what decided each minimap frame.)
+		if ns.mmRec and (entry.group == "minimap" or entry.frame == Minimap) then
+			ns.mmRec.Entry(entry, target, row, cinematic, hovered[row], hoverHeldUntil[row], tracking, triggered[row],
+				chatShowing, fightingShown, follows, events)
 		end
 		if entry.frame == Minimap then
 			RedrawMinimapWhenShown()
