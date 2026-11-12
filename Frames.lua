@@ -4356,6 +4356,56 @@ function ns.IsBareAura(aura)
 	return duration == 0 and ending == 0 and (stacks or 0) <= 1
 end
 
+-- Each aura's stacks when last seen, by instance ID (ns.IsUnrefreshedAura),
+-- and how many are noted. (On ns: this file is at its cap of locals.)
+ns.auraStacks, ns.auraStacksCount = {}, 0
+
+-- Note an aura's stacks: a later update is told a stack change by them.
+function ns.NoteAuraStacks(aura)
+	if type(aura) ~= "table" then
+		return
+	end
+	local id, stacks = aura.auraInstanceID, aura.applications
+	if id == nil or (issecretvalue and (issecretvalue(id) or issecretvalue(stacks))) then
+		return
+	end
+	if ns.auraStacks[id] == nil then
+		ns.auraStacksCount = ns.auraStacksCount + 1
+		if ns.auraStacksCount > 300 then -- (gone auras' IDs never come back)
+			wipe(ns.auraStacks)
+			ns.auraStacksCount = 1
+		end
+	end
+	ns.auraStacks[id] = stacks or 0
+end
+
+-- An updated aura that wasn't refreshed: its time wasn't set back to full
+-- (it has run a while: the game also sends updates when only a buff's numbers
+-- change, as a shapeshift changing your attack power) and its stacks didn't
+-- change. False when unsure (secret values, or stacks never seen and above 1).
+function ns.IsUnrefreshedAura(aura)
+	if type(aura) ~= "table" then
+		return false
+	end
+	local duration, ending, stacks = aura.duration, aura.expirationTime, aura.applications
+	if duration == nil or ending == nil
+		or (issecretvalue and (issecretvalue(duration) or issecretvalue(ending) or issecretvalue(stacks))) then
+		return false
+	end
+	local id = aura.auraInstanceID
+	local before = id ~= nil and not (issecretvalue and issecretvalue(id)) and ns.auraStacks[id] or nil
+	ns.NoteAuraStacks(aura)
+	stacks = stacks or 0
+	if (before and before ~= stacks) or (not before and stacks > 1) then
+		return false
+	end
+	-- (Full time left, give or take a moment: a recast.)
+	if duration > 0 and ending - GetTime() >= duration - 1.5 then
+		return false
+	end
+	return true
+end
+
 -- A buff you cast on yourself (buffPeekIgnoreSelf passes these over): its
 -- caster is you or your pet. (False when unsure: no data, or a secret caster.)
 local function IsSelfCast(aura)
@@ -4637,6 +4687,7 @@ local function AnyAuraHold(updateInfo, found)
 				return AuraHold(nil)
 			end
 			for _, aura in pairs(added) do
+				ns.NoteAuraStacks(aura)
 				Consider(aura)
 			end
 		end
@@ -4647,9 +4698,9 @@ local function AnyAuraHold(updateInfo, found)
 			end
 			for _, instanceID in pairs(updated) do
 				local aura = C_UnitAuras.GetAuraDataByAuraInstanceID("player", instanceID)
-				if ns.IsBareAura(aura) then
+				if ns.IsBareAura(aura) or ns.IsUnrefreshedAura(aura) then
 					if ns.auraDebug then
-						ns.AuraSay(("aura %s: updated, but no time or stacks to refresh"):format(
+						ns.AuraSay(("aura %s: updated, but not refreshed (time not back to full, same stacks)"):format(
 							issecretvalue and issecretvalue(aura.name) and "secret" or tostring(aura.name)))
 					end
 				else
@@ -4972,8 +5023,30 @@ function ns.WhichBuffEnded(before, after, count, ends)
 	if dueCount == 0 and unknownCount == 1 then return unknown end
 	return nil
 end
+-- Where one new buff could have come in among count buffs, by the timers
+-- shown before and after: every place whose adding gives the new row (nil
+-- when a timer isn't known). Tested 2026-11-12 (Forever, a fight): a new buff
+-- taken as one of yours, under the 5 other casters' ones, didn't fit the
+-- timers, and Blessing of Might (the first of theirs) showed instead.
+function ns.WhichBuffAdded(before, after, count)
+	local fits = {}
+	for place = 1, count do
+		local fit = true
+		for index = 1, count do
+			if after[index] == nil or (index < count and before[index] == nil) then return nil end
+			if index < place then
+				fit = fit and after[index] == before[index]
+			elseif index > place then
+				fit = fit and after[index] == before[index - 1]
+			end
+		end
+		if fit then fits[#fits + 1] = place end
+	end
+	return fits
+end
 function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 	C_Timer.After(0, function()
+		local addedTail -- (one new buff: how many sit above it, when the timers placed it)
 		local shown, total, secretAt, ends, pictureAt = {}, 0, {}, {}, {}
 		local flagAt, endAt = {}, {}
 		ns.ForEachBuffIcon(function(button)
@@ -5073,6 +5146,28 @@ function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 		elseif total > totalBefore then
 			local grew = total - totalBefore
 			local tail = math.min(ns.buffOthersTail or 0, totalBefore)
+			-- (One new buff where the timers say it can't be: put at the highest
+			-- place they allow. Above the guess, it's another caster's: one more
+			-- of theirs on top for the rest of the fight.)
+			if grew == 1 then
+				local fits = ns.WhichBuffAdded(flagsBefore, flagAt, total)
+				local guess, fitsGuess = total - tail, false
+				for _, index in ipairs(fits or {}) do
+					if index == guess then fitsGuess = true end
+				end
+				if fits and #fits > 0 and not fitsGuess then
+					local addedAt = fits[#fits]
+					if addedAt > total - tail then
+						ns.buffOthersTail = (ns.buffOthersTail or 0) + 1
+					end
+					tail = total - addedAt
+					addedTail = tail
+				end
+				if ns.auraDebug then
+					ns.AuraSay(("fight buff added: timers fit %s, guess %d, taken %d"):format(
+						fits and table.concat(fits, " ") or "unknown", guess, total - tail))
+				end
+			end
 			for index = totalBefore, totalBefore - tail + 1, -1 do
 				known[index + grew], knownEnds[index + grew] = known[index], knownEnds[index]
 			end
@@ -5217,7 +5312,7 @@ function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 			-- (The new ones go on top, older ones' places moving down; on
 			-- Forever under other casters' buffs, which stay on top. A
 			-- readable one is by its picture already.)
-			local tail = math.min(ns.buffOthersTail or 0, totalBefore or 0)
+			local tail = addedTail or math.min(ns.buffOthersTail or 0, totalBefore or 0)
 			for place = #ns.fightNewBuffs + 1, tail do
 				ns.fightNewBuffs[place] = 0
 			end
