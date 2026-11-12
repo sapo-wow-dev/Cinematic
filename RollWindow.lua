@@ -87,13 +87,12 @@ local function StyleText(text, look)
 	ns.SetTextShadow(text, look.rollShadow)
 end
 
--- Player rows per card: everyone in a party; in a raid, the top few
--- (rollRaidRows), the rest as "and N more".
-local function MaxRows()
-	if IsInRaid and IsInRaid() then
-		return ns.Setting("rollRaidRows") or 3
-	end
-	return 5
+
+-- Where the window comes up (rollPlace): "down" under the game's roll frames,
+-- "right" or "left" beside them, or "separate", where last dropped.
+local function RollPlace()
+	local place = ns.Setting("rollPlace")
+	return type(place) == "string" and place or "down"
 end
 
 local function Secret(value)
@@ -241,14 +240,74 @@ local function Unusable(link)
 	return false
 end
 
--- Good enough for a panel (rollMinQuality; rollUsableOnly, ones you can
--- use); an item not known yet is.
-local function Wanted(info)
-	local quality = ItemQuality(info.itemHyperlink)
-	if quality and quality < (ns.Setting("rollMinQuality") or 0) then
+-- One of the page's rules (rule: "Show", "Usable", "Best" or "Max") for an
+-- item of this quality, from its group's grid (Raid in a raid, else Party:
+-- a party or dungeon): Uncommon covers below it too, Legendary above it. An
+-- item whose quality isn't known yet goes by Rare's.
+local function QualityRow(quality)
+	return (not quality or quality == 3) and "Rare" or quality <= 2 and "Uncommon"
+		or quality == 4 and "Epic" or "Legendary"
+end
+local function RollGroup(raid)
+	if raid == nil then raid = IsInRaid and IsInRaid() or false end
+	return raid and "Raid" or "Party"
+end
+local function QualitySetting(rule, quality, raid)
+	return ns.Setting("roll" .. rule .. RollGroup(raid) .. QualityRow(quality))
+end
+local function QualityRule(rule, quality, raid)
+	return QualitySetting(rule, quality, raid) and true or false
+end
+
+-- Player rows on an item's card: the top few (its group's and quality's Max),
+-- the rest as "and N more".
+local function MaxRows(drop)
+	local raid = IsInRaid and IsInRaid() or false
+	return tonumber(QualitySetting("Max", ItemQuality(drop.info and drop.info.itemHyperlink), raid))
+		or (raid and 3 or 5)
+end
+
+-- Its group's and quality's Show: "off" (no panel), "winner" (a panel once
+-- it's won, just the winner) or "all" (every pick as it's made).
+local function ShowMode(quality, raid)
+	local mode = QualitySetting("Show", quality, raid)
+	if mode == true then return "all" end -- (a tick, before it was a dropdown)
+	return (mode == "winner" or mode == "all") and mode or "off"
+end
+
+-- You rolled Need on it (main or off spec), with rollAlwaysNeed on: every
+-- pick shows, whatever its quality's grid says (Show, Usable).
+local function YouNeed(info)
+	if not ns.Setting("rollAlwaysNeed") then
 		return false
 	end
-	return not (ns.Setting("rollUsableOnly") and Unusable(info.itemHyperlink))
+	for _, roll in ipairs(info.rollInfos or {}) do
+		if roll.isSelf then
+			return roll.state == NEED or roll.state == NEED_OFF
+		end
+	end
+	return false
+end
+
+-- Its quality is shown at all (an item not known yet is).
+local function QualityWanted(info)
+	local quality = ItemQuality(info.itemHyperlink)
+	return not quality or YouNeed(info) or ShowMode(quality) ~= "off"
+end
+
+-- Its quality shows just the winner, once it's won.
+local function WinnerOnly(info)
+	return not YouNeed(info) and ShowMode(ItemQuality(info.itemHyperlink)) == "winner"
+end
+
+-- Good enough for a panel (its quality's Show and Only items you can use
+-- ticks); an item not known yet is.
+local function Wanted(info)
+	if not QualityWanted(info) then
+		return false
+	end
+	return YouNeed(info)
+		or not (QualityRule("Usable", ItemQuality(info.itemHyperlink)) and Unusable(info.itemHyperlink))
 end
 
 -- The item's quality colour, from its link (either way links colour it), else white.
@@ -313,6 +372,7 @@ local shown = {}    -- the drops on show, newest first: { key, encounterID, loot
 local pinned = false -- opened with /cine rolls: stays until closed
 local testing        -- the test's fake drops, while it runs
 local dismissed = {} -- drops whose window was closed by hand mid-roll: not brought back for them
+local waiting = {} -- drops of a Winner quality seen while rolling: a panel once they're won
 local RollPicks -- (Picks, below: a drop's picks as one log line)
 
 local function SetStateIcon(texture, state)
@@ -822,10 +882,22 @@ local function FillCard(card, drop)
 		end
 		return SortRolls(a, b)
 	end)
-	-- (rollTopPick: only the best pick anyone's made counts, need over greed:
+	-- (Show's Winner: just the winner, once out; no passes or counts. A click
+	-- still lists everyone.)
+	local winnerOnly = not drop.expanded and WinnerOnly(info)
+	if winnerOnly then
+		for i = #rolls, 1, -1 do
+			if not (winner and rolls[i].isWinner) then
+				table.remove(rolls, i)
+			end
+		end
+		passed = {}
+	end
+	-- (rollBest<Q>: only the best pick anyone's made counts, need over greed:
 	-- the lower ones can't win, so they're only counted; those still choosing stay)
 	local lower = 0
-	if ns.Setting("rollTopPick") and not drop.expanded then
+	if not winnerOnly and QualityRule("Best", ItemQuality(drop.info and drop.info.itemHyperlink))
+		and not drop.expanded then
 		local best
 		for _, roll in ipairs(rolls) do
 			if roll.state ~= NO_ROLL then
@@ -856,7 +928,7 @@ local function FillCard(card, drop)
 	end
 
 	local y = compact and -(INSET + 32) or -(HEAD + 6 + math.max(0, look.rollBarHeight - 3))
-	local maxRows = drop.expanded and #rolls or MaxRows()
+	local maxRows = (drop.expanded or winnerOnly) and #rolls or MaxRows(drop)
 	-- (rollShowSelf: yours always listed, one row more under the few if it's further down)
 	if ns.Setting("rollShowSelf") and maxRows < #rolls then
 		for i = maxRows + 1, #rolls do
@@ -922,7 +994,7 @@ local function FillCard(card, drop)
 		lines[#lines + 1] = L["and %d more"]:format(more)
 	end
 	if lower > 0 then
-		lines[#lines + 1] = L["Lower picks: %d"]:format(lower)
+		lines[#lines + 1] = L["Uncounted: %d"]:format(lower)
 	end
 	if #passed > MAX_PASSED and not drop.expanded then
 		lines[#lines + 1] = L["Passed: %s"]:format(#passed)
@@ -935,7 +1007,8 @@ local function FillCard(card, drop)
 		lines[#lines + 1] = "|cff808080" .. (drop.expanded and L["Click to show fewer"]
 			or L["Click to list everyone"]) .. "|r"
 	end
-	if #lines > 0 and ns.Setting("rollFooter") then -- (the lines can be turned off; a click still works)
+	-- (the lines can be turned off, in a party or dungeon and in a raid apart; a click still works)
+	if #lines > 0 and ns.Setting("rollFooter" .. RollGroup()) then
 		card.passed:SetText(table.concat(lines, "\n"))
 		card.passed:ClearAllPoints()
 		card.passed:SetPoint("TOPLEFT", INSET, y - 4)
@@ -952,7 +1025,8 @@ Layout = function()
 		return
 	end
 	-- (the window is the first column's width, so it stays put under the
-	-- game's roll frames; the second column hangs off its right)
+	-- game's roll frames; the second column hangs off its right, or its left
+	-- beside them on the left, clear of them)
 	local y, lowest = 0, 0
 	for i = 1, math.max(#shown, #cards) do
 		local card = cards[i]
@@ -963,7 +1037,7 @@ Layout = function()
 		if drop then
 			card = card or NewCard(i)
 			card:ClearAllPoints()
-			card:SetPoint("TOPLEFT", i > PER_COLUMN and CARD_W + GAP or 0, y)
+			card:SetPoint("TOPLEFT", i > PER_COLUMN and (CARD_W + GAP) * (RollPlace() == "left" and -1 or 1) or 0, y)
 			card:SetHeight(FillCard(card, drop))
 			if card.key ~= drop.key then
 				card.fadeOut:Stop() -- (a panel moving up to fill a gap isn't the one that faded)
@@ -1059,10 +1133,12 @@ end
 local offsetX, offsetY = 0, 0
 local halfWidth -- half the game's roll frames' width, last seen
 
--- How far right of the game's roll frames' centre ours sit with rollBeside
--- on (their tops level, ours just past their right edge); else 0.
+-- How far right of the game's roll frames' centre ours sit with rollPlace
+-- "right" (their tops level, ours just past their right edge), left of it
+-- with "left"; else 0.
 local function BesideShift()
-	if not ns.Setting("rollBeside") then
+	local place = RollPlace()
+	if place ~= "right" and place ~= "left" then
 		return 0
 	end
 	local half = halfWidth
@@ -1070,7 +1146,7 @@ local function BesideShift()
 		local width = GroupLootContainer and Number(GroupLootContainer:GetWidth())
 		half = width and width > 0 and width / 2 or CARD_W / 2
 	end
-	return half + GAP + CARD_W / 2
+	return (half + GAP + CARD_W / 2) * (place == "left" and -1 or 1)
 end
 
 local function RollsTop()
@@ -1083,7 +1159,7 @@ local function RollsTop()
 		if boxX then
 			offsetX, offsetY = lastX - boxX, lastTop - boxTop
 		end
-		if ns.Setting("rollBeside") then
+		if BesideShift() ~= 0 then
 			return lastX + BesideShift(), top
 		end
 		return lastX, bottom - GAP
@@ -1096,12 +1172,12 @@ end
 
 local ownDrag = false -- dragging our panels on their own (the game's frames have no place yet)
 
--- With rollSeparate on, our panels have a place of their own, apart from the
+-- With rollPlace "separate", our panels have a place of their own, apart from the
 -- game's roll frames: where last dropped (rollSpot, shares of the screen:
 -- ns.SpotShares). Never dropped, they come up by the game's frames as usual.
 -- Their top centre, in their own units.
 local function OwnSpot()
-	local spot = ns.Setting("rollSeparate") and ns.db and ns.db.rollSpot
+	local spot = RollPlace() == "separate" and ns.db and ns.db.rollSpot
 	if type(spot) ~= "table" or not ns.SpotFromShares then
 		return nil
 	end
@@ -1341,7 +1417,7 @@ local function DragStop()
 	window:StopMovingOrSizing()
 	window:SetUserPlaced(false)
 	ownDrag = false
-	if ns.Setting("rollSeparate") then -- (apart: only ours moves, and keeps its spot)
+	if RollPlace() == "separate" then -- (apart: only ours moves, and keeps its spot)
 		local left, top = Number(window:GetLeft()), Number(window:GetTop())
 		if left and top and ns.db and ns.SpotShares then
 			ns.db.rollSpot = ns.SpotShares(window, left, top, window:GetWidth(), window:GetHeight())
@@ -1372,11 +1448,11 @@ DragStack = function(card)
 	card:RegisterForDrag("LeftButton")
 	-- (tied to the game's roll frames: dragging moves those, and this follows;
 	-- while they have no place, this moves and they're put with it. With
-	-- rollSeparate on, only this moves)
+	-- rollPlace "separate", only this moves)
 	local withRolls = false
 	card:SetScript("OnDragStart", function()
 		local box = GroupLootContainer
-		withRolls = not ns.Setting("rollSeparate") and ns.DragRolls and box and type(box:GetLeft()) == "number" and not Secret(box:GetLeft()) or false
+		withRolls = RollPlace() ~= "separate" and ns.DragRolls and box and type(box:GetLeft()) == "number" and not Secret(box:GetLeft()) or false
 		if withRolls then
 			ns.DragRolls(true)
 		else
@@ -1494,16 +1570,29 @@ local function Seen(encounterID, lootListID, info)
 	if drop then
 		drop.info = info
 		why = "refreshed"
-	elseif Done(info) then
-		why = "skipped: already done"
 	elseif dismissed[key] then
 		why = "skipped: closed by hand"
-	elseif not Wanted(info) and not YourChoiceDue(info) then
-		-- (still yours to pick on: shown whatever the filters say, so you see
-		-- the others' picks while you choose)
-		why = "skipped: below min quality or unusable"
+	elseif not QualityWanted(info) then
+		-- (a quality set to Off: never, even while yours to pick on; the game's
+		-- own roll frame still asks)
+		why = "skipped: quality off"
+	elseif WinnerOnly(info) and not Done(info) then
+		-- (Winner: its panel once it's won, as it's won; not one already won
+		-- before it was seen, as a reload's history)
+		waiting[key] = true
+		why = "skipped: waiting for its winner"
+	elseif Done(info) and not (WinnerOnly(info) and waiting[key] and info.winner) then
+		waiting[key] = nil
+		why = "skipped: already done"
+	elseif not Wanted(info) and (WinnerOnly(info) or not YourChoiceDue(info)) then
+		-- (still yours to pick on: shown whatever Only items you can use says,
+		-- so you see the others' picks while you choose; not for Winner)
+		waiting[key] = nil
+		why = "skipped: unusable"
 	else
-		table.insert(shown, 1, { key = key, encounterID = encounterID, lootListID = lootListID, info = info })
+		waiting[key] = nil
+		table.insert(shown, 1, { key = key, encounterID = encounterID, lootListID = lootListID, info = info,
+			instant = WinnerOnly(info) or nil })
 		for i = #shown, Panels() + 1, -1 do
 			shown[i] = nil
 		end
@@ -1579,6 +1668,7 @@ watcher:SetScript("OnEvent", function(_, event, encounterID, lootListID)
 		ScanEncounter(encounterID)
 	elseif event == "LOOT_HISTORY_CLEAR_HISTORY" and not testing then
 		wipe(dismissed)
+		wipe(waiting)
 		Close()
 	end
 end)
@@ -1622,9 +1712,15 @@ function ns.RollDebug()
 	local function Say(line)
 		ns.Print(line)
 	end
-	Say(("Roll Vision %s; min quality %s; usable only %s; panels %d; in combat %s"):format(
-		Enabled() and "on" or "off", tostring(ns.Setting("rollMinQuality")), tostring(ns.Setting("rollUsableOnly")),
-		Panels(), tostring(InCombatLockdown())))
+	Say(("Roll Vision %s; panels %d; in combat %s"):format(Enabled() and "on" or "off", Panels(),
+		tostring(InCombatLockdown())))
+	for _, raid in ipairs({ false, true }) do
+		for _, row in ipairs({ { "Uncommon", 2 }, { "Rare", 3 }, { "Epic", 4 }, { "Legendary", 5 } }) do
+			Say(("  %s %s: show %s, usable only %s, hide uncounted %s, max %s"):format(RollGroup(raid), row[1],
+				ShowMode(row[2], raid), tostring(QualityRule("Usable", row[2], raid)),
+				tostring(QualityRule("Best", row[2], raid)), tostring(QualitySetting("Max", row[2], raid))))
+		end
+	end
 	Say(("window %s; %d card(s) on show; test %s; pinned %s"):format(
 		window and (window:IsShown() and "shown" or "hidden") or "not made", #shown, tostring(testing ~= nil),
 		tostring(pinned)))
@@ -1749,7 +1845,7 @@ function ns.TestRollWindow(force)
 	local now = GetTime()
 	for d, quality in ipairs(TEST_QUALITIES) do
 		-- (below the window's quality: not shown, as a real one wouldn't be)
-		if quality >= (ns.Setting("rollMinQuality") or 0) then
+		if ShowMode(quality) ~= "off" then
 			local link, icon = FakeItem(quality)
 			local info = { itemHyperlink = link, testIcon = icon, playerRollState = NO_ROLL, rollInfos = {},
 				startTime = now, duration = 12, testClock = true }

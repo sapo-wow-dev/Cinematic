@@ -384,15 +384,47 @@ local DEFAULTS = {
 	reloadKeepWindows = true,  -- after a reload, the windows that were open open again (Reload.lua)
 	rollWindow = true,         -- a window of the group's loot rolls, instead of reading them in chat (RollWindow.lua)
 	rollFade = true,           -- ...stays away while another addon has the rolls (RollWindow.lua's Competitor)
-	rollMinQuality = 3,        -- ...only items of this quality and up (2 uncommon, 3 rare, 4 epic)
-	rollRaidRows = 3,          -- ...in a raid, the top this many players' rolls per item (a party: all)
-	rollTopPick = true,        -- ...only players on the best pick made (need over greed); the rest counted
-	rollUsableOnly = true,     -- ...only items you can use (no red line on their tooltip)
+	-- ...rules per group (Party: a party or dungeon; Raid) and item quality, the Roll Vision
+	-- page's tabbed grids: roll<Rule><Group><Quality> (Uncommon covers below it, Legendary above it)
+	rollShowPartyUncommon = "off",     -- ...a panel for its items: "off", "winner" (once won) or "all" (every pick)
+	rollShowPartyRare = "all",
+	rollShowPartyEpic = "all",
+	rollShowPartyLegendary = "all",
+	rollShowRaidUncommon = "off",
+	rollShowRaidRare = "all",
+	rollShowRaidEpic = "all",
+	rollShowRaidLegendary = "all",
+	rollUsablePartyUncommon = true,    -- ...only items you can use (no red line on their tooltip)
+	rollUsablePartyRare = true,
+	rollUsablePartyEpic = false,
+	rollUsablePartyLegendary = false,
+	rollUsableRaidUncommon = true,
+	rollUsableRaidRare = true,
+	rollUsableRaidEpic = false,
+	rollUsableRaidLegendary = false,
+	rollBestPartyUncommon = true,      -- ...only players on the best pick made (need over greed); the rest counted
+	rollBestPartyRare = true,
+	rollBestPartyEpic = false,
+	rollBestPartyLegendary = false,
+	rollBestRaidUncommon = true,
+	rollBestRaidRare = true,
+	rollBestRaidEpic = false,
+	rollBestRaidLegendary = false,
+	rollMaxPartyUncommon = 5,          -- ...the top this many players' rolls per item (party 5: everyone)
+	rollMaxPartyRare = 5,
+	rollMaxPartyEpic = 5,
+	rollMaxPartyLegendary = 5,
+	rollMaxRaidUncommon = 3,
+	rollMaxRaidRare = 3,
+	rollMaxRaidEpic = 3,
+	rollMaxRaidLegendary = 3,
 	rollShowSelf = true,       -- ...your own roll always listed, whatever's cut
+	rollAlwaysNeed = true,     -- ...every pick on an item you roll Need on, whatever its grid says
 	rollMaxPanels = 4,         -- ...this many items at once, newest first (4 a column)
-	rollBeside = false,        -- ...to the right of the game's roll frames, not under them
-	rollSeparate = false,      -- ...dragged on its own, apart from the game's roll frames (rollSpot: where dropped)
-	rollFooter = false,        -- ...the lines under a panel's players ("and N more", passes, "Click to...")
+	rollPlace = "down",        -- ...under the game's roll frames ("down"), beside them ("right", "left"), or
+	                           -- its own window, dragged apart ("separate"; rollSpot: where dropped)
+	rollFooterParty = false,   -- ...the lines under a panel's players ("and N more", passes, "Click to..."),
+	rollFooterRaid = true,     -- in a party or dungeon, in a raid (once one rollFooter)
 	cozyInputPause = 2,       -- seconds after you move the camera before it carries on
 	cozyZoomClose = 8,        -- yards: the distance it zooms in to (if you're further out); far side of a fire
 	cozyTentClose = 5,       -- ...closer with a Camp Tent seen nearby (Campfire.lua), and no drifting further out
@@ -4371,6 +4403,51 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		for _, saved in pairs(ns.db.profiles or {}) do
 			if type(saved) == "table" then MigrateNodeMark(saved) end
 		end
+		-- Roll Vision's rules: once one "this quality and up" dropdown, Only items
+		-- you can use, Only show the best pick and a party and a raid box; then
+		-- (dev copy, never released) one grid of them per quality; now a grid
+		-- per group. An old tick left on takes the grids' defaults (epics: every
+		-- one, every pick).
+		local function MigrateRollQuality(saved)
+			local min = tonumber(saved.rollMinQuality)
+			for i, row in ipairs({ "Uncommon", "Rare", "Epic", "Legendary" }) do
+				for _, group in ipairs({ "Party", "Raid" }) do
+					local function Put(rule, value)
+						if value ~= nil and saved["roll" .. rule .. group .. row] == nil then
+							saved["roll" .. rule .. group .. row] = value
+						end
+					end
+					local show = saved["rollShow" .. row]
+					if show == nil and min then show = i + 1 >= min end
+					-- (a tick before Show's dropdown: ticked, every pick)
+					local now = saved["rollShow" .. group .. row]
+					if type(now) == "boolean" then saved["rollShow" .. group .. row] = now and "all" or "off" end
+					if show ~= nil then Put("Show", show and "all" or "off") end
+					local usable = saved["rollUsable" .. row]
+					if usable == nil and saved.rollUsableOnly == false then usable = false end
+					Put("Usable", usable)
+					local best = saved["rollBest" .. row]
+					if best == nil and saved.rollTopPick == false then best = false end
+					Put("Best", best)
+					Put("Max", tonumber(saved["roll" .. group .. row]) or tonumber(saved["roll" .. group .. "Rows"]))
+				end
+			end
+			-- (Show the counts under each item, once one tick: on, in both.)
+			if saved.rollFooter == true and saved.rollFooterParty == nil then
+				saved.rollFooterParty, saved.rollFooterRaid = true, true
+			end
+			-- (Where's two ticks: now the Popup location dropdown.)
+			if saved.rollPlace == nil and (saved.rollSeparate or saved.rollBeside) then
+				saved.rollPlace = saved.rollSeparate and "separate" or "right"
+			end
+		end
+		MigrateRollQuality(ns.db)
+		for _, saved in pairs(ns.db.profiles or {}) do
+			if type(saved) == "table" then
+				MigrateRollQuality(saved)
+				if type(saved.settings) == "table" then MigrateRollQuality(saved.settings) end
+			end
+		end
 		-- Older settings: one vertical range for up and down, and a separate
 		-- narrow behind mode (now behind mode with a 45 degree swing).
 		local function MigrateProfile(prefix)
@@ -7430,6 +7507,13 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			"keepRaidMarkers", -- (now the Raid Markers grid)
 			"handleUnitFrames", -- (the parts follow the HUD page's switch)
 			"minimapNodePing", -- (now minimapNodeMark)
+			"rollMinQuality", "rollUsableOnly", "rollTopPick", -- (now roll<Rule><Group><Q>)
+			"rollBeside", "rollSeparate", -- (now rollPlace)
+			"rollFooter", -- (now rollFooterParty, rollFooterRaid)
+			"rollPartyRows", "rollRaidRows", -- (now rollMax<Group><Q>)
+			"rollShowUncommon", "rollShowRare", "rollShowEpic", "rollShowLegendary", "rollUsableUncommon", "rollUsableRare",
+			"rollUsableEpic", "rollUsableLegendary", "rollBestUncommon", "rollBestRare", "rollBestEpic", "rollBestLegendary",
+			"rollPartyUncommon", "rollPartyRare", "rollPartyEpic", "rollPartyLegendary", "rollRaidUncommon", "rollRaidRare", "rollRaidEpic", "rollRaidLegendary", -- (dev copy's one grid)
 			"storyRecapSound", -- (now Last time's sound rules)
 			"questMarkFade", -- (now questieIcons)
 			"cozyInstant", "cozyBuffsOn", "cozySit", "cozySleep", "cozyDance", "cozyKneel", "cozyChair",

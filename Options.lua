@@ -13391,6 +13391,254 @@ local function CreateVisionPanel()
 			"when you turn this back on."], note, function() ns.RefreshRollWindow() end)
 		stack = Stack(rollSwitch, "check")
 		local function RollsOn(db) return db.rollWindow end
+		-- Which items get a panel (the grid), then the window's general settings.
+		stack:Header(content, L["Which items"])
+		do
+			-- A folder tab per group (Party/Dungeon: a party, in a dungeon or out;
+			-- Raid), each a grid of rules per item quality: rows Uncommon (and
+			-- below), Rare, Epic, Legendary (and up), columns each a tick or a
+			-- number (roll<Rule><Group><Q>). A row's other cells grey out while
+			-- its Show is off.
+			local GROUPS = {
+				{ key = "Party", text = L["Party/Dungeon"], max = 5,
+					tip = L["The rules while you're in a party: in a dungeon, a delve or out in the world."] },
+				{ key = "Raid", text = L["Raid"], max = 10, tip = L["The rules while you're in a raid group."] },
+			}
+			local ROWS = { { "Uncommon", 2 }, { "Rare", 3 }, { "Epic", 4 }, { "Legendary", 5 } }
+			local COLUMNS = {
+				{ key = "Show", text = L["Show"], choices = {
+					{ value = "off", text = L["Off"], tip = L["No panel: their rolls are only in chat and the game's " ..
+						"own roll frame, even when the game asks you to roll on one."] },
+					{ value = "winner", text = L["Winner"], tip = L["A panel once the item's won: the item and who " ..
+						"won it, with their roll. No picks while people choose. Click it to list everyone."] },
+					{ value = "all", text = L["All Rolls"], tip = L["A panel as the item drops: everyone's pick " ..
+						"as they make it, the numbers, then the winner."] },
+				},
+					tip = L["Whether items of this quality get a panel in the window: Off, Winner (once it's won, just " ..
+					"who won) or All Rolls (every pick as it's made). The test (/cine rolls test) goes by the " ..
+					"Party/Dungeon tab's."] },
+				{ key = "Usable", text = L["Usable"],
+					tip = L["Only items you can use. Items of this quality you can't use (armor or weapons you " ..
+					"can't wear, another class's, or a level you're not yet: anything in red on its tooltip) don't " ..
+					"get a panel, unless the game asks you to roll on one. Their rolls are only in chat."] },
+				{ key = "Best", text = L["Hide Uncounted"],
+					tip = L["Once anyone rolls Need on an item of this quality, rolls of Greed or Transmog don't count " ..
+					"(they can't win it), so those players aren't listed, only totaled on an \"Uncounted\" line. " ..
+					"Players still choosing stay listed. Click an item's panel to list everyone on it."] },
+				{ key = "Max", text = L["Max Players"], box = true,
+					tip = L["Each item of this quality lists only this many players' rolls: the winner, then need " ..
+					"before greed, the highest numbers first. The rest are counted on an \"and N more\" line. " ..
+					"Click an item's panel to list everyone on it."] },
+			}
+			local NAME_W, COL_W, HEAD_H, ROW_H, PAD = 100, 110, 30, 26, 8
+			local GRID_W, GRID_H = NAME_W + COL_W * #COLUMNS, HEAD_H + ROW_H * #ROWS
+			local labels, grids = {}, {}
+			local panel, _, ShowTab, base, tabsH
+			local picked = IsInRaid and IsInRaid() and 2 or 1 -- (the group you're in, to start)
+			local function Pick(i)
+				picked = i
+				for g, each in ipairs(grids) do each:SetShown(g == i) end
+				if ShowTab then ShowTab(i) end
+				Refresh() -- (the shown grid's cells, as their settings are)
+			end
+			for g, group in ipairs(GROUPS) do
+				local grid = CreateFrame("Frame", nil, content)
+				grid:SetSize(GRID_W, GRID_H)
+				grid.openSection = function() Pick(g) end -- (a search match on it: its tab first)
+				grids[g] = grid
+				for c, column in ipairs(COLUMNS) do
+					local head = Label(grid, "GameFontNormalSmall", column.text)
+					head:SetWidth(COL_W - 6)
+					head:SetJustifyH("CENTER")
+					head:SetJustifyV("BOTTOM")
+					head:SetPoint("BOTTOM", grid, "TOPLEFT", NAME_W + COL_W * (c - 0.5), -HEAD_H + 2)
+					head.searchSkip = true -- (each cell carries the words: below)
+					labels[#labels + 1] = head
+				end
+				for r, row in ipairs(ROWS) do
+					local quality, y = row[1], -HEAD_H - ROW_H * (r - 0.5)
+					local name = Label(grid, "GameFontHighlight", L[quality])
+					name:SetPoint("LEFT", grid, "TOPLEFT", 4, y)
+					name.qualityColor = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[row[2]]
+					name.searchSkip = true
+					labels[#labels + 1] = name
+					local showKey = "rollShow" .. group.key .. quality
+					-- (Usable: any panel; Hide Uncounted and Max: only All Rolls lists players)
+					local function RowShown(db) return RollsOn(db) and (db[showKey] or "off") ~= "off" end
+					local function RowAll(db) return RollsOn(db) and db[showKey] == "all" end
+					for c, column in ipairs(COLUMNS) do
+						local key = "roll" .. column.key .. group.key .. quality
+						local x = NAME_W + COL_W * (c - 0.5)
+						local tip = group.text .. ", " .. L[quality] .. ": " .. column.tip
+						local search = group.text .. " " .. L[quality] .. " " .. column.text
+						local dropdown = column.choices
+							and Dropdown(grid, key, column.choices, COL_W - 8, function() ns.RefreshRollWindow() end)
+						if dropdown then
+							dropdown:SetPoint("CENTER", grid, "TOPLEFT", x, y)
+							Tooltip(dropdown, tip)
+							RecordKey(content, key)
+							GreyUnless(dropdown, RollsOn)
+						elseif column.box then
+							-- (a number: the page's box, alone on its line, centered in its cell)
+							local line = BoxLine(grid)
+							local box = line:Box("", key, 1, group.max, 1, "%d", 1, tip,
+								function() ns.RefreshRollWindow() end)
+							line:SetPoint("LEFT", grid, "TOPLEFT", x - 18, y)
+							box.searchLabel = search
+							RecordKey(content, key)
+							GreyUnless(box, RowAll)
+						else
+							-- (Show on a client without the game's menus: a tick, All Rolls or Off)
+							local show = column.key == "Show"
+							local cb = Check(grid, key, "", tip, function(value)
+								ns.GetDB()[key] = show and (value and "all" or "off") or value
+								ns.RefreshRollWindow()
+								if show then Refresh() end -- (its row's other cells grey or not)
+							end)
+							if show then
+								local refresh = cb.Refresh
+								cb.Refresh = function(self)
+									refresh(self)
+									self:SetChecked((ns.GetDB()[key] or "off") ~= "off")
+								end
+							end
+							cb:SetPoint("CENTER", grid, "TOPLEFT", x, y)
+							cb.searchLabel = search
+							RecordKey(content, key)
+							GreyUnless(cb, show and RollsOn
+								or column.key == "Best" and RowAll or RowShown)
+						end
+					end
+				end
+			end
+			-- The tabs over a panel holding the picked group's grid; a spacer in
+			-- the stack as tall as both.
+			local list = {}
+			for g, group in ipairs(GROUPS) do list[g] = { group.text, group.tip } end
+			panel, _, ShowTab, base, tabsH = ns.FolderTabs(content, list, Pick)
+			local host = CreateFrame("Frame", nil, content)
+			host:SetSize(GRID_W + PAD * 2, (tabsH or 24) + GRID_H + PAD * 2)
+			stack:Add(host, "label")
+			panel:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -(tabsH or 24))
+			panel:SetSize(GRID_W + PAD * 2, GRID_H + PAD * 2)
+			base:SetPoint("TOPLEFT", panel, "TOPLEFT")
+			for _, grid in ipairs(grids) do grid:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD, -PAD) end
+			-- (The headers and quality names dim with the page's switch.)
+			host.Refresh = function()
+				local on = RollsOn(ns.GetDB())
+				for _, label in ipairs(labels) do
+					local color = label.qualityColor
+					if color then label:SetTextColor(color.r, color.g, color.b) end
+					label:SetAlpha(on and 1 or 0.5)
+				end
+			end
+			host.pageSwitch = false -- (dims itself above)
+			controls[#controls + 1] = host
+			for g, grid in ipairs(grids) do grid:SetShown(g == picked) end
+			ShowTab(picked)
+		end
+		stack:Header(content, L["General"])
+		-- Where the window comes up (rollPlace).
+		local PLACES = {
+			{ value = "down", text = L["Down"] },
+			{ value = "right", text = L["Right"] },
+			{ value = "left", text = L["Left"] },
+			{ value = "separate", text = L["Separate window"] },
+		}
+		local PLACE_TIP = L["Where the window comes up. Down: under the game's roll frames. Right or Left: beside " ..
+			"them, level with their top, so a long list of drops doesn't push it down the screen. Separate window: " ..
+			"dragging the window moves only it, not the game's roll frames, so the two can sit anywhere; it comes " ..
+			"up where you last dropped it (by the game's roll frames until you've dragged it), and its dragging " ..
+			"works even with \"Drag windows to move them\" off. Otherwise dragging either moves both."]
+		local function PlacePicked()
+			ns.RefreshRollWindow()
+			Refresh()
+		end
+		stack:Add(Label(content, "GameFontHighlight", L["Popup location"]), "label")
+		local place = Dropdown(content, "rollPlace", PLACES, 200, PlacePicked)
+		if place then
+			stack:Add(place, "dropdown")
+			Tooltip(place, PLACE_TIP)
+			GreyUnless(place, RollsOn)
+		else
+			for _, choice in ipairs(PLACES) do
+				local check = stack:Add(Check(content, "rollPlace", choice.text, PLACE_TIP, function()
+					ns.GetDB().rollPlace = choice.value
+					PlacePicked()
+				end), "check")
+				check.Refresh = function(self) self:SetChecked((ns.GetDB().rollPlace or "down") == choice.value) end
+				GreyUnless(check, RollsOn)
+			end
+		end
+		GreyUnless(stack:Add(BoxLine(content), "label"):Box(L["Items shown at once"], "rollMaxPanels", 1, 8, 1, "%d",
+			1, L["The window shows this many items at once, newest at the top: four down, the " ..
+			"rest in a second column. When another drops, the oldest goes."]), RollsOn)
+		local ownRoll = stack:Add(Check(content, "rollShowSelf", L["Always show your roll"],
+			L["Your own pick and number are always on an item's panel, even when it lists only the top few " ..
+			"players or hides uncounted rolls."]), "check")
+		GreyUnless(ownRoll, RollsOn)
+		local alwaysNeed = stack:Add(Check(content, "rollAlwaysNeed", L["Always show rolls I need"],
+			L["An item you roll Need on gets a panel with everyone's picks and numbers, whatever the tabs above " ..
+			"say for its quality (Off, Winner or Usable): from when you pick until it's won."],
+			function(value)
+				ns.GetDB().rollAlwaysNeed = value
+				ns.RefreshRollWindow()
+			end), "check")
+		GreyUnless(alwaysNeed, RollsOn)
+		-- Show selected count: a tick each for Party/Dungeon and Raid
+		-- (rollFooterParty, rollFooterRaid), in one dropdown.
+		local FOOTERS = {
+			{ key = "rollFooterParty", text = L["Party/Dungeon"] },
+			{ key = "rollFooterRaid", text = L["Raid"] },
+		}
+		local FOOTER_TIP = L["The lines under an item's players: \"and N more\", \"Uncounted\", who passed, and " ..
+			"\"Click to list everyone\", in a party or dungeon, in a raid, or both. Off: just the players. " ..
+			"Clicking an item's panel still lists everyone."]
+		stack:Add(Label(content, "GameFontHighlight", L["Show selected count"]), "label")
+		local okFooterMenu, footer = ns.MenuDropdown(content)
+		if okFooterMenu and footer and footer.SetupMenu then
+			footer:SetWidth(200)
+			footer.searchSkip = true -- (it shows the current ticks, not a label)
+			footer:SetupMenu(function(_, root)
+				for _, choice in ipairs(FOOTERS) do
+					root:CreateCheckbox(choice.text,
+						function()
+							local db = ns.GetDB()
+							return db ~= nil and db[choice.key] and true or false
+						end,
+						function()
+							local db = ns.GetDB()
+							db[choice.key] = not db[choice.key]
+							ns.RefreshRollWindow()
+							return MenuResponse and MenuResponse.Refresh
+						end)
+				end
+			end)
+			if footer.SetSelectionText then
+				footer:SetSelectionText(function()
+					local db, ticked = ns.GetDB(), {}
+					for _, choice in ipairs(FOOTERS) do
+						if db and db[choice.key] then ticked[#ticked + 1] = choice.text end
+					end
+					return #ticked > 0 and table.concat(ticked, ", ") or L["Off"]
+				end)
+			end
+			footer.Refresh = function(self) self:GenerateMenu() end
+			controls[#controls + 1] = footer
+			for _, choice in ipairs(FOOTERS) do RecordKey(content, choice.key) end
+			stack:Add(footer, "dropdown")
+			Tooltip(footer, FOOTER_TIP)
+			GreyUnless(footer, RollsOn)
+		else
+			for _, choice in ipairs(FOOTERS) do
+				local check = stack:Add(Check(content, choice.key, L["Show selected count"] .. ": " .. choice.text,
+					FOOTER_TIP, function(value)
+						ns.GetDB()[choice.key] = value
+						ns.RefreshRollWindow()
+					end), "check")
+				GreyUnless(check, RollsOn)
+			end
+		end
 		local rollFade = stack:Add(Check(content, "rollFade", L["Fade if another addon competes"],
 			L["While another addon has the loot rolls (XLoot, ElvUI's Loot Roll, or any that takes over the " ..
 			"game's roll frames), the window stays away and leaves them to it. /cine rolls still opens it."],
@@ -13399,74 +13647,6 @@ local function CreateVisionPanel()
 				ns.RefreshRollWindow()
 			end), "check")
 		GreyUnless(rollFade, RollsOn)
-		local QUALITIES = {
-			{ value = 2, text = L["Uncommon and up"] },
-			{ value = 3, text = L["Rare and up"] },
-			{ value = 4, text = L["Epic and up"] },
-		}
-		local QUALITY_TIP = L["Only items of this quality and better get a panel in the window. Rolls on the " ..
-			"rest are only in chat, unless the game asks you to roll on one. The test (/cine rolls test) goes by it too."]
-		-- Which items get a panel, then whose rolls each lists, then where the window goes.
-		stack:Header(content, L["Which items"])
-		stack:Add(Label(content, "GameFontHighlight", L["Show rolls on"]), "label")
-		local quality = Dropdown(content, "rollMinQuality", QUALITIES, 200)
-		if quality then
-			stack:Add(quality, "dropdown")
-			Tooltip(quality, QUALITY_TIP)
-			GreyUnless(quality, RollsOn)
-		else
-			for _, choice in ipairs(QUALITIES) do
-				local check = stack:Add(Choice(content, "rollMinQuality", choice.value, choice.text, QUALITY_TIP), "check")
-				GreyUnless(check, RollsOn)
-			end
-		end
-		local usable = stack:Add(Check(content, "rollUsableOnly", L["Only items you can use"],
-			L["Items you can't use (armor or weapons you can't wear, another class's, or a level you're not " ..
-			"yet: anything in red on its tooltip) don't get a panel, unless the game asks you to roll on one. " ..
-			"Their rolls are only in chat."]), "check")
-		GreyUnless(usable, RollsOn)
-		GreyUnless(stack:Add(BoxLine(content), "label"):Box(L["Items shown at once"], "rollMaxPanels", 1, 8, 1, "%d",
-			1, L["The window shows this many items at once, newest at the top: four down, the " ..
-			"rest in a second column. When another drops, the oldest goes."]), RollsOn)
-		stack:Header(content, L["Players"])
-		GreyUnless(stack:Add(BoxLine(content), "label"):Box(L["Players shown per item in a raid"], "rollRaidRows", 1,
-			10, 1, "%d", 1, L["In a raid, each item lists only this many players' rolls: the winner, then need " ..
-			"before greed, the highest numbers first. The rest are counted on an \"and N more\" line. " ..
-			"In a party, everyone is listed. Click an item's panel to list everyone on it."]), RollsOn)
-		local ownRoll = stack:Add(Check(content, "rollShowSelf", L["Always list your own roll"],
-			L["Your own pick and number are always on an item's panel, even when it lists only the top few " ..
-			"players or only the best pick."]), "check")
-		GreyUnless(ownRoll, RollsOn)
-		local topPick = stack:Add(Check(content, "rollTopPick", L["Only show the best pick"],
-			L["Once anyone picks need, players on greed or transmog for that item aren't listed (they can't " ..
-			"win it), only counted on a \"Lower picks\" line. Players still choosing stay listed. Click an " ..
-			"item's panel to list everyone on it."]), "check")
-		GreyUnless(topPick, RollsOn)
-		local footer = stack:Add(Check(content, "rollFooter", L["Show the counts under each item"],
-			L["The lines under an item's players: \"and N more\", \"Lower picks\", who passed, and " ..
-			"\"Click to list everyone\". Off: just the players. Clicking an item's panel still lists everyone."]),
-			"check")
-		GreyUnless(footer, RollsOn)
-		stack:Header(content, L["Where"])
-		local beside = stack:Add(Check(content, "rollBeside", L["Beside the game's roll frames"],
-			L["The window sits to the right of the game's roll frames, level with their top, instead of under " ..
-			"them, so a long list of drops doesn't push it down the screen. It stays there once you've chosen."],
-			function(value)
-				ns.GetDB().rollBeside = value
-				ns.RefreshRollWindow()
-			end), "check")
-		GreyUnless(beside, function(db) return db.rollWindow and not db.rollSeparate end)
-		local separate = stack:Add(Check(content, "rollSeparate", L["Move apart from the game's roll frames"],
-			L["Dragging the window moves only it, not the game's roll frames, and dragging those moves only " ..
-			"them, so the two can sit anywhere on the screen. The window comes up where you last dropped it. " ..
-			"Until you've dragged it, it comes up by the game's roll frames as usual. Its dragging works even " ..
-			"with \"Drag windows to move them\" off."],
-			function(value)
-				ns.GetDB().rollSeparate = value
-				ns.RefreshRollWindow()
-				Refresh() -- ("Beside the game's roll frames" greys out)
-			end), "check")
-		GreyUnless(separate, RollsOn)
 		canvas:SetScript("OnShow", PageShown(Refresh, content))
 		canvas:Hide()
 		RegisterSubpage(canvas, "Roll Vision")
