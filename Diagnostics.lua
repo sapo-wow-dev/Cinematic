@@ -591,7 +591,10 @@ local function OtherAddons()
 		for i = 1, NumAddOns() do
 			local name = AddOnInfo(i)
 			if name and name ~= ADDON_NAME and IsLoaded(i) then
-				addons[#addons + 1] = name
+				-- (With its version, so a report shows which release it was.)
+				local version = GetMetadata and GetMetadata(name, "Version")
+				addons[#addons + 1] = (type(version) == "string" and version ~= "")
+					and (name .. " " .. version) or name
 			end
 		end
 	end
@@ -602,9 +605,14 @@ end
 local function Summary()
 	local lines = {}
 	local function add(text) lines[#lines + 1] = text end
-	local _, build, _, interface = GetBuildInfo()
-	add(("%s %s | game %s (%s) | %s"):format(ADDON_NAME, Version(), tostring(interface), tostring(build),
-		GetLocale()))
+	local gameVersion, build, _, interface = GetBuildInfo()
+	add(("%s %s | game %s %s (%s) | %s"):format(ADDON_NAME, Version(), tostring(gameVersion), tostring(interface),
+		tostring(build), GetLocale()))
+	local ScreenSize = _G.GetPhysicalScreenSize -- (guarded: not checked on every client)
+	local width, height
+	if ScreenSize then width, height = ScreenSize() end
+	add(("client: %s, %d fps now, screen %sx%s, ui scale %.2f"):format(tostring(ns.CLIENT),
+		math.floor((GetFramerate() or 0) + 0.5), tostring(width), tostring(height), UIParent:GetEffectiveScale()))
 	local ok, mode = pcall(ns.CameraMode)
 	add(("state: %s%s, camera mode %s"):format(ns.db.enabled and "on" or "off",
 		ns.IsSuspended() and " (STOPPED after an error)" or "", ok and tostring(mode or "none") or "?"))
@@ -646,6 +654,7 @@ local function Summary()
 	end
 	return table.concat(lines, "\n")
 end
+ns.SetupSummary = Summary -- (the Profiler page's Copy report starts with it)
 
 local window
 

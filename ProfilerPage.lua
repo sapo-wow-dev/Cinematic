@@ -231,14 +231,15 @@ end
 -- Everything as text to send us (Copy report): what it ran on, the graph's
 -- digest, every addon's figures and the last recording, in English for us to read.
 local function ShareText()
-	local version, build = GetBuildInfo()
 	local lines = {
 		("Cinematic %s profiler report, %s"):format(ns.Version(), date("%Y-%m-%d %H:%M")),
-		("client: %s, game %s (%s), %s"):format(tostring(ns.CLIENT), tostring(version), tostring(build),
-			tostring(GetLocale())),
 		"",
-		"[the graph: the game's figure, one sample a second]",
+		"[the setup: profile, changed settings, other addons and their versions]",
 	}
+	local ok, setup = pcall(ns.SetupSummary)
+	lines[#lines + 1] = ok and setup or ("setup unreadable: " .. tostring(setup))
+	lines[#lines + 1] = ""
+	lines[#lines + 1] = "[the graph: the game's figure, one sample a second]"
 	if count > 0 then
 		for _, line in ipairs(Digest()) do
 			lines[#lines + 1] = line
