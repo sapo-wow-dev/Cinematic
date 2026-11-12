@@ -1,11 +1,11 @@
 -- The Why window (/cine why): every row of frames Cinematic fades in one
 -- window you can keep up while you play, each saying in a line whether it's
--- showing and why, by section as the Game Frames page has them. At its top,
+-- showing and why, by section as the HUD page has them. At its top,
 -- whether CineMode is on (and when it isn't, what's keeping it off) and what
 -- you're doing right now. A row opens to all its reasons, a button to its
 -- settings and one that points it out on the screen, and to its parts, each
 -- a row of its own under it: a unit frame's (portrait, name, bars...: the
--- Game Frames page's part rows, ns.UnitPartsWhy), the raid and party frames'
+-- HUD page's part rows, ns.UnitPartsWhy), the raid and party frames'
 -- and the minimap's (rows of their own, listed under their frame here). The
 -- search box and the filters find parts too. Pick a frame on screen
 -- starts Inspect (Why.lua), which comes back here when stopped; Copy report
@@ -26,7 +26,7 @@ local STATUS_COLOR = {
 	shown = { 0.56, 0.89, 0.60 }, partly = { 1, 0.82, 0 }, hidden = { 0.95, 0.64, 0.64 },
 	idle = { 0.5, 0.5, 0.5 }, unknown = { 0.5, 0.5, 0.5 },
 }
--- The Game Frames page's sections, in its order, then the rest.
+-- The HUD page's sections, in its order, then the rest.
 local SECTIONS = {
 	{ "units", "Unit frames" }, { "prd", "Personal Resource Display" }, { "bars", "Action bars" },
 	{ "combat", "Trackers" },
@@ -42,7 +42,7 @@ end
 -- (Addons: the rows of other addons' frames, whatever they're doing.)
 local FILTERS = { { "all", "All" }, { "shown", "Showing" }, { "hidden", "Hidden" }, { "addons", "Addons" } }
 local INDENT = 18 -- (a part's row, under its frame's)
--- The Game Frames rows that are unit frames, whose parts open under them there.
+-- The HUD rows that are unit frames, whose parts open under them there.
 local UNIT_FRAME = { player = "PlayerFrame", petframe = "PetFrame", target = "TargetFrame", tot = "TargetFrameToT",
 	focus = "FocusFrame", focustot = "FocusFrameToT" }
 -- The rows that are parts of another row's frames, listed under it: by section, and the minimap's.
@@ -119,7 +119,7 @@ local function Kind(status)
 	return ((status == "shown" or status == "partly") and "shown") or (status == "hidden" and "hidden") or nil
 end
 
--- A unit frame's part as a row under its frame's: what the Game Frames
+-- A unit frame's part as a row under its frame's: what the HUD
 -- page's row for it says now (info: one of ns.UnitPartsWhy's).
 local partLabels
 local function UnitPartItem(parent, info, at)
@@ -138,7 +138,7 @@ local function UnitPartItem(parent, info, at)
 	elseif info.over then
 		Add("on", L["The Style hub's Overrides tab keeps it shown, whatever its row says"], "Style Overrides")
 	elseif info.pageOff then
-		Add("on", L["The Game Frames page is switched off, so every part shows as the game has it"], page)
+		Add("on", L["The HUD page is switched off, so every part shows as the game has it"], page)
 	else
 		status = (info.hidden or info.held) and "hidden" or "shown"
 		if info.held then
@@ -370,9 +370,9 @@ end
 
 -- A settings link: its page opened at the setting behind it (setting: its
 -- id, ns.OpenSettingByKey), glowing; else, on the row's own page (Game
--- Frames, Game Frames...), at its row there by its name; else the page alone.
+-- Frames, HUD...), at its row there by its name; else the page alone.
 -- (By name only there: another page can have a label like the row's, the
--- Personal Resource Display page's "Player frame" heading.)
+-- Health & Resources page's "Player frame" heading.)
 local function OpenAtRow(page, setting)
 	local item = detail and detail.item
 	local ownPage = item and (item.settingsPage or why.FramePage(item.key))
@@ -642,7 +642,7 @@ function Fill()
 			"are off, or it has only just started. Give it a moment."])
 			or (search ~= "" and L["Nothing here is called \"%s\"."]:format(search))
 			or (filter == "addons" and L["No other addon's frames are being faded. Cinematic fades the addons it " ..
-				"knows and the frames you add on the Addon Frames page. For any other frame, use Pick a frame on screen."])
+				"knows and the frames you add on the Addons page. For any other frame, use Pick a frame on screen."])
 			or L["Nothing in this list right now."])
 	end
 	-- (Addons: only those Cinematic fades have a row.)
@@ -795,7 +795,7 @@ local function MakeWindow()
 	window.note:SetWidth(LIST_WIDTH - 8)
 	window.note:SetJustifyH("LEFT")
 	window.note:SetText(L["Only frames Cinematic fades are listed: the addons it knows, and the frames you add on the " ..
-		"Addon Frames page. For any other addon's frame, use Pick a frame on screen."])
+		"Addons page. For any other addon's frame, use Pick a frame on screen."])
 	MakeDetail()
 
 	-- The Calm Timer bar (placed by Fill, at the list's top while it runs):

@@ -12,7 +12,7 @@
 -- Neither picked: the one supported addon that claims the part ("found by
 -- Cinematic"). Two or more claiming it is a clash: the part stays the game's
 -- own until the player picks (the Chat page's Addon Frame Links section, or
--- the Addon Frames page's Support files tab).
+-- the Addons page's Support files tab).
 --
 -- The claimed frames still fade with their row as their support file adds
 -- them (ns.AddFoundFrame): a link only adds what the part does on the page.
@@ -203,7 +203,7 @@ function ns.ApplyFrameLinks()
 	for _, watcher in ipairs(ns.frameLinkWatchers) do watcher() end
 end
 
--- Each part's Game Frames row and fade group: a frame picked for it by name
+-- Each part's HUD row and fade group: a frame picked for it by name
 -- fades with them, as a support file's does (ns.FadeWithRow). Once per name
 -- a session (a pick taken back fades with it till /reload).
 local PART_ROW = {
@@ -382,7 +382,7 @@ function ns.BuildLinkBand(body, groupKey, onResize)
 	for _, part in ipairs(group.parts) do
 		local partRow -- (the panel opens beside it)
 		partRow = Row(L[part.label], L[part.tip] .. " " .. L["Find a frame: use another addon's frame for this part, " ..
-			"one Cinematic has no support file for. It fades with this part's Game Frames row from then on."],
+			"one Cinematic has no support file for. It fades with this part's HUD row from then on."],
 			{ get = function() local links = DB() return links and links.parts[part.key] end,
 				set = function(value)
 					if value == FIND then
@@ -418,7 +418,7 @@ function ns.BuildLinkBand(body, groupKey, onResize)
 				"addon's frame for a part, pick Find a frame... in its list."])
 		elseif clashes > 0 then
 			intro:SetText("|cffd9a441" .. (L["%s all have parts of this. A part two of them have stays " ..
-				"the game's own until you pick (here, or on the Addon Frames page's Support files tab)."])
+				"the game's own until you pick (here, or on the Addons page's Support files tab)."])
 				:format(table.concat(addons, L[" and "])) .. "|r")
 		else
 			intro:SetText(L["Which frame each part is: the game's own, or another addon's that draws its own. " ..
@@ -497,8 +497,8 @@ function ns.BuildLinkSection(content, anchor, groupKey)
 end
 
 -- Find a frame: a small panel beside the part's choice, with a search for
--- any other addon's frame by name (one with no support file), as the Addon
--- Frames page's Find frames: hovering a match marks it on screen, clicking it
+-- any other addon's frame by name (one with no support file), as the
+-- Addons page's Find frames: hovering a match marks it on screen, clicking it
 -- picks it for the part. One panel, made the first time it's wanted.
 local findPanel
 local FIND_ROWS = 10
@@ -647,7 +647,7 @@ function ns.OpenFindFramePanel(part, anchor, done)
 end
 
 -- Each group's Addon Frame Links section, by group: { frame, open = opens
--- it }. ns.OpenLinkSection opens its page scrolled to it (the Addon Frames
+-- it }. ns.OpenLinkSection opens its page scrolled to it (the Addons
 -- page's Support files buttons).
 local linkSections = {}
 function ns.RegisterLinkSection(groupKey, frame, open)
@@ -687,7 +687,7 @@ function ns.LinkBandOpen(groupKey)
 	return false
 end
 
--- The Addon Frames page's Support files tab: the clashes to pick, then what
+-- The Addons page's Support files tab: the clashes to pick, then what
 -- each supported addon loaded replaces. Returns the panel; panel.Refresh()
 -- lays it out and returns its height.
 function ns.BuildSupportFilesPanel(parent, width)

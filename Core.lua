@@ -4261,7 +4261,7 @@ end
 function ns.FullTint(t)
 	if type(t) == "table" and (t.tintStrength == 0.33 or t.tintStrength == 0.66) then t.tintStrength = 1 end
 end
--- The grids whose rows only act in CineMode (Game Frames, Gamepad, Tooltips,
+-- The grids whose rows only act in CineMode (HUD, Gamepad, Tooltips,
 -- Cursor Hide) have no CineMode column now: there it was Always again. A
 -- row's CineMode tick goes onto its Always (t: the live settings or a saved
 -- profile), which shows it the same.
@@ -7408,7 +7408,7 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			if type(saved) == "table" then QuestieIconsFrom(saved) end
 		end
 		-- The Unit Frame Parts page's switch is gone (2026-11-11: the parts
-		-- follow the Game Frames page's). Switched off, every part showed as
+		-- follow the HUD page's). Switched off, every part showed as
 		-- the game has it: the parts' Always ticked, so they still do.
 		local function PartsSwitchOff(saved)
 			if rawget(saved, "handleUnitFrames") ~= false then return end
@@ -7428,7 +7428,7 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		-- above have read what they need.
 		for _, key in ipairs({
 			"keepRaidMarkers", -- (now the Raid Markers grid)
-			"handleUnitFrames", -- (the parts follow the Game Frames page's switch)
+			"handleUnitFrames", -- (the parts follow the HUD page's switch)
 			"minimapNodePing", -- (now minimapNodeMark)
 			"storyRecapSound", -- (now Last time's sound rules)
 			"questMarkFade", -- (now questieIcons)

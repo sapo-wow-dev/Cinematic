@@ -189,7 +189,7 @@ ns.WhenAddonLoads("ElvUI", function()
 	ns.FadeWithRows(ROWS)
 	-- Its player frame, player nameplate and pet frame stay up while you or
 	-- your pet recover, as the game's player frame, personal resource display
-	-- and pet frame do (Personal Resource Display page).
+	-- and pet frame do (Health & Resources page).
 	ns.AddPortraitFrame("ElvUF_Player")
 	ns.AddPortraitFrame("ElvNP_Player", true)
 	ns.AddPetFrame("ElvUF_Pet")

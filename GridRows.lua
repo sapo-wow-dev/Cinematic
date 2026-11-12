@@ -679,7 +679,7 @@ local MENU_NAMES = { combatShow = "In combat", enemyShow = "Enemy targeted", fri
 -- the dropdowns, Edit. (Its icons: Media/make_quill.py, Media/make_grid_icon.py.)
 local ALWAYS_W, CINE_W, MENU_W, RULE_W, GAP = 40, 44, 96, 22, 2
 -- (For rows lined up with the Always column without a grid of their own:
--- the Addon Frames page's supported addons' switches.)
+-- the Addons page's supported addons' switches.)
 ns.GRID_ALWAYS_W, ns.GRID_GAP = ALWAYS_W, GAP
 local EDIT_ICON = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\Quill"
 local GRID_ICON = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\GridIcon"
@@ -726,7 +726,7 @@ function ns.GridWidth(layout) return Columns(layout).width end
 -- The Show in tables (ns.GridTable): their columns, and what the CineMode
 -- column takes off the names, so they still fit beside the scrollbar.
 local TABLE_LAYOUT, TABLE_LABEL_TRIM = { cine = true, edit = true }, 12
--- A table whose rows only act in CineMode (rows.noCine: Game Frames, Gamepad,
+-- A table whose rows only act in CineMode (rows.noCine: HUD, Gamepad,
 -- Tooltips, Cursor Hide), where a CineMode tick would only be Always again:
 -- no such column, its room shared out to the dropdowns.
 local NO_CINE_LAYOUT = { edit = true, menuW = MENU_W + math.floor((CINE_W + GAP) / 3) }

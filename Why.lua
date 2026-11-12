@@ -424,7 +424,7 @@ function ColumnsOf(key, out, always, anyFight, page)
 	if fighting and not calm and ns.FightHold(key) and not always then
 		local wait = { player = "fightWaitPortrait", prd = "fightWaitHealth", prdpower = "fightWaitPower",
 			prdmana = "fightWaitPower" }
-		Add(out, "block", L["Held back at the fight's start while you're at rest (Personal Resource Display page)"],
+		Add(out, "block", L["Held back at the fight's start while you're at rest (Health & Resources page)"],
 			"Personal Resources", wait[key])
 	end
 	if not found then
@@ -574,11 +574,11 @@ local function Explain(entry)
 	if entry.unmanaged then
 		local out, name = {}, entry.name
 		if ns.db.ignoredFrames[name] then
-			Add(out, "on", L["You set it to always show (Custom frames, Addon Frames page)"], "Advanced Frames")
+			Add(out, "on", L["You set it to always show (Custom frames, Addons page)"], "Advanced Frames")
 		else
 			Add(out, "on", L["%s isn't a supported addon, so Cinematic leaves its frames as they are"]
 				:format(entry.unmanaged), "Advanced Frames")
-			Add(out, "off", L["/cine add %s fades it in CineMode, or add it on the Addon Frames page"]:format(name),
+			Add(out, "off", L["/cine add %s fades it in CineMode, or add it on the Addons page"]:format(name),
 				"Advanced Frames")
 		end
 		return name, "unmanaged", out, "extra:" .. name
@@ -694,7 +694,7 @@ local function Explain(entry)
 			Add(out, "on", L["Kept up by a setting Inspect can't name yet"])
 		end
 	end
-	-- (Personal Resource Display page: your frames kept up after a fight or on
+	-- (Health & Resources page: your frames kept up after a fight or on
 	-- low mana; what it has ticked that isn't keeping them up now, below.)
 	local yours = {}
 	local setting = ns.PORTRAIT_FRAMES and ns.PORTRAIT_FRAMES[entry.name]

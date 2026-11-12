@@ -10,7 +10,7 @@ for _, known in ipairs({
 	{
 		key = "cmcUtility", label = "Cooldown Manager Centered utility cooldowns", short = "CMC utility",
 		about = L["its utility cooldowns"],
-		note = L["The game's Cooldown Manager itself is a row on the Game Frames page."],
+		note = L["The game's Cooldown Manager itself is a row on the HUD page."],
 		names = { "CMCUtilityLayoutHost" },
 	},
 	{

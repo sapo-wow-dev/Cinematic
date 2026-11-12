@@ -402,7 +402,7 @@ function ns.CreateRaidStylePanel(kit)
 	local intro = kit.PageIntro(content, title,
 		L["How the raid frames look, the party's when the game draws them raid-style, and the arena's. The " ..
 		"Default tab's settings are each group's until its own tab has Same as the Default tab unticked. Which " ..
-		"parts show: the Game Frames page's party and raid rows."])
+		"parts show: the HUD page's party and raid rows."])
 
 	local editing
 	local function UsesDefault(db) return editing and not db["rfOwn_" .. editing] end
@@ -536,7 +536,7 @@ function ns.CreateRaidStylePanel(kit)
 	kit.AddControl(ownCheck)
 	-- (Party, while the game draws it as its own frames: the Unit frames page's.)
 	partyNote = kit.Label(content, "GameFontHighlightSmall", L["Your party uses its own frames, not raid-style " ..
-		"ones: they follow the Game Frames page's Party tab."])
+		"ones: they follow the HUD page's Party tab."])
 	partyNote:SetPoint("LEFT", ownCheck.Text or ownCheck.text or ownCheck, "RIGHT", 16, 0)
 	partyNote:SetWidth(300)
 	partyNote:SetJustifyH("LEFT")

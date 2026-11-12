@@ -4,7 +4,7 @@
 -- game has a bar for it (AlternatePowerBar) but keeps it hidden.
 -- Off to start with: the UI Manager's Personal Resources page turns it on
 -- (prdMana, PersonalResources.lua), and can keep it to a few seconds after
--- you use mana (prdManaRecent); the Style hub's Personal Resource Display page
+-- you use mana (prdManaRecent); the Style hub's Personal Resource Style page
 -- dresses it with the other two (PersonalStyle.lua).
 -- It's a child of the display, so it moves with Edit Mode and comes and goes
 -- with it. Its fade is the Standard Frames row Personal mana bar (prdmana,

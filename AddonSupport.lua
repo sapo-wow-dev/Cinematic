@@ -100,7 +100,7 @@ function ns.WhenAddonLoads(addon, setup)
 	table.insert(setups[addon], setup)
 end
 
--- Support switched off on the Addon Frames page (db.addonSupportOff, the
+-- Support switched off on the Addons page (db.addonSupportOff, the
 -- account's: addon -> true): its setup doesn't run. Read at load, so a
 -- change counts after a /reload (a setup that ran can't be taken back).
 -- (CinematicDB itself while ns.db isn't set yet: its ADDON_LOADED may come first.)
@@ -157,7 +157,7 @@ local function OnLoaded(addon)
 	local list = setups[addon]
 	setups[addon] = nil
 	if list and not ns.AddonSupportOn(addon) then
-		ns.Log("support", ("support for %s is switched off (Addon Frames page): its setup didn't run"):format(addon))
+		ns.Log("support", ("support for %s is switched off (Addons page): its setup didn't run"):format(addon))
 		return
 	end
 	for _, setup in ipairs(list or {}) do

@@ -1,4 +1,4 @@
--- The Style hub's Personal Resource Display page: how the game's personal resource
+-- The Style hub's Personal Resource Style page: how the game's personal resource
 -- display (the bars under your character) looks. Its health and power bars'
 -- texture, border and background, the health bar's color, each bar's
 -- width and height, and your class resource's size. When the bars come up: the UI
@@ -705,7 +705,7 @@ function ns.CreatePersonalStylePanel(kit)
 	title:SetPoint("TOPLEFT", 16, -16)
 	local intro = kit.PageIntro(content, title,
 		L["How the personal resource display under your character looks: its health and power bars, and " ..
-		"your class resource. When the bars come up: the UI Visibility hub's Personal Resource Display page."])
+		"your class resource. When the bars come up: the UI Visibility hub's Health & Resources page."])
 
 	local preview -- (below: drawn again as each setting changes)
 	local function Changed()

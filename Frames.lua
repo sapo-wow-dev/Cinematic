@@ -1462,7 +1462,7 @@ function ns.PruneBuiltInExtras()
 	end
 end
 
--- A built-in frame (a Game Frames row's) inside holder, not holder itself:
+-- A built-in frame (a HUD row's) inside holder, not holder itself:
 -- its managed entry if faded now, else true; nil if none. Adding holder
 -- would fade it too, whatever its row says. (Inside: within this function,
 -- the file being near Lua's 200-local cap.)
@@ -2107,7 +2107,7 @@ ns.COMBAT_SHOW = {
 	{ key = "prdmana", label = L["Personal mana bar"], default = false, frames = { "CinematicPersonalMana" },
 		morePage = "Personal Resources",
 		tip = L["Your mana under your character when it isn't your power (Elemental Shaman, Shadow Priest...): " ..
-			"once it's on, on the Personal Resource Display page."] },
+			"once it's on, on the Health & Resources page."] },
 	{ key = "target", label = L["Target"], default = true, frames = { "TargetFrame" } },
 	{ key = "tot", label = L["Target of target"], default = true, frames = { "TargetFrameToT" } },
 	{ key = "focus", label = L["Focus"], default = true, frames = { "FocusFrame" } },
@@ -2180,7 +2180,7 @@ ns.COMBAT_SHOW = {
 	{ key = "flags", label = L["Flag carriers"], default = false, addon = "Blizzard_Deprecated_ArenaUI",
 		page = "interface", frames = { "ArenaEnemyFramesContainer" } },
 	-- morePage: the options page with more settings for it, which can keep it up besides
-	-- (a » by its name on the Game Frames page opens it).
+	-- (a » by its name on the HUD page opens it).
 	{ key = "minimap", label = L["Minimap"], default = true, groups = { "minimap" }, morePage = "Minimap" },
 	-- The bar behind the zone's name (not the name): follows the minimap's
 	-- ticks until set (see ROW_FALLBACK).
@@ -9503,7 +9503,7 @@ end
 -- commands come lowercased).
 function ns.ReportFrames(text)
 	local found = false
-	ns.Print(("addon on %s, CineMode %s, Game Frames switch %s, in combat %s"):format(
+	ns.Print(("addon on %s, CineMode %s, HUD switch %s, in combat %s"):format(
 		tostring(ns.db.enabled), ns.lastCinematic and "on" or ("off: " .. tostring(ns.cineOffWhy)),
 		tostring(ns.db.handleFrames), tostring(InCombatLockdown())))
 	-- ([group]: only that fade group, exactly: [party] leaves out the raid-style
@@ -9547,7 +9547,7 @@ function ns.ReportFrames(text)
 			if #chain > 0 then
 				ns.Print("  above: " .. table.concat(chain, " < "))
 			end
-			-- (The Game Frames row it follows, and that row's settings.)
+			-- (The HUD row it follows, and that row's settings.)
 			local rowKey = ns.HoverRowFor(entry)
 			local rowLabel
 			for _, row in ipairs(ns.HOVER_ROWS) do
@@ -9594,7 +9594,7 @@ function ns.ReportMinimap()
 		return ("%s to %s %s %s, %s"):format(tostring(p[1]), ok and tostring(name) or "?", tostring(p[3]),
 			Value(p[4]), Value(p[5]))
 	end
-	ns.Print(("minimap settings: profile %s, Game Frames switch %s, Minimap page switch %s, Always %s, " ..
+	ns.Print(("minimap settings: profile %s, HUD switch %s, Minimap page switch %s, Always %s, " ..
 		"In combat %s"):format(tostring(ns.ActiveProfile()), tostring(db.handleFrames), tostring(db.handleMinimap),
 		tostring(ns.IsCineShowOn("minimap")), tostring(ns.IsCombatShowOn("minimap"))))
 	ns.Print(("addon on %s, keep up indoors %s, always show (old setting) %s"):format(
@@ -11370,7 +11370,7 @@ function ns.AddUnderMouse(name)
 	end
 	if not name then
 		ns.Print(L["hover over a named UI element, then type /cine add and press Enter " ..
-			"(or /cine add <FrameName>). Frames without a name can't be added: the Addon Frames " ..
+			"(or /cine add <FrameName>). Frames without a name can't be added: the Addons " ..
 			"settings page lists the addons faded out of the box."])
 		return
 	end
@@ -11394,9 +11394,9 @@ function ns.AddUnderMouse(name)
 		for _, row in ipairs(ns.HOVER_ROWS or {}) do
 			if row.key == key then label = row.label end
 		end
-		ns.Print(label and L["%s holds frames that fade with the %s row on the Game Frames page: set it there."]
+		ns.Print(label and L["%s holds frames that fade with the %s row on the HUD page: set it there."]
 			:format(name, label)
-			or L["%s holds frames that fade with a row on the Game Frames page: set them there."]:format(name))
+			or L["%s holds frames that fade with a row on the HUD page: set them there."]:format(name))
 		return
 	end
 	ns.db.ignoredFrames[name] = nil
@@ -11414,7 +11414,7 @@ function ns.RemoveUnderMouse()
 		return
 	end
 	ns.StopFading(name)
-	ns.Print(L["%s will always be shown (untick its CineMode box under Custom frames on the Addon Frames " ..
+	ns.Print(L["%s will always be shown (untick its CineMode box under Custom frames on the Addons " ..
 		"options page to undo)."]:format(name))
 end
 
@@ -11476,7 +11476,7 @@ do
 		return not (game or source == ADDON_NAME or IsWindow(frame, name))
 	end
 
-	-- Under the cursor, a frame faded already as a Game Frames row (an addon's
+	-- Under the cursor, a frame faded already as a HUD row (an addon's
 	-- unit frames standing in for the game's): said once which row, so it's
 	-- clear where to set it rather than nothing happening.
 	local told = {} -- row keys told so far this time
@@ -11490,7 +11490,7 @@ do
 						for _, row in ipairs(ns.HOVER_ROWS) do
 							if row.key == key and not told[key] then
 								told[key] = true
-								ns.Print(L["This frame fades with the %s row on the Game Frames page: set it there."]
+								ns.Print(L["This frame fades with the %s row on the HUD page: set it there."]
 									:format(row.label))
 							end
 						end
@@ -11526,7 +11526,7 @@ do
 		if ns.db.ignoredFrames[name] then
 			skipped[name] = true
 			ns.Print(L["%s skipped: you set it to always show (untick its CineMode box under Custom frames " ..
-				"on the Addon Frames page)."]:format(name))
+				"on the Addons page)."]:format(name))
 			return
 		end
 		pending[#pending + 1] = name
@@ -12579,7 +12579,7 @@ do
 				local held = FRAMES.held[entry[1]]
 				for _, part in ipairs(ns.UNIT_PARTS) do
 					local key = FRAMES.Key(entry, part)
-					-- (The Style hub's Overrides tab over the row, with the Game Frames page on.)
+					-- (The Style hub's Overrides tab over the row, with the HUD page on.)
 					local over = ns.db.handleFrames ~= false and ns.StyleOverride(key) or nil
 					local hide = over == "hide" or not over and ns.db.handleFrames ~= false and FRAMES.Hidden(key)
 					local ruled = key and not over and ns.RuleTest(key) ~= nil

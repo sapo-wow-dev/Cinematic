@@ -174,7 +174,7 @@ end
 -- it up, "off" ticked but not now. As KeepYourFrameUp works it out.
 function ns.YourFrameWhy(setting, entry, afterFight, fighting, add)
 	local db = ns.db
-	local page = L["Personal Resource Display"]
+	local page = L["Health & Resources"]
 	local pet = ns.PET_FRAMES[entry.name] or false
 	local row = pet and "petframe" or (setting == "prdWhenNotFull" and entry.group or "player")
 	local manaBar = ns.PersonalManaShown and ns.PersonalManaShown()
@@ -234,19 +234,19 @@ end
 -- The page.
 function ns.CreatePersonalResourcesPanel(kit)
 	local canvas, content = kit.CreateScrollPage()
-	local title = kit.Label(content, "GameFontNormalLarge", L["Personal Resource Display"])
+	local title = kit.Label(content, "GameFontNormalLarge", L["Health & Resources"])
 	title:SetPoint("TOPLEFT", 16, -16)
 	local hasDisplay = _G.CinematicPersonalPower ~= nil
 	local intro = kit.PageIntro(content, title,
 		L["Your player frame, pet frame and personal resource display in CineMode: kept up while you recover " ..
 		"after a fight or run low on mana, and held back at the start of a fight until there's something to " ..
-		"see. When they come up at all (always, in fights, in places) is their rows' on the Game Frames page."])
-	-- Their look: the Style hub's Personal Resource Display page (PersonalStyle.lua).
+		"see. When they come up at all (always, in fights, in places) is their rows' on the HUD page."])
+	-- Their look: the Style hub's Personal Resource Style page (PersonalStyle.lua).
 	local styleLink = ns.StyleLink(content, title, "Personal Style", L["Opens the Personal Resource Style page: how the bars look."], kit.Tooltip)
 	ns.FramesLink(content, title, "prd", styleLink)
 	local switch = kit.PageSwitch(content, "personalResources", L["Enable Page"],
 		L["On: your player frame, pet frame and personal resource display stay up or wait as this page says, " ..
-		"and its mana bar and remaining mana text show. Off: none of it; they come up only as their Game Frames " ..
+		"and its mana bar and remaining mana text show. Off: none of it; they come up only as their HUD " ..
 		"rows say."], intro, function()
 		if ns.UpdatePersonalMana then ns.UpdatePersonalMana() end
 		if ns.RefreshPersonalStyle then ns.RefreshPersonalStyle() end
@@ -312,7 +312,7 @@ function ns.CreatePersonalResourcesPanel(kit)
 		L["The same for your player frame: it comes up once your health or your power changes."], Fights)
 
 	-- Mana under the power bar, when it isn't your power (PersonalMana.lua; its
-	-- look: the Style hub's Personal Resource Display page).
+	-- look: the Style hub's Personal Resource Style page).
 	if ns.PERSONAL_MANA then
 		stack:Header(content, L["Mana bar"])
 		local function Update()
@@ -321,7 +321,7 @@ function ns.CreatePersonalResourcesPanel(kit)
 		stack:Add(kit.Check(content, "prdMana", L["Show your mana when it isn't your power"],
 			L["The game shows only your main power under your character: Maelstrom, Insanity, Astral Power, " ..
 			"rage or energy in a form. Ticked, your mana gets a bar of its own under it. When it comes up is the " ..
-			"Personal mana bar row on the Game Frames page."], function(value)
+			"Personal mana bar row on the HUD page."], function(value)
 			ns.GetDB().prdMana = value
 			if ns.RefreshPersonalStyle then ns.RefreshPersonalStyle() end -- (shown and dressed)
 			kit.Refresh()
@@ -371,5 +371,5 @@ function ns.CreatePersonalResourcesPanel(kit)
 		links.Show()
 	end, content))
 	canvas:Hide()
-	kit.RegisterSubpage(canvas, "Personal Resources", L["Personal Resource Display"])
+	kit.RegisterSubpage(canvas, "Personal Resources", L["Health & Resources"])
 end

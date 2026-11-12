@@ -52,7 +52,7 @@ for i, bar in ipairs({ 6, 7, 8, 9, 10 }) do
 		key = "euiBar" .. bar, from = "euiBars", addon = "EllesmereUIActionBars", bar = true,
 		label = "EllesmereUI Action Bar " .. bar, short = "EllesmereUI bar " .. bar,
 		about = L["its action bar %d"]:format(bar),
-		note = i == 1 and L["Its bars 1-5, pet, stance and XP bars are rows on the Game Frames page, " ..
+		note = i == 1 and L["Its bars 1-5, pet, stance and XP bars are rows on the HUD page, " ..
 			"with its unit frames and quest tracker."] or nil,
 		names = { "EABBar_Bar" .. bar },
 	}
@@ -106,7 +106,7 @@ for _, known in ipairs({
 		label = "EllesmereUI Resource Bars", short = "EllesmereUI resource bars",
 		about = L["its health and power bars"],
 		note = L["Its cast bar isn't faded, like the game's. Its swing timer is the Swing timer row on " ..
-			"the Game Frames page."],
+			"the HUD page."],
 		names = { "EllesmereUIResourceBarsFrame" },
 	},
 	{
@@ -178,13 +178,13 @@ for _, known in ipairs({
 	table.insert(ns.ADDON_FRAMES, known)
 end
 
--- Its unit frames have no row here: they follow the game's on the Game Frames
+-- Its unit frames have no row here: they follow the game's on the HUD
 -- page. A note says so, so they're not looked for on this page.
 table.insert(ns.ADDON_NOTES, {
 	addon = "EllesmereUIUnitFrames", label = "Unit Frames",
-	works = L["Follow the Game Frames page's rows"],
+	works = L["Follow the HUD page's rows"],
 	about = L["Its player, target, target of target and focus frames fade with the Player frame, Target, " ..
-		"Target of target and Focus rows on the Game Frames page, its party frames with Party frames and its " ..
+		"Target of target and Focus rows on the HUD page, its party frames with Party frames and its " ..
 		"raid frames with Players. " ..
 		"Set when they come back, or tick Always, there. Hover Find leaves them out and says which row."],
 })

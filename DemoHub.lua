@@ -139,7 +139,7 @@ Add("Recording helpers", { key = "letterbox", name = "Letterbox sweep",
 -- Each hub's pages (English names, as ns.OpenOptions takes them). Pages a
 -- client hasn't got are skipped.
 -- (The pages' ids, as in Options.lua's HUBS: some show other names, e.g.
--- Standard Frames is Game Frames.)
+-- Standard Frames is HUD.)
 local TOURS = {
 	{ "tour-main", "Main page and Profiles", { "", "Profiles" } },
 	{ "tour-ui", "Interface", { "Standard Frames", "Advanced Frames", "Mouseover groups", "Gamepad",

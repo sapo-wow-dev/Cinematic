@@ -218,11 +218,11 @@ function ns.MoreLink(parent, label, page)
 end
 
 -- The way back from such a page: a button right of its title (or after, a
--- button there already) to the Game Frames page at its rows' tab (section:
+-- button there already) to the HUD page at its rows' tab (section:
 -- its key there, as Frames.lua's ROW_SECTIONS).
 function ns.FramesLink(content, title, section, after)
 	local button = ns.StyleLink(content, title, "Standard Frames", L["When it shows in CineMode (always, in " ..
-		"fights, in places): its rows on the Game Frames page."], Tooltip, L["Game Frames"] .. " »", after)
+		"fights, in places): its rows on the HUD page."], Tooltip, L["HUD"] .. " »", after)
 	button:SetScript("OnClick", function() ns.OpenFramesSection(section) end)
 	return button
 end
@@ -1786,7 +1786,7 @@ local function CreatePanel()
 	local subtitle = PageIntro(panel, title,
 		L["Fades the UI and adds letterbox bars between fights. Combat, casting " ..
 		"and opening windows like the spellbook bring it back. Typing just shows the chat. The " ..
-		"pages under this one cover what shows when (CineMode, Game Frames, Addon Frames, Minimap, Quest tracker, Nameplates, " ..
+		"pages under this one cover what shows when (CineMode, HUD, Addons, Minimap, Quest tracker, Nameplates, " ..
 		"Chat), visual effects and sound, the camera modes and triggers, and keybinds."])
 
 	local searchBox = CreateSearch(mainCanvas, panel)
@@ -2023,15 +2023,15 @@ do
 			{ "Standard Frames", function()
 				return UnitFactionGroup("player") == "Horde" and "Interface\\Icons\\INV_BannerPVP_01"
 					or "Interface\\Icons\\INV_BannerPVP_02"
-			end, label = "Game Frames", section = "CineMode Autohide" },
-			{ "Advanced Frames", "Interface\\Icons\\INV_Misc_Gear_01", label = "Addon Frames", section = "CineMode Autohide" },
+			end, label = "HUD", section = "CineMode Autohide" },
+			{ "Nameplates", "Interface\\Icons\\Ability_Hunter_SniperShot", section = "CineMode Autohide" },
+			{ "Advanced Frames", "Interface\\Icons\\INV_Misc_Gear_01", label = "Addons", section = "CineMode Autohide" },
 			{ "Mouseover groups", "Interface\\Icons\\Spell_Holy_MindVision", label = "Hover Groups", section = "CineMode Autohide" },
 			{ "Gamepad", "Interface\\Icons\\INV_Gizmo_01", label = "Gamepad Frames", section = "CineMode Autohide" },
 			{ "Cursor Hide", "Interface\\Icons\\INV_Misc_Eye_01", section = "CineMode Autohide" }, -- (CursorHide.lua)
 			-- (Most used first; swing timer, chat bubbles and tooltips last.)
-			{ "Nameplates", "Interface\\Icons\\Ability_Hunter_SniperShot", section = "Autohide Advanced" },
 			{ "Personal Resources", "Interface\\Icons\\Ability_Racial_BloodRage", -- (Bloodrage: health into power)
-				label = "Personal Resource Display", section = "Autohide Advanced" },
+				label = "Health & Resources", section = "Autohide Advanced" },
 			{ "Buffs/debuffs", "Interface\\Icons\\Spell_Holy_WordFortitude", label = "Buffs/Debuffs", section = "Autohide Advanced" },
 			{ "Minimap", "Interface\\Icons\\INV_Misc_Map_01", section = "Autohide Advanced" },
 			{ "Chat", "Interface\\Icons\\INV_Scroll_03", section = "Autohide Advanced" },
@@ -2175,7 +2175,9 @@ do
 	-- than one of them: the first it has gets the icon, named label; the rest
 	-- are its tabs (tabOf). Each page: { English name, tab name, tab tip }.
 	local PAGE_GROUPS = {
-		{ label = "Gamepad & Cursor", pages = {
+		-- (HUD' icon: the gamepad's frames and the cursor its tabs.)
+		{ label = "HUD", pages = {
+			{ "Standard Frames", "HUD", "The game's own frames: when each shows in CineMode." },
 			{ "Gamepad", "Gamepad", "The frames gamepad mode adds: its action bars, button hints and reticle." },
 			{ "Cursor Hide", "Cursor", "In CineMode, the cursor gets out of the way." },
 		} },
@@ -2186,6 +2188,7 @@ do
 	}
 	-- (Whether this client makes the page: as the calls at the end of this file decide.)
 	local GROUP_HAS = {
+		["Standard Frames"] = function() return true end,
 		["Cursor Hide"] = function() return ns.CreateCursorHidePage ~= nil end,
 		Gamepad = function() return C_GamePad ~= nil and not ns.isRetail end,
 		["Cooldown Manager"] = function() return ns.HasCooldownManager() end,
@@ -3149,7 +3152,7 @@ local function CreateRevealPanel()
 
 	local subtitle = PageIntro(content, title,
 		L["How fast the UI fades, what brings it (or parts of it) back while CineMode " ..
-		"is on, and combat text. Fights and targeting are on the Game Frames page, names and " ..
+		"is on, and combat text. Fights and targeting are on the HUD page, names and " ..
 		"nameplates on the Nameplates page, buffs on the " ..
 		"Buffs/debuffs page, the minimap on the Minimap page, the quest tracker on the Quest tracker page, " ..
 		"chat on the Chat page."])
@@ -3305,7 +3308,7 @@ local function CreateRevealPanel()
 	-- Stored the other way round (stayInCombat), as the Standard Frames page's lists apply while staying.
 	local combat = Check(content, "stayInCombat", L["In combat"],
 		L["Being in combat brings the UI back. Unticked, CineMode stays on in fights: only the frames " ..
-		"ticked under In combat on the Game Frames page show. (Targeting an enemy only ever shows " ..
+		"ticked under In combat on the HUD page show. (Targeting an enemy only ever shows " ..
 		"the frames chosen for it there.)"], function(value)
 			ns.GetDB().stayInCombat = not value
 			Refresh()
@@ -3447,7 +3450,7 @@ local function CreateBuffsPanel()
 	buffPeek:SetPoint("TOPLEFT", note, "BOTTOMLEFT", -2, -17) -- (as under the other pages' hidden switch)
 	PageSwitch(content, "handleBuffs", L["Enable Page"],
 		L["On: this page's peeks bring your buffs and debuffs up in CineMode. Off: no peeks; they still " ..
-		"fade as their Game Frames row says."], note)
+		"fade as their HUD row says."], note)
 	buffPeek:HookScript("OnClick", Refresh) -- grey out / enable the options below
 
 	local BUFF_INDENT = 16
@@ -6967,7 +6970,7 @@ end
 ns.GRID_KIT.SectionBand, ns.GRID_KIT.SectionState, ns.GRID_KIT.BAND_HEIGHT = SectionBand, SectionState, BAND_HEIGHT
 ns.GRID_KIT.ContentDepth, ns.GRID_KIT.FitContentHeight = ContentDepth, FitContentHeight
 
--- The unit frame parts' rows (under the Game Frames page's Unit frames rows): the lists a part's row
+-- The unit frame parts' rows (under the HUD page's Unit frames rows): the lists a part's row
 -- keeps its dropdowns' ticks in.
 function ns.UnitPartLists()
 	local lists = { "calmShow", "quietShow", "camShow" }
@@ -7047,8 +7050,9 @@ end
 local function CreateCombatPanel()
 	local canvas, content = CreateScrollPage()
 
-	local title = Label(content, "GameFontNormalLarge", L["Game Frames"])
+	local title = Label(content, "GameFontNormalLarge", L["HUD"])
 	title:SetPoint("TOPLEFT", 16, -16)
+	ns.GroupTabs(content, title, "Standard Frames")
 
 	-- (The rows are dropdowns where the client has menus, else a column each: GridRows.lua.)
 	local subtitle = PageIntro(content, title, ns.GRID_MENUS
@@ -7056,12 +7060,12 @@ local function CreateCombatPanel()
 		"its Fights dropdown, only while you fight or have something targeted; its Places dropdown, the " ..
 		"whole time while you're there (Grouped: in a party or raid). Edit turns a row into a rule, for AND, " ..
 		"NOT and more places. Frames fade in and out at the fade times on the CineMode page. Other addons' " ..
-		"frames are on the Addon Frames page."]
+		"frames are on the Addons page."]
 		or L["Everything here is hidden in CineMode unless ticked. Tick a column to show that frame: " ..
 		"Always shows it the whole time, the next three only while you fight or have something " ..
 		"targeted, and the places the whole time while you're there (Grouped: in a party or raid). " ..
 		"Frames fade in and out at the fade times on the CineMode page. Other addons' " ..
-		"frames are on the Addon Frames page."])
+		"frames are on the Addons page."])
 
 	-- The game's frames this client has, in sections (their page: see
 	-- ROW_SECTIONS), each a table of its own; the gamepad's are on the
@@ -7539,8 +7543,8 @@ local function CreateCombatPanel()
 		{ "units", L["Unit frames"], nil, { "Unit Style", L["Opens the Unit Frame Style page: how the frames look."],
 			L["Style"] } },
 		-- (Your health and resource bars under your character: on the Unit frames tab too.)
-		{ "prd", L["Personal Resource Display"], L["Unit frames"], { "Personal Resources", L["Opens the Personal " ..
-			"Resource Display page: the bars under your character, and your frame kept up while you recover."],
+		{ "prd", L["Personal Resource Display"], L["Unit frames"], { "Personal Resources", L["Opens the Health & " ..
+			"Resources page: the bars under your character, and your frame kept up while you recover."],
 			L["Settings"] } },
 		{ "bars", L["Action bars"] }, { "combat", L["Trackers"] },
 		{ "interface", L["Info and menus"] }, { "minimap", L["Minimap"] },
@@ -7574,7 +7578,7 @@ local function CreateCombatPanel()
 	-- (On panelTop, not the panel: the panel's bottom hangs on the rows under them.)
 	base:SetPoint("TOPLEFT", panelTop, "TOPLEFT")
 	-- Addon Frame Links (FrameLinks.lua): which addon's frame each unit frame
-	-- is. Opened from elsewhere (search, the Addon Frames page), it picks the
+	-- is. Opened from elsewhere (search, the Addons page), it picks the
 	-- Unit frames tab too.
 	unitLinks = ns.BuildLinkSection(content, panelTop, "units")
 	local openLinks = unitLinks.body.openSection
@@ -7593,7 +7597,7 @@ local function CreateCombatPanel()
 		unitLinks.Show()
 	end, content))
 	canvas:Hide()
-	RegisterSubpage(canvas, L["Standard Frames"], L["Game Frames"])
+	RegisterSubpage(canvas, L["Standard Frames"], L["HUD"])
 end
 
 -- Sub-page: chat bubbles (where they show; how they look: BubbleStyle.lua).
@@ -8041,9 +8045,9 @@ local function CreateGamepadPanel()
 
 	local subtitle = PageIntro(content, title,
 		L["The frames gamepad mode adds (Options, Controls, Gamepad): its action bars, the button hints " ..
-		"and the reticle (the dot you aim with). As on the Game Frames page, " ..
+		"and the reticle (the dot you aim with). As on the HUD page, " ..
 		"each is hidden in CineMode unless ticked: Always shows it the whole time, the next three only " ..
-		"while you fight or have something targeted, and the places while you're there. Rows also on the Game Frames page (the " ..
+		"while you fight or have something targeted, and the places while you're there. Rows also on the HUD page (the " ..
 		"experience bars) follow this page in gamepad mode, and that one otherwise."])
 
 	local rows = {}
@@ -11198,7 +11202,7 @@ do
 		-- On top: the master switch and the peek's own options.
 		local switch = PageSwitch(chatPanel, "handleChat", L["Enable Page"],
 			L["On: new messages, typing, unread whispers and scrolling back bring up the chat windows as this " ..
-			"page says. Off: none of them do, and the chat windows fade as their Game Frames row says."],
+			"page says. Off: none of them do, and the chat windows fade as their HUD row says."],
 			subtitle)
 
 		local chatPeek = Check(chatPanel, "chatPeek", L["Show chat when a message arrives"],
@@ -11564,7 +11568,7 @@ RefreshExtras = function()
 		local follow = item.found and ns.RowLabel(known.follow)
 		if follow then
 			tip = tip .. "\n\n" .. L["It sits where the game's %s was, or is named like it: it takes that " ..
-				"row's ticks on the Game Frames page until you give it its own."]:format(follow)
+				"row's ticks on the HUD page until you give it its own."]:format(follow)
 		end
 		Tooltip(row.hover, tip)
 	end
@@ -11587,10 +11591,10 @@ local function CreateMinimapPanel()
 	local subtitle = PageIntro(content, title,
 		L["When the minimap (and on retail the quest waypoint) stays up in CineMode. " ..
 		"Hovering the minimap always shows it. To keep it up all the time, or in fights, " ..
-		"see the Game Frames page."])
+		"see the HUD page."])
 	local switch = PageSwitch(content, "handleMinimap", L["Enable Page"],
 		L["On: this page's settings can bring the minimap up or keep it up in CineMode. Off: they don't; " ..
-		"it still fades as its Game Frames rows say."], subtitle)
+		"it still fades as its HUD rows say."], subtitle)
 
 	-- Retail's quest waypoint (the marker in the world showing where to go).
 	local aboveTracking
@@ -12135,7 +12139,7 @@ local function CreateQuestTrackerPanel()
 
 	local subtitle = PageIntro(content, title,
 		L["When the quest tracker comes up in CineMode. Hovering it always shows it. To keep it " ..
-		"up all the time, or in fights, see the Game Frames page."])
+		"up all the time, or in fights, see the HUD page."])
 
 	local reveal = Check(content, "questRevealOnAccept", L["Reveal on new quest"],
 		L["Accepting a quest shows the quest tracker as if you'd hovered it (with the rest of the " ..
@@ -12250,13 +12254,13 @@ local function CreateSwingPanel()
 
 	local subtitle = PageIntro(content, title,
 		L["Which of the game's swing timer bars show, in CineMode and out. When they come up in " ..
-		"CineMode is the Swing timer row on the Game Frames page."])
+		"CineMode is the Swing timer row on the HUD page."])
 
 	-- The page's master switch: off, everything below greys out and does
 	-- nothing; the bars still fade as their Standard Frames row says.
 	local handleCheck = PageSwitch(content, "handleSwing", L["Enable Page"],
 		L["On: this page's settings can fade out the bars you aren't using. Off: they don't; the swing " ..
-		"timer still fades as its Game Frames row says, every bar alike."], subtitle)
+		"timer still fades as its HUD row says, every bar alike."], subtitle)
 
 	local smart = Check(content, "swingSmartShow", L["Only show the weapons you're using"],
 		L["The main hand (and off-hand) bars show while you auto-attack, the ranged bar while you " ..
@@ -12304,14 +12308,14 @@ local function CreateCooldownPanel()
 
 	local subtitle = PageIntro(content, title,
 		L["When the Cooldown Manager comes up in CineMode (Enhanced Cooldown Manager's bars too). Hovering " ..
-		"it always shows it. To keep it up all the time, or in fights, see the Game Frames page; " ..
+		"it always shows it. To keep it up all the time, or in fights, see the HUD page; " ..
 		"what comes up with it is on the Hover groups page."])
 
 	-- The page's master switch: off, everything below greys out and does
 	-- nothing; the Cooldown Manager still fades as its Standard Frames row says.
 	local handleCheck = PageSwitch(content, "handleCooldowns", L["Enable Page"],
 		L["On: this page's settings can keep the Cooldown Manager up in CineMode, or show only the icons " ..
-		"you pick. Off: they don't; it still fades as its Game Frames row says."], subtitle)
+		"you pick. Off: they don't; it still fades as its HUD row says."], subtitle)
 	local function Handled() return ns.GetDB().handleCooldowns end
 
 	-- Stay up while recharging, each bar's own (Essential's keys also count
@@ -14331,7 +14335,7 @@ local function CreateExtrasPanel()
 	local canvas, content = CreateScrollPage()
 	extrasPanel = content
 
-	local title = Label(content, "GameFontNormalLarge", L["Addon Frames"])
+	local title = Label(content, "GameFontNormalLarge", L["Addons"])
 	title:SetPoint("TOPLEFT", 16, -16)
 
 	-- One grid for every addon's frames: the supported addons' and the custom
@@ -14340,7 +14344,7 @@ local function CreateExtrasPanel()
 	-- custom frames' and the Default row's recorded as Custom frames.)
 	SetSection(content, L["Supported addons"])
 	local note = PageIntro(content, title, L["These addons' frames are hidden in CineMode unless ticked, like the game's " ..
-		"frames on the Game Frames page. Tick Always to leave an addon's frames alone (shown the " ..
+		"frames on the HUD page. Tick Always to leave an addon's frames alone (shown the " ..
 		"whole time); the next three show them only while you fight or have something targeted, and " ..
 		"the places while you're there."] .. "\n\n" ..
 		L["To fade something else, use the Find frames tab: search by name, pick frames by hovering, or let " ..
@@ -14878,7 +14882,7 @@ local function CreateExtrasPanel()
 	runButton:SetSize(120, 22)
 	runButton:SetPoint("TOPLEFT", tools, "TOPLEFT", 384, -3) -- (right of Hover Find and its spinner)
 	Tooltip(runButton, L["Looks for other addons' frames that nothing " ..
-		"fades, on screen or hidden, and guesses which Game Frames row each stands in for. Load one to put " ..
+		"fades, on screen or hidden, and guesses which HUD row each stands in for. Load one to put " ..
 		"it on the Loaded tab, under its addon, with the Default row's settings."] .. "\n\n" ..
 		L["Looks once a second for a while, so a frame that only shows now and then is caught: " ..
 		"bring it up while it runs. Click again to stop."])
@@ -15225,7 +15229,7 @@ local function CreateExtrasPanel()
 		end
 	end, content))
 	canvas:Hide()
-	RegisterSubpage(canvas, L["Advanced Frames"], L["Addon Frames"])
+	RegisterSubpage(canvas, L["Advanced Frames"], L["Addons"])
 end
 
 -- Sub-page: keybinds. The same bindings as Key Bindings > AddOns, with two

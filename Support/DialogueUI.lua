@@ -26,7 +26,7 @@ table.insert(ns.ADDON_NOTES, {
 -- Whether DialogueUI's window is up with its camera on (its saved settings:
 -- CameraMovement 0 is off, nil its default, on).
 function ns.DialogueUICameraOn()
-	-- (Its support switched off, Addon Frames page: ours play as if it weren't here.)
+	-- (Its support switched off, Addons page: ours play as if it weren't here.)
 	if not ns.AddonSupportOn("DialogueUI") then
 		return false
 	end
