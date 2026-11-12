@@ -361,7 +361,7 @@ local DEFAULTS = {
 	campfireSit = true,       -- ...its emotes: sit, kneel, lie down (one of those ticked, at random)
 	campfireKneel = true,
 	campfireLie = true,
-	campfireStandUp = false,  -- ...and stand up again once Camp Benefits arrives (off since 2026-11-09)
+	campfireStandUp = true,   -- ...and stand up again once Camp Benefits arrives (not while eating, casting or crafting)
 	hunterRightClickShot = true, -- hunters on Classic Era: right-click on an enemy starts Auto Shot, in combat too (Hunter.lua)
 	hunterAmmoSort = true,    -- hunters: after Clean Up Bags, the smallest ammo stack goes first, to be shot first (HunterAmmo.lua)
 	hunterQuiverFill = true,  -- hunters: a Fill button on arrows and bullets at vendors fills the quiver (HunterAmmo.lua)
@@ -6080,18 +6080,23 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			end
 			ns.db.questItemButtonOffV1 = true
 		end
-		-- Campfire stand-up off to start with now (2026-11-09: it stood a
-		-- player up as they sat to eat). Off in every profile. Once: tick it
-		-- again and it stays.
-		if not ns.db.campfireStandUpOffV1 then
-			ns.db.campfireStandUp = false
+		-- (campfireStandUpOffV1, 2026-11-09, turned the campfire stand-up off
+		-- once for everyone after it stood a player up as they sat to eat. It's
+		-- on to start with again since 2026-11-12, with eating, casting and
+		-- crafting left alone; the old turn-off no longer runs, so new players
+		-- keep it on.)
+		-- Back on once for everyone it was turned off for (2026-11-12): eating,
+		-- casting and crafting no longer get cut short. Once: untick it and it
+		-- stays off.
+		if not ns.db.campfireStandUpOnV2 then
+			ns.db.campfireStandUp = true
 			for _, saved in pairs(type(ns.db.profiles) == "table" and ns.db.profiles or {}) do
 				if type(saved) == "table" then
 					saved.campfireStandUp = nil
 					if type(saved.settings) == "table" then saved.settings.campfireStandUp = nil end
 				end
 			end
-			ns.db.campfireStandUpOffV1 = true
+			ns.db.campfireStandUpOnV2 = true
 		end
 		-- Boss defeated's card waits till after the fight now (it showed in the
 		-- middle of it, with adds still up). Once: pick Show again and it stays.

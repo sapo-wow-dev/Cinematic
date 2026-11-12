@@ -691,12 +691,44 @@ end
 -- in every game language.)
 local EAT_LONGEST = 35 -- seconds: food and drink buffs are this long or shorter
 local recentCasts = {} -- the last few spell IDs you cast, newest first
+local BUSY_FOR = 10 -- seconds after your last cast you still count as busy
+local lastCast, lastCastID -- when you last started or finished a cast, and what
 local function NoteCast(spellID)
 	if type(spellID) ~= "number" or (issecretvalue and issecretvalue(spellID)) then
+		spellID = nil
+	end
+	-- (Camp Benefits itself, should the game cast it on you, isn't you busy.)
+	if spellID == CAMP_BENEFITS then
 		return
 	end
-	table.insert(recentCasts, 1, spellID)
-	recentCasts[5] = nil
+	lastCast, lastCastID = GetTime(), spellID
+	if spellID and spellID ~= recentCasts[1] then
+		table.insert(recentCasts, 1, spellID)
+		recentCasts[5] = nil
+	end
+end
+
+-- Doing something else as Camp Benefits arrives: casting or channeling
+-- (crafting), a cast in the last few seconds (between crafts, a hearth, a
+-- mount), or a profession window open. Standing then would cut it short or
+-- get in the way. Returns the reason for the log.
+local CRAFT_WINDOWS = { "ProfessionsFrame", "TradeSkillFrame", "CraftFrame" }
+local function Busy()
+	local ok, casting = pcall(function()
+		return (UnitCastingInfo and UnitCastingInfo("player")) or (UnitChannelInfo and UnitChannelInfo("player"))
+	end)
+	if ok and casting ~= nil then
+		return "casting"
+	end
+	if lastCast and GetTime() - lastCast < BUSY_FOR then
+		return ("cast spell %s %.1f sec ago"):format(tostring(lastCastID), GetTime() - lastCast)
+	end
+	for _, name in ipairs(CRAFT_WINDOWS) do
+		local frame = _G[name]
+		if frame and frame.IsShown and frame:IsShown() then
+			return name .. " open"
+		end
+	end
 end
 local function Eating()
 	if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then
@@ -720,12 +752,14 @@ local had, hadEnds -- nil until the first look after loading in
 local campWatcher = CreateFrame("Frame")
 campWatcher:RegisterUnitEvent("UNIT_AURA", "player")
 campWatcher:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+campWatcher:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
+campWatcher:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
 campWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 campWatcher:SetScript("OnEvent", ns.Profiled("UNIT_AURA (camp benefits)", function(_, event, _, _, spellID)
 	if not ns.HasCampBenefits() then
 		return
 	end
-	if event == "UNIT_SPELLCAST_SUCCEEDED" then
+	if event ~= "UNIT_AURA" and event ~= "PLAYER_ENTERING_WORLD" then
 		NoteCast(spellID)
 		return
 	end
@@ -741,8 +775,11 @@ campWatcher:SetScript("OnEvent", ns.Profiled("UNIT_AURA (camp benefits)", functi
 	-- (It only comes while you sit, so no need to ask whether you are.)
 	if gained and ns.Setting("campfireSitButton") and db.campfireStandUp then
 		local eating, food = Eating()
+		local busy = not eating and Busy()
 		if eating then
 			ns.Log("campfire", ("stand up skipped: eating or drinking (spell %s)"):format(tostring(food)))
+		elseif busy then
+			ns.Log("campfire", "stand up skipped: " .. busy)
 		else
 			StandUp()
 		end
