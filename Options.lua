@@ -3522,11 +3522,18 @@ local function CreateBuffsPanel()
 	longMinutes:SetPoint("TOPLEFT", ignoreLong, "BOTTOMLEFT", 24, -10)
 	GreyUnless(longMinutes, function(db) return IfDebuffPeek(db) and db.buffPeekIgnoreLong end)
 
-	local buffPeekTime = Slider(content, "buffPeekTime", L["Show buffs for"], 0.5, 30, 0.5, L["%.1f sec"])
+	-- (All the way left: Off, the mouseover time.)
+	local function PeekSeconds(value) return value <= 0 and L["Off"] or L["%.1f sec"]:format(value) end
+	local buffPeekTime = Slider(content, "buffPeekTime", L["Override Default Buff Reveal Time"], 0, 30, 0.5, PeekSeconds)
 	buffPeekTime:SetPoint("TOPLEFT", longMinutes, "BOTTOMLEFT", 4 - BUFF_INDENT - 24, -30)
+	Tooltip(buffPeekTime, L["How long a new buff keeps the buffs up, in place of the mouseover time " ..
+		"(Hover groups page). Off: the mouseover time."])
 	GreyUnless(buffPeekTime, IfBuffPeek)
 
-	local debuffPeekTime = Slider(content, "debuffPeekTime", L["Show debuffs for"], 0.5, 30, 0.5, L["%.1f sec"])
+	local debuffPeekTime = Slider(content, "debuffPeekTime", L["Override Default Debuff Reveal Time"], 0, 30, 0.5,
+		PeekSeconds)
+	Tooltip(debuffPeekTime, L["How long a new debuff keeps the buffs up, in place of the mouseover time " ..
+		"(Hover groups page). Off: the mouseover time."])
 	debuffPeekTime:SetPoint("TOPLEFT", buffPeekTime, "BOTTOMLEFT", 0, -34)
 	GreyUnless(debuffPeekTime, IfDebuffPeek)
 
@@ -11211,19 +11218,21 @@ do
 				ns.GetDB().chatPeek = value
 				Refresh() -- grey out / enable the time and the messages below
 			end)
-		chatPeek:SetPoint("TOPLEFT", switch, "BOTTOMLEFT", 0, -2)
 		local function IfPeek(db) return db.chatPeek end
 
-		local peekTime = Slider(chatPanel, "chatPeekTime", L["Show chat for"], 2, 30, 1, L["%d sec"])
-		peekTime:SetPoint("TOPLEFT", chatPeek, "BOTTOMLEFT", 4, -26)
-		Tooltip(peekTime, L["How long chat stays up after a message arrives or after you finish typing. " ..
-			"While a flight, auto-run, auto-walk or standing-still camera plays, 8 seconds at most."])
-		GreyUnless(peekTime, IfPeek)
+		-- On top: how long chat stays up, in place of the mouseover time (all the way left: off).
+		local peekTime = Slider(chatPanel, "chatPeekTime", L["Override Default Reveal Time"], 0, 60, 1,
+			function(value) return value == 0 and L["Off"] or L["%d sec"]:format(value) end)
+		peekTime:SetPoint("TOPLEFT", switch, "BOTTOMLEFT", 4, -26)
+		Tooltip(peekTime, L["How long chat stays up after a message arrives or after you finish typing, in place " ..
+			"of the mouseover time (Hover groups page). While a flight, auto-run, auto-walk or standing-still " ..
+			"camera plays, 8 seconds at most. Off: the mouseover time."])
+		chatPeek:SetPoint("TOPLEFT", peekTime, "BOTTOMLEFT", -4, -18)
 
 		local hideOwn = Check(chatPanel, "chatHideOwn", L["Hide your messages"],
 			L["Your own messages don't show chat: your emotes (a /bow, or sitting or kneeling at the " ..
 			"campfire), and what you say in /say, party, guild and so on. Other people's still do."])
-		hideOwn:SetPoint("TOPLEFT", peekTime, "BOTTOMLEFT", -4, -18)
+		hideOwn:SetPoint("TOPLEFT", chatPeek, "BOTTOMLEFT", 0, -2)
 		GreyUnless(hideOwn, IfPeek)
 		hideOwn:HookScript("OnClick", Refresh) -- (greys out / enables its exception)
 
@@ -11700,9 +11709,11 @@ local function CreateMinimapPanel()
 	else
 		ping:SetPoint("TOPLEFT", revealLabel, "BOTTOMLEFT", 12, -4)
 	end
-	local pingTime = Slider(content, "minimapPingTime", L["Show for"], 2, 60, 1, L["%d sec"])
+	local pingTime = Slider(content, "minimapPingTime", L["Override Default Reveal Time"], 0, 60, 1,
+		function(value) return value == 0 and L["Off"] or L["%d sec"]:format(value) end)
 	pingTime:SetPoint("TOPLEFT", ping, "BOTTOMLEFT", 4, -26)
-	Tooltip(pingTime, L["How long the minimap stays up after someone pings it, before it fades."])
+	Tooltip(pingTime, L["How long the minimap stays up after someone pings it, before it fades, in place of " ..
+		"the mouseover time (Hover groups page). Off: the mouseover time."])
 	GreyUnless(pingTime, function(db) return db.minimapRevealOnPing end)
 	-- (What goes under the slider lines up with the checkboxes again.)
 	local pingSpacer = CreateFrame("Frame", nil, content)
@@ -12145,10 +12156,20 @@ local function CreateQuestTrackerPanel()
 		L["Accepting a quest shows the quest tracker as if you'd hovered it (with the rest of the " ..
 		"Hover groups that have Quest progress ticked): it goes after \"Stays after " ..
 		"mouseover\" (Hover groups page)."])
-	reveal:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", -2, -17) -- (as under the other pages' hidden switch)
-	PageSwitch(content, "handleQuests", L["Enable Page"],
+	local switch = PageSwitch(content, "handleQuests", L["Enable Page"],
 		L["On: this page's settings can bring the quest tracker, quest timer and durability figure up in " ..
-		"CineMode. Off: they don't; they still fade as their Game Frames rows say."], subtitle)
+		"CineMode. Off: they don't; they still fade as their HUD rows say."], subtitle)
+
+	-- On top: how long a reveal keeps the tracker up, in place of the mouseover time (all the way left: off).
+	local revealTime = Slider(content, "questRevealTime", L["Override Default Reveal Time"], 0, 60, 1,
+		function(value) return value == 0 and L["Off"] or L["%d sec"]:format(value) end)
+	revealTime:SetPoint("TOPLEFT", switch, "BOTTOMLEFT", 4, -26)
+	Tooltip(revealTime, L["A reveal (a new quest, quest or scenario progress) keeps the quest tracker up this " ..
+		"long, in place of the mouseover time (Hover groups page). \"Keep up for the Calm Timer\" still keeps it " ..
+		"up for the Calm Timer if that's longer. While a camera mode plays, it goes as the mouseover time does. " ..
+		"Off: the mouseover time."])
+	GreyUnless(revealTime, function(db) return db.questRevealOnAccept or db.questRevealOnProgress or db.questRevealOnScenario end)
+	reveal:SetPoint("TOPLEFT", revealTime, "BOTTOMLEFT", -4, -18)
 	reveal:HookScript("OnClick", Refresh) -- grey out / enable the option below
 
 	-- Children: each reveal can stay up for the Calm Timer instead.

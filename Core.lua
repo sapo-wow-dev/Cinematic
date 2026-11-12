@@ -145,6 +145,7 @@ local DEFAULTS = {
 	questScenarioCalm = false,  -- ...and stays up for the Calm Timer (if longer than the mouseover time)
 	questRevealOnlyThat = true, -- those two reveals show just that quest, the rest of the tracker faded
 	questRevealCollapse = true, -- ...drawn at the top of the tracker, not in its own place under the faded ones
+	questRevealTime = 8,        -- seconds a reveal keeps the tracker up, in place of the mouseover time (0 = off)
 	minimapRevealOnPing = true, -- a group member pinging the minimap shows it as a mouseover would
 	minimapPingTime = 30,       -- ...for this many seconds (once faded in), then it fades
 	cooldownWhileRecharging = false, -- the Cooldown Manager stays up while a cooldown recharges (Mouseover groups
@@ -4158,9 +4159,11 @@ ns.GetPlayerSpeed = OncePerFrame(ns.GetPlayerSpeed) -- (asked 2-3 times a frame)
 -- or standing-still camera plays these use their default values instead of
 -- the player's, so a long hold set for normal play doesn't keep the quest
 -- tracker (or chat, or buffs) up over the view.
-local FLIGHT_USES_DEFAULT = { mouseoverHold = true, buffPeekTime = true, debuffPeekTime = true, chatPeekTime = true }
--- ...except the general hold, which goes at once there (normal play holds it a while).
-local FLIGHT_HOLD = { mouseoverHold = 0 }
+local FLIGHT_USES_DEFAULT = { mouseoverHold = true, buffPeekTime = true, debuffPeekTime = true, chatPeekTime = true,
+	questRevealTime = true }
+-- ...except the general hold, which goes at once there (normal play holds it a while), and the
+-- quest tracker's own reveal time, which goes with it.
+local FLIGHT_HOLD = { mouseoverHold = 0, questRevealTime = 0 }
 
 -- The flight, auto-walk or auto-run camera playing, or a standing-still one
 -- past the standing-still delay. By the camera really running (ns.activeCam,
@@ -4213,10 +4216,15 @@ end
 
 function ns.HoldTime(key)
 	local db = ns.db or DEFAULTS -- (before settings load: an error alert at load time peeks chat)
-	if FLIGHT_USES_DEFAULT[key] and InCameraMode() then
-		return math.min(FLIGHT_HOLD[key] or DEFAULTS[key], db[key])
+	local value = db[key]
+	-- (Chat's and the buffs' Override Default Reveal Time: Off, all the way left, uses the mouseover time.)
+	if (key == "chatPeekTime" or key == "buffPeekTime" or key == "debuffPeekTime") and (tonumber(value) or 0) <= 0 then
+		value = db.mouseoverHold
 	end
-	return db[key]
+	if FLIGHT_USES_DEFAULT[key] and InCameraMode() then
+		return math.min(FLIGHT_HOLD[key] or DEFAULTS[key], value)
+	end
+	return value
 end
 ns.GetDB = function() return ns.db end
 ns.Snooze = function(seconds)

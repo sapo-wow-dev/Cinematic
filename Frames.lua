@@ -6531,6 +6531,11 @@ do
 		if ns.db and ns.db[setting] then
 			Focus(questID)
 			local hold = ns.HoldTime("mouseoverHold") - ns.FadeOutTime()
+			-- (Override default reveal time, Quest tracker page: up this long instead.)
+			local override = tonumber(ns.HoldTime("questRevealTime")) or 0 -- (0 in camera modes)
+			if override > 0 then
+				hold = override
+			end
 			if ns.db[QUEST_REVEAL_CALM[setting]] then
 				hold = math.max(hold, ns.db.calmTime or 0)
 			end
@@ -6841,7 +6846,12 @@ do
 			if ns.pingDebug then ns.Print(how .. ": taken as an ore/herb ping, skipped") end
 			return
 		end
-		pingRevealUntil = GetTime() + ns.FadeInTime() + ns.db.minimapPingTime
+		-- (Override Default Reveal Time, Minimap page: Off, all the way left, uses the mouseover time.)
+		local pingTime = tonumber(ns.db.minimapPingTime) or 0
+		if pingTime <= 0 then
+			pingTime = math.max(0, (ns.db.mouseoverHold or 0) - ns.FadeOutTime())
+		end
+		pingRevealUntil = GetTime() + ns.FadeInTime() + pingTime
 		ns.framesWake = true -- (the frames' pass at once: Core.lua)
 		if ns.pingDebug then
 			ns.Print(("%s: minimap up for %.1f sec"):format(how, pingRevealUntil - GetTime()))
