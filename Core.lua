@@ -476,6 +476,7 @@ local DEFAULTS = {
 	shoulderCamTalkTime = 1.5, -- ...seconds that turn takes
 	shoulderCamTalkHold = 0, -- ...seconds it stays on them before gliding back (0: till the window closes)
 	shoulderCamTargetTurn = false, -- ...the camera turns slowly toward an enemy you target (the game's enemy focus, eased in)
+	shoulderCamTargetFollow = false, -- ...and the cast bar and PRD slide along with that turn (guessed from where you clicked; experimental)
 	shoulderCamAlways = true,  -- ...everywhere: its Show in row's Always (the rest: the row's ticks and rule)
 	indoorLimits = true,      -- indoors, keep the camera modes from pushing into walls:
 	indoorZoomOut = 1,        -- ...zoom out at most this many yards past your own distance

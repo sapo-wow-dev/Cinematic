@@ -496,6 +496,124 @@ local function HasEnemy()
 	return UnitExists("target") and ns.Flag(UnitCanAttack("player", "target")) or false
 end
 
+-- Frames follow you through the turn. The game won't say how far it turned
+-- (or where the target is), but a click does: the target was under the
+-- cursor. You slide the other way by about aim.slide of the click's x (both as
+-- shares of the half-width), eased in with the turn ("aimclick" run, retail,
+-- 2026-11-13: dummy at -0.8 or 0.85, you slid 13% of the width; in the middle,
+-- none). Picked with a targeting key (Tab), from a unit frame or any other
+-- way: no clue, so the frames stay where the offset puts you, as before.
+aim.slide = 0.32
+aim.farthest = 0.85 -- (the click's x it's never taken past: the furthest measured)
+-- (Over the world or a nameplate: forbidden ones can't be asked, so count as a plate.)
+function aim.OverWorld()
+	local ok, focus = pcall(function()
+		if GetMouseFoci then return GetMouseFoci()[1] end
+		return GetMouseFocus and GetMouseFocus()
+	end)
+	if not ok or focus == nil or focus == WorldFrame then return true end
+	if focus.IsForbidden and focus:IsForbidden() then return true end
+	local okName, name = pcall(focus.GetName, focus)
+	return okName and type(name) == "string" and name:find("^NamePlate") ~= nil or false
+end
+aim.mouse = CreateFrame("Frame")
+pcall(aim.mouse.RegisterEvent, aim.mouse, "GLOBAL_MOUSE_DOWN")
+aim.mouse:SetScript("OnEvent", function(_, _, button)
+	if button ~= "LeftButton" and button ~= "RightButton" then return end
+	local x = GetCursorPosition()
+	local width = UIParent:GetWidth() * UIParent:GetEffectiveScale()
+	aim.downAt, aim.downX, aim.downWorld = GetTime(), (x / width - 0.5) * 2, aim.OverWorld()
+	aim.downButton = button
+end)
+for _, name in ipairs({ "TargetNearestEnemy", "TargetNearestEnemyPlayer", "TargetNearest", "TargetNearestFriend",
+	"TargetNearestPartyMember", "TargetNearestRaidMember", "TargetLastTarget", "TargetLastEnemy", "TargetUnit" }) do
+	if type(_G[name]) == "function" then hooksecurefunc(name, function() aim.keyAt = GetTime() end) end
+end
+-- (At each target change: a click's x, or none.)
+function aim.Picked()
+	if not HasEnemy() then return end -- (cleared: the slide eases back with the turn)
+	local now, how = GetTime(), "no click or key"
+	if aim.keyAt and now - aim.keyAt < 0.5 then
+		aim.clickX, how = nil, "a targeting key"
+	elseif aim.downAt and now - aim.downAt < 1 then
+		aim.clickX = aim.downWorld and aim.downX or nil
+		how = aim.downWorld and "a click" or "a click off the world (a unit frame?)"
+	else
+		aim.clickX = nil
+	end
+	aim.Mark()
+	ns.Log("shoulder", ("target turn: picked by %s (cursor x %s, so you slide %s of the half-width) | facing %s, " ..
+		"at %s, guessed %s yards away"):format(how,
+		aim.clickX and ("%.3f"):format(aim.clickX) or "-", aim.clickX and ("%.3f"):format(-aim.slide * aim.clickX) or "none",
+		aim.facing0 and ("%.3f"):format(aim.facing0) or "can't be read",
+		aim.spot and ("%.1f, %.1f"):format(aim.spot[1], aim.spot[2]) or "can't be read", tostring(aim.yards)))
+end
+
+-- Then, as you turn and move: where the target is from you now. At the click
+-- it's put in the world: the cursor's x gives its direction (the camera looking
+-- your way then), and how far it is is a guess (the game's interact ranges, out
+-- of a fight; else 20 yards). Your facing (GetPlayerFacing) and where you are
+-- (UnitPosition: north first, then west; facing 0 north and counting to the left) then
+-- give its direction from you as you go. Either one unreadable (in an
+-- instance): turning only, or just the click.
+function aim.Facing()
+	local ok, facing = pcall(GetPlayerFacing)
+	if not ok then return nil end
+	local okNumber, number = pcall(function() return facing + 0 end)
+	return okNumber and number or nil
+end
+function aim.Spot()
+	-- (Its first number is the north one: a strafe left, facing 5.13, moved it
+	-- 5.0 and the second 2.2, retail 2026-11-13; the other way round reads a
+	-- strafe as walking toward or away.)
+	local ok, north, west = pcall(UnitPosition, "player")
+	if not ok then return nil end
+	local okNumber, spot = pcall(function() return { north + 0, west + 0 } end)
+	return okNumber and spot or nil
+end
+function aim.Yards()
+	if InCombatLockdown() then return 20 end
+	for _, band in ipairs({ { 3, 7 }, { 2, 10 }, { 4, 20 } }) do
+		local ok, near = pcall(CheckInteractDistance, "target", band[1])
+		if ok and near ~= nil and not (issecretvalue and issecretvalue(near)) then
+			if near then return band[2] end
+		else
+			return 20
+		end
+	end
+	return 35
+end
+function aim.Mark()
+	aim.facing0, aim.spot, aim.yards, aim.where = nil, nil, nil, nil
+	if not aim.clickX then return end
+	aim.facing0, aim.spot, aim.yards = aim.Facing(), aim.Spot(), aim.Yards()
+	if aim.facing0 and aim.spot then
+		local toward = aim.facing0 - math.atan(aim.clickX * ns.ShoulderViewWidth())
+		aim.where = { aim.spot[1] + aim.yards * math.cos(toward), aim.spot[2] + aim.yards * math.sin(toward) }
+	end
+end
+-- The click's x as it would be now (shares of the half-width; nil: none).
+function aim.NowX()
+	if not aim.clickX then return nil end
+	local width = ns.ShoulderViewWidth()
+	local facing = aim.facing0 and aim.Facing()
+	if not facing then return aim.clickX end
+	local angle -- (the target's direction from your facing, + right)
+	local spot = aim.where and aim.Spot()
+	if spot then
+		local toward = math.atan2(aim.where[2] - spot[2], aim.where[1] - spot[1])
+		angle = facing - toward
+	else
+		angle = facing - aim.facing0 + math.atan(aim.clickX * width)
+	end
+	angle = (angle + math.pi) % (2 * math.pi) - math.pi
+	-- (No further than the turns measured: a target at 0.85 of the half-width
+	-- slid you 13% of the screen, and you were never seen further over. The
+	-- guess went to 1.39 once, putting the frames well past you, 2026-11-13.)
+	local x = math.tan(math.max(-1.1, math.min(1.1, angle))) / width
+	return math.max(-aim.farthest, math.min(aim.farthest, x))
+end
+
 local function AimTick(elapsed)
 	local yours = ns.db and ns.db.shoulderCamYours
 	if not (yours and AimOn()) or ns.shoulderTestHold or (ns.DialogueUICameraOn and ns.DialogueUICameraOn()) then
@@ -521,6 +639,30 @@ local function AimTick(elapsed)
 		aim.share = math.min(1, aim.share + step)
 	else
 		aim.share = math.max(0, aim.share - step)
+		if aim.share == 0 then aim.clickX = nil end
+	end
+	-- (The left button held on the world: the camera's being turned by itself,
+	-- which nothing tells an addon (your facing stays), so the guess is lost:
+	-- the frames go back to the offset's place till the next click. A plain
+	-- click's down for well under 0.3 seconds.)
+	-- The right button too ("follow" run, retail 2026-11-13): turning with it
+	-- drops the game's turn toward the target, the camera going straight
+	-- behind you (you were back on your spot a second after), so the guess,
+	-- which counted on the turn, went the wrong way.
+	if aim.clickX and aim.downButton and aim.downWorld and aim.downAt
+		and GetTime() - aim.downAt > 0.3 and IsMouseButtonDown and IsMouseButtonDown(aim.downButton) then
+		ns.Log("shoulder", ("target turn: the camera turned with the mouse (%s), the frames let go of the guess"):format(
+			aim.downButton))
+		aim.clickX = nil
+	end
+	-- (Following a click: where it thinks the target is, twice a second.)
+	aim.logClock = (aim.logClock or 0) + elapsed
+	if aim.clickX and aim.logClock >= 0.5 then
+		aim.logClock = 0
+		local facing, spot, nowX = aim.Facing(), aim.Spot(), aim.NowX()
+		ns.Log("shoulder", ("target turn: following, x now %s (click %.3f), share %.2f | facing %s, at %s"):format(
+			nowX and ("%.3f"):format(nowX) or "-", aim.clickX, aim.share, facing and ("%.3f"):format(facing) or "-",
+			spot and ("%.1f, %.1f"):format(spot[1], spot[2]) or "-"))
 	end
 	SetAimShare(yours, aim.share)
 end
@@ -777,6 +919,12 @@ local function TargetShift()
 	local half = UIParent:GetWidth() / 2
 	local shift = -yards * ns.ShoulderModelScale() / (distance * ns.ShoulderViewWidth()) * half
 		* (db.shoulderCamFramesStrength or 1)
+	-- (Turned toward a target you clicked: the other way by a share of the click's x, aim above.)
+	local nowX = aim.clickX and AimOn() and db.shoulderCamTargetFollow ~= false and aim.NowX()
+	if nowX then
+		local k = aim.share * aim.share * (3 - 2 * aim.share)
+		shift = shift - aim.slide * nowX * k * half * (db.shoulderCamFramesStrength or 1)
+	end
 	local most = UIParent:GetWidth() * FOLLOW_MAX
 	return math.max(-most, math.min(most, shift))
 end
@@ -840,7 +988,7 @@ function ns.GetShoulderCamDebug()
 		end)(),
 		paused = db and PauseReason() or "no", always = db and db.shoulderCamAlways, key = GetBindingKey(SWAP_ACTION) or "none",
 		talkTurn = db and db.shoulderCamTalkTurn, talking = talk.on, talkShare = talk.share, talkBack = talk.back,
-		targetTurn = db and db.shoulderCamTargetTurn, aimShare = aim.share, enemyTargeted = HasEnemy(),
+		targetTurn = db and db.shoulderCamTargetTurn, aimShare = aim.share, enemyTargeted = HasEnemy(), aimClickX = aim.clickX, aimNowX = aim.NowX(),
 		enemyFocus = GetCVar(aim.enable), enemyYaw = GetCVar(aim.yawCVar), enemyPitch = GetCVar(aim.pitchCVar),
 		focus = GetCVar(talk.enable), focusYaw = GetCVar(talk.yawCVar), focusPitch = GetCVar(talk.pitchCVar),
 	}
@@ -896,6 +1044,7 @@ events:SetScript("OnEvent", function(_, event)
 		ns.ApplyShoulderCam()
 	elseif event == "PLAYER_TARGET_CHANGED" then
 		-- (Yourself targeted or not: the frames glide to the middle or back.)
+		if AimOn() then aim.Picked() end
 		if UpdateFollow then UpdateFollow() end
 	else
 		if event == "PLAYER_ENTERING_WORLD" then talk.on, talk.closedAt = false, nil end
@@ -967,8 +1116,17 @@ function ns.CreateShoulderCamPanel(kit)
 	local function IfTalk() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTalkTurn end
 	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetTurn", L["Turn to your target"],
 		L["As you target an enemy, the camera turns slowly toward it, and glides back at the same pace " ..
-		"once you clear your target or pick a friendly one. Not tried in a fight yet."], SaveThen("shoulderCamTargetTurn", ns.ApplyShoulderCam)),
-		"check"), IfOn)
+		"once you clear your target or pick a friendly one. Not tried in a fight yet."],
+		SaveThen("shoulderCamTargetTurn", ns.ApplyShoulderCam)), "check"), IfOn)
+	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetFollow", L["Frames follow the turn"],
+		L["Your cast bar and Personal Resource Display slide along with you as the camera turns toward " ..
+		"your target. The game doesn't say how far it turned, so this works it out from where you clicked: " ..
+		"picked with Tab, they stay put. Experimental: turning the camera with the left mouse button " ..
+		"loses it."], SaveThen("shoulderCamTargetFollow", UpdateFollow)), "check", 16),
+		function()
+			local db = ns.GetDB()
+			return ns.Setting("shoulderCam") and db.shoulderCamTargetTurn and db.shoulderCamFrames
+		end)
 	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Turn takes"], 0.5, 4, 0.5,
 		L["%.1f sec"]), "slider")
 	kit.Tooltip(talkTime, L["How long the turn toward them (or your target) takes, and the glide back."])

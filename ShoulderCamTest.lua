@@ -1491,6 +1491,38 @@ do
 	if ns.RegisterCamera then ns.RegisterCamera("zoomcurve", function() return run ~= nil end) end
 end
 
+-- A ruler over the screen while a run that's read off the recording goes:
+-- a line every tenth of the width (brighter at the middle and the quarters),
+-- labeled in shares of the half-width (-1 to 1, as the logs give x), so a
+-- spot can be read off any frame, however busy. Not under UIParent: CineMode
+-- hiding the interface can't take it.
+function ns.ShoulderTestGrid(on)
+	local grid = ns.shoulderTestGrid
+	if not on then
+		if grid then grid:Hide() end
+		return
+	end
+	if not grid then
+		grid = CreateFrame("Frame")
+		grid:SetFrameStrata("FULLSCREEN_DIALOG")
+		grid:SetAllPoints(WorldFrame)
+		for i = 0, 10 do
+			local line = grid:CreateTexture(nil, "OVERLAY")
+			local strong = i == 5 and 0.7 or (i == 0 or i == 10) and 0 or (i % 5 == 0 and 0.5) or 0.3
+			line:SetColorTexture(1, 1, 1, strong)
+			line:SetWidth(i == 5 and 2 or 1)
+			line:SetPoint("TOP", grid, "TOPLEFT", grid:GetWidth() * i / 10, 0)
+			line:SetPoint("BOTTOM", grid, "BOTTOMLEFT", grid:GetWidth() * i / 10, 0)
+			local label = grid:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+			label:SetPoint("BOTTOM", line, "BOTTOM", 0, 6)
+			label:SetText(("%+.1f"):format((i - 5) / 5))
+			label:SetTextColor(1, 1, 1, 0.8)
+		end
+		ns.shoulderTestGrid = grid
+	end
+	grid:Show()
+end
+
 -- mounts: one run for "how much does a mount scale the offset". Recording the
 -- screen, you stand still; the offset steps 0, +1, 0, -1, 0 on its own on
 -- foot, then the box says mount up and the same steps run on the mount, then
@@ -1525,6 +1557,7 @@ do
 		SetCVar(SHOULDER, run.held.offset)
 		SetCVar(CENTERED, run.held.centered)
 		run = nil
+		ns.ShoulderTestGrid(false)
 		ns.shoulderTestHold = nil
 		if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
 		Log(("mounts: %s"):format(why))
@@ -1596,6 +1629,7 @@ do
 		Log(("mounts: starts | screen %.0f x %.0f, cameraFov %s, %s %s"):format(WorldFrame:GetWidth(), WorldFrame:GetHeight(),
 			Text(GetCVar("cameraFov")), REDUCE, Text(GetCVar(REDUCE))))
 		Steps("on foot")
+		ns.ShoulderTestGrid(true)
 		ns.Print("shoulder mounts: record your screen; type it again to stop")
 	end
 end
@@ -1632,6 +1666,7 @@ do
 		run.frame:SetScript("OnUpdate", nil)
 		run.frame:UnregisterAllEvents()
 		run = nil
+		ns.ShoulderTestGrid(false)
 		Log(("aimclick: %s"):format(why))
 	end
 	local function Place()
@@ -1708,7 +1743,323 @@ do
 			Who(), WorldFrame:GetWidth(), WorldFrame:GetHeight(), Text(GetCVar("cameraFov")), Text(ns.db.shoulderCamTalkTime),
 			Text(GetCVar(SHOULDER)), Zoom(), Facing()))
 		Place()
+		ns.ShoulderTestGrid(true)
 		ns.Print("shoulder aimclick: record your screen; type it again to stop")
+	end
+end
+
+-- drag: one run for "can an addon see how far you turn the camera with the
+-- mouse?". You drag the camera (DRAG_STEPS), told which button and how far by
+-- the box; every frame a button's down, what the game reports of the mouse
+-- (GetCursorDelta, if it's there; the cursor's place) and your facing are
+-- added up, and each drag's totals logged as it ends. The right button turns
+-- you too, so its facing change says how far a mouse unit turns; the left
+-- button's turn is read off the recording. Typed again: stops.
+do
+	local DRAG_STEPS = {
+		{ "RightButton", "a little (about a quarter of the screen)" },
+		{ "RightButton", "more (about half the screen)" },
+		{ "LeftButton", "a little (about a quarter of the screen)" },
+		{ "LeftButton", "more (about half the screen)" },
+		{ "LeftButton", "a little the OTHER way" },
+	}
+	local BUTTON = { RightButton = "RIGHT", LeftButton = "LEFT" }
+	local MOUSE_CVARS = { "cameraYawMoveSpeed", "cameraPitchMoveSpeed", "cameraYawSmoothSpeed", "mouseSpeed",
+		"cameraSmoothStyle", "mouseInvertYaw", "rawMouseEnable", "enableMouseSpeed" }
+	local CursorDelta = _G["GetCursorDelta"] -- (retail; may not be there)
+	local run
+	local function Box(line, r, g, b)
+		ns.PadTestBox(("Drag %d/%d"):format(run.at, #DRAG_STEPS), line, r, g, b)
+	end
+	local function Facing()
+		local ok, facing = pcall(GetPlayerFacing)
+		local okNumber, number = pcall(function() return facing + 0 end)
+		return ok and okNumber and number or nil
+	end
+	local function Delta()
+		if not CursorDelta then return nil end
+		local ok, x, y = pcall(CursorDelta)
+		local okNumber, both = pcall(function() return { x + 0, y + 0 } end)
+		return ok and okNumber and both or nil
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run = nil
+		ns.ShoulderTestGrid(false)
+		Log(("drag: %s"):format(why))
+	end
+	local function Ask()
+		local step = DRAG_STEPS[run.at]
+		run.drag = nil
+		Box(("hold the %s mouse button on the world and DRAG %s to the right, then let go"):format(BUTTON[step[1]],
+			step[2]), 0.3, 1, 0.3)
+	end
+	local function Tick()
+		local step = DRAG_STEPS[run.at]
+		local down = IsMouseButtonDown(step[1])
+		local drag = run.drag
+		if down and not drag then
+			local x, y = GetCursorPosition()
+			drag = { began = GetTime(), facing = Facing(), x = x, y = y, dx = 0, dy = 0, frames = 0, moved = 0,
+				mouselook = IsMouselooking and IsMouselooking() and true or false }
+			run.drag = drag
+			Box("dragging...", 0.7, 0.7, 0.7)
+		end
+		if drag and down then
+			drag.frames = drag.frames + 1
+			local delta = Delta()
+			if delta then
+				drag.dx, drag.dy = drag.dx + delta[1], drag.dy + delta[2]
+				if delta[1] ~= 0 or delta[2] ~= 0 then drag.moved = drag.moved + 1 end
+			else
+				drag.noDelta = true
+			end
+			if IsMouselooking and IsMouselooking() then drag.mouselook = true end
+		elseif drag and not down then
+			local x, y = GetCursorPosition()
+			local facing = Facing()
+			local turned = facing and drag.facing and ((facing - drag.facing + math.pi) % (2 * math.pi) - math.pi)
+			Log(("drag: %d %s %s: %.2f s, %d frames | GetCursorDelta %s: x %.2f, y %.2f, moving on %d frames | " ..
+				"cursor moved x %.1f, y %.1f | mouselook %s | facing %s -> %s (turned %s rad)"):format(run.at,
+				step[1], step[2], GetTime() - drag.began, drag.frames, CursorDelta and (drag.noDelta and "unreadable" or "read") or "missing",
+				drag.dx, drag.dy, drag.moved, x - drag.x, y - drag.y, Text(drag.mouselook),
+				drag.facing and ("%.3f"):format(drag.facing) or "-", facing and ("%.3f"):format(facing) or "-",
+				turned and ("%.3f"):format(turned) or "-"))
+			if GetTime() - drag.began < 0.2 then
+				Ask() -- (a click, not a drag: again)
+				return
+			end
+			run.at = run.at + 1
+			if not DRAG_STEPS[run.at] then
+				End("done")
+				ns.PadTestBox("Drag run done", "stop the recording, then /reload", 0.3, 1, 0.3)
+				C_Timer.After(8, function() if not run then ns.PadTestBoxHide() end end)
+				return
+			end
+			Ask()
+		end
+	end
+	function ns.ShoulderDrag()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder drag: stopped")
+		end
+		run = { frame = CreateFrame("Frame"), at = 1 }
+		local cvars = {}
+		for _, name in ipairs(MOUSE_CVARS) do cvars[#cvars + 1] = name .. " " .. Text(GetCVar(name)) end
+		Log(("drag: starts | GetCursorDelta %s, IsMouselooking %s | %s | facing %s"):format(
+			CursorDelta and "there" or "missing", IsMouselooking and "there" or "missing", table.concat(cvars, ", "),
+			Facing() and ("%.3f"):format(Facing()) or "-"))
+		run.frame:SetScript("OnUpdate", Tick)
+		Ask()
+		ns.ShoulderTestGrid(true)
+		ns.Print("shoulder drag: record your screen; type it again to stop")
+	end
+end
+
+-- follow: the one run for Frames follow the turn (ShoulderCam.lua, aim):
+-- everything it guesses from and everything that throws it, in one go. Clicks
+-- at the edges, then from the middle: turning with keys, strafing, walking,
+-- dragging with each mouse button, Tab, and a fight. The box says what to do
+-- (FOLLOW_TRIALS); every 0.1 s your facing, where you are, the mouse (buttons,
+-- GetCursorDelta, mouselook), the turn, the guess and where the PRD and cast
+-- bar really are go into their own saved list (db.shoulderFollowRun, so the
+-- log's limit can't cut it), read after a /reload with the recording and its
+-- ruler. Turn to your target and Frames follow the turn are on for the run,
+-- yours back after. Typed again: stops.
+do
+	local MIDDLE = "TURN till a dummy is near the MIDDLE of the screen, then CLICK it"
+	local HANDS_OFF, BACK = { "wait", 3, "hands off (the camera turns)" }, { "wait", 2.5, "hands off (it glides back)" }
+	local CLEAR = { "clear", "CLEAR THE TARGET (Esc)" }
+	local FOLLOW_TRIALS = {
+		{ "click far left", { { "target", "TURN till a dummy is at the FAR LEFT of the screen, then CLICK it" },
+			HANDS_OFF, CLEAR, BACK } },
+		{ "click far right", { { "target", "TURN till a dummy is at the FAR RIGHT of the screen, then CLICK it" },
+			HANDS_OFF, CLEAR, BACK } },
+		{ "turning", { { "target", MIDDLE }, HANDS_OFF, { "do", 2, "TURN LEFT a little: TAP your turn key (an eighth of a turn)" },
+			{ "wait", 2.5, "hands off" }, { "do", 2, "TURN RIGHT back: TAP the other turn key" }, { "wait", 2.5, "hands off" },
+			CLEAR, BACK } },
+		{ "strafing", { { "target", MIDDLE }, HANDS_OFF, { "do", 1.5, "STRAFE LEFT" }, { "wait", 2.5, "hands off" },
+			{ "do", 1.5, "STRAFE RIGHT" }, { "wait", 2.5, "hands off" }, CLEAR, BACK } },
+		{ "walking", { { "target", MIDDLE }, HANDS_OFF, { "do", 1.5, "WALK FORWARD" }, { "wait", 2.5, "hands off" },
+			{ "do", 1.5, "WALK BACKWARD" }, { "wait", 2.5, "hands off" }, CLEAR, BACK } },
+		{ "right button", { { "target", MIDDLE }, HANDS_OFF,
+			{ "do", 2, "HOLD the RIGHT mouse button and drag a little to the RIGHT, then let go" },
+			{ "wait", 2.5, "hands off" }, CLEAR, BACK } },
+		{ "left button", { { "target", MIDDLE }, HANDS_OFF,
+			{ "do", 2, "HOLD the LEFT mouse button and drag a little to the RIGHT, then let go" },
+			{ "wait", 3, "hands off" }, CLEAR, BACK } },
+		{ "tab", { { "target", "press TAB to target a dummy (no clicking)" }, HANDS_OFF, CLEAR, BACK } },
+		{ "fight", { { "target", MIDDLE }, HANDS_OFF, { "do", 6, "ATTACK IT: cast at it a few times (stand still)" },
+			{ "do", 1.5, "STRAFE LEFT (still fighting)" }, { "wait", 2.5, "hands off" }, CLEAR, BACK } },
+	}
+	-- (Each thing to do is read out first, then done: a "do" step on its own
+	-- went by before it could be read, 2026-11-13.)
+	for _, trial in ipairs(FOLLOW_TRIALS) do
+		local steps = {}
+		for _, step in ipairs(trial[2]) do
+			if step[1] == "do" then steps[#steps + 1] = { "ready", 3, "NEXT: " .. step[3] } end
+			steps[#steps + 1] = step
+		end
+		trial[2] = steps
+	end
+	local ALL_TRIALS = FOLLOW_TRIALS
+	local SAMPLE_EVERY = 0.1
+	local MOST_LINES = 6000
+	local CursorDelta = _G["GetCursorDelta"] -- (retail; may not be there)
+	local run
+	local function Number(fn, ...)
+		local ok, a, b = pcall(fn, ...)
+		local okNumber, both = pcall(function() return { a + 0, b ~= nil and b + 0 or nil } end)
+		return ok and okNumber and both or nil
+	end
+	-- (A frame's middle as a share of the half-width, -1 to 1; "-" not shown, "?" unreadable.)
+	local function Across(name)
+		local frame = _G[name]
+		if not (frame and frame.GetCenter and frame:IsShown()) then return "-" end
+		local center = Number(frame.GetCenter, frame)
+		if not center then return "?" end
+		local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		return ("%.3f"):format((center[1] * scale / UIParent:GetWidth() - 0.5) * 2)
+	end
+	local function Write(text)
+		local lines = ns.db.shoulderFollowRun
+		if #lines < MOST_LINES then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Box(line, r, g, b, left)
+		ns.PadTestBox(("Follow %d/%d  %s"):format(run.at, #FOLLOW_TRIALS, FOLLOW_TRIALS[run.at][1]),
+			left and ("%s  (%.0f)"):format(line, math.max(0, math.ceil(left))) or line, r, g, b)
+	end
+	local function Enemy() return UnitExists("target") and ns.Flag(UnitCanAttack("player", "target")) or false end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
+		ns.db.shoulderCamTargetTurn, ns.db.shoulderCamTargetFollow = run.kept[1], run.kept[2]
+		Write("end: " .. why)
+		Log(("follow: %s, %d lines in db.shoulderFollowRun"):format(why, #ns.db.shoulderFollowRun))
+		run = nil
+		ns.ShoulderTestGrid(false)
+		if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
+	end
+	local function Step()
+		local trial = FOLLOW_TRIALS[run.at]
+		if not trial then
+			End("done")
+			ns.PadTestBox("Follow run done", "stop the recording, then /reload", 0.3, 1, 0.3)
+			C_Timer.After(8, function() if not run then ns.PadTestBoxHide() end end)
+			return
+		end
+		local step = trial[2][run.step]
+		if not step then
+			run.at, run.step = run.at + 1, 1
+			return Step()
+		end
+		run.clock = 0
+		Write(("step: %s %d: %s %s"):format(trial[1], run.step, step[1], step[3] or step[2]))
+		if step[1] == "target" then
+			if Enemy() then return Box("CLEAR YOUR TARGET first (Esc)", 1, 0.82, 0) end
+			Box(step[2], 0.3, 1, 0.3)
+		elseif step[1] == "clear" then
+			Box(step[2], 1, 0.82, 0)
+		elseif step[1] == "do" then
+			Box("NOW: " .. step[3], 0.3, 1, 0.3, step[2])
+		elseif step[1] == "ready" then
+			Box(step[3], 1, 0.82, 0, step[2])
+		else
+			Box(step[3], 0.7, 0.7, 0.7, step[2])
+		end
+	end
+	local function Next()
+		run.step = run.step + 1
+		Step()
+	end
+	local function Tick(_, elapsed)
+		run.clock, run.sampleClock = run.clock + elapsed, run.sampleClock + elapsed
+		local delta = CursorDelta and Number(CursorDelta)
+		if delta then run.dx, run.dy = run.dx + delta[1], run.dy + (delta[2] or 0) end
+		local trial = FOLLOW_TRIALS[run.at]
+		local step = trial and trial[2][run.step]
+		if step and (step[1] == "wait" or step[1] == "do" or step[1] == "ready") then
+			if run.clock >= step[2] then return Next() end
+			if math.floor(run.clock) ~= math.floor(run.clock - elapsed) then
+				local doing, ready = step[1] == "do", step[1] == "ready"
+				Box(doing and "NOW: " .. step[3] or step[3], (doing or ready) and (ready and 1 or 0.3) or 0.7, doing and 1 or (ready and 0.82 or 0.7),
+					doing and 0.3 or (ready and 0 or 0.7), step[2] - run.clock)
+			end
+		end
+		if run.sampleClock < SAMPLE_EVERY then return end
+		run.sampleClock = 0
+		local facing = Number(GetPlayerFacing)
+		local spot = Number(UnitPosition, "player")
+		local cursor = Number(GetCursorPosition)
+		local d = ns.GetShoulderCamDebug and ns.GetShoulderCamDebug() or {}
+		Write(("s %s | facing %s at %s | L %d R %d look %d delta %s cursor %s | share %.2f click %s now %s slide %.1f | " ..
+			"PRD %s cast %s | target %s combat %s"):format(trial and trial[1] or "-",
+			facing and ("%.3f"):format(facing[1]) or "-", spot and ("%.1f,%.1f"):format(spot[1], spot[2]) or "-",
+			IsMouseButtonDown("LeftButton") and 1 or 0, IsMouseButtonDown("RightButton") and 1 or 0,
+			IsMouselooking and IsMouselooking() and 1 or 0,
+			CursorDelta and (delta and ("%.1f,%.1f"):format(run.dx, run.dy) or "unreadable") or "missing",
+			cursor and ("%.0f,%.0f"):format(cursor[1], cursor[2] or 0) or "-", d.aimShare or 0,
+			d.aimClickX and ("%.3f"):format(d.aimClickX) or "-", d.aimNowX and ("%.3f"):format(d.aimNowX) or "-",
+			d.followShift or 0, Across("PersonalResourceDisplayFrame"), Across("PlayerCastingBarFrame"),
+			Enemy() and "enemy" or (UnitExists("target") and "other" or "none"), Text(InCombatLockdown())))
+	end
+	local function OnTarget()
+		local trial = FOLLOW_TRIALS[run.at]
+		local step = trial and trial[2][run.step]
+		local enemy = Enemy()
+		Write(("target changed: %s"):format(enemy and "an enemy" or (UnitExists("target") and "not an enemy" or "none")))
+		if not step then return end
+		if step[1] == "target" and enemy then
+			Next()
+		elseif step[1] == "target" then
+			Step()
+		elseif step[1] == "clear" and not enemy then
+			Next()
+		end
+	end
+	-- (With a trial's name, or the start of it, only that one: "follow turning".)
+	function ns.ShoulderFollow(only)
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder follow: stopped")
+		end
+		if not (ns.Setting("shoulderCam") and ns.db.shoulderCamFrames) then
+			return ns.Print("shoulder follow: turn on the Shoulder Cam and Frames follow you first")
+		end
+		FOLLOW_TRIALS = ALL_TRIALS
+		if only then
+			local kept = {}
+			for _, trial in ipairs(ALL_TRIALS) do
+				if trial[1]:find(only, 1, true) == 1 then kept[#kept + 1] = trial end
+			end
+			if #kept == 0 then return ns.Print("shoulder follow: no trial called " .. only) end
+			FOLLOW_TRIALS = kept
+		end
+		run = { frame = CreateFrame("Frame"), at = 1, step = 1, clock = 0, sampleClock = 0, began = GetTime(),
+			dx = 0, dy = 0, kept = { ns.db.shoulderCamTargetTurn, ns.db.shoulderCamTargetFollow } }
+		ns.db.shoulderCamTargetTurn, ns.db.shoulderCamTargetFollow = true, true
+		if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
+		ns.db.shoulderFollowRun = {}
+		local cvars = {}
+		for _, name in ipairs({ "cameraYawMoveSpeed", "cameraSmoothStyle", "mouseSpeed", "cameraFov",
+			"test_cameraOverShoulder", "test_cameraTargetFocusEnemyStrengthYaw" }) do
+			cvars[#cvars + 1] = name .. " " .. Text(GetCVar(name))
+		end
+		Write(("start | %s | screen %.0f x %.0f, UI %.0f wide | zoom %.2f | GetCursorDelta %s | %s"):format(Who(),
+			WorldFrame:GetWidth(), WorldFrame:GetHeight(), UIParent:GetWidth(), Zoom(), CursorDelta and "there" or "missing",
+			table.concat(cvars, ", ")))
+		Log("follow: starts (lines go into db.shoulderFollowRun)")
+		run.frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+		run.frame:SetScript("OnEvent", function() if run then OnTarget() end end)
+		run.frame:SetScript("OnUpdate", Tick)
+		Step()
+		ns.ShoulderTestGrid(true)
+		ns.Print("shoulder follow: record your screen; about 3 minutes; type it again to stop")
 	end
 end
 
@@ -1743,6 +2094,8 @@ function ns.ShoulderTest(arg)
 	elseif what == "zoomcurve" then ns.ShoulderZoomCurve()
 	elseif what == "mounts" then ns.ShoulderMounts()
 	elseif what == "aimclick" then ns.ShoulderAimClick()
+	elseif what == "drag" then ns.ShoulderDrag()
+	elseif what == "follow" then ns.ShoulderFollow(rest)
 	elseif what == "on" then Set("shoulderCam", true)
 	elseif what == "off" then Set("shoulderCam", false)
 	elseif what == "left" or what == "right" then Set("shoulderCamSide", what)
@@ -1751,7 +2104,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end
