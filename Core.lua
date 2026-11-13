@@ -4231,6 +4231,7 @@ function ns.EnsureTables()
 	ns.db.cooldownGroupDefaults = ns.db.cooldownGroupDefaults or {} -- ...group -> { mode, power, early }
 	ns.db.cooldownBuffMode = ns.db.cooldownBuffMode or {} -- ...tracked buff's spell ID -> its own mode
 	ns.db.cooldownFlashReady = ns.db.cooldownFlashReady or {} -- ...spell ID -> true/false: Flash, its own
+	ns.db.cooldownSituations = ns.db.cooldownSituations or {} -- ...its situations, in order (CooldownSituations.lua)
 	ns.db.cooldownNoBuff = nil -- (a test build's per-spell Only cooldown, not buff)
 	ns.db.cooldownEarlyOff = nil -- (a test build's, when Show early started ticked)
 	ns.db.gamepadPressButtons = ns.db.gamepadPressButtons or {} -- Gamepad page: button -> reveals the bars

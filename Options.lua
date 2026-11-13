@@ -3550,9 +3550,19 @@ local function CreateBuffsPanel()
 	local buffPeek = Check(content, "buffPeek", L["Show buffs when you gain or refresh one"],
 		L["Gaining or refreshing a buff briefly shows your buffs and debuffs. Not on flights."])
 	buffPeek:SetPoint("TOPLEFT", note, "BOTTOMLEFT", -2, -17) -- (as under the other pages' hidden switch)
-	PageSwitch(content, "handleBuffs", L["Enable Page"],
+	local switch = PageSwitch(content, "handleBuffs", L["Enable Page"],
 		L["On: this page's peeks bring your buffs and debuffs up in CineMode. Off: no peeks; they still " ..
 		"fade as their HUD row says."], note)
+
+	-- Two tabs (ns.PageTabsBelow): the page's settings, and Addon Frame Links.
+	local tabHosts, _, TabsShown, AdoptTab = ns.PageTabsBelow(content, switch, {
+		{ L["Settings"], L["When your buffs and debuffs come up in CineMode."] },
+		{ L["Frame Links"], L["Which supported addon's frames stand in for your buffs and debuffs."] },
+	}, "Buffs/page", 2, "buffs", 1)
+	-- (Made before the switch, under the page's intro: onto the tab, at its top.)
+	buffPeek:SetParent(tabHosts[1])
+	buffPeek:ClearAllPoints()
+	buffPeek:SetPoint("TOPLEFT", tabHosts[1], "TOPLEFT", -2, 0)
 	buffPeek:HookScript("OnClick", Refresh) -- grey out / enable the options below
 
 	local BUFF_INDENT = 16
@@ -3772,12 +3782,11 @@ local function CreateBuffsPanel()
 	end }
 	controls[#controls + 1] = ignoreList
 	RecordKey(content, "buffPeekIgnore") -- (for Reset page)
-	-- Addon Frame Links (last): which addon's frames the buffs are (FrameLinks.lua).
-	local links = ns.BuildLinkSection(content, addBox, "buffs")
+	AdoptTab() -- (everything above onto the Settings tab)
 
 	canvas:SetScript("OnShow", PageShown(function()
 		Refresh()
-		links.Show()
+		TabsShown()
 	end, content))
 	canvas:Hide()
 	RegisterSubpage(canvas, "Buffs/debuffs", L["Buffs/Debuffs"])
@@ -11341,7 +11350,7 @@ do
 		for i, name in ipairs(channels) do
 			local holder = ChannelHolder(name)
 			holder:ClearAllPoints()
-			holder:SetPoint("TOPLEFT", chatPanel.channelBody, "TOPLEFT", 0, -(i - 1) * 24)
+			holder:SetPoint("TOPLEFT", chatPanel.channelTop, "TOPLEFT", 0, -(i - 1) * 24)
 			holder:Show()
 			shown[holder] = true
 		end
@@ -11411,61 +11420,51 @@ do
 		-- (Ticking it greys out / enables the Chat bubbles page's Behind you.)
 		hideBubbled:HookScript("OnClick", Refresh)
 
-		-- The sections, each a band that opens and closes with a click and its
-		-- body under it (all open to start with). A setting found by search in a
-		-- closed one opens it.
-		local sections = {}
-		local top = CreateFrame("Frame", nil, chatPanel)
-		top:SetSize(1, 1)
-		top:SetPoint("TOPLEFT", hideBubbled, "BOTTOMLEFT", 2, -16) -- (back to the column edge)
+		-- The tabs (ns.PageTabsBelow): Settings (the peek's own options and the
+		-- chat window's), then a tab for each table of what shows chat, Other,
+		-- and Addon Frame Links. A setting found by search on another tab opens it.
+		local TAB_SETTINGS, TAB_LINKS = 1, 6
+		local bodies = {}
+		local Layout
+		local tabHosts, PickTab, TabsShown = ns.PageTabsBelow(chatPanel, switch, {
+			{ L["Settings"], L["When a new message shows chat, and what of the chat window comes up with it."] },
+			{ L["Conversations"], L["Which people's messages show chat, and where: says, whispers, party, guild..."] },
+			{ L["Game Messages"], L["Which of the game's messages show chat, and where."] },
+			{ L["Channels"], L["Which channels you've joined show chat, and where."] },
+			{ L["Other"], L["Chat lines of Cinematic's own."] },
+			{ L["Frame Links"], L["Which frame each part of the chat is: the game's, or an addon's that draws its own."] },
+		}, "Chat/page", nil, nil, nil, function() Layout() end)
+		local settings = tabHosts[TAB_SETTINGS]
+		for _, control in ipairs({ chatPeek, peekTime, hideOwn, ownNoBubble, hideBubbled }) do
+			control:SetParent(settings)
+		end
+		peekTime:ClearAllPoints()
+		peekTime:SetPoint("TOPLEFT", settings, "TOPLEFT", 4, -18)
+
+		-- Each other tab's body: its rows under the tab's top, sized to them
+		-- (the page's height is measured two frames deep).
 		local function LayoutNow()
-			local above
-			for _, section in ipairs(sections) do
-				local frame = section.frame
-				frame:ClearAllPoints()
-				if above then
-					frame:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -6)
-				else
-					frame:SetPoint("TOPLEFT", top, "TOPLEFT", 0, 0)
-				end
-				frame:SetPoint("RIGHT", chatPanel, "RIGHT", -16, 0)
-				SectionState.Restore(section)
-				section.body:SetShown(section.open)
-				section.nameRow:SetOpen(section.open)
-				frame:SetHeight(BAND_HEIGHT + (section.open and (ContentDepth(section.body) or 0) + 10 or 0))
-				above = frame
+			for _, body in ipairs(bodies) do
+				body:SetHeight(math.max(ContentDepth(body) or 1, 1))
 			end
 			FitContentHeight(chatPanel)
 		end
 		-- (Laid out again next frame too, once the rows have settled.)
-		local function Layout()
+		function Layout()
 			LayoutNow()
 			C_Timer.After(0, LayoutNow)
 		end
 		chatPanel.layoutSections = Layout
-		local function Section(heading, key)
-			local frame = CreateFrame("Frame", nil, chatPanel)
-			frame:SetHeight(BAND_HEIGHT)
-			local body = CreateFrame("Frame", nil, frame)
-			body:SetPoint("TOPLEFT", 0, -BAND_HEIGHT)
-			body:SetPoint("TOPRIGHT", 0, -BAND_HEIGHT)
+		local function TabBody(i)
+			local body = CreateFrame("Frame", nil, tabHosts[i])
+			body:SetPoint("TOPLEFT", tabHosts[i], "TOPLEFT", 2, 0)
+			body:SetPoint("RIGHT", chatPanel, "RIGHT", -16, 0)
 			body:SetHeight(1)
-			body.searchAlways = true
-			local section = { frame = frame, body = body, open = true, id = "Chat/" .. key }
-			section.nameRow = SectionBand(frame, heading, function()
-				SectionState.Save(section, not section.open)
-				Layout()
-			end)
-			function body.openSection()
-				if not section.open then
-					SectionState.Save(section, true)
-					Layout()
-				end
-			end
-			sections[#sections + 1] = section
-			return body, section.nameRow
+			bodies[#bodies + 1] = body
+			return body
 		end
-		-- (A table's anchor: the top of its section's body.)
+		-- (A table's anchor: a point at the top of its body. Not the body
+		-- itself: a table hangs under its anchor, and the body grows to fit it.)
 		local function TableTop(body)
 			local anchor = CreateFrame("Frame", nil, body)
 			anchor:SetSize(1, 1)
@@ -11473,21 +11472,25 @@ do
 			return anchor
 		end
 
-		-- Chat window: plain ticks. (Where it stays up is its row on the
-		-- Standard Frames page.)
-		local windowBody = Section(L["Chat window"], "Chat window")
-		local untilRead = Check(windowBody, "chatUntilWhisperRead", L["Keep chat up until whispers are read"],
+		-- Chat window: plain ticks, on Settings under the peek's. (Where it
+		-- stays up is its row on the Standard Frames page.)
+		-- (Each part's settings under its old section's name, as the profile
+		-- modules' scopes have them: Chat/Other and the rest.)
+		SetSection(chatPanel, L["Chat window"])
+		local windowHeading = Label(settings, "GameFontNormal", L["Chat window"])
+		windowHeading:SetPoint("TOPLEFT", hideBubbled, "BOTTOMLEFT", 2, -18)
+		local untilRead = Check(settings, "chatUntilWhisperRead", L["Keep chat up until whispers are read"],
 			L["When a whisper arrives in its own tab, the whole chat window stays up in CineMode " ..
 			"while that tab flashes, until you click it. Whispers that land in the tab you're " ..
 			"looking at don't flash, so they just show as above."])
-		untilRead:SetPoint("TOPLEFT", windowBody, "TOPLEFT", -2, -6)
-		local tabHint = Check(windowBody, "chatHideTabHint", L["Hide the tabs' right-click hint"],
+		untilRead:SetPoint("TOPLEFT", windowHeading, "BOTTOMLEFT", -2, -6)
+		local tabHint = Check(settings, "chatHideTabHint", L["Hide the tabs' right-click hint"],
 			L["Hovering a chat tab shows just its name, without the green <Right click for Tab Settings> " ..
 			"line. Right-clicking a tab still opens its settings."])
 		tabHint:SetPoint("TOPLEFT", untilRead, "BOTTOMLEFT", 0, -2)
 		-- What of the window a new message brings up with it (hovering,
 		-- typing and unread whispers still bring it all).
-		local partsLabel = Label(windowBody, "GameFontHighlight", L["A message shows"])
+		local partsLabel = Label(settings, "GameFontHighlight", L["A message shows"])
 		partsLabel:SetPoint("TOPLEFT", tabHint, "BOTTOMLEFT", 2, -10)
 		local PARTS_TIP = L["Hovering the chat, typing or a whisper to read still brings it all up."]
 		for i, part in ipairs({
@@ -11497,14 +11500,15 @@ do
 			{ "chatPeekButtons", L["Buttons"], L["The buttons beside the chat window (chat menu, channels, voice...) " ..
 				"come up with a new message."] },
 		}) do
-			local check = Check(windowBody, part[1], part[2], part[3] .. " " .. PARTS_TIP)
+			local check = Check(settings, part[1], part[2], part[3] .. " " .. PARTS_TIP)
 			check:SetPoint("TOPLEFT", partsLabel, "BOTTOMLEFT", -2 + (i - 1) * 110, -4)
 			GreyUnless(check, IfPeek)
 		end
 
 		-- The message types that show chat: people's, then the game's.
-		local function TypeSection(heading, game)
-			local body = Section(heading, game and "Game messages" or "Conversation")
+		local function TypeSection(tab, heading, game)
+			SetSection(chatPanel, heading)
+			local body = TabBody(tab)
 			local rows = MessageRows()
 			for _, peekType in ipairs(ns.CHAT_PEEK_TYPES) do
 				if (peekType.section == "game") == game then
@@ -11519,7 +11523,7 @@ do
 			GreyUnlessPeek(body)
 			return body, #rows
 		end
-		local conversationBody, conversationRows = TypeSection(L["Conversation"], false)
+		local conversationBody, conversationRows = TypeSection(2, L["Conversation"], false)
 		-- Typing last, a row of its own (chatShowWhileTyping its Always; see
 		-- Frames.lua): not a message, so not greyed with the peek off.
 		local typing = CreateFrame("Frame", nil, conversationBody)
@@ -11538,25 +11542,33 @@ do
 		ShowTable(typing, typing, typingRows, "Chat", L["Conversation"])
 		ToPage(typing)
 		RecordKey(chatPanel, "chatShowWhileTyping")
-		TypeSection(L["Game messages"], true)
+		TypeSection(3, L["Game messages"], true)
 
 		-- Channels the player has joined, a row each (ChannelHolder), listed
 		-- again each time the page opens.
-		local channelBody, channelBand = Section(L["Channels"], "Channels")
+		SetSection(chatPanel, L["Channels"])
+		local channelBody = TabBody(4)
 		chatPanel.channelBody = channelBody
+		local channelNote = Label(channelBody, "GameFontHighlightSmall",
+			L["Channels you've joined, like General or Trade. The list updates each time you open this page."])
+		channelNote:SetPoint("TOPLEFT", channelBody, "TOPLEFT", 0, 0)
+		channelNote:SetWidth(560)
+		channelNote:SetJustifyH("LEFT")
+		local channelTop = CreateFrame("Frame", nil, channelBody)
+		channelTop:SetSize(1, 1)
+		channelTop:SetPoint("TOPLEFT", channelNote, "BOTTOMLEFT", 0, -8)
+		chatPanel.channelTop = channelTop
 		local headings = CreateFrame("Frame", nil, channelBody)
 		headings:SetSize(1, 1)
-		headings:SetPoint("TOPLEFT", channelBody, "TOPLEFT", 0, 0)
+		headings:SetPoint("TOPLEFT", channelTop, "TOPLEFT", 0, 0)
 		ShowTable(headings, headings, MessageRows())
 		chatPanel.channelHeadings = headings
-		PageIntro(channelBand, channelBand.title,
-			L["Channels you've joined, like General or Trade. The list updates each time " ..
-			"you open this page."])
 		chatPanel.noChannels = Label(channelBody, "GameFontDisableSmall", L["No channels joined."])
-		chatPanel.noChannels:SetPoint("TOPLEFT", channelBody, "TOPLEFT", 0, -10)
+		chatPanel.noChannels:SetPoint("TOPLEFT", channelTop, "TOPLEFT", 0, -10)
 
 		-- Other: chat lines of Cinematic's own.
-		local otherBody = Section(L["Other"], "Other")
+		SetSection(chatPanel, L["Other"])
+		local otherBody = TabBody(5)
 		-- (Attacks shown on the screen: the Cards page's now.)
 		local attackAlert = ns.CardsLink(otherBody, L["Attacks shown on the screen:"], "attack")
 		attackAlert:SetPoint("TOPLEFT", otherBody, "TOPLEFT", 0, -6)
@@ -11565,22 +11577,21 @@ do
 			"What's new link to what's been added. Chat shows for it while the UI is faded."])
 		updateNotice:SetPoint("TOPLEFT", attackAlert, "BOTTOMLEFT", -2, -4)
 
-		for _, section in ipairs(sections) do
-			ToPage(section.body)
+		for _, body in ipairs(bodies) do
+			ToPage(body)
 		end
 		-- (The Always boxes' own settings, for the page's Reset too.)
 		RecordKey(chatPanel, "chatPeekTypes")
 		RecordKey(chatPanel, "chatPeekChannelList")
 
-		-- Addon Frame Links (last; made after the Always boxes' keys are
-		-- recorded, so those stay Other's): which frame each part of the chat is, the
-		-- game's or an addon's that draws its own (FrameLinks.lua). Closed while
-		-- they're all the game's, till opened with a click.
-		local linksBody = Section(L["Addon Frame Links"], "Addon Frame Links")
-		local linksSection = sections[#sections]
-		linksSection.open = false
+		-- Addon Frame Links, its tab's (made after the Always boxes' keys are
+		-- recorded, so those stay Other's): which frame each part of the chat
+		-- is, the game's or an addon's that draws its own (FrameLinks.lua). A
+		-- jump to it from elsewhere opens the tab.
+		SetSection(chatPanel, L["Addon Frame Links"])
+		local linksBody = TabBody(TAB_LINKS)
 		local linkBand = ns.BuildLinkBand(linksBody, "chat", Layout)
-		ns.RegisterLinkSection("chat", linksSection.frame, linksBody.openSection)
+		ns.RegisterLinkSection("chat", tabHosts[TAB_LINKS], function() PickTab(TAB_LINKS) end)
 		ToPage(linksBody)
 		ns.WatchFrameLinks(function()
 			if chatCanvas:IsVisible() then
@@ -11592,12 +11603,8 @@ do
 		chatCanvas:SetScript("OnShow", PageShown(function()
 			if ns.GetDB() then RefreshChannels() end
 			Refresh() -- (after: new channels' rows too)
-			-- (Addon Frame Links: open at first only while it has something.)
-			if ns.db and ns.db.sectionsOpen and ns.db.sectionsOpen[linksSection.id] == nil then
-				linksSection.open = ns.LinkBandOpen("chat")
-			end
 			linkBand.Refresh()
-			Layout()
+			TabsShown()
 		end, chatPanel))
 		chatCanvas:Hide()
 		RegisterSubpage(chatCanvas, "Chat")
@@ -11763,6 +11770,12 @@ local function CreateMinimapPanel()
 	local switch = PageSwitch(content, "handleMinimap", L["Enable Page"],
 		L["On: this page's settings can bring the minimap up or keep it up in CineMode. Off: they don't; " ..
 		"it still fades as its HUD rows say."], subtitle)
+
+	-- Two tabs (ns.PageTabsBelow): the page's settings, and Addon Frame Links.
+	local _, _, TabsShown, AdoptTab = ns.PageTabsBelow(content, switch, {
+		{ L["Settings"], L["When the minimap comes up or stays up in CineMode."] },
+		{ L["Frame Links"], L["Which supported addon's frames stand in for the minimap's parts."] },
+	}, "Minimap/page", 2, "minimap", 1)
 
 	-- Retail's quest waypoint (the marker in the world showing where to go).
 	local aboveTracking
@@ -12293,21 +12306,17 @@ local function CreateMinimapPanel()
 	local trackTop = CreateFrame("Frame", nil, content)
 	trackTop:SetSize(1, 1)
 	trackTop:SetPoint("TOPLEFT", aboveExcept, "BOTTOMLEFT", exceptX - 20, -2)
-	local trackRow = ShowTable(content, trackTop, {
+	ShowTable(content, trackTop, {
 		opts = { anyFight = true }, underHeader = true, layout = ns.GRID_PLACE_COMBAT_LAYOUT,
 		labelWidth = FRAME_LABEL_WIDTH - 20,
 		{ key = ns.MINIMAP_TRACKING_ROW, label = L["Tracking"],
 			tip = L["Where herb, mineral or treasure tracking keeps the minimap up, and whether in fights. " ..
 			"Alterac Valley's mines do have ore: tick BGs & arenas if you mine there. Hovering it still shows it."] },
 	})
-	local placesRow = CreateFrame("Frame", nil, content) -- (Addon Frame Links goes under it)
-	placesRow:SetSize(1, 1)
-	placesRow:SetPoint("TOPLEFT", trackRow, "BOTTOMLEFT", 0, -8)
-	-- Addon Frame Links (last): which addon's frames the minimap's parts are (FrameLinks.lua).
-	local links = ns.BuildLinkSection(content, placesRow, "minimap")
+	AdoptTab(switch) -- (everything above onto the Settings tab)
 	canvas:SetScript("OnShow", PageShown(function()
 		Refresh()
-		links.Show()
+		TabsShown()
 	end, content))
 	canvas:Hide()
 	RegisterSubpage(canvas, "Minimap")
@@ -12333,6 +12342,13 @@ local function CreateQuestTrackerPanel()
 	local switch = PageSwitch(content, "handleQuests", L["Enable Page"],
 		L["On: this page's settings can bring the quest tracker, quest timer and durability figure up in " ..
 		"CineMode. Off: they don't; they still fade as their HUD rows say."], subtitle)
+
+	-- Two tabs (ns.PageTabsBelow): the page's settings, and Addon Frame Links.
+	local tabHosts, _, TabsShown, AdoptTab = ns.PageTabsBelow(content, switch, {
+		{ L["Settings"], L["When the quest tracker, quest timer and durability figure come up in CineMode."] },
+		{ L["Frame Links"], L["Which supported addon's frames stand in for the quest tracker."] },
+	}, "Quest tracker/page", 2, "quests", 1)
+	reveal:SetParent(tabHosts[1]) -- (made before the switch: onto the tab too)
 
 	-- On top: how long a reveal keeps the tracker up, in place of the mouseover time (all the way left: off).
 	local revealTime = Slider(content, "questRevealTime", L["Override Default Reveal Time"], 0, 60, 1,
@@ -12426,15 +12442,112 @@ local function CreateQuestTrackerPanel()
 	durabilityCam:SetPoint("TOPLEFT", durability, "BOTTOMLEFT", QUEST_INDENT, -2)
 	GreyUnless(durabilityCam, function(db) return db.durabilityShow end)
 
-	-- Addon Frame Links (last): which addon's tracker it is (FrameLinks.lua).
-	local links = ns.BuildLinkSection(content, durabilityCam, "quests")
+	AdoptTab(switch) -- (everything above onto the Settings tab)
 
 	canvas:SetScript("OnShow", PageShown(function()
 		Refresh()
-		links.Show()
+		TabsShown()
 	end, content))
 	canvas:Hide()
 	RegisterSubpage(canvas, L["Quest tracker"], L["Quest Tracker"])
+end
+
+-- Folder tabs inside a page, under anchor (its switch), as the Cooldown
+-- Manager's and Swing Timer's: list { label, tip } each. Each tab's
+-- settings go on a frame of its own (hosts[i]: build them there), one shown
+-- at a time (1 by 1: one with no height draws none of it); search still
+-- finds them, and a match opens their tab (ShowMatch's openSection). The tab
+-- last picked is kept (SectionState, id). linksTab: the tab that's the
+-- page's Addon Frame Links (groupKey's, FrameLinks.lua), made here on its
+-- frame without its band; a jump to it from elsewhere opens the tab.
+-- adoptTab: for a page built as before, straight on content: what's made on
+-- content after this call goes onto that tab's frame once Adopt(oldAnchor)
+-- is called at the page's end (what was placed under oldAnchor, the page's
+-- switch, then sits at the tab's top), and again as the page shows (rows a
+-- page makes later).
+-- onPick(i): after a tab's picked, before the page's height is fitted.
+-- Gives the hosts, Pick(i), Shown() for the page's OnShow, and Adopt.
+-- (On ns: this file's main chunk is near Lua's 200 locals.)
+function ns.PageTabsBelow(content, anchor, list, id, linksTab, groupKey, adoptTab, onPick)
+	local picked = { id = id, open = 1 }
+	local Pick
+	local panel, _, ShowTab, base = ns.FolderTabs(content, list, function(i) Pick(i) end)
+	base:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -(ns.FOLDER_TAB_HEIGHT + 14))
+	panel:SetPoint("TOPLEFT", base)
+	panel:SetPoint("RIGHT", content, "RIGHT", -8, 0)
+	panel:SetHeight(1) -- (just its top edge, a line under the tabs)
+	local hosts = {}
+	for i = 1, #list do
+		local host = CreateFrame("Frame", nil, content)
+		host:SetSize(1, 1)
+		host:SetPoint("TOPLEFT", base, "TOPLEFT", 0, -14)
+		host.recordAs = content -- (its settings are the page's: its Reset puts them back)
+		host.searchAlways = true
+		host.openSection = function() Pick(i) end
+		hosts[i] = host
+	end
+	local links
+	if linksTab then
+		links = ns.BuildLinkSection(content, hosts[linksTab], groupKey, true)
+		links.frame:SetParent(hosts[linksTab])
+		local open = links.body.openSection
+		links.body.openSection = function()
+			Pick(linksTab)
+			open()
+		end
+		ns.RegisterLinkSection(groupKey, links.frame, links.body.openSection)
+	end
+	-- (What's on content now stays there: the title, the switch, the tabs.)
+	local before = {}
+	if adoptTab then
+		for _, object in ipairs({ content:GetChildren() }) do before[object] = true end
+		for _, object in ipairs({ content:GetRegions() }) do before[object] = true end
+	end
+	local function Adopt(oldAnchor)
+		if not adoptTab then return end
+		local host = hosts[adoptTab]
+		for _, set in ipairs({ { content:GetChildren() }, { content:GetRegions() } }) do
+			for _, object in ipairs(set) do
+				if not before[object] then
+					before[object] = true
+					object:SetParent(host)
+					-- (Placed under the switch: at the tab's top instead, its
+					-- other points as they were.)
+					local points, moved = {}, false
+					for n = 1, (oldAnchor and object:GetNumPoints() or 0) do
+						points[n] = { object:GetPoint(n) }
+						if points[n][2] == oldAnchor then moved = true end
+					end
+					if moved then
+						object:ClearAllPoints()
+						for _, point in ipairs(points) do
+							if point[2] == oldAnchor then
+								object:SetPoint(point[1], host, "TOPLEFT", point[4] or 0, 0)
+							else
+								object:SetPoint(point[1], point[2] or content, point[3], point[4], point[5])
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	function Pick(i)
+		if not hosts[i] then i = 1 end
+		SectionState.Save(picked, i)
+		ShowTab(i)
+		for n, host in ipairs(hosts) do host:SetShown(n == i) end
+		if links and i == linksTab then links.Show() end
+		if onPick then onPick(i) end
+		FitContentHeight(content)
+		C_Timer.After(0, function() FitContentHeight(content) end)
+	end
+	local function Shown()
+		Adopt()
+		SectionState.Restore(picked)
+		Pick(tonumber(picked.open) or 1)
+	end
+	return hosts, Pick, Shown, Adopt
 end
 
 -- Sub-page: Classic's swing timer bars: only the weapons in use, and the
@@ -12457,36 +12570,41 @@ local function CreateSwingPanel()
 		L["On: this page's settings can fade out the bars you aren't using. Off: they don't; the swing " ..
 		"timer still fades as its HUD row says, every bar alike."], subtitle)
 
-	local smart = Check(content, "swingSmartShow", L["Only show the weapons you're using"],
+	-- Two tabs: its settings, and Addon Frame Links.
+	local hosts, _, TabsShown = ns.PageTabsBelow(content, handleCheck, {
+		{ L["Settings"], L["Which bars show, and when they fade."] },
+		{ L["Frame Links"], L["Which supported addon's frames stand in for the swing timer."] },
+	}, "Swing timer/page", 2, "swing")
+	local settings = hosts[1]
+
+	local smart = Check(settings, "swingSmartShow", L["Only show the weapons you're using"],
 		L["The main hand (and off-hand) bars show while you auto-attack, the ranged bar while you " ..
 		"shoot. A hunter's main hand bar comes up when they melee, a warrior's ranged bar when " ..
 		"they shoot, and each fades out a while after (the slider below)."])
-	smart:SetPoint("TOPLEFT", handleCheck, "BOTTOMLEFT", 0, -8)
+	smart:SetPoint("TOPLEFT", settings, "TOPLEFT", 0, 0)
 	smart:HookScript("OnClick", Refresh) -- grey out / enable the slider below
 
-	local after = Slider(content, "swingHideAfter", L["Fade out after the bar is done for"], 0, 30, 1, L["%d sec"])
+	local after = Slider(settings, "swingHideAfter", L["Fade out after the bar is done for"], 0, 30, 1, L["%d sec"])
 	after:SetPoint("TOPLEFT", smart, "BOTTOMLEFT", 20, -24)
 	Tooltip(after, L["Once you stop swinging or shooting and the bar has run down to 0, it stays this " ..
 		"long before fading out."])
 	GreyUnless(after, function(db) return db.handleSwing and db.swingSmartShow end)
 
-	local offHand = Check(content, "swingHideOffHand", L["Hide the off-hand bar"],
+	local offHand = Check(settings, "swingHideOffHand", L["Hide the off-hand bar"],
 		L["Never show the off-hand swing timer, dual wielding or not."])
 	offHand:SetPoint("TOPLEFT", after, "BOTTOMLEFT", -20, -16)
 
 	-- (Per class: your current one's.)
 	local className, class = UnitClass("player")
-	local rangedTop = Check(content, "swingRangedOnTop" .. class, L["Ranged bar on top for %s"]:format(className),
+	local rangedTop = Check(settings, "swingRangedOnTop" .. class, L["Ranged bar on top for %s"]:format(className),
 		L["The ranged bar goes on top, where the main hand's was, and the main hand and off-hand bars " ..
 		"each move down one. Set for each class on its own, so one profile " ..
 		"suits all your characters."])
 	rangedTop:SetPoint("TOPLEFT", offHand, "BOTTOMLEFT", 0, -2)
-	-- Addon Frame Links (last): which addon's swing timer it is (FrameLinks.lua).
-	local links = ns.BuildLinkSection(content, rangedTop, "swing")
 
 	canvas:SetScript("OnShow", PageShown(function()
 		Refresh()
-		links.Show()
+		TabsShown()
 	end, content))
 	canvas:Hide()
 	RegisterSubpage(canvas, L["Swing timer"], L["Swing Timer"])
@@ -12513,9 +12631,18 @@ local function CreateCooldownPanel()
 		"you pick. Off: they don't; it still fades as its HUD row says."], subtitle)
 	local function Handled() return ns.GetDB().handleCooldowns end
 
+	-- The page's tabs (ns.PageTabsBelow): the spell icons and their
+	-- situations (CDM), the Cooldown Manager's other settings, and Addon Frame Links.
+	local tabHosts, _, TabsShown = ns.PageTabsBelow(content, handleCheck, {
+		{ L["CDM"], L["Each spell's icon: when it shows, and in which situations."] },
+		{ L["Settings"], L["Staying up while a cooldown recharges, keybinds, numbers and the Flash style."] },
+		{ L["Frame Links"], L["Which supported addon's frames stand in for the Cooldown Manager's bars."] },
+	}, "Cooldown Manager/page", 3, "cooldowns")
+	local icons, settings = tabHosts[1], tabHosts[2]
+
 	-- Stay up while recharging, each bar's own (Essential's keys also count
 	-- Enhanced Cooldown Manager's bars).
-	local afterCombat = handleCheck
+	local afterCombat = settings
 	for i, bar in ipairs({
 		{ prefix = "cooldown", label = L["Essential: stay up while a cooldown is recharging"],
 			tip = L["Keeps the Cooldown Manager up until every cooldown in its Essential bar (and Enhanced " ..
@@ -12528,12 +12655,13 @@ local function CreateCooldownPanel()
 			"group by default.)"] },
 	}) do
 		local whileKey = bar.prefix .. "WhileRecharging"
-		local recharging = Check(content, whileKey, bar.label, bar.tip)
-		recharging:SetPoint("TOPLEFT", afterCombat, "BOTTOMLEFT", i == 1 and 0 or -16, i == 1 and -8 or -2)
+		local recharging = Check(settings, whileKey, bar.label, bar.tip)
+		recharging:SetPoint("TOPLEFT", afterCombat, i == 1 and "TOPLEFT" or "BOTTOMLEFT", i == 1 and 0 or -16,
+			i == 1 and 0 or -2)
 		recharging:HookScript("OnClick", Refresh) -- grey out / enable the option below
 		GreyUnless(recharging, function(db) return db.handleCooldowns end)
 
-		afterCombat = Check(content, bar.prefix .. "AfterCombat", L["Only after combat"],
+		afterCombat = Check(settings, bar.prefix .. "AfterCombat", L["Only after combat"],
 			L["Only within the Calm Timer after a fight (CineMode page): after that it fades even with a " ..
 			"long cooldown still going, and cooldowns used out of fights don't bring it up."])
 		afterCombat:SetPoint("TOPLEFT", recharging, "BOTTOMLEFT", 16, -2)
@@ -12541,42 +12669,41 @@ local function CreateCooldownPanel()
 	end
 
 	-- Each spell's key on its icon (Frames.lua: ns.ApplyCooldownKeybinds).
-	local keybinds = Check(content, "cooldownKeybinds", L["Show keybinds"],
+	local keybinds = Check(settings, "cooldownKeybinds", L["Show keybinds"],
 		L["Shows the key each spell is bound to in the corner of its icon in the Essential and Utility bars, " ..
 		"as on an action button: the key of the first action bar button holding it (or a macro casting it)."])
 	keybinds:SetPoint("TOPLEFT", afterCombat, "BOTTOMLEFT", -16, -8)
 	keybinds:HookScript("OnClick", function() ns.ApplyCooldownKeybinds() end)
 	GreyUnless(keybinds, function(db) return db.handleCooldowns end)
 	-- Its icons' countdown numbers as the game's option says (Frames.lua: ns.ApplyCooldownNumbers).
-	local numbers = Check(content, "cooldownFollowNumbers", L["Numbers follow the game's Show Numbers for Cooldowns"],
+	local numbers = Check(settings, "cooldownFollowNumbers", L["Numbers follow the game's Show Numbers for Cooldowns"],
 		L["The seconds left on the Cooldown Manager's icons show only when the game's Show Numbers for " ..
 		"Cooldowns (Options > Action Bars) is on. Unticked, the Cooldown Manager shows them as it likes."])
 	numbers:SetPoint("TOPLEFT", keybinds, "BOTTOMLEFT", 0, -2)
 	numbers:HookScript("OnClick", function() ns.ApplyCooldownNumbers() end)
 	GreyUnless(numbers, function(db) return db.handleCooldowns end)
 	-- Icons the game turns into a buff show the spell instead (Frames.lua: ns.CooldownNoBuff).
-	local notBuff = Check(content, "cooldownSpellNotBuff", L["Use the spell's cooldown, not its buff"],
+	local notBuff = Check(settings, "cooldownSpellNotBuff", L["Use the spell's cooldown, not its buff"],
 		L["While a spell's buff is up, the game shows the buff on its icon in the Essential and Utility bars " ..
 		"(Read Leyline: Attuned's hour). Ticked, the icon keeps the spell's own picture and cooldown."])
 	notBuff:SetPoint("TOPLEFT", numbers, "BOTTOMLEFT", 0, -2)
 	GreyUnless(notBuff, function(db) return db.handleCooldowns end)
 	-- Stack numbers on tracked buffs of known stacking spells (CooldownStacks.lua).
-	local stacks = Check(content, "cooldownStacks", L["Show stacks on tracked buffs"],
+	local stacks = Check(settings, "cooldownStacks", L["Show stacks on tracked buffs"],
 		L["Shows how many stacks are up on the tracked buff icons of spells that stack, which the game " ..
 		"shows only as on or off: Arcane Blast for now. In fights the game keeps them secret, so they're " ..
 		"counted from your casts."])
 	stacks:SetPoint("TOPLEFT", notBuff, "BOTTOMLEFT", 0, -2)
 	stacks:HookScript("OnClick", function() ns.ApplyCooldownStacks() end)
 	GreyUnless(stacks, function(db) return db.handleCooldowns end)
-	afterCombat = stacks
 
 	-- Each spell's icon: always shown (the game's own), only when ready in
 	-- fights, or only while recharging. A row per spell in the Cooldown
 	-- Manager's spell bars now, grouped by bar as in its settings, then any
 	-- set that aren't in it.
-	local readyHeader = Label(content, "GameFontNormal", L["Spell icons"])
-	readyHeader:SetPoint("TOPLEFT", afterCombat, "BOTTOMLEFT", 2, -18)
-	local readyNote = PageIntro(content, readyHeader,
+	local readyHeader = Label(icons, "GameFontNormal", L["Spell icons"])
+	readyHeader:SetPoint("TOPLEFT", icons, "TOPLEFT", 2, 0)
+	local readyNote = PageIntro(icons, readyHeader,
 		L["Pick when each spell's icon shows. Always: as the game shows it. When ready: out of " ..
 		"fights, and while it recharges, it fades out; it comes back once it's ready, or the seconds in " ..
 		"its box before (empty: %d%% of its cooldown). While recharging: in fights or not, it shows " ..
@@ -12589,17 +12716,18 @@ local function CreateCooldownPanel()
 		"secret in fights, so they go by that alone). Each group has a tab of its own."] .. " " ..
 		L["With Smart set ticked, until you set a bar's mode, its spells with no cooldown go by what they " ..
 		"cost; unticked, by their group's setting."])
-	RecordKey(content, "cooldownReadyOnly") -- (for the page's Reset)
-	RecordKey(content, "cooldownReadyEarly")
-	RecordKey(content, "cooldownEarlyOn")
-	RecordKey(content, "cooldownRechargeOnly")
-	RecordKey(content, "cooldownNeedsPower")
-	RecordKey(content, "cooldownGroupDefaults")
-	RecordKey(content, "cooldownProcOnly")
-	RecordKey(content, "cooldownAlwaysShow")
-	RecordKey(content, "cooldownBuffMode")
-	RecordKey(content, "cooldownSmartDefaults")
-	RecordKey(content, "cooldownFlashReady")
+	RecordKey(icons, "cooldownReadyOnly") -- (for the page's Reset)
+	RecordKey(icons, "cooldownReadyEarly")
+	RecordKey(icons, "cooldownEarlyOn")
+	RecordKey(icons, "cooldownRechargeOnly")
+	RecordKey(icons, "cooldownNeedsPower")
+	RecordKey(icons, "cooldownGroupDefaults")
+	RecordKey(icons, "cooldownProcOnly")
+	RecordKey(icons, "cooldownAlwaysShow")
+	RecordKey(icons, "cooldownBuffMode")
+	RecordKey(icons, "cooldownSmartDefaults")
+	RecordKey(icons, "cooldownFlashReady")
+	RecordKey(icons, "cooldownSituations")
 	-- Columns: the spell, when it shows, (When ready only) its Resources and
 	-- how early it's back, and Flash.
 	local MODE_X, POWER_X, EARLY_X, FLASH_X, ROW_HEIGHT = 200, 360, 440, 556, 26
@@ -12612,20 +12740,20 @@ local function CreateCooldownPanel()
 	local GROUP_ORDER = { "essential", "utility", "buffs", "bars", "other", "otherbuffs" }
 	local picked = { id = "Cooldown Manager/tab", open = "essential" }
 	-- (The panel's top left, under the tabs: placed once they're made.)
-	local panelTop = CreateFrame("Frame", nil, content)
+	local panelTop = CreateFrame("Frame", nil, icons)
 	panelTop:SetSize(1, 1)
 	local panel, groupTabs, ShowTab
-	local spellHeading = Label(content, "GameFontNormalSmall", L["Spell"])
+	local spellHeading = Label(icons, "GameFontNormalSmall", L["Spell"])
 	spellHeading:SetPoint("TOPLEFT", panelTop, "TOPLEFT", 12, -10)
-	local modeHeading = Label(content, "GameFontNormalSmall", L["Icon shows"])
+	local modeHeading = Label(icons, "GameFontNormalSmall", L["Icon shows"])
 	modeHeading:SetPoint("TOPLEFT", panelTop, "TOPLEFT", 12 + MODE_X, -10)
-	local powerHeading = Label(content, "GameFontNormalSmall", L["Resources"])
+	local powerHeading = Label(icons, "GameFontNormalSmall", L["Resources"])
 	powerHeading:SetPoint("TOPLEFT", panelTop, "TOPLEFT", 12 + POWER_X - 4, -10)
-	local earlyHeading = Label(content, "GameFontNormalSmall", L["Show early"] .. " (" .. L["sec"] .. ")")
+	local earlyHeading = Label(icons, "GameFontNormalSmall", L["Show early"] .. " (" .. L["sec"] .. ")")
 	earlyHeading:SetPoint("TOPLEFT", panelTop, "TOPLEFT", 12 + EARLY_X, -10)
-	local flashHeading = Label(content, "GameFontNormalSmall", L["Flash"])
+	local flashHeading = Label(icons, "GameFontNormalSmall", L["Flash"])
 	flashHeading:SetPoint("TOPLEFT", panelTop, "TOPLEFT", 12 + FLASH_X - 4, -10)
-	local noSpells = Label(content, "GameFontDisable", L["Nothing in the Cooldown Manager right now."])
+	local noSpells = Label(icons, "GameFontDisable", L["Nothing in the Cooldown Manager right now."])
 	-- (Where the spell list goes: placed under the Flash style, once it's made.)
 
 	-- A heading over each bar's spells, as the Cooldown Manager's settings group them.
@@ -12658,6 +12786,18 @@ local function CreateCooldownPanel()
 	local groupOf, groupSpells = {}, {} -- spell ID -> its group; group -> its spells (as last listed)
 	local buffGroupOf = {} -- (the same for tracked buffs and bars: a spell can be a cooldown and a buff)
 
+	-- The situation the grid shows (CooldownSituations.lua's chips, made
+	-- below): false for Default. Store: where its settings are kept, the
+	-- profile's own for Default, else the situation's (the same tables).
+	-- In a situation a row can also follow: "inherit", Same as group or Same
+	-- as Default, not set there.
+	local sits
+	local function View() return sits and sits.View() or false end
+	local function Store()
+		local sit = View()
+		return sit and sit.set or ns.GetDB()
+	end
+
 	-- Each group's settings (db.cooldownGroupDefaults[group]: mode, power,
 	-- early = seconds or nil for the default share; a mode not set: the
 	-- built-in one, ns.COOLDOWN_GROUP_MODES). A spell not set on its own
@@ -12665,34 +12805,52 @@ local function CreateCooldownPanel()
 	-- to following it. A spell made When ready on its own starts with its
 	-- group's Resources and Show early.
 	local function GroupDefaults(group)
-		local all = ns.GetDB().cooldownGroupDefaults
+		local all = Store().cooldownGroupDefaults
 		all[group] = all[group] or {}
 		return all[group]
+	end
+
+	-- (A row following, in a situation: its group's there, or Default's, and
+	-- what that is now.)
+	local function ModeText(mode) return ns.COOLDOWN_MODE_TEXT[mode] or tostring(mode) end
+	local function SameAs(fromGroup, mode)
+		return (fromGroup and L["Group's (%s)"] or L["Default's (%s)"]):format(ModeText(mode))
 	end
 
 	local OWN_MODES = { ready = "cooldownReadyOnly", recharge = "cooldownRechargeOnly", proc = "cooldownProcOnly",
 		always = "cooldownAlwaysShow" }
 	local function ModeOf(spell)
-		return (ns.CooldownSpellMode(spell, groupOf[spell]))
+		local sit = View()
+		if sit then
+			local mode, from = ns.CooldownSitSpellMode(sit, spell, groupOf[spell])
+			return from == "spell" and mode or "inherit"
+		end
+		return (ns.CooldownSpellMode(spell, groupOf[spell], false))
 	end
-	-- (nil: back to following its group)
+	-- (nil or "inherit": back to following its group)
 	local function SetSpellMode(spell, mode)
-		local db = ns.GetDB()
-		if mode == "ready" and not db.cooldownReadyOnly[spell] then
-			-- (Newly When ready: as it was following its group, or its group's
-			-- Resources and Show early; the seconds box empty, the default
-			-- share, unless the group says.)
-			local _, power, early = ns.CooldownGroupSettings(groupOf[spell] or "other")
-			db.cooldownEarlyOn[spell], db.cooldownReadyEarly[spell] = true, early
-			db.cooldownNeedsPower[spell] = power or nil
+		local store = Store()
+		if mode == "inherit" then mode = nil end
+		if mode == "ready" and not store.cooldownReadyOnly[spell] then
+			-- (Newly When ready: as it was if it was When ready, else its
+			-- group's Resources and Show early; the seconds box empty, the
+			-- default share, unless the group says.)
+			local group = groupOf[spell] or "other"
+			local was, _, power, earlyOn, early = ns.CooldownSpellMode(spell, group, View())
+			if was ~= "ready" then
+				earlyOn = true
+				power, early = select(2, ns.CooldownGroupSettings(group, View()))
+			end
+			store.cooldownEarlyOn[spell], store.cooldownReadyEarly[spell] = earlyOn and true or nil, early
+			store.cooldownNeedsPower[spell] = power or nil
 		end
 		for value, key in pairs(OWN_MODES) do
-			db[key][spell] = value == mode or nil
+			store[key][spell] = value == mode or nil
 		end
 	end
 	-- A spell following its group's When ready gets its own (the same) before one part changes.
 	local function OwnReady(spell)
-		if not ns.GetDB().cooldownReadyOnly[spell] then SetSpellMode(spell, "ready") end
+		if not Store().cooldownReadyOnly[spell] then SetSpellMode(spell, "ready") end
 	end
 
 	-- What a row reads and sets, for a spell (key: its ID) or a group's
@@ -12704,30 +12862,41 @@ local function CreateCooldownPanel()
 	local SPELL = {
 		Mode = ModeOf,
 		SetMode = SetSpellMode,
-		Power = function(spell) return select(3, ns.CooldownSpellMode(spell, groupOf[spell])) end,
+		Power = function(spell) return select(3, ns.CooldownSpellMode(spell, groupOf[spell], View())) end,
 		SetPower = function(spell, value)
 			OwnReady(spell)
-			ns.GetDB().cooldownNeedsPower[spell] = value or nil
+			Store().cooldownNeedsPower[spell] = value or nil
 		end,
 		Early = function(spell)
-			local _, _, _, earlyOn, seconds = ns.CooldownSpellMode(spell, groupOf[spell])
+			local _, _, _, earlyOn, seconds = ns.CooldownSpellMode(spell, groupOf[spell], View())
 			return EarlyText(earlyOn, seconds)
 		end,
 		SetEarly = function(spell, seconds)
 			OwnReady(spell)
-			local db = ns.GetDB()
-			db.cooldownEarlyOn[spell], db.cooldownReadyEarly[spell] = true, seconds
+			local store = Store()
+			store.cooldownEarlyOn[spell], store.cooldownReadyEarly[spell] = true, seconds
 		end,
 		Length = function(spell) return ns.CooldownLength(spell) end,
-		Flash = function(spell) return ns.CooldownSpellFlash(spell, groupOf[spell]) end,
-		SetFlash = function(spell, value) ns.GetDB().cooldownFlashReady[spell] = value end,
+		Flash = function(spell) return ns.CooldownSpellFlash(spell, groupOf[spell], View()) end,
+		SetFlash = function(spell, value) Store().cooldownFlashReady[spell] = value end,
+		Inherit = function(spell)
+			local sit, group = View(), groupOf[spell]
+			local _, from = ns.CooldownSitSpellMode(sit, spell, group)
+			return SameAs(from == "group", (ns.CooldownSpellMode(spell, group, sit)))
+		end,
 		modes = MODES,
 		tip = L["When this spell's icon shows in the Cooldown Manager."],
 	}
+	local function GroupMode(group)
+		local sit = View()
+		if sit then return ns.CooldownSitGroup(sit, group) or "inherit" end
+		return (ns.CooldownGroupSettings(group, false))
+	end
+	local function GroupInherit(group) return SameAs(false, (ns.CooldownGroupSettings(group, false))) end
 	local GROUP = {
-		Mode = function(group) return (ns.CooldownGroupSettings(group)) end,
+		Mode = GroupMode,
 		SetMode = function(group, mode)
-			GroupDefaults(group).mode = mode
+			GroupDefaults(group).mode = mode ~= "inherit" and mode or nil
 			for _, spell in ipairs(groupSpells[group] or {}) do
 				SetSpellMode(spell, nil)
 			end
@@ -12736,25 +12905,26 @@ local function CreateCooldownPanel()
 		SetPower = function(group, value)
 			GroupDefaults(group).power = value or nil
 			for _, spell in ipairs(groupSpells[group] or {}) do
-				if ns.GetDB().cooldownReadyOnly[spell] then SPELL.SetPower(spell, value) end
+				if Store().cooldownReadyOnly[spell] then SPELL.SetPower(spell, value) end
 			end
 		end,
 		Early = function(group) return EarlyText(true, GroupDefaults(group).early) end,
 		SetEarly = function(group, seconds)
 			GroupDefaults(group).early = seconds
 			for _, spell in ipairs(groupSpells[group] or {}) do
-				if ns.GetDB().cooldownReadyOnly[spell] then SPELL.SetEarly(spell, seconds) end
+				if Store().cooldownReadyOnly[spell] then SPELL.SetEarly(spell, seconds) end
 			end
 		end,
 		Length = function() return nil end,
-		Flash = function(group) return ns.CooldownGroupFlash(group) end,
+		Flash = function(group) return ns.CooldownGroupFlash(group, View()) end,
 		SetFlash = function(group, value)
 			-- (Kept even when off: Smart set turns some groups' on until they're set.)
 			GroupDefaults(group).flash = value and true or false
 			for _, spell in ipairs(groupSpells[group] or {}) do
-				ns.GetDB().cooldownFlashReady[spell] = nil
+				Store().cooldownFlashReady[spell] = nil
 			end
 		end,
+		Inherit = GroupInherit,
 		modes = MODES,
 		tip = L["Sets every spell in this group to this. Spells you haven't set on their own follow it, " ..
 			"and a spell here made When ready on its own starts with its Resources and Show early."],
@@ -12763,25 +12933,45 @@ local function CreateCooldownPanel()
 	-- (No Resources, Show early or Flash: those are for spells.)
 	local function NoValue() return nil end
 	local BUFF = {
-		Mode = function(spell) return (ns.CooldownBuffMode(spell, buffGroupOf[spell])) end,
-		SetMode = function(spell, mode) ns.GetDB().cooldownBuffMode[spell] = mode end,
+		Mode = function(spell)
+			local sit = View()
+			if sit then
+				local mode, from = ns.CooldownSitBuffMode(sit, spell, buffGroupOf[spell])
+				return from == "spell" and mode or "inherit"
+			end
+			return (ns.CooldownBuffMode(spell, buffGroupOf[spell], false))
+		end,
+		SetMode = function(spell, mode) Store().cooldownBuffMode[spell] = mode ~= "inherit" and mode or nil end,
 		Power = NoValue, SetPower = NoValue, Early = NoValue, SetEarly = NoValue, Length = NoValue,
+		Inherit = function(spell)
+			local sit, group = View(), buffGroupOf[spell]
+			local _, from = ns.CooldownSitBuffMode(sit, spell, group)
+			return SameAs(from == "group", (ns.CooldownBuffMode(spell, group, sit)))
+		end,
 		modes = BUFF_MODES,
 		tip = L["When this buff's icon or bar shows. The game keeps your buffs secret in fights, so these go " ..
 			"by whether you're in one."],
 	}
 	local BUFF_GROUP_ACCESS = {
-		Mode = function(group) return (ns.CooldownGroupSettings(group)) end,
+		Mode = GroupMode,
 		SetMode = function(group, mode)
-			GroupDefaults(group).mode = mode
+			GroupDefaults(group).mode = mode ~= "inherit" and mode or nil
 			for _, spell in ipairs(groupSpells[group] or {}) do
-				ns.GetDB().cooldownBuffMode[spell] = nil
+				Store().cooldownBuffMode[spell] = nil
 			end
 		end,
 		Power = NoValue, SetPower = NoValue, Early = NoValue, SetEarly = NoValue, Length = NoValue,
+		Inherit = GroupInherit,
 		modes = BUFF_MODES,
 		tip = L["Sets every buff in this group to this. Buffs you haven't set on their own follow it."],
 	}
+	-- A row's choices: in a situation, following (Same as...) first.
+	local function ModesFor(access, key)
+		if not View() or key == nil then return access.modes end
+		local list = { { value = "inherit", text = access.Inherit(key) } }
+		for _, choice in ipairs(access.modes) do list[#list + 1] = choice end
+		return list
+	end
 
 	local GetName = (C_Spell and C_Spell.GetSpellName) or function(id) return (GetSpellInfo(id)) end
 	local GetIcon = (C_Spell and C_Spell.GetSpellTexture) or GetSpellTexture
@@ -12792,7 +12982,7 @@ local function CreateCooldownPanel()
 	-- tick and seconds box. access: SPELL or GROUP; row.key what it's for.
 	local function NewRow(access, font)
 		local row = { access = access, font = font }
-		row.name = Label(content, font, "")
+		row.name = Label(icons, font, "")
 		row.name:SetWidth(MODE_X - 10)
 		row.name:SetJustifyH("LEFT")
 		row.name:SetWordWrap(false)
@@ -12802,12 +12992,12 @@ local function CreateCooldownPanel()
 			access.SetMode(row.key, mode)
 			Refresh() -- (a group's change shows on its spells' rows too)
 		end
-		local ok, dropdown = ns.MenuDropdown(content)
+		local ok, dropdown = ns.MenuDropdown(icons)
 		if ok and dropdown and dropdown.SetupMenu then
 			dropdown:SetWidth(150)
 			dropdown.searchSkip = true
 			dropdown:SetupMenu(function(_, rootDescription)
-				for _, choice in ipairs(access.modes) do
+				for _, choice in ipairs(ModesFor(access, row.key)) do
 					rootDescription:CreateRadio(choice.text,
 						function() return row.key ~= nil and access.Mode(row.key) == choice.value end,
 						function() Pick(choice.value) end)
@@ -12815,11 +13005,11 @@ local function CreateCooldownPanel()
 			end)
 			row.mode = dropdown
 		else
-			local button = ns.PanelButton(content)
+			local button = ns.PanelButton(icons)
 			button:SetSize(150, 22)
 			button:SetScript("OnClick", function()
 				local now = row.key ~= nil and access.Mode(row.key)
-				local modes = access.modes
+				local modes = ModesFor(access, row.key)
 				for i, choice in ipairs(modes) do
 					if choice.value == now then
 						Pick(modes[i % #modes + 1].value)
@@ -12833,7 +13023,7 @@ local function CreateCooldownPanel()
 
 		-- Resources (When ready only): ticked, ready also means you have the
 		-- power to cast it (Maelstrom, mana...).
-		local power = Check(content, nil, "", L["Ready also needs the resources to cast it: Maelstrom, " ..
+		local power = Check(icons, nil, "", L["Ready also needs the resources to cast it: Maelstrom, " ..
 			"mana, rage and so on. Until you have them the icon stays faded."], function(value)
 			if row.key ~= nil then
 				access.SetPower(row.key, value)
@@ -12847,7 +13037,7 @@ local function CreateCooldownPanel()
 		-- Seconds before it's ready that it comes back: empty for the default,
 		-- 0 for once it's ready. (Stored as before: Show early on or off, and
 		-- its seconds.)
-		local early = ns.SkinEditBox(CreateFrame("EditBox", nil, content, "InputBoxTemplate"))
+		local early = ns.SkinEditBox(CreateFrame("EditBox", nil, icons, "InputBoxTemplate"))
 		early:SetSize(36, 20)
 		early:SetAutoFocus(false)
 		early:SetNumeric(true)
@@ -12886,7 +13076,7 @@ local function CreateCooldownPanel()
 		-- Flash (any mode): its icon flashes for a few seconds as its cooldown
 		-- ends, shown for it even if its mode has it faded.
 		if access.SetFlash then
-			local flash = Check(content, nil, "", L["Flashes the icon for a few seconds when the spell's " ..
+			local flash = Check(icons, nil, "", L["Flashes the icon for a few seconds when the spell's " ..
 				"cooldown ends."], function(value)
 				if row.key ~= nil then
 					access.SetFlash(row.key, value)
@@ -12907,7 +13097,7 @@ local function CreateCooldownPanel()
 			if key == nil then return end
 			local mode = access.Mode(key)
 			if not self.SetupMenu then
-				for _, choice in ipairs(access.modes) do
+				for _, choice in ipairs(ModesFor(access, key)) do
 					if choice.value == mode then self:SetText(choice.text) end
 				end
 			end
@@ -12970,16 +13160,19 @@ local function CreateCooldownPanel()
 	local function GroupRow(group)
 		if not groupRows[group] then
 			local row = NewRow(BUFF_GROUP[group] and BUFF_GROUP_ACCESS or GROUP, "GameFontNormal")
-			row.line = content:CreateTexture(nil, "ARTWORK")
+			row.line = icons:CreateTexture(nil, "ARTWORK")
 			row.line:SetColorTexture(1, 0.82, 0, 0.4)
 			row.line:SetSize(GROUP_WIDTH, 1)
 			if group ~= "other" and (not BUFF_GROUP[group] or group == "buffs") then
-				row.center = Check(content, nil, L["Close the gaps (centered)"], group == "buffs"
+				row.center = Check(icons, nil, L["Close the gaps (centered)"], group == "buffs"
 					and L["The buffs this bar shows sit together in their order, centered on the bar, instead of " ..
 					"inactive or faded ones leaving gaps. Edit Mode shows the game's own layout."]
 					or L["The icons this bar shows sit together in their order, centered on the bar, instead of " ..
 					"faded ones leaving gaps. Edit Mode shows the game's own layout."], function(value)
-					GroupDefaults(group).center = value -- (false kept: Utility's is on until set)
+					-- (Default's alone: where the icons sit is the bar's, in every situation.)
+					local all = ns.GetDB().cooldownGroupDefaults
+					all[group] = all[group] or {}
+					all[group].center = value -- (false kept: Utility's is on until set)
 				end)
 				row.center.Refresh = function(self)
 					self:SetChecked(ns.CooldownGroupCentered(group))
@@ -12993,15 +13186,16 @@ local function CreateCooldownPanel()
 	-- Every group's spells, then those set on their own that aren't in the
 	-- Cooldown Manager now (spells, then buffs).
 	function ListSpells()
-		local db = ns.GetDB()
+		local db, store = ns.GetDB(), Store()
 		local list = ns.CooldownManagerSpells()
 		local listed = { spell = {}, buff = {} }
 		for _, spell in ipairs(list) do
 			listed[BUFF_GROUP[spell.group] and "buff" or "spell"][spell.id] = true
 		end
 		for _, set in ipairs({
-			{ "other", "spell", { db.cooldownReadyOnly, db.cooldownRechargeOnly, db.cooldownProcOnly } },
-			{ "otherbuffs", "buff", { db.cooldownBuffMode } },
+			{ "other", "spell", { db.cooldownReadyOnly, db.cooldownRechargeOnly, db.cooldownProcOnly,
+				store.cooldownReadyOnly, store.cooldownRechargeOnly, store.cooldownProcOnly, store.cooldownAlwaysShow } },
+			{ "otherbuffs", "buff", { db.cooldownBuffMode, store.cooldownBuffMode } },
 		}) do
 			local group, seen, missing = set[1], listed[set[2]], {}
 			for _, own in ipairs(set[3]) do
@@ -13082,7 +13276,7 @@ local function CreateCooldownPanel()
 	local tabList = {}
 	for i, group in ipairs(GROUP_ORDER) do tabList[i] = { TAB_NAMES[group], GROUP_NAMES[group] } end
 	local base, height
-	panel, groupTabs, ShowTab, base, height = ns.FolderTabs(content, tabList, function(i)
+	panel, groupTabs, ShowTab, base, height = ns.FolderTabs(icons, tabList, function(i)
 		SectionState.Save(picked, GROUP_ORDER[i])
 		ListSpells()
 		Refresh()
@@ -13098,7 +13292,7 @@ local function CreateCooldownPanel()
 	-- cost (ns.SmartCooldownMode): When ready with Resources for a resource you
 	-- build up (Maelstrom), When it procs for the rest. Off: by their group's
 	-- setting.
-	local smartSet = Check(content, "cooldownSmartDefaults", L["Smart set"],
+	local smartSet = Check(icons, "cooldownSmartDefaults", L["Smart set"],
 		L["Ticked: the spells with no cooldown you haven't set yourself go by what they cost, until you set " ..
 		"their group's mode: When ready with Resources if they spend a resource you build up (like Maelstrom), " ..
 		"else When it procs (like Lightning Bolt). Spells with a cooldown or charges go by their group's " ..
@@ -13114,16 +13308,16 @@ local function CreateCooldownPanel()
 	local SPELL_ICON_KEYS = { cooldownReadyOnly = true, cooldownReadyEarly = true, cooldownEarlyOn = true,
 		cooldownRechargeOnly = true, cooldownNeedsPower = true, cooldownGroupDefaults = true,
 		cooldownProcOnly = true, cooldownAlwaysShow = true, cooldownBuffMode = true, cooldownSmartDefaults = true,
-		cooldownFlashReady = true }
-	local iconsReset = ns.PanelButton(content)
+		cooldownFlashReady = true, cooldownSituations = true }
+	local iconsReset = ns.PanelButton(icons)
 	iconsReset:SetSize(60, 20)
 	iconsReset:SetPoint("LEFT", smartSet.Text or smartSet.text or smartSet, "RIGHT", 16, 0)
 	iconsReset:SetText(L["Reset"])
 	iconsReset.searchSkip = true
-	Tooltip(iconsReset, L["Put every spell's, buff's and group's icon setting, and Smart set, back to the " ..
-		"active profile's own."])
+	Tooltip(iconsReset, L["Put every spell's, buff's and group's icon setting, Smart set and the situations " ..
+		"back to the active profile's own."])
 	iconsReset:SetScript("OnClick", function()
-		StaticPopup_Show("CINEMATIC_RESET_PART", nil, nil, { content = content, keys = SPELL_ICON_KEYS,
+		StaticPopup_Show("CINEMATIC_RESET_PART", nil, nil, { icons = icons, keys = SPELL_ICON_KEYS,
 			after = function()
 				ListSpells()
 				Refresh()
@@ -13132,18 +13326,18 @@ local function CreateCooldownPanel()
 
 	-- The Flash style, for every spell with Flash ticked (Frames.lua): a
 	-- glow, the icon growing with each beat, a colored border, and how long.
-	local flashLabel = Label(content, "GameFontHighlight", L["Flash style:"])
-	flashLabel:SetPoint("TOPLEFT", smartSet, "BOTTOMLEFT", 2, -12)
-	local flashGlow = Check(content, "cooldownFlashGlow", L["Glow"],
+	local flashLabel = Label(settings, "GameFontHighlight", L["Flash style:"])
+	flashLabel:SetPoint("TOPLEFT", stacks, "BOTTOMLEFT", 2, -18)
+	local flashGlow = Check(settings, "cooldownFlashGlow", L["Glow"],
 		L["The icon glows bright and dim while it flashes."])
 	flashGlow:SetPoint("LEFT", flashLabel, "RIGHT", 8, 0)
-	local flashGrow = Check(content, "cooldownFlashGrow", L["Grow"],
+	local flashGrow = Check(settings, "cooldownFlashGrow", L["Grow"],
 		L["The icon grows a little and back with each beat while it flashes."])
 	flashGrow:SetPoint("LEFT", flashGlow.Text or flashGlow.text or flashGlow, "RIGHT", 12, 0)
-	local flashBorder = Check(content, "cooldownFlashBorder", L["Border"],
+	local flashBorder = Check(settings, "cooldownFlashBorder", L["Border"],
 		L["A border in the color beside it around the icon while it flashes."])
 	flashBorder:SetPoint("LEFT", flashGrow.Text or flashGrow.text or flashGrow, "RIGHT", 12, 0)
-	local flashSwatch = CreateFrame("Button", nil, content)
+	local flashSwatch = CreateFrame("Button", nil, settings)
 	flashSwatch:SetSize(20, 20)
 	flashSwatch:SetPoint("LEFT", flashBorder.Text or flashBorder.text or flashBorder, "RIGHT", 6, 0)
 	local swatchEdge = flashSwatch:CreateTexture(nil, "BACKGROUND")
@@ -13168,30 +13362,42 @@ local function CreateCooldownPanel()
 		end)
 	end)
 	controls[#controls + 1] = flashSwatch
-	local flashTest = ns.PanelButton(content)
+	local flashTest = ns.PanelButton(settings)
 	flashTest:SetSize(60, 20)
 	flashTest:SetPoint("LEFT", flashSwatch, "RIGHT", 16, 0)
 	flashTest:SetText(L["Test"])
 	flashTest.searchSkip = true
 	Tooltip(flashTest, L["Flashes every icon in the Essential and Utility bars once, in this style."])
 	flashTest:SetScript("OnClick", function() ns.TestCooldownFlash() end)
-	local flashTime = Slider(content, "cooldownFlashTime", L["Flash for"], 1, 6, 0.5,
+	local flashTime = Slider(settings, "cooldownFlashTime", L["Flash for"], 1, 6, 0.5,
 		function(value) return L["%.1f sec"]:format(value) end)
 	flashTime:SetPoint("TOPLEFT", flashLabel, "BOTTOMLEFT", 0, -28)
 	Tooltip(flashTime, L["How long the icon flashes once its cooldown ends."])
 	for _, control in ipairs({ flashGlow, flashGrow, flashBorder, flashTime }) do
 		GreyUnless(control, function(db) return db.handleCooldowns end)
 	end
-	panelTop:SetPoint("TOPLEFT", flashTime, "BOTTOMLEFT", 0, -16 - height)
-	noSpells:SetPoint("TOPLEFT", flashTime, "BOTTOMLEFT", 0, -20)
+	-- The situations (CooldownSituations.lua): Default and each of yours, the
+	-- picked one's When under them; the spells' tabs show the picked one's settings.
+	sits = ns.BuildCooldownSituations(icons, {
+		width = GROUP_WIDTH,
+		Tooltip = Tooltip,
+		Enabled = function() return Handled() end,
+		Changed = function()
+			ListSpells()
+			Refresh()
+			FitContentHeight(content)
+		end,
+	})
+	sits:SetPoint("TOPLEFT", smartSet, "BOTTOMLEFT", 2, -16)
+	controls[#controls + 1] = sits
+	panelTop:SetPoint("TOPLEFT", sits, "BOTTOMLEFT", 0, -12 - height)
+	noSpells:SetPoint("TOPLEFT", sits, "BOTTOMLEFT", 0, -16)
 
-	-- Addon Frame Links (last, under the spells' panel): which addon's bars they are (FrameLinks.lua).
-	local links = ns.BuildLinkSection(content, panel, "cooldowns")
 	local shown = PageShown(Refresh, content)
 	canvas:SetScript("OnShow", function()
 		ListSpells()
 		shown()
-		links.Show()
+		TabsShown()
 	end)
 	canvas:Hide()
 	RegisterSubpage(canvas, L["Cooldown Manager"])

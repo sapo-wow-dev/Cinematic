@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-13", page = "Cooldown Manager", title = "Cooldown situations",
+		text = "The Cooldown Manager page can use different spell icon settings in different places, like " ..
+		"dungeons out of combat. Add a row, pick where and when it's used, and change just what you need." },
 	{ date = "2026-11-13", page = "Game settings", title = "Game Settings page",
 		text = "Community > Game Settings lists the game's own settings Cinematic changes for a while, with ours, " ..
 		"yours and the value now. Keep yours on any of them, or let Cinematic use ours again." },

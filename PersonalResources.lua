@@ -604,6 +604,11 @@ function ns.CreatePersonalResourcesPanel(kit)
 		if ns.RefreshPersonalStyle then ns.RefreshPersonalStyle() end
 		if ns.UpdateManaCost then ns.UpdateManaCost() end
 	end)
+	-- Two tabs (Options.lua's ns.PageTabsBelow): the page's settings, and Addon Frame Links.
+	local _, _, TabsShown, AdoptTab = ns.PageTabsBelow(content, switch, {
+		{ L["Settings"], L["When your player frame, pet frame and personal resource display stay up or wait."] },
+		{ L["Frame Links"], L["Which supported addon's frames stand in for these bars."] },
+	}, "Personal Resources/page", 2, "prd", 1)
 	local stack = kit.Stack(switch, "check")
 	local function Tick(key, label, tip, enabledBy)
 		local check = stack:Add(kit.Check(content, key, label, tip), "check")
@@ -786,13 +791,12 @@ function ns.CreatePersonalResourcesPanel(kit)
 	redrawer.Refresh = Redraw -- (the grid's Mana text)
 	kit.AddControl(redrawer)
 
-	-- Addon Frame Links (last): which addon's bars they are (FrameLinks.lua).
-	local links = ns.BuildLinkSection(content, stack.last, "prd")
+	AdoptTab(switch) -- (everything above onto the Settings tab)
 
 	canvas:SetScript("OnShow", kit.PageShown(function()
 		for text, Name in pairs(named) do text:SetText(Name()) end
 		kit.Refresh()
-		links.Show()
+		TabsShown()
 	end, content))
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Personal Resources", L["Health & Resources"])

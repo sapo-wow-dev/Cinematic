@@ -445,30 +445,36 @@ end
 
 -- A page's Addon Frame Links section, last on the page, under anchor: its
 -- band (opens and closes, as the Chat page's sections) and the group's rows.
--- Returns it; section.Show() from the page's OnShow.
-function ns.BuildLinkSection(content, anchor, groupKey)
+-- flat: no band, always open (a page's tab of its own: the Cooldown
+-- Manager's Frame Links). Returns it; section.Show() from the page's OnShow.
+function ns.BuildLinkSection(content, anchor, groupKey, flat)
 	local kit = ns.GRID_KIT
+	local top = flat and 0 or kit.BAND_HEIGHT
 	local frame = CreateFrame("Frame", nil, content)
-	frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 2, -18)
+	frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 2, flat and 0 or -18)
 	frame:SetPoint("RIGHT", content, "RIGHT", -16, 0)
-	frame:SetHeight(kit.BAND_HEIGHT)
+	frame:SetHeight(math.max(top, 1))
 	local body = CreateFrame("Frame", nil, frame)
-	body:SetPoint("TOPLEFT", 0, -kit.BAND_HEIGHT)
-	body:SetPoint("TOPRIGHT", 0, -kit.BAND_HEIGHT)
+	body:SetPoint("TOPLEFT", 0, -top)
+	body:SetPoint("TOPRIGHT", 0, -top)
 	body:SetHeight(1)
 	body.searchAlways = true
-	local section = { frame = frame, body = body, open = false, id = "Links/" .. groupKey }
+	local section = { frame = frame, body = body, open = flat and true or false, id = "Links/" .. groupKey }
 	local function Layout()
-		kit.SectionState.Restore(section)
+		if not flat then
+			kit.SectionState.Restore(section)
+			section.nameRow:SetOpen(section.open)
+		end
 		body:SetShown(section.open)
-		section.nameRow:SetOpen(section.open)
-		frame:SetHeight(kit.BAND_HEIGHT + (section.open and (kit.ContentDepth(body) or 0) + 10 or 0))
+		frame:SetHeight(top + (section.open and (kit.ContentDepth(body) or 0) + 10 or 0))
 		kit.FitContentHeight(content)
 	end
-	section.nameRow = kit.SectionBand(frame, L["Addon Frame Links"], function()
-		kit.SectionState.Save(section, not section.open)
-		Layout()
-	end)
+	if not flat then
+		section.nameRow = kit.SectionBand(frame, L["Addon Frame Links"], function()
+			kit.SectionState.Save(section, not section.open)
+			Layout()
+		end)
+	end
 	function body.openSection()
 		if not section.open then
 			kit.SectionState.Save(section, true)
@@ -486,7 +492,7 @@ function ns.BuildLinkSection(content, anchor, groupKey)
 	-- (Open at first only while it has something: an addon's frame in use,
 	-- or a pick waiting. Opened or closed with a click, it stays so.)
 	function section.Show()
-		if ns.db and ns.db.sectionsOpen and ns.db.sectionsOpen[section.id] == nil then
+		if not flat and ns.db and ns.db.sectionsOpen and ns.db.sectionsOpen[section.id] == nil then
 			section.open = ns.LinkBandOpen(groupKey)
 		end
 		band.Refresh()

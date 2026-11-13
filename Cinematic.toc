@@ -71,6 +71,7 @@ Support\TitanPanel.lua
 Support\TomTom.lua
 Frames.lua
 CooldownStacks.lua
+CooldownSituations.lua
 HealVisionFrames.lua
 Chat.lua
 ChatCopy.lua
