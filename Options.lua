@@ -279,7 +279,8 @@ local function PageIntro(parent, title, text, under, warn)
 	Tooltip(help, text)
 	help.searchNote = text
 	help.searchEdges = { top = title, bottom = title, left = title, right = help }
-	if first then parent.pageHelp, parent.pageTitle = help, title end
+	if first then parent.pageHelp, parent.pageTitle = help, title
+	elseif title == parent.pageHelp then parent.pageHelpLast = help end -- (a triangle past the "?": the switch goes past it)
 	return anchor
 end
 
@@ -881,7 +882,7 @@ local function MakeHeaderSwitch(content, switch)
 	if switch.header or not (switch.check and content.pageHelp) then return end
 	local toggle = CreateFrame("Button", nil, content.pageHelp:GetParent())
 	toggle:SetSize(46, 18)
-	toggle:SetPoint("LEFT", content.pageHelp, "RIGHT", 8, 0)
+	toggle:SetPoint("LEFT", content.pageHelpLast or content.pageHelp, "RIGHT", 8, 0)
 	toggle:SetFrameLevel(content.pageHelp:GetFrameLevel())
 	toggle.key, toggle.check = switch.key, switch.check
 	local edge = toggle:CreateTexture(nil, "BACKGROUND")
