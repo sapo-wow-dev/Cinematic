@@ -239,8 +239,8 @@ local DEFAULTS = {
 	buffPeekTime = 3,           -- seconds they stay up for a buff
 	debuffPeekTime = 3,         -- ...and for a debuff
 	-- Buffs or debuffs that never bring them up (spell IDs or names; 8326/20584:
-	-- Ghost; the rest ns.LUST_DEBUFFS).
-	buffPeekIgnore = "2479, Plainsrunning, 8326, 20584, 57724, 57723, 80354, 95809, 264689, 390435",
+	-- Ghost; 1953: Blink; the rest ns.LUST_DEBUFFS).
+	buffPeekIgnore = "2479, Plainsrunning, 8326, 20584, 57724, 57723, 80354, 95809, 264689, 390435, 1953",
 	buffHoverPadX = 40,         -- how far beside the buff icons hovering reveals them (UI units)
 	buffHoverPadY = 40,         -- ...and above and below
 	mouseover = true,      -- hovering a faded element reveals it
