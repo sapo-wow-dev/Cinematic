@@ -236,6 +236,12 @@ GetCameraZoom gives the zoom's end at once (every frame read in the run). So the
 
 Then (that evening) the offset capped at 1.5 yards (OFFSET_SAFE): "felt a little better, still not perfect smooth". A second `walls` run, the same walk with no offset at all and then as built (capped): **the two looked the same**. The game alone hugged the wall, pulled in and out and hid you behind the trunk just as often. So what's left near walls is the game's own camera; the cap only stops the offset making it worse. The cost: past about 6 yards the spot isn't held (12.5% instead of 20% at 12 yards; the sim's spot and bear checks fail by that).
 
+#### Map: walk (Stormwind streets, 2026-11-12, zoom 15, offset 1.5, your follow style 0)
+
+`map walk`: 12 trials of walk, turn left, stop, one game setting each (follow styles 0/1/2/4, terrain tilt, tilt, head movement and two of its knobs, bobbing). All the settings exist on Forever. Read off the recording as the whole picture's frame-to-frame jitter (its move less its 0.3 s average) while walking: trials 1, 2 and 12 had the same settings and came out 0.09 / 0.27 / 0.55 sideways and 0.20 / 0.24 / 2.38 up and down, as far apart as any two settings. So the walks themselves (mouse turns, ground, a turn left or none: in 6, 11 and 12 your facing never changed) swamped whatever the settings did: **no setting stood out**. A clean answer would need the same walk every time, which only a script could do (an addon can't walk you).
+
+Second walk run (flat open ground, zoom 9.6, keyboard only: W, then the turn key; A is strafe for the user, so turns were the arrow key, held for different times: 10 to 160 degrees). Jitter, sideways / up and down: as built 1.71 / 0.38, 2.62 / 0.43, 2.06 / 0.62 (the spread of the same settings); follow style 2 2.34 / 0.61, style 4 2.62 / 0.54, terrain tilt 3.05 / 0.57, tilt 2.96 / 0.41, head movement 1 2.43 / 0.58, bobbing 1.20 / 0.57. Up and down all inside the spread; sideways follows how much each walk turned (tilt turned most, bobbing least). **None of the game's walking settings steadies the view**: what shake there is isn't theirs to fix.
+
 What the first two tries taught: a turn or tilt speed setting written low is put back by Core.lua's speed watch unless held with `ns.SetHeldSpeed`; `SetView` blends over about a second; the standing-still and chat cameras start mid-run unless the run holds the view (`ns.RegisterCamera`); the recording's clock ran 1.0 s ahead of the log; block matching fails on dark grass, tracking the hair's colour works.
 
 ## Build phases

@@ -1163,6 +1163,86 @@ do
 			#list))
 		C_Timer.After(1, function() if run == this and not run.at then TalkBegin(1) end end)
 	end
+	-- Run 5, "walk": what the game's settings do while you move (2026-11-12),
+	-- over the Shoulder Cam as built. Per trial you're told, by the box: stand,
+	-- WALK forward, keep walking and TURN LEFT (hold A), STOP; then its
+	-- settings go back to yours. Logged per trial: its start and, every 0.1 s,
+	-- your speed and facing (to line the recording up); the view's moves are
+	-- read off the recording. A setting this client hasn't got is named in the
+	-- trial's start line.
+	-- (First run, 2026-11-12, Stormwind streets: trials with the same settings
+	-- came out as far apart as any two settings, the walks too uneven (mouse
+	-- turns, a turn or none, slopes). So the second: on flat open ground, no
+	-- mouse, and as built three times through it, to show how far apart the
+	-- same settings come out; a setting counts only if it's further off.)
+	local MAP_WALK = {
+		{ "as built" },
+		{ "follow style 2 (always)", { cameraSmoothStyle = "2" } },
+		{ "follow style 4 (smart)", { cameraSmoothStyle = "4" } },
+		{ "terrain tilt", { cameraTerrainTilt = "1" } },
+		{ "as built (2nd)" },
+		{ "tilt (dynamic pitch)", { [P] = "1" } },
+		{ "head movement 1", { [H] = "1" } },
+		{ "bobbing", { cameraBobbing = "1" } },
+		{ "as built (3rd)" },
+	}
+	-- (Seconds into a trial: what the box says from then.)
+	local WALK_STEPS = {
+		{ 0, "stand still, hands off the mouse", 0.7, 0.7, 0.7 }, { 1.5, "WALK FORWARD (hold W only)", 0.3, 1, 0.3 },
+		{ 4.5, "keep walking + TURN LEFT (hold W and A, no mouse)", 1, 0.82, 0 }, { 7, "STOP, hands off", 1, 0.3, 0.3 },
+	}
+	local WALK_LENGTH, WALK_BACK = 10, 8.5
+	local function WalkBegin(at)
+		local trial = MAP_WALK[at]
+		if not trial then
+			End("done")
+			ns.PadTestBox("Walk run done", "stop the recording, then /reload", 0.3, 1, 0.3)
+			C_Timer.After(8, function() if not run then ns.PadTestBoxHide() end end)
+			return
+		end
+		local missing = {}
+		for name in pairs(trial[2] or {}) do
+			if GetCVar(name) == nil then missing[#missing + 1] = name end
+		end
+		run.at, run.began, run.step, run.track, run.back = at, GetTime(), 0, {}, false
+		Change(trial[2] or {})
+		Log(("map: walk %d (%s) starts, zoom %.2f, offset %s%s"):format(at, trial[1], Zoom(), Text(GetCVar(SHOULDER)),
+			#missing > 0 and (", not on this client: " .. table.concat(missing, ", ")) or ""))
+	end
+	local function WalkTick()
+		if not run then return end
+		ns.stillSince = GetTime()
+		if not run.at then return end
+		local into = GetTime() - run.began
+		local step = WALK_STEPS[run.step + 1]
+		if step and into >= step[1] then
+			run.step = run.step + 1
+			ns.PadTestBox(("Walk %d/%d  %s"):format(run.at, #MAP_WALK, MAP_WALK[run.at][1]), step[2], step[3], step[4], step[5])
+			Log(("map: walk %d: %s"):format(run.at, step[2]))
+		end
+		if into < WALK_BACK and #run.track < into * 10 then
+			local ok, speed = pcall(GetUnitSpeed, "player")
+			local made, text = pcall(string.format, "%.1f", ok and speed or -1)
+			run.track[#run.track + 1] = ("%.1f:%s:%s"):format(into, made and text or "?", Facing())
+		end
+		if not run.back and into >= WALK_BACK then
+			run.back = true
+			Log(("map: walk %d track (s in:speed:facing): %s"):format(run.at, table.concat(run.track, " ")))
+			local keep, back = ns.db.shoulderMapKeep or {}, {}
+			for name in pairs(MAP_WALK[run.at][2] or {}) do back[name] = keep[name] end
+			Put(back)
+		end
+		if into >= WALK_LENGTH then WalkBegin(run.at + 1) end
+	end
+	local function WalkStart()
+		run = { ticker = C_Timer.NewTicker(0.05, WalkTick) }
+		Log(("map: walk run, %d trials of %d s | %s | offset %s, zoom %.2f"):format(#MAP_WALK, WALK_LENGTH, Who(),
+			Text(GetCVar(SHOULDER)), Zoom()))
+		ns.Print(("shoulder map: record your screen; about %d minutes in the open, walk and turn when told; " ..
+			"type it again to stop"):format(math.ceil(#MAP_WALK * WALK_LENGTH / 60)))
+		local this = run
+		C_Timer.After(1, function() if run == this and not run.at then WalkBegin(1) end end)
+	end
 	function ns.ShoulderMap(which)
 		if run then
 			End("stopped")
@@ -1173,7 +1253,8 @@ do
 		if kind == "talk" then return TalkStart(MAP_TALK, "talk") end
 		if kind == "ramp" then return TalkStart(MAP_RAMP, "ramp") end
 		if kind == "back" then return TalkStart(MAP_BACK, "back") end
-		if kind ~= "still" then return ns.Print("shoulder map: still [first trial], talk, ramp, back") end
+		if kind == "walk" then return WalkStart() end
+		if kind ~= "still" then return ns.Print("shoulder map: still [first trial], talk, ramp, back, walk") end
 		from = math.max(1, math.min(#MAP_STILL, tonumber(from) or 1))
 		ns.shoulderTestHold = true
 		Change(PLAIN)
@@ -1341,7 +1422,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back, zoomcurve, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk, zoomcurve, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end
