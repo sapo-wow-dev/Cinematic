@@ -40,6 +40,9 @@ local BARS = {
 	{ "MultiBarRightButton", 12 }, { "MultiBarLeftButton", 12 }, { "MultiBar5Button", 12 },
 	{ "MultiBar6Button", 12 }, { "MultiBar7Button", 12 }, { "BonusActionButton", 12 },
 	{ "PetActionButton", 10 }, { "StanceButton", 10 }, { "ShapeshiftButton", 10 },
+	-- (The shaman's totem bar on the classic clients: its slots' buttons, then its two
+	-- ends, Call of the Elements and Totemic Recall, one each.)
+	{ "MultiCastActionButton", 12 }, { "MultiCastSummonSpellButton" }, { "MultiCastRecallSpellButton" },
 }
 
 local function Look()
@@ -641,7 +644,11 @@ end
 
 local function EachButton(apply)
 	for _, bar in ipairs(BARS) do
-		for i = 1, bar[2] do
+		if not bar[2] then
+			local button = _G[bar[1]]
+			if button then apply(button) end
+		end
+		for i = 1, bar[2] or 0 do
 			local button = _G[bar[1] .. i]
 			if button then apply(button) end
 		end

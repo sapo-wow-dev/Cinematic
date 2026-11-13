@@ -249,6 +249,39 @@ local function MakePreview(parent, width, list)
 		arrow:SetScript("OnClick", function() Step(side[3]) end)
 		if side[3] < 0 then holder.prevArrow = arrow end
 	end
+	-- (A lock left of them: the screen stays on the one showing, the arrows still step.
+	-- Not saved: a reload or login starts it turning again.)
+	local locked = false
+	local lock = CreateFrame("Button", nil, holder)
+	lock:SetSize(22, 22)
+	lock:SetPoint("RIGHT", holder.prevArrow, "LEFT", -2, 0)
+	lock:SetFrameLevel(holder:GetFrameLevel() + 30)
+	lock.icon = lock:CreateTexture(nil, "ARTWORK")
+	lock.icon:SetPoint("CENTER")
+	lock.icon:SetSize(16, 16)
+	lock.icon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-LOCK")
+	lock:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+	local function ShowLock()
+		lock.icon:SetDesaturated(not locked)
+		lock.icon:SetAlpha(locked and 1 or 0.45)
+	end
+	local function LockTip()
+		GameTooltip:SetOwner(lock, "ANCHOR_TOP")
+		GameTooltip:SetText(locked and L["Locked"] or L["Lock"], 1, 1, 1)
+		GameTooltip:AddLine(locked and L["The preview stays on this screen. Click to let it turn again."]
+			or L["Keep the preview on this screen. Until you click again or reload."], nil, nil, nil, true)
+		GameTooltip:Show()
+	end
+	lock:SetScript("OnClick", function()
+		locked = not locked
+		waited = 0
+		ShowLock()
+		LockTip()
+	end)
+	lock:SetScript("OnEnter", LockTip)
+	lock:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	ShowLock()
+	holder.lockButton = lock
 	holder:SetScript("OnShow", function(self) EndFade(); waited = 0; self:Refresh() end)
 	ns.SetOnUpdate(holder, function(_, elapsed)
 		if fading then
@@ -261,7 +294,7 @@ local function MakePreview(parent, width, list)
 			end
 		end
 		waited = waited + elapsed
-		if waited >= ROTATE_SECONDS then Step(1) end
+		if waited >= ROTATE_SECONDS and not locked then Step(1) end
 	end)
 	return holder
 end
@@ -273,9 +306,9 @@ function ns.MakeStyleJumbotron(kit, content, stack, width, list)
 	preview.headHeight = NAME_H -- (its name over the screen: StylePages.lua)
 	stack:Add(preview, "label")
 	local pop = ns.StylePopout(preview, kit.Tooltip) -- (StylePages.lua)
-	-- (left of the arrows, not over them)
+	-- (left of the arrows and the lock, not over them)
 	pop:ClearAllPoints()
-	pop:SetPoint("RIGHT", preview.prevArrow, "LEFT", -6, 0)
+	pop:SetPoint("RIGHT", preview.lockButton, "LEFT", -6, 0)
 	kit.AddControl(preview)
 	return preview
 end

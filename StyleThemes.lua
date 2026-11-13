@@ -137,6 +137,8 @@ local function Theme(info)
 		local metal = Metal(info.line)
 		s.ufBorderR, s.ufBorderG, s.ufBorderB = metal[1], metal[2], metal[3]
 	end
+	-- (Open: the bars stand alone under the name, with no line round them.)
+	if info.layout == "open" then s.ufBorder = "none" end
 	Panels(s, info.panel, info.panelAlpha)
 	Casts(s, info.cast, info.channel, info.locked, info.stop)
 	Line(s, info.lineSize, info.line)
@@ -268,6 +270,24 @@ local THEMES = {
 		settings = { styleTexture = "soft", styleFont = "philosopher", styleOutline = 0, styleShadow = "on",
 			stylePanel = "round", styleBarShape = "capsule", ufShape = "circle",
 			questTalkStyle = "dark", rollPanel = "flat", abShape = "round" },
+	}),
+	Theme({
+		key = "open", name = "Adventurer", unitBars = "soft", layout = "open",
+		tip = "Just the hero: a gold-ringed portrait, the name over two slim bars, and nothing round them.",
+		swatch = { { 0.08, 0.07, 0.06 }, { 1, 0.82, 0 }, { 0, 0.8, 0 }, { 0, 0.55, 1 } },
+		menu = { accent = { 1, 0.82, 0.2 }, edge = { 0.5, 0.4, 0.2 }, field = { 0.09, 0.08, 0.07 },
+			window = { 0.05, 0.045, 0.04 }, well = { 0.025, 0.02, 0.02 }, knob = { 1, 0.9, 0.55 },
+			thumb = { 0.66, 0.52, 0.24 } },
+		grain = "Reel", ornament = { 0.8, 0.65, 0.25 },
+		nameColor = { 1, 0.82, 0 }, -- (the game's own gold, as the preview's names)
+		health = { 0, 0.8, 0 }, mana = { 0, 0.55, 1 }, back = 0.5,
+		panel = { 0.07, 0.06, 0.05 }, panelAlpha = 0.93,
+		cast = { 1, 0.7, 0 }, channel = { 0, 0.8, 0 }, locked = { 0.5, 0.5, 0.5 }, stop = { 0.85, 0.2, 0.15 },
+		line = { 0.55, 0.45, 0.25 }, lineSize = 1,
+		cardColor = { 1, 0.86, 0.4 }, cardFont = "cinzel",
+		settings = { styleTexture = "soft", styleFont = "friz", styleOutline = 0, styleShadow = "on",
+			styleBarShape = "soft", -- (gently rounded ends: everything else on it is round)
+			ufShape = "circle", questTalkStyle = "dark", rollPanel = "flat", abShape = "round" },
 	}),
 	Theme({
 		key = "cathedral", name = "Cathedral", unitBars = "satin",
@@ -747,6 +767,7 @@ function ns.DressBarShape(bar, back, skip, rect, gap)
 	if not art then return false end
 	if not state.mask then
 		state.mask = bar:CreateMaskTexture()
+		state.mask.cineBarShape = true -- (ours: UnitStyle's StripMasks leaves it on)
 		state.mask:SetAllPoints(bar)
 		ns.ThemeNoSnap(state.mask)
 		state.backMask = back:GetParent():CreateMaskTexture()
