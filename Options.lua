@@ -9409,7 +9409,9 @@ local function CreateNameStylePanel()
 			look.Choices(L["Friendly players:"], "plateNameFriends", {
 				{ "blue", L["Blue"], L["Blue, as the game's names over their heads (green while they're PvP flagged, " ..
 					"as there too)."] },
-				{ "class", L["Class colors"], L["Their class's color, as the plates draw them."] },
+				{ "class", L["Class colors"], L["Their class's color, as the plates draw them. Turns on Use Class " ..
+					"Color for Names in the game's Options > Nameplates too, so every friendly plate shows it; " ..
+					"yours is put back when you pick another color."] },
 				{ "white", L["White"], nil },
 			}, function(db) return db.plateNameStyle and db.plateNameColour end)
 		end,

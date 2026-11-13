@@ -744,8 +744,36 @@ local function ApplyAll()
 end
 ApplyAll = ns.Profiled("Plate parts", ApplyAll)
 
+-- Friendly players in Class colors: the game's own Use Class Color for Names
+-- (Options > Nameplates) held on too, so the plates we don't fade to the name
+-- show them in class colors as well. Held like any game setting of ours: yours
+-- saved and put back, a change of yours in its Options wins. Only while Style
+-- and the Name Style page's colors are on; tried again as a fight ends.
+local HoldClassNames
+do
+	local CLASS_NAMES_SET = ns.CVarSet("Class color names", "Name Style page: friendly players in Class colors",
+		{ secure = true, playerWins = true, values = { nameplateUseClassColorForFriendlyPlayerUnitNames = "1" } })
+	local known
+	HoldClassNames = function()
+		if not ns.db then return end
+		if known == nil then
+			local ok, value = pcall(GetCVar, "nameplateUseClassColorForFriendlyPlayerUnitNames")
+			known = ok and value ~= nil
+		end
+		if not known then return end
+		local want = ns.StyleOn() and Style("plateNameStyle") and Style("plateNameColour")
+			and Style("plateNameFriends") == "class" and true or false
+		ns.ApplyCVarSet(CLASS_NAMES_SET, want)
+	end
+	local holder = CreateFrame("Frame")
+	holder:RegisterEvent("PLAYER_ENTERING_WORLD")
+	holder:RegisterEvent("PLAYER_REGEN_ENABLED")
+	holder:SetScript("OnEvent", function() HoldClassNames() end)
+end
+
 -- After a name style change (the Name Style page): our texts drawn anew.
 function ns.RefreshPlateNameStyle()
+	HoldClassNames()
 	for _, text in pairs(texts) do
 		text.dirty = true
 	end
