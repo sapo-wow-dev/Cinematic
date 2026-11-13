@@ -38,10 +38,13 @@ Support\Bartender4.lua
 Support\ElvUI.lua
 Support\DaylightUI.lua
 Support\Plater.lua
+Support\Platynator.lua
+Support\ThreatPlates.lua
 Support\HorizonSuite.lua
 Support\FlareUI.lua
 Support\WeakAuras.lua
 Support\DBM.lua
+Support\BigWigs.lua
 Support\Questie.lua
 Support\RestedXP.lua
 Support\ClassicUIForever.lua
@@ -51,8 +54,12 @@ Support\Immersion.lua
 Support\DynamicCam.lua
 Support\RareScanner.lua
 Support\Glass.lua
+Support\Prat.lua
 Support\MinimapButtonButton.lua
 Support\LeatrixPlus.lua
+Support\HealBot.lua
+Support\TitanPanel.lua
+Support\TomTom.lua
 Frames.lua
 HealVisionFrames.lua
 Chat.lua

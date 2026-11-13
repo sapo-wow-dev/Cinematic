@@ -443,3 +443,60 @@ function ns.AfterPlateAdded(fn)
 		end
 	end)
 end
+
+-- A nameplate addon that writes the game's "which plates show" settings
+-- itself (at login, after a fight) from code that can't be wrapped like
+-- Plater's passes: its writes count as its own passes (ns.OTHERS_CVAR_ADDONS,
+-- Core.lua: settings held stay held), and one that changes a setting the
+-- Nameplates page's rows decide switches those rows on again after it, as
+-- for Plater. folder: its AddOns folder; label: its name, for the log.
+do
+	local ROW_CVARS = {}
+	for _, cvar in ipairs({
+		"nameplateShowAll", "nameplateShowEnemies", "nameplateShowEnemyMinions", "nameplateShowEnemyPets",
+		"nameplateShowEnemyGuardians", "nameplateShowEnemyTotems", "nameplateShowEnemyMinus",
+		"nameplateShowFriends", "nameplateShowFriendlyPlayers", "nameplateShowFriendlyNPCs",
+		"nameplateShowFriendlyMinions", "nameplateShowFriendlyPets", "nameplateShowFriendlyGuardians",
+		"nameplateShowFriendlyTotems", "nameplateShowFriendlyPlayerMinions", "nameplateShowFriendlyPlayerPets",
+		"nameplateShowFriendlyPlayerGuardians", "nameplateShowFriendlyPlayerTotems",
+	}) do
+		ROW_CVARS[cvar:lower()] = true
+	end
+	local watched = {} -- [folder] = label
+	local pending = false
+	local hooked = false
+
+	local function OnWrite(name)
+		if pending or type(name) ~= "string" or not ROW_CVARS[name:lower()] then
+			return
+		end
+		local stack = (debugstack() or ""):gsub("\\", "/")
+		for folder, label in pairs(watched) do
+			if stack:find("AddOns/" .. folder .. "/", 1, true) then
+				pending = true
+				-- (After the rest of its pass: it writes several at once.)
+				C_Timer.After(0, function()
+					pending = false
+					if ns.db and ns.db.handlePlates then
+						ns.Log("cvar", label .. " set the game's nameplate settings: Nameplates page's rows switched on again")
+						ns.EnsurePlateRows()
+					end
+				end)
+				return
+			end
+		end
+	end
+
+	function ns.FollowOthersPlateWrites(folder, label)
+		watched[folder] = label
+		ns.OTHERS_CVAR_ADDONS[folder] = true
+		if hooked then
+			return
+		end
+		hooked = true
+		if C_CVar and C_CVar.SetCVar then
+			hooksecurefunc(C_CVar, "SetCVar", ns.Profiled("Nameplate addon SetCVar hook", OnWrite))
+		end
+		hooksecurefunc("SetCVar", ns.Profiled("Nameplate addon SetCVar hook", OnWrite))
+	end
+end

@@ -2804,6 +2804,24 @@ end
 local othersPass = 0
 local overridden = {}
 
+-- Addons whose own writes to the game's settings count as passes of their
+-- own (see ns.RunOthersCVarPass) though they can't be wrapped, their code
+-- being private (Support/Platynator.lua): [AddOns folder] = true. Told by
+-- the file the write came from, and only for a setting held.
+ns.OTHERS_CVAR_ADDONS = {}
+local function FromOthersAddon()
+	if not next(ns.OTHERS_CVAR_ADDONS) then
+		return false
+	end
+	local stack = (debugstack() or ""):gsub("\\", "/")
+	for folder in pairs(ns.OTHERS_CVAR_ADDONS) do
+		if stack:find("AddOns/" .. folder .. "/", 1, true) then
+			return true
+		end
+	end
+	return false
+end
+
 local function CheckHeldCVar(name)
 	if writingCVar or type(name) ~= "string" then
 		return
@@ -2814,6 +2832,12 @@ local function CheckHeldCVar(name)
 	end
 	if othersPass > 0 then
 		overridden[name:lower()] = true
+		return
+	end
+	if FromOthersAddon() then
+		-- (Written back once its write is done: ns.writeBackOverridden, below.)
+		overridden[name:lower()] = true
+		C_Timer.After(0, function() ns.writeBackOverridden() end)
 		return
 	end
 	local now = GetCVar(held.name)
@@ -2876,6 +2900,7 @@ local function WriteBackOverridden()
 		end
 	end
 end
+ns.writeBackOverridden = WriteBackOverridden
 heldWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 heldWatcher:SetScript("OnEvent", ns.Profiled("CVAR_UPDATE event", function(_, event, name)
 	if event == "PLAYER_REGEN_ENABLED" then

@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-13", page = "Advanced Frames", title = "Support for 7 more addons",
+		text = "BigWigs, TomTom, HealBot Continued and Titan Panel get rows of their own and fade with Cinematic. " ..
+		"Platynator and Threat Plates nameplates fade in CineMode, and Prat 3.0's chat follows the Chat page." },
 	{ date = "2026-11-13", page = "Advanced Frames", title = "Leatrix Plus support",
 		text = "Leatrix Plus's square minimap header and its minimap button bag now fade with the Minimap rows, " ..
 		"its flight bar gets a row of its own, and its faction-tinted tooltips are an Addon Conflicts choice." },

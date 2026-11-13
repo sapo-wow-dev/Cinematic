@@ -6198,3 +6198,7 @@ L["Three new cards in the top bar: how much of a zone you've explored, an achiev
 -- What's new: ClassicUI Forever support (Changelog.lua)
 L["ClassicUI Forever support"] = "Compatibilidad con ClassicUI Forever"
 L["ClassicUI Forever's action bars, bar art and quest watch now fade with Cinematic, and come back when you hover them."] = "Las barras de acción, el arte de la barra y el seguimiento de misiones de ClassicUI Forever ahora se desvanecen con Cinematic y vuelven al pasar el ratón por encima."
+
+-- What's new: support for 7 more addons (Changelog.lua)
+L["Support for 7 more addons"] = "Compatibilidad con 7 addons más"
+L["BigWigs, TomTom, HealBot Continued and Titan Panel get rows of their own and fade with Cinematic. Platynator and Threat Plates nameplates fade in CineMode, and Prat 3.0's chat follows the Chat page."] = "BigWigs, TomTom, HealBot Continued y Titan Panel tienen sus propias filas y se desvanecen con Cinematic. Las placas de nombre de Platynator y Threat Plates se desvanecen en CineMode, y el chat de Prat 3.0 sigue la página de Chat."
