@@ -73,9 +73,19 @@ end
 
 local function Libs()
 	local libStub = _G.LibStub
-	if not libStub then return nil end
-	local pins = libStub("HereBeDragonsQuestie-Pins-2.0", true)
-	local hbd = libStub("HereBeDragonsQuestie-2.0", true)
+	local pins = libStub and libStub("HereBeDragonsQuestie-Pins-2.0", true)
+	local hbd = libStub and libStub("HereBeDragonsQuestie-2.0", true)
+	-- (Newer Questie keeps its HereBeDragons copy as its own modules, "HBD"
+	-- and "HBDPins", no LibStub names: no position came back, read in its
+	-- code 2026-11-13. Same fields: minimapPins, GetPlayerWorldPosition.)
+	if not (pins and hbd) then
+		local loader = Plain(_G.QuestieLoader, "table")
+		local modules = loader and Plain(loader._modules, "table")
+		if modules then
+			pins = pins or Plain(modules.HBDPins, "table")
+			hbd = hbd or Plain(modules.HBD, "table")
+		end
+	end
 	return pins, hbd
 end
 
@@ -454,4 +464,225 @@ function ns.QuestieMinimapReport()
 	lines[#lines + 1] = ("last reveal %s"):format(look.seenAt > -math.huge
 		and ("%.1fs ago: %s"):format(GetTime() - look.seenAt, tostring(look.names)) or "never")
 	return lines
+end
+
+-- /cine debug questnodes (NodeSweep.lua): the dots a sweep heard next to
+-- Questie's minimap icons, to see whether a dot can be known as a quest's
+-- (its name is secret on Forever since 2026-11-12). dots: { name, north,
+-- west (yards from you), units }. n0, w0: UnitPosition's, to learn which
+-- of HereBeDragons' axes is north and which west. Returns lines and how many
+-- dots had a Questie icon within MATCH yards. (A test: reads only, guarded.)
+local MATCH = 15
+local function Value(value)
+	if Secret(value) then return "SECRET" end
+	if type(value) == "string" then return ("%q"):format(value:sub(1, 30)) end
+	if type(value) == "table" then return "table" end
+	return tostring(value)
+end
+local function Keys(data)
+	local keys = {}
+	for key, value in pairs(data) do
+		if #keys >= 14 then break end
+		keys[#keys + 1] = tostring(key) .. "=" .. Value(value)
+	end
+	table.sort(keys)
+	return table.concat(keys, " ")
+end
+function ns.QuestieNodeCompare(dots, n0, w0)
+	local lines = {}
+	local _, hbd = Libs()
+	local px, py, instance
+	if hbd and hbd.GetPlayerWorldPosition then px, py, instance = hbd:GetPlayerWorldPosition() end
+	lines[#lines + 1] = ("you: Questie's %s, %s (instance %s); UnitPosition north %s, west %s"):format(
+		tostring(px), tostring(py), tostring(instance), tostring(n0), tostring(w0))
+	if not (Plain(px, "number") and Plain(py, "number")) then
+		lines[#lines + 1] = "QUESTIE: no position from HereBeDragonsQuestie (Questie loaded? " ..
+			tostring(ns.QuestieLoaded()) .. ")"
+		return lines, 0
+	end
+	-- Which of its axes is north and which west, and their signs, from your own
+	-- spot both ways. (Else as FrameSpot has it: x west, y north.)
+	local xAxis, xSign, yAxis, ySign = "west", 1, "north", 1
+	local calibrated = "assumed x west, y north"
+	if n0 and w0 then
+		local function Match(v)
+			for _, try in ipairs({ { "north", 1, n0 }, { "north", -1, -n0 }, { "west", 1, w0 }, { "west", -1, -w0 } }) do
+				if math.abs(v - try[3]) < 2 then return try[1], try[2] end
+			end
+		end
+		local ax, sx = Match(px)
+		local ay, sy = Match(py)
+		if ax and ay and ax ~= ay then
+			xAxis, xSign, yAxis, ySign = ax, sx, ay, sy
+			calibrated = ("x is %s%s, y is %s%s"):format(sx < 0 and "minus " or "", ax, sy < 0 and "minus " or "", ay)
+		else
+			calibrated = "COULDN'T match your spot, assumed x west, y north"
+		end
+	end
+	lines[#lines + 1] = "axes: " .. calibrated
+	local function Offsets(x, y)
+		local off = { north = 0, west = 0 }
+		off[xAxis] = (x - px) * xSign
+		off[yAxis] = (y - py) * ySign
+		return off.north, off.west
+	end
+	local icons, source = Icons()
+	if not icons then
+		lines[#lines + 1] = "QUESTIE: no icons: " .. tostring(source)
+		return lines, 0
+	end
+	local okRadius, radius = pcall(C_Minimap.GetViewRadius)
+	radius = okRadius and Plain(radius, "number") or 150
+	local kinds, near = {}, {}
+	for _, entry in ipairs(icons) do
+		local frame = entry.frame
+		local data = Plain(frame.data, "table")
+		local kind = data and tostring(data.Type) or "no data"
+		kinds[kind] = (kinds[kind] or 0) + 1
+		local spot = entry.spot or FrameSpot(frame)
+		local x, y = spot and Plain(spot.x, "number"), spot and Plain(spot.y, "number")
+		local id = spot and (spot.instanceID or spot.instanceId)
+		if x and y and (id == nil or id == instance) then
+			local north, west = Offsets(x, y)
+			local yards = math.sqrt(north * north + west * west)
+			if yards <= radius + 30 then
+				near[#near + 1] = { kind = kind, label = data and Label(data) or "?", hidden = frame.hidden == true,
+					north = north, west = west, yards = yards, data = data }
+			end
+		end
+	end
+	local list = {}
+	for kind, count in pairs(kinds) do list[#list + 1] = ("%s %d"):format(kind, count) end
+	table.sort(list)
+	lines[#lines + 1] = ("Questie icons (%s): %s; %d within the minimap's %.0f yd (+30)"):format(tostring(source),
+		#list > 0 and table.concat(list, ", ") or "none", #near, radius)
+	table.sort(near, function(a, b) return a.yards < b.yards end)
+	for i = 1, math.min(15, #near) do
+		local icon = near[i]
+		lines[#lines + 1] = ("  ICON %s \"%s\": %.0f yd (%.0f north, %.0f west)%s"):format(icon.kind, icon.label,
+			icon.yards, icon.north, icon.west, icon.hidden and ", hidden by Questie" or "")
+		if i <= 4 and icon.data then lines[#lines + 1] = "    data: " .. Keys(icon.data) end
+	end
+	local matched = 0
+	for i, dot in ipairs(dots) do
+		if dot.north then
+			local best, bestYards
+			for _, icon in ipairs(near) do
+				local d = math.sqrt((icon.north - dot.north) ^ 2 + (icon.west - dot.west) ^ 2)
+				if not bestYards or d < bestYards then best, bestYards = icon, d end
+			end
+			local yards = math.sqrt(dot.north ^ 2 + dot.west ^ 2)
+			if best and bestYards <= MATCH then matched = matched + 1 end
+			lines[#lines + 1] = ("  DOT %d (%s, %s units): %.0f yd (%.0f north, %.0f west); nearest Questie icon: %s"):format(
+				i, tostring(dot.name), tostring(dot.units), yards, dot.north, dot.west,
+				best and ("%s \"%s\" %.1f yd from it%s"):format(best.kind, best.label, bestYards,
+					bestYards <= MATCH and " = MATCH" or "") or "none")
+		else
+			lines[#lines + 1] = ("  DOT %d (%s, %s units): where in yards unknown"):format(i, tostring(dot.name),
+				tostring(dot.units))
+		end
+	end
+	return lines, matched
+end
+
+-- Nearby Dots (NodeSweep.lua): the spots of Questie's icons that can't be a
+-- gathering node, a quest giver's "!" or "?" and its town icons (mailbox,
+-- innkeeper...), as yards north and west of you, within reach yards. The
+-- game draws a dot for those too and its name is secret on Forever: a dot on
+-- one of them is left out. (Hidden icons too: the game's dot is there all
+-- the same. Objective icons are kept: a quest's herb or ore is a node.)
+-- (HereBeDragons' x is west and y north, UnitPosition's the other way round:
+-- read in Questie's code and seen in /cine debug questnodes, 2026-11-13.)
+local KNOWN_KINDS = { available = true, complete = true, manual = true }
+function ns.QuestieKnownSpots(reach, out)
+	if not ns.QuestieLoaded() then return out end
+	local _, hbd = Libs()
+	local px, py, instance
+	if hbd and hbd.GetPlayerWorldPosition then px, py, instance = hbd:GetPlayerWorldPosition() end
+	if not (Plain(px, "number") and Plain(py, "number")) then return out end
+	ForEachIcon(function(frame, spot)
+		local data = Plain(frame.data, "table")
+		if not (data and KNOWN_KINDS[data.Type]) then return end
+		spot = spot or FrameSpot(frame)
+		local x, y = spot and Plain(spot.x, "number"), spot and Plain(spot.y, "number")
+		local id = spot and (spot.instanceID or spot.instanceId)
+		if x and y and (id == nil or id == instance) and (x - px) ^ 2 + (y - py) ^ 2 <= reach * reach then
+			out[#out + 1] = { north = y - py, west = x - px, kind = data.Type }
+		end
+	end)
+	return out
+end
+
+-- /cine debug questiedb: does the QuestieDB addon (its object database, read
+-- at runtime from the player's own copy, nothing of it copied) know where
+-- ore veins, herbs and chests spawn? If it does, a dot on the minimap at one
+-- of those spots is a node (its name is secret on Forever since 2026-11-12).
+-- For each name: how many objects, spawn points in all, here in your zone,
+-- and the nearest in yards. To ns.db.questieDbLog and chat. (A test.)
+local DB_NODE_NAMES = {
+	"Copper Vein", "Tin Vein", "Silver Vein", "Iron Deposit", "Gold Vein", "Mithril Deposit",
+	"Truesilver Deposit", "Small Thorium Vein", "Rich Thorium Vein", "Dark Iron Deposit",
+	"Incendicite Mineral Vein", "Lesser Bloodstone Deposit", "Ooze Covered Silver Vein",
+	"Peacebloom", "Silverleaf", "Earthroot", "Mageroyal", "Briarthorn", "Stranglekelp", "Bruiseweed",
+	"Wild Steelbloom", "Grave Moss", "Kingsblood", "Liferoot", "Fadeleaf", "Goldthorn", "Khadgar's Whisker",
+	"Wintersbite", "Firebloom", "Purple Lotus", "Arthas' Tears", "Sungrass", "Blindweed", "Ghost Mushroom",
+	"Gromsblood", "Golden Sansam", "Dreamfoil", "Mountain Silversage", "Plaguebloom", "Icecap", "Black Lotus",
+	"Battered Chest", "Solid Chest", "Large Battered Chest", "Large Solid Chest",
+}
+function ns.QuestieDbNodesReport()
+	local lines = {}
+	ns.db.questieDbLog = lines
+	local function Say(text)
+		lines[#lines + 1] = text
+		ns.Print("questiedb: " .. text)
+	end
+	local lib = Plain(_G.LibQuestieDB, "table")
+	local objects = lib and Plain(lib.Object, "table")
+	if not (objects and type(objects.IdsByName) == "function" and type(objects.spawns) == "function") then
+		return Say(("no QuestieDB object database (LibQuestieDB %s, Object %s). /reload and say \"check log\".")
+			:format(tostring(lib ~= nil), tostring(objects ~= nil)))
+	end
+	-- (Its zone numbers are area IDs: Questie's ZoneDB turns them into map IDs.)
+	local loader = Plain(_G.QuestieLoader, "table")
+	local modules = loader and Plain(loader._modules, "table")
+	local zoneDB = modules and Plain(modules.ZoneDB, "table")
+	local hereMap = C_Map.GetBestMapForUnit("player")
+	local here = hereMap and C_Map.GetPlayerMapPosition(hereMap, "player")
+	local herePos
+	if here then herePos = select(2, C_Map.GetWorldPosFromMapPos(hereMap, here)) end
+	Say(("you: map %s, ZoneDB %s, world pos %s"):format(tostring(hereMap), tostring(zoneDB ~= nil),
+		herePos and ("%.0f, %.0f"):format(herePos.x, herePos.y) or "unknown"))
+	local known, total, started = 0, 0, debugprofilestop()
+	for _, name in ipairs(DB_NODE_NAMES) do
+		local okIds, ids = pcall(objects.IdsByName, name)
+		ids = okIds and type(ids) == "table" and ids or {}
+		local spawns, inZone, nearest = 0, 0, nil
+		for _, id in ipairs(ids) do
+			local okSpawns, list = pcall(objects.spawns, id)
+			for zone, points in pairs(okSpawns and type(list) == "table" and list or {}) do
+				local mapID
+				if zoneDB and zoneDB.GetUiMapIdByAreaId then
+					local okMap, value = pcall(zoneDB.GetUiMapIdByAreaId, zoneDB, zone)
+					mapID = okMap and value or nil
+				end
+				for _, point in ipairs(type(points) == "table" and points or {}) do
+					spawns = spawns + 1
+					if mapID and mapID == hereMap and herePos and type(point[1]) == "number" then
+						inZone = inZone + 1
+						local _, pos = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(point[1] / 100, point[2] / 100))
+						if pos then
+							local yards = math.sqrt((pos.x - herePos.x) ^ 2 + (pos.y - herePos.y) ^ 2)
+							if not nearest or yards < nearest then nearest = yards end
+						end
+					end
+				end
+			end
+		end
+		if #ids > 0 then known = known + 1 end
+		total = total + 1
+		Say(("%s: %d objects, %d spawn points, %d in this zone%s"):format(name, #ids, spawns, inZone,
+			nearest and (", nearest %.0f yd"):format(nearest) or ""))
+	end
+	Say(("VERDICT: QuestieDB knows %d of %d node names (%.0f ms). /reload and say \"check log\"."):format(known, total,
+		debugprofilestop() - started))
 end

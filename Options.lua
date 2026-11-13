@@ -11927,7 +11927,8 @@ local function CreateMinimapPanel()
 			label = L["Nearby Dots"]
 			tip = L["With Find Minerals, Find Herbs or Find Treasure on, the minimap comes up while a dot shows " ..
 				"on it near you. The game hides the names on the minimap from addons, so Cinematic can't tell a " ..
-				"vein or herb from other dots: party members, quest areas and town icons you track count too."]
+				"vein or herb from other dots by name. It leaves out your group, and with Questie loaded the " ..
+				"quest givers and town icons it knows, by where they are; anything else counts, quest areas too."]
 		end
 		local check = Check(content, key, label, tip .. " " .. (cursorNodes and CURSOR_NOTE or SWEEP_NOTE),
 			kind[1] == "minimapRevealNodes" and function(value)
@@ -12041,8 +12042,9 @@ local function CreateMinimapPanel()
 			Tooltip(warn, L["A workaround: every few seconds the hidden minimap is moved under your mouse pointer for " ..
 				"about a second. Meanwhile the minimap and its buttons don't take clicks. It doesn't look while you " ..
 				"hold the left or right mouse button (or both), turn the camera or point at a window, so if you steer " ..
-				"with the mouse a lot it only looks in the gaps. Other minimap addons may not like it. Any dot " ..
-				"counts (party members, quest areas, tracked town icons too): the game hides their names."])
+				"with the mouse a lot it only looks in the gaps. Other minimap addons may not like it. The game " ..
+				"hides the dots' names, so what isn't left out by where it is (your group, Questie's quest givers " ..
+				"and town icons) counts, quest areas too."])
 			-- Where it looks: its Show in row (NodeSweep.lua's cursor.ROW), Open
 			-- world ticked to start with, In combat its fights. (In place of In
 			-- combat too and an Except in row, 2026-11-13.)

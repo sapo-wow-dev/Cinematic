@@ -1673,6 +1673,12 @@ local function HandleSlash(msg)
 			tostring(InCombatLockdown())))
 	elseif cmd == "debug" and arg:find("^minimappulse") then
 		ns.MinimapPulseTest()
+	elseif cmd == "debug" and arg == "questiedb" then
+		-- (Does QuestieDB know where veins and herbs spawn: Support/QuestieMinimap.lua.)
+		ns.QuestieDbNodesReport()
+	elseif cmd == "debug" and arg == "questnodes" then
+		-- (Can a minimap dot be told as a quest's by Questie's icons: Diagnostics.lua.)
+		ns.QuestNodesTest()
 	elseif cmd == "debug" and arg:find("^cursorsweep%s+combat") then
 		ns.CursorSweepCombat()
 	elseif cmd == "debug" and arg:find("^cursorsweep") then

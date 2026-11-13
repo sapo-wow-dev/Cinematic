@@ -281,6 +281,11 @@ end
 local cursor = {}
 -- (A dot whose name the game keeps secret: Probe, below.)
 cursor.DOT = "a dot on the minimap"
+-- (A secret dot on a spot known not to be a node: cursor.Known.)
+cursor.KNOWN = "a known dot (quest giver, town icon or your group)"
+-- Minimap units around a grid point a dot answers from (12 measured), and
+-- a little more for where the known spot's dot really sits.
+cursor.KNOWN_REACH = 15
 -- Where it looks: Nearby Dots' Show in row (Minimap page: Combat and
 -- Location), Open world ticked to start with (not in cities, instances or
 -- BGs, as its old Except in had it).
@@ -399,13 +404,24 @@ local function Probe(step, found, stop, radius, cx, cy)
 		probes = probes + 1
 		local lines, why = Listen(dx, dy)
 		if not lines then return nil, why end
+		-- (Secret lines at this point that a known spot explains: a quest
+		-- giver, town icon or group member within a dot's reach, cursor.Known.)
+		local explained = cursor.s and cursor.known and cursor.KnownNear(dx, dy) or 0
 		for _, line in ipairs(lines) do
 			local text, color = line.leftText, line.leftColor
 			-- (Forever since its 2026-11-12 patch: every minimap name is secret,
 			-- even with your own mouse on the dot (tested). In the cursor sweep
 			-- such a line counts as a dot, nameless: any dot brings the minimap
-			-- up, the user's choice 2026-11-13.)
-			if Secret(text) and cursor.s then text, color = cursor.DOT, nil end
+			-- up, the user's choice 2026-11-13; one a known spot explains doesn't.)
+			if Secret(text) and cursor.s then
+				if explained > 0 then
+					explained = explained - 1
+					text = cursor.KNOWN
+				else
+					text = cursor.DOT
+				end
+				color = nil
+			end
 			if type(text) == "string" and not Secret(text) then
 				local gray = GrayLine(text, color)
 				-- (Colour codes and icons out, one name a line.)
@@ -1512,6 +1528,7 @@ cursor.DEPTH = 4    -- generations of the minimap's children whose mouse is turn
 cursor.LOOTED = 12  -- yards: looting this near a node's spot drops it
 cursor.SETTLE = 5   -- seconds after a login or /reload before the first one (10 was a guess; 5 on trial 2026-11-10)
 cursor.KEEP = 0.85  -- of the minimap's view radius: a node further than this from you lets it go
+cursor.HEARD = 16   -- minimap units around a dot that hear it (12 measured, and some)
 -- Frames between two looks at the world: the minimap back off the pointer
 -- for a frame, and the sweep stops if the mouse is on someone or something
 -- then (under the minimap the game can't see them: one that came under the
@@ -1858,6 +1875,48 @@ function cursor.Look(px, py)
 	return NO_LINES
 end
 
+-- What can't be a gathering node, on the minimap now, for the sweep to
+-- leave out (its names are secret, so a dot is only known by where it is):
+-- Questie's quest givers and town icons (Support/QuestieMinimap.lua) and
+-- your group, as minimap units from the middle (Keep, turned round).
+-- Made once a sweep, in cursor.known; nil when where you are isn't known.
+function cursor.Known(half)
+	cursor.known = nil
+	local perUnit, facing = View()
+	local n0, w0 = Here()
+	if not (perUnit and n0) then return end
+	local reach = half * perUnit * 1.5
+	local spots = {}
+	if ns.QuestieKnownSpots then pcall(ns.QuestieKnownSpots, reach, spots) end
+	local group = IsInRaid() and "raid" or "party"
+	for i = 1, IsInRaid() and 40 or 4 do
+		local unit = group .. i
+		if UnitExists(unit) and not ns.Flag(UnitIsUnit(unit, "player")) then
+			local n, w = UnitPosition(unit)
+			if type(n) == "number" and not Secret(n) and type(w) == "number" and not Secret(w) then
+				spots[#spots + 1] = { north = n - n0, west = w - w0, kind = "group" }
+			end
+		end
+	end
+	local cos, sin = math.cos(facing), math.sin(facing)
+	local known = {}
+	for _, spot in ipairs(spots) do
+		known[#known + 1] = { x = (sin * spot.north - cos * spot.west) / perUnit,
+			y = (cos * spot.north + sin * spot.west) / perUnit, kind = spot.kind }
+	end
+	cursor.known = known
+	return known
+end
+
+-- How many known spots a grid point at x, y hears a dot of.
+function cursor.KnownNear(x, y)
+	local count, reach = 0, cursor.KNOWN_REACH * cursor.KNOWN_REACH
+	for _, spot in ipairs(cursor.known) do
+		if (spot.x - x) ^ 2 + (spot.y - y) ^ 2 <= reach then count = count + 1 end
+	end
+	return count
+end
+
 -- Where a node heard at x, y (minimap units from the middle) is in the
 -- world: yards north and west (ToMinimap the other way round), or nil.
 function cursor.Keep(name, list)
@@ -1963,7 +2022,15 @@ local function CursorSweep(all)
 		return
 	end
 	local function IsNode(name) return name == cursor.DOT or NODE_KINDS[ns.NodeKind(name)] == true end
-	local found, probes = Probe(STEP, {}, not all and IsNode or nil, s.width / 2)
+	-- (What's known not to be a node, placed before the first point is heard.)
+	if not pcall(cursor.Known, s.width / 2) then cursor.known = nil end
+	-- (Not out to the rim: a dot heard there, past KEEP of the view, was let
+	-- go at once (Held), the minimap faded after HOLD, and the next sweep
+	-- found it again, every 4 s, the log 2026-11-13. The grid stops short so
+	-- whatever it hears, a dot answering HEARD units around, is within KEEP.
+	-- The test sweeps it all.)
+	local reach = all and s.width / 2 or (s.width / 2 * cursor.KEEP - cursor.HEARD)
+	local found, probes = Probe(STEP, {}, not all and IsNode or nil, reach)
 	-- (The test: how far from where each name was heard it still answers,
 	-- out along the four ways, a unit at a time: the size of a dot's answer.)
 	if all and type(found) == "table" then
@@ -2120,21 +2187,47 @@ function ns.CursorSweepCombat()
 		cursor.combat and "ON" or "off", cursor.fightSweeps or 0))
 end
 
+-- (questnodes' end, whatever ended it: reveals back on.)
+function ns.CursorTestingOff() cursor.testing = nil end
+
 function ns.CursorSweepTest(arg)
 	-- (test <size>: the game's icon scale during this sweep, to see if
 	-- bigger icons are heard from further away.)
 	local size = tonumber((arg or ""):match("test%s+([%d%.]+)"))
+	-- (questie: /cine debug questnodes, its lines kept in questNodesLog too.)
+	local questie = (arg or ""):find("questie") ~= nil
+	if questie then ns.db.questNodesLog = {} end
 	local tab = CinematicTab()
 	local function Say(text)
 		tab:AddMessage("|cffe0b050Cinematic cursorsweep:|r " .. text)
 		ns.Log("nodes", "cursorsweep: " .. text)
+		if questie and #ns.db.questNodesLog < 300 then ns.db.questNodesLog[#ns.db.questNodesLog + 1] = text end
+	end
+	-- (The end of a questnodes run: its verdict, for the box.)
+	local function Finish(verdict)
+		if not questie then return end
+		cursor.testing = nil
+		if ns.QuestNodesDone then ns.QuestNodesDone(verdict) end
+	end
+	local function Stop(text)
+		Say(text)
+		Finish(text)
 	end
 	if not ns.CanCursorSweepMinimap() then
-		return Say("this client doesn't need it, or can't (no AdjustPointsOffset)")
+		return Stop("this client doesn't need it, or can't (no AdjustPointsOffset)")
 	end
-	if sweepJob then return Say("a sweep is running, try again in a second") end
-	if Minimap:GetEffectiveAlpha() > 0.01 then
-		return Say("the minimap has to be faded first (CineMode), then run it again")
+	if sweepJob then return Stop("a sweep is running, try again in a second") end
+	-- (questnodes: standing by a node, Nearby Dots holds the minimap up. Its
+	-- find let go and every reveal paused (ns.IsMinimapRevealed) till the
+	-- test ends; the waiter below gives it time to fade.)
+	if questie then
+		cursor.testing = true
+		cursor.spot = nil
+		seenAt = -math.huge
+		Say("minimap was " .. (Minimap:GetEffectiveAlpha() > 0.01 and "UP" or "faded") .. " at the start: "
+			.. ns.MinimapSweepState())
+	elseif Minimap:GetEffectiveAlpha() > 0.01 then
+		return Stop("the minimap has to be faded first (CineMode), then run it again")
 	end
 	-- (The faded minimap is shrunk away unless the ore box is ticked: kept full
 	-- size in its place for the test, /cine debug nodes stay's flag, and given
@@ -2147,15 +2240,27 @@ function ns.CursorSweepTest(arg)
 		self:Hide()
 		ns.minimapStayFullSize = stayBefore
 		cursor.iconsFor = nil
+		cursor.fadedAt = nil
 	end
 	ns.SetOnUpdate(waiter, function(self)
 		if not swept then
+			-- (questnodes: up to 10 s for the minimap to fade, reveals paused.)
+			if questie and Minimap:GetEffectiveAlpha() > 0.01 then
+				if GetTime() - startedAt > 10 then
+					Done(self)
+					return Stop("the minimap stayed up 10 s with every reveal paused (hovered? Keep open?): "
+						.. ns.MinimapSweepState())
+				end
+				return
+			end
+			-- (The shrunk wait counts from the fade, not the start.)
+			cursor.fadedAt = cursor.fadedAt or GetTime()
 			local entry = MinimapEntry()
 			local shrunk = entry and (entry.shrunk or entry.parkedFullSize)
 			if shrunk then
-				if GetTime() - startedAt > 3 then
+				if GetTime() - cursor.fadedAt > 3 then
 					Done(self)
-					return Say("the minimap stayed shrunk, couldn't sweep")
+					return Stop("the minimap stayed shrunk, couldn't sweep")
 				end
 				return
 			end
@@ -2167,7 +2272,7 @@ function ns.CursorSweepTest(arg)
 			if why == "the game is still loading in" then return end
 			if why then
 				Done(self)
-				return Say("can't now: " .. why)
+				return Stop("can't now: " .. why)
 			end
 			swept = true
 			last.found, cursor.reach = nil, nil
@@ -2208,15 +2313,46 @@ function ns.CursorSweepTest(arg)
 		-- (Stopped part way: the names it had are lost with it, but not that it
 		-- heard some. It said NOTHING after hearing 17, 2026-11-11.)
 		if #names == 0 and last.why and (last.heard or 0) > 0 then
-			return Say(("stopped before the end, names lost: it had heard something at %d points"):format(last.heard))
+			return Stop(("stopped before the end, names lost: it had heard something at %d points"):format(last.heard))
 		end
-		if #names == 0 then return Say("heard NOTHING on the minimap") end
+		if #names == 0 then return Stop("heard NOTHING on the minimap") end
 		for _, name in ipairs(names) do
 			local entry = found[name]
 			Say(("%s - %s, heard at %d points, %s%s; still heard (minimap units) %s"):format(name, ns.NodeKind(name),
 				entry.points, Where(entry), entry.gray and ", gray (other side of a cave)" or "",
 				cursor.reach and cursor.reach[name] or "?"))
 		end
+		-- (questnodes: each dot apart (every secret one shares a name), placed
+		-- in yards from you, next to Questie's icons.)
+		if not questie then return end
+		local dots = {}
+		local perUnit, facing = View()
+		for _, name in ipairs(names) do
+			for _, group in ipairs(Groups(found[name].list or {}, last.step or cursor.STEP)) do
+				local x, y = group[1], group[2]
+				local dot = { name = name, units = ("%.0f, %.0f"):format(x, y) }
+				if perUnit then
+					local cos, sin = math.cos(facing), math.sin(facing)
+					dot.north, dot.west = (sin * x + cos * y) * perUnit, (-cos * x + sin * y) * perUnit
+				end
+				dots[#dots + 1] = dot
+			end
+		end
+		Say(("%d dots, %.2f yards a minimap unit, rotating minimap %s"):format(#dots, perUnit or -1,
+			tostring(GetCVar("rotateMinimap"))))
+		local kinds = {}
+		for _, spot in ipairs(cursor.known or {}) do kinds[spot.kind] = (kinds[spot.kind] or 0) + 1 end
+		local list = {}
+		for kind, count in pairs(kinds) do list[#list + 1] = ("%s %d"):format(kind, count) end
+		table.sort(list)
+		Say(("known spots left out (not nodes): %s%s"):format(#list > 0 and table.concat(list, ", ") or "none",
+			cursor.known and "" or " (where you are isn't known)"))
+		if not ns.QuestieNodeCompare then return Stop("QUESTIE: its support file isn't loaded") end
+		local n0, w0 = Here()
+		local ok, lines, matched = pcall(ns.QuestieNodeCompare, dots, n0, w0)
+		if not ok then return Stop("QUESTIE: compare failed: " .. tostring(lines)) end
+		for _, line in ipairs(lines) do Say(line) end
+		Finish(("%d dots heard, %d of them within a few yards of a Questie icon"):format(#dots, matched or 0))
 	end)
 end
 
@@ -2410,6 +2546,9 @@ local function GiversFound(now)
 	return any
 end
 function ns.IsMinimapRevealed(now)
+	-- (/cine debug questnodes: nothing reveals it meanwhile, so it can fade
+	-- for the test's sweep. A node found had held it up, 2026-11-13.)
+	if cursor.testing then return false end
 	local questie = GiversFound(now)
 	-- (Nodes by the cursor sweep, quests from the quest log: both can be on.)
 	if not cursor.On() and ns.db and ns.db.minimapNodesByCursor then

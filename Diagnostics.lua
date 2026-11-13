@@ -3030,6 +3030,46 @@ do
 	end
 end
 
+-- /cine debug questnodes: can a dot on the minimap be known as a quest's by
+-- Questie's icons? (Its name is secret on Forever since 2026-11-12.) One
+-- run: a countdown in the box to stand near a quest node, one whole cursor
+-- sweep (NodeSweep.lua, "questie"), then every dot heard next to Questie's
+-- icons near you, in ns.db.questNodesLog; a verdict in the box.
+function ns.QuestNodesTest()
+	local LEAD = 6
+	ns.padTestRun = (ns.padTestRun or 0) + 1
+	local run, started = ns.padTestRun, GetTime()
+	local TEXT = "Stand where a QUEST node (ore, herb or object for a quest) shows on your minimap, CineMode on, " ..
+		"Questie on. Rest the mouse over the open world. Don't move."
+	local done = false
+	function ns.QuestNodesDone(verdict)
+		if done or run ~= ns.padTestRun then return end
+		done = true
+		ns.QuestNodesDone = nil
+		if ns.CursorTestingOff then ns.CursorTestingOff() end
+		ns.Print("questnodes: " .. tostring(verdict) .. ". Now /reload and say \"check log\".")
+		ns.PadTestBox("Test done. /reload, then say \"check log\".", verdict, 0.3, 1, 0.3)
+		C_Timer.After(20, function() ns.PadTestBoxHide(run) end)
+	end
+	local ticker
+	ticker = C_Timer.NewTicker(0.2, function()
+		local left = LEAD - (GetTime() - started)
+		if left > 0 then
+			ns.PadTestBox(TEXT, ("GET READY: looking in %d"):format(math.ceil(left)), 1, 0.82, 0)
+			return
+		end
+		ticker:Cancel()
+		ns.PadTestBox(TEXT, "LOOKING: keep still, a few seconds", 0.3, 1, 0.3)
+		local ok, err = pcall(ns.CursorSweepTest, "questie")
+		if not ok and ns.QuestNodesDone then ns.QuestNodesDone("the test failed: " .. tostring(err)) end
+		-- (Never left hanging: a sweep that doesn't finish still ends the run.)
+		C_Timer.After(40, function()
+			if ns.QuestNodesDone then ns.QuestNodesDone("no answer after 40 s (the sweep never finished)") end
+		end)
+	end)
+	ns.Print("questnodes: follow the box at the top of the screen.")
+end
+
 -- /cine debug minimappulse: the minimap fading in and out over and over with
 -- nothing to show (video 2026-11-12, about every 4.5 s, cursor sweep on).
 -- One run, two steps: every pass, what decided each Minimap-page frame
