@@ -28,6 +28,7 @@ ignore:
   - DemoHub.lua
   # (Bar hover test: /cine debug bartest, action bar addons' fade, hover and clicks, dev copy only)
   - BarHoverTest.lua
+  - LowManaTest.lua
   # (Minimap Copy: the Dev hub page drawing the minimap from the game's own tiles, dev copy only)
   - MinimapTiles.lua
   - MinimapCopy.lua
