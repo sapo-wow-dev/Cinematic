@@ -1204,6 +1204,7 @@ DEFAULTS.minimapHelper = true -- Minimap Glow Helper: the minimap button glows a
 DEFAULTS.handleCooldowns = true -- the Cooldown Manager page's master switch (off: left alone)
 DEFAULTS.cooldownKeybinds = false -- its Show keybinds: each spell's key on its icon (Frames.lua)
 DEFAULTS.cooldownFollowNumbers = true -- its icons' countdown numbers follow the game's Show Numbers for Cooldowns
+DEFAULTS.cooldownSpellNotBuff = true -- its icons show the spell's cooldown, not a buff the game puts on them (Frames.lua)
 -- Its Flash style, for every spell with Flash ticked: how long, and whether
 -- the icon glows, grows and gets a colored border while it flashes.
 DEFAULTS.cooldownFlashTime = 3
@@ -4087,6 +4088,7 @@ function ns.EnsureTables()
 	ns.db.cooldownGroupDefaults = ns.db.cooldownGroupDefaults or {} -- ...group -> { mode, power, early }
 	ns.db.cooldownBuffMode = ns.db.cooldownBuffMode or {} -- ...tracked buff's spell ID -> its own mode
 	ns.db.cooldownFlashReady = ns.db.cooldownFlashReady or {} -- ...spell ID -> true/false: Flash, its own
+	ns.db.cooldownNoBuff = nil -- (a test build's per-spell Only cooldown, not buff)
 	ns.db.cooldownEarlyOff = nil -- (a test build's, when Show early started ticked)
 	ns.db.gamepadPressButtons = ns.db.gamepadPressButtons or {} -- Gamepad page: button -> reveals the bars
 	ns.db.cineFade = nil -- (a test build's CineMode column, before it became cineShow)

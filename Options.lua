@@ -12427,7 +12427,13 @@ local function CreateCooldownPanel()
 	numbers:SetPoint("TOPLEFT", keybinds, "BOTTOMLEFT", 0, -2)
 	numbers:HookScript("OnClick", function() ns.ApplyCooldownNumbers() end)
 	GreyUnless(numbers, function(db) return db.handleCooldowns end)
-	afterCombat = numbers
+	-- Icons the game turns into a buff show the spell instead (Frames.lua: ns.CooldownNoBuff).
+	local notBuff = Check(content, "cooldownSpellNotBuff", L["Use the spell's cooldown, not its buff"],
+		L["While a spell's buff is up, the game shows the buff on its icon in the Essential and Utility bars " ..
+		"(Read Leyline: Attuned's hour). Ticked, the icon keeps the spell's own picture and cooldown."])
+	notBuff:SetPoint("TOPLEFT", numbers, "BOTTOMLEFT", 0, -2)
+	GreyUnless(notBuff, function(db) return db.handleCooldowns end)
+	afterCombat = notBuff
 
 	-- Each spell's icon: always shown (the game's own), only when ready in
 	-- fights, or only while recharging. A row per spell in the Cooldown

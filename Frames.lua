@@ -7775,7 +7775,11 @@ local function InfoSpell(cooldownID)
 	return found or nil
 end
 function ItemSpell(item)
-	if item.GetSpellID then
+	-- (While the game shows a buff of the spell's on its icon, as Read
+	-- Leyline's Attuned, the icon's spell ID is the buff's: its cooldown
+	-- info says the spell itself.)
+	local fromAura = item.wasSetFromAura
+	if item.GetSpellID and not (Secret(fromAura) or fromAura == true) then
 		local ok, id = pcall(item.GetSpellID, item)
 		if ok and not Secret(id) and type(id) == "number" and id > 0 then return id end
 	end
@@ -7969,6 +7973,7 @@ local function AnyCooldownRecharging(now, group)
 				if id then start, duration = SpellCooldown(id) end
 			else
 				start, duration = SwipeTimes(part)
+				if start and ns.SwipeIsBuff(part, duration) then start = nil end
 			end
 			if start and Recharging(start, duration, now) then found = true end
 		end)
@@ -8210,12 +8215,32 @@ local function FirstSwipe(part, kind)
 		swipeStart, swipeDuration = SwipeTimes(part)
 	end
 end
+-- (A swipe longer than the spell's own cooldown is a buff's: the Cooldown
+-- Manager draws one on the icon while it's up, as Read Leyline's hour of
+-- Attuned over its 2 minutes. That's no cooldown: not read, nor kept as its length.)
+local SWIPE_SLACK = 1.5 -- (sec)
+local function BuffSwipe(id, duration)
+	if not GetSpellBaseCooldown then return false end
+	local ok, ms = pcall(GetSpellBaseCooldown, id)
+	if not ok or Secret(ms) or type(ms) ~= "number" or ms <= 0 then return false end
+	return duration > ms / 1000 + SWIPE_SLACK
+end
+-- Whether a swipe is its icon's buff, not its cooldown (Stay up while
+-- recharging looks at every swipe in a bar).
+function ns.SwipeIsBuff(swipe, duration)
+	local icon = swipe.GetParent and swipe:GetParent()
+	local id = icon and ItemSpell(icon)
+	return id and BuffSwipe(id, duration) or false
+end
 function IconTimeLeft(icon, id, now)
 	local start, duration = SpellCooldown(id)
 	if not start then
 		swipeStart, swipeDuration = nil, nil
 		EachCooldownPart(icon, 1, FirstSwipe)
 		start, duration = swipeStart, swipeDuration
+		if start and BuffSwipe(id, duration) then
+			start, duration = nil, nil
+		end
 	end
 	if start then
 		if not Recharging(start, duration, now) then
@@ -9343,6 +9368,124 @@ ns.Guard(function()
 	watch:SetScript("OnEvent", function() ns.readyPace.due = true end)
 end)
 
+-- The Cooldown Manager page's "Use the spell's cooldown, not its buff"
+-- (db.cooldownSpellNotBuff). While a buff of a spell's is up, the game shows
+-- the buff on its icon in the spell bars (Read Leyline: Attuned's picture and
+-- its hour). Ticked, every icon shows its spell's own picture and cooldown
+-- instead: put back each time the game sets the icon (hooked, once it's
+-- ticked), and on each look at the icons. Unticked, the game's own comes
+-- back the next time it sets the icon.
+do
+	local hooked = setmetatable({}, { __mode = "k" }) -- icon -> true
+	local applying = false
+	local GetTexture = (C_Spell and C_Spell.GetSpellTexture) or _G.GetSpellTexture
+	local SETTERS = { "SetCooldown", "SetCooldownFromDurationObject", "SetCooldownDuration",
+		"SetCooldownFromExpirationTime" }
+
+	-- (In fights whether it's a buff may be secret: then its aura's ID says.)
+	local function ShowsBuff(icon)
+		local fromAura = icon.wasSetFromAura
+		if Secret(fromAura) then return type(icon.auraInstanceID) == "number" end
+		return fromAura == true
+	end
+
+	function ns.CooldownNoBuffOn()
+		return ns.db.cooldownSpellNotBuff and true or false
+	end
+
+	local function Apply(icon, id)
+		if applying or not ShowsBuff(icon) then return end
+		applying = true
+		local art, swipe = icon.Icon, icon.Cooldown
+		if type(art) == "table" and art.SetTexture and GetTexture then
+			local ok, file = pcall(GetTexture, id)
+			if ok and type(file) ~= "nil" then pcall(art.SetTexture, art, file) end
+		end
+		if type(swipe) == "table" and swipe.SetCooldown then
+			local start, duration = SpellCooldown(id)
+			if start then
+				if Recharging(start, duration, GetTime()) then
+					pcall(swipe.SetCooldown, swipe, start, duration)
+				else
+					pcall(swipe.Clear, swipe)
+				end
+			elseif C_Spell and C_Spell.GetSpellCooldownDuration and swipe.SetCooldownFromDurationObject then
+				-- (Secret in a fight: the game's duration, which takes a secret.)
+				local ok, length = pcall(C_Spell.GetSpellCooldownDuration, id)
+				if ok and type(length) ~= "nil" then
+					pcall(swipe.SetCooldownFromDurationObject, swipe, length, true)
+				end
+			end
+		end
+		applying = false
+	end
+
+	local function Handled()
+		return ns.db and ns.CooldownNoBuffOn() and GroupHandled("cooldowns") and ns.PageOn("handleCooldowns")
+	end
+
+	-- (Its tooltip too: the spell's, not the buff's. Put back as the game
+	-- shows it, and each time the game sets the tooltip again while it's up,
+	-- the buff's time ticking down.)
+	local function FixTooltip(icon)
+		if applying or not Handled() or not ShowsBuff(icon) then return end
+		local tip = _G.GameTooltip
+		if not tip or tip:GetOwner() ~= icon then return end
+		local id = ItemSpell(icon) or iconSpell[icon]
+		if not id then return end
+		applying = true
+		pcall(tip.SetSpellByID, tip, id)
+		applying = false
+	end
+	local TOOLTIP_SETTERS = { "SetUnitBuffByAuraInstanceID", "SetUnitAuraByAuraInstanceID", "SetUnitBuff",
+		"SetUnitAura", "SetSpellByID" }
+	local tooltipHooked = false
+	local function HookTooltip()
+		local tip = _G.GameTooltip
+		if tooltipHooked or not tip then return end
+		tooltipHooked = true
+		local function Again(self)
+			local owner = self:GetOwner()
+			if owner and hooked[owner] then FixTooltip(owner) end
+		end
+		for _, name in ipairs(TOOLTIP_SETTERS) do
+			if type(tip[name]) == "function" then hooksecurefunc(tip, name, Again) end
+		end
+	end
+
+	local function Hook(icon)
+		if hooked[icon] then return end
+		hooked[icon] = true
+		HookTooltip()
+		if icon.HookScript then
+			icon:HookScript("OnEnter", function(self) FixTooltip(self) end)
+		end
+		local function Again()
+			if applying or not Handled() then
+				return
+			end
+			-- (A pooled icon can come back for another spell: asked again.)
+			local id = ItemSpell(icon) or iconSpell[icon]
+			if id and ns.CooldownNoBuffOn(id) then Apply(icon, id) end
+		end
+		local art, swipe = icon.Icon, icon.Cooldown
+		if type(art) == "table" and type(art.SetTexture) == "function" then
+			hooksecurefunc(art, "SetTexture", Again)
+		end
+		if type(swipe) == "table" then
+			for _, name in ipairs(SETTERS) do
+				if type(swipe[name]) == "function" then hooksecurefunc(swipe, name, Again) end
+			end
+		end
+	end
+
+	function ns.CooldownNoBuff(icon, id)
+		if not ns.CooldownNoBuffOn(id) then return end
+		Hook(icon)
+		Apply(icon, id)
+	end
+end
+
 local UpdateReadyOnly
 do
 -- (Each pass's icons looked at by one function made once, with the pass's
@@ -9356,6 +9499,7 @@ local function ReadyTarget(icon, id, bar)
 		end
 		return
 	end
+	ns.CooldownNoBuff(icon, id)
 	local mode, _, power, earlyOn, seconds = ns.CooldownSpellMode(id, ns.COOLDOWN_BAR_GROUPS[bar])
 	if mode == "ready" then
 		readyTargets[icon] = (passInCombat and IconShows(icon, id, passNow, power, earlyOn, seconds)) and 1 or 0
@@ -9401,7 +9545,7 @@ function UpdateReadyOnly(elapsed, now)
 		wipe(readyTargets)
 		local db = ns.db
 		local any = next(db.cooldownReadyOnly) or next(db.cooldownRechargeOnly) or next(db.cooldownProcOnly)
-			or next(db.cooldownBuffMode)
+			or next(db.cooldownBuffMode) or db.cooldownSpellNotBuff
 		for _, group in pairs(ns.COOLDOWN_BAR_GROUPS) do
 			any = any or ns.CooldownGroupSettings(group) ~= "always"
 		end
@@ -9628,6 +9772,36 @@ do
 	ns.WakeCooldownFlash = function() ns.WakeFeatureLoop(watcher) end
 end
 
+-- (For /cine debug cooldowns: what an icon shows and where it comes from,
+-- its spell's name, picture, the game's aura on it and its info's spells.)
+function ns.ReportCooldownIconLook(icon, id)
+	local function Show(value)
+		if Secret(value) then return "secret" end
+		return tostring(value)
+	end
+	local name = id and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
+	local picture
+	local art = icon.Icon
+	if type(art) == "table" and art.GetTexture then
+		local ok, file = pcall(art.GetTexture, art)
+		picture = ok and Show(file) or "?"
+	end
+	local info = ns.IconCooldownInfo(icon)
+	local linked = "none"
+	if info and type(info.linkedSpellIDs) == "table" then
+		local list = {}
+		for _, other in ipairs(info.linkedSpellIDs) do list[#list + 1] = Show(other) end
+		linked = table.concat(list, ",")
+	end
+	local okAlpha, alpha = pcall(icon.GetAlpha, icon)
+	print(("    name %s, picture %s, from aura %s, aura id %s, aura spell %s, info spell %s override %s " ..
+		"linked %s selfAura %s, alpha %s, our target %s, only cooldown %s"):format(Show(name), tostring(picture),
+		Show(icon.wasSetFromAura), Show(icon.auraInstanceID), Show(icon.auraSpellID),
+		info and Show(info.spellID) or "-", info and Show(info.overrideSpellID) or "-", linked,
+		info and Show(info.selfAura) or "-", okAlpha and Show(alpha) or "?", tostring(readyTargets[icon]),
+		tostring(id and ns.CooldownNoBuffOn(id) or false)))
+end
+
 -- /cine debug cooldowns: what the Cooldown Manager check sees.
 function ns.ReportCooldowns()
 	local now = GetTime()
@@ -9651,6 +9825,7 @@ function ns.ReportCooldowns()
 				print(("  icon spell=%s cooldown %s"):format(tostring(id), start
 					and ("%.1fs left of %.1fs"):format(math.max(0, start + duration - now), duration)
 					or "unreadable"))
+				ns.ReportCooldownIconLook(part, id)
 				local mode, own, power, earlyOn, seconds
 				if id then
 					ns.NoteCooldownIcon(part, id)
@@ -9711,6 +9886,7 @@ function ns.ReportCooldowns()
 		print(("  %s spell=%s up=%s mode=%s%s -> %s, alpha %s"):format(group, tostring(id),
 			okShown and Show(shown) or "?", mode, own and "" or " (its group's)",
 			ns.CooldownBuffShows(mode, inCombat) and "shown" or "faded", Show(readyAlpha[icon] or 1)))
+		ns.ReportCooldownIconLook(icon, id)
 	end, true)
 	if not any then
 		ns.Print("no Cooldown Manager frames found among the faded frames")
