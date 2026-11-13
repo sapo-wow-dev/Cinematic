@@ -106,6 +106,7 @@ Camera.lua
 Director.lua
 ZoomGuard.lua
 QuestCam.lua
+ShoulderCam.lua
 SkyrideCam.lua
 CameraRows.lua
 TriggerLibrary.lua

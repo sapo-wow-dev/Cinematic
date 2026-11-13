@@ -2118,7 +2118,7 @@ do
 				return ok and icon or "Interface\\Icons\\INV_Misc_Spyglass_02"
 			end, section = "Cameras" },
 			{ "Camera Settings", "Interface\\Icons\\Trade_Engineering", dev = true, section = "Dev" }, -- (settings no script step uses)
-			{ "Shoulder Cam", "Interface\\Icons\\INV_Shoulder_02", dev = true, section = "Dev" }, -- (ShoulderCam.lua)
+			{ "Shoulder Cam", "Interface\\Icons\\INV_Shoulder_02", dev = ns.isDev or nil, section = "Dev" }, -- (ShoulderCam.lua; testers: /cine testshoulder)
 		} },
 		-- (label: the name on its icon, when the page is registered under another)
 		-- (the look and the sound: the visual effects' pages, then Audio)

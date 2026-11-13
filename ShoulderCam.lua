@@ -33,9 +33,17 @@
 local ADDON_NAME, ns = ...
 local L = ns.L
 
+-- Soft release: in the player copy it's there but locked, page and all,
+-- till a tester types /cine testshoulder (db.shoulderCamTester) and reloads.
+-- The dev copy always has it.
+function ns.ShoulderCamUnlocked()
+	return ns.isDev or (ns.db and ns.db.shoulderCamTester) and true or false
+end
+
 -- On, and not standing aside for another addon that owns the shoulder offset
 -- (DynamicCam writes it with every situation change: Support/DynamicCam.lua).
 local function ShoulderOn()
+	if not ns.ShoulderCamUnlocked() then return false end
 	if ns.FeatureYieldedTo and ns.FeatureYieldedTo("shoulderCam") then return false end
 	return ns.Setting("shoulderCam")
 end
@@ -896,6 +904,9 @@ events:SetScript("OnEvent", function(_, event)
 end)
 
 function ns.CreateShoulderCamPanel(kit)
+	if not ns.ShoulderCamUnlocked() then return end -- (no page: locked, above)
+	-- (A check given its own change function saves nothing itself: this saves, then runs it.)
+	local function SaveThen(key, fn) return function(value) ns.GetDB()[key] = value; fn() end end
 	local canvas, content = kit.CreateScrollPage()
 	local title = kit.Label(content, "GameFontNormalLarge", L["Shoulder Cam"])
 	title:SetPoint("TOPLEFT", 16, -16)
@@ -940,7 +951,7 @@ function ns.CreateShoulderCamPanel(kit)
 	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamFrames", L["Frames follow you"],
 		L["Your cast bar and Personal Resource Display slide over to where you are on the screen, and " ..
 		"glide back as the camera goes behind you. Edit Mode still places them: this moves them from " ..
-		"there."], UpdateFollow), "check"), IfOn)
+		"there."], SaveThen("shoulderCamFrames", UpdateFollow)), "check"), IfOn)
 	local strength = stack:Add(kit.Slider(content, "shoulderCamFramesStrength", L["Follow strength"], 0, 200, 5,
 		"%d%%", 100), "slider")
 	kit.Tooltip(strength, L["How far they slide. Where you are on the screen is worked out from the camera, " ..
@@ -952,11 +963,11 @@ function ns.CreateShoulderCamPanel(kit)
 		L["As you talk to an NPC (or open a vendor, bank, flight master or mailbox), the camera turns " ..
 		"slowly to bring them toward the middle of the screen, and glides back at the same pace as you " ..
 		"close the window. " ..
-		"It steps aside while Cinematic's quest or chat camera moves the view."], ns.ApplyShoulderCam), "check"), IfOn)
+		"It steps aside while Cinematic's quest or chat camera moves the view."], SaveThen("shoulderCamTalkTurn", ns.ApplyShoulderCam)), "check"), IfOn)
 	local function IfTalk() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTalkTurn end
 	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetTurn", L["Turn to your target"],
 		L["As you target an enemy, the camera turns slowly toward it, and glides back at the same pace " ..
-		"once you clear your target or pick a friendly one. Not tried in a fight yet."], ns.ApplyShoulderCam),
+		"once you clear your target or pick a friendly one. Not tried in a fight yet."], SaveThen("shoulderCamTargetTurn", ns.ApplyShoulderCam)),
 		"check"), IfOn)
 	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Turn takes"], 0.5, 4, 0.5,
 		L["%.1f sec"]), "slider")

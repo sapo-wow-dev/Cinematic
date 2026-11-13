@@ -1491,6 +1491,227 @@ do
 	if ns.RegisterCamera then ns.RegisterCamera("zoomcurve", function() return run ~= nil end) end
 end
 
+-- mounts: one run for "how much does a mount scale the offset". Recording the
+-- screen, you stand still; the offset steps 0, +1, 0, -1, 0 on its own on
+-- foot, then the box says mount up and the same steps run on the mount, then
+-- dismount (and again on another mount, if you like). Every step, mount and
+-- model change is logged; the shift's read off the recording after (the same
+-- view, so mounted against on foot is the mount's scale). Typed again: stops.
+do
+	local STEPS = { 0, 1, 0, -1, 0 } -- (small: 2 yards on a big mount hit the hillside, first run)
+	local STEP_TIME = 2      -- seconds each offset's held (it eases over in about 0.3)
+	local MOUNT_SETTLE = 3   -- seconds after mounting before the steps (the mount-up animation)
+	local WAIT_MOST = 40     -- seconds the box waits for a mount before ending the run
+	local run
+	local function MountNow()
+		if not (C_MountJournal and C_MountJournal.GetMountIDs) then return "?" end
+		for _, id in ipairs(C_MountJournal.GetMountIDs()) do
+			local name, spell, _, active = C_MountJournal.GetMountInfoByID(id)
+			if ns.Flag(active) then
+				local display = C_MountJournal.GetMountInfoExtraByID and C_MountJournal.GetMountInfoExtraByID(id)
+				return ("%s (mount %s, spell %s, display %s)"):format(Text(name), Text(id), Text(spell), Text(display))
+			end
+		end
+		return "none found"
+	end
+	local function Mounted() return IsMounted and ns.Flag(IsMounted()) or false end
+	local function Box(line, r, g, b)
+		ns.PadTestBox(("Mounts  %s"):format(run.label), line, r, g, b)
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
+		SetCVar(SHOULDER, run.held.offset)
+		SetCVar(CENTERED, run.held.centered)
+		run = nil
+		ns.shoulderTestHold = nil
+		if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
+		Log(("mounts: %s"):format(why))
+	end
+	local function Finish()
+		End("done")
+		ns.PadTestBox("Mounts run done", "stop the recording, then /reload", 0.3, 1, 0.3)
+		C_Timer.After(8, function() if not run then ns.PadTestBoxHide() end end)
+	end
+	local function Steps(label)
+		run.phase, run.step, run.clock, run.label = "steps", 1, 0, label
+		SetCVar(SHOULDER, tostring(STEPS[1]))
+		Log(("mounts: %s steps start | %s | %s | offset %s, zoom %.2f"):format(label, Who(),
+			Mounted() and MountNow() or "on foot", Text(GetCVar(SHOULDER)), Zoom()))
+		Box(("hands off: the camera steps sideways on its own (1/%d)"):format(#STEPS), 0.7, 0.7, 0.7)
+	end
+	local function Tick(_, elapsed)
+		run.clock = run.clock + elapsed
+		local mounted = Mounted()
+		if mounted ~= run.mounted then
+			run.mounted = mounted
+			Log(("mounts: %s | %s | offset %s, zoom %.2f"):format(mounted and "mounted" or "dismounted",
+				mounted and MountNow() or "on foot", Text(GetCVar(SHOULDER)), Zoom()))
+			if mounted and (run.phase == "mount" or run.phase == "again") then
+				run.rides = run.rides + 1
+				run.phase, run.clock = "settle", 0
+				Box("stay still, hands off...", 1, 0.82, 0)
+			elseif not mounted and run.phase == "dismount" then
+				run.phase, run.clock = "again", 0
+				Box("MOUNT UP on a DIFFERENT-SIZE mount now, or wait to finish", 0.3, 1, 0.3)
+			end
+		end
+		if run.phase == "steps" and run.clock >= STEP_TIME then
+			Log(("mounts: %s step %d held: offset %s, zoom %.2f"):format(run.label, run.step, Text(GetCVar(SHOULDER)), Zoom()))
+			run.step, run.clock = run.step + 1, 0
+			if STEPS[run.step] then
+				SetCVar(SHOULDER, tostring(STEPS[run.step]))
+				Box(("hands off: the camera steps sideways on its own (%d/%d)"):format(run.step, #STEPS), 0.7, 0.7, 0.7)
+			elseif run.mounted then
+				run.phase = "dismount"
+				Box("DISMOUNT now", 0.3, 1, 0.3)
+			else
+				run.phase, run.clock = "mount", 0
+				Box("MOUNT UP now (stay on the ground, don't turn)", 0.3, 1, 0.3)
+			end
+		elseif run.phase == "settle" and run.clock >= MOUNT_SETTLE then
+			Steps(("mount %d"):format(run.rides))
+		elseif (run.phase == "mount" or run.phase == "again") and run.clock >= WAIT_MOST then
+			Finish()
+		end
+	end
+	function ns.ShoulderMounts()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder mounts: stopped")
+		end
+		if InCombatLockdown() then return ns.Print("shoulder mounts: not in a fight") end
+		if Mounted() then return ns.Print("shoulder mounts: start on foot") end
+		run = { frame = CreateFrame("Frame"), rides = 0, mounted = false,
+			held = { offset = GetCVar(SHOULDER), centered = GetCVar(CENTERED) } }
+		ns.shoulderTestHold = true -- (ShoulderCam.lua keeps its hands off meanwhile)
+		SetCVar(CENTERED, "0")
+		run.frame:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
+		run.frame:SetScript("OnEvent", function(_, event)
+			if run then Log(("mounts: %s, mounted %s, offset %s"):format(event, Text(Mounted()), Text(GetCVar(SHOULDER)))) end
+		end)
+		run.frame:SetScript("OnUpdate", Tick)
+		Log(("mounts: starts | screen %.0f x %.0f, cameraFov %s, %s %s"):format(WorldFrame:GetWidth(), WorldFrame:GetHeight(),
+			Text(GetCVar("cameraFov")), REDUCE, Text(GetCVar(REDUCE))))
+		Steps("on foot")
+		ns.Print("shoulder mounts: record your screen; type it again to stop")
+	end
+end
+
+-- aimclick: one run for "how far does Turn to your target turn the camera,
+-- by where the target was when you clicked it" (so the frames that follow
+-- you can guess the turn from the click). For each spot (AIM_SPOTS) you turn
+-- till the dummy sits there, click it, keep hands off while the camera
+-- turns, then clear it and keep hands off while it glides back; the cursor
+-- at the click, your facing (if the game gives it here) and the turn's share
+-- are logged, and the turn's read off the recording after. Typed again: stops.
+do
+	local AIM_SPOTS = { "FAR LEFT", "LEFT", "MIDDLE", "RIGHT", "FAR RIGHT" }
+	local AIM_TURNED = 1   -- seconds after the turn's full before "clear it"
+	local AIM_BACK = 1     -- ...and after the glide back's done before the next spot
+	local AIM_LOG = 0.1    -- seconds between log lines while it turns
+	local run
+	local function Box(line, r, g, b)
+		ns.PadTestBox(("Aim %d/%d  dummy at the %s"):format(run.at, #AIM_SPOTS, AIM_SPOTS[run.at]), line, r, g, b)
+	end
+	local function Facing()
+		local ok, facing = pcall(GetPlayerFacing)
+		if not ok then return "error" end
+		local okText, text = pcall(function() return ("%.3f"):format(facing) end)
+		return okText and text or Text(facing)
+	end
+	local function Enemy() return UnitExists("target") and ns.Flag(UnitCanAttack("player", "target")) or false end
+	local function Share()
+		local debug = ns.GetShoulderCamDebug and ns.GetShoulderCamDebug()
+		return debug and debug.aimShare or -1
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
+		run = nil
+		Log(("aimclick: %s"):format(why))
+	end
+	local function Place()
+		run.phase = "place"
+		if Enemy() then
+			Box("CLEAR YOUR TARGET first (Esc)", 1, 0.82, 0)
+		else
+			Box(("TURN till the dummy is at the %s of the screen, then CLICK IT"):format(AIM_SPOTS[run.at]), 0.3, 1, 0.3)
+		end
+	end
+	local function Tick(_, elapsed)
+		run.clock, run.logClock = run.clock + elapsed, run.logClock + elapsed
+		local share = Share()
+		if (run.phase == "turning" or run.phase == "back") and run.logClock >= AIM_LOG then
+			run.logClock = 0
+			Log(("aimclick: %d %s %.2f s: share %.2f, facing %s, turn %s"):format(run.at, run.phase, run.clock, share,
+				Facing(), Text(GetCVar("test_cameraTargetFocusEnemyStrengthYaw"))))
+		end
+		if run.phase == "turning" then
+			if share >= 1 then run.fullFor = run.fullFor + elapsed end
+			if run.fullFor >= AIM_TURNED then
+				run.phase = "clear"
+				Box("CLEAR THE TARGET now (Esc), then hands off", 1, 0.82, 0)
+			end
+		elseif run.phase == "back" then
+			if share <= 0 then run.backFor = run.backFor + elapsed end
+			if run.backFor >= AIM_BACK then
+				Log(("aimclick: %d back | facing %s"):format(run.at, Facing()))
+				run.at = run.at + 1
+				if not AIM_SPOTS[run.at] then
+					End("done")
+					ns.PadTestBox("Aim run done", "stop the recording, then /reload", 0.3, 1, 0.3)
+					C_Timer.After(8, function() if not run then ns.PadTestBoxHide() end end)
+					return
+				end
+				Place()
+			end
+		end
+	end
+	local function OnTarget()
+		local enemy = Enemy()
+		if run.phase == "place" and enemy then
+			local x, y = GetCursorPosition()
+			local w, h = UIParent:GetWidth() * UIParent:GetEffectiveScale(), UIParent:GetHeight() * UIParent:GetEffectiveScale()
+			local _, instance = IsInInstance()
+			Log(("aimclick: %d targeted at the %s | cursor x %.4f, y %.4f (-1 to 1 from the middle), mouse over it %s | " ..
+				"facing %s, instance %s, in combat %s | offset %s, zoom %.2f, share %.2f"):format(run.at, AIM_SPOTS[run.at],
+				(x / w - 0.5) * 2, (y / h - 0.5) * 2, Text(UnitExists("mouseover") and ns.Flag(UnitIsUnit("mouseover", "target"))),
+				Facing(), Text(instance), Text(InCombatLockdown()), Text(GetCVar(SHOULDER)), Zoom(), Share()))
+			run.phase, run.clock, run.logClock, run.fullFor = "turning", 0, 0, 0
+			Box("hands off (the camera turns)...", 0.7, 0.7, 0.7)
+		elseif run.phase == "clear" and not enemy then
+			Log(("aimclick: %d cleared | facing %s, share %.2f"):format(run.at, Facing(), Share()))
+			run.phase, run.clock, run.logClock, run.backFor = "back", 0, 0, 0
+			Box("hands off (the camera glides back)...", 0.7, 0.7, 0.7)
+		elseif run.phase == "place" then
+			Place()
+		end
+	end
+	function ns.ShoulderAimClick()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder aimclick: stopped")
+		end
+		if not (ns.Setting("shoulderCam") and ns.db.shoulderCamTargetTurn) then
+			return ns.Print("shoulder aimclick: turn on the Shoulder Cam and Turn to your target first")
+		end
+		run = { frame = CreateFrame("Frame"), at = 1, clock = 0, logClock = 0 }
+		run.frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+		run.frame:SetScript("OnEvent", function() if run then OnTarget() end end)
+		run.frame:SetScript("OnUpdate", Tick)
+		Log(("aimclick: starts | %s | screen %.0f x %.0f, cameraFov %s, turn takes %s s, offset %s, zoom %.2f, facing %s"):format(
+			Who(), WorldFrame:GetWidth(), WorldFrame:GetHeight(), Text(GetCVar("cameraFov")), Text(ns.db.shoulderCamTalkTime),
+			Text(GetCVar(SHOULDER)), Zoom(), Facing()))
+		Place()
+		ns.Print("shoulder aimclick: record your screen; type it again to stop")
+	end
+end
+
 local function Set(key, value)
 	ns.db[key] = value
 	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
@@ -1520,6 +1741,8 @@ function ns.ShoulderTest(arg)
 	elseif what == "cams" then Cams()
 	elseif what == "map" then ns.ShoulderMap(rest)
 	elseif what == "zoomcurve" then ns.ShoulderZoomCurve()
+	elseif what == "mounts" then ns.ShoulderMounts()
+	elseif what == "aimclick" then ns.ShoulderAimClick()
 	elseif what == "on" then Set("shoulderCam", true)
 	elseif what == "off" then Set("shoulderCam", false)
 	elseif what == "left" or what == "right" then Set("shoulderCamSide", what)
@@ -1528,7 +1751,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end
