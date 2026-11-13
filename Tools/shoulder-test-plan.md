@@ -215,6 +215,21 @@ So a slow turn to whoever you talk to is ours to make: focus on with strength 0,
 
 Your facing: the first click turned you from 23.9 to 49.1 degrees to face the NPC; later clicks, already facing them, none. So the only slow way back is the strengths coming down before the window closes: possible only if we know the close is coming.
 
+#### Zoom curve and cat (Menethil, 2026-11-12, Night Elf, offset held at 1.18)
+
+`zoomcurve`: the game's zoom against a written offset, plus cat form. "Zooming feels staircase like: it goes right really fast, then stops."
+
+| What | On screen (the hair, % of width off the middle) |
+| --- | --- |
+| Zoom in 2 (5.38 to 3.38), offset held | -10.2 to -16.4: a smooth glide, 90% in 0.45 s, size 90% in 0.55 s |
+| Zoom out 2 | 90% in 0.3-0.35 s |
+| Both, in camera distance | about an ease of 0.19 s (63% in 0.19 s) |
+| Zoom in 5 (to 0) | first person: the hair's gone |
+| Offset +1 yard | -11.1 to -20.5: 70% in 0.05 s, 90% in 0.1 s |
+| Cat form, the elf's offset | the cat on -20.3%, the elf on -10.8%: a factor of 0.82 x 20.3 / 10.8 = 1.55 |
+
+GetCameraZoom gives the zoom's end at once (every frame read in the run). So the offset for the end was written at once and the game put it in within 0.1 s, while the camera took 0.4-0.5 s: the sideways jump, then the stop. Built: the offset follows a distance eased toward the zoom's end by 0.15 s (the glide's 0.19 less the offset's 0.04), and cat form has FORM_SCALES 1.55 (tried in game that day: "feels smooth"). The cat sits low and right in front of the camera with the shift's smoke over it for about 2 s; that's the game's.
+
 What the first two tries taught: a turn or tilt speed setting written low is put back by Core.lua's speed watch unless held with `ns.SetHeldSpeed`; `SetView` blends over about a second; the standing-still and chat cameras start mid-run unless the run holds the view (`ns.RegisterCamera`); the recording's clock ran 1.0 s ahead of the log; block matching fails on dark grass, tracking the hair's colour works.
 
 ## Build phases

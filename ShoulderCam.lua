@@ -110,9 +110,13 @@ local paused -- (PauseReason at the last check, every POLL)
 -- SWAP_WAIT at most.
 -- (That third recording, standing still: the elf rested on 20.1% with 0.82,
 -- the bear on 18.4% with 1.85, so 1.70.)
+-- (The cat, the zoomcurve run 2026-11-12, standing still with the elf's
+-- offset held: the elf on 10.8% of the way to the edge, the cat on 20.3%,
+-- so 0.82 x 20.3 / 10.8 = 1.55.)
 -- (Mounts change it too: not measured yet.)
 local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Skyborne-2"] = 0.86, ["NightElf-3"] = 0.82 }
-local FORM_SCALES = { [5] = 1.70, [8] = 1.70 } -- bear, dire bear: off the recordings till the sweep's run in it
+-- bear, cat, dire bear: off the recordings till the sweep's run in them
+local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 local SWAP_WAIT = 0.4 -- seconds: the longest the old form's factor is kept without the model's event
 local lastForm -- (the form at the last plain read: kept if a read comes back secret)
 local function FormNow()
@@ -202,8 +206,31 @@ function ns.ShoulderModelScale()
 	return 1, "not measured"
 end
 
+-- The camera's distance as it is on screen. GetCameraZoom gives where a zoom
+-- is going, at once, and the game glides the camera there (the zoomcurve run,
+-- 2026-11-12, offset held: 2 yards in or out ~90% done in 0.4-0.5 s, about
+-- an ease of 0.19 s), while a written offset settles in about 0.1 s. An
+-- offset for the zoom's end written at once ran ahead of the camera: you went
+-- sideways fast, stopped, then the zoom caught up ("staircase like"). So the
+-- offset follows this, eased toward the zoom's end by ZOOM_EASE (the glide's
+-- 0.19 less the offset's own 0.04). Started fresh, or after a pause, it's the
+-- zoom's end at once.
+local ZOOM_EASE = 0.15
+local seenZoom, seenAt
+local function SeenZoom()
+	local target = GetCameraZoom and GetCameraZoom() or 8
+	local now = GetTime()
+	if not seenZoom or now - seenAt > 0.5 then
+		seenZoom = target
+	else
+		seenZoom = target + (seenZoom - target) * math.exp(-(now - seenAt) / ZOOM_EASE)
+	end
+	seenAt = now
+	return seenZoom
+end
+
 local function SpotYards()
-	local distance = GetCameraZoom and GetCameraZoom() or 8
+	local distance = SeenZoom()
 	local yards = (ns.db.shoulderCamSpot or 0.2) * distance * ns.ShoulderViewWidth() / ns.ShoulderModelScale()
 	local k = math.min(1, math.max(0, (distance - SPOT_EASE_FROM) / (SPOT_EASE_TO - SPOT_EASE_FROM)))
 	yards = math.min(OFFSET_MOST, yards * k * k * (3 - 2 * k))
