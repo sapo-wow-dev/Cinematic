@@ -8007,9 +8007,21 @@ local readyAlpha = {} -- icon -> its alpha, while not full
 local readyCheckedAt = 0
 
 do
+	-- (Your last few casts, and when an item last went on cooldown, for
+	-- /cine debug cooldowns: which spell ID an item's use comes as, if any.)
+	ns.recentCasts = {} -- { id = spell ID or "secret", at = time }, newest last
+	ns.itemCooldownAt = nil
 	local castWatcher = CreateFrame("Frame")
 	castWatcher:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
-	castWatcher:SetScript("OnEvent", function(_, _, _, _, spellID)
+	pcall(castWatcher.RegisterEvent, castWatcher, "BAG_UPDATE_COOLDOWN")
+	castWatcher:SetScript("OnEvent", function(_, event, _, _, spellID)
+		if event == "BAG_UPDATE_COOLDOWN" then
+			ns.itemCooldownAt = GetTime()
+			return
+		end
+		local recent = ns.recentCasts
+		recent[#recent + 1] = { id = Secret(spellID) and "secret" or spellID, at = GetTime() }
+		if #recent > 12 then table.remove(recent, 1) end
 		if not Secret(spellID) and type(spellID) == "number" then
 			lastCastOf[spellID] = GetTime()
 		end
@@ -9864,6 +9876,17 @@ function ns.ReportCooldowns()
 		end)
 		if count == 0 then print("  (no icons or swipes found)") end
 	end)
+	-- Your last casts, as the game said them (an item's use: which spell ID, if any).
+	local casts = {}
+	for i = #ns.recentCasts, 1, -1 do
+		local cast = ns.recentCasts[i]
+		local name = type(cast.id) == "number" and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(cast.id)
+		casts[#casts + 1] = ("%s %s %.0fs ago"):format(tostring(cast.id), name and ("(" .. Show(name) .. ")") or "",
+			now - cast.at)
+	end
+	ns.Print("last casts, newest first: " .. (#casts > 0 and table.concat(casts, ", ") or "none seen"))
+	ns.Print("an item last went on cooldown: " .. (ns.itemCooldownAt and ("%.0fs ago"):format(now - ns.itemCooldownAt)
+		or "not seen"))
 	-- The tracked buffs and bars: each icon in use (a buff not up too) and its mode.
 	local inCombat = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))
 	for _, entry in ipairs(ns.managed) do
