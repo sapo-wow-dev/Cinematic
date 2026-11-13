@@ -5171,10 +5171,128 @@ function ns.WhichBuffAdded(before, after, count)
 	end
 	return fits
 end
+-- One new buff in a fight that the timers fit in more than one place (fits):
+-- the game pulses each icon whose buff has under BUFF_WARNING_TIME left, and
+-- its alpha stays readable. For a second each icon's lowest alpha is watched;
+-- the place where the pulsing matches what's known of the old buffs' ends
+-- (oldEnds, by their places before) is the new one's. Seen 2026-11-13
+-- (Forever): Rejuvenation came in under a 65-minute buff, guessed on top,
+-- and that buff showed instead. Not told apart: the guess (taken) after all.
+-- Its mark (ns.fightNewBuffs) goes up, for its hold (holdLeft), once settled.
+function ns.SettleAddedBuff(fits, oldEnds, total, taken, holdLeft, castIcon)
+	local warn = tonumber(_G.BUFF_WARNING_TIME) or 31
+	local settle = ns.buffSettle
+	if not settle then
+		settle = { frame = CreateFrame("Frame") }
+		ns.buffSettle = settle
+	end
+	-- (One still being watched: dropped, its buff left unmarked. The new
+	-- buff has shifted the places it was watching, so its guess may be on the
+	-- wrong icon now: no mark beats a wrong one.)
+	if settle.pending and ns.auraDebug then
+		ns.AuraSay("fight buff settle: another buff came in while watching, the first left unshown")
+	end
+	settle.pending = true
+	local started = GetTime()
+	settle.lowest = {}
+	local lowest = settle.lowest
+	local function Watch(button)
+		local info = button.buttonInfo
+		local index = type(info) == "table" and info.auraType == "Buff" and info.index
+		if type(index) ~= "number" or (issecretvalue and issecretvalue(index)) then return end
+		local okShown, isShown = pcall(button.IsShown, button)
+		if not (okShown and ns.Flag(isShown)) then return end
+		local ok, alpha = pcall(button.GetAlpha, button)
+		if ok and type(alpha) == "number" and not (issecretvalue and issecretvalue(alpha)) then
+			lowest[index] = math.min(lowest[index] or 1, alpha)
+		end
+	end
+	local function Finish()
+		ns.SetOnUpdate(settle.frame, nil)
+		settle.pending = nil
+		if ns.shownBuffTotal ~= total then
+			if ns.auraDebug then
+				ns.AuraSay(("fight buff settle: buffs went %d -> %s while watching, left unshown"):format(
+					total, tostring(ns.shownBuffTotal)))
+			end
+			return
+		end
+		local now = GetTime()
+		local newPulses -- (nil: not known)
+		local lasts = castIcon and ns.buffDurations[castIcon]
+		if lasts then newPulses = lasts < warn end
+		local pulsing = {}
+		for index = 1, total do
+			pulsing[index] = (lowest[index] or 1) < 0.97
+		end
+		local function Matches(newOne)
+			local found = {}
+			for _, place in ipairs(fits) do
+				local fit = newOne == nil or pulsing[place] == newOne
+				for index = 1, total do
+					if index ~= place then
+						local ending = oldEnds[index < place and index or index - 1]
+						if ending ~= nil then
+							local pulses = ending > 0 and ending - now < warn
+							fit = fit and pulsing[index] == pulses
+						end
+					end
+				end
+				if fit then found[#found + 1] = place end
+			end
+			return found
+		end
+		local matches = Matches(newPulses)
+		-- (How long it lasts not known, nor the old ones' ends (a /reload in
+		-- the fight): one place of those that fit pulsing is taken as the new
+		-- one, a short buff just cast. Seen 2026-11-13: Rejuvenation pulsing at
+		-- 4 of 5, nothing else known, and the guess put it on top.)
+		if #matches ~= 1 and newPulses == nil then
+			local short = Matches(true)
+			if #short == 1 then
+				matches = short
+				newPulses = "assumed"
+			end
+		end
+		local chosen = #matches == 1 and matches[1] or taken
+		if ns.auraDebug then
+			local marks = {}
+			for index = 1, total do marks[#marks + 1] = index .. (pulsing[index] and ":P" or ":-") end
+			ns.AuraSay(("fight buff settle: pulsing %s, new one pulses %s, fits %s, match %s, taken %d -> %d"):format(
+				table.concat(marks, " "), tostring(newPulses), table.concat(fits, " "),
+				#matches > 0 and table.concat(matches, " ") or "none", taken, chosen))
+		end
+		if chosen ~= taken then
+			-- (The new one's picture and end move to its place, the old ones
+			-- between back by one.)
+			local known, knownEnds = ns.buffPlaceIcons, ns.buffPlaceEnds
+			local icon, ending = known[taken], knownEnds[taken]
+			local step = chosen < taken and -1 or 1
+			for index = taken, chosen - step, step do
+				known[index], knownEnds[index] = known[index + step], knownEnds[index + step]
+			end
+			known[chosen], knownEnds[chosen] = icon, ending
+			ns.buffOthersTail = total - chosen
+		end
+		local marks = ns.fightNewBuffs
+		local wasPlace, place = total - taken + 1, total - chosen + 1
+		if marks[wasPlace] == 0 then table.remove(marks, wasPlace) end
+		for at = #marks + 1, place - 1 do marks[at] = 0 end
+		table.insert(marks, place, now + math.max(holdLeft - (now - started), 1))
+	end
+	ns.ForEachBuffIcon(Watch)
+	ns.SetOnUpdate(settle.frame, function()
+		ns.ForEachBuffIcon(Watch)
+		if GetTime() - started >= 1 then
+			Finish()
+		end
+	end)
+end
 function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 	C_Timer.After(0, function()
 		local addedTail -- (one new buff: how many sit above it, when the timers placed it)
 		local castAdded = false -- (one new buff, taken as your cast's: castIcon)
+		local addFits, addTaken, oldEnds -- (one new buff the timers fit in more than one place)
 		local shown, total, secretAt, ends, pictureAt = {}, 0, {}, {}, {}
 		local flagAt, endAt = {}, {}
 		ns.ForEachBuffIcon(function(button)
@@ -5294,6 +5412,14 @@ function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 				if ns.auraDebug then
 					ns.AuraSay(("fight buff added: timers fit %s, guess %d, taken %d"):format(
 						fits and table.concat(fits, " ") or "unknown", guess, total - tail))
+				end
+				-- (Several places fit: settled by which icons pulse as they run
+				-- out, ns.SettleAddedBuff. Each old buff's end as known before.)
+				if fits and #fits > 1 then
+					addFits, addTaken, oldEnds = fits, total - tail, {}
+					for index = 1, totalBefore do
+						oldEnds[index] = knownEnds[index]
+					end
 				end
 			end
 			for index = totalBefore, totalBefore - tail + 1, -1 do
@@ -5463,6 +5589,16 @@ function ns.CheckNewBuffIcons(peek, castIcon, updated, swapped)
 				-- (The cast's own: one new buff, at tail + 1.)
 				local placeHold = castAdded and castHold or hold
 				table.insert(ns.fightNewBuffs, tail + 1, secretAt[total - tail - place + 1] and GetTime() + placeHold or 0)
+			end
+			-- (Its place only a guess among several: held back, not shown on
+			-- whichever buff sits there, until the icons' pulsing tells.)
+			if added == 1 and addFits and total - addTaken == tail then
+				local untilAt = ns.fightNewBuffs[tail + 1]
+				if untilAt and untilAt > 0 then
+					ns.fightNewBuffs[tail + 1] = 0
+					ns.SettleAddedBuff(addFits, oldEnds, total, addTaken, untilAt - GetTime(),
+						castAdded and castIcon or nil)
+				end
 			end
 			if refreshedPlace then
 				for place = #ns.fightNewBuffs + 1, refreshedPlace - 1 do
