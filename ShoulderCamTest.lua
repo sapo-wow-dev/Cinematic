@@ -517,6 +517,8 @@ local function WallsEnd(why)
 	if not wallRun then return end
 	wallRun.frame:Hide()
 	for cvar, value in pairs(wallRun.kept) do SetCVar(cvar, value) end
+	ns.shoulderTestHold = nil
+	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
 	ns.PadTestBoxHide()
 	Log(("walls: %s; wall settings back (%s)"):format(why, Text(GetCVar("cameraIndirectVisibility"))))
 	wallRun = nil
@@ -535,19 +537,20 @@ local function WallsVerdict()
 	if a.flips + b.flips == 0 then
 		Log("walls: VERDICT indoors never flipped: that doorway counts as outdoors")
 	end
-	Log(("walls: VERDICT wall setting: pull-ins %d -> %d (%s)"):format(a.pullIns, b.pullIns,
-		b.pullIns < a.pullIns * 0.6 and "FEWER" or "no real change"))
+	Log("walls: VERDICT the game alone against as built: read off the recording")
 	ns.Print("shoulder walls: done, check log (/reload to save it)")
 end
 local function WallsBegin(index)
-	local labels = { "as it is", "with the wall setting" }
-	if index == 2 then
-		for cvar, value in pairs(TRIES.walls) do
-			if GetCVar(cvar) ~= nil then
-				wallRun.kept[cvar] = wallRun.kept[cvar] or GetCVar(cvar)
-				SetCVar(cvar, value)
-			end
-		end
+	-- (Second run, 2026-11-12: the game's wall setting is on by default and
+	-- raising it changed nothing, so the walks now tell the game's own wall
+	-- bumps from ours: the first with no offset at all, the second as built.)
+	local labels = { "no offset (the game alone)", "as built" }
+	if index == 1 then
+		ns.shoulderTestHold = true
+		SetCVar(SHOULDER, "0")
+	else
+		ns.shoulderTestHold = nil
+		if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
 	end
 	wallRun.walk = { label = labels[index], pullIns = 0, pushOuts = 0, biggest = 0, low = math.huge, high = 0,
 		offsets = 0, flips = 0, ends = GetTime() + WALL_STEP }
@@ -660,7 +663,7 @@ local function Walls()
 		if wallRun ~= run then return end
 		local walk, now = run.walk, GetTime()
 		local left = walk.ends - now
-		ns.PadTestBox(("%d/2: WALK in and out of that doorway, past the wall, a few times"):format(#run.walks),
+		ns.PadTestBox(("%d/2: WALK along that wall and past the tree, the same way, a few times"):format(#run.walks),
 			("%s - %d s left"):format(walk.label, math.max(0, math.ceil(left))))
 		local zoom, offset = Zoom(), Text(GetCVar(SHOULDER))
 		local indoors = IsIndoors and ns.Flag(IsIndoors()) or false

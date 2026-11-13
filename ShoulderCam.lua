@@ -79,6 +79,13 @@ end
 -- The offset to write: yards, negative for the left shoulder; "0" paused.
 local SPOT_EASE_FROM, SPOT_EASE_TO = 1, 4 -- yards: in the middle at 1, eased out to your spot by 4
 local OFFSET_MOST = 15 -- yards (DynamicCam's range too)
+-- Near walls the game pulls the camera in, out of our sight (the walls run,
+-- 2026-11-12: GetCameraZoom read 15.0 all through, no setting stops it), and
+-- an offset sized for the full distance then threw you far to the side,
+-- behind a tree or off screen (3.3 yards at 15 away). So the offset stops at
+-- OFFSET_SAFE: zoomed far out you sit nearer the middle than your spot, and a
+-- pull-in throws you less far (right up close it still can).
+local OFFSET_SAFE = 1.5 -- yards
 local OFFSET_STEP = 0.02 -- yards: a smaller change to the offset isn't written
 local paused -- (PauseReason at the last check, every POLL)
 
@@ -233,7 +240,7 @@ local function SpotYards()
 	local distance = SeenZoom()
 	local yards = (ns.db.shoulderCamSpot or 0.2) * distance * ns.ShoulderViewWidth() / ns.ShoulderModelScale()
 	local k = math.min(1, math.max(0, (distance - SPOT_EASE_FROM) / (SPOT_EASE_TO - SPOT_EASE_FROM)))
-	yards = math.min(OFFSET_MOST, yards * k * k * (3 - 2 * k))
+	yards = math.min(OFFSET_SAFE, yards * k * k * (3 - 2 * k))
 	-- (Just into a form: past the new offset for a moment, SWAP_PUSH.)
 	if boostUntil then
 		if GetTime() < boostUntil then

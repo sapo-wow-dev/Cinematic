@@ -230,6 +230,12 @@ Your facing: the first click turned you from 23.9 to 49.1 degrees to face the NP
 
 GetCameraZoom gives the zoom's end at once (every frame read in the run). So the offset for the end was written at once and the game put it in within 0.1 s, while the camera took 0.4-0.5 s: the sideways jump, then the stop. Built: the offset follows a distance eased toward the zoom's end by 0.15 s (the glide's 0.19 less the offset's 0.04), and cat form has FORM_SCALES 1.55 (tried in game that day: "feels smooth"). The cat sits low and right in front of the camera with the shift's smoke over it for about 2 s; that's the game's.
 
+#### Walls (Menethil Keep courtyard, 2026-11-12, a wall corner by a tree, zoom 15, offset 3.30)
+
+`walls`: two 20 s walks along the wall and past the tree. GetCameraZoom read 15.0 every frame of both: **the game's pull-ins near walls can't be seen from code**. `cameraIndirectVisibility` was already 1 (its default) in the first walk, so the second only raised `cameraIndirectOffset` 6 to 10: no change on screen. In both, the camera pulled in near the wall and the tree while the offset stayed at 3.3 yards (for 15 yards away), so you went far off to the side, behind the tree trunk or out of the picture, and came back as it let go. The console list (281 camera settings) has nothing for collision. So nothing the game gives us sees a wall or stops the pull-in.
+
+Then (that evening) the offset capped at 1.5 yards (OFFSET_SAFE): "felt a little better, still not perfect smooth". A second `walls` run, the same walk with no offset at all and then as built (capped): **the two looked the same**. The game alone hugged the wall, pulled in and out and hid you behind the trunk just as often. So what's left near walls is the game's own camera; the cap only stops the offset making it worse. The cost: past about 6 yards the spot isn't held (12.5% instead of 20% at 12 yards; the sim's spot and bear checks fail by that).
+
 What the first two tries taught: a turn or tilt speed setting written low is put back by Core.lua's speed watch unless held with `ns.SetHeldSpeed`; `SetView` blends over about a second; the standing-still and chat cameras start mid-run unless the run holds the view (`ns.RegisterCamera`); the recording's clock ran 1.0 s ahead of the log; block matching fails on dark grass, tracking the hair's colour works.
 
 ## Build phases
