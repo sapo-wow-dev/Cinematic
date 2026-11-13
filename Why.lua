@@ -423,7 +423,7 @@ function ColumnsOf(key, out, always, anyFight, page)
 	end
 	if fighting and not calm and ns.FightHold(key) and not always then
 		local wait = { player = "fightWaitPortrait", prd = "fightWaitHealth", prdpower = "fightWaitPower",
-			prdmana = "fightWaitPower" }
+			prdmana = "fightWaitMana" }
 		Add(out, "block", L["Held back at the fight's start while you're at rest (Health & Resources page)"],
 			"Personal Resources", wait[key])
 	end

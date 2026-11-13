@@ -10,6 +10,14 @@
 local _, ns = ...
 local L = ns.L
 
+-- Its detached power bar: a row of its own on the Health & Resources page
+-- (PersonalResources.lua), its ticks by addon name, on to start with.
+ns.ADDON_POWER_ROWS = ns.ADDON_POWER_ROWS or {}
+table.insert(ns.ADDON_POWER_ROWS, { addon = "ElvUI",
+	tip = L["ElvUI's player power bar, while it's detached from its player frame."] })
+ns.DEFAULTS.nfPowerElvUI = true
+ns.DEFAULTS.lowManaElvUI = true
+
 -- Advanced Frames rows: one frame each. (from: the row that held it with
 -- others till 2026-11-12, whose settings it starts with: ns.SplitAddonRows.)
 local rows = {}
@@ -51,12 +59,17 @@ end
 -- pages 1 and 3-6, so the bars that page sits on; 13-15 are retail's bars 6-8.
 -- Its target and focus cast bars are on its unit frames and fade with them,
 -- as the game's do.)
+-- (A unit frame's power bar, <frame>_PowerBar, listed with the frame. Not
+-- detached it's inside the frame: nested, left to the frame's fade. Detached
+-- with its Parent at UIParent it's moved onto ElvUI's UIParent; with its
+-- Parent at FRAME (the default) it stays inside the faded frame, so it's set
+-- to ignore the frame's alpha (DetachedBars, below) and fades on its own.)
 local ROWS = {
-	{ "player", "player", "ElvUF_Player" },
-	{ "petframe", "player", "ElvUF_Pet", "ElvUF_PetTarget" },
-	{ "target", "target", "ElvUF_Target" },
+	{ "player", "player", "ElvUF_Player", "ElvUF_Player_PowerBar" },
+	{ "petframe", "player", "ElvUF_Pet", "ElvUF_PetTarget", "ElvUF_Pet_PowerBar" },
+	{ "target", "target", "ElvUF_Target", "ElvUF_Target_PowerBar" },
 	{ "tot", "target", "ElvUF_TargetTarget", "ElvUF_TargetTargetTarget" },
-	{ "focus", "target", "ElvUF_Focus" },
+	{ "focus", "target", "ElvUF_Focus", "ElvUF_Focus_PowerBar" },
 	{ "focustot", "target", "ElvUF_FocusTarget" },
 	{ "party", "party", "ElvUF_Party" },
 	{ "buffs", "buffs", "ElvUIPlayerBuffs", "ElvUIPlayerDebuffs" },
@@ -129,6 +142,24 @@ local function IsUsable(frame)
 		and not (frame.IsForbidden and frame:IsForbidden())
 end
 
+-- Its detached power bars still inside their faded unit frame (Parent:
+-- FRAME): they ignore the frame's alpha while detached, so their own fade
+-- shows them (low mana and "until full" bring them up without the frame).
+-- Put back when attached again. (Each scan; nesting is worked out after.)
+local DETACHABLE = { "ElvUF_Player", "ElvUF_Pet", "ElvUF_Target", "ElvUF_Focus" }
+local function DetachedBars()
+	for _, name in ipairs(DETACHABLE) do
+		local frame, bar = _G[name], _G[name .. "_PowerBar"]
+		if IsUsable(frame) and IsUsable(bar) and bar.SetIgnoreParentAlpha then
+			local own = frame.POWERBAR_DETACHED == true and bar:GetParent() == frame
+			if bar.cinematicOwnAlpha ~= own then
+				bar.cinematicOwnAlpha = own
+				bar:SetIgnoreParentAlpha(own)
+			end
+		end
+	end
+end
+
 -- Its chat panels: the panel a chat window's lines show on (its left and
 -- right chat windows, as its Chat module says), the panel's backdrop (the
 -- Chat page's Background), its tab strip and its data panels and toggle
@@ -191,14 +222,20 @@ ns.WhenAddonLoads("ElvUI", function()
 	-- your pet recover, as the game's player frame, personal resource display
 	-- and pet frame do (Health & Resources page).
 	ns.AddPortraitFrame("ElvUF_Player")
+	ns.AddPowerBarFrame("ElvUF_Player_PowerBar", "ElvUI")
+	-- (Its player frame's SetAlpha hook does math on the alpha, its 3D
+	-- portrait's fix: no secret alpha there. Its detached power bar has none.)
+	ns.NO_SECRET_ALPHA.ElvUF_Player = true
 	ns.AddPortraitFrame("ElvNP_Player", true)
 	ns.AddPetFrame("ElvUF_Pet")
+	ns.AddPetFrame("ElvUF_Pet_PowerBar")
 	ns.AddScanner(function()
 		for part, name in pairs(LINKS) do
 			local frame = _G[name]
 			if IsUsable(frame) then ns.ClaimLinkPart("ElvUI", part, frame) end
 		end
 		ClaimChat()
+		DetachedBars()
 		-- The dark bar behind its minimap's zone name and clock (with its
 		-- minimap cluster on): the Minimap header row, as the game's bar there.
 		local back = _G.ElvUI_MinimapClusterBackdrop

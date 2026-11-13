@@ -449,6 +449,67 @@ local function WrapCloses()
 	ns.Log("shoulder", "talk close: watching " .. (#names > 0 and table.concat(names, ", ") or "nothing"))
 end
 
+-- Turn to your target (shoulderCamTargetTurn, off by default). The game's
+-- enemy focus (test_cameraTargetFocusEnemy...) turns the camera toward an
+-- enemy you target, but out of combat at fixed strengths it does nothing: it
+-- moves only while its strengths are changing, and holds the turn after the
+-- target's gone till they come back down (the "enemy" map run, retail dummy,
+-- 2026-11-12, Tools/shoulder-test-plan.md). So, as with the talk turn, it's on
+-- with them at 0, eased up to the game's own (aim.yaw, aim.pitch) over
+-- shoulderCamTalkTime while an enemy's targeted, and down again over the same
+-- time once it isn't: a slow turn there and a glide back. In a fight it's
+-- untested. A target the game won't say is an enemy (secret) counts as none.
+local aim = {
+	enable = "test_cameraTargetFocusEnemyEnable",
+	yawCVar = "test_cameraTargetFocusEnemyStrengthYaw",
+	pitchCVar = "test_cameraTargetFocusEnemyStrengthPitch",
+	yaw = 0.5, pitch = 0.4, -- (the game's defaults, Forever and retail)
+	share = 0, had = nil, -- (how far the turn is, 0-1; whether an enemy was targeted at the last frame)
+}
+
+local function AimOn()
+	return ns.Setting("shoulderCam") and ns.db.shoulderCamTargetTurn and paused ~= "show in"
+end
+
+local function SetAimShare(yours, share)
+	local k = share * share * (3 - 2 * share)
+	Write(yours, aim.yawCVar, ("%.3f"):format(k * aim.yaw), true)
+	Write(yours, aim.pitchCVar, ("%.3f"):format(k * aim.pitch), true)
+end
+
+local function HasEnemy()
+	return UnitExists("target") and ns.Flag(UnitCanAttack("player", "target")) or false
+end
+
+local function AimTick(elapsed)
+	local yours = ns.db and ns.db.shoulderCamYours
+	if not (yours and AimOn()) or ns.shoulderTestHold or (ns.DialogueUICameraOn and ns.DialogueUICameraOn()) then
+		return
+	end
+	local step = elapsed / math.max(0.1, ns.db.shoulderCamTalkTime or 1.5)
+	local enemy = HasEnemy()
+	if enemy ~= aim.had then
+		aim.had = enemy
+		ns.Log("shoulder", ("target turn: %s (target %s, attackable %s; enemy focus %s, turn %s, tilt %s, share %.2f)"):format(
+			enemy and "an enemy targeted, turning to it" or "no enemy, gliding back",
+			UnitExists("target") and "yes" or "none", select(2, pcall(tostring, UnitCanAttack("player", "target"))) or "secret",
+			tostring(GetCVar(aim.enable)), tostring(GetCVar(aim.yawCVar)), tostring(GetCVar(aim.pitchCVar)), aim.share))
+	end
+	if aim.share >= 1 and not aim.full and enemy then
+		aim.full = true
+		ns.Log("shoulder", ("target turn: full (enemy focus %s, turn %s, tilt %s)"):format(tostring(GetCVar(aim.enable)),
+			tostring(GetCVar(aim.yawCVar)), tostring(GetCVar(aim.pitchCVar))))
+	elseif not enemy then
+		aim.full = nil
+	end
+	if enemy then
+		aim.share = math.min(1, aim.share + step)
+	else
+		aim.share = math.max(0, aim.share - step)
+	end
+	SetAimShare(yours, aim.share)
+end
+
 -- Every frame while the Shoulder Cam's on.
 local function TalkTick(elapsed)
 	local yours = ns.db and ns.db.shoulderCamYours
@@ -511,6 +572,14 @@ function ns.ApplyShoulderCam()
 				talk.share = 0
 				GiveBack(yours, talk.enable, talk.yawCVar, talk.pitchCVar)
 			end
+			-- (The same for the enemy focus: at 0 before it goes on.)
+			if AimOn() then
+				SetAimShare(yours, aim.share)
+				Write(yours, aim.enable, "1")
+			else
+				aim.share = 0
+				GiveBack(yours, aim.enable, aim.yawCVar, aim.pitchCVar)
+			end
 		end
 		poller:Show()
 	else
@@ -534,6 +603,7 @@ end
 local waited = 0
 ns.SetOnUpdate(poller, function(_, elapsed)
 	TalkTick(elapsed)
+	AimTick(elapsed)
 	waited = waited + elapsed
 	if waited >= POLL then
 		waited = 0
@@ -755,6 +825,8 @@ function ns.GetShoulderCamDebug()
 		end)(),
 		paused = db and PauseReason() or "no", always = db and db.shoulderCamAlways, key = GetBindingKey(SWAP_ACTION) or "none",
 		talkTurn = db and db.shoulderCamTalkTurn, talking = talk.on, talkShare = talk.share, talkBack = talk.back,
+		targetTurn = db and db.shoulderCamTargetTurn, aimShare = aim.share, enemyTargeted = HasEnemy(),
+		enemyFocus = GetCVar(aim.enable), enemyYaw = GetCVar(aim.yawCVar), enemyPitch = GetCVar(aim.pitchCVar),
 		focus = GetCVar(talk.enable), focusYaw = GetCVar(talk.yawCVar), focusPitch = GetCVar(talk.pitchCVar),
 	}
 end
@@ -868,17 +940,23 @@ function ns.CreateShoulderCamPanel(kit)
 		"not read: if they land short of you or past you, turn this up or down."])
 	kit.GreyUnless(strength, function() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamFrames end)
 
-	stack:Header(content, L["Talking"])
+	stack:Header(content, L["Turning"])
 	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTalkTurn", L["Turn to who you talk to"],
 		L["As you talk to an NPC (or open a vendor, bank, flight master or mailbox), the camera turns " ..
 		"slowly to bring them toward the middle of the screen, and glides back at the same pace as you " ..
 		"close the window. " ..
 		"It steps aside while Cinematic's quest or chat camera moves the view."], ns.ApplyShoulderCam), "check"), IfOn)
 	local function IfTalk() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTalkTurn end
+	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetTurn", L["Turn to your target"],
+		L["As you target an enemy, the camera turns slowly toward it, and glides back at the same pace " ..
+		"once you clear your target or pick a friendly one. Not tried in a fight yet."], ns.ApplyShoulderCam),
+		"check"), IfOn)
 	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Turn takes"], 0.5, 4, 0.5,
 		L["%.1f sec"]), "slider")
-	kit.Tooltip(talkTime, L["How long the turn toward them takes, and the glide back."])
-	kit.GreyUnless(talkTime, IfTalk)
+	kit.Tooltip(talkTime, L["How long the turn toward them (or your target) takes, and the glide back."])
+	kit.GreyUnless(talkTime, function()
+		return ns.Setting("shoulderCam") and (ns.GetDB().shoulderCamTalkTurn or ns.GetDB().shoulderCamTargetTurn)
+	end)
 	local talkHold = stack:Add(kit.Slider(content, "shoulderCamTalkHold", L["Look at them for"], 0, 10, 0.5,
 		L["%.1f sec"]), "slider")
 	kit.Tooltip(talkHold, L["At 0 the camera stays on them till you close the window. Set a time and it " ..

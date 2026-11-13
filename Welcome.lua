@@ -1015,8 +1015,15 @@ end
 
 -- Closed (the X, Escape, Done or Decide later): what's on now, in chat.
 -- (Not on the way to the settings: those say it.)
-local toSettings
+local toSettings, afterClose
 local function OnHide()
+	-- (A window waiting its turn, the conflicts one: opened once this has
+	-- closed, a moment on so See Profile's settings open first.)
+	if afterClose then
+		local fn = afterClose
+		afterClose = nil
+		C_Timer.After(0.2, function() fn() end)
+	end
 	if toSettings then
 		toSettings = false
 	elseif not ns.db.enabled then -- (closed after Turn off)
@@ -1124,6 +1131,14 @@ function ns.ShowWelcome()
 	if not window then CreateWindow() end
 	window:Show()
 	ShowPage(1)
+end
+
+-- Runs fn once the welcome window closes (Customize included), instead of
+-- over it. False when it isn't open: the caller goes ahead now.
+function ns.AfterWelcome(fn)
+	if not (window and window:IsShown()) then return false end
+	afterClose = fn
+	return true
 end
 
 -- The level cards in their order (the Demo Hub's welcome tour clicks them).

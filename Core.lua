@@ -77,9 +77,9 @@ local DEFAULTS = {
 	offInWorld = false,       -- the open world: anywhere outside instances, cities and inns
 	offInParty = false,       -- while in a party (not a raid group)
 	offInRaidGroup = false,   -- while in a raid group
-	offWhileMoving = false,   -- while walking or riding about yourself (not auto-run, RP walking or flights)
-	movingBackAfter = 15,     -- ...until you've stood still, or kept moving, this many seconds
-	movingKeepVFX = true,     -- ...and the visual effects (letterbox, tint...) stay on meanwhile
+	offWhileMoving = false,   -- while walking, running (auto-run too) or riding about yourself (not RP walking or flights)
+	movingBackAfter = 15,     -- ...until you've kept moving this many seconds
+	movingStillAfter = 15,    -- ...or stood still this many seconds
 	fadeOutTime = 1.5,        -- every fade out, in fights and after them (once the Calm Timer is over) too
 	fadeInTime = 1.5,
 	combatFadeInTime = 0.2,   -- ...for fades in during a fight (the UI coming back as it starts)
@@ -176,9 +176,12 @@ local DEFAULTS = {
 	-- your real mouse (NodeSweep.lua). Off to start with: it's a workaround.
 	minimapNodesByCursor = true, -- (on again 2026-11-10: the quest area outline is hidden while faded now, NodeSweep.lua)
 	minimapNodePing = true,       -- ...and pings where it heard what it found (NodeSweep.lua cursor.Mark)
-	minimapNodesInCombat = false, -- ...and in fights (works, tested 2026-11-10; off to start with, user's ask)
-	nodesOffInCities = true,     -- ...but not in these places (cities have no nodes; instances and BGs
-	nodesOffInDungeons = true,   -- are kept clear of the workaround, user's ask 2026-11-10)
+	-- ...where: its Show in row (row "minimap:dots", NodeSweep.lua: Combat and
+	-- Location), Open world ticked to start with. (Since 2026-11-13; the old
+	-- In combat too and Except in boxes below are read once, to move them over.)
+	minimapNodesInCombat = false, -- (old: In combat too)
+	nodesOffInCities = true,     -- (old: Except in. Cities have no nodes; instances and BGs
+	nodesOffInDungeons = true,   -- were kept clear of the workaround, user's ask 2026-11-10)
 	nodesOffInRaids = true,
 	nodesOffInPvP = true,
 	minimapRevealTurnIns = true, -- quests of yours that are done
@@ -207,6 +210,7 @@ local DEFAULTS = {
 	minimapKeepElementals = false,
 	minimapKeepGiants = false,
 	minimapKeepHidden = false,
+	-- (Old: its Except in, read once to move onto its Show in row, 2026-11-13.)
 	trackingOffInCities = true,  -- ...except in these places (no nodes there; dungeons have some)
 	trackingOffInDungeons = true,
 	trackingOffInRaids = true,
@@ -220,9 +224,6 @@ local DEFAULTS = {
 	stayWithWindows = true, -- stay cinematic when opening the spellbook, options and similar
 	barsWithSpellbook = true, -- action bars show in CineMode while the spellbook or macros are open (Action bars tab)
 	pauseCamsInWindows = true, -- an open window pauses a playing scene and holds new ones (Scenes page)
-	portraitWhenNotFull = true, -- keep the player portrait up while health or power isn't full, within
-	                            -- the Calm Timer (calmTime) of combat or after coming back to life
-	prdWhenNotFull = true,      -- ...and the personal resource display (its own tick)
 	buffPeek = true,          -- briefly show buffs/debuffs when a buff is gained or refreshed
 	buffPeekAfterCombat = false, -- ...or only within the Calm Timer of a fight
 	buffPeekIgnoreSelf = false,  -- ...or not for buffs you cast on yourself (or your pet does)
@@ -474,6 +475,7 @@ local DEFAULTS = {
 	shoulderCamTalkTurn = true, -- ...the camera turns slowly to whoever you talk to (the game's interact focus, eased in)
 	shoulderCamTalkTime = 1.5, -- ...seconds that turn takes
 	shoulderCamTalkHold = 0, -- ...seconds it stays on them before gliding back (0: till the window closes)
+	shoulderCamTargetTurn = false, -- ...the camera turns slowly toward an enemy you target (the game's enemy focus, eased in)
 	shoulderCamAlways = true,  -- ...everywhere: its Show in row's Always (the rest: the row's ticks and rule)
 	indoorLimits = true,      -- indoors, keep the camera modes from pushing into walls:
 	indoorZoomOut = 1,        -- ...zoom out at most this many yards past your own distance
@@ -1492,7 +1494,7 @@ local PAGE_SWITCH = {}
 for page, keys in pairs({
 	handleQuality = { "campfireSitButton", "dragEquipCharacter", "talentLink", "talentCalc",
 		"centerPanels", "dragPanels", "chatCopyButton", "chatHistory", "chatHistoryTime", "loginZoom",
-		"reloadButton", "reloadKeepWindows", "xpLeft" },
+		"reloadButton", "reloadKeepWindows", "xpLeft", "hideCombatText", "hideErrorsInCombat", "hideErrorsOutOfCombat" },
 	handleHunter = { "hunterRightClickShot", "hunterAmmoSort", "hunterQuiverFill", "petUnhappyShow" },
 	handleAddonSupport = { "questieMoveIcons", "eqolMoveIcons" },
 	duelPlates = { "duelCC", "duelHideOthers" }, -- Duel Vision's page
@@ -1512,9 +1514,35 @@ for page, keys in pairs({
 }) do
 	for _, key in ipairs(keys) do PAGE_SWITCH[key] = page end
 end
+-- Allow outside CineMode (CineMode page): a vision's switch -> its tick there.
+-- Unticked, the vision works only while CineMode is on (2026-11-13).
+local OUTSIDE_CINE = {
+	handleHealVision = "outsideCineHeal", damageVision = "outsideCineDamage", lowHealth = "outsideCineVitals",
+	questVision = "outsideCineQuest", rollWindow = "outsideCineRoll", teleportVision = "outsideCineTeleport",
+	duelPlates = "outsideCineDuel", emoteVision = "outsideCineEmote", cards = "outsideCineCards",
+}
+for _, tick in pairs(OUTSIDE_CINE) do DEFAULTS[tick] = true end
+ns.OUTSIDE_CINE = OUTSIDE_CINE
+local function OutsideBlocked(db, key)
+	local tick = OUTSIDE_CINE[key]
+	return tick ~= nil and db[tick] == false and not ns.lastCinematic
+end
 -- (A page's switch can be under another's: Duel Vision's ticks under its page's
 -- switch, under Enable Visions.)
 function ns.Setting(key)
+	local db = ns.db
+	if not db then return false end
+	if OutsideBlocked(db, key) then return false end
+	local page = PAGE_SWITCH[key]
+	while page do
+		if db[page] == false or OutsideBlocked(db, page) then return false end
+		page = PAGE_SWITCH[page]
+	end
+	return db[key]
+end
+-- As ns.Setting, but not asking Allow outside CineMode: for the options
+-- pages' greying (they're open out of CineMode).
+function ns.PageSetting(key)
 	local db = ns.db
 	if not db then return false end
 	local page = PAGE_SWITCH[key]
@@ -1523,6 +1551,22 @@ function ns.Setting(key)
 		page = PAGE_SWITCH[page]
 	end
 	return db[key]
+end
+-- CineMode just came on or went off: the visions held to it with
+-- Allow outside CineMode put their frames and plates right. (force: one of
+-- its ticks just changed.)
+function ns.RefreshOutsideCine(force)
+	local db = ns.db
+	if not db then return end
+	local any = force or false
+	for _, tick in pairs(OUTSIDE_CINE) do
+		if db[tick] == false then any = true break end
+	end
+	if not any then return end
+	for _, name in ipairs({ "ApplyHealVisionFrames", "ApplyHealVisionPlates", "RefreshPlateNameStyle",
+		"RefreshTargetQuestIcon", "UpdateQuestGlow", "RefreshQuestItemButton", "RefreshRollWindow" }) do
+		if ns[name] then ns.Guard(ns[name]) end
+	end
 end
 -- The switch a setting's page is under, or nil (the options pages grey by it).
 function ns.PageSwitchOf(key)
@@ -2191,15 +2235,15 @@ local function CursorBusy()
 	return ns.db.revealOnDrag and GetCursorInfo() ~= nil and not BindPopupShown()
 end
 
--- "Turn off in" Moving: walking or riding about yourself. Auto-run, RP
--- walking and flights carry on in CineMode. It comes back once you've moved,
--- or stood still, for movingBackAfter seconds.
--- Timed from when you last took over yourself: starting to move, or ending
--- an auto-run or RP walk (say, pressing forward) without stopping.
+-- "Turn off in" Moving: walking, running (auto-run too) or riding about
+-- yourself. RP walking and flights carry on in CineMode. It comes back once
+-- you've moved for movingBackAfter seconds, or stood still for
+-- movingStillAfter. Timed from when you started moving, or ended an RP walk
+-- (say, pressing forward) without stopping.
 local movingOffSince
 local function MovingFor()
 	if not ns.db.offWhileMoving or not ns.playerMoving or ns.OnTaxi()
-		or (ns.IsAutoRunning and ns.IsAutoRunning()) or (ns.IsRPWalking and ns.IsRPWalking()) then
+		or (ns.IsRPWalking and ns.IsRPWalking()) then
 		movingOffSince = nil
 		return nil
 	end
@@ -2214,6 +2258,10 @@ local function MovingWait()
 	return math.max(1, ns.db.movingBackAfter or DEFAULTS.movingBackAfter)
 end
 
+local function StillWait()
+	return math.max(1, ns.db.movingStillAfter or DEFAULTS.movingStillAfter)
+end
+
 local function MovingOff()
 	local moving = MovingFor()
 	return moving ~= nil and moving < MovingWait()
@@ -2224,7 +2272,6 @@ local function LongMove()
 	return moving ~= nil and moving >= MovingWait()
 end
 local lastMovingOff = -math.huge -- when Moving last kept CineMode off
-local offForMoving = false -- this tick, Moving (and nothing else) kept CineMode off
 
 local function IsBusy()
 	local inCombat = InCombatLockdown() or Flag(UnitAffectingCombat("player"))
@@ -2494,19 +2541,18 @@ function Cinematic_StopCamera()
 	end
 end
 
--- Tracking doesn't keep the minimap up here (Minimap page, "Except in").
--- Going by where you are, not your PvP flag: PvP here means battlegrounds and
--- arenas, since flagged out in the world (always, on a PvP realm) is still
--- gathering country.
+-- Tracking doesn't keep the minimap up here: its Show in row (Minimap page,
+-- Combat and Location; it was an Except in row till 2026-11-13). Open world
+-- ticked to start with, and Combat, as tracking kept it up in fights before.
+-- (Going by where you are, not your PvP flag: flagged out in the world is
+-- still gathering country.)
+ns.MINIMAP_TRACKING_ROW = "minimap:tracking"
+ns.LIST_DEFAULTS.worldShow[ns.MINIMAP_TRACKING_ROW] = true
+ns.LIST_DEFAULTS.combatShow[ns.MINIMAP_TRACKING_ROW] = true
 function ns.IsTrackingOffHere()
-	local place = PLACE_SUFFIX[ns.GetPlaceType() or ""]
-	return place ~= nil and ns.db["trackingOffIn" .. place] or false
-end
-
--- The cursor sweep doesn't look here (Minimap page, its own "Except in").
-function ns.IsNodeScanOffHere()
-	local place = PLACE_SUFFIX[ns.GetPlaceType() or ""]
-	return place ~= nil and ns.db["nodesOffIn" .. place] or false
+	if not ns.RowOnNow then return false end
+	local ok, on = pcall(ns.RowOnNow, ns.MINIMAP_TRACKING_ROW, nil, true)
+	return ok and not on
 end
 
 -- The zone map you're on (its ID), up through the small maps inside it
@@ -2664,15 +2710,13 @@ local function ShouldBeCinematic(now)
 	local travelCine = ns.TravelSceneCine and ns.TravelSceneCine()
 	if MovingOff() and not travelCine then
 		lastMovingOff = now
-		offForMoving = true
 		ns.cineOffWhy = "moving (Off while moving)"
 		ns.cineOffCode = "moving"
 		return false
 	end
 	if instant or travelCine or not ns.db.offWhileMoving then
 		lastMovingOff = -math.huge
-	elseif now - lastMovingOff < MovingWait() then
-		offForMoving = true
+	elseif now - lastMovingOff < StillWait() then
 		ns.cineOffWhy = "just moved (Off while moving)"
 		ns.cineOffCode = "moved"
 		return false
@@ -3392,6 +3436,11 @@ local snapRound = 0
 -- fights (and until the Calm Timer, db.calmTime, has run out after one), or
 -- only while a camera mode runs.
 local GRID_EFFECTS = { "letterbox", "tint", "vignette", "weather" }
+-- Allow outside CineMode's tick for each (CineMode page; off: CineMode only).
+local OUTSIDE_EFFECT = { letterbox = "outsideCineLetterbox", tint = "outsideCineTint",
+	vignette = "outsideCineVignette", weather = "outsideCineWeather" }
+for _, tick in pairs(OUTSIDE_EFFECT) do DEFAULTS[tick] = false end
+ns.OUTSIDE_EFFECT = OUTSIDE_EFFECT
 local EFFECT_ROWS = {} -- (their Show in rows' keys, made once)
 for _, key in ipairs(GRID_EFFECTS) do EFFECT_ROWS[key] = "effect:" .. key end
 local effectWanted = {}
@@ -3478,9 +3527,9 @@ local function OnUpdate(_, elapsed)
 			ns.Log("calm", ("%.1f sec after the calm timer ended, still up: %s"):format(now - calmTrace.endedAt,
 				ns.NotFadedList and Step(ns.NotFadedList) or "?"))
 		end
-		-- In CineMode only (never over the normal UI, since 2026-11-10: the effects
-		-- mean CineMode); and while just moving about takes you out of it, with Keep VFX on.
-		local effectsOn = cinematic or (offForMoving and ns.db.movingKeepVFX) or false
+		-- In CineMode; out of it only the effects ticked in Allow outside CineMode
+		-- (CineMode page, 2026-11-13: outsideCine<Effect>, off to start with).
+		local effectsOn = cinematic or false -- (a change asks the rows at once, below)
 		-- (Each on while its Show in row, effect:<effect>, is: Visual Effects page;
 		-- the letterbox and tint while their own page's Enable Page is on too.)
 		-- (Show me's effects demo, ShowMe.lua: just its effects, for its few seconds.)
@@ -3495,7 +3544,8 @@ local function OnUpdate(_, elapsed)
 				if ns.effectsDemo then
 					effectAsk[key] = ns.effectsDemo[key] or false
 				else
-					effectAsk[key] = effectsOn and ns.db.visualEffects and ns.db[key .. "Page"] ~= false
+					effectAsk[key] = (cinematic or ns.db[OUTSIDE_EFFECT[key]] == true)
+						and ns.db.visualEffects and ns.db[key .. "Page"] ~= false
 						and ns.RowOnNow(EFFECT_ROWS[key], ns.db[key .. "Always"], true) or false
 				end
 			end
@@ -3519,7 +3569,10 @@ local function OnUpdate(_, elapsed)
 		Step(ns.UpdateTooltip)
 		Step(ns.UpdateTaxi)
 		if not ns.IsSuspended() then
+			local changed = cinematic ~= ns.lastCinematic
 			ns.lastCinematic = cinematic
+			-- (The visions held to CineMode by Allow outside CineMode.)
+			if changed then Step(ns.RefreshOutsideCine) end
 		end
 	end
 	if accumulated < TICK then
@@ -3563,7 +3616,6 @@ local function OnUpdate(_, elapsed)
 	end
 
 	Step(UpdateDroppedTarget)
-	offForMoving = false
 	local cinematic = Step(ShouldBeCinematic, GetTime()) or false -- (an error: the normal UI)
 	if cinematic and (starting or switchedProfile) then
 		switchedProfile = false
@@ -6002,6 +6054,26 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			end
 			ns.db.minimapNodesOffV1 = true
 		end
+		-- Nearby Dots' In combat too and Except in boxes became its Show in row
+		-- (2026-11-13): what you'd changed there moved onto the row's ticks,
+		-- once. (Open world is ticked to start with; Instances covers both
+		-- Dungeons and Raids.)
+		if not ns.db.nodesShowInV1 then
+			local key, db = "minimap:dots", ns.db
+			local function Tick(list, on)
+				if on and type(db[list]) == "table" and db[list][key] == nil then db[list][key] = true end
+			end
+			Tick("combatShow", db.minimapNodesInCombat == true)
+			Tick("cityShow", db.nodesOffInCities == false)
+			Tick("instanceShow", db.nodesOffInDungeons == false or db.nodesOffInRaids == false)
+			Tick("bgShow", db.nodesOffInPvP == false)
+			-- (Keep open's Tracking, its Except in likewise.)
+			key = "minimap:tracking"
+			Tick("cityShow", db.trackingOffInCities == false)
+			Tick("instanceShow", db.trackingOffInDungeons == false or db.trackingOffInRaids == false)
+			Tick("bgShow", db.trackingOffInPvP == false)
+			db.nodesShowInV1 = true
+		end
 		if not ns.db.skyrideDefaultsV1 then
 			for key, value in pairs(DEFAULTS) do
 				if key:find("^skyride") then
@@ -6257,6 +6329,45 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 				end
 			end
 			ns.db.questTalkPlaceFixedV1 = true
+		end
+		-- Health & Resources' grid (2026-11-13): Not full by frame, health and
+		-- power apart (nfHealth... and nfPower...), from the player frame's one
+		-- tick (portraitWhenNotFull) and the personal resource display's
+		-- (prdWhenNotFull; for a day, one per bar: prd...NotFull). ElvUI's power
+		-- bar went by the player frame's; our mana bar's Wait at pull by the
+		-- power bar's. Not full now counts any time: players from before keep
+		-- "only after a fight". Every profile. Once.
+		if not ns.db.notFullGridV2 then
+			local existing = ns.db.notFullGridV1 or ns.db.petWhenNotFullOffV1 ~= nil or ns.db.profileChosen == true
+			local CARRY = {
+				{ "prdHealthNotFull", { "nfHealthPrd" } },
+				{ "prdPowerNotFull", { "nfPowerPrdPower" } },
+				{ "prdManaNotFull", { "nfPowerPrdMana" } },
+				{ "powerNotFullElvUI", { "nfPowerElvUI" } },
+				{ "prdWhenNotFull", { "nfHealthPrd", "nfPowerPrdPower", "nfPowerPrdMana" } },
+				{ "portraitWhenNotFull", { "nfHealthPlayer", "nfPowerPlayer", "nfPowerElvUI" } },
+			}
+			local function Carry(t)
+				if type(t) ~= "table" then return end
+				for _, carry in ipairs(CARRY) do
+					local value = t[carry[1]]
+					if value ~= nil then
+						for _, key in ipairs(carry[2]) do
+							if t[key] == nil then t[key] = value end
+						end
+						t[carry[1]] = nil
+					end
+				end
+				if t.fightWaitPower ~= nil and t.fightWaitMana == nil then t.fightWaitMana = t.fightWaitPower end
+				if existing and t.notFullAfterFight == nil then t.notFullAfterFight = true end
+			end
+			Carry(ns.db)
+			for _, saved in pairs(ns.db.profiles or {}) do
+				if type(saved) == "table" then
+					Carry(type(saved.settings) == "table" and saved.settings or saved)
+				end
+			end
+			ns.db.notFullGridV2 = true
 		end
 		-- The pet frame kept up until its health is full (Personal Resources)
 		-- off to start with now: off in every profile. Once.
@@ -7616,6 +7727,7 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		-- above have read what they need.
 		for _, key in ipairs({
 			"keepRaidMarkers", -- (now the Raid Markers grid)
+			"movingKeepVFX", "damageVisionOnlyCine", -- (now Allow outside CineMode's ticks)
 			"handleUnitFrames", -- (the parts follow the HUD page's switch)
 			"rollMinQuality", "rollUsableOnly", "rollTopPick", -- (now roll<Rule><Group><Q>)
 			"rollBeside", "rollSeparate", -- (now rollPlace)
@@ -7898,6 +8010,60 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 				if type(point) == "table" then SplitBGs(point) end
 			end
 			ns.db.offInBGsV1 = true
+		end
+		-- Off while moving's one Back after timed both standing still and a long
+		-- move; standing still has its own slider now (2026-11-13), starting at
+		-- the old one's time.
+		if not ns.db.movingStillV1 then
+			local function SplitStill(t)
+				if t.movingStillAfter == nil and t.movingBackAfter ~= nil then t.movingStillAfter = t.movingBackAfter end
+			end
+			SplitStill(ns.db)
+			for _, saved in pairs(ns.db.profiles or {}) do
+				if type(saved) == "table" then
+					SplitStill(saved)
+					if type(saved.settings) == "table" then SplitStill(saved.settings) end
+				end
+			end
+			for _, point in pairs(ns.db.profileResetPoints or {}) do
+				if type(point) == "table" then SplitStill(point) end
+			end
+			ns.db.movingStillV1 = true
+		end
+		-- Allow outside CineMode (CineMode page, 2026-11-13) is the one place a
+		-- vision is held to CineMode: Damage Vision's In CineMode tick, and the
+		-- CineMode column on Damage Vision's and Vitals Vision's Show in rows,
+		-- went. Either ticked: its row's Always ticked, and not outside CineMode.
+		if not ns.db.outsideCineV1 then
+			local function Move(t)
+				local ticks = type(t.cineModeShow) == "table" and t.cineModeShow or nil
+				-- (Already Always: the CineMode tick added nothing, it stays everywhere.)
+				if ticks and ticks["damage:vision"] == true and t.damageVisionAlways ~= true then
+					t.damageVisionAlways = true
+					t.outsideCineDamage = false
+				end
+				if t.damageVisionOnlyCine == true then t.outsideCineDamage = false end
+				if ticks and ticks["vision:lowHealth"] == true and t.lowHealthAlways == false then -- (nil: Always, its default)
+					t.lowHealthAlways = true
+					t.outsideCineVitals = false
+				end
+				t.damageVisionOnlyCine = nil
+				if ticks then
+					ticks["damage:vision"] = nil
+					ticks["vision:lowHealth"] = nil
+				end
+			end
+			Move(ns.db)
+			for _, saved in pairs(ns.db.profiles or {}) do
+				if type(saved) == "table" then
+					Move(saved)
+					if type(saved.settings) == "table" then Move(saved.settings) end
+				end
+			end
+			for _, point in pairs(ns.db.profileResetPoints or {}) do
+				if type(point) == "table" then Move(point) end
+			end
+			ns.db.outsideCineV1 = true
 		end
 		-- New settings start as the active profile has them (a built-in's
 		-- changes to the defaults included). A fresh install (or Reset addon)

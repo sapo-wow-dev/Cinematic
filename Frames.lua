@@ -1301,9 +1301,12 @@ do
 	local headerArt, headerSeen = {}, {}
 	local headerStandIn
 
+	-- Header art another addon sets the alpha of itself (Leatrix Plus's header
+	-- opacity): left to it, never set back to full here.
+	ns.headerArtLeftAlone = ns.headerArtLeftAlone or {}
 	local function AddHeaderArt(region, over)
 		if type(region) ~= "table" or headerSeen[region] or type(region.SetAlpha) ~= "function"
-			or IsForbidden(region) then
+			or IsForbidden(region) or ns.headerArtLeftAlone[region] then
 			return
 		end
 		headerSeen[region] = true
@@ -1314,7 +1317,7 @@ do
 			headerStandIn:SetAllPoints(over or region)
 			hooksecurefunc(headerStandIn, "SetAlpha", function(_, alpha)
 				for _, art in ipairs(headerArt) do
-					art:SetAlpha(alpha)
+					if not ns.headerArtLeftAlone[art] then art:SetAlpha(alpha) end
 				end
 			end)
 		end
@@ -1335,6 +1338,29 @@ do
 				return region
 			end
 		end
+	end
+
+	-- LibDBIcon's buttons shown only while you hover the minimap (its
+	-- ShowOnEnter, Leatrix Plus's Hide addon buttons among others) fade out
+	-- 1 s after you leave by an alpha animation of their own (0.2 s). Drawn
+	-- over the fade's alpha, it brought the icon back to full in the middle of
+	-- the map's fade and ended it late (lag and flicker, 2026-11-12). It's
+	-- stopped as it starts, and the button set to 0 at its end time instead:
+	-- its own alpha, which the fade multiplies (the buttons are hooked).
+	-- Hovering again (the animation's Stop, then alpha 1) cancels that.
+	local iconFadeTurn = setmetatable({}, { __mode = "k" })
+	local function TameIconFade(button)
+		local anim = button.fadeOut
+		if iconFadeTurn[button] or type(anim) ~= "table" or type(anim.Play) ~= "function" then return end
+		iconFadeTurn[button] = 0
+		hooksecurefunc(anim, "Stop", function() iconFadeTurn[button] = iconFadeTurn[button] + 1 end)
+		hooksecurefunc(anim, "Play", function(self)
+			self:Stop()
+			local turn = iconFadeTurn[button]
+			C_Timer.After(1.2, function()
+				if iconFadeTurn[button] == turn and button.showOnMouseover then button:SetAlpha(0) end
+			end)
+		end)
 	end
 
 	local HEADER_GROUPS = { "minimapheader", "minimapzone", "minimaptracking", "minimapdial", "minimapaddons",
@@ -1407,7 +1433,10 @@ do
 		if type(Minimap) == "table" and Minimap.GetChildren and not leftAlone.Minimap and GroupHandled("minimapaddons") then
 			for _, child in ipairs({ Minimap:GetChildren() }) do
 				local ok, name = pcall(child.GetName, child)
-				if ok and type(name) == "string" and name:find("^LibDBIcon10_") then
+				if ok and type(name) == "string" and name:find("^LibDBIcon10_") and not seen[child] then
+					-- (Its own alpha followed, hooked: shown only on hover, it's 0 or 1.)
+					TameIconFade(child)
+					ownAlphaFrames[child], hookedFrames[child] = true, true
 					AddFrame(child, "minimapaddons")
 				end
 			end
@@ -10230,6 +10259,47 @@ end
 -- header: zone name, its bar, the clock), the textures of every shown frame
 -- there, biggest first, with owner, layer, art, color and alpha. For a dark
 -- band a player still sees there with the header's rows hidden (2026-11-12).
+-- /cine debug mapicon: our minimap button and every LibDBIcon button (other
+-- addons', and the copies Leatrix Plus makes of buttons like ours), each
+-- with where it is, its alpha and whether the fade has it, plus the map's.
+-- For "our minimap icon isn't fading with the minimap" (2026-11-12).
+function ns.ReportMinimapIcon()
+	local function Num(value)
+		if Secret(value) then return "secret" end
+		return type(value) == "number" and ("%.2f"):format(value) or tostring(value)
+	end
+	local function Line(label, frame)
+		if type(frame) ~= "table" or IsForbidden(frame) then return label .. ": none" end
+		local entry
+		for _, managed in ipairs(ns.managed) do
+			if managed.frame == frame then entry = managed break end
+		end
+		local okParent, parent = pcall(function()
+			local p = frame:GetParent()
+			return p and (p:GetName() or p:GetDebugName()) or "none"
+		end)
+		return ("%s: shown %s visible %s, parent %s, alpha %s (on screen %s), strata %s; %s"):format(label,
+			Num(frame:IsShown()), Num(frame:IsVisible()), okParent and tostring(parent) or "?", Num(frame:GetAlpha()),
+			Num(frame:GetEffectiveAlpha()), tostring(frame:GetFrameStrata()),
+			entry and ("faded in %s at %s"):format(tostring(entry.group), Num(entry.alpha)) or "not faded by Cinematic")
+	end
+	ns.Print(Line("Minimap", Minimap))
+	ns.Print(Line("our button", _G.CinematicMinimapButton) .. (", gathered %s"):format(
+		tostring(ns.MinimapButtonGathered and ns.MinimapButtonGathered())))
+	ns.Print(("Addon buttons row handled %s"):format(tostring(GroupHandled("minimapaddons"))))
+	local frame = EnumerateFrames()
+	while frame do
+		if not IsForbidden(frame) then
+			local ok, name = pcall(frame.GetName, frame)
+			if ok and type(name) == "string" and name:find("^LibDBIcon10_") then ns.Print("  " .. Line(name, frame)) end
+		end
+		frame = EnumerateFrames(frame)
+	end
+	if _G.LeaPlusGlobalMinimapCombinedButtonFrame then
+		ns.Print(Line("Leatrix Plus button bag", _G.LeaPlusGlobalMinimapCombinedButtonFrame))
+	end
+end
+
 function ns.ReportMinimapBack()
 	if type(Minimap) ~= "table" then ns.Print("mapback: no minimap") return end
 	local function Rect(region)
@@ -11421,15 +11491,20 @@ function ns.UpdateFrames(cinematic, elapsed)
 			target = 0
 		end
 		-- (Vitals Vision's health bars: up as far as your health says, LowHealth.lua.)
-		entry.vitalsSecret = nil
+		entry.vitalsSecret, entry.manaSecret = nil, nil
 		if target == 0 and cinematic and not deathFade and not immersive and PORTRAIT_FRAMES[entry.name]
 			and entry.name ~= "CinematicPersonalPower" and entry.name ~= "CinematicPersonalMana" then
 			local which = PORTRAIT_FRAMES[entry.name] == "prdWhenNotFull" and "prd" or "portrait"
 			local vitals = ns.VitalsFrameAlpha(which, entry.frame == personalPower.healthStandIn)
 			if vitals == "secret" then
-				entry.vitalsSecret = which
+				entry.vitalsSecret = not ns.NO_SECRET_ALPHA[entry.name] and which or nil
 			elseif vitals then
 				target = vitals
+			end
+			-- (Low mana the game won't say: it sets the alpha, PersonalResources.lua.)
+			if target == 0 and not entry.vitalsSecret
+				and ns.LowManaSecret(PORTRAIT_FRAMES[entry.name], entry) then
+				entry.manaSecret = true
 			end
 		end
 		-- (Swing timer page: in CineMode and out, hovering included.)
@@ -11538,7 +11613,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 			if group == "chat" or entry.shrinkWhenFaded or entry.shrunk or entry.parkedFullSize
 				or entry.frame == Minimap or entry.frame == artStandIn or entry.frame == personalPower.healthStandIn
 				or LOOSE_PART_GROUPS[group] or personalPower.GROUPS[group] or group == "prd"
-				or ns.UNIT_PART_FRAME_NAMES[entry.name] or NEVER_NESTED[entry.name] or entry.vitalsSecret
+				or ns.UNIT_PART_FRAME_NAMES[entry.name] or NEVER_NESTED[entry.name] or entry.vitalsSecret or entry.manaSecret
 				or entry.frame == _G.ObjectiveTrackerFrame or ns.chatLinkBackdrop[entry.frame] then
 				tickTables.fadeOnly = false
 			end
@@ -11589,7 +11664,14 @@ function ns.UpdateFrames(cinematic, elapsed)
 		end
 		-- (Secret health: the game sets a faded-out health bar's alpha from it.)
 		if entry.vitalsSecret and target == 0 and entry.alpha == 0 and not ns.layoutFadeUntil and not ns.previewRows then
+			-- (Ours: the own-alpha hook on an addon's frame mustn't put it back.)
+			entry.settingAlpha = true
 			ns.SetVitalsSecretAlpha(entry.frame, entry.vitalsSecret)
+			entry.settingAlpha = nil
+		elseif entry.manaSecret and target == 0 and entry.alpha == 0 and not ns.layoutFadeUntil and not ns.previewRows then
+			entry.settingAlpha = true
+			ns.SetLowManaSecretAlpha(entry.frame)
+			entry.settingAlpha = nil
 		end
 		if NEVER_NESTED[entry.name] and entry.group == "chat" then
 			chatButtonsAlpha = math.max(chatButtonsAlpha or 0, entry.alpha)
@@ -12292,6 +12374,19 @@ end
 -- display: its personal resource display instead, shown like the game's.
 function ns.AddPortraitFrame(name, display)
 	PORTRAIT_FRAMES[name] = display and "prdWhenNotFull" or "portraitWhenNotFull"
+end
+
+-- Its power bar on its own (ElvUI's detached one): shown like its player
+-- frame, by its own row's ticks on the Health & Resources page (addon: the
+-- row's; PersonalResources.lua, ns.ADDON_POWER_ROWS).
+ns.ADDON_POWER_BARS = {}
+-- Its frames whose SetAlpha it hooks with math on the value (ElvUI's player
+-- frame: its 3D portrait fix): never given a secret alpha (low health or
+-- mana the game won't say), or its hook errors on every pass. Faded as usual.
+ns.NO_SECRET_ALPHA = {}
+function ns.AddPowerBarFrame(name, addon)
+	ns.AddPortraitFrame(name)
+	ns.ADDON_POWER_BARS[name] = addon
 end
 
 -- Its pet frame, kept up like the game's until your pet's health is full.

@@ -208,7 +208,8 @@ ns.BUILTIN_PROFILES = {
 			"flights, when you go AFK, for your Hearthstone and teleports, at cozy moments like a campfire, " ..
 			"and when you die."],
 		picks = { layout = { forever = "preset" }, camera = "lite", chat = "lite" },
-		modules = With("zone-card", "travel-cards", "damage-vision", "music-calm", "node-icons", "tint-medium"),
+		modules = With("zone-card", "travel-cards", "damage-vision", "music-calm", "node-icons", "tint-medium",
+			"effects-outside-cinemode"),
 		preview = "bars",
 	},
 	{
@@ -228,7 +229,7 @@ ns.BUILTIN_PROFILES = {
 		-- choice for a slot then leaves them as they are.)
 		modules = With("zone-card", "travel-cards", "story-cards", "damage-vision", "vitals-vision",
 			"combat-vision", "cursor-hide", "music-calm", "weather-view-distance",
-			"node-icons"),
+			"node-icons", "effects-outside-cinemode"),
 	},
 	-- Nothing on: for players who want just a few parts (Roll, Emote Vision,
 	-- cards...) and turn on only those pages. The welcome window's last

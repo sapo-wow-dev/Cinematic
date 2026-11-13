@@ -3042,9 +3042,11 @@ function ns.MinimapPulseTest()
 		return
 	end
 	local STEPS = {
-		"1/2: STAND STILL where the minimap flashed, CineMode on.\nRest the mouse over the open world, "
+		"1/4: STAND STILL where the minimap flashed, CineMode on.\nRest the mouse over the open world, "
 			.. "away from the minimap and any window. Don't touch anything.",
-		"2/2: STAND STILL. Rest the mouse on your action bars' spot,\nbottom middle of the screen. Don't touch anything.",
+		"2/4: STAND STILL. Rest the mouse on your action bars' spot,\nbottom middle of the screen. Don't touch anything.",
+		"3/4: When it says RECORDING, move the mouse onto the minimap's spot\n(top right) and keep it there. Don't click.",
+		"4/4: Rest the mouse RIGHT ON the ore/herb dot on the minimap,\nso its name shows. Keep it there. Don't click.",
 	}
 	local LEAD, LENGTH = 4, 25
 	local log = {}
@@ -3128,13 +3130,34 @@ function ns.MinimapPulseTest()
 		table.sort(order, function(a, b) return tally[a] > tally[b] end)
 		local parts = {}
 		for _, reason in ipairs(order) do parts[#parts + 1] = ("%dx %s"):format(tally[reason], reason) end
+		-- (Nearby ore, herbs and treasure: whether the sweeps ran and heard the
+		-- node, and else why they waited most, 2026-11-13.)
+		local waits, topWait, top = {}, nil, 0
+		for _, line in ipairs(log) do
+			local why = line:match("waits: ([^%)]+)%)")
+			if why and why ~= "nothing" then
+				waits[why] = (waits[why] or 0) + 1
+				if waits[why] > top then topWait, top = why, waits[why] end
+			end
+		end
+		Line(("NODES: %d sweeps finished, last names heard: %s; waited most for: %s"):format(rec.results or 0,
+			tostring(rec.heardAny or "none"), topWait and ("%s (%d snaps)"):format(topWait, top) or "nothing"))
+		local hover = not rec.hoverAt and "HOVER: the mouse never reached the minimap's spot"
+			or rec.hoverUpAt and ("HOVER: minimap came up %.1f s after the mouse reached it"):format(rec.hoverUpAt - rec.hoverAt)
+			or ("HOVER: minimap NEVER came up in %.0f s with the mouse on it"):format(GetTime() - rec.hoverAt)
+		Line(hover)
+		local readVerdict = rec.readable and ("DOT: a name WAS readable: " .. rec.readable)
+			or rec.secretRead and "DOT: the game answered but every name was SECRET"
+			or "DOT: nothing read under the mouse (was it on the dot?)"
+		Line(readVerdict)
+		hover = hover .. ". " .. readVerdict
 		local verdict = #rec.ups == 0
 			and ("the minimap never came up (%d sweeps ran): no pulse this run"):format(#rec.sweepEnds)
 			or ("the minimap came up %d times, %d of them during a sweep or within 0.8 s after one (%d sweeps). Why: %s"):format(
 				#rec.ups, afterSweep, #rec.sweepEnds, table.concat(parts, " | "))
 		Line("VERDICT (" .. how .. "): " .. verdict)
-		ns.Print("minimappulse: " .. verdict .. ". Now /reload and say \"check log\".")
-		ns.PadTestBox("Test " .. how .. ". /reload, then say \"check log\".", verdict, 0.3, 1, 0.3)
+		ns.Print("minimappulse: " .. hover .. ". " .. verdict .. ". Now /reload and say \"check log\".")
+		ns.PadTestBox("Test " .. how .. ". /reload, then say \"check log\".", hover, 0.3, 1, 0.3)
 		C_Timer.After(20, function() ns.PadTestBoxHide(run) end)
 	end
 	-- (The sweep's ends, for the verdict: NodeSweep.lua writes the line.)
@@ -3165,6 +3188,70 @@ function ns.MinimapPulseTest()
 		else
 			ns.PadTestBox(STEPS[index], ("RECORDING: keep still, %d sec left"):format(math.ceil(LENGTH - into)),
 				0.3, 1, 0.3)
+			-- (Step 3: how long from the mouse reaching the minimap's spot till it
+			-- came up. MinimapCluster: it stays put while a sweep moves Minimap.)
+			if index == 3 then
+				local now = GetTime()
+				local okOn, on = pcall(function() return _G.MinimapCluster and ns.Flag(_G.MinimapCluster:IsMouseOver()) end)
+				if okOn and on and not rec.hoverAt then
+					rec.hoverAt = now
+					local okSweep, sweep = pcall(ns.MinimapSweepState or function() return "no sweep code" end)
+					Line("HOVER TEST: mouse reached the minimap's spot; " .. (okSweep and tostring(sweep) or "?"))
+				end
+				if rec.hoverAt and not rec.hoverUpAt and Minimap:GetEffectiveAlpha() > 0.5 then
+					rec.hoverUpAt = now
+					Line(("HOVER TEST: minimap up %.2f s after the mouse reached it"):format(now - rec.hoverAt))
+				end
+			end
+			-- (Step 4: the REAL mouse on a node's dot. Can an addon read its name
+			-- at all, or only the game? The sweep's answers were all secret after
+			-- the 2026-11-12 patch. Each new reading logged, both ways in: the
+			-- tooltip data and the shown tooltip's own text.)
+			if index == 4 then
+				local function Show(value)
+					if issecretvalue and issecretvalue(value) then return "SECRET" end
+					if type(value) == "string" then return ("%q"):format(value:sub(1, 60)) end
+					return tostring(value)
+				end
+				local parts = {}
+				local ok, data = pcall(C_TooltipInfo.GetMinimapMouseover)
+				if not ok then
+					parts[#parts + 1] = "data failed: " .. tostring(data)
+				elseif issecretvalue and issecretvalue(data) then
+					parts[#parts + 1] = "data SECRET"
+				elseif type(data) ~= "table" then
+					parts[#parts + 1] = "data " .. tostring(data)
+				else
+					local lines = data.lines
+					local count = (type(lines) == "table" and not (issecretvalue and issecretvalue(lines))) and #lines or -1
+					parts[#parts + 1] = ("data %d lines"):format(count)
+					for i = 1, math.min(count, 4) do
+						parts[#parts + 1] = ("line %d %s"):format(i, Show(lines[i].leftText))
+					end
+				end
+				local shown = GameTooltip and ns.Flag(GameTooltip:IsShown())
+				local owner = shown and GameTooltip:GetOwner()
+				parts[#parts + 1] = ("GameTooltip shown %s, owner %s"):format(tostring(shown or false),
+					owner and Name(owner) or "none")
+				if shown then
+					for i = 1, 3 do
+						local region = _G["GameTooltipTextLeft" .. i]
+						if region and region:IsShown() then
+							local okText, text = pcall(region.GetText, region)
+							parts[#parts + 1] = ("tip %d %s"):format(i, okText and Show(text) or "failed")
+						end
+					end
+				end
+				local okOver, over = pcall(function() return ns.Flag(Minimap:IsMouseOver()) end)
+				local reading = ("on minimap %s, alpha %.2f: %s"):format(okOver and tostring(over) or "?",
+					Minimap:GetEffectiveAlpha(), table.concat(parts, "; "))
+				if reading ~= rec.lastReading then
+					rec.lastReading = reading
+					Line("READ " .. reading)
+					if reading:find("line %d \"") or reading:find("tip %d \"") then rec.readable = reading end
+					if reading:find("SECRET") then rec.secretRead = (rec.secretRead or 0) + 1 end
+				end
+			end
 		end
 		if GetTime() >= nextSnap then
 			nextSnap = GetTime() + 0.5
@@ -3183,10 +3270,11 @@ function ns.MinimapPulseTest()
 	end
 	ns.mmRec = rec
 	Line(("start: client %s, Minimap page %s, mouseover %s, nodes by cursor %s, reveal areas %s, turn-ins %s, " ..
-		"quest givers %s, hold %s, fade out %s"):format(
+		"quest givers %s, hold %s, fade out %s; stealthed %s, in combat %s"):format(
 		tostring((select(4, GetBuildInfo()))), tostring(ns.PageOn("handleMinimap")), tostring(ns.db.mouseover),
 		tostring(ns.db.minimapNodesByCursor), tostring(ns.db.minimapRevealAreas), tostring(ns.db.minimapRevealTurnIns),
-		tostring(ns.db.minimapQuestGivers), tostring(ns.HoldTime("mouseoverHold")), tostring(ns.FadeOutTime())))
+		tostring(ns.db.minimapQuestGivers), tostring(ns.HoldTime("mouseoverHold")), tostring(ns.FadeOutTime()),
+		tostring(IsStealthed and IsStealthed()), tostring(InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")))))
 	rec.ticker = C_Timer.NewTicker(0.1, function()
 		local ok, err = pcall(Tick)
 		if not ok then
@@ -3194,5 +3282,5 @@ function ns.MinimapPulseTest()
 			pcall(rec.Finish, "stopped by an error")
 		end
 	end)
-	ns.Print("minimappulse: recording for 58 seconds, follow the box at the top. Type it again to stop.")
+	ns.Print("minimappulse: recording for 100 seconds, follow the box at the top. Type it again to stop.")
 end

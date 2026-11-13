@@ -279,6 +279,14 @@ end
 -- answer the pretend mouse: the minimap moved under the REAL mouse instead
 -- (filled in further down, after the Reveal sweep).
 local cursor = {}
+-- (A dot whose name the game keeps secret: Probe, below.)
+cursor.DOT = "a dot on the minimap"
+-- Where it looks: Nearby Dots' Show in row (Minimap page: Combat and
+-- Location), Open world ticked to start with (not in cities, instances or
+-- BGs, as its old Except in had it).
+cursor.ROW = "minimap:dots"
+ns.LIST_DEFAULTS.worldShow[cursor.ROW] = true
+ns.MINIMAP_DOTS_ROW = cursor.ROW
 
 -- The pretend mouse's turn on the minimap (OnMinimap): the faded minimap
 -- grown or back on the screen for it (Grow) and the soft cursor on, then
@@ -393,6 +401,11 @@ local function Probe(step, found, stop, radius, cx, cy)
 		if not lines then return nil, why end
 		for _, line in ipairs(lines) do
 			local text, color = line.leftText, line.leftColor
+			-- (Forever since its 2026-11-12 patch: every minimap name is secret,
+			-- even with your own mouse on the dot (tested). In the cursor sweep
+			-- such a line counts as a dot, nameless: any dot brings the minimap
+			-- up, the user's choice 2026-11-13.)
+			if Secret(text) and cursor.s then text, color = cursor.DOT, nil end
 			if type(text) == "string" and not Secret(text) then
 				local gray = GrayLine(text, color)
 				-- (Colour codes and icons out, one name a line.)
@@ -1583,9 +1596,15 @@ function cursor.NotReady(started, test)
 	-- (In fights with In combat too ticked, or /cine debug cursorsweep combat
 	-- for this session; never with the minimap itself protected. Tested
 	-- 2026-11-10: sweeps in fights, nothing blocked.)
-	local fights = cursor.combat or (ns.db and ns.db.minimapNodesInCombat == true)
-	if (InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")))
-		and not (fights and not (Minimap.IsProtected and Minimap:IsProtected())) then
+	-- (Its Show in row says where and whether in fights: In combat its fights,
+	-- the rest out of them. Asked before a sweep starts, or in a fight.)
+	local fighting = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))
+	local here
+	if fighting or not started then
+		local ok, on = pcall(ns.RowOnNow, cursor.ROW, nil, true)
+		here = ok and on and true or false
+	end
+	if fighting and not ((cursor.combat or here) and not (Minimap.IsProtected and Minimap:IsProtected())) then
 		return "in combat"
 	end
 	if not ns.Flag(Minimap:IsVisible()) then return "the minimap is hidden" end
@@ -1598,7 +1617,7 @@ function cursor.NotReady(started, test)
 		if ns.IsGatheringTrackingOn and not ns.IsGatheringTrackingOn() then
 			return "no ore, herb or treasure tracking is on"
 		end
-		if ns.IsNodeScanOffHere and ns.IsNodeScanOffHere() then return "not here (Except in, Minimap page)" end
+		if not here then return "not here (its Show in row, Minimap page)" end
 	end
 	if Minimap:GetEffectiveAlpha() > 0.01 then return "the minimap is up" end
 	-- (Not in the first seconds after a login or /reload: the game is still
@@ -1746,6 +1765,10 @@ function cursor.Look(px, py)
 			coroutine.yield()
 			if cursor.s ~= s then error({ stopped = cursor.endedBy or "the minimap came up" }) end
 			local why = cursor.OnWorldThing() or cursor.NotReady(true)
+			-- (The minimap back in its place for this frame: your mouse on it
+			-- there is you hovering it. The sweep went on and the faded
+			-- minimap wouldn't come up till it ended, 2026-11-13.)
+			if not why and ns.Flag(Minimap:IsMouseOver()) then why = "your mouse came onto the minimap" end
 			if why then error({ stopped = why }) end
 			s.cx, s.cy = GetCursorPosition()
 		end
@@ -1807,7 +1830,25 @@ function cursor.Look(px, py)
 			local ok, data = pcall(C_TooltipInfo.GetMinimapMouseover)
 			local lines = ok and not Secret(data) and type(data) == "table" and data.lines
 			if type(lines) == "table" and not Secret(lines) then
-				if #lines > 0 then s.heard = s.heard + 1 end
+				if #lines > 0 then
+					s.heard = s.heard + 1
+					-- (/cine debug minimappulse: what an answer held. A sweep heard
+					-- something at 4 points yet no name came out, 2026-11-13.)
+					if ns.mmRec and #(cursor.lineInfo or {}) < 6 then
+						cursor.lineInfo = cursor.lineInfo or {}
+						for i, line in ipairs(lines) do
+							local text = line.leftText
+							local keys = {}
+							for key, value in pairs(type(line) == "table" and line or {}) do
+								keys[#keys + 1] = key .. "=" .. (Secret(value) and "SECRET" or type(value) == "string"
+									and ("%q"):format(value:sub(1, 40)) or type(value) == "table" and "table" or tostring(value))
+							end
+							table.sort(keys)
+							cursor.lineInfo[#cursor.lineInfo + 1] = ("at %.0f,%.0f line %d of %d: leftText %s; %s"):format(px, py,
+								i, #lines, Secret(text) and "SECRET" or type(text), table.concat(keys, " "))
+						end
+					end
+				end
 				return lines
 			end
 			return NO_LINES
@@ -1921,7 +1962,7 @@ local function CursorSweep(all)
 		last.why = why
 		return
 	end
-	local function IsNode(name) return NODE_KINDS[ns.NodeKind(name)] == true end
+	local function IsNode(name) return name == cursor.DOT or NODE_KINDS[ns.NodeKind(name)] == true end
 	local found, probes = Probe(STEP, {}, not all and IsNode or nil, s.width / 2)
 	-- (The test: how far from where each name was heard it still answers,
 	-- out along the four ways, a unit at a time: the size of a dot's answer.)
@@ -1950,6 +1991,21 @@ local function CursorSweep(all)
 	end
 	cursor.End()
 	last.probes, last.step, last.found = probes, STEP, type(found) == "table" and found or nil
+	if ns.mmRec and not all then
+		-- (/cine debug minimappulse: what each sweep heard, every name with its
+		-- kind, so a node it hears but doesn't count shows up, 2026-11-13.)
+		local heard = {}
+		for name in pairs(type(found) == "table" and found or {}) do
+			heard[#heard + 1] = ("%s (%s)"):format(name, tostring(ns.NodeKind(name)))
+		end
+		table.sort(heard)
+		ns.mmRec.Line(("SWEEP RESULT: %s; heard: %s"):format(found and "done" or ("stopped: " .. tostring(probes)),
+			#heard > 0 and table.concat(heard, ", ") or "nothing"))
+		for _, info in ipairs(cursor.lineInfo or {}) do ns.mmRec.Line("  ANSWER " .. info) end
+		cursor.lineInfo = nil
+		ns.mmRec.results = (ns.mmRec.results or 0) + 1
+		if #heard > 0 then ns.mmRec.heardAny = table.concat(heard, ", ") end
+	end
 	if not found then
 		last.why = probes
 		if not all then cursor.Note("sweep stopped: " .. tostring(probes)) end
@@ -1958,7 +2014,7 @@ local function CursorSweep(all)
 	if not all then
 		local any = false
 		for name in pairs(found) do
-			if NODE_KINDS[ns.NodeKind(name)] then any = true end
+			if IsNode(name) then any = true end
 		end
 		if not any then cursor.Note("swept, no node on the minimap") end
 	end

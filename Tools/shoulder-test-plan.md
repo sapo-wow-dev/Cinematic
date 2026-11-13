@@ -242,6 +242,14 @@ Then (that evening) the offset capped at 1.5 yards (OFFSET_SAFE): "felt a little
 
 Second walk run (flat open ground, zoom 9.6, keyboard only: W, then the turn key; A is strafe for the user, so turns were the arrow key, held for different times: 10 to 160 degrees). Jitter, sideways / up and down: as built 1.71 / 0.38, 2.62 / 0.43, 2.06 / 0.62 (the spread of the same settings); follow style 2 2.34 / 0.61, style 4 2.62 / 0.54, terrain tilt 3.05 / 0.57, tilt 2.96 / 0.41, head movement 1 2.43 / 0.58, bobbing 1.20 / 0.57. Up and down all inside the spread; sideways follows how much each walk turned (tilt turned most, bobbing least). **None of the game's walking settings steadies the view**: what shake there is isn't theirs to fix.
 
+#### Map: enemy (Forever, a Young Goretusk, 2026-11-12, zoom 9.5, offset 1.5)
+
+`map enemy`: target, hold 5.5 s, clear, per trial. The game's own strengths on Forever: turn 0.5, tilt 0.4. Read off the recording by the target's health bar: with the focus on, the boar slid 1-3% of the screen toward the middle within ~0.5 s of the target (7.1 to 6.1, 8.4 to 6.3 at strength 0.3, 3.6 to 1.1 eased in); with it off, nothing pulled. But the boar started only 3-11% off the middle and wandered (in three trials it walked across the screen while targeted), so how far and how fast is unread. Next: a target dummy on retail, standing still, well off to one side.
+
+Retail at a Training Dummy (Orc, zoom 13.6, the same strengths 0.5 / 0.4): your facing never moved, but the dummy stood almost straight ahead, ~1% off the middle, and stayed there in every trial, focus off too: nothing to turn. Next: the dummy well off to one side (the camera dragged round with the left mouse button before starting).
+
+Retail again, the dummy ~18% right of the middle (your facing never moved), read as the whole picture's slide after each target and clear: focus off, focus on (0.5 / 0.4), strength 0.3, tilt 0 and focus on again: **no turn at all**. Eased in over 1.5 s: a smooth turn of 3.8% of the width in 0.7 s; eased in then back before the clear: the same turn, then a smooth glide back. After a clear the camera **stayed turned** (no snap, unlike the interact focus) till the strengths came down. So out of combat the enemy focus only moves while its strengths are changing (untested: in combat, where it may act on its own).
+
 What the first two tries taught: a turn or tilt speed setting written low is put back by Core.lua's speed watch unless held with `ns.SetHeldSpeed`; `SetView` blends over about a second; the standing-still and chat cameras start mid-run unless the run holds the view (`ns.RegisterCamera`); the recording's clock ran 1.0 s ahead of the log; block matching fails on dark grass, tracking the hair's colour works.
 
 ## Build phases

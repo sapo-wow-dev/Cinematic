@@ -25,7 +25,7 @@ local PICK_TIPS = {
 }
 local PAGE = "Addon Conflicts"
 -- Addons with rows (Support/): the page is listed with one of them loaded.
-local ADDONS = { "DaylightUI", "ElvUI", "NaowhForever_QoL", "RareScanner" }
+local ADDONS = { "DaylightUI", "ElvUI", "Leatrix_Plus", "NaowhForever_QoL", "RareScanner" }
 
 -- Holding their frames hidden ------------------------------------------------
 
@@ -391,8 +391,8 @@ end
 
 -- The window -----------------------------------------------------------------
 
--- Drawn flat as the welcome window is (ns.FlatStyle), over it (a strata
--- higher). A card a row: what it is and its pick buttons, three a page; Next
+-- Drawn flat as the welcome window is (ns.FlatStyle), a strata higher (at
+-- login it waits for that to close, not over it). A card a row: what it is and its pick buttons, three a page; Next
 -- through them, Done on the last. Theirs for the rest picks Theirs for every
 -- unpicked one; Decide later, the X or Escape leave them unpicked (theirs plays)
 -- and it comes back at the next login.
@@ -554,13 +554,18 @@ function ns.ShowConflicts(all)
 	return true
 end
 
--- At login (and /reload): after the welcome window's (1 s), so it opens over it.
+-- At login (and /reload): after the welcome window's (1 s). With that open,
+-- not over it: once it's closed (its Customize page done too).
+local function LoginShow()
+	if InCombatLockdown() or not (ns.db and ns.db.enabled) then return end
+	ns.ShowConflicts()
+end
 local loginWatcher = CreateFrame("Frame")
 loginWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 loginWatcher:SetScript("OnEvent", function(_, _, isLogin, isReload)
 	if (isLogin or isReload) and ns.db and ns.db.enabled then
 		C_Timer.After(2, function()
-			if not InCombatLockdown() then ns.ShowConflicts() end
+			if not (ns.AfterWelcome and ns.AfterWelcome(LoginShow)) then LoginShow() end
 		end)
 	end
 end)

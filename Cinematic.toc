@@ -60,6 +60,7 @@ Support\Immersion.lua
 Support\RareScanner.lua
 Support\Glass.lua
 Support\MinimapButtonButton.lua
+Support\LeatrixPlus.lua
 Frames.lua
 HealVisionFrames.lua
 Chat.lua

@@ -17,15 +17,23 @@ DEFAULTS.personalResources = true   -- the page's switch: off, none of the below
 DEFAULTS.fightWaitPower = true      -- the resource bar waits for your power to change at a fight's start
 DEFAULTS.fightWaitHealth = false    -- ...the health bar for your health
 DEFAULTS.fightWaitPortrait = false  -- ...the player frame for either
-DEFAULTS.drainWhenNotEmpty = true   -- "until full" also waits for rage, runic power and the like to drain to 0
-DEFAULTS.petWhenNotFull = false     -- the pet frame stays up after a fight until its health is full
-DEFAULTS.lowManaShare = 0           -- the resource bar shows whenever mana is under this share (0: off)
-DEFAULTS.lowManaPortrait = false    -- ...and the player frame too
+DEFAULTS.fightWaitMana = true       -- ...our mana bar for your mana
+DEFAULTS.drainWhenNotEmpty = true   -- "not full" also waits for rage, runic power and the like to drain to 0
+DEFAULTS.notFullAfterFight = false  -- "not full" counts only within the Calm Timer of a fight (or a fall, resurrecting)
+-- Not full, by row: stays up while your health (nfHealth...) or power
+-- (nfPower...) isn't full. (An addon's power bar: by addon, its support file.)
+DEFAULTS.nfHealthPlayer = true      -- the player frame, health
+DEFAULTS.nfPowerPlayer = true       -- ...power
+DEFAULTS.nfHealthPrd = true         -- the personal health bar, health
+DEFAULTS.nfPowerPrdPower = true     -- the personal power bar, power
+DEFAULTS.nfPowerPrdMana = true      -- our mana bar, while mana isn't full
+DEFAULTS.petWhenNotFull = false     -- the pet frame while its health isn't full
+DEFAULTS.lowManaShare = 0.25        -- Low mana: under this share of mana (0: off)... (25% to start with)
+DEFAULTS.lowManaPortrait = true     -- ...the player frame shows
+DEFAULTS.lowManaPower = true        -- ...the personal power bar (mana your power)
+DEFAULTS.lowManaMana = true         -- ...our mana bar (mana not your power)
 DEFAULTS.prdMana = true             -- a mana bar of ours under them, when mana isn't your power (PersonalMana.lua)
 DEFAULTS.prdManaRecent = 3          -- ...only for this many seconds after you use mana (0: always)
-
--- The resource bar's stand-in (Frames.lua; none: no personal resource display).
-local personalPower = _G.CinematicPersonalPower
 
 -- Whether the page's switch is on (PersonalMana*.lua ask too).
 function ns.PersonalResourcesOn(db)
@@ -77,7 +85,7 @@ local ROW_WAIT = {
 	player = { "fightWaitPortrait", "health", "power" },
 	prd = { "fightWaitHealth", "health" },
 	prdpower = { "fightWaitPower", "power" },
-	prdmana = { "fightWaitPower", "mana" },
+	prdmana = { "fightWaitMana", "mana" },
 }
 function ns.FightHold(row)
 	local wait = ROW_WAIT[row]
@@ -124,6 +132,98 @@ local function LowMana(any)
 	local mana, maxMana = UnitPower("player", 0), UnitPowerMax("player", 0)
 	return Readable(mana) and Readable(maxMana) and maxMana > 0 and mana / maxMana < share
 end
+-- A frame's row on the page's grid: player, prd (health), prdpower, prdmana,
+-- or an addon's power bar ("addon").
+local function RowOf(setting, entry)
+	if ns.ADDON_POWER_BARS[entry.name] then return "addon" end
+	return setting == "prdWhenNotFull" and entry.group or "player"
+end
+-- Its Not full (health, power) and Low mana settings (false: no such cell).
+-- An addon's power bar: its own, by addon (ns.AddPowerBarFrame).
+local ROW_KEYS = {
+	player = { "nfHealthPlayer", "nfPowerPlayer", "lowManaPortrait" },
+	prd = { "nfHealthPrd", false, false },
+	prdpower = { false, "nfPowerPrdPower", "lowManaPower" },
+	prdmana = { false, "nfPowerPrdMana", "lowManaMana" },
+}
+local function RowKeys(row, entry)
+	if row == "addon" then
+		local addon = ns.ADDON_POWER_BARS[entry.name]
+		return nil, "nfPower" .. addon, "lowMana" .. addon
+	end
+	local keys = ROW_KEYS[row]
+	if keys then return keys[1] or nil, keys[2] or nil, keys[3] or nil end
+end
+-- Whether Low mana is ticked for this row and can count now, and whether any
+-- mana counts (not only while it's your power): the power bar while mana is
+-- your power, our mana bar while it isn't (it's up).
+local function LowManaApplies(db, row, lowKey, manaBar)
+	if not (lowKey and db[lowKey]) or (db.lowManaShare or 0) <= 0 then return false, false end
+	if row == "prdpower" and manaBar or row == "prdmana" and not manaBar then return false, false end
+	return true, (row == "prdmana" or row == "player") and manaBar or false
+end
+
+-- (Now, as the frames' pass asks it: /cine debug lowmana, LowManaTest.lua.)
+function ns.LowManaNow()
+	return LowMana(ns.PersonalManaShown and ns.PersonalManaShown())
+end
+
+-- Mana the game won't say (WoW Forever: secret even out of a fight, tested
+-- 2026-11-13): the game works it out itself, through a curve (up below the
+-- Low mana share, none above), and its secret answer goes straight into the
+-- frame's alpha, as Vitals Vision does with health (LowHealth.lua). nil:
+-- no curve API here.
+local manaCurve, manaCurveShare
+local function ManaCurve(share)
+	if manaCurveShare == share then return manaCurve end
+	manaCurveShare, manaCurve = share, nil
+	if not (C_CurveUtil and C_CurveUtil.CreateCurve and Enum.LuaCurveType and UnitPowerPercent) then
+		return nil
+	end
+	local ok, curve = pcall(C_CurveUtil.CreateCurve)
+	if ok and curve then
+		curve:SetType(Enum.LuaCurveType.Linear)
+		curve:AddPoint(0, 1)
+		curve:AddPoint(math.max(0, share - 0.005), 1)
+		curve:AddPoint(share, 0)
+		curve:AddPoint(1, 0)
+		manaCurve = curve
+	end
+	return manaCurve
+end
+function ns.ManaCurveReady()
+	return ManaCurve(ns.db.lowManaShare or 0) ~= nil
+end
+local function SecretManaAlpha(frame, curve)
+	frame:SetAlpha(UnitPowerPercent("player", 0, false, curve))
+end
+-- Whether low mana is this frame's but the mana is secret, so the game sets
+-- its alpha (ns.SetLowManaSecretAlpha). As KeepYourFrameUp picks the rows.
+function ns.LowManaSecret(setting, entry)
+	local db = ns.db
+	local share = db.lowManaShare or 0
+	if share <= 0 or not setting or ns.NO_SECRET_ALPHA[entry.name] or not ns.PersonalResourcesOn(db) then
+		return false
+	end
+	local mana = UnitPower("player", 0)
+	if Readable(mana) then return false end
+	local row = RowOf(setting, entry)
+	local manaBar = ns.PersonalManaShown and ns.PersonalManaShown()
+	local applies, any = LowManaApplies(db, row, select(3, RowKeys(row, entry)), manaBar)
+	if not applies then return false end
+	if not any then
+		local powerType = UnitPowerType("player")
+		if not Readable(powerType) or powerType ~= 0 then return false end
+	end
+	return ManaCurve(share) ~= nil
+end
+function ns.SetLowManaSecretAlpha(frame)
+	local curve = ManaCurve(ns.db.lowManaShare or 0)
+	if curve then
+		local ok, err = pcall(SecretManaAlpha, frame, curve)
+		ns.lowManaSecretError = not ok and tostring(err) or nil
+	end
+end
 
 -- Mana not full, for the mana bar's row. Secret: still changing.
 local function ManaRecovering()
@@ -134,38 +234,68 @@ local function ManaRecovering()
 	return not RestedNow("mana", GetTime())
 end
 
+-- Your health not full. Secret: still changing.
+local function HealthNotFull()
+	local health, maxHealth = UnitHealth("player"), UnitHealthMax("player")
+	if Readable(health) and Readable(maxHealth) then
+		return maxHealth > 0 and health < maxHealth
+	end
+	return not RestedNow("health", GetTime())
+end
+
+-- Your power not full: our mana bar's row, your mana; rage, runic power and
+-- the like (resting at 0), not drained yet (Rage counts until 0). Secret:
+-- still changing.
+local function PowerNotFull(db, row, manaBar)
+	if row == "prdmana" then
+		return manaBar and ManaRecovering() or false
+	end
+	local _, token = UnitPowerType("player")
+	if type(token) == "string" and not (issecretvalue and issecretvalue(token)) and ns.EMPTY_AT_REST[token] then
+		return db.drainWhenNotEmpty and PowerDraining() or false
+	end
+	local power, maxPower = UnitPower("player"), UnitPowerMax("player")
+	if Readable(power) and Readable(maxPower) then
+		return maxPower > 0 and power < maxPower
+	end
+	return not RestedNow("power", GetTime())
+end
+
+-- Whether Not full may count now: not held to after a fight (Not full: after
+-- fights only), nor back at a fight's start (Wait at pull).
+local function NotFullAllowed(db, row, afterFight, fighting)
+	if db.notFullAfterFight and not afterFight then return false end
+	return not (fighting and ns.FightHold(row))
+end
+
 -- Whether your player frame, personal resource display or pet frame stays up
--- now in CineMode, shown like a fight's frames. setting: the frame's "until
--- full" one (Frames.lua's PORTRAIT_FRAMES; nil for the pet frame); afterFight:
--- within the Calm Timer of a fight, fall or other health loss (Life Tap), or
--- coming back to life.
+-- now in CineMode, shown like a fight's frames. setting: the frame's kind
+-- (Frames.lua's PORTRAIT_FRAMES; nil for the pet frame); afterFight: within
+-- the Calm Timer of a fight, fall or other health loss (Life Tap), or coming
+-- back to life. Each row's ticks: the page's grid (ROW_KEYS).
 function ns.KeepYourFrameUp(setting, entry, afterFight, fighting)
 	local db = ns.db
 	if not ns.PersonalResourcesOn(db) then
 		return false
 	end
 	if ns.PET_FRAMES[entry.name] then
-		return db.petWhenNotFull and afterFight and ns.IsPetRecovering() or false
+		return db.petWhenNotFull and (afterFight or not db.notFullAfterFight) and ns.IsPetRecovering() or false
 	end
 	if not setting then
 		return false
 	end
-	local row = setting == "prdWhenNotFull" and entry.group or "player"
-	-- (No resource display: low mana is the player frame's. With the mana bar
-	-- of ours up, it's that bar's row, not the power bar's.)
+	local row = RowOf(setting, entry)
+	local healthKey, powerKey, lowKey = RowKeys(row, entry)
 	local manaBar = ns.PersonalManaShown and ns.PersonalManaShown()
-	if (row == (manaBar and "prdmana" or "prdpower") or row == "player" and (db.lowManaPortrait or not personalPower))
-		and LowMana(manaBar) then
+	local applies, any = LowManaApplies(db, row, lowKey, manaBar)
+	if applies and LowMana(any) then
 		return true
 	end
-	if not (db[setting] and afterFight) or fighting and ns.FightHold(row) then
+	local health, power = healthKey and db[healthKey], powerKey and db[powerKey]
+	if not (health or power) or not NotFullAllowed(db, row, afterFight, fighting) then
 		return false
 	end
-	-- (The mana bar's row: until your mana's full.)
-	if row == "prdmana" then
-		return manaBar and ManaRecovering() or false
-	end
-	return ns.IsPlayerRecovering() or db.drainWhenNotEmpty and PowerDraining() or false
+	return health and HealthNotFull() or power and PowerNotFull(db, row, manaBar) or false
 end
 
 -- The same, in words, for the Why window (Why.lua): each of this page's
@@ -176,58 +306,61 @@ function ns.YourFrameWhy(setting, entry, afterFight, fighting, add)
 	local db = ns.db
 	local page = L["Health & Resources"]
 	local pet = ns.PET_FRAMES[entry.name] or false
-	local row = pet and "petframe" or (setting == "prdWhenNotFull" and entry.group or "player")
+	if not pet and not setting then return end
+	local row = pet and "petframe" or RowOf(setting, entry)
+	local healthKey, powerKey, lowKey
+	if pet then
+		healthKey = "petWhenNotFull"
+	else
+		healthKey, powerKey, lowKey = RowKeys(row, entry)
+	end
 	local manaBar = ns.PersonalManaShown and ns.PersonalManaShown()
-	local lowManaRow = not pet and setting and (row == (manaBar and "prdmana" or "prdpower")
-		or row == "player" and (db.lowManaPortrait or not personalPower))
-	local untilKey = pet and "petWhenNotFull" or setting
-	local untilFull = untilKey and db[untilKey]
+	local lowApplies, any = false, false
+	if not pet then lowApplies, any = LowManaApplies(db, row, lowKey, manaBar) end
+	local health, power = healthKey and db[healthKey], powerKey and db[powerKey]
 	if not ns.PersonalResourcesOn(db) then
-		if untilFull or lowManaRow and (db.lowManaShare or 0) > 0 then
+		if health or power or lowApplies then
 			add("off", L["The %s page is off, so its settings don't keep this up"]:format(page), "personalResources")
 		end
 		return
 	end
-	if lowManaRow and (db.lowManaShare or 0) > 0 then
+	if lowApplies then
 		local share = ("%d%%"):format(math.floor(db.lowManaShare * 100 + 0.5))
-		if LowMana(manaBar) then
-			add("on", L["Your mana is under %s (Show below this much mana)"]:format(share), "lowManaShare")
+		if LowMana(any) then
+			add("on", L["Your mana is under %s (Low mana)"]:format(share), lowKey)
 		else
-			add("off", L["Shows whenever your mana is under %s (Show below this much mana)"]:format(share), "lowManaShare")
+			add("off", L["Shows whenever your mana is under %s (Low mana)"]:format(share), lowKey)
 		end
 	end
-	if not untilFull then return end
-	-- (Each reason that holds, as KeepYourFrameUp has them: after a fight, a
-	-- fall or resurrecting, and not held back at a fight's start.)
-	local held = fighting and not pet and ns.FightHold(row)
-	local any = false
-	if afterFight and not held then
-		if pet then
-			if ns.IsPetRecovering() then
-				add("on", L["Your pet's health isn't full yet, just after a fight"], untilKey)
-				any = true
-			end
-		elseif row == "prdmana" then
-			if manaBar and ManaRecovering() then
-				add("on", L["Your mana isn't full yet, just after a fight"], untilKey)
-				any = true
-			end
-		else
-			if ns.IsPlayerRecovering() then
-				add("on", L["Your health or power isn't full yet, just after a fight"], untilKey)
-				any = true
-			end
-			if db.drainWhenNotEmpty and PowerDraining() then
-				add("on", L["Your rage, runic power or the like isn't drained yet, just after a fight"],
-					"drainWhenNotEmpty")
-				any = true
-			end
+	if not (health or power) then return end
+	local key = health and healthKey or powerKey
+	if db.notFullAfterFight and not afterFight then
+		add("off", L["Not full counts only after a fight, a fall, Life Tap or resurrecting (Not full: only during Calm Timer)"],
+			"notFullAfterFight")
+		return
+	end
+	if fighting and not pet and ns.FightHold(row) then
+		add("off", L["Held back at the fight's start while you're at rest (Wait at pull)"], key)
+		return
+	end
+	local shown = false
+	if health then
+		if pet and ns.IsPetRecovering() then
+			add("on", L["Your pet's health isn't full yet (Not full: Health)"], healthKey)
+			shown = true
+		elseif not pet and HealthNotFull() then
+			add("on", L["Your health isn't full yet (Not full: Health)"], healthKey)
+			shown = true
 		end
 	end
-	if not any then
-		add("off", pet and L["After a fight, it stays up until your pet's health is full"]
-			or (afterFight and not held and L["After a fight it stays up until your health and power are full: they are"])
-			or L["After a fight, a fall, Life Tap or resurrecting, it stays up until your health and power are full"], untilKey)
+	if power and PowerNotFull(db, row, manaBar) then
+		add("on", row == "prdmana" and L["Your mana isn't full yet (Not full: Power)"]
+			or L["Your power isn't full yet, or your rage or the like isn't drained (Not full: Power)"], powerKey)
+		shown = true
+	end
+	if not shown then
+		add("off", pet and L["Stays up while your pet's health isn't full (Not full: Health): it is"]
+			or L["Stays up while what's ticked under Not full isn't full: it is"], key)
 	end
 end
 
@@ -238,9 +371,10 @@ function ns.CreatePersonalResourcesPanel(kit)
 	title:SetPoint("TOPLEFT", 16, -16)
 	local hasDisplay = _G.CinematicPersonalPower ~= nil
 	local intro = kit.PageIntro(content, title,
-		L["Your player frame, pet frame and personal resource display in CineMode: kept up while you recover " ..
-		"after a fight or run low on mana, and held back at the start of a fight until there's something to " ..
-		"see. When they come up at all (always, in fights, in places) is their rows' on the HUD page."])
+		L["Your player frame, pet frame and personal resource display in CineMode: kept up while your health " ..
+		"or power isn't full or your mana is low, and held back at the start of a fight until there's something " ..
+		"to see. Hover a row or column for what it does. When they come up at all (always, in fights, in places) " ..
+		"is their rows' on the HUD page."])
 	-- Their look: the Style hub's Personal Resource Style page (PersonalStyle.lua).
 	local styleLink = ns.StyleLink(content, title, "Personal Style", L["Opens the Personal Resource Style page: how the bars look."], kit.Tooltip)
 	ns.FramesLink(content, title, "prd", styleLink)
@@ -259,57 +393,129 @@ function ns.CreatePersonalResourcesPanel(kit)
 		return check
 	end
 
-	stack:Header(content, L["After a fight"])
-	Tick("portraitWhenNotFull", L["Show your player frame until health and power are full"],
-		L["Keeps your player frame up after a fight, a fall, a spell that costs you health (Life Tap) " ..
-		"or resurrecting, until your health and power are full. Rage and runic power don't count."])
-	if hasDisplay then
-		Tick("prdWhenNotFull", L["Show your personal resource display until health and power are full"],
-			L["The same for your personal resource display."])
-	end
-	Tick("drainWhenNotEmpty", L["Rage, runic power and the like count until drained"],
-		L["Rage, runic power and the other resources that drain away out of combat count too: the frames " ..
-		"ticked above stay up until they're back to 0, within the Calm Timer."],
-		function(db) return db.portraitWhenNotFull or hasDisplay and db.prdWhenNotFull end)
-	if _G.PetFrame then
-		Tick("petWhenNotFull", L["Show your pet frame until its health is full"],
-			L["Keeps your pet frame up after a fight or a fall, within the Calm Timer, until your pet's " ..
-			"health is full."])
-	end
-
-	-- Low mana: the resource bar (and the player frame, ticked) whenever mana is low.
+	-- Low mana: the share the grid's Low mana column goes by.
 	stack:Header(content, L["Low mana"])
 	local function Percent(value) return value == 0 and L["Off"] or ("%d%%"):format(value) end
-	-- (Greys just its tick below: the whole menu's Refresh on every step of a
-	-- drag froze the game.)
-	local portraitTick
-	local lowMana = stack:Add(kit.Slider(content, "lowManaShare", L["Show below this much mana"], 0, 90, 5,
-		Percent, 100, function() if portraitTick then portraitTick:Refresh() end end), "slider")
-	kit.Tooltip(lowMana, hasDisplay
-		and L["In CineMode, your resource bar shows whenever your mana is under this share, in a fight or " ..
-		"not: drinking, or saving mana for the pull. Off: 0."]
-		or L["In CineMode, your player frame shows whenever your mana is under this share, in a fight or " ..
-		"not: drinking, or saving mana for the pull. Off: 0."])
-	if hasDisplay then
-		portraitTick = Tick("lowManaPortrait", L["Your player frame too"],
-			L["Low mana brings up your player frame as well as your resource bar."],
-			function(db) return (db.lowManaShare or 0) > 0 end)
-	end
+	-- (Greys just the grid's Low mana ticks: the whole menu's Refresh on every
+	-- step of a drag froze the game.)
+	local lowCells = {}
+	local lowMana = stack:Add(kit.Slider(content, "lowManaShare", L["Below"], 0, 90, 5, Percent, 100, function()
+		for _, cell in ipairs(lowCells) do cell:Refresh() end
+	end), "slider")
+	kit.Tooltip(lowMana, L["In CineMode, the frames ticked under Low mana below show whenever your mana is under " ..
+		"this share, in a fight or not: drinking, or saving mana for the pull. Off: 0."])
 
-	-- (Only while fights bring up frames: Exit CineMode's In combat on the CineMode page.)
+	-- Keep up: a row per frame, a column per reason it stays up. A cell a
+	-- frame can't have is left empty; a frame this client hasn't, no row.
+	stack:Header(content, L["Keep up"])
 	local function Fights(db) return db.stayInCombat end
-	stack:Header(content, L["At the start of a fight"])
-	if hasDisplay then
-		Tick("fightWaitPower", L["Resource bar waits for your power to change"],
-			L["A fight you go into with your mana, rage, energy or the like at rest (rage at 0, mana full...) " ..
-			"brings up your resource bar only once it changes: your first cast, your first hit. Going in " ..
-			"with it still filling or draining, it comes up straight away. It stays up for the rest of the fight."],
-			Fights)
-		Tick("fightWaitHealth", L["Health bar waits for your health to change"],
-			L["The same for your personal health bar: it comes up with the first hit or heal you take."], Fights)
+	local function LowOn(db) return (db.lowManaShare or 0) > 0 end
+	local COLUMNS = {
+		{ L["Health"], L["Not full: whenever your health isn't full, in a fight or not (or only during the Calm Timer: " ..
+			"the tick under this table)."], group = L["Not full"] },
+		{ L["Power"], L["Not full: whenever your power isn't full (mana, energy, focus), in a fight or not; " ..
+			"rage, runic power and the like until they're back to 0 (Rage counts until 0)."], group = L["Not full"] },
+		{ L["Low mana"], L["Whenever your mana is under the share above, in a fight or not."] },
+		{ L["Wait at pull"], L["At a fight's start, it comes up only once your health or power changes: your " ..
+			"first cast, your first hit. Only while fights bring frames up (In combat on the CineMode page)."] },
+		{ L["Mana text"], L["While you cast a spell that costs mana, your mana's numbers on the bar show what " ..
+			"you'll have once the cast is done, paler. The amount and the percent, whichever the game shows there " ..
+			"(its Status Text setting); with the game's numbers off, the amount in the middle of the bar."] },
+	}
+	-- (The mana text's: redrawn as it's ticked, PersonalManaCost.lua.)
+	local function Redraw()
+		if ns.UpdateManaCost then ns.UpdateManaCost() end
 	end
-	Tick("fightWaitPortrait", L["Player frame waits for your health or power to change"],
-		L["The same for your player frame: it comes up once your health or your power changes."], Fights)
+	-- (Each bar by what it shows: the health bar by your health, the power
+	-- and mana bars by your power.)
+	local rows = {
+		{ L["Player Frame"], nil, "nfHealthPlayer", "nfPowerPlayer", "lowManaPortrait", "fightWaitPortrait",
+			"manaAfterPortrait" },
+	}
+	if _G.PetFrame then
+		rows[#rows + 1] = { L["Pet Frame"], L["Not full: until your pet's health is full."], "petWhenNotFull" }
+	end
+	if hasDisplay then
+		rows[#rows + 1] = { L["PRD: Health"], L["The game's personal resource display (PRD): its health bar."],
+			"nfHealthPrd", nil, nil, "fightWaitHealth" }
+		rows[#rows + 1] = { L["PRD: Power"], L["The game's personal resource display (PRD): its power bar (mana, " ..
+			"rage, energy...). Low mana: while mana is your power."], nil, "nfPowerPrdPower", "lowManaPower",
+			"fightWaitPower", "manaAfterDisplay" }
+	end
+	if ns.PERSONAL_MANA then
+		rows[#rows + 1] = { L["Mana bar"], L["Ours, under the PRD's power bar, while mana isn't your power (forms, " ..
+			"Shadow, Elemental). Not full: until your mana's full."], nil, "nfPowerPrdMana", "lowManaMana", "fightWaitMana" }
+	end
+	-- (Other addons' power bars standing in for these: their own rows, by addon.)
+	for _, bar in ipairs(ns.ADDON_POWER_ROWS or {}) do
+		if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(bar.addon) then
+			rows[#rows + 1] = { L["Power bar (%s)"]:format(bar.addon), bar.tip,
+				nil, "nfPower" .. bar.addon, "lowMana" .. bar.addon }
+		end
+	end
+	-- (Two heading lines: a group's name over its columns, Not full's.)
+	local LABEL_W, COLUMN_W, ROW_H, HEAD_H = 150, 76, 26, 40
+	local grid = CreateFrame("Frame", nil, content)
+	grid:SetSize(LABEL_W + #COLUMNS * COLUMN_W, HEAD_H + #rows * ROW_H)
+	local groupAt = {}
+	for c, column in ipairs(COLUMNS) do
+		local head = CreateFrame("Frame", nil, grid)
+		head:SetSize(COLUMN_W, 20)
+		head:SetPoint("BOTTOMLEFT", grid, "TOPLEFT", LABEL_W + (c - 1) * COLUMN_W, -HEAD_H)
+		local text = kit.Label(head, "GameFontNormalSmall", column[1])
+		text:SetPoint("CENTER")
+		text.searchSkip = true
+		kit.Tooltip(head, column[2])
+		if column.group then
+			local span = groupAt[column.group]
+			if not span then
+				span = kit.Label(grid, "GameFontNormalSmall", column.group)
+				span.searchSkip = true
+				span.first = c
+				groupAt[column.group] = span
+			end
+			span:ClearAllPoints()
+			span:SetPoint("BOTTOM", grid, "TOPLEFT", LABEL_W + ((span.first - 1) + c) / 2 * COLUMN_W, -HEAD_H + 20)
+		end
+	end
+	for r, row in ipairs(rows) do
+		local y = -HEAD_H - (r - 1) * ROW_H
+		local name = CreateFrame("Frame", nil, grid)
+		name:SetSize(LABEL_W, ROW_H)
+		name:SetPoint("TOPLEFT", 0, y)
+		local text = kit.Label(name, "GameFontHighlight", row[1])
+		text:SetPoint("LEFT")
+		text.searchSkip = true
+		if row[2] then kit.Tooltip(name, row[2]) end
+		for c = 1, #COLUMNS do
+			local key = row[2 + c]
+			if key then
+				local column = COLUMNS[c]
+				local named = column.group and ("%s %s"):format(column.group, column[1]:lower()) or column[1]
+				local cell = kit.Check(grid, key, "", ("%s: %s. %s"):format(row[1], named, column[2]),
+					c == 5 and function(value)
+						ns.GetDB()[key] = value
+						Redraw()
+					end or nil)
+				cell:SetPoint("CENTER", grid, "TOPLEFT", LABEL_W + (c - 0.5) * COLUMN_W, y - ROW_H / 2)
+				cell.searchLabel = ("%s: %s"):format(row[1], named)
+				if c == 3 then
+					kit.GreyUnless(cell, LowOn)
+					lowCells[#lowCells + 1] = cell
+				elseif c == 4 then
+					kit.GreyUnless(cell, Fights)
+				end
+			end
+		end
+	end
+	stack:Add(grid, "label")
+	Tick("notFullAfterFight", L["Not full: only during Calm Timer"],
+		L["Ticked, Not full brings frames up only after a fight, a fall, a spell that costs you health (Life " ..
+		"Tap) or resurrecting, until the Calm Timer runs out: casting or drinking in town brings nothing up. " ..
+		"Unticked, it works any time."])
+	Tick("drainWhenNotEmpty", L["Rage counts until 0"],
+		L["Rage, runic power and the other resources that drain away out of combat: Not full keeps the frames " ..
+		"up until they're back to 0."])
 
 	-- Mana under the power bar, when it isn't your power (PersonalMana.lua; its
 	-- look: the Style hub's Personal Resource Style page).
@@ -318,7 +524,7 @@ function ns.CreatePersonalResourcesPanel(kit)
 		local function Update()
 			if ns.UpdatePersonalMana then ns.UpdatePersonalMana() end
 		end
-		stack:Add(kit.Check(content, "prdMana", L["Show your mana when it isn't your power"],
+		stack:Add(kit.Check(content, "prdMana", L["Show mana bar"],
 			L["The game shows only your main power under your character: Maelstrom, Insanity, Astral Power, " ..
 			"rage or energy in a form. Ticked, your mana gets a bar of its own under it. When it comes up is the " ..
 			"Personal mana bar row on the HUD page."], function(value)
@@ -328,9 +534,9 @@ function ns.CreatePersonalResourcesPanel(kit)
 		end), "check")
 		local recentLine = kit.BoxLine(content)
 		stack:Add(recentLine, "label", 20)
-		local recentBox = recentLine:Box(L["Only after you use mana, for"], "prdManaRecent", 0, 60, 1, "%d", 1,
+		local recentBox = recentLine:Box(L["After using mana for"], "prdManaRecent", 0, 60, 1, "%d", 1,
 			L["The mana bar shows for this many seconds after you spend mana, then fades out until you spend " ..
-			"some again. 0: whenever it's up."], Update, 40, L["seconds"])
+			"some again. 0: whenever it's up."], Update, 40, L["sec"])
 		kit.GreyUnless(recentBox, function(db) return db.prdMana end)
 		-- (And after the page's Reset, or a profile loaded: shown as the settings are now.)
 		local updater = CreateFrame("Frame", nil, content)
@@ -338,29 +544,9 @@ function ns.CreatePersonalResourcesPanel(kit)
 		kit.AddControl(updater)
 	end
 
-	-- Mana on its bars: your mana after the cast going on, under your character
-	-- and on your player frame (PersonalManaText.lua; the cast: PersonalManaCost.lua).
-	stack:Header(content, L["Mana"])
-	local function Redraw()
-		if ns.UpdateManaCost then ns.UpdateManaCost() end
-	end
-	local afterTip = L["While you cast a spell that costs mana, your mana's numbers on the bar show what you'll " ..
-		"have once the cast is done, paler. The amount and the percent, whichever the game shows there (its " ..
-		"Status Text setting); with the game's numbers off, the amount in the middle of the bar."]
-	for _, info in ipairs({ { L["Resource bar"], "manaAfterDisplay", hasDisplay },
-		{ L["Player frame"], "manaAfterPortrait", true } }) do
-		if info[3] then
-			local key = info[2]
-			stack:Add(kit.Label(content, "GameFontNormal", info[1]), "label")
-			stack:Add(kit.Check(content, key, L["Show remaining mana text"], afterTip, function(value)
-				ns.GetDB()[key] = value
-				Redraw()
-			end), "check")
-		end
-	end
 	-- (And after the page's Reset, or a profile loaded: drawn as the settings are now.)
 	local redrawer = CreateFrame("Frame", nil, content)
-	redrawer.Refresh = Redraw
+	redrawer.Refresh = Redraw -- (the grid's Mana text)
 	kit.AddControl(redrawer)
 
 	-- Addon Frame Links (last): which addon's bars they are (FrameLinks.lua).

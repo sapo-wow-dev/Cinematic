@@ -1189,7 +1189,7 @@ do
 	-- (Seconds into a trial: what the box says from then.)
 	local WALK_STEPS = {
 		{ 0, "stand still, hands off the mouse", 0.7, 0.7, 0.7 }, { 1.5, "WALK FORWARD (hold W only)", 0.3, 1, 0.3 },
-		{ 4.5, "keep walking + TURN LEFT (hold W and A, no mouse)", 1, 0.82, 0 }, { 7, "STOP, hands off", 1, 0.3, 0.3 },
+		{ 4.5, "keep walking + TURN LEFT (W and your turn key, no mouse)", 1, 0.82, 0 }, { 7, "STOP, hands off", 1, 0.3, 0.3 },
 	}
 	local WALK_LENGTH, WALK_BACK = 10, 8.5
 	local function WalkBegin(at)
@@ -1243,6 +1243,111 @@ do
 		local this = run
 		C_Timer.After(1, function() if run == this and not run.at then WalkBegin(1) end end)
 	end
+	-- Run 6, "enemy": the camera's turn to an enemy you target
+	-- (test_cameraTargetFocusEnemy..., what "ActionCam full" adds), over the
+	-- Shoulder Cam as built. You stand with an enemy well off to one side of
+	-- the screen (one that won't attack: a training dummy, or a low one) and
+	-- per trial target it when the box says, then clear it (Esc) when told.
+	-- ramp = the strengths go 0 to full over this long once targeted (the talk
+	-- turn's way); down = { at, over }: eased back to 0 before the clear.
+	-- Logged per trial: when it was targeted and cleared, what was written,
+	-- your facing; the turn's read off the recording.
+	local E = F .. "Enemy"
+	local MAP_ENEMY = {
+		{ "focus off", { [E .. "Enable"] = "0" } },
+		{ "focus on", { [E .. "Enable"] = "1" } },
+		{ "turn strength 0.3", { [E .. "Enable"] = "1", [E .. "StrengthYaw"] = "0.3" } },
+		{ "tilt strength 0", { [E .. "Enable"] = "1", [E .. "StrengthPitch"] = "0" } },
+		{ "eased in over 1.5 s", { [E .. "Enable"] = "1", [E .. "StrengthYaw"] = "0", [E .. "StrengthPitch"] = "0" },
+			ramp = 1.5 },
+		{ "eased in, eased back before the clear", { [E .. "Enable"] = "1", [E .. "StrengthYaw"] = "0",
+			[E .. "StrengthPitch"] = "0" }, ramp = 1.5, down = { 3, 1.5 } },
+		{ "focus on again", { [E .. "Enable"] = "1" } },
+	}
+	local ENEMY_SETTLE, ENEMY_HOLD, ENEMY_RETURN = 2.5, 5, 3 -- seconds: before "target", targeted till "clear", after
+	local function EnemyBox(line, r, g, b)
+		ns.PadTestBox(("Enemy %d/%d  %s"):format(run.at, #MAP_ENEMY, MAP_ENEMY[run.at][1]), line, r, g, b)
+	end
+	local function EnemyBegin(at)
+		local trial = MAP_ENEMY[at]
+		if not trial then
+			End("done")
+			ns.PadTestBox("Enemy run done", "stop the recording, then /reload", 0.3, 1, 0.3)
+			C_Timer.After(8, function() if not run then ns.PadTestBoxHide() end end)
+			return
+		end
+		run.at, run.phase, run.began, run.writes, run.lastYaw, run.lastPitch = at, "settle", GetTime(), {}, nil, nil
+		Change(trial[2] or {})
+		Log(("map: enemy %d (%s) on, zoom %.2f, offset %s, focus %s turn %s tilt %s"):format(at, trial[1], Zoom(),
+			Text(GetCVar(SHOULDER)), Text(GetCVar(E .. "Enable")), Text(GetCVar(E .. "StrengthYaw")),
+			Text(GetCVar(E .. "StrengthPitch"))))
+		EnemyBox("wait... (no target)", 0.7, 0.7, 0.7)
+	end
+	local function EnemyTick()
+		if not run then return end
+		ns.stillSince = GetTime()
+		if not run.at then return end
+		local into = GetTime() - run.began
+		local trial = MAP_ENEMY[run.at]
+		if run.phase == "settle" and into >= ENEMY_SETTLE then
+			run.phase, run.clickFacing = "target", Facing()
+			EnemyBox("TARGET THE ENEMY now (click it or Tab), then hands off", 0.3, 1, 0.3)
+		elseif run.phase == "on" then
+			if trial.ramp then
+				local k = math.min(1, into / trial.ramp)
+				k = k * k * (3 - 2 * k)
+				if trial.down and into >= trial.down[1] then
+					local d = math.min(1, (into - trial.down[1]) / trial.down[2])
+					k = k * (1 - d * d * (3 - 2 * d))
+				end
+				local yaw, pitch = ("%.3f"):format(k * run.fullYaw), ("%.3f"):format(k * run.fullPitch)
+				if yaw ~= run.lastYaw or pitch ~= run.lastPitch then
+					pcall(SetCVar, E .. "StrengthYaw", yaw)
+					pcall(SetCVar, E .. "StrengthPitch", pitch)
+					run.lastYaw, run.lastPitch = yaw, pitch
+					run.writes[#run.writes + 1] = ("%.2f:%s/%s"):format(into, yaw, pitch)
+				end
+			end
+			if into >= ENEMY_HOLD and not run.told then
+				run.told = true
+				EnemyBox("CLEAR THE TARGET now (Esc), then hands off", 1, 0.82, 0)
+			end
+		elseif run.phase == "back" and into >= ENEMY_RETURN then
+			Log(("map: enemy %d back, facing %s"):format(run.at, Facing()))
+			local keep, back = ns.db.shoulderMapKeep or {}, {}
+			for name in pairs(trial[2] or {}) do back[name] = keep[name] end
+			Put(back)
+			EnemyBegin(run.at + 1)
+		end
+	end
+	local function EnemyStart()
+		-- (The strengths go back too, whichever trial ends the run; full = the game's own, read now.)
+		Change({ [E .. "Enable"] = GetCVar(E .. "Enable"), [E .. "StrengthYaw"] = GetCVar(E .. "StrengthYaw"),
+			[E .. "StrengthPitch"] = GetCVar(E .. "StrengthPitch") })
+		run = { ticker = C_Timer.NewTicker(0.05, EnemyTick), events = CreateFrame("Frame"),
+			fullYaw = tonumber(GetCVar(E .. "StrengthYaw")) or 1, fullPitch = tonumber(GetCVar(E .. "StrengthPitch")) or 0.75 }
+		pcall(run.events.RegisterEvent, run.events, "PLAYER_TARGET_CHANGED")
+		local this = run
+		run.events:SetScript("OnEvent", function()
+			if run ~= this or not run.at then return end
+			local has = UnitExists("target") and ns.Flag(UnitCanAttack("player", "target"))
+			if has and run.phase == "target" then
+				run.phase, run.began, run.told = "on", GetTime(), nil
+				Log(("map: enemy %d targeted %s, facing %s (at the box %s)"):format(run.at, Text(UnitName("target")),
+					Facing(), run.clickFacing or "?"))
+				EnemyBox("hands off...", 1, 0.82, 0)
+			elseif not UnitExists("target") and run.phase == "on" then
+				Log(("map: enemy %d cleared %.1f s in, facing %s; written (s in: turn/tilt strength): %s"):format(run.at,
+					GetTime() - run.began, Facing(), #run.writes > 0 and table.concat(run.writes, " ") or "nothing"))
+				run.phase, run.began = "back", GetTime()
+				EnemyBox("hands off...", 0.7, 0.7, 0.7)
+			end
+		end)
+		Log(("map: enemy run, %d trials | %s | offset %s, zoom %.2f, the game's strengths turn %s tilt %s"):format(
+			#MAP_ENEMY, Who(), Text(GetCVar(SHOULDER)), Zoom(), Text(run.fullYaw), Text(run.fullPitch)))
+		ns.Print(("shoulder map: record your screen; %d targets, told when; type it again to stop"):format(#MAP_ENEMY))
+		C_Timer.After(1, function() if run == this and not run.at then EnemyBegin(1) end end)
+	end
 	function ns.ShoulderMap(which)
 		if run then
 			End("stopped")
@@ -1254,7 +1359,8 @@ do
 		if kind == "ramp" then return TalkStart(MAP_RAMP, "ramp") end
 		if kind == "back" then return TalkStart(MAP_BACK, "back") end
 		if kind == "walk" then return WalkStart() end
-		if kind ~= "still" then return ns.Print("shoulder map: still [first trial], talk, ramp, back, walk") end
+		if kind == "enemy" then return EnemyStart() end
+		if kind ~= "still" then return ns.Print("shoulder map: still [first trial], talk, ramp, back, walk, enemy") end
 		from = math.max(1, math.min(#MAP_STILL, tonumber(from) or 1))
 		ns.shoulderTestHold = true
 		Change(PLAIN)
@@ -1422,7 +1528,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk, zoomcurve, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

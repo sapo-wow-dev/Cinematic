@@ -451,13 +451,13 @@ function ns.UpdateCVars(cinematic, fightStarting)
 	end
 	-- (Kept through the Calm Timer after a fight, like the plates.)
 	local fighting = inCombat or (ns.FightLingering and ns.FightLingering())
-	ns.ApplyCVarSet(COMBAT_TEXT_CVARS, (cinematic and ns.db.hideCombatText and not fighting) or false)
+	ns.ApplyCVarSet(COMBAT_TEXT_CVARS, (cinematic and ns.Setting("hideCombatText") and not fighting) or false)
 	ns.ApplyCVarSet(TARGET_CIRCLE_CVARS, (cinematic and ns.PageOn("handleFrames")
 		and not ns.RowOnNow("targetcircle", nil, true)) or immersive)
 	-- The red error text ("Target not in line of sight"): its own In combat
 	-- and Out of combat boxes, CineMode or not (the addon off: always shown).
 	if UIErrorsFrame then
-		local hide = ns.db.enabled and ns.db[fighting and "hideErrorsInCombat" or "hideErrorsOutOfCombat"]
+		local hide = ns.db.enabled and ns.Setting(fighting and "hideErrorsInCombat" or "hideErrorsOutOfCombat")
 		UIErrorsFrame:SetAlpha(hide and 0 or 1)
 	end
 end
@@ -1469,15 +1469,6 @@ function ns.SetPlateAlpha(plate, alpha, bodyAlpha)
 	end
 end
 
--- The game's (localized) name for the Totem creature type.
-local TOTEM_TYPE = "Totem"
-if C_CreatureInfo and C_CreatureInfo.GetCreatureTypeInfo then
-	local ok, info = pcall(C_CreatureInfo.GetCreatureTypeInfo, 11)
-	if ok and type(info) == "table" and info.name then
-		TOTEM_TYPE = info.name
-	end
-end
-
 local function Known(value)
 	return not (issecretvalue and issecretvalue(value))
 end
@@ -1486,8 +1477,10 @@ end
 -- and neutral NPCs (minor units apart), friendly players (their minions apart) and
 -- friendly NPCs. Friendly or not is the game's own test, so the other
 -- faction's players are enemies. Minions are anything a player controls
--- (pets, guardians, totems). nil when the game won't say (secret values in
--- combat): such plates just follow the fade.
+-- (pets, guardians, totems). An NPC's own totems are NPCs, as their owner is
+-- (a Foulweald shaman's red totems with Hostile NPCs, not with enemy players'
+-- minions, whose In PvP names kept them up while you were flagged). nil when
+-- the game won't say (secret values in combat): such plates just follow the fade.
 local function PlateKind(unit)
 	local okFriend, friend = pcall(UnitIsFriend, "player", unit)
 	local ok, isPlayer = pcall(UnitIsPlayer, unit)
@@ -1508,13 +1501,11 @@ local function PlateKind(unit)
 		end
 		return friend and "Friends" or "Enemies"
 	end
-	local okType, creatureType = pcall(UnitCreatureType, unit)
-	local totem = okType and Known(creatureType) and creatureType == TOTEM_TYPE
 	local okControl, controlled = pcall(UnitPlayerControlled, unit)
 	if not okControl or not Known(controlled) then
 		return nil
 	end
-	if controlled or totem then
+	if controlled then
 		return friend and "FriendlyMinions" or "EnemyMinions"
 	end
 	if friend then

@@ -691,6 +691,8 @@ local function HandleSlash(msg)
 		ns.ReportMinimap()
 	elseif cmd == "debug" and arg == "mapback" then
 		ns.ReportMinimapBack()
+	elseif cmd == "debug" and arg == "mapicon" then
+		ns.ReportMinimapIcon()
 	elseif cmd == "debug" and arg == "ping" then
 		ns.ReportPingReveal()
 	elseif cmd == "debug" and arg == "questtimer" then
@@ -1676,6 +1678,9 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg:find("^cursorsweep") then
 		-- (One cursor sweep, the faded minimap under your mouse: NodeSweep.lua.)
 		ns.CursorSweepTest(arg:match("^cursorsweep%s*(.*)$"))
+	elseif cmd == "debug" and arg == "lowmana" then
+		-- (Dev copy: one run recording why low mana doesn't bring your frames up, LowManaTest.lua.)
+		if ns.LowManaTest then ns.LowManaTest() else ns.Print("/cine debug lowmana is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "bartest" then
 		-- (Dev copy: one run recording an action bar addon's fade, hover and clicks, BarHoverTest.lua.)
 		if ns.BarHoverTest then ns.BarHoverTest() else ns.Print("/cine debug bartest is in the dev copy only.") end
@@ -1911,9 +1916,11 @@ local function HandleSlash(msg)
 		ns.Print(("power %s / %s, type %s (%s)"):format(show(UnitPower("player")),
 			show(UnitPowerMax("player")), show(powerToken), show(powerType)))
 		ns.Print(("last health/power change: %.1f sec ago"):format(ns.GetSecondsSinceVitalsChange()))
-		ns.Print(("option on: %s (PRD %s), recovering: %s, in combat: %s"):format(
-			tostring(ns.db.portraitWhenNotFull), tostring(ns.db.prdWhenNotFull), tostring(ns.IsPlayerRecovering()),
-			tostring(InCombatLockdown())))
+		ns.Print(("Not full: player health %s, power %s; PRD health %s, power %s; mana bar %s; " ..
+			"after fights only %s; recovering: %s, in combat: %s"):format(tostring(ns.db.nfHealthPlayer),
+			tostring(ns.db.nfPowerPlayer), tostring(ns.db.nfHealthPrd), tostring(ns.db.nfPowerPrdPower),
+			tostring(ns.db.nfPowerPrdMana),
+			tostring(ns.db.notFullAfterFight), tostring(ns.IsPlayerRecovering()), tostring(InCombatLockdown())))
 		for _, entry in ipairs(ns.managed) do
 			if entry.name == "PlayerFrame" then
 				ns.Print(("PlayerFrame alpha %.2f, group %s, nested %s"):format(
@@ -1932,7 +1939,7 @@ local function HandleSlash(msg)
 		ns.Print("tracking icon: " .. tostring(ns.GetActiveTrackingIcon()))
 		local gathering, creatures = ns.IsTrackingSomethingWanted()
 		ns.Print(("keeping minimap open for gathering tracking: %s%s, for creatures or fish: %s"):format(
-			tostring(gathering), gathering and ns.IsTrackingOffHere() and " (but not here: Except in, Minimap page)" or "",
+			tostring(gathering), gathering and ns.IsTrackingOffHere() and " (but not here: its Show in row, Minimap page)" or "",
 			tostring(creatures)))
 		ns.Print(ns.NodeSweepReport())
 		local quests = ns.QuestRevealReport()

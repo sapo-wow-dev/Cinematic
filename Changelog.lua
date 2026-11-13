@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-13", page = "Advanced Frames", title = "Leatrix Plus support",
+		text = "Leatrix Plus's square minimap header and its minimap button bag now fade with the Minimap rows, " ..
+		"its flight bar gets a row of its own, and its faction-tinted tooltips are an Addon Conflicts choice." },
 	{ date = "2026-11-12", page = "Addon Conflicts", title = "Addon Conflicts",
 		text = "Where another addon has its own version of a Cinematic feature (DaylightUI, ElvUI, Naowh Forever, " ..
 		"RareScanner), pick whose plays: theirs, ours or both. It's on the new Addons hub, which also holds your " ..

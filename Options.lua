@@ -243,7 +243,8 @@ end
 -- A page's intro, kept out of the way: a "?" beside its title shows it on
 -- hover (and search still finds its words). Returns a flat anchor under the
 -- title (or under, if given) for what goes below; hiding it hides the "?" too.
-local function PageIntro(parent, title, text, under)
+-- (warn: a warning triangle in place of the "?", for an intro that's a caution.)
+local function PageIntro(parent, title, text, under, warn)
 	-- (A page's first: its intro, behind the "?" on its card on the CineMode page.)
 	if parent.introText == nil then parent.introText = text end
 	local first = not parent.pageHelp -- (the page's title's "?": its on/off switch goes past it)
@@ -256,17 +257,26 @@ local function PageIntro(parent, title, text, under)
 	help:SetPoint("LEFT", title, "RIGHT", 6, 0)
 	-- (Above the title's own frame: a camera section's title is on its header.)
 	help:SetFrameLevel(math.max(anchor:GetFrameLevel(), title:GetParent():GetFrameLevel()) + 2)
-	local ring = help:CreateTexture(nil, "BACKGROUND")
-	ring:SetAllPoints()
-	ring:SetTexture(ns.HELP_DISC)
-	ring:SetVertexColor(0.3, 0.3, 0.3, 0.9)
-	local mark = help:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	mark:SetPoint("CENTER", 1, 0)
-	mark:SetText("?")
-	mark.searchSkip = true
+	if warn then
+		local icon = help:CreateTexture(nil, "ARTWORK")
+		icon:SetAllPoints()
+		icon:SetTexture("Interface\\DialogFrame\\UI-Dialog-Icon-AlertNew")
+		icon:SetVertexColor(0.9, 0.9, 0.9)
+		help:HookScript("OnEnter", function() icon:SetVertexColor(1, 1, 1) end)
+		help:HookScript("OnLeave", function() icon:SetVertexColor(0.9, 0.9, 0.9) end)
+	else
+		local ring = help:CreateTexture(nil, "BACKGROUND")
+		ring:SetAllPoints()
+		ring:SetTexture(ns.HELP_DISC)
+		ring:SetVertexColor(0.3, 0.3, 0.3, 0.9)
+		local mark = help:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		mark:SetPoint("CENTER", 1, 0)
+		mark:SetText("?")
+		mark.searchSkip = true
+		help:HookScript("OnEnter", function() mark:SetTextColor(1, 1, 1) end)
+		help:HookScript("OnLeave", function() mark:SetTextColor(1, 0.82, 0) end)
+	end
 	Tooltip(help, text)
-	help:HookScript("OnEnter", function() mark:SetTextColor(1, 1, 1) end)
-	help:HookScript("OnLeave", function() mark:SetTextColor(1, 0.82, 0) end)
 	help.searchNote = text
 	help.searchEdges = { top = title, bottom = title, left = title, right = help }
 	if first then parent.pageHelp, parent.pageTitle = help, title end
@@ -1579,7 +1589,7 @@ end
 -- too: Style|Names fade time (tried first, then as all words). (Pipes come
 -- from the chat box doubled: any run of them splits.)
 function ns.FindSetting(query)
-	-- A setting's id (/cine find portraitWhenNotFull), or a Show in row's
+	-- A setting's id (/cine find nfHealthPlayer), or a Show in row's
 	-- (/cine find row:player): straight to its control.
 	local id = type(query) == "string" and (query:match("^%s*([%w_]+)%s*$") or query:match("^%s*(row:%S+)%s*$"))
 	if id and (ns.DEFAULTS[id] ~= nil or id:find("^row:")) and ns.OpenSettingByKey then
@@ -2004,6 +2014,52 @@ end
 -- clients with the old options window.
 local subpages = {}
 
+-- The left list, top down, by English name: hubs and plain pages. Entries are
+-- queued as they're made and handed to the game in this order when setup ends
+-- (menu.Flush), so the order of the Create calls doesn't matter. One not named
+-- here goes last; a hub under another (hub.under) right under that one.
+local menu = { order = { "Profiles", "CineMode", "UI Manager", "Addons", "Visions", "Style", "Atmosphere", "Camera",
+	"Keybinds", "Quality of life", "Community", "Dev" }, queue = {} }
+do
+	local function Register(entry)
+		if category and Settings and Settings.RegisterCanvasLayoutSubcategory then
+			local parentSub = entry.parent and subpages[entry.parent] or category
+			local sub = Settings.RegisterCanvasLayoutSubcategory(parentSub, entry.frame, entry.shown)
+			Settings.RegisterAddOnCategory(sub)
+			subpages[entry.key] = sub
+		elseif InterfaceOptions_AddCategory then
+			InterfaceOptions_AddCategory(entry.frame)
+		end
+	end
+	-- key: its subpages name; parent: the hub it's under, or nil (Cinematic).
+	-- After setup (menu.flushed), straight in at the bottom.
+	function menu.Add(key, frame, shown, parent)
+		subpages[key] = frame
+		local entry = { key = key, frame = frame, shown = shown, parent = parent }
+		if menu.flushed then Register(entry) else menu.queue[#menu.queue + 1] = entry end
+	end
+	function menu.Flush()
+		local done = {}
+		local function Put(entry)
+			if done[entry] then return end
+			done[entry] = true
+			Register(entry)
+			for _, child in ipairs(menu.queue) do
+				if child.parent == entry.key then Put(child) end
+			end
+		end
+		for _, key in ipairs(menu.order) do
+			for _, entry in ipairs(menu.queue) do
+				if entry.key == key and not entry.parent then Put(entry) end
+			end
+		end
+		for _, entry in ipairs(menu.queue) do
+			if not entry.parent then Put(entry) end
+		end
+		menu.flushed, menu.queue = true, {}
+	end
+end
+
 -- Hubs: a sub-page holding several pages, picked from a row of icons at its
 -- top (the page shows under them, its name on the icon's mouseover). Above
 -- the icons, a search box for all its pages and Reset page for the one shown.
@@ -2081,7 +2137,7 @@ do
 		-- The picked page's band in gold, the rest faded. Cinematic's own looks
 		-- are Style tabs on their own pages. after: listed right after UI
 		-- Manager, at the same level.)
-		{ name = "Style", after = "UI Manager", colors = {
+		{ name = "Style", colors = {
 			HUD = { 0.35, 0.6, 0.9 }, Overhead = { 0.65, 0.45, 0.9 },
 		}, pages = {
 			{ "Style General", "Interface\\Icons\\INV_Misc_Gear_08", label = "General" },
@@ -2138,11 +2194,11 @@ do
 			{ "Hunter", "Interface\\Icons\\INV_Weapon_Bow_07", section = "Helpers" },
 			{ "Keyboard Map", "Interface\\Icons\\INV_Misc_Note_06", section = "Helpers" }, -- (KeyboardMap.lua)
 		} },
-		-- (Everything about other addons, listed after Quality of life. General:
+		-- (Everything about other addons, listed after UI Visibility. General:
 		-- CreateQualityPanel's end, only with one of its addons loaded;
 		-- Conflicts: Conflicts.lua, only with an addon that has rows loaded;
 		-- Frames: the Advanced Frames page, always, its ids kept.)
-		{ name = "Addons", after = "Quality of life", pages = {
+		{ name = "Addons", pages = {
 			{ "Addon Support", "Interface\\Icons\\INV_Misc_Gear_02", label = "General" },
 			{ "Addon Conflicts", "Interface\\Icons\\Ability_Warrior_Disarm", label = "Conflicts" },
 			{ "Advanced Frames", "Interface\\Icons\\INV_Misc_Gear_01", label = "Frames" },
@@ -2421,11 +2477,10 @@ do
 	-- (made when its first page comes, so it's listed where that page would be)
 	local function CreateHub(hub)
 		-- (hub.under: listed under that hub, made first, not under Cinematic.
-		-- hub.after: that hub made first, so this one is listed right after it.)
+		-- Its place in the list: menu.order.)
 		local parentHub
 		for _, each in ipairs(HUBS) do
 			if each.name == hub.under then parentHub = each end
-			if each.name == hub.after and not each.frame then CreateHub(each) end
 		end
 		if parentHub and not parentHub.frame then CreateHub(parentHub) end
 		local frame = CreateFrame("Frame")
@@ -2478,20 +2533,8 @@ do
 			ns.PaintPageSwitches()
 		end)
 		frame:Hide()
-		if category and Settings and Settings.RegisterCanvasLayoutSubcategory then
-			local parentSub = parentHub and subpages[parentHub.name] or category
-			local sub = Settings.RegisterCanvasLayoutSubcategory(parentSub, frame, L[hub.label or hub.name])
-			-- (the hub it's under starts open in the list, so this one shows)
-			if parentHub then
-				if parentSub.SetExpanded then parentSub:SetExpanded(true) else parentSub.expanded = true end
-			end
-			Settings.RegisterAddOnCategory(sub)
-			subpages[hub.name] = sub
-		else
-			subpages[hub.name] = frame
-			if parentHub then parentHub.frame.collapsed = false end
-			if InterfaceOptions_AddCategory then InterfaceOptions_AddCategory(frame) end
-		end
+		-- (the hub it's under starts collapsed in the list: Wheels hidden till it's opened)
+		menu.Add(hub.name, frame, L[hub.label or hub.name], parentHub and parentHub.name)
 	end
 
 	-- A tile's page switch (its hidden Enable Page: RegisterPageSwitch), or nil.
@@ -2612,9 +2655,15 @@ do
 	end
 	local function PaintOffCard(hub)
 		local card, tile = hub.offCard, hub.current
-		-- (the page it faded last time back, whichever shows now)
+		-- (the page it faded last time back, whichever shows now, its tabs too)
+		local function KeepTabs(tabs, keep)
+			if not (tabs and tabs.panel.SetIgnoreParentAlpha) then return end
+			tabs.panel:SetIgnoreParentAlpha(keep)
+			for _, tab in ipairs(tabs.frames) do tab:SetIgnoreParentAlpha(keep) end
+		end
 		if card and card.faded then
 			card.faded:SetAlpha(1)
+			KeepTabs(card.faded.content and card.faded.content.pageTabs, false)
 			card.faded = nil
 		end
 		local switch = tile and TileSwitch(tile)
@@ -2634,6 +2683,18 @@ do
 		card.button.switch = box
 		card.button:SetShown(not stuck)
 		card.box:SetHeight(math.max(32, card.title:GetStringHeight() + 3 + card.text:GetStringHeight()) + 20)
+		-- A page split into tabs (HUD, Gamepad, Cursor) keeps them over the
+		-- card, still clickable, so the other tabs' pages are a click away.
+		local tabs = tile.canvas.content and tile.canvas.content.pageTabs
+		card:ClearAllPoints()
+		card:SetPoint("BOTTOMRIGHT", hub.host)
+		if tabs and tabs.panel.SetIgnoreParentAlpha then
+			if tile.canvas.scroll then tile.canvas.scroll:SetVerticalScroll(0) end
+			card:SetPoint("TOPLEFT", hub.host, "TOPLEFT", 0, -(ns.FOLDER_TAB_HEIGHT + 22))
+			KeepTabs(tabs, true)
+		else
+			card:SetPoint("TOPLEFT", hub.host)
+		end
 		tile.canvas:SetAlpha(0)
 		card.faded = tile.canvas
 		card:Show()
@@ -2976,13 +3037,7 @@ local function RegisterSubpage(subpanel, name, shown)
 		local box = CreateSearch(subpanel, subpanel.content, { page })
 		box:SetPoint("RIGHT", subpanel.resetButton, "LEFT", -12, 0)
 	end
-	if category and Settings and Settings.RegisterCanvasLayoutSubcategory then
-		local sub = Settings.RegisterCanvasLayoutSubcategory(category, subpanel, L[name])
-		Settings.RegisterAddOnCategory(sub)
-		subpages[name] = sub
-	elseif InterfaceOptions_AddCategory then
-		InterfaceOptions_AddCategory(subpanel)
-	end
+	menu.Add(name, subpanel, L[name])
 end
 
 -- Sub-page: what brings faded things back, and what stays up.
@@ -3372,8 +3427,8 @@ local function CreateRevealPanel()
 
 	local moving = Check(content, "offWhileMoving", L["When moving"],
 		L["Walking or riding about yourself brings the UI back (names too), say to look for an NPC " ..
-		"in a city. CineMode comes back once you've stood still, or kept moving, for the time " ..
-		"below. Auto-run, RP walking and flights stay in CineMode."],
+		"in a city. CineMode comes back once you've stood still, or kept moving, for the times " ..
+		"below. Auto-run counts as moving; RP walking and flights stay in CineMode."],
 		function(value)
 			ns.GetDB().offWhileMoving = value
 			Refresh()
@@ -3381,46 +3436,66 @@ local function CreateRevealPanel()
 	stack:Add(moving, "check")
 
 	-- (Indented under Moving, as its sub-options.)
-	local movingVFX = Check(content, "movingKeepVFX", L["Keep VFX on"],
-		L["The visual effects (letterbox, tint and the rest on the Visual Effects page) stay on " ..
-		"while moving brings the UI back."])
-	GreyUnless(movingVFX, function(db) return db.offWhileMoving end)
-	stack:Add(movingVFX, "check", 16)
+	local movingStill = Slider(content, "movingStillAfter", L["Back after stopping"], 1, 60, 1, L["%d sec"])
+	Tooltip(movingStill, L["CineMode comes back once you've stood still this long."])
+	GreyUnless(movingStill, function(db) return db.offWhileMoving end)
+	stack:Add(movingStill, "slider", 16)
 
-	local movingBack = Slider(content, "movingBackAfter", L["Back after"], 1, 60, 1, L["%d sec"])
-	Tooltip(movingBack, L["CineMode comes back once you've stood still this long, or kept moving " ..
-		"this long without stopping (a long walk or ride)."])
+	local movingBack = Slider(content, "movingBackAfter", L["Back after moving"], 1, 60, 1, L["%d sec"])
+	Tooltip(movingBack, L["CineMode comes back once you've kept moving this long without stopping " ..
+		"(a long walk or ride)."])
 	GreyUnless(movingBack, function(db) return db.offWhileMoving end)
 	stack:Add(movingBack, "slider", 16)
 
 	stack:Add(windows, "check")
 	stack:Add(npcs, "check")
 
-	stack:Header(content, L["Combat text"])
-
-	local combatText = Check(content, "hideCombatText", L["Hide combat text out of combat"],
-		L["No floating damage and healing numbers (like \"+10\" from a heal or regen) in cinematic " ..
-		"mode while you're out of combat. They come back the moment a fight starts and stay for the " ..
-		"Calm Timer after it, and your " ..
-		"combat text settings are put back when the UI returns."])
-	stack:Add(combatText, "check")
-
-	-- (Hide all floating text, XP too: on the Style hub's Combat Text Style
-	-- page since 2026-11-10, CombatTextStyle.lua.)
-
-	-- The red error text at the top of the screen, in and out of fights
-	-- (CineMode or not).
-	stack:Header(content, L["Hide error messages"])
-
-	local errorsInCombat = Check(content, "hideErrorsInCombat", L["In combat"],
-		L["No red error text at the top of the screen (like \"Target not in line of sight\" or " ..
-		"\"Can't do that while moving\") while you're fighting, and for the Calm Timer after it."])
-	stack:Add(errorsInCombat, "check")
-
-	local errorsOutOfCombat = Check(content, "hideErrorsOutOfCombat", L["Out of combat"],
-		L["No red error text at the top of the screen (like \"Target not in line of sight\" or " ..
-		"\"Can't do that while moving\") while you're out of combat."])
-	stack:Add(errorsOutOfCombat, "check")
+	-- What still works while CineMode is off (2026-11-13): each visual effect
+	-- (Core.lua's OUTSIDE_EFFECT, off to start with) and each vision
+	-- (OUTSIDE_CINE, on to start with). A group each, in two columns.
+	stack:Header(content, L["Allow outside CineMode"])
+	stack:Help(content, L["Ticked, it works while CineMode is off too. Unticked, only while CineMode is on."])
+	local function OutsideChanged()
+		if ns.RefreshOutsideCine then ns.RefreshOutsideCine(true) end
+	end
+	local function Group(title, rows)
+		stack:Add(Label(content, "GameFontNormal", title), "label")
+		local leftCheck
+		for i, row in ipairs(rows) do
+			local tick, label = row[1], row[2]
+			local check = Check(content, tick, label,
+				L["%s works while CineMode is off too. Unticked, only while CineMode is on."]:format(label),
+				function(value)
+					ns.GetDB()[tick] = value
+					OutsideChanged()
+					Refresh()
+				end)
+			if i % 2 == 1 then
+				stack:Add(check, "check")
+				leftCheck = check
+			else
+				check:SetPoint("LEFT", leftCheck, "LEFT", 200, 0)
+			end
+		end
+	end
+	local effectRows = {}
+	for _, item in ipairs({ { "letterbox", L["Letterbox"] }, { "tint", L["Tint"] },
+		{ "vignette", L["Vignette"] }, { "weather", L["Weather"] } }) do
+		local effect = item[1]
+		effectRows[#effectRows + 1] = { ns.OUTSIDE_EFFECT[effect], item[2] } -- (never greyed by its page)
+	end
+	Group(L["Visual effects"], effectRows)
+	local visionRows = {}
+	for _, item in ipairs({
+		{ "handleHealVision", "Heal Vision" }, { "damageVision", "Damage Vision" },
+		{ "lowHealth", "Vitals Vision" }, { "questVision", "Quest Vision" },
+		{ "rollWindow", "Roll Vision" }, { "teleportVision", "Teleport Vision" },
+		{ "duelPlates", "Duel Vision" }, { "emoteVision", "Emote Vision" },
+		{ "cards", "Card Vision" },
+	}) do
+		visionRows[#visionRows + 1] = { ns.OUTSIDE_CINE[item[1]], L[item[2]] } -- (never greyed by its page)
+	end
+	Group(L["Visions"], visionRows)
 
 	-- The Settings tab: everything made since the overview, on a frame of its
 	-- own to show and hide (1 by 1: one with no height draws none of it).
@@ -7867,6 +7942,32 @@ local function CreateQualityPanel()
 		L["After a reload (/reload, the Reload button or its key), what you had open opens again: these " ..
 		"settings at the page you were on, your bags, the character window, map, spellbook and the game's " ..
 		"other windows, and Cinematic's own."]), "check")
+	-- (On the CineMode page until 2026-11-13.)
+	stack:Header(content, L["Combat text"])
+
+	local combatText = Check(content, "hideCombatText", L["Hide combat text out of combat"],
+		L["No floating damage and healing numbers (like \"+10\" from a heal or regen) in cinematic " ..
+		"mode while you're out of combat. They come back the moment a fight starts and stay for the " ..
+		"Calm Timer after it, and your " ..
+		"combat text settings are put back when the UI returns."])
+	stack:Add(combatText, "check")
+
+	-- (Hide all floating text, XP too: on the Style hub's Combat Text Style
+	-- page since 2026-11-10, CombatTextStyle.lua.)
+
+	-- The red error text at the top of the screen, in and out of fights
+	-- (CineMode or not).
+	stack:Header(content, L["Hide error messages"])
+
+	local errorsInCombat = Check(content, "hideErrorsInCombat", L["In combat"],
+		L["No red error text at the top of the screen (like \"Target not in line of sight\" or " ..
+		"\"Can't do that while moving\") while you're fighting, and for the Calm Timer after it."])
+	stack:Add(errorsInCombat, "check")
+
+	local errorsOutOfCombat = Check(content, "hideErrorsOutOfCombat", L["Out of combat"],
+		L["No red error text at the top of the screen (like \"Target not in line of sight\" or " ..
+		"\"Can't do that while moving\") while you're out of combat."])
+	stack:Add(errorsOutOfCombat, "check")
 	canvas:SetScript("OnShow", PageShown(Refresh, content))
 	canvas:Hide()
 	-- (Quality of life's first page: "General" there.)
@@ -8702,7 +8803,7 @@ local function CreatePlatesPanel()
 		"switch nameplates on or off during a fight: they stay as the fight found them.\n\nA friendly row's " ..
 		"Grouped (in its Location list) counts here too: while you're in a group that kind shows, whatever its " ..
 		"choice below.\n\nFriendly players' " ..
-		"setting covers their pets too, so with pets shown, friendly players' plates show as well."])
+		"setting covers their pets too, so with pets shown, friendly players' plates show as well."], nil, true)
 	local INSTANCE_CHOICES = {
 		{ "Friends", L["Friendly players"], target = true },
 		{ "FriendlyMinions", L["Pets and minions"] },
@@ -9030,6 +9131,13 @@ local function CreatePlatesPanel()
 	-- here, after the Names grid's rows, and laid out at the top.
 	local targetSection = Section(L["Target"], "Target")
 	table.insert(sections, 1, table.remove(sections))
+	-- (Dungeons & raids' tab first of all, before Target's.)
+	for i, section in ipairs(sections) do
+		if section == instanceSection then
+			table.insert(sections, 1, table.remove(sections, i))
+			break
+		end
+	end
 	BeginSection(targetSection)
 	local targetTop = TableTop(targetSection.frame, PLATE_LAYOUT)
 	AddPlateRow(targetTop, 1, { "YourTarget", L["Nameplates"] })
@@ -11703,9 +11811,9 @@ local function CreateMinimapPanel()
 	RecordKey(content, "minimapRevealParts")
 	local okParts, parts = ns.MenuDropdown(content)
 	if okParts and parts and parts.SetupMenu then
-		local partsLabel = Label(content, "GameFontHighlight", L["Reveal shows"])
-		partsLabel:SetPoint("TOPLEFT", revealLabel, "BOTTOMLEFT", 12, -6)
-		parts:SetPoint("TOPLEFT", partsLabel, "BOTTOMLEFT", -4, -4)
+		-- (Straight under Reveal, no name of its own: "Reveal shows" under
+		-- "Reveal" said it twice, the user 2026-11-13. Its tip says what it is.)
+		parts:SetPoint("TOPLEFT", revealLabel, "BOTTOMLEFT", 8, -6)
 		parts:SetWidth(260)
 		parts.searchSkip = true -- (it shows the current ticks, not a label)
 		parts:SetupMenu(function(_, root)
@@ -11812,7 +11920,16 @@ local function CreateMinimapPanel()
 	})) do
 		local cursorNodes = byCursor and kind[1] == "minimapRevealNodes"
 		local key = cursorNodes and "minimapNodesByCursor" or kind[1]
-		local check = Check(content, key, kind[2], kind[3] .. " " .. (cursorNodes and CURSOR_NOTE or SWEEP_NOTE),
+		-- (The cursor sweep can't read names since Forever's 2026-11-12 patch,
+		-- NodeSweep.lua: any dot counts, and its box says so.)
+		local label, tip = kind[2], kind[3]
+		if cursorNodes then
+			label = L["Nearby Dots"]
+			tip = L["With Find Minerals, Find Herbs or Find Treasure on, the minimap comes up while a dot shows " ..
+				"on it near you. The game hides the names on the minimap from addons, so Cinematic can't tell a " ..
+				"vein or herb from other dots: party members, quest areas and town icons you track count too."]
+		end
+		local check = Check(content, key, label, tip .. " " .. (cursorNodes and CURSOR_NOTE or SWEEP_NOTE),
 			kind[1] == "minimapRevealNodes" and function(value)
 				ns.GetDB()[key] = value
 				Refresh()
@@ -11824,8 +11941,8 @@ local function CreateMinimapPanel()
 		-- (The cursor sweep: a ping where it heard its find, just a box.)
 		if cursorNodes then
 			local ping = Check(content, "minimapNodePing", L["Ping where it is"],
-				L["Pings the minimap where a vein, herb or chest shows up, the same ping as clicking the minimap, " ..
-				"with its sound; in a group, everyone sees it. It lands within a few yards of the node."])
+				L["Pings the minimap where a dot shows up, the same ping as clicking the minimap, " ..
+				"with its sound; in a group, everyone sees it. It lands within a few yards of the dot."])
 			ping:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 20, -2)
 			GreyUnless(ping, function(db) return db.minimapNodesByCursor end)
 			ping.revealIndent = 20
@@ -11908,37 +12025,51 @@ local function CreateMinimapPanel()
 				previousReveal.revealIndent = 16
 			end
 		end
-		-- (Under the cursor sweep's box: whether it goes on in fights.)
 		if cursorNodes then
-			local fights = Check(content, "minimapNodesInCombat", L["In combat too"],
-				L["Keeps looking during fights. While it looks, the minimap and its buttons don't take clicks for " ..
-				"about a second; buttons the game protects in fights are left alone."])
-			fights:SetPoint("TOPLEFT", previousReveal, "BOTTOMLEFT", 20 - (previousReveal.revealIndent or 0),
-				previousReveal.revealIndent and -6 or -2)
-			GreyUnless(fights, function(db) return db.minimapNodesByCursor end)
-			-- Places it doesn't look in (nodesOffIn<place>), a row like tracking's Except in.
-			local nodesExcept = Label(content, "GameFontHighlight", L["Except in"])
-			nodesExcept:SetPoint("TOPLEFT", fights, "BOTTOMLEFT", 4, -4)
-			local nodesFirst
-			for i, place in ipairs(PLACES) do
-				local placeCheck = Check(content, "nodesOffIn" .. place[1], place[1] == "PvP" and L["BGs"] or place[2],
-					L["It doesn't look for ore, herbs and treasure here, so the workaround never touches the " ..
-					"minimap or your mouse pointer here."])
-				placeCheck:SetPoint("TOPLEFT", nodesExcept, "BOTTOMLEFT", 12 + (i - 1) * 120, -4)
-				GreyUnless(placeCheck, function(db) return db.minimapNodesByCursor end)
-				if i == 1 then nodesFirst = placeCheck end
-			end
-			-- (What the workaround costs, said where it's ticked.)
-			local warning = Label(content, "GameFontRedSmall",
-				L["A workaround: every few seconds the hidden minimap is moved under your mouse pointer for about " ..
-				"a second. Meanwhile the minimap and its buttons don't take clicks. It doesn't look while you hold " ..
-				"the left or right mouse button (or both), turn the camera or point at a window, so if you steer " ..
-				"with the mouse a lot it only looks in the gaps. Other minimap addons may not like it."])
-			warning:SetPoint("TOPLEFT", nodesFirst, "BOTTOMLEFT", -12, -6)
-			warning:SetWidth(440)
-			warning:SetJustifyH("LEFT")
-			warning.revealIndent = 24
-			previousReveal = warning
+			-- What the workaround costs: a red "!" after the box's name, the
+			-- words in its tip (a block of red text under it was a lot, the
+			-- user 2026-11-13).
+			local warn = CreateFrame("Frame", nil, content)
+			warn:SetSize(16, 18)
+			local nameText = check.Text or check.text
+			warn:SetPoint("LEFT", nameText or check, "RIGHT", 6, 0)
+			local bang = warn:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+			bang:SetPoint("CENTER")
+			bang:SetText("!")
+			bang:SetTextColor(1, 0.3, 0.25)
+			warn:EnableMouse(true)
+			Tooltip(warn, L["A workaround: every few seconds the hidden minimap is moved under your mouse pointer for " ..
+				"about a second. Meanwhile the minimap and its buttons don't take clicks. It doesn't look while you " ..
+				"hold the left or right mouse button (or both), turn the camera or point at a window, so if you steer " ..
+				"with the mouse a lot it only looks in the gaps. Other minimap addons may not like it. Any dot " ..
+				"counts (party members, quest areas, tracked town icons too): the game hides their names."])
+			-- Where it looks: its Show in row (NodeSweep.lua's cursor.ROW), Open
+			-- world ticked to start with, In combat its fights. (In place of In
+			-- combat too and an Except in row, 2026-11-13.)
+			local rowTop = CreateFrame("Frame", nil, content)
+			rowTop:SetSize(1, 1)
+			-- (Under Ping where it is, at its edge, close under it: the column
+			-- headings make the gap. At the box's own edge it stuck out left
+			-- of it, and a full gap left a hole, seen 2026-11-13.)
+			rowTop:SetPoint("TOPLEFT", previousReveal, "BOTTOMLEFT", 0, 0)
+			local lastRow = ShowTable(content, rowTop, {
+				opts = { anyFight = true }, underHeader = true,
+				-- (Its name 20 narrower for the indent: the columns end where
+				-- the page's other tables do, clear of the scroll bar.)
+				labelWidth = FRAME_LABEL_WIDTH - 20,
+				-- (Just Combat and Location: where it looks and whether in fights,
+				-- the user 2026-11-13. No Always: Location's every place is it.)
+				layout = ns.GRID_PLACE_COMBAT_LAYOUT,
+				noCine = true, -- (it only looks while CineMode has the minimap faded: Always says it all)
+				{ key = ns.MINIMAP_DOTS_ROW, label = L["Nearby Dots"] },
+			})
+			-- (What comes next goes under the row's whole height, back at the
+			-- box's edge: placed at its label, Quest turn-ins ran into it.)
+			local rowEnd = CreateFrame("Frame", nil, content)
+			rowEnd:SetSize(1, 1)
+			rowEnd:SetPoint("TOPLEFT", lastRow, "BOTTOMLEFT", 0, -8)
+			rowEnd.revealIndent = (previousReveal.revealIndent or 0)
+			previousReveal = rowEnd
 		end
 	end
 	-- Quest givers nearby (QuestGlow.lua): NPC nameplates the game would show
@@ -11984,13 +12115,12 @@ local function CreateMinimapPanel()
 		L["Inside buildings, caves and cities like Ironforge, the minimap stays up during CineMode. " ..
 		"The game stops updating the indoor map while the minimap is hidden, so after walking " ..
 		"around it can come back blank or out of date for a moment. Off, it's redrawn as it comes back."])
-	indoors:SetPoint("TOPLEFT", keepLabel, "BOTTOMLEFT", 12, -4)
-
 	-- Zones you picked (minimapKeepZones, map IDs comma-separated): a row
 	-- each (name, Remove), then a button to add the one you're in.
+	-- (First under Keep open, at the checkboxes' edge: under Indoors it read
+	-- as a part of Indoors, the user 2026-11-13.)
 	local zonesLabel = Label(content, "GameFontHighlightSmall", L["In these zones:"])
-	-- (Lined up with the checkboxes' text.)
-	zonesLabel:SetPoint("TOPLEFT", indoors, "BOTTOMLEFT", 28, -4)
+	zonesLabel:SetPoint("TOPLEFT", keepLabel, "BOTTOMLEFT", 16, -6)
 	local function ZoneEntries()
 		local entries = {}
 		for id in (ns.GetDB().minimapKeepZones or ""):gmatch("%d+") do
@@ -12073,7 +12203,8 @@ local function CreateMinimapPanel()
 			ns.GetDB().minimapKeepQuest = value
 			Refresh()
 		end)
-	quest:SetPoint("TOPLEFT", addZone, "BOTTOMLEFT", -28, -6)
+	indoors:SetPoint("TOPLEFT", addZone, "BOTTOMLEFT", -4, -6)
+	quest:SetPoint("TOPLEFT", indoors, "BOTTOMLEFT", 0, -2)
 	-- (Under it: how long after picking up a quest or progress on one.)
 	local questFor = Slider(content, "minimapKeepQuestFor", L["Only after progress"], 0, 10, 1,
 		function(value) return value == 0 and L["Off"] or L["%d min"]:format(value) end)
@@ -12097,13 +12228,7 @@ local function CreateMinimapPanel()
 		Elementals = L["Elementals"], Giants = L["Giants"], Hidden = L["Hidden"] }
 	local TRACK_TIP = L["While tracking ticked here is on, the minimap stays up during CineMode: Find Minerals, " ..
 		"Find Herbs, Find Treasure, Find Fish, or a hunter's, druid's, warlock's or paladin's creature tracking. " ..
-		"Ore, herbs and treasure: except in the places below."]
-	local function GatheringTicked(db)
-		for _, kind in ipairs(ns.TRACKING_KINDS) do
-			if kind.gathering and db[kind.key] then return true end
-		end
-		return false
-	end
+		"Ore, herbs and treasure: where its Show in row below says."]
 	local trackLabel = Label(content, "GameFontHighlight", L["Tracking"])
 	trackLabel:SetPoint("TOPLEFT", aboveCreatures, "BOTTOMLEFT", creaturesGap[1] + 4, creaturesGap[2] - 6)
 	local aboveExcept, exceptX = trackLabel, 20
@@ -12156,26 +12281,22 @@ local function CreateMinimapPanel()
 		end
 	end
 	for _, kind in ipairs(ns.TRACKING_KINDS) do RecordKey(content, kind.key) end
-	-- Places where gathering tracking doesn't keep the minimap up, in the usual place order.
-	local exceptIn = Label(content, "GameFontHighlight", L["Except in"])
-	exceptIn:SetPoint("TOPLEFT", aboveExcept, "BOTTOMLEFT", exceptX, -4)
-	local PLACE_TIPS = {
-		Cities = L["Capital cities. "],
-		PvP = L["Battlegrounds and arenas (being flagged for PvP out in the world doesn't count). " ..
-			"Alterac Valley's mines do have ore, so untick this if you mine there. "],
-	}
-	-- (In a row.)
-	local PLACE_COLUMN = 120
-	local placesRow -- (the row's first box: Addon Frame Links goes under it)
-	for i, place in ipairs(PLACES) do
-		-- (PvP here is battlegrounds and arenas only, so it's named for them.)
-		local label = place[1] == "PvP" and L["BGs"] or place[2]
-		local check = Check(content, "trackingOffIn" .. place[1], label, (PLACE_TIPS[place[1]] or "") ..
-			L["Tracking doesn't keep the minimap up here. Hovering it still shows it."])
-		check:SetPoint("TOPLEFT", exceptIn, "BOTTOMLEFT", 12 + (i - 1) * PLACE_COLUMN, -4)
-		GreyUnless(check, GatheringTicked)
-		if i == 1 then placesRow = check end
-	end
+	-- Where gathering tracking keeps the minimap up: its Show in row (Core.lua's
+	-- ns.IsTrackingOffHere), Combat and Location, as Nearby Dots' (in place of
+	-- an Except in row, 2026-11-13). Open world and Combat to start with.
+	local trackTop = CreateFrame("Frame", nil, content)
+	trackTop:SetSize(1, 1)
+	trackTop:SetPoint("TOPLEFT", aboveExcept, "BOTTOMLEFT", exceptX - 20, -2)
+	local trackRow = ShowTable(content, trackTop, {
+		opts = { anyFight = true }, underHeader = true, layout = ns.GRID_PLACE_COMBAT_LAYOUT,
+		labelWidth = FRAME_LABEL_WIDTH - 20,
+		{ key = ns.MINIMAP_TRACKING_ROW, label = L["Tracking"],
+			tip = L["Where herb, mineral or treasure tracking keeps the minimap up, and whether in fights. " ..
+			"Alterac Valley's mines do have ore: tick BGs & arenas if you mine there. Hovering it still shows it."] },
+	})
+	local placesRow = CreateFrame("Frame", nil, content) -- (Addon Frame Links goes under it)
+	placesRow:SetSize(1, 1)
+	placesRow:SetPoint("TOPLEFT", trackRow, "BOTTOMLEFT", 0, -8)
 	-- Addon Frame Links (last): which addon's frames the minimap's parts are (FrameLinks.lua).
 	local links = ns.BuildLinkSection(content, placesRow, "minimap")
 	canvas:SetScript("OnShow", PageShown(function()
@@ -14147,7 +14268,7 @@ local function CreateVisionPanel()
 				Refresh() -- (Don't fade greys with it)
 			end)
 		barsCheck:SetPoint("TOPLEFT", barsHead, "BOTTOMLEFT", -2, -6)
-		GreyUnless(barsCheck, function() return ns.Setting("handleHealVision") end)
+		GreyUnless(barsCheck, function() return ns.PageSetting("handleHealVision") end)
 
 		-- Don't fade: the parts that stay while the rest fades (a tick menu;
 		-- healVisionPlatesKeep<part>, the name only to start with).
@@ -14182,7 +14303,7 @@ local function CreateVisionPanel()
 		end)
 		Tooltip(keepButton, L["The parts of a plate that stay while the rest fades with health (the name, to start " ..
 			"with). The target highlight sits on the health bar: it fades with the bar whatever this says."])
-		GreyUnless(keepButton, function(db) return ns.Setting("handleHealVision") and db.healVisionPlates end)
+		GreyUnless(keepButton, function(db) return ns.PageSetting("handleHealVision") and db.healVisionPlates end)
 		controls[#controls + 1] = keepButton -- (refreshed with the page)
 		keepLabel.searchSkip = true
 
@@ -14196,7 +14317,7 @@ local function CreateVisionPanel()
 				if ns.RefreshPlateNameStyle then ns.RefreshPlateNameStyle() end
 			end)
 		fillCheck:SetPoint("TOPLEFT", namesHead, "BOTTOMLEFT", -2, -6)
-		GreyUnless(fillCheck, function() return ns.Setting("handleHealVision") end)
+		GreyUnless(fillCheck, function() return ns.PageSetting("handleHealVision") end)
 		-- (Where neither can work, at the foot of the tab, under both: tested on
 		-- retail in a follower dungeon, every friendly plate locked from addons;
 		-- Forever locks them too. Names are drawn by those plates.)
@@ -15908,7 +16029,7 @@ function ns.OpenOptionsAt(page, label, settingKey)
 	ns.OpenOptions(page)
 end
 
--- A setting's own control, by its key (its id: portraitWhenNotFull, and so
+-- A setting's own control, by its key (its id: nfHealthPlayer, and so
 -- on): its page opened, scrolled to it and glowing. page: looked on first
 -- (a key can have a control on more than one page). False: none found.
 function ns.OpenSettingByKey(settingKey, page)
@@ -17515,7 +17636,7 @@ ns.OnLanguage(function()
 	CreateProfilesPanel()
 	-- Sub-pages in the order they're listed: what fades and shows, then the look
 	-- and sound, then the camera modes (their shared page and events first),
-	-- keybinds. (Standard Frames and Advanced Frames come right after CineMode.)
+	-- keybinds. (Their place in the left list: menu.order.)
 	CreateRevealPanel()
 	CreateCombatPanel()
 	if ns.CreatePersonalResourcesPanel then -- (PersonalResources.lua)
@@ -17687,5 +17808,6 @@ ns.OnLanguage(function()
 	if ns.isDev and ns.CreateMinimapCopyPage then -- (MinimapCopy.lua: the Dev hub)
 		ns.CreateMinimapCopyPage(ns.lowHealthKit)
 	end
+	menu.Flush() -- (the left list, in menu.order)
 	GuardGamepadClose()
 end)

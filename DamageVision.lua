@@ -20,7 +20,6 @@ DEFAULTS.damageVisionStyle = "gap"         -- "gap", "race" or "ladder"
 DEFAULTS.damageVisionCount = "role"        -- "damage", "healing", or "role" (healing for healers)
 DEFAULTS.damageVisionDuring = "all"        -- "all" fights or "boss" fights only
 DEFAULTS.damageVisionFrom = "boss"         -- "run" (the meter's Overall), "boss" (a boss's own, else the run), "fight"
-DEFAULTS.damageVisionOnlyCine = false      -- only while CineMode is on
 DEFAULTS.damageVisionPlace = true          -- your place over it...
 DEFAULTS.damageVisionPlaceOf = false       -- ...as "#2 of 5" (else just "#2")
 DEFAULTS.damageVisionLadderRows = 3        -- the rank ladder: at most this many rows (#1 down, you last if further down)
@@ -230,9 +229,9 @@ local function Allowed()
 	if test then return true end
 	if recap and recap:IsShown() then return false, "its recap is up (in the same spot)" end
 	if not db.damageVision then return false, "the page is off" end
+	if not ns.Setting("damageVision") then return false, "only in CineMode (Allow outside CineMode)" end
 	if not HasMeter() then return false, "no damage meter on this client" end
 	if not MeterOn() then return false, "the game's damage meter is off (Gameplay Enhancements: Enable Damage Meter)" end
-	if db.damageVisionOnlyCine and not ns.lastCinematic then return false, "only in CineMode" end
 	local ok, here = pcall(ns.RowOnNow, ROW_KEY, nil, true)
 	if not ok then return false, "its Show in row errored" end
 	if not here then return false, "its Show in row says not here" end
@@ -1325,6 +1324,7 @@ function ns.CreateDamageVisionPanel(kit)
 	local header = stack:Header(content, L["Show in"])
 	local lastRow = ns.ShowTable(content, header, {
 		opts = { anyFight = true }, underHeader = true,
+		noCine = true, -- (held to CineMode on the CineMode page: Allow outside CineMode)
 		{ key = ROW_KEY, label = L["Damage Vision"], alwaysKey = "damageVisionAlways",
 			alwaysOn = function() return ns.GetDB().damageVisionAlways end,
 			setAlways = function(value) ns.GetDB().damageVisionAlways = value Changed() end,
@@ -1338,9 +1338,6 @@ function ns.CreateDamageVisionPanel(kit)
 		{ value = "all", text = L["Every fight"] },
 		{ value = "boss", text = L["Boss fights only"] },
 	}, nil, Any)
-	b.Toggles(L["Only:"], {
-		{ "damageVisionOnlyCine", L["In CineMode"], L["Ticked, only while the UI is faded."] },
-	})
 	b.Number(L["Stays after a fight:"], "damageVisionHold", 0, 30, 1, 1, L["sec"],
 		L["How long it stays up once a fight is over."])
 

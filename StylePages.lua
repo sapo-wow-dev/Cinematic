@@ -348,6 +348,8 @@ function ns.PageTabs(content, list, picked)
 	panel:SetPoint("RIGHT", content, "RIGHT", -8, 0)
 	panel:SetHeight(1)
 	Show(picked)
+	-- (kept on screen over the page's off card, to reach the other tabs)
+	content.pageTabs = { panel = panel, frames = tabFrames }
 	return panel
 end
 

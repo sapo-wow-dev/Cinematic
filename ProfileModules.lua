@@ -161,8 +161,9 @@ ns.PROFILE_MODULES = {
 	{ key = "recovering", name = "Up while recovering", scope = { "Standard Frames/top", "Personal Resources" },
 		tip = "The player frame and personal resource display stay up until health and power are full.",
 		apply = function(set)
-			set("portraitWhenNotFull", true)
-			set("prdWhenNotFull", true)
+			for _, key in ipairs({ "nfHealthPlayer", "nfPowerPlayer", "nfHealthPrd", "nfPowerPrdPower", "nfPowerPrdMana" }) do
+				set(key, true)
+			end
 		end },
 	{ key = "no-fading", name = "Nothing fades", scope = { "Cinematic/General" },
 		tip = "The normal UI: nothing fades.",
@@ -227,8 +228,11 @@ ns.PROFILE_MODULES = {
 		"raid frames without names, buffs, threat, target markers, ready checks or titles in CineMode.",
 		apply = function(set)
 			-- (The personal resource display in fights: the layout module's.)
-			set("portraitWhenNotFull", true)
-			set("prdWhenNotFull", false)
+			set("nfHealthPlayer", true)
+			set("nfPowerPlayer", true)
+			for _, key in ipairs({ "nfHealthPrd", "nfPowerPrdPower", "nfPowerPrdMana" }) do
+				set(key, false)
+			end
 			set("unitPartsFocusToT", true)
 			set("cineShow", { castbar = true, raidnames = false, raidbuffs = false, raidthreat = false,
 				raidtarget = false, raidready = false, raidtitles = false })
@@ -578,6 +582,12 @@ ns.PROFILE_MODULES = {
 			end
 			set("depthOfField", false)
 		end },
+	-- (CineMode page's Allow outside CineMode, 2026-11-13: Balanced's and Cinema's.)
+	{ key = "effects-outside-cinemode", name = "Effects outside CineMode", scope = { "CineMode/Allow outside CineMode" },
+		tip = "The letterbox, tint, vignette and weather also show while CineMode is off (walking about, say), " ..
+			"where their rows say.",
+		settings = { outsideCineLetterbox = true, outsideCineTint = true, outsideCineVignette = true,
+			outsideCineWeather = true } },
 	{ key = "letterbox-in-fights", name = "Letterbox stays in fights", scope = { "Letterbox/Show in" },
 		tip = "Fights don't bring the letterbox down.",
 		apply = function(set) set("letterboxOffInCombat", false) end },

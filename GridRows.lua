@@ -733,6 +733,9 @@ local NO_CINE_LAYOUT = { edit = true, menuW = MENU_W + math.floor((CINE_W + GAP)
 -- (For rows laid out under a table's, lined up with its columns: the Game
 -- Frames page's unit frame parts.)
 ns.GRID_NO_CINE_LAYOUT, ns.GRID_TABLE_LABEL_TRIM = NO_CINE_LAYOUT, TABLE_LABEL_TRIM
+-- Combat and Location columns only (no Always, Target or rule): a row that
+-- only says where and whether in fights, the Minimap page's Nearby Dots and Tracking.
+ns.GRID_PLACE_COMBAT_LAYOUT = { always = false, groups = { 1, 3 } }
 -- How wide one is, whole, for names labelWidth wide.
 function ns.GridTableWidth(labelWidth, noCine)
 	return labelWidth - TABLE_LABEL_TRIM + ns.GridWidth(noCine and NO_CINE_LAYOUT or TABLE_LAYOUT)
@@ -1278,7 +1281,9 @@ end
 -- label, to place what comes below.
 function ns.GridTable(content, columnTop, rows, kit)
 	local LABEL_WIDTH, ROW_HEIGHT, COLUMNS = kit.labelWidth - TABLE_LABEL_TRIM, kit.rowHeight, kit.columns
-	local LAYOUT = rows.noCine and NO_CINE_LAYOUT or TABLE_LAYOUT
+	-- (rows.layout: a table of its own columns, ns.GRID_PLACE_COMBAT_LAYOUT's
+	-- Combat and Location only, for the Minimap page's rows, 2026-11-13.)
+	local LAYOUT = rows.layout or (rows.noCine and NO_CINE_LAYOUT or TABLE_LAYOUT)
 	-- (The rows a row may follow: the table's others, or rows.followRows: a
 	-- table of one row in a list of them, the Unit frames tab's.)
 	local choices = {}
