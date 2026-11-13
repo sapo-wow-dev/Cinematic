@@ -1741,7 +1741,6 @@ local orbitPrefix = "taxiOrbit"
 local CONTINUOUS_RAMP = 3 -- seconds a continuous turn takes to reach full speed
 local CONTINUOUS_FADE = 1.5 -- seconds it takes to ease out when handing over to moves
 local HANDOFF_PAUSE = 1 -- seconds: stopped walking, the first sweep starts this soon
-local walkHandoff = false
 
 -- Cozy camera triggers. Buffs: any from the player's list (names or spell
 -- IDs, cozyBuffs), checked whenever your buffs change. Emotes: followed from
@@ -3862,13 +3861,9 @@ function ns.DecideScene(cinematic, now, onTaxi, active)
 		or (ns.ChatCamActive and ns.ChatCamActive()) then
 		ns.stillSince = nil
 	elseif not ns.stillSince then
-		-- Stopping from the RP walk or auto-run camera goes straight into the
-		-- standing-still camera: its timer counts as already run (for the tint,
-		-- tooltips and music too), so there's no gap between the two. Those
-		-- only run on auto-walk and auto-run; moving by hand last means the
-		-- timer starts afresh (walkHandoff is cleared as you do).
-		ns.stillSince = walkHandoff and (now - ns.db.idleOrbitDelay) or now
-		walkHandoff = false
+		-- (Every stop starts the timer afresh, auto-run and auto-walk too:
+		-- stopping one is you taking over, not going away.)
+		ns.stillSince = now
 	end
 	-- Moving ends an emote, and turning stands you up from sitting, kneeling or
 	-- lying down. (ns.sitFacing: your facing as you got down, in radians.)
@@ -3904,6 +3899,10 @@ function ns.DecideScene(cinematic, now, onTaxi, active)
 	local afk = ns.IsEventAFK()
 	if ns.stillSince and (cozy or vista or fish or afk) and now - ns.stillSince < ns.db.idleOrbitDelay then
 		ns.stillSince = now - ns.db.idleOrbitDelay
+	elseif ns.stillSince and (scene.cozy or scene.vista or scene.fish) and not (cozy or vista or fish or afk) then
+		-- (One just ended: its time wasn't standing about, so the AFK camera's
+		-- wait starts afresh rather than straight away.)
+		ns.stillSince = now
 	end
 	local idle = ns.db.idleOrbit and ns.stillSince ~= nil and now - ns.stillSince >= ns.db.idleOrbitDelay
 		and not ns.IsCameraOffHere("idle") and ns.StillRunsAFK()
@@ -3953,15 +3952,6 @@ function ns.DecideScene(cinematic, now, onTaxi, active)
 		or (ns.PlayingCameraKey and ns.PlayingCameraKey(true)) or nil -- (in or out of cinematic mode; one of ours as its script)
 	-- (logged always; printed with /cine debug modes)
 	ns.ReportCameraMode(ns.activeCam)
-	local scripted = ns.PlayingCameraKey(true) -- (as their scripts, travel's nil)
-	-- (Not once the timer's running: the frame you stop, the auto-run camera
-	-- still plays as the timer takes the handoff, and re-arming it there let a
-	-- right-click or camera drag just after restart the AFK camera, not end it.)
-	if (travel or scripted == "walk" or scripted == "run") and cinematic and not ns.stillSince then
-		walkHandoff = true
-	elseif onTaxi or (active and not travel and ns.playerMoving) then
-		walkHandoff = false -- running or flying: the next stop starts the timer afresh
-	end
 	scene.onTaxi, scene.active, scene.dead, scene.deathCam = onTaxi, active, dead, deathCam
 	scene.travel, scene.T, scene.vista, scene.fish = travel, T, vista, fish
 	scene.cozy, scene.tele, scene.idle, scene.cam = cozy, tele, idle, ns.activeCam
