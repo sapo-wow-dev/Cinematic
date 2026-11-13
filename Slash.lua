@@ -689,6 +689,8 @@ local function HandleSlash(msg)
 		end
 	elseif cmd == "debug" and arg == "minimap" then
 		ns.ReportMinimap()
+	elseif cmd == "debug" and arg == "mapback" then
+		ns.ReportMinimapBack()
 	elseif cmd == "debug" and arg == "ping" then
 		ns.ReportPingReveal()
 	elseif cmd == "debug" and arg == "questtimer" then

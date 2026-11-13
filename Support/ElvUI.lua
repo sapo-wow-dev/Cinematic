@@ -199,6 +199,12 @@ ns.WhenAddonLoads("ElvUI", function()
 			if IsUsable(frame) then ns.ClaimLinkPart("ElvUI", part, frame) end
 		end
 		ClaimChat()
+		-- The dark bar behind its minimap's zone name and clock (with its
+		-- minimap cluster on): the Minimap header row, as the game's bar there.
+		local back = _G.ElvUI_MinimapClusterBackdrop
+		if IsUsable(back) and not ns.IsFaded(back) then
+			ns.AddFoundFrame(back, "minimapheader", false, false)
+		end
 	end)
 	for group, names in pairs(RAID) do
 		ns.FadeFoundByName(group, names)

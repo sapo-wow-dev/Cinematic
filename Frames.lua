@@ -10027,6 +10027,77 @@ function ns.ReportMinimap()
 	if #onScreen > 15 then ns.Print(("    ...and %d more in /cine log"):format(#onScreen - 15)) end
 end
 
+-- /cine debug mapback: everything drawn in the strip above the minimap (the
+-- header: zone name, its bar, the clock), the textures of every shown frame
+-- there, biggest first, with owner, layer, art, color and alpha. For a dark
+-- band a player still sees there with the header's rows hidden (2026-11-12).
+function ns.ReportMinimapBack()
+	if type(Minimap) ~= "table" then ns.Print("mapback: no minimap") return end
+	local function Rect(region)
+		local ok, left, bottom, width, height = pcall(region.GetRect, region)
+		if not ok or type(left) ~= "number" or Secret(left, bottom, width, height) then return nil end
+		local k = region:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		return left * k, bottom * k, width * k, height * k
+	end
+	local mLeft, mBottom, mWidth, mHeight = Rect(Minimap)
+	if not mLeft then ns.Print("mapback: can't read the minimap's place") return end
+	-- The strip: the map's width plus a margin, from its top up 50 units.
+	local x1, x2 = mLeft - 20, mLeft + mWidth + 20
+	local y1, y2 = mBottom + mHeight, mBottom + mHeight + 50
+	local function Name(object)
+		if object.cineName then return object.cineName end
+		local ok, name = pcall(function() return object:GetName() or object:GetDebugName() end)
+		return ok and tostring(name) or "?"
+	end
+	local function Num(value)
+		if Secret(value) then return "secret" end
+		return type(value) == "number" and ("%.2f"):format(value) or tostring(value)
+	end
+	local found = {}
+	local frame = EnumerateFrames()
+	while frame do
+		if not IsForbidden(frame) then
+			local okVis, visible = pcall(frame.IsVisible, frame)
+			local okAlpha, alpha = pcall(frame.GetEffectiveAlpha, frame)
+			if okVis and ns.Flag(visible) and okAlpha and (Secret(alpha) or alpha > 0) then
+				local okRegions, regions = pcall(function() return { frame:GetRegions() } end)
+				for _, region in ipairs(okRegions and regions or {}) do
+					local okType, kind = pcall(region.GetObjectType, region)
+					local okShown, shown = pcall(region.IsShown, region)
+					if okType and kind == "Texture" and okShown and ns.Flag(shown) then
+						local left, bottom, width, height = Rect(region)
+						-- Overlapping the strip, and at least a third as wide as the map.
+						if left and width >= mWidth / 3 and left < x2 and left + width > x1
+							and bottom < y2 and bottom + height > y1 then
+							local okArt, atlas, file = pcall(function() return region:GetAtlas(), region:GetTexture() end)
+							local okColor, r, g, b, a = pcall(region.GetVertexColor, region)
+							local layer, sub = region:GetDrawLayer()
+							local okStrata, strata = pcall(frame.GetFrameStrata, frame)
+							local okLevel, level = pcall(frame.GetFrameLevel, frame)
+							found[#found + 1] = { area = width * height, line = ("%s in %s (%s %s): %s %s, color %s,%s,%s a%s, " ..
+								"alpha %s x frame %s, %s/%s, at %.0f,%.0f %.0fx%.0f"):format(
+								Name(region), Name(frame), okStrata and tostring(strata) or "?", okLevel and tostring(level) or "?",
+								okArt and type(atlas) == "string" and ("atlas " .. atlas) or "file",
+								okArt and tostring(file) or "?", Num(okColor and r), Num(okColor and g), Num(okColor and b),
+								Num(okColor and a), Num(select(2, pcall(region.GetAlpha, region))), Num(alpha), tostring(layer), tostring(sub),
+								left, bottom, width, height) }
+						end
+					end
+				end
+			end
+		end
+		frame = EnumerateFrames(frame)
+	end
+	table.sort(found, function(p, q) return p.area > q.area end)
+	ns.Print(("mapback: map at %.0f,%.0f %.0fx%.0f; %d texture%s in the strip above it, biggest first:"):format(
+		mLeft, mBottom, mWidth, mHeight, #found, #found == 1 and "" or "s"))
+	for i, entry in ipairs(found) do
+		ns.Log("mapback", entry.line)
+		if i <= 20 then ns.Print("  " .. entry.line) end
+	end
+	if #found > 20 then ns.Print(("  ...and %d more in the log (/reload to save it)"):format(#found - 20)) end
+end
+
 -- /cine debug frames: the shown top-level frames not faded, and every global
 -- frame with GamePad in its name, to the log (and chat), for finding frames
 -- a client feature adds (WoW Forever's gamepad mode).

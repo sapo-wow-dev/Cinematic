@@ -1192,6 +1192,115 @@ do
 	end)
 end
 
+-- zoomcurve: one run for "zooming feels like a staircase: you slide right
+-- fast, then stop" (2026-11-12) and "cat form needs the bear's treatment".
+-- GetCameraZoom gives where the zoom is going, not where the camera is (the
+-- still map run: the full 4 yards read 0.05 s after the zoom was asked; the
+-- recording took ~0.5 s), so the offset for the new distance goes in at once
+-- and the game eases over to it (~0.3 s) ahead of the camera. This measures
+-- both curves off a recording, with our own writes held: zooms in and out by
+-- 2 and 5 yards, and a 1-yard offset step at a still zoom, all on their own;
+-- then you shift into cat form and out, twice, when the box says. Every
+-- frame's zoom read is logged for 1.5 s after each zoom; each step's moment
+-- and every form and model change too. Typed again while running: stops.
+do
+	local STEPS = {
+		{ 2, "zoom in 2", "CameraZoomIn", 2 }, { 4.5, "zoom out 2", "CameraZoomOut", 2 },
+		{ 7, "zoom in 5", "CameraZoomIn", 5 }, { 10, "zoom out 5", "CameraZoomOut", 5 },
+		{ 13, "offset +1 yard", offset = 1 }, { 15.5, "offset back", offset = 0 },
+	}
+	local CAT_AT, CAT_FORM, CAT_TIMES = 18, 1, 2
+	local run
+	local function Box(line, r, g, b) ns.PadTestBox("Zoom curve", line, r, g, b) end
+	local function End(why)
+		if not run then return end
+		run.frame:UnregisterAllEvents()
+		run.frame:SetScript("OnUpdate", nil)
+		pcall(SetCVar, SHOULDER, run.offset)
+		run = nil
+		ns.shoulderTestHold = nil
+		if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
+		Log(("zoomcurve: %s"):format(why))
+	end
+	local function Tick()
+		if not run then return end
+		ns.stillSince = GetTime()
+		local into = GetTime() - run.began
+		local step = STEPS[run.step]
+		if step and into >= step[1] then
+			run.step = run.step + 1
+			if step.offset then
+				pcall(SetCVar, SHOULDER, ("%.2f"):format(tonumber(run.offset) + step.offset))
+			else
+				ns.CallCameraFunction(step[3], step[4])
+			end
+			run.reads, run.readFrom = {}, GetTime()
+			Log(("zoomcurve: %s now (zoom %.2f, offset %s)"):format(step[2], Zoom(), Text(GetCVar(SHOULDER))))
+		end
+		if run.reads then
+			local since = GetTime() - run.readFrom
+			if since <= 1.5 then
+				run.reads[#run.reads + 1] = ("%.3f:%.2f"):format(since, Zoom())
+			else
+				Log("zoomcurve:   zoom read each frame: " .. table.concat(run.reads, " "))
+				run.reads = nil
+			end
+		end
+		if run.phase == "auto" and into >= CAT_AT then
+			run.phase, run.shifts = "in", 0
+			Box("SHIFT INTO CAT FORM now (stand still, hands off the camera)", 0.3, 1, 0.3)
+		end
+	end
+	function ns.ShoulderZoomCurve()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder zoomcurve: stopped")
+		end
+		local offset = tonumber(GetCVar(SHOULDER)) or 0
+		if offset == 0 then return ns.Print("shoulder zoomcurve: turn the Shoulder Cam on first, out of your forms") end
+		if GetShapeshiftFormID and GetShapeshiftFormID() then
+			return ns.Print("shoulder zoomcurve: start out of your forms")
+		end
+		ns.shoulderTestHold = true
+		run = { frame = CreateFrame("Frame"), began = GetTime(), step = 1, phase = "auto", offset = GetCVar(SHOULDER) }
+		run.frame:SetScript("OnUpdate", Tick)
+		run.frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+		run.frame:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
+		run.frame:SetScript("OnEvent", function(_, event)
+			if not run then return end
+			local form = GetShapeshiftFormID and GetShapeshiftFormID()
+			Log(("zoomcurve: %s, form %s, offset %s, zoom %.2f"):format(event, Text(form), Text(GetCVar(SHOULDER)), Zoom()))
+			if event ~= "UPDATE_SHAPESHIFT_FORM" then return end
+			if form == CAT_FORM and run.phase == "in" then
+				run.phase = "out"
+				Box("count to 2, then SHIFT BACK OUT", 1, 0.82, 0)
+			elseif not form and run.phase == "out" then
+				run.shifts = run.shifts + 1
+				if run.shifts >= CAT_TIMES then
+					End("done")
+					Box("done: stop the recording, then /reload", 0.3, 1, 0.3)
+					C_Timer.After(8, function() if not run then ns.PadTestBoxHide() end end)
+				else
+					run.phase = "wait"
+					Box("wait...", 0.7, 0.7, 0.7)
+					C_Timer.After(2.5, function()
+						if run and run.phase == "wait" then
+							run.phase = "in"
+							Box("SHIFT INTO CAT FORM now (stand still, hands off the camera)", 0.3, 1, 0.3)
+						end
+					end)
+				end
+			end
+		end)
+		Log(("zoomcurve: starts | %s | offset %s, zoom %.2f, cameraZoomSpeed %s, screen %.0f x %.0f"):format(Who(),
+			Text(run.offset), Zoom(), Text(GetCVar("cameraZoomSpeed")), WorldFrame:GetWidth(), WorldFrame:GetHeight()))
+		Box("hands off: zooms and a sideways step on their own...", 0.7, 0.7, 0.7)
+		ns.Print("shoulder zoomcurve: record your screen; about 30 s; type it again to stop")
+	end
+	if ns.RegisterCamera then ns.RegisterCamera("zoomcurve", function() return run ~= nil end) end
+end
+
 local function Set(key, value)
 	ns.db[key] = value
 	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
@@ -1220,6 +1329,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "forms" then Forms()
 	elseif what == "cams" then Cams()
 	elseif what == "map" then ns.ShoulderMap(rest)
+	elseif what == "zoomcurve" then ns.ShoulderZoomCurve()
 	elseif what == "on" then Set("shoulderCam", true)
 	elseif what == "off" then Set("shoulderCam", false)
 	elseif what == "left" or what == "right" then Set("shoulderCamSide", what)
@@ -1228,7 +1338,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back, zoomcurve, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

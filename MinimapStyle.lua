@@ -252,6 +252,7 @@ local function DressZoneBar(on)
 		zoneBar = CreateFrame("Frame", nil, holder)
 		zoneBar:SetAllPoints(art)
 		zoneBar:EnableMouse(false)
+		zoneBar.cineName = "Cinematic zone bar panel" -- (named in /cine debug mapback)
 		local below = type(button) == "table" and button.GetFrameLevel and button:GetFrameLevel() or holder:GetFrameLevel() + 1
 		zoneBar:SetFrameLevel(math.max(0, below - 1))
 		zoneBar.themeSliceCorner = ZONE_CORNER
