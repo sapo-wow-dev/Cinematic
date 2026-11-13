@@ -53,10 +53,17 @@ ns.pitchAxis = NewAxis("MoveViewUpStart", "MoveViewUpStop",
 local drivingCamera = false
 local lastCameraInput = -math.huge
 
+-- The game's own zoom functions, as they are when this file loads, before
+-- any addon later in the list swaps them for its own. With ns.zoomBypass set
+-- (Support/DynamicCam.lua: its zoom adds steps to every zoom, and stops its
+-- own glide), our zooms go straight to these, so they go the distance asked.
+ns.GAME_ZOOM = { CameraZoomIn = _G.CameraZoomIn, CameraZoomOut = _G.CameraZoomOut }
+
 -- (Ungated: the quest cam's view after a movie, and the test commands.)
 function ns.CallCameraFunction(name, ...)
 	drivingCamera = true
-	_G[name](...)
+	local fn = ns.zoomBypass and ns.GAME_ZOOM[name] or _G[name]
+	fn(...)
 	drivingCamera = false
 end
 
@@ -1201,6 +1208,9 @@ local function OnPlayerZoom()
 		ns.lastPlayerZoomAt = lastCameraInput -- (kept apart: other input overwrites the "what")
 	end
 end
+-- (For support files whose addon swaps the zoom functions after our hook
+-- went on: they hook the new ones too. Support/DynamicCam.lua.)
+ns.OnPlayerZoom = OnPlayerZoom
 
 -- Whether you've zoomed yourself since `t`. (The game's zoom from a scroll
 -- carries on a moment after it: a zoom of ours starting then went with it.)
@@ -5486,10 +5496,13 @@ function ns.ZoomToSet(when)
 	end
 	local diff = ns.db.loginZoomDistance - GetCameraZoom()
 	ns.Log("zoom", ("%s zoom: %.1f -> %.1f yards"):format(when, GetCameraZoom(), ns.db.loginZoomDistance))
+	-- (The game's own, past an addon's swapped zoom: see ns.GAME_ZOOM.)
+	local zoomOut = ns.zoomBypass and ns.GAME_ZOOM.CameraZoomOut or CameraZoomOut
+	local zoomIn = ns.zoomBypass and ns.GAME_ZOOM.CameraZoomIn or CameraZoomIn
 	if diff > 0.1 then
-		CameraZoomOut(diff)
+		zoomOut(diff)
 	elseif diff < -0.1 then
-		CameraZoomIn(-diff)
+		zoomIn(-diff)
 	end
 end
 

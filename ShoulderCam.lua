@@ -33,6 +33,13 @@
 local ADDON_NAME, ns = ...
 local L = ns.L
 
+-- On, and not standing aside for another addon that owns the shoulder offset
+-- (DynamicCam writes it with every situation change: Support/DynamicCam.lua).
+local function ShoulderOn()
+	if ns.FeatureYieldedTo and ns.FeatureYieldedTo("shoulderCam") then return false end
+	return ns.Setting("shoulderCam")
+end
+
 local POLL = 0.2 -- seconds between checks for a pause (mounting, a camera starting)
 
 -- Where: its Show in row (Always ticked to start with: everywhere). Off
@@ -363,7 +370,7 @@ local talk = {
 }
 
 local function TalkOn()
-	return ns.Setting("shoulderCam") and ns.db.shoulderCamTalkTurn and paused ~= "show in"
+	return ShoulderOn() and ns.db.shoulderCamTalkTurn and paused ~= "show in"
 end
 
 local function SetTalkShare(yours, share)
@@ -468,7 +475,7 @@ local aim = {
 }
 
 local function AimOn()
-	return ns.Setting("shoulderCam") and ns.db.shoulderCamTargetTurn and paused ~= "show in"
+	return ShoulderOn() and ns.db.shoulderCamTargetTurn and paused ~= "show in"
 end
 
 local function SetAimShare(yours, share)
@@ -551,9 +558,9 @@ function ns.ApplyShoulderCam()
 		return
 	end
 	local yours = ns.db.shoulderCamYours
-	if ns.Setting("shoulderCam") and not ns.db.shoulderCamNoticed then
+	if ShoulderOn() and not ns.db.shoulderCamNoticed then
 		AskNotice() -- (nothing written till it's answered)
-	elseif ns.Setting("shoulderCam") then
+	elseif ShoulderOn() then
 		QuietWarning()
 		yours = yours or {}
 		ns.db.shoulderCamYours = yours
@@ -754,7 +761,7 @@ end
 
 local function TargetShift()
 	local db = ns.db
-	if not (db and ns.Setting("shoulderCam") and db.shoulderCamFrames) then return 0 end
+	if not (db and ShoulderOn() and db.shoulderCamFrames) then return 0 end
 	if YouAreTarget() then return 0 end
 	local yards = tonumber(GetCVar("test_cameraOverShoulder")) or 0
 	if yards == 0 then return 0 end
@@ -803,7 +810,7 @@ ns.SetOnUpdate(follower, function(self, elapsed)
 end)
 
 function UpdateFollow()
-	if ns.db and ns.Setting("shoulderCam") and ns.db.shoulderCamFrames or next(followed) then
+	if ns.db and ShoulderOn() and ns.db.shoulderCamFrames or next(followed) then
 		follower:Show()
 	end
 end
