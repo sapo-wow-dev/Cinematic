@@ -2226,6 +2226,7 @@ do
 			{ "Help", "Interface\\Icons\\INV_Misc_QuestionMark", section = "Help" }, -- (WhatsNew.lua)
 			{ "Profiler", "Interface\\Icons\\INV_Misc_PocketWatch_02", section = "Help" }, -- (ProfilerPage.lua)
 			{ "Why showing", "Interface\\Icons\\Ability_Hunter_EagleEye", label = "Why Is It Showing?", section = "Help" }, -- (Why.lua)
+			{ "Game settings", "Interface\\Icons\\INV_Gizmo_02", label = "Game Settings", section = "Help" }, -- (GameSettingsPage.lua)
 			{ "Module Editor", "Interface\\Icons\\INV_Misc_Wrench_01", section = "Dev", dev = true }, -- (ModuleEditor.lua)
 		} },
 		-- (The dev copy's own hub: none of its pages are in the release, so neither is it.)
@@ -17801,6 +17802,9 @@ ns.OnLanguage(function()
 	end
 	if ns.CreateWhyPanel then -- (Why.lua: after the Profiler, in Community's Help)
 		ns.CreateWhyPanel(ns.lowHealthKit)
+	end
+	if ns.CreateGameSettingsPage then -- (GameSettingsPage.lua: after Why, in Community's Help)
+		ns.CreateGameSettingsPage(ns.lowHealthKit)
 	end
 	-- The dev build's Module Editor, Community's last page (ModuleEditor.lua).
 	if ns.isDev and ns.CreateModuleEditor then

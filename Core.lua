@@ -2955,6 +2955,7 @@ function ns.ApplyCVarSet(set, want)
 	else
 		set.letGoAt = GetTime()
 	end
+	local leftAlone = ns.db.cvarsLeftAlone or {}
 	for cvar, value in pairs(set.values) do
 		-- (Two sets can hold one setting, sharing one saved value of yours:
 		-- the last to let go puts yours back. One letting go before then
@@ -2963,7 +2964,11 @@ function ns.ApplyCVarSet(set, want)
 		holders[set] = want or nil
 		activeCVars[cvar] = next(holders) and holders or nil
 		local other = next(holders)
-		if want then
+		if leftAlone[cvar] then
+			-- (Yours kept on the Game Settings page: still counted as held, so
+			-- Ours there can write it at once, but never written.)
+			heldCVars[cvar:lower()] = nil
+		elseif want then
 			local original = GetCVar(cvar)
 			if original ~= nil then
 				if ns.db.savedCVars[cvar] == nil then
@@ -2996,6 +3001,64 @@ function ns.ApplyCVarSet(set, want)
 			end
 		end
 	end
+end
+
+-- The Game Settings page (GameSettingsPage.lua): the set holding a setting
+-- now (nil: none), and your lasting choice per setting. Keep yours: your
+-- value back now and the addon never writes it again (db.cvarsLeftAlone),
+-- until Ours: ours written again at once if a set holds it now (yours
+-- saved first, even after you changed it yourself and the set let it go),
+-- else the next time one takes hold. Returns false in a fight for plate
+-- and name settings (the game won't change them then).
+function ns.CVarHolder(cvar)
+	return activeCVars[cvar] and next(activeCVars[cvar]) or nil
+end
+
+do
+local function SecureCVar(cvar)
+	return cvar:find("^nameplate") or cvar:find("^UnitName")
+end
+
+function ns.KeepYourCVar(cvar)
+	if SecureCVar(cvar) and InCombatLockdown() then
+		return false
+	end
+	ns.db.cvarsLeftAlone[cvar] = true
+	heldCVars[cvar:lower()] = nil
+	local yours = ns.db.savedCVars[cvar]
+	if yours ~= nil then
+		ns.db.savedCVars[cvar] = nil
+		if not SameValue(GetCVar(cvar), yours) then
+			ns.Log("cvar", ("%s: yours kept (%s), from the Game Settings page"):format(cvar, tostring(yours)))
+			WriteCVar(cvar, yours)
+		end
+	end
+	if ns.ApplyProfileSwitches then ns.ApplyProfileSwitches() end
+	return true
+end
+
+function ns.UseOurCVar(cvar)
+	if SecureCVar(cvar) and InCombatLockdown() then
+		return false
+	end
+	ns.db.cvarsLeftAlone[cvar] = nil
+	local set = ns.CVarHolder(cvar)
+	local ours = set and set.values[cvar]
+	if ours ~= nil and GetCVar(cvar) ~= nil then
+		if not SameValue(GetCVar(cvar), ours) then
+			if ns.db.savedCVars[cvar] == nil then
+				ns.db.savedCVars[cvar] = GetCVar(cvar)
+			end
+			ns.Log("cvar", ("%s: ours again (%s), from the Game Settings page"):format(cvar, tostring(ours)))
+			WriteCVar(cvar, ours)
+		end
+		if set.playerWins then
+			heldCVars[cvar:lower()] = { name = cvar, value = ours }
+		end
+	end
+	if ns.ApplyProfileSwitches then ns.ApplyProfileSwitches() end
+	return true
+end
 end
 
 -- One camera at a time. Our cameras that move the view on their own (Camera.lua's
@@ -4131,6 +4194,8 @@ function ns.EnsureTables()
 	-- Options pages' sections opened or closed with a click: "page/section" -> true or false.
 	ns.db.sectionsOpen = ns.db.sectionsOpen or {}
 	ns.db.savedCVars = ns.db.savedCVars or {}
+	-- Game settings you kept as yours on the Game Settings page: cvar -> true.
+	ns.db.cvarsLeftAlone = ns.db.cvarsLeftAlone or {}
 	-- Your camera speed settings while one of ours holds them, and your last
 	-- good ones (the speed keeper, ns.HoldSpeed): cvar -> value.
 	ns.db.heldSpeeds = ns.db.heldSpeeds or {}

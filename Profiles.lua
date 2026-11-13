@@ -392,7 +392,9 @@ local function ApplyProfileSwitches()
 		if GetCVar(cvar) ~= nil then
 			local on = GetCVar(cvar) == "1"
 			local want
-			if Wanted(db, switch) and db.enabled then
+			-- (Kept as yours on the Game Settings page: as if no profile wanted it.)
+			local lone = db.cvarsLeftAlone and db.cvarsLeftAlone[cvar]
+			if Wanted(db, switch) and db.enabled and not lone then
 				-- (Our turnedOn with it off: switched off where its CVAR_UPDATE wasn't
 				-- seen, e.g. logged out. Stale: on again.)
 				if not on and not db[switch.leftAlone] then want = "1" end
@@ -411,6 +413,17 @@ local function ApplyProfileSwitches()
 			end
 		end
 	end
+end
+ns.ApplyProfileSwitches = ApplyProfileSwitches
+-- The switches for the Game Settings page (GameSettingsPage.lua): each one's
+-- setting, its name, and whether the profile wants it on now.
+function ns.ProfileSwitchRows()
+	local rows = {}
+	for _, switch in ipairs(PROFILE_SWITCHES) do
+		rows[#rows + 1] = { cvar = switch.cvar, name = switch.name, wanted = ns.db and Wanted(ns.db, switch) or false,
+			turnedOn = ns.db and ns.db[switch.turnedOn] or false, leftAloneKey = switch.leftAlone }
+	end
+	return rows
 end
 switchFrame:RegisterEvent("PLAYER_LOGIN")
 switchFrame:RegisterEvent("CVAR_UPDATE")
@@ -851,6 +864,7 @@ local RESET_KEEPS = {
 	"cameraScripts", "customWheels", -- (your scripts, your own wheels)
 	"zoneTints", "zonePresets", "zoneTintStrength", "timePhaseColors", "timePhaseStrength", -- (tints you picked)
 	"extraFrames", -- (frames you added)
+	"cvarsLeftAlone", -- (game settings you kept as yours: the Game Settings page)
 	"devEdits", -- (the dev copy's Module Editor)
 	"flightTimes", "questDrops", "frameAddons", "smartFindLooks", "goodSpeeds", "ownSpeeds", "selfTest",
 	"slashUsage", -- (the /cine commands you use most: SlashComplete.lua)

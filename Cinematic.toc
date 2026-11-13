@@ -195,5 +195,6 @@ Changelog.lua
 ChangelogCommits.lua
 WhatsNew.lua
 ProfilerPage.lua
+GameSettingsPage.lua
 MinimapButton.lua
 Reload.lua

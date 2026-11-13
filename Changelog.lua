@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-13", page = "Game settings", title = "Game Settings page",
+		text = "Community > Game Settings lists the game's own settings Cinematic changes for a while, with ours, " ..
+		"yours and the value now. Keep yours on any of them, or let Cinematic use ours again." },
 	{ date = "2026-11-13", page = "Advanced Frames", title = "Support for 7 more addons",
 		text = "BigWigs, TomTom, HealBot Continued and Titan Panel get rows of their own and fade with Cinematic. " ..
 		"Platynator and Threat Plates nameplates fade in CineMode, and Prat 3.0's chat follows the Chat page." },
