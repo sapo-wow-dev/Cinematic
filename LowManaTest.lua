@@ -83,7 +83,7 @@ local function Tick()
 	local facts = run.facts
 	local cine = ns.lastCinematic and true or false
 	local pageOn = ns.PersonalResourcesOn()
-	local wanted = db.lowManaShare or 0
+	local wanted = db.prPowerPlayer or 0
 	local share, manaLine = Mana()
 	local low = ns.LowManaNow and ns.LowManaNow() or false
 	local displayOn = ns.PersonalDisplayOn and ns.PersonalDisplayOn()
@@ -94,7 +94,7 @@ local function Tick()
 	facts.low = facts.low or (cine and low)
 	if share then facts.lowest = math.min(facts.lowest or 1, share) end
 	local head = ("CineMode %s | page %s | slider %d%% | your player frame too %s | game display %s | our mana bar %s | " ..
-		"in combat %s"):format(Bool(cine), Bool(pageOn), math.floor(wanted * 100 + 0.5), Bool(db.lowManaPortrait),
+		"in combat %s"):format(Bool(cine), Bool(pageOn), math.floor(wanted * 100 + 0.5), Bool(wanted > 0),
 		Bool(displayOn), Bool(manaBar), Bool(InCombatLockdown()))
 	local frames, shown = {}, {}
 	for _, entry in ipairs(ns.managed or {}) do
@@ -156,10 +156,10 @@ end
 
 local function Verdict()
 	local f, db = run.facts, ns.db
-	local wanted = math.floor((db.lowManaShare or 0) * 100 + 0.5)
+	local wanted = math.floor((db.prPowerPlayer or 0) * 100 + 0.5)
 	if not f.cine then return "CineMode was never on: low mana only brings frames up in CineMode" end
 	if not f.page then return "The Health & Resources page was off" end
-	if wanted == 0 then return "Show below this much mana is at Off (0%)" end
+	if wanted == 0 then return "Player Frame's power row is at Show below 0%" end
 	if not f.read then
 		local used = {}
 		for name in pairs(WATCH) do
@@ -192,7 +192,7 @@ local function Verdict()
 	end
 	if #kept == 0 then
 		return ("Low mana read, but no frame took it (game display on %s, Your player frame too %s)"):format(
-			Bool(ns.PersonalDisplayOn and ns.PersonalDisplayOn()), Bool(db.lowManaPortrait))
+			Bool(ns.PersonalDisplayOn and ns.PersonalDisplayOn()), Bool((db.prPowerPlayer or 0) > 0))
 	end
 	if #worked > 0 then return "WORKED: came up: " .. table.concat(worked, ", ") end
 	if #faded > 0 then return "The rule said show, but the fade never rose: " .. table.concat(faded, ", ") end

@@ -2197,7 +2197,7 @@ ns.COMBAT_SHOW = {
 		tip = L["Mana, rage, energy, focus or runic power under your character, and class resources " ..
 			"such as combo points."] },
 	-- Nothing ticked to start with: its own setting (a few seconds after you use mana) shows it.
-	{ key = "prdmana", label = L["Personal mana bar"], default = false, frames = { "CinematicPersonalMana" },
+	{ key = "prdmana", label = L["Cine Mana Bar"], default = false, frames = { "CinematicPersonalMana" },
 		morePage = "Personal Resources",
 		tip = L["Your mana under your character when it isn't your power (Elemental Shaman, Shadow Priest...): " ..
 			"once it's on, on the Health & Resources page."] },
@@ -9450,7 +9450,11 @@ do
 			bar:SetIgnoreParentAlpha(true)
 		end
 		held[bar] = personalPower.pass
-		bar:SetAlpha(alpha)
+		if personalPower.secret then
+			ns.SetThresholdSecretAlpha(bar, personalPower.secret)
+		else
+			bar:SetAlpha(alpha)
+		end
 	end
 
 	local function LetGo(bar)
@@ -11652,11 +11656,27 @@ function ns.UpdateFrames(cinematic, elapsed)
 			elseif vitals then
 				target = vitals
 			end
-			-- (Low mana the game won't say: it sets the alpha, PersonalResources.lua.)
-			if target == 0 and not entry.vitalsSecret
-				and ns.LowManaSecret(PORTRAIT_FRAMES[entry.name], entry) then
-				entry.manaSecret = true
+			-- (Under a Show below share the game won't say: it sets the alpha,
+			-- PersonalResources.lua. Not the stand-ins: their alpha is read and
+			-- worked with, Apply.)
+			if target == 0 and not entry.vitalsSecret and entry.frame ~= personalPower.healthStandIn then
+				entry.manaSecret = ns.ThresholdSecret(PORTRAIT_FRAMES[entry.name], entry) or nil
 			end
+		end
+		-- (The resource bar's stand-in: a secret share's curve goes to the
+		-- bars it drives, not to it: its alpha is read, personalPower.Apply.)
+		entry.standInSecret = nil
+		if entry.frame == personalPower.standIn and target == 0 and cinematic and not deathFade and not immersive then
+			entry.standInSecret = ns.ThresholdSecret(PORTRAIT_FRAMES[entry.name], entry) or nil
+		end
+		-- (Health & Resources: Opacity while hidden, and fading in as health or
+		-- power nears a row's share (Fade range). Not while the game sets the
+		-- alpha itself from a secret value: its curve has both.)
+		if target < 1 and cinematic and not deathFade and not immersive and not entry.vitalsSecret
+			and not entry.manaSecret and not entry.standInSecret
+			and (PORTRAIT_FRAMES[entry.name] or ns.PET_FRAMES[entry.name]) then
+			local level = ns.YourFrameLevel(PORTRAIT_FRAMES[entry.name], entry)
+			if level > target then target = level end
 		end
 		-- (Swing timer page: in CineMode and out, hovering included.)
 		if entry.group == "swing" and ns.IsSwingBarUnused(entry.name) then
@@ -11821,7 +11841,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 			entry.settingAlpha = nil
 		elseif entry.manaSecret and target == 0 and entry.alpha == 0 and not ns.layoutFadeUntil and not ns.previewRows then
 			entry.settingAlpha = true
-			ns.SetLowManaSecretAlpha(entry.frame)
+			ns.SetThresholdSecretAlpha(entry.frame, entry.manaSecret)
 			entry.settingAlpha = nil
 		end
 		if NEVER_NESTED[entry.name] and entry.group == "chat" then
@@ -11869,6 +11889,9 @@ function ns.UpdateFrames(cinematic, elapsed)
 			personalPower.health = entry.alpha
 		elseif entry.group == "prdpower" then
 			personalPower.level = entry.alpha
+			-- (Faded out under a secret share: the bars take the game's curve.)
+			personalPower.secret = entry.standInSecret and entry.alpha == 0 and not ns.layoutFadeUntil
+				and not ns.previewRows and entry.standInSecret or nil
 		elseif entry.group == "prdmana" then
 			personalPower.mana = entry.alpha
 		end

@@ -6403,6 +6403,50 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			end
 			ns.db.petWhenNotFullOffV1 = true
 		end
+		-- Health & Resources as shares (2026-11-13): each row's Show below
+		-- (pr...) from its Not full tick (on: the default, 95%) or, off, its Low mana tick
+		-- (the Low mana share, 25% to start with; off: 0%). The pet frame's
+		-- Not full: 99% or 0%. Every profile. Once.
+		if not ns.db.prThresholdsV1 then
+			local CARRY = {
+				{ "prHealthPlayer", "nfHealthPlayer" },
+				{ "prPowerPlayer", "nfPowerPlayer", "lowManaPortrait" },
+				{ "prHealthPrd", "nfHealthPrd" },
+				{ "prPowerPrd", "nfPowerPrdPower", "lowManaPower" },
+				{ "prPowerMana", "nfPowerPrdMana", "lowManaMana" },
+				{ "prPowerElvUI", "nfPowerElvUI", "lowManaElvUI" },
+			}
+			local function Carry(t)
+				if type(t) ~= "table" then return end
+				local share = t.lowManaShare
+				if share == nil then share = 0.25 end
+				for _, carry in ipairs(CARRY) do
+					local notFull, low = t[carry[2]], carry[3] and t[carry[3]]
+					-- (Only where something was changed: else the new default.)
+					if t[carry[1]] == nil and (notFull ~= nil or low ~= nil or carry[3] and t.lowManaShare ~= nil) then
+						if notFull ~= false then
+							t[carry[1]] = DEFAULTS[carry[1]] or 0.95 -- (on, as most were: the start)
+						else
+							t[carry[1]] = carry[3] and low ~= false and share > 0 and share or 0
+						end
+					end
+					t[carry[2]] = nil
+					if carry[3] then t[carry[3]] = nil end
+				end
+				if t.petWhenNotFull ~= nil then
+					if t.prPetHealth == nil then t.prPetHealth = t.petWhenNotFull and 0.99 or 0 end
+					t.petWhenNotFull = nil
+				end
+				t.lowManaShare = nil
+			end
+			Carry(ns.db)
+			for _, saved in pairs(ns.db.profiles or {}) do
+				if type(saved) == "table" then
+					Carry(type(saved.settings) == "table" and saved.settings or saved)
+				end
+			end
+			ns.db.prThresholdsV1 = true
+		end
 		-- Off-screen plates in CineMode off to start with now (the game's head
 		-- names flashed at the screen's edge): off in every profile. Once.
 		if not ns.db.plateOffscreenOffV1 then

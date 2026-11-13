@@ -1690,6 +1690,10 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "lowmana" then
 		-- (Dev copy: one run recording why low mana doesn't bring your frames up, LowManaTest.lua.)
 		if ns.LowManaTest then ns.LowManaTest() else ns.Print("/cine debug lowmana is in the dev copy only.") end
+	elseif cmd == "debug" and arg:find("^hrtest") then
+		-- (Dev copy: one run checking Health & Resources' shares, opacity and fade range, ThresholdTest.lua.)
+		if ns.ThresholdTest then ns.ThresholdTest(arg:match("^hrtest%s*(.*)$"))
+		else ns.Print("/cine debug hrtest is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "bartest" then
 		-- (Dev copy: one run recording an action bar addon's fade, hover and clicks, BarHoverTest.lua.)
 		if ns.BarHoverTest then ns.BarHoverTest() else ns.Print("/cine debug bartest is in the dev copy only.") end
@@ -1925,10 +1929,10 @@ local function HandleSlash(msg)
 		ns.Print(("power %s / %s, type %s (%s)"):format(show(UnitPower("player")),
 			show(UnitPowerMax("player")), show(powerToken), show(powerType)))
 		ns.Print(("last health/power change: %.1f sec ago"):format(ns.GetSecondsSinceVitalsChange()))
-		ns.Print(("Not full: player health %s, power %s; PRD health %s, power %s; mana bar %s; " ..
-			"after fights only %s; recovering: %s, in combat: %s"):format(tostring(ns.db.nfHealthPlayer),
-			tostring(ns.db.nfPowerPlayer), tostring(ns.db.nfHealthPrd), tostring(ns.db.nfPowerPrdPower),
-			tostring(ns.db.nfPowerPrdMana),
+		ns.Print(("Show below: player health %s, power %s; PRD health %s, power %s; Cine Mana Bar %s; " ..
+			"after fights only %s; recovering: %s, in combat: %s"):format(tostring(ns.db.prHealthPlayer),
+			tostring(ns.db.prPowerPlayer), tostring(ns.db.prHealthPrd), tostring(ns.db.prPowerPrd),
+			tostring(ns.db.prPowerMana),
 			tostring(ns.db.notFullAfterFight), tostring(ns.IsPlayerRecovering()), tostring(InCombatLockdown())))
 		for _, entry in ipairs(ns.managed) do
 			if entry.name == "PlayerFrame" then

@@ -756,7 +756,7 @@ function ns.CreatePersonalStylePanel(kit)
 			look.Swatch(last, "prdHealthColor", { "prdHealthR", "prdHealthG", "prdHealthB" },
 				L["The health bar's color, for Custom."])
 			if ns.PERSONAL_MANA then
-				local manaLast = look.Choices(L["Mana bar:"], "prdManaColor", {
+				local manaLast = look.Choices(L["Cine Mana Bar:"], "prdManaColor", {
 					{ "game", L["The game's"] },
 					{ "custom", L["Custom"], L["A color of your own (the swatch)."] },
 				}, ManaOn)

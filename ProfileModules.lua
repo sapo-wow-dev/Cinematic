@@ -159,10 +159,10 @@ ns.PROFILE_MODULES = {
 
 	-- What fades, and when
 	{ key = "recovering", name = "Up while recovering", scope = { "Standard Frames/top", "Personal Resources" },
-		tip = "The player frame and personal resource display stay up until health and power are full.",
+		tip = "The player frame and personal resource display stay up while health or power is under 95%.",
 		apply = function(set)
-			for _, key in ipairs({ "nfHealthPlayer", "nfPowerPlayer", "nfHealthPrd", "nfPowerPrdPower", "nfPowerPrdMana" }) do
-				set(key, true)
+			for _, key in ipairs({ "prHealthPlayer", "prPowerPlayer", "prHealthPrd", "prPowerPrd", "prPowerMana" }) do
+				set(key, 0.95)
 			end
 		end },
 	{ key = "no-fading", name = "Nothing fades", scope = { "Cinematic/General" },
@@ -224,14 +224,14 @@ ns.PROFILE_MODULES = {
 		"of target (these also for an enemy or friend targeted and in dungeons and raids) and the swing timer, but " ..
 		"no buffs or minimap (the minimap is up in dungeons and raids; the personal resource display: as " ..
 		"the layout has it); the cast bar shows all " ..
-		"through CineMode. The player frame stays up until health and power are full (not the resource display); " ..
+		"through CineMode. The player frame stays up while health or power is under 95% (not the resource display); " ..
 		"raid frames without names, buffs, threat, target markers, ready checks or titles in CineMode.",
 		apply = function(set)
 			-- (The personal resource display in fights: the layout module's.)
-			set("nfHealthPlayer", true)
-			set("nfPowerPlayer", true)
-			for _, key in ipairs({ "nfHealthPrd", "nfPowerPrdPower", "nfPowerPrdMana" }) do
-				set(key, false)
+			set("prHealthPlayer", 0.95)
+			set("prPowerPlayer", 0.95)
+			for _, key in ipairs({ "prHealthPrd", "prPowerPrd", "prPowerMana" }) do
+				set(key, 0)
 			end
 			set("unitPartsFocusToT", true)
 			set("cineShow", { castbar = true, raidnames = false, raidbuffs = false, raidthreat = false,
