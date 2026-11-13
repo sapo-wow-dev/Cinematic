@@ -931,8 +931,8 @@ end
 function ns.MarkUnitKind(flags) return MixKind(ns.MARK_UNIT_LETTERS, "u", flags) end
 function ns.MarkAggroKind(flags) return MixKind(ns.MARK_AGGRO_LETTERS, "ag", flags) end
 -- Every kind's mark opacity (Opacity: the mark's own; Alpha is the whole
--- plate's), health bar size (PlateWidth, PlateHeight: retail, Forever's
--- plates don't size) and plate color (PlateColor: "-" none, the next fitting row's; "game" the
+-- plate's), health bar size (PlateWidth, PlateHeight: retail; Forever the
+-- width alone, PlateParts' ns.plateSizes) and plate color (PlateColor: "-" none, the next fitting row's; "game" the
 -- game's; "same" its mark's; "gold", "reaction", "class" or "custom", PlateR,
 -- G, B), the parts it colors its Also color ticks. The rows for one unit
 -- (and aggro) their mark's to start with, the kinds of plate none.

@@ -2255,6 +2255,12 @@ local function UpdateWhen()
 end
 ns.TargetMarkFits = function(kind) return whenNow[kind] ~= false end
 
+-- Which plate sizes each client takes: retail both; WoW Forever the width
+-- (its cast bar container held in, as retail's: tested 2026-11-13 with
+-- /cine debug platewidth, the whole bar narrowed, the name cut to fit),
+-- not the height (untried); Classic Era neither (untried).
+ns.plateSizes = { width = ns.isRetail or not ns.isClassicEra, height = ns.isRetail }
+
 -- Whether Default's row changes every other plate from the game's
 -- look: shown, with a mark, an Also color or an opacity.
 local function OthersOn(kind)
@@ -2262,8 +2268,8 @@ local function OthersOn(kind)
 	return ArrowSetting("Show", kind) and (ArrowSetting("Style", kind) ~= "none"
 		or AlsoOn("ColorName", kind) or AlsoOn("ColorBar", kind)
 		or (ArrowSetting("Alpha", kind) or 1) < 1
-		or ns.isRetail and (math.abs((ArrowSetting("PlateWidth", kind) or 1) - 1) > 0.001
-			or math.abs((ArrowSetting("PlateHeight", kind) or 1) - 1) > 0.001)) and true or false
+		or ns.plateSizes.width and math.abs((ArrowSetting("PlateWidth", kind) or 1) - 1) > 0.001
+		or ns.plateSizes.height and math.abs((ArrowSetting("PlateHeight", kind) or 1) - 1) > 0.001) and true or false
 end
 
 -- How a unit stands with you, for the rows added for one reaction: "Enemy",
@@ -2356,13 +2362,14 @@ end
 -- own last); the game's: none.
 local partKinds = {}
 local PART_KEYS = { name = "ColorName", bar = "ColorBar", border = "ColorBorder" }
--- (The page's own Width and Height, every plate's: 1, 1 for none.)
+-- (The page's own Width and Height, every plate's: 1, 1 for none, and for
+-- a size this client doesn't take.)
 local function MasterSize()
-	return Style("plateStyleWidth") or 1, Style("plateStyleHeight") or 1
+	return ns.plateSizes.width and Style("plateStyleWidth") or 1, ns.plateSizes.height and Style("plateStyleHeight") or 1
 end
 local function MasterSizeOn()
 	local width, height = MasterSize()
-	return ns.isRetail and (math.abs(width - 1) > 0.001 or math.abs(height - 1) > 0.001)
+	return math.abs(width - 1) > 0.001 or math.abs(height - 1) > 0.001
 end
 -- (/cine debug plates: the row a unit's plate goes by now, and its place.)
 function ns.PlateRowNow(plate, unit)
@@ -2383,8 +2390,8 @@ local function PlateLook(plate, unit)
 		mark = below and below ~= "others" and ArrowSetting("Style", below) ~= "none" and below or nil
 	end
 	local alpha = ArrowSetting("Alpha", kind) or 1
-	local width = (ArrowSetting("PlateWidth", kind) or 1) * masterWidth
-	local height = (ArrowSetting("PlateHeight", kind) or 1) * masterHeight
+	local width = (ns.plateSizes.width and ArrowSetting("PlateWidth", kind) or 1) * masterWidth
+	local height = (ns.plateSizes.height and ArrowSetting("PlateHeight", kind) or 1) * masterHeight
 	local colorRow = kind
 	while colorRow do
 		local tintKind = TintKind(colorRow)
@@ -2448,7 +2455,7 @@ local function DistanceRowsOn()
 	end
 	return false
 end
--- Each plate's size from its rows (retail: Forever's plates don't size):
+-- Each plate's size from its rows (ns.plateSizes: what each client takes):
 -- its own width and height times the row's Width and Height. Retail's
 -- plates won't say where their parts are, but Blizzard's layout is known
 -- (NamePlateUnitFrameMixin:UpdateAnchors): the cast bar container's held
@@ -2620,7 +2627,7 @@ local function MoveTo(what, plate, now, goal, jump)
 	easer:Show()
 end
 local function SetPlateSize(plate, size, level, jump)
-	if not ns.isRetail then
+	if not (ns.plateSizes.width or ns.plateSizes.height) then
 		return
 	end
 	for what, list in pairs(nows) do
@@ -2787,7 +2794,8 @@ function ns.ReportTargetMarks()
 			frameWidth and castWidth and Num((frameWidth - castWidth) / 2) or "-", own and Num(own.inset) or "-",
 			Num(nows.width[plate]), Num(nows.height[plate]),
 			sizeSkipped[plate] and ", not sized: " .. sizeSkipped[plate] or "",
-			ns.isRetail and "" or " (Forever: not sized)"))
+			ns.plateSizes.width and (ns.plateSizes.height and "" or " (this client: width only)")
+				or " (this client: not sized)"))
 	end
 end
 

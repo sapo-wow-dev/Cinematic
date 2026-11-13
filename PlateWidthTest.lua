@@ -8,7 +8,11 @@
 --   1 inset: retail's way, the cast bar container held further in, the
 --     health bar container sitting on it follows;
 --   2 bar:   the health bar itself re-anchored half as wide, centered;
---   3 scale: the health bar container at half scale.
+--   3 scale: the health bar container at half scale;
+--   4 setting: Nameplate Style's own Width at 50%, the way players get;
+--   5 marker: the row the plate goes by a red diamond, the plate at
+--     Opacity 0: does the mark stay with the plate gone?
+--   6 quarter: that row a red diamond and Width 25% (the lowest).
 -- Each step waits 4 seconds (read the box), then changes the bar, so the
 -- change is seen as it happens. Every half second the log gets the plate's
 -- widths, points, scale, alpha and how often the game laid the plate out
@@ -28,6 +32,12 @@ local METHODS = {
 		"(the bar itself narrowed)." },
 	{ key = "scale", say = "%d/%d: Watch your target's HEALTH BAR. In %d sec it should get HALF AS BIG " ..
 		"(narrower and thinner)." },
+	{ key = "setting", say = "%d/%d: Watch your target's HEALTH BAR. In %d sec Nameplate Style's Width goes " ..
+		"to 50%%: it should get HALF AS WIDE." },
+	{ key = "marker", ratio = false, say = "%d/%d: Watch your target's PLATE. In %d sec it should FADE AWAY " ..
+		"and leave just a RED DIAMOND over the mob." },
+	{ key = "quarter", ratio = 0.25, say = "%d/%d: Watch your target's HEALTH BAR. In %d sec it should get a " ..
+		"QUARTER AS WIDE, with a RED DIAMOND over it." },
 }
 
 local run -- { at, steps = { method index... }, step, applied = { plate, undo }, notes, layouts }
@@ -190,12 +200,78 @@ function APPLY.scale(parts)
 	if not ok then Say("  SetScale failed: " .. tostring(err)) end
 	return function() pcall(parts.container.SetScale, parts.container, scale) end, before
 end
+-- 4 setting: the real thing, Nameplate Style's every-plate Width at 50%
+-- (the page on too), as a player sets it; what the marks report says then.
+function APPLY.setting(parts)
+	local db = ns.GetDB()
+	local width = Ask(parts.container, "GetWidth")
+	local oldWidth, oldOn = db.plateStyleWidth, db.handlePlateStyle
+	Say(("  setting: plateSizes width %s height %s, page %s, styles on %s, Width %s"):format(
+		tostring(ns.plateSizes and ns.plateSizes.width), tostring(ns.plateSizes and ns.plateSizes.height),
+		tostring(oldOn), tostring(ns.StyleOn and ns.StyleOn()), tostring(oldWidth)))
+	db.plateStyleWidth, db.handlePlateStyle = 0.5, true
+	if ns.RefreshTargetArrows then ns.RefreshTargetArrows() end
+	return function()
+		db.plateStyleWidth, db.handlePlateStyle = oldWidth, oldOn
+		if ns.RefreshTargetArrows then ns.RefreshTargetArrows() end
+	end, width
+end
+-- 5 and 6: the row your target's plate goes by now (Nameplate Style's
+-- rows: target first), its own settings set as a player would.
+local function SetRow(parts, values)
+	local db = ns.GetDB()
+	local unit = parts.plate.namePlateUnitToken or "target"
+	local row = ns.PlateRowNow and ns.PlateRowNow(parts.plate, unit) or "target"
+	local prefix = row == "target" and "targetArrow" or row .. "Mark"
+	local old, list = { handlePlateStyle = db.handlePlateStyle }, {}
+	for key, value in pairs(values) do
+		old[prefix .. key] = db[prefix .. key]
+		db[prefix .. key] = value
+		list[#list + 1] = key .. "=" .. tostring(value)
+	end
+	db.handlePlateStyle = true
+	Say(("  row %s (%s): %s; plateSizes width %s, styles on %s"):format(tostring(row), prefix,
+		table.concat(list, " "), tostring(ns.plateSizes and ns.plateSizes.width), tostring(ns.StyleOn and ns.StyleOn())))
+	if ns.RefreshTargetArrows then ns.RefreshTargetArrows() end
+	return function()
+		for key, value in pairs(old) do db[key] = value end
+		if ns.RefreshTargetArrows then ns.RefreshTargetArrows() end
+	end
+end
+local RED = { Show = true, Style = "diamond", Color = "custom", R = 1, G = 0, B = 0 }
+local function With(extra)
+	local values = {}
+	for key, value in pairs(RED) do values[key] = value end
+	for key, value in pairs(extra) do values[key] = value end
+	return values
+end
+function APPLY.marker(parts)
+	return SetRow(parts, With({ Alpha = 0 })), Ask(parts.plate, "GetEffectiveAlpha")
+end
+function APPLY.quarter(parts)
+	local width = Ask(parts.container, "GetWidth")
+	return SetRow(parts, With({ PlateWidth = 0.25 })), width
+end
+
+-- (The marks report, /cine debug marks, into this log: why a plate isn't sized.)
+local function MarksReport()
+	if not ns.ReportTargetMarks then return end
+	local print = ns.Print
+	ns.Print = function(text) Say("  marks: " .. tostring(text)) end
+	pcall(ns.ReportTargetMarks)
+	ns.Print = print
+end
+
 -- What each way changed, to tell whether it took: the width (or scale) now.
 local MEASURE = {
 	inset = function(parts) return Ask(parts.container, "GetWidth") end, -- (the health bar following)
 	bar = function(parts) return Ask(parts.bar, "GetWidth") end,
 	-- (On screen: a frame held by two sides stretches as its scale drops, so
 	-- its width times its scale, not the scale alone. Tested on Forever.)
+	setting = function(parts) return Ask(parts.container, "GetWidth") end,
+	quarter = function(parts) return Ask(parts.container, "GetWidth") end,
+	-- (The plate's opacity: the mark's own is in the screenshots.)
+	marker = function(parts) return Ask(parts.plate, "GetEffectiveAlpha") end,
 	scale = function(parts)
 		local width, scale = Ask(parts.container, "GetWidth"), Ask(parts.container, "GetScale")
 		return width and scale and width * scale
@@ -211,13 +287,18 @@ local function Undo()
 	end
 end
 
-local function Verdict(key)
+local function Verdict(key, ratio)
 	local note = run.notes[key]
 	if not note then return key .. ": not run" end
 	if note.skipped then return ("%s: COULDN'T TRY (%s)"):format(key, note.skipped) end
-	local took = note.before and note.after and math.abs(note.after - note.before / 2) < note.before * 0.1
+	if ratio == false then
+		return ("%s: plate opacity before %s, after %s (the diamond: see the AFTER screenshot)"):format(key,
+			Num(note.before), Num(note.after))
+	end
+	ratio = ratio or 0.5
+	local took = note.before and note.after and math.abs(note.after - note.before * ratio) < note.before * 0.1
 	return ("%s: before %s, wanted %s, after %s -> %s%s; game re-laid it out %d times while on"):format(key,
-		Num(note.before), Num(note.before and note.before / 2), Num(note.after), took and "CHANGED" or "NOT CHANGED",
+		Num(note.before), Num(note.before and note.before * ratio), Num(note.after), took and "CHANGED" or "NOT CHANGED",
 		note.undone and (", put back by the game at " .. note.undone .. " sec") or "", note.layouts or 0)
 end
 
@@ -225,7 +306,7 @@ local function Finish(done)
 	if run.ticker then run.ticker:Cancel() end
 	Undo()
 	local lines = {}
-	for _, index in ipairs(run.steps) do lines[#lines + 1] = Verdict(METHODS[index].key) end
+	for _, index in ipairs(run.steps) do lines[#lines + 1] = Verdict(METHODS[index].key, METHODS[index].ratio) end
 	for _, line in ipairs(lines) do
 		Say("verdict " .. line)
 		ns.Print(line)
@@ -300,6 +381,7 @@ local function Tick()
 	elseif not note.shotAfter and run.applied and into >= WAIT + 2 then
 		note.shotAfter = true
 		Say("  " .. Shot(("step %d %s AFTER"):format(run.steps[index], method.key)))
+		if method.key == "setting" or method.key == "marker" or method.key == "quarter" then MarksReport() end
 	end
 	if parts then Say(Snapshot(parts)) end
 	local applied = run.applied

@@ -8592,7 +8592,7 @@ local function CreatePlatesPanel()
 	-- row's label, the panel's bottom under it. The tab last picked is kept
 	-- across reloads (SectionState, its id "Nameplates/tab", open the key).
 	local sections = {}
-	local picked = { id = "Nameplates/tab", open = "Target" }
+	local picked = { id = "Nameplates/tab", open = "Instances" }
 	local SECTION_WIDTH = GRID_LABEL + ns.GridWidth(PLATE_LAYOUT)
 	-- (The panel's top left, under the tabs (placed once they're made, as high
 	-- as their rows); the sections' frames hang on it.)
@@ -9605,6 +9605,13 @@ do
 			"target frame shows them: a mark on each one's plate, a row for each in the grid, and its name, " ..
 			"health bar or border in its mark's color (the row's Also color). When they show is the Target Indicator row's, on " ..
 			"the Nameplates page's Cinematic plate parts grid. Changes show at once, here and on the plates."])
+		-- (A warning triangle past the "?": friendly plates are the game's in
+		-- dungeons and raids, as on the Nameplates page's Dungeons & raids tab.)
+		PageIntro(content, content.pageHelp or title,
+			L["Friendly plates in dungeons and raids"] .. "\n\n" ..
+			L["In dungeons and raids the game won't let addons change friendly nameplates, so nothing on this " ..
+			"page shows on them there: no marks, colors, opacity or size. They look as the game draws them. " ..
+			"Enemy plates aren't affected."], nil, true)
 
 		local preview -- (below: drawn again as each setting changes)
 		local function Changed()
@@ -9772,16 +9779,17 @@ do
 			local castWidth = castLook and castLook.plateCastWidth or 1
 			cast:SetSize(150 * castWidth, 7 * (castLook and castLook.plateCastHeight or 1))
 			castFill:SetWidth(150 * castWidth * 0.4)
-			-- (Its opacity and health bar's size, on retail: Forever's plates
-			-- don't change size; moved to by the OnUpdate below, as plates do.)
+			-- (Its opacity and health bar's size, the sizes this client takes
+			-- (ns.plateSizes: Forever's the width); moved to by the OnUpdate
+			-- below, as plates do.)
 			local goal = self.goal
 			goal.alpha = shown and (ns.TargetMarkSetting("Alpha", kind) or 1) or 0.35
-			local sized = shown and ns.isRetail
+			local sizes = ns.plateSizes or {}
 			local db = ns.GetDB()
-			goal.width = (sized and ns.TargetMarkSetting("PlateWidth", kind) or 1)
-				* (ns.isRetail and db.plateStyleWidth or 1)
-			goal.height = (sized and ns.TargetMarkSetting("PlateHeight", kind) or 1)
-				* (ns.isRetail and db.plateStyleHeight or 1)
+			goal.width = (shown and sizes.width and ns.TargetMarkSetting("PlateWidth", kind) or 1)
+				* (sizes.width and db.plateStyleWidth or 1)
+			goal.height = (shown and sizes.height and ns.TargetMarkSetting("PlateHeight", kind) or 1)
+				* (sizes.height and db.plateStyleHeight or 1)
 			-- (db.plateStyle*: filled from DEFAULTS at load, 1 for none.)
 		end
 		-- Moving like a plate in a fight: its health dropping in hits and
@@ -10038,11 +10046,14 @@ do
 			if markAlpha < 1 and ns.TargetMarkSetting("Style", kind) ~= "none" then
 				list[#list + 1] = { (L["Mark %d%%"]):format(markAlpha * 100 + 0.5), "fade" }
 			end
-			local width = ns.TargetMarkSetting("PlateWidth", kind) or 1
-			local height = ns.TargetMarkSetting("PlateHeight", kind) or 1
-			if ns.isRetail and math.abs(width - height) > 0.001 then
+			local sizes = ns.plateSizes or {}
+			local width = sizes.width and ns.TargetMarkSetting("PlateWidth", kind) or 1
+			local height = sizes.height and ns.TargetMarkSetting("PlateHeight", kind) or 1
+			if not sizes.height and math.abs(width - 1) > 0.001 then
+				list[#list + 1] = { (L["Plate width %d%%"]):format(width * 100 + 0.5) }
+			elseif math.abs(width - height) > 0.001 then
 				list[#list + 1] = { (L["Plate size %d%% x %d%%"]):format(width * 100 + 0.5, height * 100 + 0.5) }
-			elseif ns.isRetail and math.abs(width - 1) > 0.001 then
+			elseif math.abs(width - 1) > 0.001 then
 				list[#list + 1] = { (L["Plate size %d%%"]):format(width * 100 + 0.5) }
 			end
 			return list
@@ -11131,14 +11142,19 @@ do
 			end
 			controls[#controls + 1] = placer
 			-- (Width and Height, W and H, the two boxes where one Size was.)
-			if ns.isRetail then
-				local SIZE_TIP = L["Its name, mark and the rest of the plate move with the bar's edges. Not on " ..
-					"WoW Forever: its plates don't change size."]
-				local _, w = PercentBox("Plate", 2, "PlateWidth", 50, 300, L["Width"],
-					L["The health bar's width."] .. " " .. SIZE_TIP, DRAWER_W - 230)
+			-- (Just Width on WoW Forever, nothing on Classic Era: ns.plateSizes.)
+			local sizes = ns.plateSizes or {}
+			if sizes.width then
+				local SIZE_TIP = L["Its name, mark and the rest of the plate move with the bar's edges."]
+				local _, w = PercentBox("Plate", 2, "PlateWidth", 25, 300, L["Width"],
+					L["The health bar's width."] .. " " .. SIZE_TIP .. (sizes.height and ""
+						or (" " .. L["A long name is cut short to fit."])), DRAWER_W - 230)
 				w:SetText(L["W"])
+			end
+			if sizes.height then
 				local _, h = PercentBox("Plate", 2, "PlateHeight", 50, 300, L["Height"],
-					L["The health bar's height."] .. " " .. SIZE_TIP)
+					L["The health bar's height."] .. " " .. L["Its name, mark and the rest of the plate move with " ..
+					"the bar's edges."])
 				h:SetText(L["H"])
 			end
 			PercentBox("Plate", 1, "Alpha", 0, 100, L["Opacity"], L["The whole plate's opacity while this row fits " ..
@@ -11220,19 +11236,21 @@ do
 		-- (How fast a plate's opacity and size change, as CineMode's Fade in
 		-- time: a quick look away from an elite and back barely shows.)
 		stack:Header(content, L["All rows"])
-		-- (On one line, small boxes: the time, and on retail every plate's
-		-- Width and Height, times each row's, as theirs.)
+		-- (On one line, small boxes: the time, and every plate's Width and
+		-- Height, times each row's, as theirs: the ones this client takes.)
 		local allRows = stack:Add(BoxLine(content), "label")
 		allRows:Box(L["Change time"], "plateStyleFadeTime", 0, 10, 0.1, "%.1f", 1,
 			L["How long a plate takes to change its opacity or size a whole 100% when the row it " ..
 			"goes by changes: from 100% to 15% takes a bit less. If it changes back before it's there, it turns " ..
 			"back from where it is, so a quick look away from an elite and back barely shows. A plate just come " ..
 			"into view starts at its row's. 0: at once."], nil, nil, L["sec"])
-		if ns.isRetail then
-			local MASTER_TIP = L["Every plate's, those no row fits too, times its row's own. When they show is the " ..
-				"Target Indicator row's, as the rows'."]
-			allRows:Box(L["Width"], "plateStyleWidth", 50, 300, 5, "%d", 100,
+		local MASTER_TIP = L["Every plate's, those no row fits too, times its row's own. When they show is the " ..
+			"Target Indicator row's, as the rows'."]
+		if (ns.plateSizes or {}).width then
+			allRows:Box(L["Width"], "plateStyleWidth", 25, 300, 5, "%d", 100,
 				L["The health bar's width."] .. " " .. MASTER_TIP, Changed, nil, "%")
+		end
+		if (ns.plateSizes or {}).height then
 			allRows:Box(L["Height"], "plateStyleHeight", 50, 300, 5, "%d", 100,
 				L["The health bar's height."] .. " " .. MASTER_TIP, Changed, nil, "%")
 		end
