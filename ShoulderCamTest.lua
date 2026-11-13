@@ -1918,8 +1918,15 @@ do
 			{ "do", 1.5, "WALK FORWARD a little with the LEFT STICK" }, { "wait", 3, "hands off" },
 			{ "do", 2, "WALK in a small curve to the LEFT with the LEFT STICK" }, { "wait", 3, "hands off" },
 			{ "clear", "CLEAR THE TARGET (Esc, or your gamepad's)" }, BACK } },
-		{ "fight", { { "target", MIDDLE }, HANDS_OFF, { "do", 6, "ATTACK IT: cast at it a few times (stand still)" },
-			{ "do", 1.5, "STRAFE LEFT (still fighting)" }, { "wait", 2.5, "hands off" }, CLEAR, BACK } },
+		-- (In a fight: the game's enemy focus may act otherwise than out of one,
+		-- where every other trial ran. Casting keeps you in it throughout.)
+		{ "fight", { { "target", "TURN till a dummy is a little to the RIGHT of the middle, then CLICK it" },
+			HANDS_OFF, { "do", 6, "ATTACK IT: cast at it a few times (stand still)" }, { "wait", 3, "hands off" },
+			{ "do", 1.5, "STRAFE LEFT (keep casting if you can)" }, { "wait", 3, "hands off" },
+			{ "do", 1.5, "STRAFE RIGHT, back" }, { "wait", 3, "hands off" },
+			{ "do", 2, "TURN LEFT a little: TAP your turn key" }, { "wait", 3, "hands off" },
+			{ "do", 2, "TURN RIGHT back: TAP the other turn key" }, { "wait", 3, "hands off" },
+			CLEAR, BACK } },
 	}
 	-- (Each thing to do is read out first, then done: a "do" step on its own
 	-- went by before it could be read, 2026-11-13.)
