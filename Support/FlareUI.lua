@@ -54,6 +54,9 @@ local FOLLOWED = {
 
 ns.WhenAddonLoads("FlareUI", function()
 	ns.FadeWithRows(ROWS)
+	-- Its XP bar stops taking the mouse when faded below 5% (its own SetAlpha
+	-- hook), so the mouse never lands on it: hovered by its rect instead.
+	ns.HOVER_BY_RECT.FlareUI_XPBar = true
 	-- (A bar set to a Show choice other than Always is stepped towards its
 	-- alpha every frame, so it's faded again every frame, not just each tick.)
 	ns.FollowOwnAlpha(FOLLOWED)

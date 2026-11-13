@@ -2123,6 +2123,14 @@ function ns.IsEntryHovered(entry)
 		end
 		return false
 	end
+	-- Addon frames that stop taking the mouse once faded (ns.HOVER_BY_RECT):
+	-- the mouse over their rect counts, unless something else on top has it.
+	local rectName = next(ns.HOVER_BY_RECT) and entry.frame.GetName and entry.frame:GetName()
+	if rectName and ns.HOVER_BY_RECT[rectName] then
+		local focus = MouseFocus()
+		return ns.Flag(entry.frame:IsVisible()) and ns.Flag(entry.frame:IsMouseOver())
+			and (not focus or focus == WorldFrame or IsInside(focus, entry.frame))
+	end
 	-- (The mouse over the 3D world, as it mostly is in CineMode: none of the
 	-- rest can be hovered, so no need to ask each frame. Except an action
 	-- bar's empty slots: see ns.IsOverEmptySlot.)
@@ -11131,13 +11139,18 @@ tickTables.hoverMouse = { at = -math.huge }
 -- With the mouse over the 3D world (no frame has it), the only faded frames
 -- ns.IsEntryHovered can say yes for: a shrunk or parked one (its saved
 -- spot), the buffs (near an icon), the quest tracker (its lines), an action
--- bar (its empty slots) and the chat (its rect). The other 180 or so of 208
--- aren't asked at all then (0.8 ms of a pass, 2026-11-11). Keep in step with
--- ns.IsEntryHovered. (On tickTables: this file is at Lua's 200 locals.)
+-- bar (its empty slots), the chat (its rect) and an addon's frame that lets
+-- the mouse through once faded (its rect: ns.HOVER_BY_RECT). The other 180 or
+-- so of 208 aren't asked at all then (0.8 ms of a pass, 2026-11-11). Keep in
+-- step with ns.IsEntryHovered. (On tickTables: this file is at Lua's 200 locals.)
 function tickTables.WorldHover(entry)
 	local group = entry.group
-	return entry.shrunk or entry.parkedFullSize or group == "bars" or group == "sidebars" or group == "chat"
-		or group == "buffs" or group == "quests"
+	if entry.shrunk or entry.parkedFullSize or group == "bars" or group == "sidebars" or group == "chat"
+		or group == "buffs" or group == "quests" then
+		return true
+	end
+	local name = next(ns.HOVER_BY_RECT) and entry.frame.GetName and entry.frame:GetName()
+	return name and ns.HOVER_BY_RECT[name] or false
 end
 
 -- In CineMode, out of fights, with every frame settled, the frames' pass runs
@@ -12520,6 +12533,10 @@ ns.ADDON_POWER_BARS = {}
 -- frame: its 3D portrait fix): never given a secret alpha (low health or
 -- mana the game won't say), or its hook errors on every pass. Faded as usual.
 ns.NO_SECRET_ALPHA = {}
+-- Its frames that let the mouse through once faded (FlareUI's XP bar turns
+-- its mouse off below 5% alpha): hovered by their rect (ns.IsEntryHovered).
+-- { [name] = true }
+ns.HOVER_BY_RECT = {}
 function ns.AddPowerBarFrame(name, addon)
 	ns.AddPortraitFrame(name)
 	ns.ADDON_POWER_BARS[name] = addon
