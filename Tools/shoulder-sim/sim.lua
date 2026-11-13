@@ -313,6 +313,7 @@ end
 
 -- DAY: what the player does.
 local bearDip -- (the nearest the middle you got between the form and its model coming)
+local bearBefore -- (how far off the middle you sat just before: below your spot when the offset's at its cap)
 local bearSwing -- (the furthest off the middle the bear got between "no form" and its model going)
 local bearEnd -- (how far off the middle you sat after 3 s in bear form)
 local indoorsEnd -- (where the camera and frames were after 3 s indoors)
@@ -344,6 +345,7 @@ local function Day()
 	Wait(3)
 	Part("Bear form")
 	-- (In: the model's 0.06 to 0.1 s behind the form. 2026-11-11 log.)
+	bearBefore = math.abs(YouOnScreen())
 	me.form = 5
 	wow.Fire("UPDATE_SHAPESHIFT_FORM")
 	bearDip = 1
@@ -490,12 +492,27 @@ Check("Reduce Unexpected Movement back to yours", cvars.CameraReduceUnexpectedMo
 Check("Cast bar back on its place", math.abs(Share(bar, home.bar)) < 0.001, ("%.1f UI units off"):format(Share(bar, home.bar) * UI_WIDTH / 2))
 Check("PRD back on its place", math.abs(Share(prd, home.prd)) < 0.001, ("%.1f UI units off"):format(Share(prd, home.prd) * UI_WIDTH / 2))
 -- Your spot held (Phase 3): how far you sat from it while it was on and the
--- game had caught up, 4 to 30 yards away, on a standard model on foot.
-local spotMiss, spotCount = 0, 0
+-- game had caught up, 4 to 30 yards away, on a standard model on foot. With
+-- the offset at its cap (OFFSET_SAFE in ShoulderCam.lua, near walls, since
+-- 2026-11-12) you're meant to sit nearer the middle: those only must not go
+-- past your spot (once the offset's glide after a zoom is done: 0.6 s).
+local OFFSET_SAFE = 1.5
+local spotMiss, spotCount, pastSpot = 0, 0, 0
+local zoomWas, zoomedAt = nil, -math.huge
 for _, row in ipairs(samples) do
+	if row[4] ~= zoomWas then zoomWas, zoomedAt = row[4], row[1] end
 	local caught = math.abs(row[3] - row[2] * me.scale) < 0.05
 	if row[2] ~= 0 and caught and row[4] >= 4 and row[4] <= 30 and row[8] == 0 then
-		spotMiss, spotCount = spotMiss + math.abs(math.abs(row[5]) - (ns.db.shoulderCamSpot or 0.2)), spotCount + 1
+		local spot = ns.db.shoulderCamSpot or 0.2
+		if math.abs(row[2]) >= OFFSET_SAFE - 0.01 then
+			if row[1] - zoomedAt < 0.6 then row = nil end
+		end
+		if not row then -- (just zoomed, at the cap: skipped)
+		elseif math.abs(row[2]) >= OFFSET_SAFE - 0.01 then
+			pastSpot = math.max(pastSpot, math.abs(row[5]) - spot)
+		else
+			spotMiss, spotCount = spotMiss + math.abs(math.abs(row[5]) - spot), spotCount + 1
+		end
 	end
 end
 if variant == "sweep" then
@@ -505,13 +522,15 @@ end
 if variant ~= "decline" and variant ~= "sweep" then
 	Check("Your spot held as you zoom", spotCount > 0 and spotMiss / spotCount < 0.01,
 		spotCount > 0 and ("%.2f%% off it on average"):format(spotMiss / spotCount * 100) or "never on")
+	Check("Never past your spot at the offset's cap", pastSpot < 0.01, ("%.2f%% past it at most"):format(pastSpot * 100))
 end
 if bearEnd and variant ~= "decline" then
 	local spot = ns.db.shoulderCamSpot or 0.2
 	Check("Bear form: still on your spot", math.abs(bearEnd - spot) < 0.01,
 		("%.1f%% off the middle, your spot %.0f%%"):format(bearEnd * 100, spot * 100))
-	Check("Into bear form: no dip in first", bearDip > spot - 0.01,
-		("%.1f%% off the middle at least, your spot %.0f%%"):format(bearDip * 100, spot * 100))
+	local level = math.min(spot, bearBefore or spot)
+	Check("Into bear form: no dip in first", bearDip > level - 0.01,
+		("%.1f%% off the middle at least, %.1f%% before it"):format(bearDip * 100, level * 100))
 	Check("Out of bear form: no swing out first", bearSwing < spot + 0.01,
 		("%.1f%% off the middle at most, your spot %.0f%%"):format(bearSwing * 100, spot * 100))
 end
