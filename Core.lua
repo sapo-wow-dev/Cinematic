@@ -1207,6 +1207,7 @@ DEFAULTS.handleCooldowns = true -- the Cooldown Manager page's master switch (of
 DEFAULTS.cooldownKeybinds = false -- its Show keybinds: each spell's key on its icon (Frames.lua)
 DEFAULTS.cooldownFollowNumbers = true -- its icons' countdown numbers follow the game's Show Numbers for Cooldowns
 DEFAULTS.cooldownSpellNotBuff = true -- its icons show the spell's cooldown, not a buff the game puts on them (Frames.lua)
+DEFAULTS.cooldownStacks = true -- stack numbers on tracked buffs of known stacking spells, counted from casts (CooldownStacks.lua)
 -- Its Flash style, for every spell with Flash ticked: how long, and whether
 -- the icon glows, grows and gets a colored border while it flashes.
 DEFAULTS.cooldownFlashTime = 3

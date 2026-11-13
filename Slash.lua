@@ -234,6 +234,8 @@ local function PrintDebugHelp()
 	print("  /cine debug portal [number|file|back|near|far|up|down|turn|tilt|scale N|alpha N|reset|reel [seconds]|off] - (dev copy) show the game's portal and swirl models over the screen, one each time, to see which load and how they sit, for Vitals Vision")
 	print("  /cine debug bargap - the left and right edges of action bars 1-3 and their end buttons, to line up the gaps between bars")
 	print("  /cine debug explore - where you are in the game's Exploration achievements: discovered or not, and the zone's areas")
+	print("  /cine debug stacks - the Cooldown Manager's stack numbers: each stacking spell's count now, which tracked buff icons are for it, and the last casts")
+	print("  /cine debug stacktest - a guided 3-step Arcane Blast test (about 80 sec) with results to copy; again: stop")
 	print("  /cine debug screenfx [number | id N | find words | speed N | tile N | shots [from] | back | off] - dev copy: the game's full-screen effects (all of them, from its data) animated over the screen, one at a time; Space: next, Backspace: back; shots: a screenshot of each")
 	if ns.isDev then print("  /cine debug cursorsize [value | cycle | back | cvars [word] | hardware 0/1/back | pic blank/small/red/tiny/off] - the game's Cursor Size setting (cursorSizePreferred): what it is, set it, step through -1 to 4 three seconds each, put yours back, list every game setting with cursor (or the word) in its name, switch the hardware cursor, or show a test picture as the cursor") end
 	print("  /cine debug cursor [log [seconds]] - Cursor Hide: on or off, its method, whether its Show in row is on here, what's holding it back, the turn speeds and camera; log: a record of it all for 30 seconds (or the seconds given), saved by a /reload")
@@ -715,6 +717,10 @@ local function HandleSlash(msg)
 		else
 			ns.Print("/cine debug portal is in the dev copy only.")
 		end
+	elseif cmd == "debug" and arg == "stacks" then
+		if ns.CooldownStacksReport then ns.CooldownStacksReport() end
+	elseif cmd == "debug" and arg == "stacktest" then
+		if ns.CooldownStacksTest then ns.CooldownStacksTest() end
 	elseif cmd == "debug" and arg == "explore" then
 		if ns.DebugExplore then ns.DebugExplore() end
 	elseif cmd == "debug" and (arg == "screenfx" or arg:match("^screenfx ")) then

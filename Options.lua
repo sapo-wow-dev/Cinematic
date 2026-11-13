@@ -12560,7 +12560,15 @@ local function CreateCooldownPanel()
 		"(Read Leyline: Attuned's hour). Ticked, the icon keeps the spell's own picture and cooldown."])
 	notBuff:SetPoint("TOPLEFT", numbers, "BOTTOMLEFT", 0, -2)
 	GreyUnless(notBuff, function(db) return db.handleCooldowns end)
-	afterCombat = notBuff
+	-- Stack numbers on tracked buffs of known stacking spells (CooldownStacks.lua).
+	local stacks = Check(content, "cooldownStacks", L["Show stacks on tracked buffs"],
+		L["Shows how many stacks are up on the tracked buff icons of spells that stack, which the game " ..
+		"shows only as on or off: Arcane Blast for now. In fights the game keeps them secret, so they're " ..
+		"counted from your casts."])
+	stacks:SetPoint("TOPLEFT", notBuff, "BOTTOMLEFT", 0, -2)
+	stacks:HookScript("OnClick", function() ns.ApplyCooldownStacks() end)
+	GreyUnless(stacks, function(db) return db.handleCooldowns end)
+	afterCombat = stacks
 
 	-- Each spell's icon: always shown (the game's own), only when ready in
 	-- fights, or only while recharging. A row per spell in the Cooldown
