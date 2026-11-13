@@ -153,7 +153,8 @@ local paused -- (PauseReason at the last check, every POLL)
 -- offset held: the elf on 10.8% of the way to the edge, the cat on 20.3%,
 -- so 0.82 x 20.3 / 10.8 = 1.55.)
 -- (Mounts change it too: not measured yet.)
-local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Skyborne-2"] = 0.86, ["NightElf-3"] = 0.82 }
+-- (Human-3: the offset sweep, Forever, 2026-11-13.)
+local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Skyborne-2"] = 0.86, ["NightElf-3"] = 0.82, ["Human-3"] = 0.81 }
 -- bear, cat, dire bear: off the recordings till the sweep's run in them
 local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 local SWAP_WAIT = 0.4 -- seconds: the longest the old form's factor is kept without the model's event
@@ -346,6 +347,36 @@ end
 -- (Tools/shoulder-sim: a new session, as a reload starts this file again.)
 function ns.ResetShoulderSession() quieted = nil end
 
+-- Turned on: the Shoulder Cam profile offered, each time (to be safe: made
+-- fresh each time it's taken), where there's one for this client (Forever,
+-- ProfileChoices.lua: Cinema's settings, the personal resource display in
+-- fights in place of your portrait, and the Shoulder Cam layout, Layouts.lua,
+-- its HUD hung on the personal resource display, which Frames follow you
+-- slides as one). Yes: switched to, put back to the built-in's own settings
+-- (what you had in it goes to Backups first), and its layout made again from
+-- the code (Edit Mode layouts outlast a reset of Cinematic), with the reload offered.
+local PROFILE_NAME = "Shoulder Cam"
+function ns.OfferShoulderProfile()
+	if not (ns.ProfileExists and ns.ProfileExists(PROFILE_NAME)) or InCombatLockdown() then return end
+	if not StaticPopupDialogs.CINEMATIC_SHOULDER_PROFILE then
+		StaticPopupDialogs.CINEMATIC_SHOULDER_PROFILE = {
+			text = L["Set up the Shoulder Cam profile? It switches you to a profile called Shoulder Cam: " ..
+				"Cinema's settings, with your resources in fights in place of your portrait, and an Edit Mode " ..
+				"layout of its own that puts them at the bottom middle so they slide along with you. It's made " ..
+				"fresh each time (what you had in it goes to Backups), and you can switch back on the Profiles page."],
+			button1 = YES or L["Yes"], button2 = NO or L["No"],
+			OnAccept = function()
+				if not (ns.SetProfile and ns.SetProfile(PROFILE_NAME)) then return end
+				if ns.ResetProfile then ns.ResetProfile() end
+				if ns.RegenerateLayout then ns.RegenerateLayout(PROFILE_NAME) end
+				ns.Log("shoulder", "profile: switched to Shoulder Cam, made fresh, its layout made again")
+			end,
+			timeout = 0, whileDead = true, hideOnEscape = true,
+		}
+	end
+	StaticPopup_Show("CINEMATIC_SHOULDER_PROFILE")
+end
+
 -- Our notice, once: Accept and it starts; Cancel turns it off.
 local asking
 local function Answered(yes)
@@ -357,6 +388,7 @@ local function Answered(yes)
 	end
 	ns.ApplyShoulderCam()
 	if ns.RefreshOptions then ns.RefreshOptions() end
+	if yes then ns.OfferShoulderProfile() end
 end
 local function AskNotice()
 	if asking then return end
@@ -693,7 +725,9 @@ local function AimTick(elapsed)
 		return
 	end
 	local step = elapsed / math.max(0.1, ns.db.shoulderCamTalkTime or 1.5)
-	local enemy = HasEnemy()
+	-- (Not in fights, shoulderCamTargetTurnNoFight: as if none were targeted
+	-- while one's on, so it glides back, and turns again after.)
+	local enemy = HasEnemy() and not (ns.db.shoulderCamTargetTurnNoFight and InCombatLockdown())
 	if enemy ~= aim.had then
 		aim.had = enemy
 		ns.Log("shoulder", ("target turn: %s (target %s, attackable %s; enemy focus %s, turn %s, tilt %s, share %.2f)"):format(
@@ -712,7 +746,8 @@ local function AimTick(elapsed)
 		aim.share = math.min(1, aim.share + step)
 	else
 		aim.share = math.max(0, aim.share - step)
-		if aim.share == 0 then aim.clickX = nil end
+		-- (Gone back for a fight with the target kept: its click kept for after.)
+		if aim.share == 0 and not HasEnemy() then aim.clickX = nil end
 	end
 	-- (The left button held on the world: the camera's being turned by itself,
 	-- which nothing tells an addon (your facing stays), so the guess is lost:
@@ -929,6 +964,10 @@ local FOLLOW_GROUPS = {
 	{ key = "shoulderCamFollowCast", frames = { "PlayerCastingBarFrame", "CastingBarFrame",
 		"GamepadPlayerCastingBarFrame" } },
 	{ key = "shoulderCamFollowPRD", frames = { "PersonalResourceDisplayFrame", "CinematicPersonalResource" } },
+	-- (The swing timers, main hand, off hand and ranged: Edit Mode's, often
+	-- chained one under the other, so the first slides the rest.)
+	{ key = "shoulderCamFollowSwing", frames = { "SwingTimerMainHandFrame", "SwingTimerOffHandFrame",
+		"SwingTimerRangedFrame" } },
 	{ key = "shoulderCamFollowEssential", frames = { "EssentialCooldownViewer" } },
 	{ key = "shoulderCamFollowUtility", frames = { "UtilityCooldownViewer" } },
 	{ key = "shoulderCamFollowBuffIcons", frames = { "BuffIconCooldownViewer" } },
@@ -1069,7 +1108,10 @@ local function TargetShift()
 	if YouAreTarget() then return 0 end
 	local yards = tonumber(GetCVar("test_cameraOverShoulder")) or 0
 	if yards == 0 then return 0 end
-	local distance = math.max(FOLLOW_MIN_ZOOM, GetCameraZoom and GetCameraZoom() or 5)
+	-- (The camera as it glides, as the offset follows it (SeenZoom): the
+	-- zoom's end at once put the PRD where it'd be at zoom 4 while you were
+	-- still small at 15, "prdcheck", Forever, 2026-11-13.)
+	local distance = math.max(FOLLOW_MIN_ZOOM, SeenZoom())
 	local half = UIParent:GetWidth() / 2
 	local shift = -yards * ns.ShoulderModelScale() / (distance * ns.ShoulderViewWidth()) * half
 		* (db.shoulderCamFramesStrength or 1)
@@ -1242,7 +1284,11 @@ function ns.CreateShoulderCamPanel(kit)
 		L["On: the camera moves over your shoulder. This uses one of Blizzard's experimental " ..
 		"camera settings: the game shows its experimental camera warning (Accept keeps it working). " ..
 		"The game's Keep Character Centered and motion sickness options stop it, so those are turned " ..
-		"off meanwhile. Off: your own settings come back."], intro, ns.ApplyShoulderCam)
+		"off meanwhile. Off: your own settings come back."], intro, function(on)
+			ns.ApplyShoulderCam()
+			-- (Turned on, past our notice: the profile offered. Before it, its Accept does.)
+			if on and ns.db.shoulderCamNoticed then ns.OfferShoulderProfile() end
+		end)
 	local function IfOn() return ns.Setting("shoulderCam") end
 	-- (Two folder tabs: the camera's settings, built on content as before and
 	-- moved onto the first tab (Adopt, below), and the frames that follow you.)
@@ -1293,8 +1339,12 @@ function ns.CreateShoulderCamPanel(kit)
 	local function IfTalk() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTalkTurn end
 	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetTurn", L["Turn to your target"],
 		L["As you target an enemy, the camera turns slowly toward it, and glides back at the same pace " ..
-		"once you clear your target or pick a friendly one. Not tried in a fight yet."],
+		"once you clear your target or pick a friendly one."],
 		SaveThen("shoulderCamTargetTurn", ns.ApplyShoulderCam)), "check"), IfOn)
+	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetTurnNoFight", L["Not in fights"],
+		L["In a fight the camera glides back over your shoulder and stays there, and turns to your target " ..
+		"again once the fight's over."], SaveThen("shoulderCamTargetTurnNoFight", ns.ApplyShoulderCam)), "check", 16),
+		function() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTargetTurn end)
 	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Turn takes"], 0.5, 4, 0.5,
 		L["%.1f sec"]), "slider")
 	kit.Tooltip(talkTime, L["How long the turn toward them (or your target) takes, and the glide back."])
@@ -1336,6 +1386,7 @@ function ns.CreateShoulderCamPanel(kit)
 	local labels = {
 		shoulderCamFollowCast = L["Cast bar"],
 		shoulderCamFollowPRD = L["Personal Resource Display"],
+		shoulderCamFollowSwing = L["Swing timers"],
 		shoulderCamFollowEssential = L["Cooldowns: essential"],
 		shoulderCamFollowUtility = L["Cooldowns: utility"],
 		shoulderCamFollowBuffIcons = L["Tracked buffs: icons"],

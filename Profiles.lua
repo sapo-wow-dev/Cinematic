@@ -490,7 +490,12 @@ end
 -- Every profile's name: the built-in ones in order, then the player's A to Z.
 function ns.ProfileNames()
 	local names, own = {}, {}
-	for _, profile in ipairs(ns.BUILTIN_PROFILES) do names[#names + 1] = profile.name end
+	for _, profile in ipairs(ns.BUILTIN_PROFILES) do
+		-- (A testers' one: only with what it's for unlocked, the Shoulder Cam's.)
+		if not profile.tester or (ns.ShoulderCamUnlocked and ns.ShoulderCamUnlocked()) then
+			names[#names + 1] = profile.name
+		end
+	end
 	for name in pairs(ns.db.profiles) do
 		-- (Not one of the other built-ins: another client's, or hidden. Their
 		-- settings stay saved for when they're listed again.)

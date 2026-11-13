@@ -317,7 +317,9 @@ do
 		DESIGN[#DESIGN + 1] = { PRD_SYSTEM, nil, "BOTTOM", below, "TOP", 0, 4 }
 		below = "PersonalResourceDisplayFrame"
 	end
-	DESIGN[#DESIGN + 1] = { 1, nil, "BOTTOM", below, "TOP", 0, 4 }                     -- cast bar
+	-- (16 up: Forever's cast bar writes the spell's name under itself, which
+	-- sat on the personal resource display's health bar at 4, 2026-11-13.)
+	DESIGN[#DESIGN + 1] = { 1, nil, "BOTTOM", below, "TOP", 0, PRD_SYSTEM and 16 or 4 } -- cast bar
 	DESIGN[#DESIGN + 1] = { 20, 3, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 4 }    -- buff icons
 end
 
@@ -347,9 +349,11 @@ do
 	local add = function(row) SHOULDER_HUD[#SHOULDER_HUD + 1] = row end
 	if PRD_SYSTEM then
 		root, rootName = PRD_SYSTEM, "PersonalResourceDisplayFrame"
-		add({ 1, nil, "BOTTOM", rootName, "TOP", 0, 4 })                              -- cast bar
+		add({ 1, nil, "BOTTOM", rootName, "TOP", 0, 16 })                             -- cast bar (its name under it)
 	end
-	add({ root, nil, "BOTTOM", "UIParent", "BOTTOM", 0, 210 })                         -- the root
+	-- (330: just under your feet at a normal zoom; 210 put it down by the
+	-- action bars, "too low", 2026-11-13.)
+	add({ root, nil, "BOTTOM", "UIParent", "BOTTOM", 0, 330 })                         -- the root
 	add({ 20, 1, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 6 })                    -- cooldowns: essential
 	add({ 20, 2, "BOTTOM", "EssentialCooldownViewer", "TOP", 0, 4 })                  -- utility
 	add({ 20, 3, "BOTTOM", "UtilityCooldownViewer", "TOP", 0, 4 })                    -- buff icons
@@ -391,12 +395,12 @@ ns.EDIT_MODE_LAYOUTS = {
 	["Personal Resource Centered"] = ns.isRetail and { systems = PURE_CINEMA_SYSTEMS, client = "retail" }
 		or { design = FOREVER_PURE, client = "forever" },
 }
--- (Dev build only, and not made on logging in, so it never takes one of the
--- player's account layout slots unasked: /cine debug shoulder layout.)
-if ns.isDev then
-	ns.EDIT_MODE_LAYOUTS["Shoulder Cam"] = { design = SHOULDER_HUD, bars = { 2, 3 }, client = "forever",
-		onDemand = true }
-end
+-- (Not made on logging in, so it never takes one of the player's account
+-- layout slots unasked: made when the Shoulder Cam profile's picked, when
+-- turning the Shoulder Cam on offers it (ShoulderCam.lua), or by
+-- /cine debug shoulder layout. The Shoulder Cam's for testers for now.)
+ns.EDIT_MODE_LAYOUTS["Shoulder Cam"] = { design = SHOULDER_HUD, bars = { 2, 3 }, client = "forever",
+	onDemand = true }
 
 -- A layout from systems lines (as PURE_CINEMA_SYSTEMS): the export string is
 -- a format version, the number of systems, then the lines. (The Edit Mode

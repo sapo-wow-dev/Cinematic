@@ -58,6 +58,9 @@ ns.SLOT_CHOICES = {
 			line = "Action bars centered along the bottom, menus in the corner", modules = { "layout-retail" } },
 		{ part = "pure", label = "Personal Resource Centered", made = true,
 			line = "Your resources in the middle, the Cooldown Manager above", modules = { "layout-pure" } },
+		-- (The Shoulder Cam profile's, testers' for now: in no list.)
+		{ part = "shoulder", client = "forever", hidden = true, label = "Shoulder Cam", made = true,
+			line = "Your resources at the bottom middle, everything hung on them", modules = { "layout-shoulder" } },
 		{ part = "own", label = "Your own", line = "Cinematic leaves your Edit Mode layout as it is",
 			modules = {} },
 		{ part = "preset", client = "forever", label = ns.isClassicEra and "Classic's" or "WoW Forever's",
@@ -69,6 +72,12 @@ ns.SLOT_CHOICES = {
 		-- (From the most fading to the least.)
 		{ part = "pure", label = "Almost always", line = "As little UI as possible, even in fights",
 			modules = { "pure-frames", "pure-minimap", "minimal-target", "pure-plates", "ultra-plates", "pure-tooltips" } },
+		-- (The Shoulder Cam profile's, testers' for now: "Almost always" with
+		-- the personal resource display in fights in place of the player frame.)
+		{ part = "shoulder", client = "forever", hidden = true, label = "Almost always, over your shoulder",
+			line = "As little UI as possible; your resources, not your portrait, in fights",
+			modules = { "shoulder-frames", "pure-minimap", "minimal-target", "pure-plates", "ultra-plates",
+				"pure-tooltips" } },
 		{ part = "immersive", label = "Most of the time",
 			line = "Between fights, and fights bring back less: no minimap, fewer group nameplates",
 			modules = { "recovering", "minimap-off-in-fights", "fewer-group-plates" } },
@@ -227,6 +236,25 @@ ns.BUILTIN_PROFILES = {
 			bars = { forever = "split", retail = "pure" }, camera = "pure", vfx = "pure", chat = "pure" },
 		-- (Its own Visions and cards, apart from the slots' choices: picking a
 		-- choice for a slot then leaves them as they are.)
+		modules = With("zone-card", "travel-cards", "story-cards", "damage-vision", "vitals-vision",
+			"combat-vision", "cursor-hide", "music-calm", "weather-view-distance",
+			"node-icons", "effects-outside-cinemode"),
+	},
+	-- Cinema over your shoulder (Forever, testers': tester = listed only with
+	-- the Shoulder Cam unlocked, ns.ShoulderCamUnlocked). Its HUD centered on
+	-- the personal resource display, which fights bring up in place of the
+	-- player frame, and slides with you.
+	{
+		name = "Shoulder Cam",
+		label = "Shoulder Cam", -- (shown in your language)
+		client = "forever",
+		tester = true,
+		icon = "Interface\\Icons\\INV_Shoulder_02",
+		tip = L["Cinema, over your shoulder. The camera sits over your shoulder with you to one side of the " ..
+			"screen, and your resources, cast bar and Cooldown Manager sit under you and slide along with you. " ..
+			"Fights bring up your personal resource display instead of your portrait. Everything else is " ..
+			"Cinema's: as little UI as possible, every camera, Vision and all the atmosphere."],
+		picks = { layout = "shoulder", frames = "shoulder", bars = "split", camera = "pure", vfx = "pure", chat = "pure" },
 		modules = With("zone-card", "travel-cards", "story-cards", "damage-vision", "vitals-vision",
 			"combat-vision", "cursor-hide", "music-calm", "weather-view-distance",
 			"node-icons", "effects-outside-cinemode"),

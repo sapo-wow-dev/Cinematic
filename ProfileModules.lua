@@ -157,6 +157,18 @@ ns.PROFILE_MODULES = {
 			set("combatShow", { prd = true, prdpower = true })
 		end),
 
+	-- (The Shoulder Cam profile's, testers' for now: its HUD centered on the
+	-- personal resource display, which slides with you over your shoulder.)
+	Layout("layout-shoulder", "Shoulder Cam layout", "Shoulder Cam", "forever",
+		"Retail Inspired's bars, with the personal resource display in the middle at the bottom and the cast " ..
+		"bar, Cooldown Manager, swing timers and portraits hung on it, so the Shoulder Cam's Frames follow " ..
+		"you slides them as one; fights bring the personal resource display up. Turns the game's personal " ..
+		"resource display on if it's off.",
+		function(set)
+			set("prdOn", true)
+			set("combatShow", { prd = true, prdpower = true })
+		end),
+
 	-- What fades, and when
 	{ key = "recovering", name = "Up while recovering", scope = { "Standard Frames/top", "Personal Resources" },
 		tip = "The player frame and personal resource display stay up while health or power isn't full (rage and " ..
@@ -253,6 +265,33 @@ ns.PROFILE_MODULES = {
 			-- (Nor the rest in dungeons, scenarios and raids, where the Instances
 			-- column starts with the party and raid frames ticked. The bars: pure-cdm's.)
 			set("instanceShow", instance)
+		end },
+	-- (Cinema's frames, over your shoulder: the personal resource display,
+	-- which follows you there, in fights and with an enemy targeted in place
+	-- of the player frame; and the Shoulder Cam on. Made from pure-frames as
+	-- it's written, so the two stay alike.)
+	{ key = "shoulder-frames", name = "Shoulder Cam: frames", client = "forever",
+		scope = { "Standard Frames", "Personal Resources", "Advanced Frames/Supported addons", "Gamepad/top",
+			"Shoulder Cam" },
+		tip = "Cinema's frames, with the personal resource display (which slides with you over your shoulder) " ..
+		"in fights, with an enemy targeted and while your health or power isn't full, in place of your " ..
+		"portrait; and the Shoulder Cam on.",
+		apply = function(set)
+			ns.PROFILE_MODULE_BY_KEY["pure-frames"].apply(function(key, value)
+				-- (In fights the personal resource display's the layout's to bring up:
+				-- layout-shoulder's. With an enemy targeted, this one's.)
+				if key == "combatShow" and type(value) == "table" then
+					value.player = false
+				elseif key == "enemyShow" and type(value) == "table" then
+					value.player, value.prd, value.prdpower = false, true, true
+				-- (Nor kept up while your health or power isn't full: the
+				-- personal resource display is, 2026-11-13.)
+				elseif key == "prHealthPlayer" or key == "prPowerPlayer" then
+					value = 0
+				end
+				set(key, value)
+			end)
+			set("shoulderCam", true)
 		end },
 	{ key = "pure-minimap", name = "Cinema: minimap", scope = { "Minimap" },
 		tip = "A reveal, ping or Keep open brings up just the map, none of its header, buttons or coordinates " ..

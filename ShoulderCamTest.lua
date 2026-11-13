@@ -2384,6 +2384,91 @@ function ns.ShoulderPadScan()
 	ns.Print(("shoulder padscan: %d settings logged (/reload to save it)"):format(found))
 end
 
+-- prdcheck: is the personal resource display under you? You stand still with
+-- nothing targeted; the zoom steps through PRD_ZOOMS on its own and holds
+-- each, with the Shoulder Cam working as it does in play. Every 0.1 s the
+-- offset, zoom, size factor (and where it's from), your spot, the slide and
+-- where the PRD and cast bar really are go into db.shoulderPrdRun; you're
+-- read off the recording with its ruler. Typed again: stops.
+do
+	local PRD_ZOOMS = { 6, 9, 12, 15, 4, 8 }
+	local PRD_HOLD = 3 -- seconds at each (the zoom's glide and the frames' ease settled)
+	local run
+	local function Write(text)
+		local lines = ns.db.shoulderPrdRun
+		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Across(name)
+		local frame = _G[name]
+		if not (frame and frame.GetCenter and frame:IsShown()) then return "-" end
+		local ok, x = pcall(frame.GetCenter, frame)
+		local okNumber, share = pcall(function()
+			local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			return (x * scale / UIParent:GetWidth() - 0.5) * 2
+		end)
+		return ok and okNumber and ("%.3f"):format(share) or "?"
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		Write("end: " .. why)
+		Log(("prdcheck: %s, %d lines in db.shoulderPrdRun"):format(why, #ns.db.shoulderPrdRun))
+		run = nil
+		ns.ShoulderTestGrid(false)
+	end
+	local function ZoomTo(yards)
+		local delta = yards - Zoom()
+		if math.abs(delta) > 0.1 then
+			ns.CallCameraFunction(delta > 0 and "CameraZoomOut" or "CameraZoomIn", math.abs(delta))
+		end
+	end
+	local function Tick(_, elapsed)
+		run.clock, run.sampleClock = run.clock + elapsed, run.sampleClock + elapsed
+		if run.clock >= PRD_HOLD then
+			run.at, run.clock = run.at + 1, 0
+			if not PRD_ZOOMS[run.at] then
+				End("done")
+				ns.PadTestBox("PRD check done", "stop the recording, then /reload", 0.3, 1, 0.3)
+				C_Timer.After(8, function() if not run then ns.PadTestBoxHide() end end)
+				return
+			end
+			ZoomTo(PRD_ZOOMS[run.at])
+			Write(("zoom to %d"):format(PRD_ZOOMS[run.at]))
+			ns.PadTestBox(("PRD check %d/%d: zoom %d"):format(run.at, #PRD_ZOOMS, PRD_ZOOMS[run.at]),
+				"hands off, stand still", 0.7, 0.7, 0.7)
+		end
+		if run.sampleClock < 0.1 then return end
+		run.sampleClock = 0
+		local d = ns.GetShoulderCamDebug and ns.GetShoulderCamDebug() or {}
+		Write(("s %d | offset %s zoom %.2f | scale %.2f (%s) spot %s | slide %.1f target %.1f | PRD %s cast %s"):format(
+			run.at, Text(GetCVar(SHOULDER)), Zoom(), d.scale or 0, Text(d.scaleFrom), Text(ns.db.shoulderCamSpot),
+			d.followShift or 0, d.followTarget or 0, Across("PersonalResourceDisplayFrame"),
+			Across("PlayerCastingBarFrame")))
+	end
+	function ns.ShoulderPrdCheck()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder prdcheck: stopped")
+		end
+		if not (ns.Setting("shoulderCam") and ns.db.shoulderCamFrames) then
+			return ns.Print("shoulder prdcheck: turn on the Shoulder Cam and Frames follow you first")
+		end
+		run = { frame = CreateFrame("Frame"), at = 1, clock = 0, sampleClock = 0, began = GetTime() }
+		ns.db.shoulderPrdRun = {}
+		Write(("start | %s | screen %.0f x %.0f, UI %.0f wide, view width %.3f | layout %s | side %s"):format(Who(),
+			WorldFrame:GetWidth(), WorldFrame:GetHeight(), UIParent:GetWidth(),
+			ns.ShoulderViewWidth and ns.ShoulderViewWidth() or 0, Text(ns.db.editModeLayout), Text(ns.db.shoulderCamSide)))
+		Log("prdcheck: starts (lines go into db.shoulderPrdRun)")
+		ZoomTo(PRD_ZOOMS[1])
+		run.frame:SetScript("OnUpdate", Tick)
+		ns.PadTestBox(("PRD check 1/%d: zoom %d"):format(#PRD_ZOOMS, PRD_ZOOMS[1]), "hands off, stand still",
+			0.7, 0.7, 0.7)
+		ns.ShoulderTestGrid(true)
+		ns.Print("shoulder prdcheck: record your screen; about 20 seconds; type it again to stop")
+	end
+end
+
 local function Set(key, value)
 	ns.db[key] = value
 	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
@@ -2419,6 +2504,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "follow" then ns.ShoulderFollow(rest)
 	elseif what == "angles" then ns.ShoulderAngles()
 	elseif what == "padscan" then ns.ShoulderPadScan()
+	elseif what == "prdcheck" then ns.ShoulderPrdCheck()
 	elseif what == "lock" then ns.ShoulderLock()
 	elseif what == "on" then Set("shoulderCam", true)
 	elseif what == "off" then Set("shoulderCam", false)
@@ -2428,7 +2514,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, lock, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, lock, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end
