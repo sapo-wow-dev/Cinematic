@@ -594,6 +594,16 @@ function ns.CreateCursorHidePage(kit)
 	kit.GreyUnless(stack:Add(kit.Slider(content, "cursorHideDelay", L["Gone after the mouse is still for"],
 		DELAY_MIN, DELAY_MAX, 0.5, "%.1f s"), "slider"), function(d) return d.cursorHideMethod ~= "tiny" end)
 
+	-- Its key, the same binding as the Keybinds page's row (set in either, both show it).
+	local keyLabel = stack:Add(kit.Label(content, "GameFontHighlight", L["Hide Cursor till moves"]), "label")
+	keyLabel:SetSize(200, 24)
+	local first = kit.CreateKeybindButton(content, "CINEMATIC_HIDECURSOR", 1)
+	first:SetPoint("LEFT", keyLabel, "RIGHT", 4, 0)
+	local second = kit.CreateKeybindButton(content, "CINEMATIC_HIDECURSOR", 2)
+	second:SetPoint("LEFT", first, "RIGHT", 8, 0)
+	kit.PageIntro(content, second, L["Hides the cursor right away; moving the mouse (or pressing it again) brings " ..
+		"it back. Also on the Keybinds page."], keyLabel)
+
 	-- The warning, over everything below the title till it's accepted (the
 	-- account's): it's experimental, and /cine reset undoes it all.
 	local gate = CreateFrame("Frame", nil, content)
@@ -669,7 +679,11 @@ function ns.CreateCursorHidePage(kit)
 	canvas:SetScript("OnShow", kit.PageShown(function()
 		GateShown()
 		kit.Refresh()
+		kit.RefreshKeybinds()
 	end, content))
+	canvas:RegisterEvent("UPDATE_BINDINGS")
+	canvas:SetScript("OnEvent", kit.RefreshKeybinds)
+	canvas:SetScript("OnHide", kit.StopListening)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Cursor Hide")
 end

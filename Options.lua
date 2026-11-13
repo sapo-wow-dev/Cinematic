@@ -15657,6 +15657,9 @@ local KEYBINDS = {
 	{ action = "CINEMATIC_TOGGLELETTERBOX", label = L["Toggle letterbox bars"],
 		tip = L["Brings the letterbox bars in, or takes them out, in or out of CineMode. Turning CineMode on " ..
 			"or off puts them back as the Letterbox page says."] },
+	{ action = "CINEMATIC_HIDECURSOR", label = L["Hide Cursor till moves"],
+		tip = L["Hides the cursor right away; moving the mouse (or pressing it again) brings it back. Also on " ..
+			"UI Visibility > Cursor."] },
 	{ action = "CINEMATIC_RELOAD", label = L["Reload the UI"],
 		tip = L["Reloads the UI, like /reload. With Keep windows open across a reload ticked (Quality of " ..
 			"life > General), what you had open opens again after."] },
