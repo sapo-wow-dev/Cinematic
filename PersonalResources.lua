@@ -23,13 +23,13 @@ DEFAULTS.notFullAfterFight = false  -- "not full" counts only within the Calm Ti
 -- Show below, by row: kept up while its health or power is under this share
 -- (0: never; 0.99: while it isn't full; 1: always). (An addon's power bar:
 -- by addon, its support file.)
-DEFAULTS.prHealthPlayer = 0.95      -- the player frame, health
-DEFAULTS.prPowerPlayer = 0.95       -- ...power
+DEFAULTS.prHealthPlayer = 0.99      -- the player frame, health
+DEFAULTS.prPowerPlayer = 0.99       -- ...power
 DEFAULTS.prPetHealth = 0            -- the pet frame, its health
-DEFAULTS.prHealthPrd = 0.95         -- the personal health bar
-DEFAULTS.prPowerPrd = 0.95          -- the personal power bar
-DEFAULTS.prPowerMana = 0.95         -- the Cine Mana Bar, your mana
-DEFAULTS.prFadeRange = 0.05         -- ...fading in over this much above a share under 99% (0: all at once)
+DEFAULTS.prHealthPrd = 0.99         -- the personal health bar
+DEFAULTS.prPowerPrd = 0.99          -- the personal power bar
+DEFAULTS.prPowerMana = 0.99         -- the Cine Mana Bar, your mana
+DEFAULTS.prFadeRange = 0            -- ...fading in over this much above a share under 99% (0: all at once)
 -- How much of each still shows while CineMode hides it (0: none).
 DEFAULTS.prAlphaPlayer = 0          -- the player frame
 DEFAULTS.prAlphaPet = 0             -- the pet frame
