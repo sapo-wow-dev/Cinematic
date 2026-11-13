@@ -1348,7 +1348,7 @@ ns.why = {
 -- fades, what it's doing now and why, kept up to date while the page is open
 -- (UpdateFrames notes the first frame of each row, as Inspect's are).
 local NOW_WORDS = { "cinemode", "combat", "calm", "nocombat", "camera", "target", "enemy", "friendly", "boss",
-	"world", "city", "inn", "dungeon", "raid", "bg", "arena", "group", "mounted", "dead", "casting", "flagged" }
+	"world", "city", "inn", "dungeon", "raid", "bg", "arena", "group", "mounted", "taxi", "dead", "casting", "flagged" }
 local FILTERS = { { "shown", "Showing" }, { "hidden", "Hidden" }, { "all", "All" } }
 local SORTS = { { "name", "Name" }, { "visible", "Visible first" } }
 -- (Visible first: showing, then partly, hidden, and the ones it can't tell.)

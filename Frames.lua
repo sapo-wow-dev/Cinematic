@@ -3074,7 +3074,8 @@ ns.RULE_WORDS = {
 	bg = "bg", bgs = "bg", pvp = "bg", battleground = "battleground", arena = "arena", arenas = "arena",
 	world = "world", group = "group", grouped = "group", instance = "instance",
 	dungeon = "dungeon", raid = "raid", city = "city", inn = "inn",
-	flagged = "flagged", mounted = "mounted", dead = "dead", ghost = "dead", casting = "casting", cast = "casting", channeling = "casting",
+	flagged = "flagged", mounted = "mounted", taxi = "taxi", flightpath = "taxi", ontaxi = "taxi",
+	dead = "dead", ghost = "dead", casting = "casting", cast = "casting", channeling = "casting",
 	-- (CineMode on: always so for the rows read in it, the frames'; the Cards page's are read any time.)
 	cinemode = "cinemode", cine = "cinemode",
 	-- (A fight starting or ending: only the Cards page's fight rows are read then.)
@@ -3746,7 +3747,8 @@ do
 		for _, event in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_MOUNT_DISPLAY_CHANGED", "ZONE_CHANGED",
 			"ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE",
 			"PLAYER_FLAGS_CHANGED", "UNIT_FACTION", "ENCOUNTER_START", "ENCOUNTER_END",
-			"INSTANCE_ENCOUNTER_ENGAGE_UNIT", "PLAYER_ROLES_ASSIGNED", "PLAYER_SPECIALIZATION_CHANGED" }) do
+			"INSTANCE_ENCOUNTER_ENGAGE_UNIT", "PLAYER_ROLES_ASSIGNED", "PLAYER_SPECIALIZATION_CHANGED",
+			"PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED" }) do
 			pcall(factsWatch.RegisterEvent, factsWatch, event)
 		end
 		for _, event in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START",
@@ -3881,6 +3883,8 @@ do
 		facts.group = ns.InGroup() and true or false
 		facts.flagged = ns.IsPvPFlagged() and true or false
 		facts.mounted = ns.Flag(IsMounted()) and true or false
+		-- (On a flight path, whatever camera plays: cam_flight is only our Flight camera.)
+		facts.taxi = ns.Flag(ns.OnTaxi()) and true or false
 		-- (You dead, or a ghost after releasing. A secret answer counts as alive.)
 		facts.dead = ns.Flag(UnitIsDeadOrGhost("player")) and true or false
 		-- (Casting or channeling. Secret in a fight on some clients, so false there.)
