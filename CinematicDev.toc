@@ -195,6 +195,7 @@ MinimapCopy.lua
 BarHoverTest.lua
 LowManaTest.lua
 ThresholdTest.lua
+PlateWidthTest.lua
 CameraScriptsPage.lua
 CameraManager.lua
 Options.lua

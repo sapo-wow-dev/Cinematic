@@ -29,6 +29,10 @@ ignore:
   # (Bar hover test: /cine debug bartest, action bar addons' fade, hover and clicks, dev copy only)
   - BarHoverTest.lua
   - LowManaTest.lua
+  # (Health & Resources test: /cine debug hrtest, dev copy only)
+  - ThresholdTest.lua
+  # (Nameplate width test: /cine debug platewidth, dev copy only)
+  - PlateWidthTest.lua
   # (Minimap Copy: the Dev hub page drawing the minimap from the game's own tiles, dev copy only)
   - MinimapTiles.lua
   - MinimapCopy.lua
