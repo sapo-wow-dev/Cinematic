@@ -499,10 +499,22 @@ Check("PRD back on its place", math.abs(Share(prd, home.prd)) < 0.001, ("%.1f UI
 local OFFSET_SAFE = 1.5
 local spotMiss, spotCount, pastSpot = 0, 0, 0
 local zoomWas, zoomedAt = nil, -math.huge
+-- (Within BLEND of a pause, the offset's easing in or out (BLEND_TIME in
+-- ShoulderCam.lua, since 2026-11-13): off your spot by design, so skipped.)
+local BLEND = 1.2
+local zeroAt = {}
+for _, row in ipairs(samples) do
+	if row[2] == 0 then zeroAt[#zeroAt + 1] = row[1] end
+end
+local function NearPause(at)
+	for _, zero in ipairs(zeroAt) do
+		if math.abs(zero - at) < BLEND then return true end
+	end
+end
 for _, row in ipairs(samples) do
 	if row[4] ~= zoomWas then zoomWas, zoomedAt = row[4], row[1] end
 	local caught = math.abs(row[3] - row[2] * me.scale) < 0.05
-	if row[2] ~= 0 and caught and row[4] >= 4 and row[4] <= 30 and row[8] == 0 then
+	if row[2] ~= 0 and not NearPause(row[1]) and caught and row[4] >= 4 and row[4] <= 30 and row[8] == 0 then
 		local spot = ns.db.shoulderCamSpot or 0.2
 		if math.abs(row[2]) >= OFFSET_SAFE - 0.01 then
 			if row[1] - zoomedAt < 0.6 then row = nil end

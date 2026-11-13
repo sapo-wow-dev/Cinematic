@@ -62,6 +62,13 @@ end
 -- Why it's paused now, or nil.
 local function PauseReason()
 	local db = ns.db
+	-- (Forever's gamepad UI holds Keep Character Centered on inside the game:
+	-- written 0, it reads 1 at once, no code of anyone's writing it, and no
+	-- setting of the 105 about the gamepad, centering or following changes
+	-- that (padscan, 2026-11-13). With it on, the offset does nothing.)
+	if not ns.isRetail and ns.IsGamePadOn and ns.IsGamePadOn() then
+		return "gamepad"
+	end
 	if not db.shoulderCamAlways then
 		local ok, here = pcall(ns.RowOnNow, ROW_KEY, false, true)
 		if not (ok and here) then
@@ -71,6 +78,16 @@ local function PauseReason()
 	-- (ns.Flag: any of these can be secret on Forever.)
 	if db.shoulderCamNotMounted and IsMounted and ns.Flag(IsMounted()) then
 		return "mounted"
+	end
+	-- (Casting a mount: already easing out, so you're behind it by the time the
+	-- mount's size comes in (it swings the offset out 2-5 times: the "mounts"
+	-- run). A cast that's stopped puts it back.)
+	if db.shoulderCamNotMounted and C_MountJournal and C_MountJournal.GetMountFromSpell then
+		local okCast, spell = pcall(function() return select(9, UnitCastingInfo("player")) end)
+		local okMount, mount = pcall(C_MountJournal.GetMountFromSpell, okCast and spell or nil)
+		if okCast and spell and okMount and ns.Flag(mount ~= nil) then
+			return "mounting"
+		end
 	end
 	-- (Indoors the game pushes the camera in off the walls, and the offset jerks
 	-- with each push: DynamicCam's help says so too. Back in the middle there.)
@@ -267,12 +284,29 @@ local function SpotYards()
 	return yards
 end
 
+-- In and out gently: a pause (a mount, indoors, our cameras) and its end used
+-- to write the whole offset at once, which the game crosses in about 0.3 s:
+-- "so fast and jarring" (2026-11-13). So the offset's taken in and out over
+-- BLEND_TIME, eased at both ends; turned on fresh, it eases in too.
+local BLEND_TIME = 0.9
+local blend, blendAt = 0, nil
+local function Blend(toward)
+	local now = GetTime()
+	local step = blendAt and math.min(0.25, now - blendAt) / BLEND_TIME or 0
+	-- (Resting all the way out, it's not asked every frame: no clock kept, so
+	-- the way back in starts from its first frame, not with a jump.)
+	blendAt = not (blend <= 0 and toward <= 0) and now or nil
+	blend = toward > blend and math.min(toward, blend + step) or math.max(toward, blend - step)
+	return blend * blend * (3 - 2 * blend)
+end
+
 local function ShoulderValue(again)
 	if not again then paused = PauseReason() end
-	if paused then
+	local k = Blend(paused and 0 or 1)
+	if k <= 0 then
 		return "0"
 	end
-	local yards = SpotYards()
+	local yards = SpotYards() * k
 	return ("%.2f"):format(ns.db.shoulderCamSide == "left" and -yards or yards)
 end
 
@@ -504,6 +538,7 @@ end
 -- none). Picked with a targeting key (Tab), from a unit frame or any other
 -- way: no clue, so the frames stay where the offset puts you, as before.
 aim.slide = 0.32
+aim.turnBy = 0.47 -- (the share of the target's x the game's turn takes off, at full)
 aim.farthest = 0.85 -- (the click's x it's never taken past: the furthest measured)
 -- (Over the world or a nameplate: forbidden ones can't be asked, so count as a plate.)
 function aim.OverWorld()
@@ -541,6 +576,7 @@ function aim.Picked()
 	else
 		aim.clickX = nil
 	end
+	aim.dragged, aim.fixedX = nil, nil
 	aim.Mark()
 	ns.Log("shoulder", ("target turn: picked by %s (cursor x %s, so you slide %s of the half-width) | facing %s, " ..
 		"at %s, guessed %s yards away"):format(how,
@@ -551,8 +587,9 @@ end
 
 -- Then, as you turn and move: where the target is from you now. At the click
 -- it's put in the world: the cursor's x gives its direction (the camera looking
--- your way then), and how far it is is a guess (the game's interact ranges, out
--- of a fight; else 20 yards). Your facing (GetPlayerFacing) and where you are
+-- your way then), and how far it is is a guess (between your spells' ranges
+-- that do and don't reach it; else the game's interact ranges, out of a
+-- fight; else 20 yards). Your facing (GetPlayerFacing) and where you are
 -- (UnitPosition: north first, then west; facing 0 north and counting to the left) then
 -- give its direction from you as you go. Either one unreadable (in an
 -- instance): turning only, or just the click.
@@ -572,6 +609,9 @@ function aim.Spot()
 	return okNumber and spot or nil
 end
 function aim.Yards()
+	-- (Your spells' ranges first: they answer in a fight too, Frames.lua.)
+	local spells = ns.TargetSpellYards and ns.TargetSpellYards()
+	if spells then return spells end
 	if InCombatLockdown() then return 20 end
 	for _, band in ipairs({ { 3, 7 }, { 2, 10 }, { 4, 20 } }) do
 		local ok, near = pcall(CheckInteractDistance, "target", band[1])
@@ -593,12 +633,14 @@ function aim.Mark()
 	end
 end
 -- The click's x as it would be now (shares of the half-width; nil: none).
-function aim.NowX()
+-- The target's direction from your facing now (radians, + right, -pi to pi),
+-- or nil: no click, or your facing can't be read. (Also for ShoulderCamTest.lua.)
+function aim.Angle()
 	if not aim.clickX then return nil end
 	local width = ns.ShoulderViewWidth()
 	local facing = aim.facing0 and aim.Facing()
-	if not facing then return aim.clickX end
-	local angle -- (the target's direction from your facing, + right)
+	if not facing then return nil end
+	local angle
 	local spot = aim.where and aim.Spot()
 	if spot then
 		local toward = math.atan2(aim.where[2] - spot[2], aim.where[1] - spot[1])
@@ -606,12 +648,43 @@ function aim.NowX()
 	else
 		angle = facing - aim.facing0 + math.atan(aim.clickX * width)
 	end
-	angle = (angle + math.pi) % (2 * math.pi) - math.pi
-	-- (No further than the turns measured: a target at 0.85 of the half-width
-	-- slid you 13% of the screen, and you were never seen further over. The
-	-- guess went to 1.39 once, putting the frames well past you, 2026-11-13.)
-	local x = math.tan(math.max(-1.1, math.min(1.1, angle))) / width
-	return math.max(-aim.farthest, math.min(aim.farthest, x))
+	return (angle + math.pi) % (2 * math.pi) - math.pi
+end
+ns.ShoulderAimAngle = aim.Angle
+
+-- How far you slide with the game's turn, by how far round the target is
+-- (degrees off your facing, either side), in shares of the half-width:
+-- measured ("angles" run, retail, 2026-11-13, zoom 9, turning with the keys
+-- and holding still at each). It grows to about 75 degrees, holds to 110 and
+-- eases off behind you (160 degrees: 0.17). But near straight behind, which
+-- side the target's on is a few degrees either way, and the guess (its
+-- distance only a guess) put it on the wrong one: the PRD went 0.3 the other
+-- way from you (2026-11-13). So from 135 degrees it eases to nothing by 165:
+-- on your spot there, never on the wrong side.
+aim.CURVE = { { 0, 0 }, { 15, 0.04 }, { 30, 0.12 }, { 45, 0.16 }, { 60, 0.24 }, { 75, 0.29 }, { 90, 0.29 },
+	{ 110, 0.30 }, { 135, 0.24 }, { 165, 0 }, { 180, 0 } }
+function aim.Slide(degrees)
+	local from = aim.CURVE[1]
+	for i = 2, #aim.CURVE do
+		local to = aim.CURVE[i]
+		if degrees <= to[1] then
+			return from[2] + (to[2] - from[2]) * (degrees - from[1]) / (to[1] - from[1])
+		end
+		from = to
+	end
+	return 0
+end
+
+-- The click's x as it would be now (shares of the half-width, the one the
+-- slide's worked out from: aim.slide of it; nil: none).
+function aim.NowX()
+	if not aim.clickX then return nil end
+	local angle = aim.Angle()
+	-- (No facing to go by: the click as it was, read off the same curve.)
+	if not angle then angle = math.atan(aim.clickX * ns.ShoulderViewWidth()) end
+	local degrees = math.deg(angle)
+	local x = aim.Slide(math.abs(degrees)) / aim.slide
+	return degrees < 0 and -x or x
 end
 
 local function AimTick(elapsed)
@@ -653,7 +726,34 @@ local function AimTick(elapsed)
 		and GetTime() - aim.downAt > 0.3 and IsMouseButtonDown and IsMouseButtonDown(aim.downButton) then
 		ns.Log("shoulder", ("target turn: the camera turned with the mouse (%s), the frames let go of the guess"):format(
 			aim.downButton))
-		aim.clickX = nil
+		aim.clickX, aim.dragged = nil, true
+	end
+	-- Your mouse over your target: where it is on screen now, a fresh fix
+	-- (picked with Tab, it's the only one). The cursor's x is where the target
+	-- sits with the game's turn partway: that turn takes off aim.turnBy of its x
+	-- at full ("aimclick": 0.86 went to 0.46), so the x without it is put back.
+	-- Not after a drag: that undid the game's turn (the camera stays behind
+	-- you), so there's no turn left to follow.
+	aim.hoverClock = (aim.hoverClock or 0) + elapsed
+	if enemy and not aim.dragged and aim.hoverClock >= 0.2 and IsMouseButtonDown
+		and not IsMouseButtonDown("LeftButton") and not IsMouseButtonDown("RightButton") then
+		aim.hoverClock = 0
+		if UnitExists("mouseover") and ns.Flag(UnitIsUnit("mouseover", "target")) and aim.OverWorld() then
+			local x = GetCursorPosition()
+			local seen = (x / (UIParent:GetWidth() * UIParent:GetEffectiveScale()) - 0.5) * 2
+			local k = aim.share * aim.share * (3 - 2 * aim.share)
+			local without = seen / math.max(0.3, 1 - aim.turnBy * k)
+			without = math.max(-aim.farthest, math.min(aim.farthest, without))
+			local was = aim.NowX()
+			aim.clickX = without
+			aim.Mark()
+			if not aim.fixedX or math.abs(aim.fixedX - without) > 0.05 then
+				ns.Log("shoulder", ("target turn: your mouse is over it: seen at x %.3f with the turn at %.2f, so %.3f " ..
+					"without it (the guess had %s) | %s yards"):format(seen, aim.share, without,
+					was and ("%.3f"):format(was) or "none", tostring(aim.yards)))
+			end
+			aim.fixedX = without
+		end
 	end
 	-- (Following a click: where it thinks the target is, twice a second.)
 	aim.logClock = (aim.logClock or 0) + elapsed
@@ -717,8 +817,20 @@ function ns.ApplyShoulderCam()
 		-- (DialogueUI's camera sets the same offset for its talks, and puts
 		-- back what it found: hands off till it's done. Support/DialogueUI.lua.)
 		if not (ns.shoulderTestHold or (ns.DialogueUICameraOn and ns.DialogueUICameraOn())) then
-			Write(yours, "CameraKeepCharacterCentered", "0")
-			Write(yours, "CameraReduceUnexpectedMovement", "0")
+			-- (Gamepad mode on Forever: the game holds centering on, so these
+			-- are given back rather than written five times a second, and it
+			-- says why once a session.)
+			if PauseReason() == "gamepad" then
+				GiveBack(yours, "CameraKeepCharacterCentered", "CameraReduceUnexpectedMovement")
+				if not ns.shoulderPadSaid then
+					ns.shoulderPadSaid = true
+					ns.Log("shoulder", "paused: Forever's gamepad UI keeps your character centered, so the offset can't work")
+					ns.Print(L["Shoulder Cam is paused while the gamepad UI is on: the game keeps your character centered in it."])
+				end
+			else
+				Write(yours, "CameraKeepCharacterCentered", "0")
+				Write(yours, "CameraReduceUnexpectedMovement", "0")
+			end
 			Write(yours, "test_cameraOverShoulder", ShoulderValue())
 			-- (The strengths at 0 before the focus goes on, so it can't snap.)
 			if TalkOn() then
@@ -768,7 +880,11 @@ ns.SetOnUpdate(poller, function(_, elapsed)
 		return
 	end
 	local yours = ns.db and ns.db.shoulderCamYours
-	if paused or not yours or ns.shoulderTestHold or (ns.DialogueUICameraOn and ns.DialogueUICameraOn()) then return end
+	-- (Paused but still easing out: on, till it's all the way back.)
+	if paused and blend <= 0 or not yours or ns.shoulderTestHold
+		or (ns.DialogueUICameraOn and ns.DialogueUICameraOn()) then
+		return
+	end
 	local value = ShoulderValue(true)
 	if math.abs((tonumber(GetCVar("test_cameraOverShoulder")) or 0) - tonumber(value)) >= OFFSET_STEP then
 		Write(yours, "test_cameraOverShoulder", value)
@@ -802,15 +918,35 @@ local SWAP_ACTION = "CLICK " .. swap:GetName() .. ":LeftButton"
 -- Forever, Run 1) only the first of ours moves; the rest ride along. Points are kept as the game set them and
 -- given back with the slide added; when the game sets them again (its
 -- layout, Edit Mode), that's taken as their place from then on. Nothing
--- moves while Edit Mode is open, nor a protected frame in a fight.
-local FOLLOW_FRAMES = { "PlayerCastingBarFrame", "CastingBarFrame", "GamepadPlayerCastingBarFrame",
-	"PersonalResourceDisplayFrame", "CinematicPersonalResource" }
+-- moves while Edit Mode is open, nor a protected frame in a fight (one
+-- that a portrait hangs on: it holds still and catches up after). The
+-- player, target and focus frames aren't offered: the game locks them in
+-- every fight (tested on retail, 2026-11-13: /cine debug shoulder lock).
+-- Which follow is the player's pick, a setting each (shoulderCamFollow<key>,
+-- all on by default); one not picked that hangs on a picked
+-- one still rides along with it.
+local FOLLOW_GROUPS = {
+	{ key = "shoulderCamFollowCast", frames = { "PlayerCastingBarFrame", "CastingBarFrame",
+		"GamepadPlayerCastingBarFrame" } },
+	{ key = "shoulderCamFollowPRD", frames = { "PersonalResourceDisplayFrame", "CinematicPersonalResource" } },
+	{ key = "shoulderCamFollowEssential", frames = { "EssentialCooldownViewer" } },
+	{ key = "shoulderCamFollowUtility", frames = { "UtilityCooldownViewer" } },
+	{ key = "shoulderCamFollowBuffIcons", frames = { "BuffIconCooldownViewer" } },
+	{ key = "shoulderCamFollowBuffBars", frames = { "BuffBarCooldownViewer" } },
+	-- (The proc alerts round the middle (Lava Surge's curves...): not protected.)
+	{ key = "shoulderCamFollowSpellAlerts", frames = { "SpellActivationOverlayFrame" } },
+}
 local FOLLOW_EASE = 12     -- how quickly the frames catch up (per second; the game eases over in ~0.3 s)
 local FOLLOW_MAX = 0.3     -- never more than this share of the screen's width
 local FOLLOW_MIN_ZOOM = 3 -- (closer, as this: in a 2026-11-07 recording at ~1.5 yards the bar went
                            -- to where your head-top is, well past your body; first person has no side)
 local followed = {}        -- frame -> { points = the game's, ours = what we put on, shift = ours in UI units }
 local followShift = 0      -- the slide now (UIParent units, + right), easing to the target
+-- Height (shoulderCamFramesHeight, UI units, + up): the picked frames lifted
+-- together, each with its own on top (<key>Height), while the camera's over
+-- your shoulder; share eases 0 to 1 and back with it. A frame riding along on
+-- another gets only its own (the one it rides on brings the rest).
+local followLift = { share = 0 }
 
 local function EditModeOpen()
 	local editMode = _G.EditModeManagerFrame
@@ -841,11 +977,20 @@ local function SamePoints(a, b)
 	return true
 end
 
+-- The frames picked now (name -> its group's setting), from FOLLOW_GROUPS'.
 local FOLLOWS = {}
-for _, name in ipairs(FOLLOW_FRAMES) do FOLLOWS[name] = true end
+local function PickFollows()
+	local db = ns.db
+	for name in pairs(FOLLOWS) do FOLLOWS[name] = nil end
+	for _, group in ipairs(FOLLOW_GROUPS) do
+		if db and db[group.key] then
+			for _, name in ipairs(group.frames) do FOLLOWS[name] = group.key end
+		end
+	end
+end
 
 -- What a frame hangs on, up its chain of anchors (first points): "plate" if
--- a nameplate (it follows you already), another of FOLLOW_FRAMES (it rides
+-- a nameplate (it follows you already), another picked one (it rides
 -- along when that one moves: never moved twice), else nil (the screen, or a
 -- frame that stays put, as Forever's PRD on EssentialCooldownViewer: Run 1).
 local function Hangs(frame)
@@ -870,26 +1015,35 @@ local function Mover(frame)
 	return true
 end
 
-local function Place(frame, entry, shift)
-	if ns.Flag(frame:IsProtected()) and InCombatLockdown() then return end
+-- (shift across, lift up, in UI units. False: not moved, a protected frame in a fight.)
+local function Place(frame, entry, shift, lift)
+	if ns.Flag(frame:IsProtected()) and InCombatLockdown() then return false end
+	lift = lift or 0
 	local scale = UIParent:GetEffectiveScale() / math.max(0.01, frame:GetEffectiveScale())
 	local ours = {}
 	frame:ClearAllPoints()
 	for i, p in ipairs(entry.points) do
-		ours[i] = { p[1], p[2], p[3], p[4] + shift * scale, p[5] }
-		frame:SetPoint(p[1], p[2] or UIParent, p[3], ours[i][4], p[5])
+		ours[i] = { p[1], p[2], p[3], p[4] + shift * scale, p[5] + lift * scale }
+		frame:SetPoint(p[1], p[2] or UIParent, p[3], ours[i][4], ours[i][5])
 	end
 	-- (Read back: what the game reports for them, to see when it moves them.)
-	entry.ours, entry.shift = ReadPoints(frame) or ours, shift
+	entry.ours, entry.shift, entry.lift = ReadPoints(frame) or ours, shift, lift
+	return true
 end
 
--- Every followed frame back where the game had it, and forgotten.
-local function PutBack()
+local function Home(entry) return entry.shift == 0 and (entry.lift or 0) == 0 end
+
+-- Every followed frame back where the game had it, and forgotten; with keep
+-- (a set of names), all but those. One that can't move yet (protected, in a
+-- fight) is kept, to go back once it can.
+local function PutBack(keep)
 	for frame, entry in pairs(followed) do
-		if entry.shift ~= 0 then Place(frame, entry, 0) end
-		followed[frame] = nil
+		if not (keep and keep[frame:GetName() or ""])
+			and (Home(entry) or Place(frame, entry, 0, 0)) then
+			followed[frame] = nil
+		end
 	end
-	followShift = 0
+	if not keep then followShift, followLift.share = 0, 0 end
 end
 
 -- How wide the view is: the tangent of half the field of view across the
@@ -939,29 +1093,44 @@ ns.SetOnUpdate(follower, function(self, elapsed)
 	local target = TargetShift()
 	followShift = followShift + (target - followShift) * math.min(1, elapsed * FOLLOW_EASE)
 	if math.abs(target - followShift) < 0.25 then followShift = target end
-	for _, name in ipairs(FOLLOW_FRAMES) do
+	-- (Height: in while over your shoulder, at the slide's pace.)
+	local db = ns.db
+	local over = db and ShoulderOn() and db.shoulderCamFrames
+		and (tonumber(GetCVar("test_cameraOverShoulder")) or 0) ~= 0 and 1 or 0
+	followLift.share = followLift.share + (over - followLift.share) * math.min(1, elapsed * FOLLOW_EASE)
+	if math.abs(over - followLift.share) < 0.01 then followLift.share = over end
+	local master = db and db.shoulderCamFramesHeight or 0
+	PickFollows()
+	-- (No longer picked: back on its place.)
+	PutBack(FOLLOWS)
+	for name, key in pairs(FOLLOWS) do
 		local frame = _G[name]
-		if frame and frame.GetPoint then
+		if type(frame) == "table" and frame.GetPoint then
 			local entry, now = followed[frame], ReadPoints(frame)
 			-- (Moved by the game since: its new place.)
 			if now and (not entry or not SamePoints(now, entry.ours)) then
-				entry = { points = now, ours = now, shift = 0 }
+				entry = { points = now, ours = now, shift = 0, lift = 0 }
 				followed[frame] = entry
 			end
-			-- (Riding along with another, or on a plate: back on its own place.)
-			if entry and not Mover(frame) then
-				if entry.shift ~= 0 then Place(frame, entry, 0) end
-				entry, followed[frame] = nil, nil
+			-- (Riding along with another, or on a plate: only its own height;
+			-- none: back on its own place, kept till it can go if protected in a fight.)
+			local mover = Mover(frame)
+			local own = db and db[key .. "Height"] or 0
+			local shift = mover and followShift or 0
+			local lift = ((mover and master or 0) + own) * followLift.share
+			if entry and not mover and math.abs(lift) < 0.5 then
+				if Home(entry) or Place(frame, entry, 0, 0) then followed[frame] = nil end
+				entry = nil
 			end
-			if entry and math.abs(entry.shift - followShift) >= 0.5 then
-				Place(frame, entry, followShift)
+			if entry and (math.abs(entry.shift - shift) >= 0.5 or math.abs((entry.lift or 0) - lift) >= 0.5) then
+				Place(frame, entry, shift, lift)
 			end
 		end
 	end
-	-- (Back home and nothing more wanted: stop.)
-	if target == 0 and followShift == 0 then
+	-- (Back home and nothing more wanted: stop; not while one is still out.)
+	if target == 0 and followShift == 0 and followLift.share == 0 then
 		PutBack()
-		self:Hide()
+		if not next(followed) then self:Hide() end
 	end
 end)
 
@@ -980,7 +1149,15 @@ function ns.GetShoulderCamDebug()
 		side = db and db.shoulderCamSide, spot = db and db.shoulderCamSpot, model = ns.ShoulderModelKey(),
 		scale = (ns.ShoulderModelScale()), scaleFrom = select(2, ns.ShoulderModelScale()),
 		follow = db and db.shoulderCamFrames, followShift = followShift, followTarget = TargetShift(),
+		followLift = followLift.share, followHeight = db and db.shoulderCamFramesHeight,
 		youTarget = YouAreTarget(),
+		picked = (function()
+			local keys = {}
+			for _, group in ipairs(FOLLOW_GROUPS) do
+				if db and db[group.key] then keys[#keys + 1] = group.key:gsub("^shoulderCamFollow", "") end
+			end
+			return #keys > 0 and table.concat(keys, ", ") or "none"
+		end)(),
 		followed = (function()
 			local names = {}
 			for frame in pairs(followed) do names[#names + 1] = frame:GetName() or "?" end
@@ -1067,6 +1244,17 @@ function ns.CreateShoulderCamPanel(kit)
 		"The game's Keep Character Centered and motion sickness options stop it, so those are turned " ..
 		"off meanwhile. Off: your own settings come back."], intro, ns.ApplyShoulderCam)
 	local function IfOn() return ns.Setting("shoulderCam") end
+	-- (Two folder tabs: the camera's settings, built on content as before and
+	-- moved onto the first tab (Adopt, below), and the frames that follow you.)
+	-- (A third on Forever, which has a gamepad UI: why it's not for that yet.)
+	local tabList = {
+		{ L["Shoulder Cam"], L["Where the camera sits, when it turns, and when it steps back behind you."] },
+		{ L["Frames"], L["Which frames slide with you as the camera sits over your shoulder."] },
+	}
+	if not ns.isRetail then
+		tabList[3] = { L["Gamepad"], L["Playing with the gamepad UI on."] }
+	end
+	local tabHosts, _, TabsShown, Adopt = ns.PageTabsBelow(content, switch, tabList, "Shoulder Cam/page", nil, nil, 1)
 	local stack = kit.Stack(switch, "check")
 
 	local header = stack:Header(content, L["Show in"])
@@ -1096,17 +1284,6 @@ function ns.CreateShoulderCamPanel(kit)
 	local key = kit.CreateKeybindButton(content, SWAP_ACTION, 1)
 	key:SetPoint("LEFT", keyLabel, "LEFT", 200, 0)
 
-	stack:Header(content, L["Frames"])
-	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamFrames", L["Frames follow you"],
-		L["Your cast bar and Personal Resource Display slide over to where you are on the screen, and " ..
-		"glide back as the camera goes behind you. Edit Mode still places them: this moves them from " ..
-		"there."], SaveThen("shoulderCamFrames", UpdateFollow)), "check"), IfOn)
-	local strength = stack:Add(kit.Slider(content, "shoulderCamFramesStrength", L["Follow strength"], 0, 200, 5,
-		"%d%%", 100), "slider")
-	kit.Tooltip(strength, L["How far they slide. Where you are on the screen is worked out from the camera, " ..
-		"not read: if they land short of you or past you, turn this up or down."])
-	kit.GreyUnless(strength, function() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamFrames end)
-
 	stack:Header(content, L["Turning"])
 	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTalkTurn", L["Turn to who you talk to"],
 		L["As you talk to an NPC (or open a vendor, bank, flight master or mailbox), the camera turns " ..
@@ -1118,15 +1295,6 @@ function ns.CreateShoulderCamPanel(kit)
 		L["As you target an enemy, the camera turns slowly toward it, and glides back at the same pace " ..
 		"once you clear your target or pick a friendly one. Not tried in a fight yet."],
 		SaveThen("shoulderCamTargetTurn", ns.ApplyShoulderCam)), "check"), IfOn)
-	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetFollow", L["Frames follow the turn"],
-		L["Your cast bar and Personal Resource Display slide along with you as the camera turns toward " ..
-		"your target. The game doesn't say how far it turned, so this works it out from where you clicked: " ..
-		"picked with Tab, they stay put. Experimental: turning the camera with the left mouse button " ..
-		"loses it."], SaveThen("shoulderCamTargetFollow", UpdateFollow)), "check", 16),
-		function()
-			local db = ns.GetDB()
-			return ns.Setting("shoulderCam") and db.shoulderCamTargetTurn and db.shoulderCamFrames
-		end)
 	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Turn takes"], 0.5, 4, 0.5,
 		L["%.1f sec"]), "slider")
 	kit.Tooltip(talkTime, L["How long the turn toward them (or your target) takes, and the glide back."])
@@ -1151,10 +1319,89 @@ function ns.CreateShoulderCamPanel(kit)
 		L["While the standing-still, AFK, flight, fly-by or death camera runs, the camera goes back " ..
 		"behind you, as their shots are built around you in the middle. It comes back as they end. " ..
 		"The quest and chat cameras keep it."]), "check"), IfOn)
+	Adopt(switch) -- (all of the above onto the first tab)
+
+	-- The Frames tab: built on its own frame, from its top.
+	local frames = tabHosts[2]
+	local top = CreateFrame("Frame", nil, frames)
+	top:SetSize(1, 1)
+	top:SetPoint("TOPLEFT", frames, "TOPLEFT", 0, 1)
+	local fstack = kit.Stack(top, "check")
+	kit.GreyUnless(fstack:Add(kit.Check(frames, "shoulderCamFrames", L["Frames follow you"],
+		L["The frames ticked below slide over to where you are on the screen, and " ..
+		"glide back as the camera goes behind you. Edit Mode still places them: this moves them from " ..
+		"there."], SaveThen("shoulderCamFrames", UpdateFollow)), "check"), IfOn)
+	local function IfFollow() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamFrames end
+	local FRAME_TIP = L["Slides with you. A frame placed on it in Edit Mode slides along with it, ticked or not."]
+	local labels = {
+		shoulderCamFollowCast = L["Cast bar"],
+		shoulderCamFollowPRD = L["Personal Resource Display"],
+		shoulderCamFollowEssential = L["Cooldowns: essential"],
+		shoulderCamFollowUtility = L["Cooldowns: utility"],
+		shoulderCamFollowBuffIcons = L["Tracked buffs: icons"],
+		shoulderCamFollowBuffBars = L["Tracked buffs: bars"],
+		shoulderCamFollowSpellAlerts = L["Spell alerts"],
+	}
+	local height = fstack:Add(kit.Slider(frames, "shoulderCamFramesHeight", L["Height (all)"], -200, 200, 5, "%+d"),
+		"slider")
+	kit.Tooltip(height, L["Raises (or lowers) all the ticked frames together while the camera is over your " ..
+		"shoulder; they glide back down as it goes behind you. Each one's own slider, on its row, adds to this."])
+	kit.GreyUnless(height, IfFollow)
+	local OWN_TIP = L["This frame's own height, on top of Height (all). A frame placed on it in Edit Mode moves " ..
+		"with it."]
+	for _, group in ipairs(FOLLOW_GROUPS) do
+		local key = group.key
+		local check = fstack:Add(kit.Check(frames, key, labels[key], FRAME_TIP,
+			SaveThen(key, function()
+				UpdateFollow()
+				kit.Refresh() -- (its height slider greys out or back)
+			end)), "check", 16)
+		kit.GreyUnless(check, IfFollow)
+		-- (Its own height, on its row: the value to the slider's right.)
+		local own = kit.Slider(frames, key .. "Height", "", -100, 100, 5, "%+d")
+		own:SetWidth(120)
+		own:SetPoint("LEFT", check, "LEFT", 250, 0)
+		own.title:ClearAllPoints()
+		own.title:SetPoint("LEFT", own, "RIGHT", 8, 0)
+		kit.Tooltip(own, OWN_TIP)
+		kit.GreyUnless(own, function() return IfFollow() and ns.GetDB()[key] end)
+	end
+	local strength = fstack:Add(kit.Slider(frames, "shoulderCamFramesStrength", L["Follow strength"], 0, 200, 5,
+		"%d%%", 100), "slider")
+	kit.Tooltip(strength, L["How far they slide. Where you are on the screen is worked out from the camera, " ..
+		"not read: if they land short of you or past you, turn this up or down."])
+	kit.GreyUnless(strength, IfFollow)
+	-- (With Turn to your target, on the first tab.)
+	fstack:Header(frames, L["Turning"])
+	kit.GreyUnless(fstack:Add(kit.Check(frames, "shoulderCamTargetFollow", L["Frames follow the turn"],
+		L["Your cast bar and Personal Resource Display slide along with you as the camera turns toward " ..
+		"your target. The game doesn't say how far it turned, so this works it out from where you clicked: " ..
+		"picked with Tab, they join in once your mouse passes over it. Experimental: dragging the camera " ..
+		"with the mouse loses it till you pick a target again."], SaveThen("shoulderCamTargetFollow", UpdateFollow)), "check"),
+		function()
+			local db = ns.GetDB()
+			return ns.Setting("shoulderCam") and db.shoulderCamTargetTurn and db.shoulderCamFrames
+		end)
+
+	-- The Gamepad tab (Forever): not supported at the moment. The game keeps
+	-- your character centered while its gamepad UI is on, so the Shoulder Cam
+	-- pauses then (PauseReason, "gamepad").
+	if tabHosts[3] then
+		local pad = tabHosts[3]
+		local padTop = CreateFrame("Frame", nil, pad)
+		padTop:SetSize(1, 1)
+		padTop:SetPoint("TOPLEFT", pad, "TOPLEFT", 0, 1)
+		local pstack = kit.Stack(padTop, "check")
+		pstack:Header(pad, L["Not supported at the moment"])
+		pstack:Note(pad, L["The Shoulder Cam doesn't work with the gamepad UI yet. While it's on, the game keeps your " ..
+			"character in the middle of the screen, so the Shoulder Cam waits behind you and comes back by itself when " ..
+			"you turn the gamepad UI off (Options > Gamepad (Beta) > Enable Gamepad UI)."], 440)
+	end
 
 	canvas:SetScript("OnShow", kit.PageShown(function()
 		kit.Refresh()
 		kit.RefreshKeybinds()
+		TabsShown()
 	end, content))
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Shoulder Cam")

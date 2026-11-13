@@ -3516,6 +3516,22 @@ do
 		end
 		return answer or false
 	end
+	-- About how far your target is, from your harmful spells on your bars
+	-- (asked shortest range first): between the longest range that doesn't
+	-- reach it and the shortest that does; a melee one (0: your weapon's reach)
+	-- counts as 5. Nil when none can say. Answers in a fight too. For the
+	-- Shoulder Cam's turn follow (ShoulderCam.lua).
+	function ns.TargetSpellYards()
+		LookForRangeSpells()
+		local short = 0
+		for i = #farSpells.harmful, 1, -1 do
+			local id = farSpells.harmful[i]
+			local yards = farYards[id] == 0 and 5 or farYards[id]
+			local reaches = SpellReaches(id, "target")
+			if reaches then return (short + yards) / 2 end
+			if reaches == false then short = math.max(short, yards) end
+		end
+	end
 	-- What a band measures with on this character, for its button's tip.
 	function ns.RangeBandInfo(field)
 		LookForRangeSpells()
