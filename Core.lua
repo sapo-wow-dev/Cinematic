@@ -469,7 +469,10 @@ local DEFAULTS = {
 	shoulderCamSide = "right", -- ..."right" or "left" (the swap key flips it)
 	shoulderCamNotMounted = true, -- ...back behind you while mounted
 	shoulderCamNotIndoors = true, -- ...and indoors (walls push the camera in: the offset jerks)
-	shoulderCamPause = true,   -- ...and while one of our cameras that frame you runs
+	-- ...and while one of our cameras that frame you runs, unless allowed (the Cameras tab)
+	shoulderCamAllowVista = false, shoulderCamAllowFish = false, shoulderCamAllowCozy = false,
+	shoulderCamAllowAFK = false, shoulderCamAllowTele = false, shoulderCamAllowFlight = false,
+	shoulderCamAllowDeath = false, shoulderCamAllowYours = false,
 	shoulderCamFrames = true,  -- ...the frames picked below slide over with you
 	shoulderCamFollowCast = true,       -- ...the cast bar
 	shoulderCamFollowPRD = true,        -- ...the Personal Resource Display (ours too)
@@ -7878,10 +7881,26 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		for _, saved in pairs(ns.db.profiles or {}) do
 			if type(saved) == "table" then PartsSwitchOff(saved) end
 		end
+		-- The Shoulder Cam's "Not during Cinematic's cameras" unticked: every
+		-- camera's tick on its Cameras tab instead (2026-11-13).
+		local function MigrateShoulderPause(saved)
+			if saved.shoulderCamPause ~= false then return end
+			for _, cam in ipairs({ "Vista", "Fish", "Cozy", "AFK", "Tele", "Flight", "Death", "Yours" }) do
+				saved["shoulderCamAllow" .. cam] = true
+			end
+		end
+		MigrateShoulderPause(ns.db)
+		for _, saved in pairs(ns.db.profiles or {}) do
+			if type(saved) == "table" then
+				MigrateShoulderPause(saved)
+				if type(saved.settings) == "table" then MigrateShoulderPause(saved.settings) end
+			end
+		end
 		-- Settings from removed or renamed features, now that the migrations
 		-- above have read what they need.
 		for _, key in ipairs({
 			"keepRaidMarkers", -- (now the Raid Markers grid)
+			"shoulderCamPause", -- (now shoulderCamAllow<Cam>)
 			"movingKeepVFX", "damageVisionOnlyCine", -- (now Allow outside CineMode's ticks)
 			"handleUnitFrames", -- (the parts follow the HUD page's switch)
 			"rollMinQuality", "rollUsableOnly", "rollTopPick", -- (now roll<Rule><Group><Q>)

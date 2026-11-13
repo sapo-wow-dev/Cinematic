@@ -322,6 +322,9 @@ local function EndSweep()
 	if not sweep then return end
 	SetCVar(SHOULDER, sweep.held.offset)
 	SetCVar(CENTERED, sweep.held.centered)
+	if sweep.held.bubbles then SetCVar("chatBubbles", sweep.held.bubbles) end
+	if sweep.held.reduce then SetCVar(REDUCE, sweep.held.reduce) end
+	if ns.shoulderCalibrateButton then ns.shoulderCalibrateButton:Hide() end
 	-- (Your zoom back as it was.)
 	local delta = sweep.held.zoom - Zoom()
 	if math.abs(delta) > 0.1 then
@@ -347,6 +350,7 @@ local function EndSweep()
 	elseif sweep.name == "offsets" then
 		Say("size factor not saved: off a mount only, for now")
 	end
+	if sweep.name == "calibrate" and ns.ShoulderCalibrated then ns.ShoulderCalibrated(sweep) end
 	sweep = nil
 end
 
@@ -396,8 +400,12 @@ ns.SetOnUpdate(stepper, function(_, elapsed)
 		if sweep.hadBubble or sweep.waited > 1 then
 			sweep.paused = true
 			stepper:Hide()
-			Say(("sweep waiting at step %d of %d: %s. Type /cine debug shoulder sweep next"):format(sweep.at, #sweep.steps,
-				tostring(y)))
+			if sweep.name == "calibrate" and ns.ShoulderCalibrateWait then
+				ns.ShoulderCalibrateWait(sweep.at, #sweep.steps, tostring(y))
+			else
+				Say(("sweep waiting at step %d of %d: %s. Type /cine debug shoulder sweep next"):format(sweep.at,
+					#sweep.steps, tostring(y)))
+			end
 		end
 		return
 	end
@@ -425,6 +433,9 @@ local SWEEPS = {
 	zoom = { { 0, 15 }, { 1, 15 }, { 1, 12 }, { 1, 8 }, { 1, 6 }, { 1, 5 }, { 1, 4 }, { 1, 3 }, { 1, 2 },
 		{ 1, 20 }, { 1, 28 } },
 	ease = { { 0 }, { 2 }, { -2 } },
+	-- (calibrate: both sides at two zooms, each zoom from its own 0. Small
+	-- offsets keep the bubble on screen up close and clear of walls.)
+	calibrate = { { 0, 8 }, { 1 }, { 2 }, { 0 }, { -1 }, { -2 }, { 0, 12 }, { 1.5 }, { 2.5 }, { 0 }, { -1.5 }, { -2.5 } },
 }
 
 local function Sweep(what)
@@ -453,6 +464,12 @@ local function Sweep(what)
 		ns.Print("shoulder sweep: not in a fight")
 		return
 	end
+	-- (calibrate: on foot, nothing targeted: yourself targeted, the game puts
+	-- you in the middle whatever the offset.)
+	if what == "calibrate" then
+		if IsMounted and ns.Flag(IsMounted()) then return ns.Print("shoulder calibrate: on foot, please") end
+		if UnitExists("target") then return ns.Print("shoulder calibrate: clear your target first (Esc)") end
+	end
 	-- (Steps past the farthest the camera goes here left out: 15 yards times
 	-- cameraDistanceMaxZoomFactor, 1 on Forever.)
 	local farthest = 15 * (tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or 1) + 0.5
@@ -461,15 +478,86 @@ local function Sweep(what)
 		if not step[2] or step[2] <= farthest then kept[#kept + 1] = step end
 	end
 	sweep = { name = what, steps = kept, at = 1, readings = {},
-		held = { offset = GetCVar(SHOULDER), centered = GetCVar(CENTERED), zoom = Zoom() } }
+		held = { offset = GetCVar(SHOULDER), centered = GetCVar(CENTERED), zoom = Zoom(),
+			bubbles = what == "calibrate" and GetCVar("chatBubbles") or nil,
+			reduce = what == "calibrate" and GetCVar(REDUCE) or nil } }
+	-- (calibrate: bubbles on, and the motion sickness setting that cancels the
+	-- offset off, both back after: it works with the Shoulder Cam off too.)
+	if what == "calibrate" then
+		SetCVar("chatBubbles", "1")
+		SetCVar(REDUCE, "0")
+	end
 	ns.shoulderTestHold = true -- (ShoulderCam.lua keeps its hands off meanwhile)
 	SetCVar(CENTERED, "0")
 	Log(("sweep %s starting: %s | offset %s, zoom %.2f, cameraFov %s, chatBubbles %s"):format(what, Who(),
 		Text(sweep.held.offset), Zoom(), Text(GetCVar("cameraFov")), Text(GetCVar("chatBubbles"))))
 	SendLine()
-	BeginStep(steps[1])
+	BeginStep(kept[1])
 	stepper:Show()
+	if what == "calibrate" then
+		ns.PadTestBox("Calibrating: " .. Who():match("^(%S+ sex %S+)"), "stand still, hands off the camera", 0.7, 0.7, 0.7)
+	end
 	ns.Print(("shoulder sweep %s: stand still and leave the camera alone"):format(what))
+end
+ns.ShoulderSweep = Sweep
+
+-- calibrate: the size factor of your race and sex (or the form you're in),
+-- in one go, for the built-in table (MEASURED_SCALES, ShoulderCam.lua), so
+-- players never need to: the offset sweep's readings at two zooms, both sides,
+-- each step's own real/worked-out; the middle one saved (to you at once, and to
+-- db.shoulderCalibrations with its spread, client and date, read after a
+-- /reload), and called good if they all agree within CALIBRATE_SPREAD. When the
+-- bubble runs out, a button says the line again (a click lets an addon talk).
+local CALIBRATE_SPREAD = 0.06
+function ns.ShoulderCalibrateWait(at, of, why)
+	local button = ns.shoulderCalibrateButton
+	if not button then
+		button = CreateFrame("Button", nil, nil, "UIPanelButtonTemplate")
+		button:SetFrameStrata("FULLSCREEN_DIALOG")
+		button:SetSize(220, 32)
+		button:SetText("Say it again and go on")
+		button:SetScript("OnClick", function(self)
+			self:Hide()
+			ns.PadTestBox("Calibrating", "stand still, hands off the camera", 0.7, 0.7, 0.7)
+			Sweep("next")
+		end)
+		ns.shoulderCalibrateButton = button
+	end
+	button:ClearAllPoints()
+	button:SetPoint("TOP", UIParent, "TOP", 0, -260)
+	button:SetScale(UIParent:GetEffectiveScale())
+	button:Show()
+	ns.PadTestBox(("Calibrating: step %d of %d"):format(at, of), "the bubble's gone: CLICK the button below to go on",
+		0.3, 1, 0.3)
+	Log(("calibrate: waiting at step %d of %d (%s)"):format(at, of, why))
+end
+function ns.ShoulderCalibrated(run)
+	local list = {}
+	for _, factor in ipairs(run.readings) do list[#list + 1] = factor end
+	table.sort(list)
+	local key = ns.ShoulderModelKey and ns.ShoulderModelKey() or "?"
+	if #list < 6 then
+		ns.PadTestBox("Calibration: not enough readings", ("%d of 8; run it again"):format(#list), 1, 0.3, 0.3)
+		Log(("calibrate: %s: only %d readings"):format(key, #list))
+		return
+	end
+	local middle = #list % 2 == 1 and list[(#list + 1) / 2] or (list[#list / 2] + list[#list / 2 + 1]) / 2
+	local spread = list[#list] - list[1]
+	local good = spread <= CALIBRATE_SPREAD
+	local factor = tonumber(("%.2f"):format(middle))
+	ns.db.shoulderCamScales = ns.db.shoulderCamScales or {}
+	ns.db.shoulderCamScales[key] = factor
+	ns.db.shoulderCalibrations = ns.db.shoulderCalibrations or {}
+	ns.db.shoulderCalibrations[key] = { factor = factor, spread = tonumber(("%.3f"):format(spread)), readings = #list,
+		good = good, client = ns.CLIENT, when = date("%Y-%m-%d %H:%M"), zoom = ("%.1f"):format(run.held.zoom) }
+	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
+	Log(("calibrate: %s = %.2f (%s: readings %s, spread %.3f) | %s"):format(key, factor, good and "good" or "redo",
+		table.concat((function() local t = {} for i, f in ipairs(list) do t[i] = ("%.2f"):format(f) end return t end)(), " "),
+		spread, Who()))
+	ns.PadTestBox(("%s: %.2f"):format(key, factor), good and "good: saved. /reload so I can read it, then the next one"
+		or ("readings disagree (%.2f apart): run it again somewhere open and flat"):format(spread),
+		good and 0.3 or 1, good and 1 or 0.3, good and 0.3 or 0.3)
+	C_Timer.After(15, function() if not sweep then ns.PadTestBoxHide() end end)
 end
 
 local function Try(what)
@@ -2469,6 +2557,41 @@ do
 	end
 end
 
+-- swingsize: what Edit Mode lets the swing timers set (is there a height?),
+-- each setting's name, range and value now, and the bars' real sizes. Into
+-- the log; read after a /reload.
+function ns.ShoulderSwingSize()
+	local system = Enum.EditModeSystem and Enum.EditModeSystem.SwingTimer
+	ns.Log("shoulder", ("swingsize: system %s | setting enum %s"):format(Text(system),
+		Text(Enum.EditModeSwingTimerSetting and "there" or "missing")))
+	for name, value in pairs(Enum.EditModeSwingTimerSetting or {}) do
+		ns.Log("shoulder", ("swingsize: enum %s = %s"):format(name, Text(value)))
+	end
+	local manager = _G["EditModeSettingDisplayInfoManager"]
+	local infos = manager and manager.systemSettingDisplayInfo
+	for _, info in ipairs(infos and system and infos[system] or {}) do
+		ns.Log("shoulder", ("swingsize: setting %s %s | type %s min %s max %s step %s"):format(Text(info.setting),
+			Text(info.name), Text(info.type), Text(info.minValue), Text(info.maxValue), Text(info.stepSize)))
+	end
+	for _, name in ipairs({ "SwingTimerMainHandFrame", "SwingTimerOffHandFrame", "SwingTimerRangedFrame" }) do
+		local frame = _G[name]
+		if frame then
+			local values = {}
+			for _, info in ipairs(infos and system and infos[system] or {}) do
+				local ok, value = pcall(frame.GetSettingValue, frame, info.setting)
+				values[#values + 1] = ("%s=%s"):format(Text(info.setting), ok and Text(value) or "?")
+			end
+			ns.Log("shoulder", ("swingsize: %s %.1f x %.1f scale %.2f shown %s | %s"):format(name, frame:GetWidth(),
+				frame:GetHeight(), frame:GetScale(), Text(frame:IsShown()), table.concat(values, " ")))
+			for _, child in ipairs({ frame:GetChildren() }) do
+				ns.Log("shoulder", ("swingsize:   child %s %s %.1f x %.1f"):format(Text(child:GetName()),
+					child:GetObjectType(), child:GetWidth(), child:GetHeight()))
+			end
+		end
+	end
+	ns.Print("shoulder swingsize: logged; /reload and say check log")
+end
+
 local function Set(key, value)
 	ns.db[key] = value
 	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
@@ -2492,6 +2615,7 @@ function ns.ShoulderTest(arg)
 		SetQuiet(ns.db.shoulderTestQuiet and true or false)
 		ns.Print(("shoulder quiet %s (stays over a reload; off takes a /reload)"):format(ns.db.shoulderTestQuiet and "on" or "off"))
 	elseif what == "sweep" then Sweep(rest)
+	elseif what == "calibrate" then Sweep("calibrate")
 	elseif what == "try" then Try(rest)
 	elseif what == "walls" then Walls()
 	elseif what == "forms" then Forms()
@@ -2505,6 +2629,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "angles" then ns.ShoulderAngles()
 	elseif what == "padscan" then ns.ShoulderPadScan()
 	elseif what == "prdcheck" then ns.ShoulderPrdCheck()
+	elseif what == "swingsize" then ns.ShoulderSwingSize()
 	elseif what == "lock" then ns.ShoulderLock()
 	elseif what == "on" then Set("shoulderCam", true)
 	elseif what == "off" then Set("shoulderCam", false)
@@ -2514,7 +2639,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, lock, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

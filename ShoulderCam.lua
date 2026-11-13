@@ -25,11 +25,16 @@
 -- It's a held setting, not a camera: it doesn't move the view, so it doesn't
 -- claim the camera lock. It goes to 0 (paused) while mounted
 -- (shoulderCamNotMounted), indoors (shoulderCamNotIndoors) and while one of Cinematic's cameras that frame you
--- runs (shoulderCamPause): the standing-still ones (cozy, vista, fish, AFK,
--- teleport), the flight camera and its fly-bys, and the death camera, whose
--- shots are built around you in the middle, and wherever its Show in row
--- (shoulder:cam) has it off. The quest cam and Chat Cam keep
--- it: an over-the-shoulder dialogue shot is the look they're after.
+-- runs, unless its tick on the Cameras tab allows it (shoulderCamAllow<Cam>,
+-- ALLOW_OF below: all off to start with): the standing-still ones (cozy,
+-- vista, fish, AFK, teleport), the flight camera and its fly-bys, the death
+-- camera, and your own, whose shots were built around you in the middle;
+-- and wherever its Show in row (shoulder:cam) has it off. The quest cam and
+-- Chat Cam keep it: an over-the-shoulder dialogue shot is the look they're
+-- after. (Allowed, a turn round you keeps you on your spot: the offset is
+-- across the camera's own view, so only their zooms move you, and the
+-- offset follows those. A flight's mount scales the offset as a mount does,
+-- not measured yet: the "cams" sim session.)
 local ADDON_NAME, ns = ...
 local L = ns.L
 
@@ -54,6 +59,21 @@ local POLL = 0.2 -- seconds between checks for a pause (mounting, a camera start
 -- there, it's paused (back behind you) as any other pause.
 local ROW_KEY = "shoulder:cam"
 ns.CINE_SHOW_SETTING[ROW_KEY] = "shoulderCamAlways"
+
+-- Each of our cameras (its key as ns.ScriptStandIn gives it, "yours" for any
+-- other script or shot) and the setting that keeps the Shoulder Cam on through
+-- it. The quest cam and Chat Cam always do; the RP walk and auto-run cameras
+-- play while you move, never a pause.
+local ALLOW_OF = { vista = "shoulderCamAllowVista", fish = "shoulderCamAllowFish", cozy = "shoulderCamAllowCozy",
+	idle = "shoulderCamAllowAFK", tele = "shoulderCamAllowTele", flight = "shoulderCamAllowFlight",
+	death = "shoulderCamAllowDeath", yours = "shoulderCamAllowYours" }
+local ALWAYS_KEPT = { quest = true, chatcam = true, walk = true, run = true }
+local function CameraKey(camera)
+	if camera == "afk" then return "idle" end
+	if camera == "script:flyby" then return "flight" end -- (a fly-by of its own: the flight camera's)
+	local key = ns.ScriptStandIn and ns.ScriptStandIn(camera) or ALLOW_OF[camera] and camera
+	return key or "yours"
+end
 
 local function Same(a, b)
 	return a == b or (tonumber(a) ~= nil and tonumber(a) == tonumber(b))
@@ -94,15 +114,16 @@ local function PauseReason()
 	if db.shoulderCamNotIndoors and IsIndoors and ns.Flag(IsIndoors()) then
 		return "indoors"
 	end
-	if db.shoulderCamPause then
-		if UnitOnTaxi and ns.Flag(UnitOnTaxi("player")) then
-			return "flight"
-		end
-		if UnitIsDead and ns.Flag(UnitIsDead("player")) then
-			return "dead"
-		end
-		local camera = ns.ActiveEvent and select(2, ns.ActiveEvent())
-		if camera and camera ~= "quest" then
+	if not db.shoulderCamAllowFlight and UnitOnTaxi and ns.Flag(UnitOnTaxi("player")) then
+		return "flight"
+	end
+	if not db.shoulderCamAllowDeath and UnitIsDead and ns.Flag(UnitIsDead("player")) then
+		return "dead"
+	end
+	local camera = ns.ActiveEvent and select(2, ns.ActiveEvent())
+	if camera then
+		local key = CameraKey(camera)
+		if not ALWAYS_KEPT[key] and not db[ALLOW_OF[key] or ALLOW_OF.yours] then
 			return camera
 		end
 	end
@@ -153,10 +174,14 @@ local paused -- (PauseReason at the last check, every POLL)
 -- offset held: the elf on 10.8% of the way to the edge, the cat on 20.3%,
 -- so 0.82 x 20.3 / 10.8 = 1.55.)
 -- (Mounts change it too: not measured yet.)
--- (Human-3: the offset sweep, Forever, 2026-11-13.)
-local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Skyborne-2"] = 0.86, ["NightElf-3"] = 0.82, ["Human-3"] = 0.81 }
+-- (Human-3: the offset sweep, Forever, 2026-11-13. Skyborne-2 and -3, Gnome-2 and -3, NightElf-2, Dwarf-3, Human-2: the calibrate run, spreads 0.025 or less.)
+local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 0.88, ["Skyborne-3"] = 0.85, ["Gnome-2"] = 0.90, ["Human-2"] = 0.94, ["Gnome-3"] = 0.84, ["NightElf-2"] = 1.00, ["NightElf-3"] = 0.82, ["Human-3"] = 0.81 }
 -- bear, cat, dire bear: off the recordings till the sweep's run in them
 local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
+-- Forms that keep your own model (warrior stances 17-19, shadowform 28,
+-- stealth 30): read as on foot. (A Human warrior's calibrate run came back
+-- "Human-2-form17", 2026-11-13.)
+local SAME_MODEL = { [17] = true, [18] = true, [19] = true, [28] = true, [30] = true }
 local SWAP_WAIT = 0.4 -- seconds: the longest the old form's factor is kept without the model's event
 local lastForm -- (the form at the last plain read: kept if a read comes back secret)
 local function FormNow()
@@ -164,7 +189,8 @@ local function FormNow()
 	local ok, form = pcall(function()
 		local id = GetShapeshiftFormID()
 		if id == nil then return false end
-		return id + 0 == id and id -- (a secret one errors here: the last one's kept)
+		if id + 0 ~= id then return nil end -- (a secret one errors here: the last one's kept)
+		return not SAME_MODEL[id] and id
 	end)
 	if ok then lastForm = form or nil end
 	return lastForm
@@ -1290,15 +1316,17 @@ function ns.CreateShoulderCamPanel(kit)
 			if on and ns.db.shoulderCamNoticed then ns.OfferShoulderProfile() end
 		end)
 	local function IfOn() return ns.Setting("shoulderCam") end
-	-- (Two folder tabs: the camera's settings, built on content as before and
-	-- moved onto the first tab (Adopt, below), and the frames that follow you.)
-	-- (A third on Forever, which has a gamepad UI: why it's not for that yet.)
+	-- (Three folder tabs: the camera's settings, built on content as before and
+	-- moved onto the first tab (Adopt, below), the frames that follow you, and
+	-- which of our cameras it stays on through.)
+	-- (A fourth on Forever, which has a gamepad UI: why it's not for that yet.)
 	local tabList = {
 		{ L["Shoulder Cam"], L["Where the camera sits, when it turns, and when it steps back behind you."] },
 		{ L["Frames"], L["Which frames slide with you as the camera sits over your shoulder."] },
+		{ L["Cameras"], L["Which of Cinematic's cameras the Shoulder Cam stays on through."] },
 	}
 	if not ns.isRetail then
-		tabList[3] = { L["Gamepad"], L["Playing with the gamepad UI on."] }
+		tabList[4] = { L["Gamepad"], L["Playing with the gamepad UI on."] }
 	end
 	local tabHosts, _, TabsShown, Adopt = ns.PageTabsBelow(content, switch, tabList, "Shoulder Cam/page", nil, nil, 1)
 	local stack = kit.Stack(switch, "check")
@@ -1365,10 +1393,6 @@ function ns.CreateShoulderCamPanel(kit)
 		L["Inside buildings and caves the camera goes back behind you, and comes back out over your " ..
 		"shoulder as you step outside. Near walls the game pushes the camera in, and with it off to " ..
 		"the side it jerks."]), "check"), IfOn)
-	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamPause", L["Not during Cinematic's cameras that frame you"],
-		L["While the standing-still, AFK, flight, fly-by or death camera runs, the camera goes back " ..
-		"behind you, as their shots are built around you in the middle. It comes back as they end. " ..
-		"The quest and chat cameras keep it."]), "check"), IfOn)
 	Adopt(switch) -- (all of the above onto the first tab)
 
 	-- The Frames tab: built on its own frame, from its top.
@@ -1434,11 +1458,39 @@ function ns.CreateShoulderCamPanel(kit)
 			return ns.Setting("shoulderCam") and db.shoulderCamTargetTurn and db.shoulderCamFrames
 		end)
 
+	-- The Cameras tab: a tick each for the cameras it stays on through (ALLOW_OF).
+	local cams = tabHosts[3]
+	local camTop = CreateFrame("Frame", nil, cams)
+	camTop:SetSize(1, 1)
+	camTop:SetPoint("TOPLEFT", cams, "TOPLEFT", 0, 1)
+	local cstack = kit.Stack(camTop, "check")
+	cstack:Header(cams, L["Allow the Shoulder Cam"])
+	cstack:Note(cams, L["Unticked, the camera goes back behind you while that camera plays and comes back over " ..
+		"your shoulder as it ends. Ticked, it stays: you keep your spot on the screen as the camera turns round you. " ..
+		"The quest and chat cameras always keep it."], 440)
+	local ALLOW_TIP = L["Keeps the camera over your shoulder while this camera plays."]
+	for _, row in ipairs({
+		{ "shoulderCamAllowVista", L["Vista camera"] },
+		{ "shoulderCamAllowFish", L["Fish camera"] },
+		{ "shoulderCamAllowCozy", L["Cozy camera"] },
+		{ "shoulderCamAllowAFK", L["AFK camera"] },
+		{ "shoulderCamAllowTele", L["Tele camera"], L["Your Hearthstone and teleports."] },
+		{ "shoulderCamAllowFlight", L["Flight camera"], L["Flight paths and their fly-bys. The flight's mount " ..
+			"pushes you further aside than your spot, and the frames that follow you don't know by how much yet."] },
+		{ "shoulderCamAllowDeath", L["Death camera"], L["While you're dead, until you release."] },
+		{ "shoulderCamAllowYours", L["Your own cameras"], L["Your scripts and shots, and cameras started from " ..
+			"the camera wheel or a key."] },
+	}) do
+		local key = row[1]
+		kit.GreyUnless(cstack:Add(kit.Check(cams, key, row[2], row[3] and (ALLOW_TIP .. " " .. row[3]) or ALLOW_TIP,
+			SaveThen(key, ns.ApplyShoulderCam)), "check"), IfOn)
+	end
+
 	-- The Gamepad tab (Forever): not supported at the moment. The game keeps
 	-- your character centered while its gamepad UI is on, so the Shoulder Cam
 	-- pauses then (PauseReason, "gamepad").
-	if tabHosts[3] then
-		local pad = tabHosts[3]
+	if tabHosts[4] then
+		local pad = tabHosts[4]
 		local padTop = CreateFrame("Frame", nil, pad)
 		padTop:SetSize(1, 1)
 		padTop:SetPoint("TOPLEFT", pad, "TOPLEFT", 0, 1)

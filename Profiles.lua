@@ -375,6 +375,10 @@ local PROFILE_SWITCHES = {
 	{ key = "prdOn", also = "prdOnFights", cvar = "nameplateShowSelf", turnedOn = "prdTurnedOn",
 		leftAlone = "prdLeftAlone", name = "personal resource display" },
 }
+-- (turnedOn and leftAlone are kept per character, as the game keeps the
+-- switches: one character's choice mustn't hold back a new one's, 2026-11-13.)
+local function Marks() return ns.chardb or ns.db end
+ns.ProfileSwitchMarks = Marks
 local switchFrame = CreateFrame("Frame")
 local switchWritten = {} -- (by cvar, the value just written: its CVAR_UPDATE isn't the player's)
 -- Whether the profile wants a switch on.
@@ -384,6 +388,7 @@ end
 local function ApplyProfileSwitches()
 	local db = ns.db
 	if not db then return end
+	local marks = Marks()
 	if InCombatLockdown() then
 		switchFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 		return
@@ -398,18 +403,18 @@ local function ApplyProfileSwitches()
 			if Wanted(db, switch) and db.enabled and not lone then
 				-- (Our turnedOn with it off: switched off where its CVAR_UPDATE wasn't
 				-- seen, e.g. logged out. Stale: on again.)
-				if not on and not db[switch.leftAlone] then want = "1" end
+				if not on and not marks[switch.leftAlone] then want = "1" end
 			else
-				db[switch.leftAlone] = nil
-				if db[switch.turnedOn] then
-					db[switch.turnedOn] = nil
+				marks[switch.leftAlone] = nil
+				if marks[switch.turnedOn] then
+					marks[switch.turnedOn] = nil
 					if on then want = "0" end
 				end
 			end
 			if want then
 				switchWritten[cvar] = want
 				SetCVar(cvar, want)
-				db[switch.turnedOn] = want == "1" or nil
+				marks[switch.turnedOn] = want == "1" or nil
 				ns.Log("state", switch.name .. (want == "1" and " turned on for the profile" or " back off"))
 			end
 		end
@@ -422,7 +427,7 @@ function ns.ProfileSwitchRows()
 	local rows = {}
 	for _, switch in ipairs(PROFILE_SWITCHES) do
 		rows[#rows + 1] = { cvar = switch.cvar, name = switch.name, wanted = ns.db and Wanted(ns.db, switch) or false,
-			turnedOn = ns.db and ns.db[switch.turnedOn] or false, leftAloneKey = switch.leftAlone }
+			turnedOn = ns.db and Marks()[switch.turnedOn] or false, leftAloneKey = switch.leftAlone }
 	end
 	return rows
 end
@@ -440,8 +445,8 @@ switchFrame:SetScript("OnEvent", function(self, event, name)
 				end
 				-- (the player switching it themselves: theirs from now on)
 				switchWritten[cvar] = nil
-				ns.db[switch.turnedOn] = nil
-				if Wanted(ns.db, switch) then ns.db[switch.leftAlone] = true end
+				Marks()[switch.turnedOn] = nil
+				if Wanted(ns.db, switch) then Marks()[switch.leftAlone] = true end
 				return
 			end
 		end
@@ -856,7 +861,7 @@ function ns.ResetProfile()
 	ns.db.profiles[name] = point and CopyTable(point) or nil
 	-- (The game switches back to the profile's too: the Cooldown Manager or
 	-- personal resource display turned on again if the player had switched it off.)
-	for _, switch in ipairs(PROFILE_SWITCHES) do ns.db[switch.leftAlone] = nil end
+	for _, switch in ipairs(PROFILE_SWITCHES) do Marks()[switch.leftAlone] = nil end
 	Load(name)
 	SettingsChanged()
 	return true
@@ -874,6 +879,7 @@ local RESET_KEEPS = {
 	"devEdits", -- (the dev copy's Module Editor)
 	"flightTimes", "questDrops", "frameAddons", "smartFindLooks", "goodSpeeds", "ownSpeeds", "selfTest",
 	"slashUsage", -- (the /cine commands you use most: SlashComplete.lua)
+	"shoulderCamScales", "shoulderCalibrations", -- (Shoulder Cam size factors measured per race/sex)
 }
 -- What a built-in profile keeps of your changes on Reset Settings: the lists
 -- you made in it (its settings go back to the built-in's).
@@ -901,7 +907,7 @@ function ns.ResetAddon(settingsOnly)
 	-- The Cooldown Manager and personal resource display off again if a
 	-- profile turned them on.
 	for _, switch in ipairs(PROFILE_SWITCHES) do
-		if ns.db[switch.turnedOn] and GetCVar(switch.cvar) == "1" then SetCVar(switch.cvar, "0") end
+		if Marks()[switch.turnedOn] and GetCVar(switch.cvar) == "1" then SetCVar(switch.cvar, "0") end
 	end
 	-- The game's own settings put back first: Graphics+'s and those held for
 	-- a feature (savedCVars). Wiped unrestored, ours stayed written for good
@@ -1092,6 +1098,8 @@ function ns.InitProfiles()
 	CinematicCharDB = CinematicCharDB or {}
 	ns.chardb = CinematicCharDB
 	local db, chardb = ns.db, ns.chardb
+	-- (The profile switches' marks were account-wide before 2026-11-13: dropped.)
+	db.cdmTurnedOn, db.cdmLeftAlone, db.prdTurnedOn, db.prdLeftAlone = nil, nil, nil, nil
 	db.profiles = db.profiles or {}
 	db.profileNotes = db.profileNotes or {}
 	db.profileIcons = db.profileIcons or {}

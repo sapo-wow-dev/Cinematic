@@ -331,11 +331,12 @@ end
 -- buff icons above that (so the PRD, cast bar and portraits sit at the same
 -- height whether the rows are full or empty: 1 unit tall), the swing timers
 -- hanging down under it (main hand, off hand, ranged), and the player and
--- target frames each side of it, 200 out (300 from the middle, as Retail
--- Inspired's, clear of a 12-icon essential row). Frames follow you moves the
--- PRD and the rest ride along. (The portraits are protected, so the game
--- locks the frames they hang on in fights: the HUD holds still in a fight
--- and catches up after.) No PRD system: the cast bar is the root.
+-- target frames each side of it, 300 from the middle (as Retail Inspired's,
+-- clear of a 12-icon essential row). Frames follow you moves the PRD and the
+-- rest ride along. The portraits are pinned to the screen, not hung on the
+-- PRD: they're protected, and the game locks whatever a protected frame
+-- hangs on in a fight, so hung on it they held the whole HUD still in fights
+-- (2026-11-13). No PRD system: the cast bar is the root.
 -- Mockup: https://claude.ai/artifact/PPvLu5DMCUPEgBpNG2zEy6 (2026-11-07).
 local SHOULDER_HUD = {}
 do
@@ -347,9 +348,13 @@ do
 	local indices = Enum.EditModeUnitFrameSystemIndices or {}
 	local root, rootName = 1, "PlayerCastingBarFrame"
 	local add = function(row) SHOULDER_HUD[#SHOULDER_HUD + 1] = row end
+	-- (Swing timers: the narrowest (setting 3), and thinner (setting 4, Height:
+	-- 15 to 60 in steps of 1, kept as steps up from 15 as Width's are, so 5 =
+	-- 20 tall; the game's is 30, 2026-11-13).
+	local SWING_SIZE = { [3] = 0, [4] = 5 }
 	if PRD_SYSTEM then
 		root, rootName = PRD_SYSTEM, "PersonalResourceDisplayFrame"
-		add({ 1, nil, "BOTTOM", rootName, "TOP", 0, 16 })                             -- cast bar (its name under it)
+		add({ 1, nil, "BOTTOM", rootName, "TOP", 0, 26 })                             -- cast bar (its name under it)
 	end
 	-- (330: just under your feet at a normal zoom; 210 put it down by the
 	-- action bars, "too low", 2026-11-13.)
@@ -357,11 +362,12 @@ do
 	add({ 20, 1, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 6 })                    -- cooldowns: essential
 	add({ 20, 2, "BOTTOM", "EssentialCooldownViewer", "TOP", 0, 4 })                  -- utility
 	add({ 20, 3, "BOTTOM", "UtilityCooldownViewer", "TOP", 0, 4 })                    -- buff icons
-	add({ 29, 1, "TOP", rootName, "BOTTOM", 0, -4, { [3] = 0 } })                     -- swing timers: main hand
-	add({ 29, 2, "TOP", "SwingTimerMainHandFrame", "BOTTOM", 0, -4, { [3] = 0 } })    -- off hand
-	add({ 29, 3, "TOP", "SwingTimerOffHandFrame", "BOTTOM", 0, -4, { [3] = 0 } })     -- ranged
-	add({ UNIT_FRAME, indices.Player or 1, "RIGHT", rootName, "LEFT", -200, 0 })      -- player frame
-	add({ UNIT_FRAME, indices.Target or 2, "LEFT", rootName, "RIGHT", 200, 0 })       -- target frame
+	add({ 29, 1, "TOP", rootName, "BOTTOM", 0, -12, SWING_SIZE })                    -- swing timers: main hand (a gap under the PRD)
+	add({ 29, 2, "TOP", "SwingTimerMainHandFrame", "BOTTOM", 0, -4, SWING_SIZE })    -- off hand
+	add({ 29, 3, "TOP", "SwingTimerOffHandFrame", "BOTTOM", 0, -4, SWING_SIZE })     -- ranged
+	-- (On the screen, level with the PRD's middle: 330 up, about 15 more.)
+	add({ UNIT_FRAME, indices.Player or 1, "RIGHT", "UIParent", "BOTTOM", -300, 345 }) -- player frame
+	add({ UNIT_FRAME, indices.Target or 2, "LEFT", "UIParent", "BOTTOM", 300, 345 })   -- target frame
 end
 
 -- Retail laid out like WoW Forever's default: its party frames raid-style.

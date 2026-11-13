@@ -227,7 +227,7 @@ end)
 local function Pick(row, ours)
 	local ok
 	if ours then
-		if row.switch and row.switch.leftAloneKey then ns.db[row.switch.leftAloneKey] = nil end
+		if row.switch and row.switch.leftAloneKey then (ns.ProfileSwitchMarks and ns.ProfileSwitchMarks() or ns.db)[row.switch.leftAloneKey] = nil end
 		ok = ns.UseOurCVar(row.cvar)
 	else
 		ok = ns.KeepYourCVar(row.cvar)

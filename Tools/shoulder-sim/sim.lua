@@ -102,6 +102,8 @@ local function MoveCamera(dt)
 	if me.selfTarget then want = 0 end
 	-- (A form is its own model: its factor in place of yours.)
 	want = want * (me.model and GAME.bearScale or me.scale) * (me.mounted and GAME.mountScale or 1)
+	-- (cams: a flight path's mount is a model too, its factor a guess like a mount's.)
+	if me.taxi and variant:find("^cams") then want = want * GAME.mountScale end
 	cam.offset = cam.offset + (want - cam.offset) * math.min(1, dt * GAME.ease)
 end
 -- Where you really are on screen: -1 left edge, 1 right edge.
@@ -135,10 +137,12 @@ local prd = StandIn("PersonalResourceDisplayFrame", 0, 240, protected)
 -- chained: Forever's layout (Run 1): the cast bar on the PRD, the PRD on the
 -- cooldowns, which stay put.
 local cooldowns = StandIn("EssentialCooldownViewer", 0, 300, false)
--- hud: the rest of the Shoulder Cam layout's stack, riding on the PRD.
+-- hud: the rest of the Shoulder Cam layout's stack, riding on the PRD. (The
+-- portraits are pinned to the screen since 2026-11-13: hung on the PRD, being
+-- protected, they locked it in fights.)
 local riders = {}
 if variant == "hud" then
-	for _, name in ipairs({ "PlayerFrame", "TargetFrame", "SwingTimerMainHandFrame", "SwingTimerOffHandFrame",
+	for _, name in ipairs({ "SwingTimerMainHandFrame", "SwingTimerOffHandFrame",
 		"SwingTimerRangedFrame", "UtilityCooldownViewer", "BuffIconCooldownViewer" }) do
 		riders[#riders + 1] = StandIn(name, 0, 0, true)
 	end
@@ -149,8 +153,7 @@ local function Layout(x)
 		prd.points = { { "BOTTOM", nil, "BOTTOM", x or 0, 210 } }
 		bar.points = { { "BOTTOM", prd, "TOP", 0, 4 } }
 		cooldowns.points = { { "BOTTOM", bar, "TOP", 0, 6 } }
-		local on = { PlayerFrame = { "RIGHT", prd, "LEFT", -200, 0 }, TargetFrame = { "LEFT", prd, "RIGHT", 200, 0 },
-			SwingTimerMainHandFrame = { "TOP", prd, "BOTTOM", 0, -4 },
+		local on = { SwingTimerMainHandFrame = { "TOP", prd, "BOTTOM", 0, -4 },
 			SwingTimerOffHandFrame = { "TOP", _G.SwingTimerMainHandFrame, "BOTTOM", 0, -4 },
 			SwingTimerRangedFrame = { "TOP", _G.SwingTimerOffHandFrame, "BOTTOM", 0, -4 },
 			UtilityCooldownViewer = { "BOTTOM", cooldowns, "TOP", 0, 4 },
@@ -237,6 +240,14 @@ StaticPopup_Show = function(name)
 end
 if variant == "mounted" then ns.db.shoulderCamNotMounted = false end
 if variant == "indoors" then ns.db.shoulderCamNotIndoors = false end
+-- cams: Cinematic's own cameras played with every one ticked on the Cameras
+-- tab (camsPaused: none, as it ships), the frames following you.
+if variant:find("^cams") then
+	for _, cam in ipairs({ "Vista", "Fish", "Cozy", "AFK", "Tele", "Flight", "Death", "Yours" }) do
+		ns.db["shoulderCamAllow" .. cam] = variant == "cams"
+	end
+	ns.db.shoulderCamFrames = true
+end
 local noticedAtStart = ns.db.shoulderCamNoticed
 -- (tall: its size factor measured, as a sweep on it would have saved.)
 if variant == "tall" then ns.db.shoulderCamScales = { ["Human-2"] = GAME.tallScale } end
@@ -480,7 +491,101 @@ local function Sweep()
 	Wait(2)
 end
 
-if variant == "sweep" then Sweep() else Day() end
+-- cams: each of Cinematic's cameras that pause it, as its built-in script
+-- moves the view with the defaults (CameraScripts.lua's BUILT_IN; Core.lua),
+-- from your own zoom of 12. Only the zoom reaches you on screen: the offset's
+-- across the camera's own view, so a turn or tilt round you keeps you on
+-- your spot (yaw and pitch are kept for the page only). Random zooms are
+-- played as fixed picks within their ranges. camStats: each camera's numbers.
+local camStats = {}
+local function Smooth(a, b, t) t = math.max(0, math.min(1, t)) return a + (b - a) * t * t * (3 - 2 * t) end
+-- Zoom moves one after another: { to, secs, pause after }, from where the last ended.
+local function ZoomPath(from, moves)
+	return function(t)
+		local z, at = from, 0
+		for _, m in ipairs(moves) do
+			if t < at + m[2] then return Smooth(z, m[1], (t - at) / m[2]) end
+			z, at = m[1], at + m[2] + (m[3] or 0)
+			if t < at then return z end
+		end
+		return z
+	end
+end
+local function Play(name, secs, zoomAt, setUp, tearDown)
+	Part(name)
+	if setUp then setUp() end
+	local spot = ns.db.shoulderCamSpot or 0.2
+	local st = { name = name, youMin = math.huge, youMax = 0, offMin = math.huge, offMax = 0, zoomMin = math.huge, zoomMax = 0,
+		pausedSecs = 0, worstMiss = 0, worstPast = 0, framesMiss = 0, secs = secs }
+	local t = 0
+	while t < secs do
+		cam.goal = zoomAt(t)
+		Tick()
+		t = t + TICK
+		local you, off = math.abs(YouOnScreen()), math.abs(tonumber(cvars[SHOULDER]) or 0)
+		if off == 0 then st.pausedSecs = st.pausedSecs + TICK end
+		if t > 1.2 then -- (the blend in over)
+			st.youMin, st.youMax = math.min(st.youMin, you), math.max(st.youMax, you)
+			st.offMin, st.offMax = math.min(st.offMin, off), math.max(st.offMax, off)
+			st.zoomMin, st.zoomMax = math.min(st.zoomMin, cam.zoom), math.max(st.zoomMax, cam.zoom)
+			-- (Where ShoulderCam.lua means you to be at this distance: your spot,
+			-- nearer the middle at the offset's cap or right up close.)
+			local width = 1 -- (cameraFov 90 on 16:9)
+			local yards = spot * cam.zoom * width / me.scale
+			local k = math.max(0, math.min(1, (cam.zoom - 1) / 3))
+			yards = math.min(1.5, yards * k * k * (3 - 2 * k))
+			local meant = yards * me.scale / (math.max(1.5, cam.zoom) * width)
+			st.worstMiss = math.max(st.worstMiss, math.abs(you - meant))
+			st.worstPast = math.max(st.worstPast, you - spot)
+			if you > 0.01 then st.framesMiss = math.max(st.framesMiss, math.abs(Share(prd, home.prd) - YouOnScreen()) / 2) end
+		end
+	end
+	if tearDown then tearDown() end
+	if st.youMin == math.huge then st.youMin, st.offMin, st.zoomMin = 0, 0, 0 end
+	camStats[#camStats + 1] = st
+	Wait(3)
+end
+local function Cams()
+	Part("Shoulder Cam on")
+	Switch(true)
+	Wait(3)
+	local z0 = 12
+	-- Vista (/stare): sways 30 either side behind you; the zoom out 4 over 16 s,
+	-- 8 s pause, then random between 2 in and 4 out (past your max).
+	Play("Vista", 60, ZoomPath(z0, { { z0 + 4, 16, 8 }, { z0 - 2, 16, 8 }, { z0 + 3, 16, 8 } }),
+		function() me.camera = "vista" end, function() me.camera = nil end)
+	-- Fish: the same, narrower: out 2, then 2 in to 2 out.
+	Play("Fish", 50, ZoomPath(z0, { { z0 + 2, 16, 8 }, { z0 - 2, 16, 8 } }),
+		function() me.camera = "fish" end, function() me.camera = nil end)
+	-- Cozy: a half turn round to face you over 14 s, in to 8 over 9 s; then
+	-- random between 6.5 and 8.5 every 12 s (4 s pauses).
+	Play("Cozy", 50, ZoomPath(z0, { { 8, 9, 4 }, { 6.5, 12, 4 }, { 8.5, 12, 4 } }),
+		function() me.camera = "cozy" end, function() me.camera = nil end)
+	-- AFK (and standing still 2 minutes): 40 degree sweeps; out 6 over 20 s
+	-- (past your max), 10 s pause, then random 2 in to 6 out.
+	Play("AFK", 70, ZoomPath(z0, { { z0 + 6, 20, 10 }, { z0 - 2, 20, 10 } }),
+		function() me.camera = "afk" end, function() me.camera = nil end)
+	-- Tele (Hearthstone, teleport): half round to face you, then a spin
+	-- speeding up to 120 a second, in to 4 over the 10 s cast.
+	Play("Tele (Hearthstone)", 10, ZoomPath(z0, { { 4, 10 } }),
+		function() me.camera = "tele" end, function() me.camera = nil end)
+	-- Flight: behind you, sways 70 either side, the standing-still zoom (out
+	-- 6, past your max), a fly-by 160 round at 30 s; landing back to yours.
+	Play("Flight path", 60, ZoomPath(z0, { { z0 + 6, 20, 10 }, { z0 - 2, 20, 7 }, { z0, 3 } }),
+		function() me.taxi = true end, function() me.taxi = false end)
+	-- Death: up 30 to look down on you, out 4 over 8 s, a slow 5/s turn.
+	Play("Death", 30, ZoomPath(z0, { { z0 + 4, 8, 20 }, { z0, 2 } }),
+		function() me.dead = true end, function() me.dead = false end)
+	-- A script of your own (the Scripts page's example, Slow orbit): 360 round
+	-- over 40 s, in to 6 over 12 s.
+	Play("Your script (Slow orbit)", 45, ZoomPath(z0, { { 6, 12, 28 }, { z0, 3 } }),
+		function() me.camera = "script:u1" end, function() me.camera = nil end)
+	Part("Turned off")
+	Switch(false)
+	Wait(3)
+end
+
+if variant == "sweep" then Sweep() elseif variant:find("^cams") then Cams() else Day() end
 
 -- The checks: what must be true when it's over.
 local checks = {}
@@ -559,7 +664,7 @@ if indoorsEnd then
 end
 if variant == "hud" then
 	Check("The HUD slid with you (the PRD, its root)", hud.most > 20, ("%.0f UI units at most"):format(hud.most))
-	Check("Portraits, swing timers and cooldowns moved with it", hud.worst < 0.01,
+	Check("Swing timers and cooldowns moved with it", hud.worst < 0.01,
 		("%.2f UI units off at worst (%s)"):format(hud.worst, hud.worstName))
 end
 local errors = 0
@@ -613,7 +718,7 @@ end
 local out = { variant = variant, tick = TICK, events = events, segments = segments, samples = samples, checks = checks,
 	writes = writes.total, popups = writes.popups, missMean = count > 0 and sum / count or 0, missWorst = worst,
 	missWorstAt = worstAt, guesses = GAME, spot = ns.db.shoulderCamSpot, side = ns.db.shoulderCamSide,
-	columns = { "t", "setting", "offset", "zoom", "you", "bar", "prd", "mounted" } }
+	columns = { "t", "setting", "offset", "zoom", "you", "bar", "prd", "mounted" }, cams = camStats }
 local file = assert(io.open(outPath or ("shoulder-sim-" .. variant .. ".json"), "wb"))
 file:write(Encode(out))
 file:close()
@@ -626,4 +731,10 @@ if variant == "sweep" then
 	for _, e in ipairs(events) do
 		if e.kind == "test" and (e.text:find("^step") or e.text:find("^sweep") or e.text:find("^try")) then print("  " .. e.text) end
 	end
+end
+
+for _, st in ipairs(camStats) do
+	print(("  %-26s you %4.1f-%4.1f%% (spot %.0f%%), offset %.2f-%.2f yd, zoom %4.1f-%4.1f, paused %4.1f of %d s, off where meant %.1f%%, past spot %.1f%%, frames off you %.1f%%")
+		:format(st.name, st.youMin * 100, st.youMax * 100, (ns.db.shoulderCamSpot or 0.2) * 100, st.offMin, st.offMax,
+		st.zoomMin, st.zoomMax, st.pausedSecs, st.secs, st.worstMiss * 100, math.max(0, st.worstPast) * 100, st.framesMiss * 100))
 end
