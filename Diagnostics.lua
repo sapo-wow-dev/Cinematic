@@ -3324,3 +3324,159 @@ function ns.MinimapPulseTest()
 	end)
 	ns.Print("minimappulse: recording for 100 seconds, follow the box at the top. Type it again to stop.")
 end
+
+-- /cine debug framekey: a frame's key (Keybinds page, Frames tab) pressed
+-- and nothing happening. One run, 20 seconds: the bindings found for each
+-- frame key, every key you press and what the game has bound to it, every
+-- click reaching the key button (and whether it got through), each toggle,
+-- and twice a second the Minimap's state (managed, hidden by its key,
+-- target alpha). To ns.db.frameKeyLog, a verdict at the end.
+function ns.FrameKeyTest()
+	if ns.fkRec then
+		ns.fkRec.Finish("stopped")
+		return
+	end
+	local LEAD, LENGTH = 3, 20
+	local log = {}
+	ns.db.frameKeyLog = log
+	local rec = { presses = 0, clicks = 0, toggles = 0 }
+	ns.fkRec = rec
+	local started = GetTime()
+	ns.padTestRun = (ns.padTestRun or 0) + 1
+	local run = ns.padTestRun
+	local function Line(text)
+		if #log < 3000 then log[#log + 1] = ("%6.2f %s"):format(GetTime() - started, text) end
+	end
+	local button = _G[ns.FRAME_KEY_BUTTON or "CinematicFrameKey"]
+	-- Start: the game and the settings it goes by.
+	Line(("start: build %s, CineMode %s, in combat %s, enabled %s, Standard Frames page %s, Minimap page %s, " ..
+		"ActionButtonUseKeyDown %s"):format(tostring((select(4, GetBuildInfo()))), tostring(ns.IsCineModeOn()),
+		tostring(InCombatLockdown()), tostring(ns.db.enabled), tostring(ns.db.handleFrames),
+		tostring(ns.db.handleMinimap), tostring(GetCVar and GetCVar("ActionButtonUseKeyDown"))))
+	local hidden = {}
+	for key, state in pairs(ns.db.frameForce or {}) do hidden[#hidden + 1] = key .. " " .. tostring(state) end
+	Line(("start: forced by key now: %s; frameForceOn %s; reset after reload %s"):format(
+		#hidden > 0 and table.concat(hidden, ", ") or "none", tostring(ns.frameForceOn), tostring(ns.db.frameKeysReset)))
+	Line(("start: key button %s, type %s, shown %s, visible %s, protected %s, OnClick %s, parent %s"):format(
+		tostring(button ~= nil), button and button:GetObjectType() or "-", button and tostring(button:IsShown()) or "-",
+		button and tostring(button:IsVisible()) or "-", button and tostring(button:IsProtected()) or "-",
+		button and tostring(button:GetScript("OnClick") ~= nil) or "-",
+		button and tostring(button:GetParent() and button:GetParent():GetName()) or "-"))
+	-- Every frame key bound, and what the game says its keys do.
+	local bound = 0
+	for _, item in ipairs(ns.COMBAT_SHOW) do
+		local action = "CLICK " .. (ns.FRAME_KEY_BUTTON or "CinematicFrameKey") .. ":" .. item.key
+		local keys = { GetBindingKey(action) }
+		if #keys > 0 then
+			bound = bound + 1
+			local says = {}
+			for _, key in ipairs(keys) do says[#says + 1] = key .. " -> " .. tostring(GetBindingAction(key)) end
+			Line(("binding: %s: %s"):format(item.key, table.concat(says, "; ")))
+		end
+	end
+	Line(("start: %d frame keys bound"):format(bound))
+	-- The Minimap's managed entries.
+	local function MinimapState()
+		local parts = {}
+		for _, entry in ipairs(ns.managed) do
+			if entry.frame == Minimap or entry.group == "minimap" then
+				parts[#parts + 1] = ("%s alpha %.2f forced %s"):format(tostring(entry.name or entry.group), entry.alpha or -1,
+					tostring(ns.FrameForced(entry)))
+			end
+		end
+		return ("Minimap alpha %.2f, visible %s, handled %s, managed: %s"):format(Minimap:GetAlpha(),
+			tostring(Minimap:IsVisible()), tostring(ns.GroupHandled("minimap")),
+			#parts > 0 and table.concat(parts, ", ") or "NONE")
+	end
+	Line("start: " .. MinimapState())
+	-- Clicks reaching the key button (before our filter: the hook sees all).
+	rec.Line = Line
+	-- (Up clicks too while it runs, to see which kind the binding sends: the
+	-- button's own OnClick still acts on a press only.)
+	if button then button:RegisterForClicks("AnyDown", "AnyUp") end
+	if button and not ns.fkHooked then
+		ns.fkHooked = true -- (hooks stay: each run's lines go to its own log)
+		button:HookScript("OnClick", function(_, which, down)
+			if ns.fkRec then
+				ns.fkRec.clicks = ns.fkRec.clicks + 1
+				ns.fkRec.Line(("CLICK reached the key button: %s, down %s"):format(tostring(which), tostring(down)))
+			end
+		end)
+		button:HookScript("PreClick", function(_, which, down)
+			if ns.fkRec then ns.fkRec.Line(("PreClick: %s, down %s"):format(tostring(which), tostring(down))) end
+		end)
+	end
+	local toggle = ns.ToggleFrameKey
+	ns.ToggleFrameKey = function(key)
+		rec.toggles = rec.toggles + 1
+		Line(("TOGGLE %s (was %s)"):format(tostring(key), tostring(ns.FrameKeyState(key))))
+		toggle(key)
+		Line(("after toggle: %s, frameForceOn %s"):format(tostring(ns.FrameKeyState(key)),
+			tostring(ns.frameForceOn)))
+	end
+	-- Every key pressed (passed on to the game), and what it's bound to.
+	local keys = CreateFrame("Frame")
+	local okKeys = not InCombatLockdown() and pcall(function()
+		keys:SetPropagateKeyboardInput(true)
+		keys:EnableKeyboard(true)
+		keys:SetScript("OnKeyDown", function(_, key)
+			rec.presses = rec.presses + 1
+			local full = key
+			if IsShiftKeyDown() then full = "SHIFT-" .. full end
+			if IsControlKeyDown() then full = "CTRL-" .. full end
+			if IsAltKeyDown() then full = "ALT-" .. full end
+			Line(("KEY %s -> %s"):format(full, tostring(GetBindingAction(full, true))))
+		end)
+	end)
+	Line("key listener " .. (okKeys and "on" or "off (in combat)"))
+	function rec.Finish(how)
+		ns.fkRec = nil
+		ns.ToggleFrameKey = toggle
+		if button then button:RegisterForClicks("AnyDown") end
+		if rec.ticker then rec.ticker:Cancel() end
+		keys:EnableKeyboard(false)
+		keys:SetScript("OnKeyDown", nil)
+		local verdict
+		if bound == 0 then
+			verdict = "no frame key was bound"
+		elseif rec.presses == 0 and okKeys then
+			verdict = "no key press seen"
+		elseif rec.clicks == 0 then
+			verdict = "keys pressed but no click reached the key button"
+		elseif rec.toggles == 0 then
+			verdict = "the button was clicked but the toggle didn't run"
+		else
+			verdict = ("%d toggles ran"):format(rec.toggles)
+		end
+		Line(("end (%s): %d key presses, %d clicks, %d toggles; %s. %s"):format(how, rec.presses, rec.clicks,
+			rec.toggles, verdict, MinimapState()))
+		ns.PadTestBox("Test " .. how .. ". /reload, then say \"check log\".", verdict, 0.3, 1, 0.3)
+		C_Timer.After(20, function() ns.PadTestBoxHide(run) end)
+		ns.Print("framekey: " .. verdict .. ". Now /reload and say \"check log\".")
+	end
+	local nextSnap = 0
+	rec.ticker = C_Timer.NewTicker(0.1, function()
+		local ok, err = pcall(function()
+			local into = GetTime() - started
+			if into >= LEAD + LENGTH then
+				rec.Finish("done")
+				return
+			end
+			local step = "Press your Minimap key ONCE. Wait 3 seconds.\nThen press it ONCE more."
+			if into < LEAD then
+				ns.PadTestBox(step, ("GET READY: recording starts in %d"):format(math.ceil(LEAD - into)), 1, 0.82, 0)
+			else
+				ns.PadTestBox(step, ("RECORDING: %d sec left"):format(math.ceil(LEAD + LENGTH - into)), 0.3, 1, 0.3)
+			end
+			if GetTime() >= nextSnap then
+				nextSnap = GetTime() + 0.5
+				Line("snap: " .. MinimapState())
+			end
+		end)
+		if not ok then
+			Line("ERROR: " .. tostring(err))
+			pcall(rec.Finish, "stopped by an error")
+		end
+	end)
+	ns.Print("framekey: recording for 23 seconds, follow the box at the top. Type it again to stop.")
+end

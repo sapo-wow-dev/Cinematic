@@ -638,6 +638,7 @@ ns.HANDLE_SWITCHES = {
 function ns.AnyFramePageOn()
 	local db = ns.db
 	if not db then return false end
+	if ns.frameForceOn then return true end -- (a frame hidden by its key: Keybinds page)
 	for _, key in ipairs(ns.HANDLE_SWITCHES) do
 		if db[key] then return true end
 	end
@@ -645,6 +646,10 @@ function ns.AnyFramePageOn()
 end
 local function GroupHandled(group)
 	local db = ns.db
+	-- (Hidden by its row's key, Keybinds page: handled with its page off too.)
+	if ns.frameForceOn and ns.FrameGroupForced(group) then
+		return true
+	end
 	if group:find("^addon:") or group:find("^extra:") then
 		return db.handleAddonFrames and true or false
 	end
@@ -2900,6 +2905,154 @@ function ns.FollowKey(key)
 		leader = after
 	end
 	return leader
+end
+
+-- Rows shown or hidden by their key (Keybinds page, Frames tab):
+-- db.frameForce, row key -> "hide" or "show", the account's (Profiles.lua's
+-- GLOBAL_KEYS), cleared at a reload unless Reset frame keys after a reload
+-- is unticked (Core.lua). The key flips what you see: up, it hides;
+-- hidden (by its key or its row), it shows. Either wins over the row's ticks,
+-- rules, hover and peeks, in CineMode and out, and takes the rows that go
+-- with it (the minimap's clock, header and buttons with the minimap; a row
+-- set to follow it). The Frames tab's button hands them all back to their rows.
+-- One key button for them all: each row's binding clicks it with the row's
+-- key as the mouse button ("CLICK CinematicFrameKey:minimap").
+ns.FRAME_KEY_BUTTON = "CinematicFrameKey"
+do
+	-- (row/frame name/group -> "hide" or "show"; handledGroups: groups with a
+	-- frame hidden, faded with their page off too)
+	local forcedRows, forcedNames, forcedGroups, handledGroups, NONE = {}, {}, {}, {}, {}
+	-- (key's state, or that of a row it goes with)
+	local function Forced(key)
+		local force, follow = ns.db.frameForce, ns.db.rowFollow
+		for _ = 1, 10 do
+			if not key then return nil end
+			if force[key] then return force[key] end
+			key = follow and follow[key] or ROW_FALLBACK[key]
+		end
+		return nil
+	end
+	local function ItemOf(key)
+		for _, each in ipairs(ns.COMBAT_SHOW) do
+			if each.key == key then return each end
+		end
+	end
+	-- The frames and groups of the rows forced now, worked out when a key is
+	-- pressed (or the settings load): the frame pass only looks them up.
+	function ns.RefreshFrameForce()
+		wipe(forcedRows) wipe(forcedNames) wipe(forcedGroups) wipe(handledGroups)
+		ns.frameForceOn = nil
+		ns.frameForceStamp = (ns.frameForceStamp or 0) + 1 -- (SyncSwitches: frames picked up or let go)
+		local force = ns.db and ns.db.frameForce
+		if not force or not next(force) then return end
+		for _, item in ipairs(ns.COMBAT_SHOW) do
+			local state = Forced(item.key)
+			if state then
+				ns.frameForceOn = true
+				forcedRows[item.key] = state
+				for _, name in ipairs(item.frames or NONE) do
+					forcedNames[name] = state
+					-- (and its fade group, so it's handled with its page off: GroupHandled)
+					if state == "hide" then
+						for group, names in pairs(FRAME_GROUPS) do
+							for _, each in ipairs(names) do
+								if each == name then handledGroups[group] = true end
+							end
+						end
+					end
+				end
+				for _, group in ipairs(item.groups or NONE) do
+					forcedGroups[group] = state
+					if state == "hide" then handledGroups[group] = true end
+				end
+			end
+		end
+	end
+	-- "hide" or "show" when a managed frame is forced by a row's key, else
+	-- false (Inspect's Why.lua, the recorder).
+	function ns.FrameForced(entry)
+		if not ns.frameForceOn then return false end
+		return (entry.name and forcedNames[entry.name]) or forcedGroups[entry.group]
+			or (entry.rspGroup and forcedGroups[entry.rspGroup])
+			or (followsRow[entry.frame] and forcedRows[followsRow[entry.frame]]) or false
+	end
+	-- The frame pass: its target alpha as its key has it.
+	function ns.FrameForcedTarget(entry, target)
+		local state = ns.FrameForced(entry)
+		if state == "hide" then return 0 end
+		if state == "show" then return 1 end
+		return target
+	end
+	-- (A group with a frame hidden by its key: GroupHandled, page off or not.)
+	function ns.FrameGroupForced(group)
+		return handledGroups[group] or false
+	end
+	-- "hide", "show" or nil: a row's own key's state (the Frames tab's labels).
+	function ns.FrameKeyState(key)
+		return ns.db and ns.db.frameForce and ns.db.frameForce[key] or nil
+	end
+	-- Whether a row's frames are up now: any of its managed frames at more
+	-- than half. None managed (its page off, or not found yet): as the game
+	-- has it, up.
+	local function Has(list, value)
+		for _, each in ipairs(list or NONE) do
+			if each == value then return true end
+		end
+		return false
+	end
+	local function RowUp(item)
+		local any = false
+		for _, entry in ipairs(ns.managed) do
+			local mine = (entry.name and Has(item.frames, entry.name)) or Has(item.groups, entry.group)
+			if mine then
+				any = true
+				if (entry.alpha or 1) > 0.5 then return true end
+			end
+		end
+		return not any
+	end
+	-- A row's key pressed: up now, hidden; hidden now (by its key or its
+	-- row), shown.
+	function ns.ToggleFrameKey(key)
+		local item = ItemOf(key)
+		if not item or not ns.db then return end
+		ns.db.frameForce = ns.db.frameForce or {}
+		local state = Forced(key)
+		local hide
+		if state then
+			hide = state == "show"
+		else
+			hide = RowUp(item)
+		end
+		ns.db.frameForce[key] = hide and "hide" or "show"
+		ns.RefreshFrameForce()
+		ns.framesSettled = false -- (the frame pass runs next tick, in CineMode or out)
+		ns.framesWake = "frame key"
+		ns.Print((hide and L["%s hidden by its key"] or L["%s shown by its key"]):format(item.label))
+		if ns.RefreshKeybindsPage then ns.RefreshKeybindsPage() end
+	end
+	-- The Frames tab's button: every row back to its Show in row.
+	function ns.ShowAllFrameKeys()
+		if not (ns.db and ns.db.frameForce and next(ns.db.frameForce)) then return end
+		wipe(ns.db.frameForce)
+		ns.RefreshFrameForce()
+		ns.framesSettled = false
+		ns.framesWake = "frame key"
+		ns.Print(L["every frame shown or hidden by its key is back to its Show in row"])
+		if ns.RefreshKeybindsPage then ns.RefreshKeybindsPage() end
+	end
+	-- (No parent, like the wheels' key buttons: never drawn, clicked by its bindings only.)
+	local button = CreateFrame("Button", ns.FRAME_KEY_BUTTON)
+	button:RegisterForClicks("AnyDown")
+	local lastAt, lastKey = 0, nil
+	button:SetScript("OnClick", function(_, key, down)
+		if down == false then return end
+		-- (A client sending the press twice: once.)
+		local now = GetTime()
+		if key == lastKey and now - lastAt < 0.15 then return end
+		lastAt, lastKey = now, key
+		ns.ToggleFrameKey(key)
+	end)
 end
 
 function ns.IsCombatShowOn(key)
@@ -9611,6 +9764,12 @@ local function SyncSwitches()
 		end
 		switchesWere[key] = on
 	end
+	-- (A frame's key pressed, Keybinds page: its frames handled, page off or not.)
+	local force = ns.frameForceStamp or 0
+	if switchesWere.frameForce ~= nil and switchesWere.frameForce ~= force then
+		changed, turnedOn = true, true
+	end
+	switchesWere.frameForce = force
 	if not changed then
 		return
 	end
@@ -11820,6 +11979,10 @@ function ns.UpdateFrames(cinematic, elapsed)
 			target = 0
 		elseif ns.previewRows and not immersive then
 			target = ns.previewRows[row] and 1 or 0
+		end
+		-- (Shown or hidden by its row's key, Keybinds page: in CineMode and out.)
+		if ns.frameForceOn then
+			target = ns.FrameForcedTarget(entry, target)
 		end
 		if editingLayout then
 			target = 1

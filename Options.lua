@@ -16545,6 +16545,47 @@ if ns.ChatCamCommand then -- (ChatCam.lua)
 			"Addons can't target on their own: the game only lets a key press do it. Out of fights."] }
 end
 
+-- The Frames tab: a key for each Standard Frames row (the frames it hides,
+-- in CineMode and out, Frames.lua's ns.ToggleFrameKey), under the headings
+-- of that page's tabs. Whole frames only: no parts (role icons...), addons'
+-- or added frames' rows (their keys hold a colon, which the binding can't),
+-- nor the Highlight rows (game settings, no frame).
+do
+	local HEADINGS = {
+		{ "units", L["Unit frames"] }, { "prd", L["Personal Resource Display"] }, { "bars", L["Action bars"] },
+		{ "combat", L["Trackers"] }, { "interface", L["Info and menus"] }, { "minimap", L["Minimap"] },
+		{ "party", L["Party frames (not raid-style)"] }, { "raid", L["Raid frames"] },
+		{ "rsparty", L["Party frames (raid-style)"] }, { false, L["Other"] },
+	}
+	local known = { highlight = true }
+	for _, heading in ipairs(HEADINGS) do if heading[1] then known[heading[1]] = true end end
+	local tip = L["Shows or hides it, in CineMode and out: up, it hides (hovering doesn't bring it back); " ..
+		"hidden, it shows. Its Show in row is overruled till you press the button above, or reload with Reset " ..
+		"frame keys after a reload ticked. The rows that go with it go too, like the minimap's clock and " ..
+		"buttons with the Minimap."]
+	local first = true
+	for _, heading in ipairs(HEADINGS) do
+		local page, text = heading[1], heading[2]
+		local headed = false
+		for _, item in ipairs(ns.COMBAT_SHOW) do
+			local itemPage = item.page
+			if not (itemPage and known[itemPage]) then itemPage = false end
+			if itemPage == page and itemPage ~= "highlight" and not item.part and not item.key:find(":")
+				and (item.frames or item.groups) then
+				KEYBINDS[#KEYBINDS + 1] = { action = "CLICK " .. ns.FRAME_KEY_BUTTON .. ":" .. item.key,
+					label = item.label, frameKey = item.key, tip = tip,
+					section = first and L["Frames"] or nil, clearAll = first or nil,
+					heading = not headed and text or nil,
+					show = function() return ns.OptionAvailable(item)
+						and not (item.auraFrames and not _G.CompactUnitFrame_UtilSetBuff) end }
+				_G["BINDING_NAME_CLICK " .. ns.FRAME_KEY_BUTTON .. ":" .. item.key] =
+					(L["Hide/show: %s"]):format(item.label)
+				first, headed = false, true
+			end
+		end
+	end
+end
+
 local IGNORED_KEYS = {
 	LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true,
 	LALT = true, RALT = true, LMETA = true, RMETA = true, UNKNOWN = true,
@@ -16557,7 +16598,13 @@ local function KeyText(key)
 	return GetBindingText and GetBindingText(key) or key
 end
 
+local frameKeyLabels = {} -- (the Frames tab's row names: "hidden" or "shown" after one forced by its key)
 local function RefreshKeybinds()
+	for _, each in ipairs(frameKeyLabels) do
+		local state = ns.FrameKeyState(each.key)
+		each.label:SetText(state == "hide" and each.text .. " |cffff6060(" .. L["hidden"] .. ")|r"
+			or state == "show" and each.text .. " |cff60ff60(" .. L["shown"] .. ")|r" or each.text)
+	end
 	for _, button in ipairs(keybindButtons) do
 		local key = select(button.slot, GetBindingKey(button.action))
 		if button == listening then
@@ -16567,6 +16614,8 @@ local function RefreshKeybinds()
 		end
 	end
 end
+
+ns.RefreshKeybindsPage = RefreshKeybinds -- (a frame's key pressed: its "hidden", Frames.lua)
 
 local function StopListening()
 	if listening then
@@ -16692,7 +16741,7 @@ local function CreateKeybindsPanel()
 		Layout()
 	end
 
-	local section
+	local section, pendingHeading
 	for _, bind in ipairs(KEYBINDS) do
 		if bind.section then
 			SetSection(content, bind.section)
@@ -16705,12 +16754,48 @@ local function CreateKeybindsPanel()
 			section.last = section.body
 			sections[number] = section
 		end
+		-- (The Frames tab: a button that hands every frame its key set back to its row.)
+		if bind.clearAll then
+			local body = section.body
+			-- (Ticked to start with: a frame its key showed or hid is back to its
+			-- row after a reload or logging in. Read as the settings load, Core.lua.)
+			local reset = Check(body, "frameKeysReset", L["Reset frame keys after a reload"],
+				L["Ticked, every frame shown or hidden by its key below goes back to its Show in row after a " ..
+				"reload or logging in. Unticked, they stay as you left them till you press their key again."])
+			reset:SetPoint("TOPLEFT", body, "BOTTOMLEFT", -4, -2)
+			local clear = ns.PanelButton(body)
+			clear:SetSize(200, 22)
+			clear:SetText(L["Back to their Show in rows"])
+			clear:SetPoint("TOPLEFT", reset, "BOTTOMLEFT", 4, -6)
+			clear:SetScript("OnClick", function() ns.ShowAllFrameKeys() end)
+			Tooltip(clear, L["Every frame shown or hidden by its key below goes back to showing as its Show in " ..
+				"row says."])
+			section.last = clear
+		end
+		-- (A heading over a group of rows: the Frames tab's, by the Standard Frames page's tabs.)
+		if bind.heading and (not bind.show or bind.show()) then
+			local heading = Label(section.body, "GameFontNormal", bind.heading)
+			heading:SetPoint("TOPLEFT", section.last, "BOTTOMLEFT", 0, section.last == section.body and -4 or -18)
+			section.last = heading
+		elseif bind.heading then
+			pendingHeading = bind.heading
+		end
 		-- (A key for something this client doesn't have: no row.)
 		if not bind.show or bind.show() then
 			local body = section.body
+			-- (Its heading's first row wasn't on this client: the heading over the next.)
+			if pendingHeading and not bind.heading then
+				local heading = Label(body, "GameFontNormal", pendingHeading)
+				heading:SetPoint("TOPLEFT", section.last, "BOTTOMLEFT", 0, section.last == body and -4 or -18)
+				section.last = heading
+			end
+			pendingHeading = nil
 			local label = Label(body, "GameFontHighlight", bind.number and bind.label:format(bind.number) or bind.label)
 			label:SetPoint("TOPLEFT", section.last, "BOTTOMLEFT", 0, section.last == body and -4 or -12)
 			label:SetWidth(200)
+			if bind.frameKey then
+				frameKeyLabels[#frameKeyLabels + 1] = { label = label, key = bind.frameKey, text = bind.label }
+			end
 			local first = CreateKeybindButton(body, bind.action, 1)
 			first:SetPoint("LEFT", label, "RIGHT", 10, 0)
 			local second = CreateKeybindButton(body, bind.action, 2)

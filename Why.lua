@@ -615,7 +615,16 @@ local function Explain(entry)
 		return title, "unknown", out, key
 	end
 	local status = n.target >= 1 and "shown" or n.target > 0 and "partly" or "hidden"
+	-- (Shown or hidden by its row's key, in CineMode or out: Frames.lua's ns.FrameForced.)
+	local forced = ns.FrameForced and ns.FrameForced(entry)
+	if forced == "hide" then
+		Add(out, "block", L["Hidden by its key (Keybinds page, Frames tab): press the key again to bring it back"],
+			"Keybinds")
+	elseif forced == "show" then
+		Add(out, "on", L["Shown by its key (Keybinds page, Frames tab): press the key again to hide it"], "Keybinds")
+	end
 	if not n.cinematic then
+		if forced then return title, status, out, key end
 		Add(out, "on", L["CineMode is off, so nothing fades"], "CineMode")
 		-- (Why it's off, in a player's words: Core.lua.)
 		if not ns.lastCinematic and ns.CineOffReason then

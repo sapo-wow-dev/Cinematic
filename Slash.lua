@@ -1697,6 +1697,9 @@ local function HandleSlash(msg)
 			tostring(InCombatLockdown())))
 	elseif cmd == "debug" and arg:find("^minimappulse") then
 		ns.MinimapPulseTest()
+	elseif cmd == "debug" and arg == "framekey" then
+		-- (A frame's key on the Keybinds page doing nothing: Diagnostics.lua.)
+		ns.FrameKeyTest()
 	elseif cmd == "debug" and arg == "questiedb" then
 		-- (Does QuestieDB know where veins and herbs spawn: Support/QuestieMinimap.lua.)
 		ns.QuestieDbNodesReport()

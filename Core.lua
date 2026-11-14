@@ -278,6 +278,7 @@ local DEFAULTS = {
 	nameKeepEnemies = false,
 	nameKeepEnemyMinions = false,
 	nameKeepGuild = false,
+	frameKeysReset = true,    -- Keybinds page, Frames tab: frames shown/hidden by their key back to their rows after a reload
 	handleTooltips = false,   -- the Tooltips page's master switch (off: every tooltip shows as the game has it)
 	-- In CineMode, hide tooltips always / in combat (old settings, gone over
 	-- into the Tooltips row, tooltip:All: see OFF_GRID_ROWS).
@@ -4257,6 +4258,9 @@ function ns.EnsureTables()
 	ns.db.addonFrames = ns.db.addonFrames or {} -- Advanced Frames page: key -> false when switched off
 	ns.db.addonSupportOff = ns.db.addonSupportOff or {} -- the same, a supported addon's support: addon -> true (the account's)
 	ns.db.conflictPicks = ns.db.conflictPicks or {} -- Addon Conflicts: row id -> "theirs", "ours" or "both" (the account's)
+	-- Keybinds page, Frames tab: rows hidden by their key, row key -> "hide" (the account's; Frames.lua)
+	ns.db.frameForce = ns.db.frameForce or {}
+	if ns.RefreshFrameForce then ns.RefreshFrameForce() end
 	-- Advanced Frames page: an addon's group (its name, or its suite's) ->
 	-- true when closed (they start open).
 	ns.db.addonGroupsClosed = ns.db.addonGroupsClosed or {}
@@ -8305,6 +8309,11 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			if ns.db[k] == nil or (ns.newInstall and type(ns.db[k]) ~= "table") then
 				if base[k] ~= nil and type(base[k]) ~= "table" then ns.db[k] = base[k] else ns.db[k] = v end
 			end
+		end
+		-- (Keybinds page, Frames tab: frames hidden by their key back, unless
+		-- Reset frame keys after a reload is unticked.)
+		if ns.db.frameKeysReset ~= false and type(ns.db.frameForce) == "table" then
+			wipe(ns.db.frameForce)
 		end
 		ns.EnsureTables()
 		ns.MigrateRoleHides() -- (the grids' old Roles column, as rules: Frames.lua)
