@@ -338,6 +338,7 @@ function ns.PageTabs(content, list, picked)
 		-- (list[i][4]: opens its page even while picked, from a page under it)
 		if i ~= picked or list[i][4] then ns.ShowHubPage(list[i][2]) end
 	end, nil, nil, function(i) ns.FlipPageSwitch(list[i][2]) end)
+	tabFrames.shotSkip = true -- (each its own page: PageShots.lua shoots those on their own)
 	-- (A right-click flips that tab's page switch: on or off on its tip.)
 	for i, tab in ipairs(tabFrames) do
 		tab:HookScript("OnEnter", function(self) ns.PageSwitchTip(self, list[i][2]) end)
@@ -1180,15 +1181,28 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 	function rows.Choices(label, key, list, test)
 		local name = stack:Add(kit.Label(content, "GameFontHighlight", label), "label")
 		name:SetWidth(150)
-		local last
+		-- (A long row goes on over more lines, each under the first's choices:
+		-- the Unit Frame Style page's 13 shapes ran off the page's edge.)
+		local ROOM = 420
+		local last, used = nil, 0
 		for _, info in ipairs(list) do
 			local choice = kit.Choice(content, K(key), info[1], info[2], info[3])
 			choice:HookScript("OnClick", changed)
-			if last then
+			local words = choice.Text or choice.text
+			local textW = words and words:GetStringWidth()
+			local wide = choice:GetWidth() + (type(textW) == "number" and textW or 60) + 16
+			if last and used + wide > ROOM then
+				local line = CreateFrame("Frame", nil, content)
+				line:SetSize(150, 18)
+				stack:Add(line, "label")
+				choice:SetPoint("LEFT", line, "RIGHT", 4, 0)
+				used = 0
+			elseif last then
 				choice:SetPoint("LEFT", last.Text or last.text, "RIGHT", 16, 0)
 			else
 				choice:SetPoint("LEFT", name, "RIGHT", 4, 0)
 			end
+			used = used + wide
 			kit.GreyUnless(choice, test or On)
 			last = choice
 		end

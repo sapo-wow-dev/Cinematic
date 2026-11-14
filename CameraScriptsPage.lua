@@ -1259,7 +1259,7 @@ function ns.CreateCameraScriptsPanel(kit)
 	page.editor = MakeEditor(content)
 	page.addBars = {}
 	-- (A header over each group, then its buttons four to a row.)
-	local ADD_PER_ROW, ADD_W, ADD_ROW, ADD_HEADER = 4, 136, 26, 18
+	local ADD_W, ADD_ROW, ADD_HEADER = 136, 26, 18
 	for _, list in ipairs({ "steps" }) do
 		local bar = CreateFrame("Frame", nil, content)
 		local y = 0
@@ -1268,12 +1268,23 @@ function ns.CreateCameraScriptsPanel(kit)
 			header:SetPoint("TOPLEFT", 2, y - 3)
 			header:SetText(L[ADD_GROUP_NAMES[group.key]])
 			y = y - ADD_HEADER
-			for i, kind in ipairs(group.kinds) do
+			-- (Each as wide as its words, at least a quarter row: + Keep up
+			-- with who's talking ran into the button after it.)
+			local x = 0
+			for _, kind in ipairs(group.kinds) do
 				local add = Button(bar, "+ " .. KIND_NAMES[kind], ADD_W - 4)
-				add:SetPoint("TOPLEFT", ((i - 1) % ADD_PER_ROW) * ADD_W, y - math.floor((i - 1) / ADD_PER_ROW) * ADD_ROW)
+				local words = add:GetFontString()
+				local textW = words and words:GetStringWidth()
+				local wide = math.max(ADD_W - 4, math.ceil(type(textW) == "number" and textW or 0) + 20)
+				if x > 0 and x + wide > WIDTH then
+					x, y = 0, y - ADD_ROW
+				end
+				add:SetWidth(wide)
+				add:SetPoint("TOPLEFT", x, y)
 				add:SetScript("OnClick", function() page.AddStep(kind) end)
+				x = x + wide + 4
 			end
-			y = y - math.ceil(#group.kinds / ADD_PER_ROW) * ADD_ROW - 4
+			y = y - ADD_ROW - 4
 		end
 		page.addHeight = -y
 		bar:SetSize(WIDTH, page.addHeight)
@@ -1295,7 +1306,7 @@ function ns.CreateCameraScriptsPanel(kit)
 		row.label = kit.Label(row, "GameFontHighlightSmall", RULE_NAMES[rule.key])
 		row.label:SetPoint("LEFT", RULE_X, 0)
 		row.label:SetWidth(126)
-		row.pick = Choice(row, 150, function() return rule.actions end,
+		row.pick = Choice(row, 200, function() return rule.actions end, -- (200: Hold till its trigger ends fits)
 			function() return page.script and page.script.rules[rule.key] end,
 			function(action)
 				page.SetRule(rule.key, action)
@@ -1888,7 +1899,8 @@ function ns.CreateCameraScriptsPanel(kit)
 				y = y - 34
 				for _, row in ipairs(page.optRows) do
 					local set = page.hasSettings and script.ruleSet and script.ruleSet[row.key]
-					row:Show()
+					-- (A setting's own control names itself: no second name over it.)
+					row:SetShown(not set)
 					row:SetPoint("TOPLEFT", COL, y)
 					local control = row.box or row.pick
 					control:SetShown(not set)
@@ -1903,8 +1915,7 @@ function ns.CreateCameraScriptsPanel(kit)
 							row.pick:SetAlpha(page.locked and 0.6 or 1)
 						end
 					end
-					y = y - 26
-					if set then y = PlaceRuleSettings(row.key, set, y) end
+					if set then y = PlaceRuleSettings(row.key, set, y) else y = y - 26 end
 				end
 			end
 			tabsPanel:SetHeight(panelTop - y + 8)

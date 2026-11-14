@@ -1409,6 +1409,8 @@ end
 -- tooltip or note, and opens its page with it highlighted. (The game's own
 -- search box can't see inside pages drawn like these.)
 local searchPages = {} -- { name = page name (nil: the main page), canvas = its canvas }, as listed
+-- Every settings page as listed (PageShots.lua walks them): read only.
+function ns.SettingsPages() return searchPages end
 -- Our settings pages on the screen now, kept as they show and hide (a hidden
 -- settings window hides them too), for ns.OurSettingsShown: asking every
 -- page each time cost 0.1 ms a call, a profile showed, 2026-11-11.
@@ -2694,6 +2696,10 @@ do
 		card.text:SetText(stuck and L["Off with the General page's switch."]
 			or L["Turn it on to see and change its settings."])
 		card.button:SetText(L["Turn on %s"]:format(name))
+		-- (as wide as its words: Turn on Combat Text Style ran past its edges)
+		local words = card.button:GetFontString()
+		local textW = words and words:GetStringWidth()
+		card.button:SetWidth(math.max(150, (type(textW) == "number" and textW or 0) + 24))
 		card.button.switch = box
 		card.button:SetShown(not stuck)
 		card.box:SetHeight(math.max(32, card.title:GetStringHeight() + 3 + card.text:GetStringHeight()) + 20)
@@ -5302,7 +5308,8 @@ local function CreateTintPanel()
 		if previewTime then
 			previewTime:SetPoint("LEFT", presetControl, "RIGHT", 16, 0)
 			if previewTime.SetDefaultText then
-				previewTime:SetDefaultText("") -- (shown until an hour or Current time is picked)
+				-- (shown until an hour is picked: no preview is the real clock; blank, it looked broken)
+				previewTime:SetDefaultText(L["Current time"])
 			end
 			local previewLabel = Label(content, "GameFontHighlightSmall", L["Preview time"])
 			previewLabel:SetPoint("BOTTOMLEFT", previewTime, "TOPLEFT", 2, 2)
@@ -7833,14 +7840,9 @@ local function CreateBubblesPanel()
 	local subtitle = PageIntro(content, title,
 		L["Where chat bubbles show. How they look: the Chat Bubble Style page."])
 	-- Their look: the Style hub's Chat bubbles page (BubbleStyle.lua), a
-	-- button away, right of the page's title (past its "?").
-	local styleButton = ns.PanelButton(content)
-	styleButton:SetSize(120, 22)
-	styleButton:SetText(L["Style"])
-	Tooltip(styleButton, L["Opens the Chat Bubble Style page: how the bubbles and speech from behind " ..
-		"you look."])
-	styleButton:SetScript("OnClick", function() ns.OpenOptions("Bubble Style") end)
-	styleButton:SetPoint("LEFT", title, "RIGHT", 34, 0)
+	-- button away, right of the page's on/off switch (it sat on the switch).
+	ns.StyleLink(content, title, "Bubble Style", L["Opens the Chat Bubble Style page: how the bubbles and speech " ..
+		"from behind you look."], Tooltip)
 
 	local function Changed() if ns.ApplyBubbles then ns.ApplyBubbles() end end
 
@@ -8525,6 +8527,7 @@ function ns.FolderTabs(parent, list, onClick, width, maxWidth, onRightClick)
 			if GameTooltip:IsOwned(self) and self:GetScript("OnEnter") then self:GetScript("OnEnter")(self) end
 		end)
 		tabs[i] = tab
+		tab.shotSet, tab.shotIndex = tabs, i -- (PageShots.lua clicks through them)
 	end
 	-- The rows of the tabs shown (a caller can hide some), as many on each as
 	-- fit (tab.row: its row's number).
@@ -8549,6 +8552,7 @@ function ns.FolderTabs(parent, list, onClick, width, maxWidth, onRightClick)
 	local base = CreateFrame("Frame", nil, parent)
 	base:SetSize(1, 1)
 	local function Show(picked)
+		tabs.picked = picked
 		Rows()
 		-- (The picked one's row at the bottom, the rest above it in order.
 		-- Each row up clears the picked tab's extra height.)
@@ -9787,7 +9791,7 @@ do
 	-- chips: opacity, colors, size) and When (its chip), each a heading over
 	-- the grid, in the color its drawer line's name has (COLUMN_COLORS).)
 	local SHOW_X, NAME_X, PREVIEW_X, PLATE_X, WHEN_X = 16, 44, 232, 290, 414
-	local ROW_W, NAME_W, PLATE_W, WHEN_W, NUMBER_W = 590, 186, 118, 128, 22 -- (When: up to the copy button)
+	local ROW_W, NAME_W, PLATE_W, WHEN_W, NUMBER_W = 590, 186, 118, 128, 30 -- (When: up to the copy button)
 	local COLUMN_COLORS = { Mark = { 0.85, 0.65, 1 }, Plate = { 1, 0.8, 0.35 }, When = { 0.55, 0.8, 1 } }
 	local DRAWER_X, LINE_H, LABEL_W = 44, 34, 48
 	-- The Also color column's parts: setting (<kind>Color<part>), name, tip,
@@ -16180,11 +16184,17 @@ local function CreateExtrasPanel()
 				if not db.foundFrames[name] then picking[#picking + 1] = name end
 			end
 		end
-		-- (Ones still to load first, then by name.)
+		-- (Ones still to load first, then by name, numbers in order: Raid2
+		-- before Raid10, as the numbers padded to the same length.)
+		local function Key(name)
+			return (name:lower():gsub("%d+", function(digits)
+				return #digits < 10 and ("0"):rep(10 - #digits) .. digits or digits
+			end))
+		end
 		table.sort(names, function(a, b)
 			local loadedA, loadedB = db.extraFrames[a] and true or false, db.extraFrames[b] and true or false
 			if loadedA ~= loadedB then return loadedB end
-			return a:lower() < b:lower()
+			return Key(a) < Key(b)
 		end)
 		for i, name in ipairs(picking) do
 			local row = FoundRow(i)
