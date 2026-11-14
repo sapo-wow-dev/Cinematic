@@ -32,6 +32,10 @@ local PART_FRAMES = {
 
 -- How far each part shows, 0 to 1, faded at the UI's fade speeds.
 local levels = {}
+-- Kinds with parts of their own (the Nameplates page's kind rows, opened,
+-- Use custom parts ticked: plateOwnParts<kind>): levels[kind][part] as
+-- levels', and each plate's kind (ns.PlateKindOf) as it's first asked.
+local kindParts = { levels = {}, kinds = {} }
 
 -- A plate held up only for its name (see ns.SetPlateBody): how much of its
 -- alpha the rest of it gets ([plate] = 0 to 1, nil for all of it), and the
@@ -504,8 +508,16 @@ local function DrawName(text, name, unit)
 		-- game's for other alphabets.)
 		local db = ns.db
 		file = db and db.styleGeneral and ns.StyleFontFile(db.styleFont) or file
-		SetNameFont(text, object, file, size, text.size, Outlined(flags, Style("plateNameOutline")))
-		if Style("plateNameShadow") then
+		-- (Its Nameplate Style row's Look over the Name Style page's: font,
+		-- size, outline and shadow. PlateRowLook.lua.)
+		local owner = text:GetParent()
+		local look = ns.PlateLookNow and owner and owner.GetParent and ns.PlateLookNow(owner:GetParent())
+		file = look and look.font or file
+		local outline = look and look.outline and look.outline >= 0 and look.outline or Style("plateNameOutline")
+		SetNameFont(text, object, file, size, text.size * (look and look.size or 1), Outlined(flags, outline))
+		local shadow = Style("plateNameShadow")
+		if look and look.shadow then shadow = look.shadow == "on" end
+		if shadow then
 			text:SetShadowOffset(Style("plateNameShadowX"), Style("plateNameShadowY"))
 			text:SetShadowColor(0, 0, 0, Style("plateNameShadowAlpha"))
 		else
@@ -515,7 +527,7 @@ local function DrawName(text, name, unit)
 		-- exactly on the grey ones. Its shadow is left off: the grey text's
 		-- shows under both.)
 		if fill then
-			SetNameFont(fill.lit, object, file, size, text.size, Outlined(flags, Style("plateNameOutline")))
+			SetNameFont(fill.lit, object, file, size, text.size * (look and look.size or 1), Outlined(flags, outline))
 			fill.lit:SetShadowOffset(0, 0)
 		end
 		-- (Further off, lower: a plate's name sits a fixed height over the unit's
@@ -704,8 +716,22 @@ local function ApplyPlate(plate, personal)
 			or unitFrame.unit))
 	CentreName(unitFrame, nameOnly and not ours)
 	OwnName(plate, ours and nameAlpha > 0 and textAlpha * Style("plateNameAlpha") or nil)
+	-- (A kind with parts of its own: its levels in place of the default ones.)
+	local mine
+	if plate ~= personal and next(kindParts.levels) then
+		local kind = kindParts.kinds[plate]
+		if not kind then
+			local unit = plate.namePlateUnitToken or unitFrame.unit
+			kind = unit and ns.PlateKindOf and ns.PlateKindOf(unit)
+			kindParts.kinds[plate] = kind -- (nil when the game won't say yet: asked again)
+		end
+		mine = kind and kindParts.levels[kind]
+	end
+	-- (Its Nameplate Style row's Look: the level box shown or hidden. PlateRowLook.lua.)
+	local look = plate ~= personal and ns.PlateLookNow and ns.PlateLookNow(plate)
 	for _, part in ipairs(ns.PLATE_PARTS) do
-		local level = plate ~= personal and levels[part] or 1
+		local level = plate ~= personal and (mine and mine[part] or levels[part]) or 1
+		if part == "Level" and look and look.level ~= nil then level = look.level and 1 or 0 end
 		if part == "Name" then
 			if ours then
 				level = 0
@@ -743,6 +769,15 @@ local function ApplyAll()
 	end
 end
 ApplyAll = ns.Profiled("Plate parts", ApplyAll)
+-- (One plate's parts again: its row's Look just changed. PlateRowLook.lua.)
+function ns.ApplyPlateNow(plate)
+	if plate then ApplyPlate(plate, PersonalPlate()) end
+end
+-- (Our own name on it drawn again in its new look.)
+function ns.DirtyPlateName(plate)
+	local text = plate and plate.UnitFrame and texts[plate.UnitFrame]
+	if text then text.dirty = true end
+end
 
 -- Friendly players in Class colors: the game's own Use Class Color for Names
 -- (Options > Nameplates) held on too, so the plates we don't fade to the name
@@ -790,7 +825,7 @@ local function AnyFaded()
 			return true
 		end
 	end
-	return next(held) ~= nil or next(bodyShare) ~= nil
+	return next(held) ~= nil or next(bodyShare) ~= nil or next(kindParts.levels) ~= nil
 end
 
 -- The class icon rows (ns.PLATE_CLASS_PARTS): our own icon left of a player's
@@ -853,6 +888,8 @@ local function RefreshClass(plate)
 	end
 	icon = ClassIcon(plate)
 	if icon then
+		local size = 22 * (ns.db.plateIconSize or 1) -- (the Icons page's Size)
+		icon:SetSize(size, size)
 		icon.texture:SetTexCoord(unpack(CLASS_ICON_TCOORDS[info.class]))
 		icon:SetAlpha(level)
 		icon:Show()
@@ -921,8 +958,10 @@ local function RefreshRoleIcon(plate)
 	if icon then
 		local classIcon = icons[plate]
 		local beside = ns.DuelBadgeShown(plate) or (classIcon and classIcon:IsShown())
+		local scale = ns.db.plateIconSize or 1 -- (the Icons page's Size)
+		icon:SetSize(18 * scale, 18 * scale)
 		icon:ClearAllPoints()
-		icon:SetPoint("RIGHT", icon.bar, "LEFT", beside and -28 or -3, 0)
+		icon:SetPoint("RIGHT", icon.bar, "LEFT", beside and -(22 * scale + 6) or -3, 0)
 		icon.texture:SetTexCoord(unpack(role.coords))
 		icon:SetAlpha(level)
 		icon:Show()
@@ -2269,7 +2308,8 @@ local function OthersOn(kind)
 		or AlsoOn("ColorName", kind) or AlsoOn("ColorBar", kind)
 		or (ArrowSetting("Alpha", kind) or 1) < 1
 		or ns.plateSizes.width and math.abs((ArrowSetting("PlateWidth", kind) or 1) - 1) > 0.001
-		or ns.plateSizes.height and math.abs((ArrowSetting("PlateHeight", kind) or 1) - 1) > 0.001) and true or false
+		or ns.plateSizes.height and math.abs((ArrowSetting("PlateHeight", kind) or 1) - 1) > 0.001
+		or ns.PlateRowHasLook and ns.PlateRowHasLook(kind)) and true or false -- (its Look: PlateRowLook.lua)
 end
 
 -- How a unit stands with you, for the rows added for one reaction: "Enemy",
@@ -2664,6 +2704,10 @@ local function RefreshTargetArrow(plate)
 	if level > 0 then
 		kind, kinds, hovered, opacity, size = PlateLook(plate, unit)
 	end
+	-- (Its row's Look: bar, border, name and level box. PlateRowLook.lua.)
+	if ns.ApplyPlateRowLook and ((level > 0 and ns.PlateLooksOn()) or ns.PlateLookNow(plate)) then
+		ns.ApplyPlateRowLook(plate, level > 0 and unit and FittingRow(plate, unit) or nil)
+	end
 	local jump = not settled[plate]
 	settled[plate] = true
 	SetPlateOpacity(plate, opacity, level, jump)
@@ -2860,6 +2904,7 @@ local function RefreshClassIcons()
 		end
 	end
 end
+ns.RefreshPlateIcons = RefreshClassIcons -- (the Icons page's settings: PlateIcons.lua)
 
 local function AnyClassIcons()
 	for _, part in ipairs(ns.PLATE_ICON_PARTS) do
@@ -2943,6 +2988,7 @@ watcher:SetScript("OnEvent", function(_, event, unit)
 	end
 	if event == "NAME_PLATE_UNIT_REMOVED" then
 		plateClass[plate], plateRole[plate] = nil, nil
+		kindParts.kinds[plate] = nil
 		bodyShare[plate], nameShare[plate], markShare[plate], textShare[plate] = nil, nil, nil, nil
 		bandOf[plate], swaps[plate] = nil, nil
 		sight[plate], dimSince[plate], clearSince[plate] = nil, nil, nil
@@ -2969,6 +3015,7 @@ watcher:SetScript("OnEvent", function(_, event, unit)
 		return
 	end
 	plateClass[plate], plateRole[plate] = nil, nil
+	kindParts.kinds[plate] = nil
 	if AnyClassIcons() or icons[plate] or roleIcons[plate] or questIcons[plate] or arrows[plate]
 		or opacities[plate] or nows.width[plate] or nows.height[plate]
 		or ((levels.TargetArrow or 0) > 0 and (OthersOn() or TypeRowsOn() or MasterSizeOn())) then
@@ -3223,7 +3270,7 @@ local questIconsAt = 0
 
 -- Each tick, from ns.UpdatePlates: active while the Nameplates page steers
 -- plates (CineMode, its master switch on).
-function ns.UpdatePlateParts(active, elapsed)
+function ns.UpdatePlateParts(active, elapsed, cinematic)
 	local changed = false
 	for _, part in ipairs(ns.PLATE_PARTS) do
 		local target = (not active or ns.PlateRowWanted("Part" .. part)) and 1 or 0
@@ -3239,19 +3286,49 @@ function ns.UpdatePlateParts(active, elapsed)
 			changed = true
 		end
 	end
+	-- Kinds with parts of their own likewise, each part starting from the
+	-- default one's level as Use custom parts is ticked (no jump).
+	for _, kind in ipairs(ns.PLATE_OWN_PART_KINDS) do
+		local mine = kindParts.levels[kind]
+		if ns.db["plateOwnParts" .. kind] then
+			if not mine then
+				mine = {}
+				kindParts.levels[kind] = mine
+			end
+			for _, part in ipairs(ns.PLATE_PARTS) do
+				local target = (not active or ns.PlateRowWanted("Part" .. kind .. part)) and 1 or 0
+				local over = ns.StyleOverride("platePart" .. part)
+				if over then target = over == "show" and 1 or 0 end
+				local level = mine[part] or levels[part] or target
+				if level ~= target then
+					level = ns.Approach(level, target, elapsed, target > level and ns.FadeInTime() or ns.FadeOutTime())
+					changed = true
+				end
+				if mine[part] ~= level then changed = true end
+				mine[part] = level
+			end
+		elseif mine then
+			kindParts.levels[kind] = nil
+			changed = true
+		end
+	end
 	if changed then
 		ApplyAll()
 	end
-	-- The class and role icons: shown nowhere with the page's master switch off.
+	-- The class and role icons and the target marks: by their When (the
+	-- Icons and Nameplate Style pages: PlateIcons.lua). The quest icon: shown
+	-- nowhere with the Nameplates page's master switch off, else by its row.
 	local iconsChanged = false
 	for _, part in ipairs(ns.PLATE_ICON_PARTS) do
-		local wanted
-		if not ns.db.handlePlates or (part == "QuestIcon" and not ns.Setting("questVision")) then
-			wanted = false
-		elseif active then
-			wanted = ns.PlateRowWanted("Part" .. part)
-		else
-			wanted = ns.db["plateAlwaysPart" .. part]
+		local wanted = ns.PlateIconWanted(part, cinematic)
+		if wanted == nil then
+			if not ns.db.handlePlates or (part == "QuestIcon" and not ns.Setting("questVision")) then
+				wanted = false
+			elseif active then
+				wanted = ns.PlateRowWanted("Part" .. part)
+			else
+				wanted = ns.db["plateAlwaysPart" .. part]
+			end
 		end
 		local target = wanted and 1 or 0
 		local level = levels[part]

@@ -1116,6 +1116,8 @@ local LOOK_GROUPS = {
 		{ "outlineColor", "Outline color" }, { "shadow", "Shadow" } } },
 	{ "Border", { { "border", "Border" } } },
 	{ "Background", { { "backColor", "Color" }, { "backAlpha", "Opacity" } } },
+	-- (A Nameplate Style row's: Forever's level box. Left out where no part has it.)
+	{ "Level", { { "level", "Level box" } } },
 }
 -- The options a Look box makes from { key, tip, ... } (the rest, from a
 -- function of the page's): texture { label, test, tint, game }, font

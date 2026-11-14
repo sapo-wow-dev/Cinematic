@@ -55,13 +55,26 @@ local function BarOf(plate)
 	return Usable(bar) and bar.SetStatusBarTexture and bar or nil
 end
 
--- General's texture (nil: the game's) and its border's kind, size and color.
-local function Look()
+-- A bar's Nameplate Style row Look, over General's (PlateRowLook.lua):
+-- [bar] = { texture ("game": the game's fill), border = { kind, size, r, g, b } }.
+local overrides = setmetatable({}, { __mode = "k" })
+
+-- General's texture (nil: the game's) and its border's kind, size and color;
+-- a bar's row Look over them (bar: the one asked about).
+local function Look(bar)
 	local db = ns.db
-	if not (db and db.styleGeneral) then return nil, "game" end
-	local texture = db.styleTexture
-	if texture == "game" then texture = nil end
-	return texture, ns.StyleBorder(db, "styleBorder")
+	local texture, kind, size, r, g, b = nil, "game", 0, 0, 0, 0
+	if db and db.styleGeneral then
+		texture = db.styleTexture
+		if texture == "game" then texture = nil end
+		kind, size, r, g, b = ns.StyleBorder(db, "styleBorder")
+	end
+	local own = bar and overrides[bar]
+	if own then
+		if own.texture ~= nil then texture = own.texture ~= "game" and own.texture or nil end
+		if own.border then kind, size, r, g, b = unpack(own.border) end
+	end
+	return texture, kind, size, r, g, b
 end
 
 -- The game's fill as it is now, to put back.
@@ -80,7 +93,7 @@ local function Dress(bar)
 		state = {}
 		states[bar] = state
 	end
-	local texture, kind, size, r, g, b = Look()
+	local texture, kind, size, r, g, b = Look(bar)
 	busy = true
 	if texture then
 		if not state.on then RememberFill(bar, state) end
@@ -120,7 +133,7 @@ local function StylePlate(plate)
 	if plate == personal then return end
 	local bar = BarOf(plate)
 	if not bar then return end
-	local texture, kind = Look()
+	local texture, kind = Look(bar)
 	-- (Left quite alone until there's something to do.)
 	if not (texture or kind ~= "game" or states[bar]) then return end
 	if not hooked[bar] then
@@ -138,6 +151,15 @@ local function TryPlate(plate)
 		logged[tostring(err)] = true
 		ns.Log("plates", "health style error: " .. tostring(err))
 	end
+end
+
+-- A plate's row Look (nil: none), from PlateRowLook.lua: its bar dressed again.
+function ns.SetPlateBarOverride(plate, look)
+	local bar = BarOf(plate)
+	if not bar then return end
+	if not look and not overrides[bar] then return end
+	overrides[bar] = look and { texture = look.texture, border = look.border } or nil
+	TryPlate(plate)
 end
 
 function ns.RefreshPlateHealthStyle()

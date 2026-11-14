@@ -382,7 +382,7 @@ ns.PROFILE_MODULES = {
 			set("enemyShow", fights)
 			set("instanceShow", EveryRow(true, false))
 		end },
-	{ key = "pure-plates", name = "Cinema: nameplates", scope = { "Nameplates", "Nameplate Style" },
+	{ key = "pure-plates", name = "Cinema: nameplates", scope = { "Nameplates", "Plate Icons", "Nameplate Style" },
 		tip = "Enemies' nameplates (and their minions') in fights, not kept up otherwise; in PvP and " ..
 		"battlegrounds, none; in instances, friendly players' and NPCs' hidden; no group members' or friendly " ..
 		"targets'; your target's name always; an arrow over your target's plate all through CineMode " ..
@@ -390,9 +390,12 @@ ns.PROFILE_MODULES = {
 		apply = function(set)
 			for _, key in ipairs({ "plateAlwaysGroupMembers", "plateAlwaysGroupMinions", "plateGroupFriends",
 				"plateGroupFriendlyMinions", "plateAlwaysYourTarget", "plateCinematicEnemies", "plateInCitiesEnemies", "plateCombatPvPEnemies", "plateCombatPvPEnemyMinions", "plateCombatPvPFriends",
-				"plateInBGsEnemies", "plateInBGsFriends", "plateInPvPEnemies", "plateAlwaysPartClassEnemy",
-				"plateAlwaysPartRoleHealer", "plateAlwaysPartRoleTank" }) do
+				"plateInBGsEnemies", "plateInBGsFriends", "plateInPvPEnemies" }) do
 				set(key, false)
+			end
+			-- (No class or role icons: the Icons page.)
+			for _, part in ipairs({ "ClassEnemy", "RoleHealer", "RoleTank" }) do
+				set("plateIconAlways" .. part, false)
 			end
 			set("plateCombatEnemies", true)
 			set("plateCombatEnemyMinions", true)
@@ -402,9 +405,7 @@ ns.PROFILE_MODULES = {
 			set("nameAlwaysYourTarget", true)
 			-- An arrow over your target's plate all through CineMode, with no
 			-- target frame to show what you've targeted.
-			for _, prefix in ipairs({ "plateCinematic", "plateCombat", "plateInPvP", "plateInBGs", "plateInInstances" }) do
-				set(prefix .. "PartTargetArrow", true)
-			end
+			set("cineModeShow", { ["platemark:show"] = true }) -- (the Nameplate Style page's Show in row)
 			set("plateInstanceFriends", "hide")
 			set("plateInstanceFriendlyNPCs", "hide")
 		end },

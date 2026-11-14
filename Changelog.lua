@@ -11,6 +11,10 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-14", page = "Nameplates", title = "Nameplates hub",
+		text = "Nameplates have a hub of their own: which show, the new Icons page for class and role icons, and " ..
+		"their looks. Each kind of plate can have its own parts, and each Nameplate Style row its own bar, border, " ..
+		"name font and level box." },
 	{ date = "2026-11-13", page = "Advanced Frames", title = "Lore Forever support", client = "forever",
 		text = "Lore Forever's subtitles, floating player, new page note and pin card get rows of their own and fade " ..
 		"with Cinematic. With Custom dialogue frames on, a Play button on the box with the NPC's words plays the " ..

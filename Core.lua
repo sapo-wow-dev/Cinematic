@@ -1486,6 +1486,46 @@ for _, list in ipairs({ ns.PLATE_PARTS, ns.PLATE_MARKER_PARTS }) do
 		end
 	end
 end
+-- A kind's own Plate parts (a Friendly or Enemy grid's kind row, opened):
+-- with plateOwnParts<kind> ticked its plates' parts go by rows of their own
+-- (keys plate<column>Part<kind><part>), copied from the default rows as it's
+-- ticked (ns.CopyDefaultPlateParts). Unticked, the default rows decide.
+ns.PLATE_OWN_PART_KINDS = { "Friends", "FriendlyMinions", "FriendlyNPCs", "Enemies", "EnemyMinions", "EnemyNPCs",
+	"EnemyMinor", "NeutralNPCs", "NeutralMinor" }
+for _, kind in ipairs(ns.PLATE_OWN_PART_KINDS) do
+	DEFAULTS["plateOwnParts" .. kind] = false
+	for _, part in ipairs(ns.PLATE_PARTS) do
+		for _, prefix in ipairs({ "plateAlways", "plateCombat", "plateCombatPvP", "plateCinematic", "plateGroup" }) do
+			DEFAULTS[prefix .. "Part" .. kind .. part] = prefix == "plateAlways"
+		end
+		for _, suffix in ipairs(ns.PLATE_PLACES) do
+			DEFAULTS["plateIn" .. suffix .. "Part" .. kind .. part] = false
+		end
+	end
+end
+-- Gives a kind the default Plate parts rows' choices (ticks and rules), as
+-- its Use custom parts is ticked, unless it has choices of its own from before.
+function ns.CopyDefaultPlateParts(kind)
+	local db = ns.db
+	local rules = type(db.frameRules) == "table" and db.frameRules or nil
+	local prefixes = { "plateAlways", "plateCombat", "plateCombatPvP", "plateCinematic", "plateGroup",
+		"plateTargetEnemy", "plateTargetFriendly", "plateInCities" }
+	for _, suffix in ipairs(ns.PLATE_PLACES) do prefixes[#prefixes + 1] = "plateIn" .. suffix end
+	for _, part in ipairs(ns.PLATE_PARTS) do
+		if rules and rules["plate:Part" .. kind .. part] then return end
+		for _, prefix in ipairs(prefixes) do
+			local key = prefix .. "Part" .. kind .. part
+			local start = DEFAULTS[key]
+			if db[key] ~= nil and (db[key] and true or false) ~= (start and true or false) then return end
+		end
+	end
+	for _, part in ipairs(ns.PLATE_PARTS) do
+		for _, prefix in ipairs(prefixes) do
+			db[prefix .. "Part" .. kind .. part] = db[prefix .. "Part" .. part]
+		end
+		if rules then rules["plate:Part" .. kind .. part] = rules["plate:Part" .. part] end
+	end
+end
 -- The Unit Frames page's Unit frame parts (see Frames): a section per frame,
 -- a Standard Frames row per part, its Always the setting
 -- unitPart<frame><part> (frames: UNIT_PART_FRAMES). The focus and the targets
@@ -1592,7 +1632,7 @@ function ns.RefreshOutsideCine(force)
 		if db[tick] == false then any = true break end
 	end
 	if not any then return end
-	for _, name in ipairs({ "ApplyHealVisionFrames", "ApplyHealVisionPlates", "RefreshPlateNameStyle",
+	for _, name in ipairs({ "RefreshNameCVars", "ApplyHealVisionFrames", "ApplyHealVisionPlates", "RefreshPlateNameStyle",
 		"RefreshTargetQuestIcon", "UpdateQuestGlow", "RefreshQuestItemButton", "RefreshRollWindow" }) do
 		if ns[name] then ns.Guard(ns[name]) end
 	end
@@ -3558,6 +3598,13 @@ local OUTSIDE_EFFECT = { letterbox = "outsideCineLetterbox", tint = "outsideCine
 	vignette = "outsideCineVignette", weather = "outsideCineWeather" }
 for _, tick in pairs(OUTSIDE_EFFECT) do DEFAULTS[tick] = false end
 ns.OUTSIDE_EFFECT = OUTSIDE_EFFECT
+-- And the Nameplates hub's rules (its Interface group): ticked, plates, their
+-- parts, names, icons and marks go by them with CineMode off too, as though
+-- it were on. Off to start with: the game's own plates outside CineMode.
+DEFAULTS.outsideCinePlates = false
+function ns.PlatesCinematic(cinematic)
+	return (cinematic or (ns.db and ns.db.outsideCinePlates)) and true or false
+end
 local EFFECT_ROWS = {} -- (their Show in rows' keys, made once)
 for _, key in ipairs(GRID_EFFECTS) do EFFECT_ROWS[key] = "effect:" .. key end
 local effectWanted = {}
@@ -3682,7 +3729,7 @@ local function OnUpdate(_, elapsed)
 		Step(ns.UpdateReadyOnly, restElapsed) -- (Cooldown Manager icons: Frames.lua)
 		Step(ns.WarmCombatShown) -- (the next frames' pass's combat rows, worked out here: Frames.lua)
 		Step(ns.UpdateMusic, cinematic, restElapsed)
-		Step(ns.UpdatePlates, cinematic, restElapsed)
+		Step(ns.UpdatePlates, ns.PlatesCinematic(cinematic), restElapsed) -- (Allow outside CineMode's Nameplates)
 		Step(ns.UpdateTooltip)
 		Step(ns.UpdateTaxi)
 		if not ns.IsSuspended() then
@@ -7535,6 +7582,10 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			end
 			ns.db.plateIconsAlwaysV1 = true
 		end
+		-- The class and role icons and the target marks left the Nameplates
+		-- page's grid for a When of their own (PlateIcons.lua). Once, after
+		-- the updates above that set their old ticks.
+		if ns.MigratePlateIconWhen then ns.MigratePlateIconWhen(ns.db) end
 		-- Immersive (CDM) now shows the Cooldown Manager in place of action
 		-- bars 1 to 3 with an enemy targeted too. Once, in that profile (and the
 		-- live settings when they're its), where its Tar enemy column is still as it was.

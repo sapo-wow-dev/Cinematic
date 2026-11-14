@@ -2020,7 +2020,7 @@ local subpages = {}
 -- queued as they're made and handed to the game in this order when setup ends
 -- (menu.Flush), so the order of the Create calls doesn't matter. One not named
 -- here goes last; a hub under another (hub.under) right under that one.
-local menu = { order = { "Profiles", "CineMode", "UI Manager", "Addons", "Visions", "Style", "Atmosphere", "Camera",
+local menu = { order = { "Profiles", "CineMode", "UI Manager", "Plates", "Addons", "Visions", "Style", "Atmosphere", "Camera",
 	"Keybinds", "Quality of life", "Community", "Dev" }, queue = {} }
 do
 	local function Register(entry)
@@ -2083,7 +2083,6 @@ do
 				return UnitFactionGroup("player") == "Horde" and "Interface\\Icons\\INV_BannerPVP_01"
 					or "Interface\\Icons\\INV_BannerPVP_02"
 			end, label = "HUD", section = "CineMode Autohide" },
-			{ "Nameplates", "Interface\\Icons\\Ability_Hunter_SniperShot", section = "CineMode Autohide" },
 			{ "Mouseover groups", "Interface\\Icons\\Spell_Holy_MindVision", label = "Hover Groups", section = "CineMode Autohide" },
 			{ "Gamepad", "Interface\\Icons\\INV_Gizmo_01", label = "Gamepad Frames", section = "CineMode Autohide" },
 			{ "Cursor Hide", "Interface\\Icons\\INV_Misc_Eye_01", section = "CineMode Autohide" }, -- (CursorHide.lua)
@@ -2152,13 +2151,22 @@ do
 			{ "Personal Style", "Interface\\Icons\\Spell_Holy_SealOfVengeance", label = "Personal Resource Style",
 				section = "HUD" },
 			{ "Tooltip Style", "Interface\\Icons\\INV_Misc_Note_05", label = "Tooltip Style", section = "HUD" },
-			{ "Nameplate Style", "Interface\\Icons\\Ability_Marksmanship", label = "Nameplate Style", section = "Overhead" },
-			{ "Name Style", "Interface\\Icons\\INV_Misc_Note_02", label = "Name Style", section = "Overhead" },
-			{ "Cast Bar Style", "Interface\\Icons\\Spell_Nature_Lightning", label = "Cast Bar Style", section = "Overhead" },
 			{ "Bubble Style", "Interface\\Icons\\Ability_Warrior_RallyingCry", label = "Chat Bubble Style",
 				section = "Overhead" },
 			{ "Combat Text Style", "Interface\\Icons\\Ability_Warrior_Riposte", label = "Combat Text Style",
 				section = "Overhead" },
+		} },
+		-- (Everything about nameplates, listed after UI Visibility: which show
+		-- (General: the Nameplates page, its id kept), the icons on them, then
+		-- their looks (Look: still Style > General's Enable Style and theme;
+		-- ids kept). name: not "Nameplates", the General page's id.)
+		{ name = "Plates", label = "Nameplates", note = { "Looks follow Style > General >", "Style General" },
+			colors = { Look = { 0.65, 0.45, 0.9 } }, pages = {
+			{ "Nameplates", "Interface\\Icons\\Ability_Hunter_SniperShot", label = "General" },
+			{ "Plate Icons", "Interface\\Icons\\INV_Misc_GroupNeedMore", label = "Icons" }, -- (PlateIcons.lua)
+			{ "Nameplate Style", "Interface\\Icons\\Ability_Marksmanship", label = "Nameplate Style", section = "Look" },
+			{ "Name Style", "Interface\\Icons\\INV_Misc_Note_02", label = "Name Style", section = "Look" },
+			{ "Cast Bar Style", "Interface\\Icons\\Spell_Nature_Lightning", label = "Cast Bar Style", section = "Look" },
 		} },
 		-- (General and the dev copy's Wind Guide in no section: plain icons)
 		{ name = "Visions", colors = { Combat = { 0.85, 0.3, 0.25 }, World = { 0.35, 0.6, 0.9 } }, pages = {
@@ -2388,10 +2396,13 @@ do
 		-- (pages in no section: a band of their own too, with no name)
 		for index, run in ipairs(runs) do
 			local wide = #run * (size + TILE_GAP) - TILE_GAP + BAND_PAD * 2
-			if x > EDGE and x + wide > width - EDGE then
+			local band = Band(hub, run.section or index, run.section)
+			-- (A name wider than its few icons: the next band starts past the
+			-- name, so the two names never run together.)
+			local room = math.max(wide, band.label:GetStringWidth() + 4)
+			if x > EDGE and x + room > width - EDGE then
 				x, y = EDGE, y - LABEL_H - high - TILE_GAP
 			end
-			local band = Band(hub, run.section or index, run.section)
 			band:ClearAllPoints()
 			band:SetPoint("TOPLEFT", hub.frame, "TOPLEFT", x, y - LABEL_H)
 			band:SetSize(wide, high)
@@ -2403,7 +2414,7 @@ do
 				tile:SetPoint("TOPLEFT", band, "TOPLEFT", BAND_PAD + (i - 1) * (size + TILE_GAP), -BAND_PAD)
 				tile:Show()
 			end
-			x = x + wide + SECTION_GAP
+			x = x + room + SECTION_GAP
 		end
 		-- (a band left over from an earlier layout, pages since added: put away)
 		for _, band in pairs(hub.bands or {}) do
@@ -3047,21 +3058,23 @@ end
 local function CreateRevealPanel()
 	local canvas, content = CreateScrollPage()
 
-	-- Folder tabs at the top: one for each hub CineMode works through, its pages
-	-- on cards (on or off, a click away) built from the hubs as they first show;
-	-- then Settings, this page's own (everything made on it below the cards,
-	-- moved onto host).
+	-- Folder tabs at the top: Overview, a group for each hub CineMode works
+	-- through, its pages on cards (on or off, a click away) built from the hubs
+	-- as they first show; then Settings, this page's own (everything made on it
+	-- below the cards, moved onto host).
 	local OVERVIEW_HUBS = {
 		{ "UI Manager", L["UI Visibility"], L["What fades in CineMode, and what brings it back."] },
+		{ "Plates", L["Nameplates"], L["Which nameplates and names stay up in CineMode, and what's on them."] },
 		{ "Atmosphere", L["Atmosphere"], L["How the world looks and sounds in CineMode."] },
 		{ "Camera", L["Camera"], L["The camera coming alive while CineMode is on."] },
 	}
-	local SETTINGS_TAB = #OVERVIEW_HUBS + 1
+	local OVERVIEW_TAB, SETTINGS_TAB = 1, 2
 	local overview, host, PickTab, FillOverview
 	local picked = 1 -- (the tab shown, kept while the game runs)
-	local tabList = {}
-	for i, group in ipairs(OVERVIEW_HUBS) do tabList[i] = { group[2], group[3] } end
-	tabList[SETTINGS_TAB] = { L["Settings"], L["How fast the UI fades, the Calm Timer, combat text and error messages."] }
+	local tabList = {
+		{ L["Overview"], L["Every page CineMode works through, hub by hub: on or off, a click away."] },
+		{ L["Settings"], L["How fast the UI fades, the Calm Timer, combat text and error messages."] },
+	}
 	local tabsPanel, _, ShowTab, tabsBase = ns.FolderTabs(content, tabList, function(i) PickTab(i) end)
 	tabsBase:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -(ns.FOLDER_TAB_HEIGHT + 16))
 	tabsPanel:SetPoint("TOPLEFT", tabsBase)
@@ -3102,17 +3115,10 @@ local function CreateRevealPanel()
 		end
 		GameTooltip:Show()
 	end
-	local function MakeCard(page, tab, spot)
+	-- (Placed by FillOverview: under its hub's heading, the cards two a row.)
+	local function MakeCard(page, tab)
 		local card = CreateFrame("Button", nil, overview)
 		card:SetHeight(CARD_H)
-		local y = -math.floor((spot - 1) / 2) * (CARD_H + CARD_GAP)
-		if spot % 2 == 1 then
-			card:SetPoint("TOPLEFT", overview, "TOPLEFT", 0, y)
-			card:SetPoint("TOPRIGHT", mid, "TOP", -CARD_GAP / 2, y)
-		else
-			card:SetPoint("TOPLEFT", mid, "TOP", CARD_GAP / 2, y)
-			card:SetPoint("TOPRIGHT", overview, "TOPRIGHT", 0, y)
-		end
 		local bg = card:CreateTexture(nil, "BACKGROUND")
 		bg:SetAllPoints()
 		bg:SetColorTexture(0.05, 0.05, 0.06, 0.75)
@@ -3186,26 +3192,58 @@ local function CreateRevealPanel()
 			state.knob:SetPoint("LEFT", state.track, "LEFT", inset, 0)
 		end
 	end
-	-- Every card as its page is now, the picked tab's shown, and how many of
-	-- those are on.
+	-- Each hub's heading on the Overview, its line of what it's for beside it.
+	local HEADING_H, GROUP_GAP = 22, 14
+	local headings = {}
+	local function Heading(group)
+		local heading = headings[group[1]]
+		if heading then return heading end
+		heading = Label(overview, "GameFontNormal", group[2])
+		heading.note = Label(overview, "GameFontDisableSmall", group[3])
+		heading.note:SetPoint("BOTTOMLEFT", heading, "BOTTOMRIGHT", 10, 1)
+		headings[group[1]] = heading
+		return heading
+	end
+	-- Every card as its page is now, under its hub's heading, and how many
+	-- of them are on.
 	function FillOverview()
 		if not ns.GetDB() then return end
 		local states = {}
+		local y = 0
 		for tab, group in ipairs(OVERVIEW_HUBS) do
-			for spot, page in ipairs(ns.HubPageStates(group[1]) or {}) do
-				states[page.name] = page
-				cards[page.name] = cards[page.name] or MakeCard(page, tab, spot)
+			local pages = ns.HubPageStates(group[1]) or {}
+			local heading = Heading(group)
+			heading:SetShown(#pages > 0)
+			heading.note:SetShown(#pages > 0)
+			if #pages > 0 then
+				heading:ClearAllPoints()
+				heading:SetPoint("TOPLEFT", overview, "TOPLEFT", 0, y)
+				y = y - HEADING_H
+				for spot, page in ipairs(pages) do
+					states[page.name] = page
+					local card = cards[page.name] or MakeCard(page, tab)
+					cards[page.name] = card
+					local top = y - math.floor((spot - 1) / 2) * (CARD_H + CARD_GAP)
+					card:ClearAllPoints()
+					if spot % 2 == 1 then
+						card:SetPoint("TOPLEFT", overview, "TOPLEFT", 0, top)
+						card:SetPoint("TOPRIGHT", mid, "TOP", -CARD_GAP / 2, top)
+					else
+						card:SetPoint("TOPLEFT", mid, "TOP", CARD_GAP / 2, top)
+						card:SetPoint("TOPRIGHT", overview, "TOPRIGHT", 0, top)
+					end
+				end
+				y = y - math.ceil(#pages / 2) * (CARD_H + CARD_GAP) - GROUP_GAP
 			end
 		end
+		overview:SetHeight(math.max(1, -y))
 		local count, onCount = 0, 0
 		for name, card in pairs(cards) do
 			local page, state = states[name], card.state
-			card:SetShown(card.tab == picked)
+			card:SetShown(page ~= nil)
 			if page and page.hasSwitch then
-				if card.tab == picked then
-					count = count + 1
-					if page.on then onCount = onCount + 1 end
-				end
+				count = count + 1
+				if page.on then onCount = onCount + 1 end
 				state.page = page
 				PaintSwitch(state, page)
 				state:Show()
@@ -3236,8 +3274,46 @@ local function CreateRevealPanel()
 		"Buffs/debuffs page, the minimap on the Minimap page, the quest tracker on the Quest tracker page, " ..
 		"chat on the Chat page."])
 
+	-- Folder tabs of its own (ns.PageTabsBelow): General, Exit CineMode, and
+	-- Outside CineMode. Each section's controls, made on content, go onto its
+	-- tab's frame as the next section starts (TakeInto), each tab's stack
+	-- starting at its top.
+	local subHosts, _, SubShown = ns.PageTabsBelow(content, subtitle, {
+		{ L["General"], L["How fast the UI fades, the Calm Timer, and fights coming in."] },
+		{ L["Exit CineMode"], L["What takes you out of CineMode: fights, places, groups, moving and windows."] },
+		{ L["Outside CineMode"], L["What still works while CineMode is off."] },
+	}, "CineMode/settings")
+	-- (Search opens the nearest tab only: Settings first, then this one.)
+	for _, subHost in ipairs(subHosts) do
+		local open = subHost.openSection
+		subHost.openSection = function()
+			PickTab(SETTINGS_TAB)
+			open()
+		end
+	end
+	local taken = {}
+	for _, list in ipairs({ { content:GetChildren() }, { content:GetRegions() } }) do
+		for _, object in ipairs(list) do taken[object] = true end
+	end
+	local function TakeInto(i)
+		for _, list in ipairs({ { content:GetChildren() }, { content:GetRegions() } }) do
+			for _, object in ipairs(list) do
+				if not taken[object] then
+					taken[object] = true
+					object:SetParent(subHosts[i])
+				end
+			end
+		end
+	end
+	local function TabTop(i)
+		local top = CreateFrame("Frame", nil, subHosts[i])
+		top:SetSize(1, 1)
+		top:SetPoint("TOPLEFT", subHosts[i], "TOPLEFT", 0, 0)
+		return top
+	end
+
 	-- Each slider on one line with its name (an inline stack, as on Graphics+).
-	local stack = Stack(subtitle, "label", true)
+	local stack = Stack(TabTop(1), "label", true)
 
 	-- Start in CineMode: the main page's box again, the same setting (its
 	-- tip too), so the page has all of CineMode's coming in and going out.
@@ -3381,8 +3457,11 @@ local function CreateRevealPanel()
 
 	-- What takes you out of CineMode: fights, places, groups and moving (from
 	-- the main page, 2026-11-11), then windows (the rest of the section set
-	-- aside above).
-	stack:Header(content, L["Exit CineMode"])
+	-- aside above): its own tab. (Windows and NPCs, made above, go with it.)
+	TakeInto(1)
+	for _, control in ipairs({ windows, npcs }) do control:SetParent(subHosts[2]) end
+	stack = Stack(TabTop(2), "label", true)
+	SetSection(content, L["Exit CineMode"]) -- (no heading: the tab says it; for search and the modules)
 
 	-- Stored the other way round (stayInCombat), as the Standard Frames page's lists apply while staying.
 	local combat = Check(content, "stayInCombat", L["In combat"],
@@ -3456,8 +3535,11 @@ local function CreateRevealPanel()
 	-- What still works while CineMode is off (2026-11-13): each visual effect
 	-- (Core.lua's OUTSIDE_EFFECT, off to start with) and each vision
 	-- (OUTSIDE_CINE, on to start with). A group each, in two columns.
-	stack:Header(content, L["Allow outside CineMode"])
-	stack:Help(content, L["Ticked, it works while CineMode is off too. Unticked, only while CineMode is on."])
+	-- (Its own tab: Outside CineMode.)
+	TakeInto(2)
+	stack = Stack(TabTop(3), "label", true)
+	SetSection(content, L["Allow outside CineMode"]) -- (no heading: the tab says it; for search and the modules)
+	stack:Note(content, L["Ticked, it works while CineMode is off too. Unticked, only while CineMode is on."], 520)
 	local function OutsideChanged()
 		if ns.RefreshOutsideCine then ns.RefreshOutsideCine(true) end
 	end
@@ -3487,6 +3569,8 @@ local function CreateRevealPanel()
 		local effect = item[1]
 		effectRows[#effectRows + 1] = { ns.OUTSIDE_EFFECT[effect], item[2] } -- (never greyed by its page)
 	end
+	-- (Interface: the Nameplates hub's rules, off to start with: Core's outsideCinePlates.)
+	Group(L["Interface"], { { "outsideCinePlates", L["Nameplates"] } })
 	Group(L["Visual effects"], effectRows)
 	local visionRows = {}
 	for _, item in ipairs({
@@ -3499,6 +3583,7 @@ local function CreateRevealPanel()
 		visionRows[#visionRows + 1] = { ns.OUTSIDE_CINE[item[1]], L[item[2]] } -- (never greyed by its page)
 	end
 	Group(L["Visions"], visionRows)
+	TakeInto(3)
 
 	-- The Settings tab: everything made since the overview, on a frame of its
 	-- own to show and hide (1 by 1: one with no height draws none of it).
@@ -3519,7 +3604,8 @@ local function CreateRevealPanel()
 		ShowTab(i)
 		overview:SetShown(i ~= SETTINGS_TAB)
 		host:SetShown(i == SETTINGS_TAB)
-		if i ~= SETTINGS_TAB and ns.Flag(canvas:IsVisible()) then FillOverview() end
+		if i == OVERVIEW_TAB and ns.Flag(canvas:IsVisible()) then FillOverview() end
+		if i == SETTINGS_TAB then SubShown() end
 		FitContentHeight(content)
 		C_Timer.After(0, function() FitContentHeight(content) end)
 	end
@@ -8503,14 +8589,7 @@ local function CreatePlatesPanel()
 
 	local title = Label(content, "GameFontNormalLarge", L["Nameplates"])
 	title:SetPoint("TOPLEFT", 16, -16)
-	-- Their look: the Style hub's Nameplates, Names and Cast bars pages.
-	local plateLink = ns.StyleLink(content, title, "Nameplate Style",
-		L["Opens the Nameplate Style page: how nameplates look."], Tooltip, L["Plate style"])
-	local nameLink = ns.StyleLink(content, title, "Name Style",
-		L["Opens the Name Style page: how names over heads look."], Tooltip, L["Name style"], plateLink)
-	ns.StyleLink(content, title, "Cast Bar Style",
-		L["Opens the Cast Bar Style page: how nameplate cast bars look."], Tooltip, L["Cast bar style"],
-		nameLink)
+	-- (Their icons and looks: the Nameplates hub's other pages, beside this one.)
 
 	local subtitle = PageIntro(content, title,
 		L["Which nameplates and names stay up in CineMode: in groups, in fights and in each kind of place."])
@@ -8551,13 +8630,15 @@ local function CreatePlatesPanel()
 	local function PlaceRow(top, r, label, indent, spec)
 		local y = -FRAME_HEADING_HEIGHT - 4 - (r - 1) * ROW_HEIGHT
 		local rowLabel = Label(content, indent and "GameFontHighlightSmall" or "GameFontHighlight", label)
-		rowLabel.indentX = indent and 18 or 0 -- (what goes below lines up with the grid, not the indent)
+		-- (What goes below lines up with the grid, not the indent. labelShift:
+		-- room for a +/- (kind rows) or a part row's indent under its kind.)
+		rowLabel.indentX = (indent and 18 or 0) + (top.labelShift or 0)
 		rowLabel:SetPoint("TOPLEFT", top, "TOPLEFT", rowLabel.indentX, y - 5)
 		rowLabel:SetWidth(GRID_LABEL - 4 - ns.GRID_DOT_ROOM - rowLabel.indentX)
 		rowLabel:SetJustifyH("LEFT")
 		rowLabel:SetWordWrap(false)
 		ns.LabelHover(content, rowLabel)
-		spec.band = r
+		spec.band = top.band or r
 		local row = ns.GridRow(ns.GRID_KIT, content, GRID_LABEL, top.layout, spec)
 		row.debugName = label -- (for the dev copy's page timing)
 		row:SetPoint("TOPLEFT", top, "TOPLEFT", GRID_LABEL, y)
@@ -8793,7 +8874,7 @@ local function CreatePlatesPanel()
 			help = { [ns.GRID_COMBAT] = L["Shown in fights: any of them, or only while you're PvP flagged."] },
 			enabled = Available,
 			override = part and function() return ns.StyleOverrideText("plate" .. kind[1]) end or nil,
-			rule = layout.edit and { key = RuleKey, label = function() return kind[2] end,
+			rule = layout.edit and { key = RuleKey, label = function() return kind.title or kind[2] end,
 				changed = function()
 					local text = ns.GetDB().frameRules[ruleKey]
 					if text and text:find("%S") then ns.EnablePlateRow(kind[1]) end
@@ -8801,10 +8882,152 @@ local function CreatePlatesPanel()
 			liveRule = function() return TicksRule(alwaysKey, ticks) end,
 		})
 	end
-	for r, kind in ipairs(FRIENDLY_KINDS) do
-		AddPlateRow(columnTop, r, kind)
+
+	-- The Friendly and Enemy grids' rows, each kind's (ns.PLATE_OWN_PART_KINDS)
+	-- with a +/- that opens its parts under it, as the HUD page's unit frames
+	-- do: Use custom parts unticked, a line saying it goes by the Default
+	-- parts tab (a link there); ticked, a row for each part of its own (keys
+	-- plate<column>Part<kind><part>, copied from the default rows as it's
+	-- ticked). Each row's top hangs under the block above, so opening one
+	-- moves the rest down. Gives the end of the last block, for the panel's foot.
+	local TOGGLE_W = 18
+	local OWN_KIND = {}
+	for _, kind in ipairs(ns.PLATE_OWN_PART_KINDS) do OWN_KIND[kind] = true end
+	local defaultPartsSection -- (the Default parts tab: made below)
+	-- The parts of the plates (see PlateParts): key, label, tip. Retail's plates have no level.
+	local PLATE_PART_LABELS
+	-- (Raid markers beyond plate range are the game's, and so is yours.)
+	local markerRangeTip = L[" Beyond nameplate range (the game's nameplateMaxDistance setting: 60 yards on retail) " ..
+		"the game draws raid markers over units itself, as it does over your own head, and addons can't hide them."]
+	PLATE_PART_LABELS = {
+		{ "Health", L["Health bar"], L[" The health bar."] },
+		{ "Name", L["Name"], L[" The name on the plate (the Names grid below is for names without a plate)."] },
+		{ "CastBar", L["Cast bar"], L[" The cast bar."] },
+		{ "Buffs", L["Buffs"], L[" The buffs shown on the plate."] },
+		{ "Debuffs", L["Debuffs"], L[" The debuffs (and crowd control) shown on the plate."] },
+		{ "RaidMarker", L["Raid marker"], L[" The raid target marker (skull, star...)."] .. markerRangeTip },
+		{ "Classification", L["Elite/rare icon"], L[" The elite, rare or boss icon."] },
+		{ "Level", L["Level"], L[" The level."] },
+		{ "Threat", L["Threat glow"], L[" The glow while a mob has you (or is about to) as its target."] },
+		{ "Highlight", L["Target highlight"], L[" The border round your target's or mouseover's plate."] },
+		{ "Widgets", L["Quest/widget icons"], L[" Quest objective icons and other widgets over the plate."] },
+	}
+	local function AddKindRows(top, kinds)
+		top.rows = top.rows or {}
+		local blocks, after = {}, nil
+		local function Relayout()
+			local db = ns.GetDB() or {} -- (none yet while the page is first built)
+			for _, block in ipairs(blocks) do
+				local open = block.parts and SectionState.Restore(block.state) and true or false
+				local custom = db["plateOwnParts" .. block.kind] and true or false
+				block.box:SetShown(open)
+				block.box:SetHeight(open and (ROW_HEIGHT + (custom and block.parts * ROW_HEIGHT or 0) + 4) or 0.001)
+				if block.parts then
+					block.rowsBox:SetShown(custom)
+					block.usingDefault:SetShown(not custom)
+					block.icon:SetTexture(open and "Interface\\Buttons\\UI-MinusButton-Up"
+						or "Interface\\Buttons\\UI-PlusButton-Up")
+				end
+			end
+			FitContentHeight(content)
+		end
+		for i, kind in ipairs(kinds) do
+			local rowTop = top
+			if i > 1 then
+				rowTop = CreateFrame("Frame", nil, content)
+				rowTop:SetSize(1, 1)
+				rowTop:SetPoint("TOPLEFT", after, "BOTTOMLEFT", 0, FRAME_HEADING_HEIGHT + 4)
+				rowTop.layout, rowTop.rows = top.layout, top.rows
+			end
+			rowTop.labelShift, rowTop.band = TOGGLE_W, i
+			AddPlateRow(rowTop, 1, kind)
+			local box = CreateFrame("Frame", nil, content)
+			box:SetPoint("TOPLEFT", rowTop, "TOPLEFT", 0, -FRAME_HEADING_HEIGHT - 4 - ROW_HEIGHT)
+			box:SetSize(SECTION_WIDTH, 0.001)
+			box:Hide()
+			local block = { kind = kind[1], box = box, state = { id = "Nameplates/kind/" .. kind[1], open = false } }
+			blocks[i], after = block, box
+			if OWN_KIND[kind[1]] then
+				local function Toggle()
+					SectionState.Save(block.state, not block.state.open)
+					Relayout()
+				end
+				-- (Search finding a part opens its kind's block.)
+				box.openSection = function()
+					SectionState.Save(block.state, true)
+					Relayout()
+				end
+				local plus = CreateFrame("Button", nil, content)
+				plus:SetSize(16, 16)
+				plus:SetPoint("LEFT", rowTop, "TOPLEFT", (kind[3] and 18 or 0),
+					-FRAME_HEADING_HEIGHT - 4 - ROW_HEIGHT / 2)
+				block.icon = plus:CreateTexture(nil, "ARTWORK")
+				block.icon:SetAllPoints()
+				plus:SetScript("OnClick", Toggle)
+				Tooltip(plus, L["Shows or hides its parts."])
+				local before = Widgets() -- (all from here in its box, hidden while closed: not the +/-)
+				local inset = TOGGLE_W + (kind[3] and 18 or 0) + 10
+				local custom = Check(content, "plateOwnParts" .. kind[1], L["Use custom parts"],
+					L["Ticked: these nameplates' parts go by rows of their own, below, starting as the Default " ..
+					"parts tab's. Unticked: they go by the Default parts tab."], function(value)
+					ns.GetDB()["plateOwnParts" .. kind[1]] = value
+					if value then ns.CopyDefaultPlateParts(kind[1]) end
+					Relayout()
+					Refresh()
+				end)
+				custom:SetPoint("TOPLEFT", box, "TOPLEFT", inset - 4, 0)
+				-- (Unticked: the tab it goes by, a click away.)
+				local usingDefault = CreateFrame("Button", nil, content)
+				usingDefault.text = usingDefault:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+				usingDefault.text:SetPoint("LEFT")
+				usingDefault.text:SetText(L["Using Default parts >"])
+				usingDefault:SetSize(usingDefault.text:GetStringWidth() + 4, 18)
+				usingDefault:SetPoint("LEFT", custom.Text or custom.text or custom, "RIGHT", 16, 0)
+				usingDefault:SetScript("OnClick", function()
+					if defaultPartsSection then defaultPartsSection.body.openSection() end
+				end)
+				usingDefault:SetScript("OnEnter", function() usingDefault.text:SetTextColor(1, 0.82, 0) end)
+				usingDefault:SetScript("OnLeave", function() usingDefault.text:SetTextColor(0.5, 0.5, 0.5) end)
+				block.usingDefault = usingDefault
+				-- Its parts' rows.
+				local rowsBox = CreateFrame("Frame", nil, content)
+				rowsBox:SetPoint("TOPLEFT", box, "TOPLEFT", 0, -ROW_HEIGHT)
+				rowsBox:SetSize(SECTION_WIDTH, 1)
+				block.rowsBox = rowsBox
+				local partTop = CreateFrame("Frame", nil, content)
+				partTop:SetSize(1, 1)
+				partTop:SetPoint("TOPLEFT", rowsBox, "TOPLEFT", 0, FRAME_HEADING_HEIGHT + 4)
+				partTop.layout, partTop.rows, partTop.labelShift = top.layout, top.rows, inset
+				local rowsBefore = Widgets()
+				local k = 0
+				for _, part in ipairs(PLATE_PART_LABELS) do
+					if not (part[1] == "Level" and ns.isRetail) then
+						k = k + 1
+						local key = "Part" .. kind[1] .. part[1]
+						UNIT_ROW_TIPS[key] = part[3] .. L[" In CineMode, on these nameplates while they're up."]
+						if INSTANCE_LOCKED[kind[1]] then INSTANCE_LOCKED[key] = true end
+						AddPlateRow(partTop, k, { key, part[2], title = kind[2] .. ": " .. part[2] })
+					end
+				end
+				for object in pairs(Widgets()) do
+					if not rowsBefore[object] then object:SetParent(rowsBox) end
+				end
+				block.parts = k
+				for object in pairs(Widgets()) do
+					if not before[object] and object ~= rowsBox then object:SetParent(box) end
+				end
+				rowsBox:SetParent(box)
+			end
+		end
+		Relayout()
+		content:HookScript("OnShow", Relayout) -- (settings loaded, or another profile since)
+		local foot = CreateFrame("Frame", nil, content)
+		foot:SetSize(1, 1)
+		foot:SetPoint("TOPLEFT", after, "BOTTOMLEFT")
+		return foot, Relayout
 	end
-	EndSection(friendlySection, lastLabel)
+	local friendlyFoot = AddKindRows(columnTop, FRIENDLY_KINDS)
+	EndSection(friendlySection, friendlyFoot)
 
 	-- Friendly plates in dungeons and raids: the game won't let addons fade
 	-- them there, so each kind is just on or off (see Effects). The grids
@@ -8852,61 +9075,34 @@ local function CreatePlatesPanel()
 	table.insert(sections, 1, table.remove(sections)) -- (its tab before Friendly's)
 	BeginSection(enemySection)
 	local enemyTop = TableTop(enemySection.frame, PLATE_LAYOUT)
-	for r, kind in ipairs(ENEMY_KINDS) do
-		AddPlateRow(enemyTop, r, kind)
-	end
-	EndSection(enemySection, lastLabel)
+	local enemyFoot = AddKindRows(enemyTop, ENEMY_KINDS)
+	EndSection(enemySection, enemyFoot)
 
 	-- The parts of the plates that are up (see PlateParts), laid out the same
 	-- way. Retail's plates have no level.
 	local partTip = L[" In CineMode, on the nameplates that are up."]
-	-- (Raid markers beyond plate range are the game's, and so is yours.)
-	local markerRangeTip = L[" Beyond nameplate range (the game's nameplateMaxDistance setting: 60 yards on retail) " ..
-		"the game draws raid markers over units itself, as it does over your own head, and addons can't hide them."]
-	local PARTS = {
-		{ "Health", L["Health bar"], L[" The health bar."] },
-		{ "Name", L["Name"], L[" The name on the plate (the Names grid below is for names without a plate)."] },
-		{ "CastBar", L["Cast bar"], L[" The cast bar."] },
-		{ "Buffs", L["Buffs"], L[" The buffs shown on the plate."] },
-		{ "Debuffs", L["Debuffs"], L[" The debuffs (and crowd control) shown on the plate."] },
-		{ "RaidMarker", L["Raid marker"], L[" The raid target marker (skull, star...)."] .. markerRangeTip },
-		{ "Classification", L["Elite/rare icon"], L[" The elite, rare or boss icon."] },
-		{ "Level", L["Level"], L[" The level."] },
-		{ "Threat", L["Threat glow"], L[" The glow while a mob has you (or is about to) as its target."] },
-		{ "Highlight", L["Target highlight"], L[" The border round your target's or mouseover's plate."] },
-		{ "Widgets", L["Quest/widget icons"], L[" Quest objective icons and other widgets over the plate."] },
-		{ "ClassFriendly", L["Class icon (friendly)"], L[" A class icon beside friendly players' health bars."], icon = true },
-		{ "ClassEnemy", L["Class icon (enemy)"], L[" A class icon beside enemy players' health bars."], icon = true },
-		{ "RoleTank", L["Role icon (tank)"], L[" A role icon beside your group's tanks' health bars."], icon = true },
-		{ "RoleHealer", L["Role icon (healer)"], L[" A role icon beside your group's healers' health bars."], icon = true },
-		{ "RoleDamager", L["Role icon (damage)"], L[" A role icon beside your group's damage dealers' health bars."],
-			icon = true },
-		{ "TargetArrow", L["Target Indicator"], L[" A mark on your target's nameplate (and its name, health bar or " ..
-			"border in its color), shown even while the rest of the plate is faded or shows just its name. Its " ..
-			"look: the Nameplate Style page."], icon = true },
-	}
-	-- (The class and role icons and the arrow are the addon's own: off unless
-	-- ticked, outside CineMode shown only with Always ticked, and in a section
-	-- of their own, Cinematic plate parts, below the game's.)
-	local iconTip = L[" Off unless ticked. In CineMode, on the nameplates that are up; outside it, only with Always ticked."]
+	local PARTS = PLATE_PART_LABELS
+	-- (The class and role icons and the target marks, the addon's own, have a
+	-- When each on the Nameplates hub's Icons and Nameplate Style pages: PlateIcons.lua.)
 	local r
-	local function PartsSection(heading, key, tab, ours)
+	local function PartsSection(heading, key, tab)
 		local section = Section(heading, key, tab)
 		BeginSection(section)
 		local top = TableTop(section.frame, PLATE_LAYOUT)
 		r = 0
 		for _, part in ipairs(PARTS) do
-			if (not part.icon) == (not ours) and not (part[1] == "Level" and ns.isRetail) then
+			if not (part[1] == "Level" and ns.isRetail) then
 				r = r + 1
-				UNIT_ROW_TIPS["Part" .. part[1]] = part[3] .. (part.icon and iconTip or partTip)
+				UNIT_ROW_TIPS["Part" .. part[1]] = part[3] .. partTip
 				AddPlateRow(top, r, { "Part" .. part[1], part[2] })
 			end
 		end
 		EndSection(section, lastLabel)
 		return top
 	end
-	local partsTop = PartsSection(L["Plate parts"], "Parts")
-	local ourPartsTop = PartsSection(L["Cinematic plate parts"], "CinematicParts", L["Cinematic"], true)
+	-- (The Default parts tab: every kind's, but for kinds set to Use custom parts.)
+	local partsTop = PartsSection(L["Default plate parts"], "Parts", L["Default parts"])
+	defaultPartsSection = sections[#sections]
 
 	-- Names, laid out the same way. Outside cinematic mode the game's own
 	-- name options decide.
@@ -9163,7 +9359,7 @@ local function CreatePlatesPanel()
 	AddNameRow(targetTop, 2, targetGroup, "YourTarget", L["Names"], nil, targetNameTip)
 	EndSection(targetSection, lastLabel)
 
-	for _, top in ipairs({ targetTop, columnTop, enemyTop, partsTop, ourPartsTop, namesTop }) do
+	for _, top in ipairs({ targetTop, columnTop, enemyTop, partsTop, namesTop }) do
 		ns.GridDots(content, top.rows or {})
 	end
 
@@ -9565,7 +9761,9 @@ do
 	-- (Aggro: -, then Your target's, then the rest.)
 	local AGGRO_STYLES = { MARK_STYLES[1], { value = "same", text = L["Your target's"] } }
 	for i = 2, #MARK_STYLES do AGGRO_STYLES[#AGGRO_STYLES + 1] = MARK_STYLES[i] end
-	local OTHERS_STYLES = MARK_STYLES
+	-- (Default's: its - is the game's own look, no mark.)
+	local OTHERS_STYLES = { { value = "none", text = L["The game's"] } }
+	for i = 2, #MARK_STYLES do OTHERS_STYLES[#OTHERS_STYLES + 1] = MARK_STYLES[i] end
 	local MARK_COLORS = {
 		{ value = "gold", text = L["Gold"] },
 		{ value = "reaction", text = L["By reaction"] },
@@ -9585,8 +9783,12 @@ do
 	-- A row's line: where its parts start, from its left, and its size; its
 	-- drawer under it, in from the left, a line each (Row, Name, Mark, Color,
 	-- Plate, When; Default's own no Row: it's always there).
-	local SHOW_X, PREVIEW_X, NAME_X, CHIPS_X = 16, 44, 92, 290
-	local ROW_W, NAME_W, CHIPS_W, NUMBER_W = 590, 192, 228, 22
+	-- (Name first, then a column each: Mark (its preview), Plate (its
+	-- chips: opacity, colors, size) and When (its chip), each a heading over
+	-- the grid, in the color its drawer line's name has (COLUMN_COLORS).)
+	local SHOW_X, NAME_X, PREVIEW_X, PLATE_X, WHEN_X = 16, 44, 232, 290, 414
+	local ROW_W, NAME_W, PLATE_W, WHEN_W, NUMBER_W = 590, 186, 118, 128, 22 -- (When: up to the copy button)
+	local COLUMN_COLORS = { Mark = { 0.85, 0.65, 1 }, Plate = { 1, 0.8, 0.35 }, When = { 0.55, 0.8, 1 } }
 	local DRAWER_X, LINE_H, LABEL_W = 44, 34, 48
 	-- The Also color column's parts: setting (<kind>Color<part>), name, tip,
 	-- and (targetOnly) whether only your target's plate has one: the game's
@@ -9607,8 +9809,8 @@ do
 		local subtitle = PageIntro(content, title,
 			L["How your target, focus and the unit under the mouse stand out on the nameplates, for when no " ..
 			"target frame shows them: a mark on each one's plate, a row for each in the grid, and its name, " ..
-			"health bar or border in its mark's color (the row's Also color). When they show is the Target Indicator row's, on " ..
-			"the Nameplates page's Cinematic plate parts grid. Changes show at once, here and on the plates."])
+			"health bar or border in its mark's color (the row's Also color). When they show: Show, below. " ..
+			"Changes show at once, here and on the plates."])
 		-- (A warning triangle past the "?": friendly plates are the game's in
 		-- dungeons and raids, as on the Nameplates page's Dungeons & raids tab.)
 		PageIntro(content, content.pageHelp or title,
@@ -9624,187 +9826,281 @@ do
 		end
 		-- (Its switch: the marks and their colors on the plates, or none at all.)
 		local switch = PageSwitch(content, "handlePlateStyle", L["Enable Page"],
-			L["On: the marks and colors on this page show on the plates, when the Nameplates page's Target " ..
-			"Indicator row says. Off: none of them do. Each setting keeps its value for when you turn this " ..
-			"back on."], subtitle, Changed)
+			L["On: the marks and colors on this page show on the plates, where its Show in row says. Off: none " ..
+			"of them do. Each setting keeps its value for when you turn this back on."], subtitle, Changed)
 		local stack = Stack(switch, "check")
+		-- Where they show: a Show in row (PlateIcons.lua, as the Icons page's).
+		local showHeader = stack:Header(content, L["Show in"])
+		local showRow = ShowTable(content, showHeader, { opts = { anyFight = true }, underHeader = true,
+			ns.TargetMarksShowRow(Changed) }, L["Nameplate Style"])
+		stack:Continue(showRow, "label")
 
-		-- The preview: one plate, large, with the look of the row last picked
-		-- (clicked, or added; Default to start with): its mark, its name and
-		-- health bar in their colors or its Also color's, the game's border
-		-- round your target's bar, at its opacity.
+		-- The preview, as the Unit Frame Style page's: a scene of plates, one
+		-- for each row of the grid (the first few, Default at the back), each
+		-- drawn as this client's own plates are (its name over the bar,
+		-- Forever's level box at the bar's right end) and dressed by its row:
+		-- its mark, its name and health bar in their colors or its Also
+		-- color's, the game's border round your target's bar, its opacity and
+		-- size. The row being edited glows; a plate clicked opens its row.
 		local previewed = "others"
 		preview = CreateFrame("Frame", nil, content)
-		preview:SetSize(560, 160)
+		preview:SetSize(560, 190)
 		stack:Add(preview, "label")
 		ns.StylePopout(preview, Tooltip) -- (StylePages.lua)
-		ns.StyleScene(preview, 0.55, 0.8) -- (the Style pages' scene, darker under the plate: StylePages.lua)
-		local caption = Label(preview, "GameFontNormal", "")
-		caption:SetPoint("TOPLEFT", 8, -7)
+		if preview.SetClipsChildren then preview:SetClipsChildren(true) end
+		local caption = preview:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		caption:SetPoint("TOPLEFT", 6, -5)
+		caption:SetText(L["Preview"])
 		caption.searchSkip = true
-		local holder = CreateFrame("Frame", nil, preview)
-		holder:SetSize(240, 80)
-		holder:SetScale(1.6)
-		holder:SetPoint("CENTER", preview, "CENTER", 0, -6)
-		local bar = CreateFrame("Frame", nil, holder)
-		bar:SetSize(150, 11)
-		bar:SetPoint("CENTER", holder, "CENTER", 0, -6)
-		bar:SetFrameLevel(holder:GetFrameLevel() + 2)
-		local barEdge = bar:CreateTexture(nil, "BORDER")
-		barEdge:SetPoint("TOPLEFT", -1, 1)
-		barEdge:SetPoint("BOTTOMRIGHT", 1, -1)
-		barEdge:SetColorTexture(0, 0, 0, 1)
-		-- (The health left, from the left; the lost part dark in its color.)
-		local barBack = bar:CreateTexture(nil, "ARTWORK", nil, -1)
-		barBack:SetAllPoints()
-		local barFill = bar:CreateTexture(nil, "ARTWORK")
-		barFill:SetPoint("TOPLEFT")
-		barFill:SetPoint("BOTTOMLEFT")
-		local function BarColour(r, g, b)
-			barFill:SetColorTexture(r, g, b, 1)
-			barBack:SetColorTexture(r * 0.25, g * 0.25, b * 0.25, 1)
-		end
-		-- (The game's border round your target's bar: 2 pixels, just outside its black edge.)
-		local border = {}
-		for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
-			local edge = bar:CreateTexture(nil, "BORDER", nil, 1)
-			if side == "TOP" or side == "BOTTOM" then
-				edge:SetPoint(side .. "LEFT", barEdge, side .. "LEFT", -2, side == "TOP" and 2 or -2)
-				edge:SetPoint(side .. "RIGHT", barEdge, side .. "RIGHT", 2, side == "TOP" and 2 or -2)
-				edge:SetHeight(2)
-			else
-				edge:SetPoint("TOP" .. side, barEdge, "TOP" .. side, side == "LEFT" and -2 or 2, 0)
-				edge:SetPoint("BOTTOM" .. side, barEdge, "BOTTOM" .. side, side == "LEFT" and -2 or 2, 0)
-				edge:SetWidth(2)
-			end
-			border[#border + 1] = edge
-		end
-		local unitName = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		unitName:SetPoint("BOTTOM", bar, "TOP", 0, 3)
-		unitName.searchSkip = true
-		-- (The rest of a plate, just for the look: your debuffs over its name,
-		-- a buff of its own at their right, and a cast under its bar.)
-		local function AuraIcon(icon, size)
-			local frame = CreateFrame("Frame", nil, bar)
-			frame:SetSize(size, size)
-			local edge = frame:CreateTexture(nil, "BACKGROUND")
+		-- (Spots on the scene, as fractions of it, and a scale: the nearer
+		-- ones first and larger; Default's at the back.)
+		local SPOTS = { { 0.27, 0.42, 1 }, { 0.73, 0.40, 1 }, { 0.16, 0.76, 0.9 }, { 0.5, 0.70, 0.95 },
+			{ 0.84, 0.76, 0.9 } }
+		local BACK_SPOT = { 0.5, 0.17, 0.75 }
+		local BAR_W, BAR_H = 120, 10
+		local WHO_COLORS = { Enemy = { 0.75, 0.1, 0.1 }, Neutral = { 0.85, 0.75, 0 }, Friendly = { 0, 0.6, 0.1 } }
+		local GAME_FILL = "Interface\\TargetingFrame\\UI-StatusBar"
+		local plates = {}
+		local function MakeSample(n)
+			local plate = CreateFrame("Button", nil, preview)
+			plate:SetSize(BAR_W + 40, 44)
+			plate.bar = CreateFrame("Frame", nil, plate)
+			plate.bar:SetSize(BAR_W, BAR_H)
+			plate.bar:SetPoint("CENTER", plate, "CENTER", -8, -4)
+			plate.bar:SetFrameLevel(plate:GetFrameLevel() + 2)
+			local edge = plate.bar:CreateTexture(nil, "BORDER")
 			edge:SetPoint("TOPLEFT", -1, 1)
 			edge:SetPoint("BOTTOMRIGHT", 1, -1)
 			edge:SetColorTexture(0, 0, 0, 1)
-			local art = frame:CreateTexture(nil, "ARTWORK")
-			art:SetAllPoints()
-			art:SetTexture("Interface\\Icons\\" .. icon)
-			art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-			return frame
+			plate.back = plate.bar:CreateTexture(nil, "ARTWORK", nil, -1)
+			plate.back:SetAllPoints()
+			plate.fill = plate.bar:CreateTexture(nil, "ARTWORK")
+			plate.fill:SetPoint("TOPLEFT")
+			plate.fill:SetPoint("BOTTOMLEFT")
+			plate.fill:SetTexture(GAME_FILL)
+			-- (The game's border round your target's bar: 2 pixels, just outside its black edge.)
+			plate.border = {}
+			for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+				local line = plate.bar:CreateTexture(nil, "BORDER", nil, 1)
+				if side == "TOP" or side == "BOTTOM" then
+					line:SetPoint(side .. "LEFT", edge, side .. "LEFT", -2, side == "TOP" and 2 or -2)
+					line:SetPoint(side .. "RIGHT", edge, side .. "RIGHT", 2, side == "TOP" and 2 or -2)
+					line:SetHeight(2)
+				else
+					line:SetPoint("TOP" .. side, edge, "TOP" .. side, side == "LEFT" and -2 or 2, 0)
+					line:SetPoint("BOTTOM" .. side, edge, "BOTTOM" .. side, side == "LEFT" and -2 or 2, 0)
+					line:SetWidth(2)
+				end
+				plate.border[#plate.border + 1] = line
+			end
+			-- (Forever's level, in a box of its own at the bar's right end; retail's plates have none.)
+			if not ns.isRetail then
+				plate.level = CreateFrame("Frame", nil, plate.bar)
+				plate.level:SetSize(20, BAR_H + 4)
+				plate.level:SetPoint("LEFT", plate.bar, "RIGHT", 4, 0)
+				local levelEdge = plate.level:CreateTexture(nil, "BORDER")
+				levelEdge:SetAllPoints()
+				levelEdge:SetColorTexture(0.8, 0.65, 0.25, 1)
+				local levelBack = plate.level:CreateTexture(nil, "ARTWORK")
+				levelBack:SetPoint("TOPLEFT", 1, -1)
+				levelBack:SetPoint("BOTTOMRIGHT", -1, 1)
+				levelBack:SetColorTexture(0.05, 0.04, 0.03, 0.9)
+				local levelText = plate.level:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+				levelText:SetPoint("CENTER", 0, 0)
+				levelText:SetText(tostring(18 + n))
+				levelText.searchSkip = true
+			end
+			plate.name = plate.bar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+			plate.name:SetPoint("BOTTOM", plate.bar, "TOP", 0, 3)
+			plate.name.searchSkip = true
+			-- (A cast under its bar, at the Cast Bar Style page's size and cast
+			-- color, filling over and over: the spell's icon at its left.)
+			plate.cast = CreateFrame("Frame", nil, plate.bar)
+			plate.cast:SetPoint("TOP", plate.bar, "BOTTOM", 0, -3)
+			local castEdge = plate.cast:CreateTexture(nil, "BACKGROUND")
+			castEdge:SetPoint("TOPLEFT", -1, 1)
+			castEdge:SetPoint("BOTTOMRIGHT", 1, -1)
+			castEdge:SetColorTexture(0, 0, 0, 1)
+			local castBack = plate.cast:CreateTexture(nil, "BORDER")
+			castBack:SetAllPoints()
+			castBack:SetColorTexture(0.2, 0.2, 0.2, 1)
+			plate.castFill = plate.cast:CreateTexture(nil, "ARTWORK")
+			plate.castFill:SetPoint("TOPLEFT")
+			plate.castFill:SetPoint("BOTTOMLEFT")
+			plate.castFill:SetTexture(GAME_FILL)
+			local castIcon = plate.cast:CreateTexture(nil, "ARTWORK")
+			castIcon:SetPoint("RIGHT", plate.cast, "LEFT", -2, 0)
+			castIcon:SetTexture(({ "Interface\\Icons\\Spell_Fire_FlameBolt", "Interface\\Icons\\Spell_Frost_FrostBolt02",
+				"Interface\\Icons\\Spell_Shadow_ShadowBolt", "Interface\\Icons\\Spell_Nature_Lightning",
+				"Interface\\Icons\\Spell_Holy_FlashHeal", "Interface\\Icons\\Spell_Nature_Slow" })[(n - 1) % 6 + 1])
+			castIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			plate.castIcon = castIcon
+			-- (The row being edited: a soft gold glow behind its plate.)
+			plate.glow = plate:CreateTexture(nil, "BACKGROUND")
+			plate.glow:SetPoint("TOPLEFT", plate.bar, "TOPLEFT", -10, 22)
+			plate.glow:SetPoint("BOTTOMRIGHT", plate.bar, "BOTTOMRIGHT", plate.level and 34 or 10, -8)
+			plate.glow:SetColorTexture(1, 0.82, 0, 0.12)
+			-- (A row hovered in the grid: its plate lit brighter, see preview:Hover.)
+			plate.lit = plate:CreateTexture(nil, "BACKGROUND", nil, 1)
+			plate.lit:SetAllPoints(plate.glow)
+			plate.lit:SetColorTexture(1, 1, 1, 0.14)
+			plate.lit:Hide()
+			plate:SetScript("OnClick", function(self)
+				if self.kind and preview.OnPlateClick then preview.OnPlateClick(self.kind) end
+				preview:Pick(self.kind)
+			end)
+			plate:SetScript("OnEnter", function(self)
+				if not self.kind then return end
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:SetText(self.full or "", 1, 0.82, 0)
+				GameTooltip:AddLine(L["Click to open its row."], 1, 1, 1, true)
+				GameTooltip:Show()
+			end)
+			plate:SetScript("OnLeave", GameTooltip_Hide)
+			plate.goal = { alpha = 1, width = 1, height = 1 }
+			plate.now = { alpha = 1, width = 1, height = 1 }
+			plate.phase = n * 1.7 -- (each plate's fight at its own point in the loop)
+			plate.health = 1
+			plates[n] = plate
+			return plate
 		end
-		local DEBUFF_ICONS = { "Spell_Shadow_ShadowWordPain", "Spell_Fire_Immolation", "Spell_Nature_Slow",
-			"Spell_Frost_FrostNova", "Spell_Shadow_CurseOfTounges" }
-		for i, icon in ipairs(DEBUFF_ICONS) do
-			AuraIcon(icon, 13):SetPoint("BOTTOMLEFT", bar, "TOPLEFT", (i - 1) * 15, 16)
+		-- The rows shown: the first few on the grid, then Default.
+		local function ShownRows()
+			local list, others = {}, nil
+			for _, id in ipairs(ns.TargetMarkOrder()) do
+				if ns.MarkRowBase(id) == "others" then
+					others = others or id
+				elseif #list < #SPOTS then
+					list[#list + 1] = id
+				end
+			end
+			return list, others or "others"
 		end
-		AuraIcon("Spell_Holy_PowerWordShield", 13):SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 0, 16)
-		local cast = CreateFrame("Frame", nil, bar)
-		cast:SetSize(150, 7)
-		cast:SetPoint("TOP", bar, "BOTTOM", 0, -3)
-		local castEdge = cast:CreateTexture(nil, "BACKGROUND")
-		castEdge:SetPoint("TOPLEFT", -1, 1)
-		castEdge:SetPoint("BOTTOMRIGHT", 1, -1)
-		castEdge:SetColorTexture(0, 0, 0, 1)
-		local castBack = cast:CreateTexture(nil, "BORDER")
-		castBack:SetAllPoints()
-		castBack:SetColorTexture(0.2, 0.2, 0.2, 1)
-		local castFill = cast:CreateTexture(nil, "ARTWORK")
-		castFill:SetPoint("TOPLEFT")
-		castFill:SetPoint("BOTTOMLEFT")
-		castFill:SetWidth(150 * 0.4)
-		castFill:SetColorTexture(1, 0.7, 0, 1)
-		local castIcon = cast:CreateTexture(nil, "ARTWORK")
-		castIcon:SetSize(10, 10)
-		castIcon:SetPoint("TOPLEFT", cast, "BOTTOMLEFT", 0, -2)
-		castIcon:SetTexture("Interface\\Icons\\Spell_Fire_FlameBolt")
-		castIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-		local spellName = cast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		spellName:SetPoint("LEFT", castIcon, "RIGHT", 3, 0)
-		spellName:SetText(L["Spell Name"])
-		spellName.searchSkip = true
-		-- (The unit shown: red for enemies, yellow neutral, green friends;
-		-- players and minions named as such.)
-		local WHO_COLORS = { Enemy = { 1, 0.2, 0.2, 0.75, 0.1, 0.1 }, Neutral = { 1, 1, 0, 0.85, 0.75, 0 },
-			Friendly = { 0.1, 1, 0.1, 0, 0.6, 0.1 } }
-		local PREVIEW_NAMES = { players = L["Player"], minions = L["Minion"], elite = L["Elite NPC"] }
 		-- Picks a row to preview (one taken off: back to Default).
 		function preview:Pick(id)
 			previewed = id or "others"
 			self:Refresh()
 		end
-		function preview:Refresh()
-			if not ns.MakeTargetArrow then return end
-			local onGrid = previewed == "others"
-			for _, id in ipairs(ns.TargetMarkOrder()) do onGrid = onGrid or id == previewed end
-			if not onGrid then previewed = "others" end
-			local kind = previewed
+		-- A row hovered in the grid (nil: none): its plate lit, when it's on the scene.
+		function preview:Hover(id)
+			for _, plate in pairs(plates) do
+				plate.lit:SetShown(id ~= nil and plate.kind == id and plate:IsShown())
+			end
+		end
+		-- Dresses a plate as its row says. (Named as its row, so each is
+		-- told apart at a glance.)
+		local function Dress(plate, kind)
+			plate.kind = kind
 			local base, reaction = ns.MarkRowBase(kind)
-			local info = self.RowInfo and self.RowInfo(kind)
-			caption:SetText((L["Previewing - %s"]):format(info and info.full or L["Default"]))
+			local info = preview.RowInfo and preview.RowInfo(kind)
+			plate.full = info and info.full or L["Default"]
+			plate.name:SetText(info and info.label or L["Default"])
+			plate.glow:SetShown(kind == previewed)
 			local shown = ns.TargetMarkSetting("Show", kind) and true or false
-			self.arrow = self.arrow or ns.MakeTargetArrow(holder, bar)
-			ns.StyleTargetArrow(self.arrow, nil, kind)
-			self.arrow:SetShown(shown and ns.TargetMarkSetting("Style", kind) ~= "none")
-			self.arrow:SetAlpha(ns.TargetMarkSetting("Opacity", kind) or 1)
-			local colors = WHO_COLORS[(reaction or ""):match("^%u%l+") or ""] or WHO_COLORS.Enemy
+			plate.arrow = plate.arrow or ns.MakeTargetArrow(plate.bar, plate.bar)
+			ns.StyleTargetArrow(plate.arrow, nil, kind)
+			plate.arrow:SetShown(shown and ns.TargetMarkSetting("Style", kind) ~= "none")
+			plate.arrow:SetAlpha(ns.TargetMarkSetting("Opacity", kind) or 1)
 			local tintKind = ns.TargetMarkTintKind(kind)
 			local r, g, b = ns.TargetPlateColour(nil, tintKind)
 			if shown and ns.TargetMarkAlso("ColorName", tintKind) then
-				unitName:SetTextColor(r, g, b)
+				plate.name:SetTextColor(r, g, b)
 			else
-				unitName:SetTextColor(colors[1], colors[2], colors[3])
+				plate.name:SetTextColor(1, 1, 1) -- (the game's names over plates: white)
 			end
-			if shown and ns.TargetMarkAlso("ColorBar", tintKind) then
-				BarColour(r, g, b)
-			else
-				BarColour(colors[4], colors[5], colors[6])
-			end
+			local colors = WHO_COLORS[(reaction or ""):match("^%u%l+") or ""] or WHO_COLORS.Enemy
+			local fr, fg, fb = colors[1], colors[2], colors[3]
+			if shown and ns.TargetMarkAlso("ColorBar", tintKind) then fr, fg, fb = r, g, b end
+			plate.fill:SetVertexColor(fr, fg, fb)
+			plate.back:SetColorTexture(fr * 0.25, fg * 0.25, fb * 0.25, 1)
 			-- (The border: your target's own, white unless its Also color takes it.)
 			local targeted = base == "target" or base == "aggro"
-			for _, edge in ipairs(border) do
-				edge:SetShown(targeted)
+			for _, line in ipairs(plate.border) do
+				line:SetShown(targeted)
 				if shown and ns.TargetMarkAlso("ColorBorder", tintKind) then
-					edge:SetColorTexture(r, g, b, 1)
+					line:SetColorTexture(r, g, b, 1)
 				else
-					edge:SetColorTexture(1, 1, 1, 1)
+					line:SetColorTexture(1, 1, 1, 1)
 				end
 			end
-			-- (A mix of units: named as its first.)
-			local first = ({ n = "npc", e = "elite", p = "players", m = "minions" })
-				[base:match("^u(%l)") or ""]
-			unitName:SetText(PREVIEW_NAMES[first or base] or L["Unit Name"])
-			-- (The cast bar at the Cast bars page's size.)
+			-- (Its row's Look: the bar's texture and border, the name's font,
+			-- size, outline and shadow, the level box. PlateRowLook.lua.)
+			local look = ns.PlateRowLookFor and ns.PlateRowLookFor(kind)
+			if look and look.texture and look.texture ~= "game" and ns.SetStyleTexture then
+				ns.SetStyleTexture(plate.fill, look.texture)
+			else
+				plate.fill:SetTexture(GAME_FILL)
+			end
+			local border = look and look.border
+			if border and border[1] == "line" then
+				plate.edges = plate.edges or ns.MakeStyleEdges(plate.bar)
+				ns.DressStyleEdges(plate.edges, border[2], border[3], border[4], border[5], 1, true)
+				plate.edges:Show()
+			elseif plate.edges then
+				plate.edges:Hide()
+			end
+			if plate.level then plate.level:SetShown(not (look and look.level == false)) end
+			local nameFile, nameSize, nameFlags = _G.GameFontNormal:GetFont()
+			if look and look.outline and look.outline >= 0 and ns.OutlinedFlags then
+				nameFlags = ns.OutlinedFlags(nameFlags, look.outline)
+			end
+			if ns.SetPlateNameFont then
+				ns.SetPlateNameFont(plate.name, _G.GameFontNormal, look and look.font or nameFile, nameSize,
+					look and look.size or 1, nameFlags)
+			end
+			plate.name:SetShadowOffset(look and look.shadow == "none" and 0 or 1, look and look.shadow == "none" and 0 or -1)
+			-- (The cast: the Cast Bar Style page's size, times the bar's, and its cast color.)
 			local castLook = ns.PlateCastLook and ns.PlateCastLook()
-			local castWidth = castLook and castLook.plateCastWidth or 1
-			cast:SetSize(150 * castWidth, 7 * (castLook and castLook.plateCastHeight or 1))
-			castFill:SetWidth(150 * castWidth * 0.4)
+			plate.castW = castLook and castLook.plateCastWidth or 1
+			local castH = 6 * (castLook and castLook.plateCastHeight or 1)
+			plate.cast:SetHeight(castH)
+			plate.castIcon:SetSize(math.max(8, castH + 2), math.max(8, castH + 2))
+			plate.castFill:SetVertexColor(castLook and castLook.plateCastR or 1, castLook and castLook.plateCastG or 0.7,
+				castLook and castLook.plateCastB or 0)
 			-- (Its opacity and health bar's size, the sizes this client takes
-			-- (ns.plateSizes: Forever's the width); moved to by the OnUpdate
-			-- below, as plates do.)
-			local goal = self.goal
+			-- (ns.plateSizes: Forever's the width); moved to by the OnUpdate below.)
+			local goal, sizes, db = plate.goal, ns.plateSizes or {}, ns.GetDB()
 			goal.alpha = shown and (ns.TargetMarkSetting("Alpha", kind) or 1) or 0.35
-			local sizes = ns.plateSizes or {}
-			local db = ns.GetDB()
 			goal.width = (shown and sizes.width and ns.TargetMarkSetting("PlateWidth", kind) or 1)
 				* (sizes.width and db.plateStyleWidth or 1)
 			goal.height = (shown and sizes.height and ns.TargetMarkSetting("PlateHeight", kind) or 1)
 				* (sizes.height and db.plateStyleHeight or 1)
-			-- (db.plateStyle*: filled from DEFAULTS at load, 1 for none.)
 		end
-		-- Moving like a plate in a fight: its health dropping in hits and
-		-- filling again, the cast filling over and over, and its opacity and
-		-- size going to a newly picked row's in the Change time
-		-- (plateStyleFadeTime), as PlateParts' easer moves them. The mark bobs
-		-- on its own (StyleTargetArrow). Each frame while the page shows.
-		preview.goal = { alpha = 1, width = 1, height = 1 }
-		local now = { alpha = 1, width = 1, height = 1 }
-		local HEALTH_TIME, CAST_TIME = 9, 3
-		local started, health = GetTime(), 1
+		function preview:Refresh()
+			if not (ns.MakeTargetArrow and ns.GetDB()) then return end
+			ns.StyleScene(self, 0.55, 0.8) -- (the Style pages' scene: StylePages.lua)
+			local list, others = ShownRows()
+			local onScene = previewed == others
+			for _, id in ipairs(list) do onScene = onScene or id == previewed end
+			if not onScene then
+				-- (A row further down the grid, picked: in the last spot.)
+				local found = false
+				for _, id in ipairs(ns.TargetMarkOrder()) do found = found or id == previewed end
+				if found then list[math.min(#list + 1, #SPOTS)] = previewed else previewed = others end
+			end
+			local width, height = self:GetWidth(), self:GetHeight()
+			local used = {}
+			local function Place(n, spot, kind)
+				local plate = plates[n] or MakeSample(n)
+				plate:ClearAllPoints()
+				plate:SetScale(spot[3])
+				plate:SetPoint("CENTER", self, "TOPLEFT", width * spot[1] / spot[3], -height * spot[2] / spot[3])
+				plate:Show()
+				Dress(plate, kind)
+				used[n] = true
+			end
+			Place(#SPOTS + 1, BACK_SPOT, others)
+			for n, id in ipairs(list) do Place(n, SPOTS[n], id) end
+			for n, plate in pairs(plates) do
+				if not used[n] then plate:Hide() end
+			end
+		end
+		-- Moving like plates in a fight: health dropping in hits and filling
+		-- again, each plate at its own point, and its opacity and size going to
+		-- its row's in the Change time (plateStyleFadeTime), as PlateParts'
+		-- easer moves them. The marks bob on their own (StyleTargetArrow).
+		local HEALTH_TIME = 9
+		local started = GetTime()
 		-- (The health for a time in the loop: full, five hits, a pause, filled again.)
 		local function HealthAt(t)
 			if t < 1.5 then return 1 end
@@ -9812,22 +10108,35 @@ do
 			if t < 6 then return 0.35 end
 			return math.min(1, 0.35 + (t - 6) / 2 * 0.65)
 		end
-		-- (Shown again: at its row's look at once, as a plate just come.)
+		-- (Shown again: at their rows' look at once, as plates just come.)
 		-- (Hooked: StylePopout's own OnShow fits it to the page's width.)
-		preview:HookScript("OnShow", function(self) self.snap = true end)
+		preview:HookScript("OnShow", function(self)
+			self.snap = true
+			self:Refresh()
+		end)
+		preview:HookScript("OnSizeChanged", function(self)
+			if self:IsShown() then self:Refresh() end
+		end)
 		preview.snap = true
 		ns.SetOnUpdate(preview, function(self, elapsed)
 			local time = ns.GetDB().plateStyleFadeTime or 1.5
-			for what, goal in pairs(self.goal) do
-				now[what] = self.snap and goal or ns.Approach(now[what], goal, elapsed, time)
+			local t = GetTime() - started
+			for _, plate in pairs(plates) do
+				if plate:IsShown() then
+					for what, goal in pairs(plate.goal) do
+						plate.now[what] = self.snap and goal or ns.Approach(plate.now[what], goal, elapsed, time)
+					end
+					plate:SetAlpha(plate.now.alpha)
+					plate.bar:SetSize(BAR_W * plate.now.width, BAR_H * plate.now.height)
+					plate.health = ns.Approach(plate.health, HealthAt((t + plate.phase) % HEALTH_TIME), elapsed, 0.25)
+					plate.fill:SetWidth(math.max(0.01, plate.bar:GetWidth() * plate.health))
+					-- (The cast filling over 2.5 of every 3 seconds, each plate at its own point.)
+					local castWidth = plate.bar:GetWidth() * (plate.castW or 1)
+					plate.cast:SetWidth(castWidth)
+					plate.castFill:SetWidth(math.max(0.01, castWidth * math.min(1, (t + plate.phase) % 3 / 2.5)))
+				end
 			end
 			self.snap = nil
-			holder:SetAlpha(now.alpha)
-			bar:SetSize(150 * now.width, 11 * now.height)
-			local t = GetTime() - started
-			health = ns.Approach(health, HealthAt(t % HEALTH_TIME), elapsed, 0.25)
-			barFill:SetWidth(math.max(0.01, bar:GetWidth() * health))
-			castFill:SetWidth(math.max(0.01, cast:GetWidth() * math.min(1, t % CAST_TIME / (CAST_TIME - 0.5))))
 		end)
 		controls[#controls + 1] = preview
 
@@ -9867,8 +10176,9 @@ do
 		stack:Header(content, L["Marks"])
 		stack:Help(content, L["A plate takes its whole look (mark, colors, opacity) from the first row that " ..
 			"fits it, top to bottom; the rows below aren't looked at. Click a row to open its settings: its " ..
-			"mark, the plate's colors and opacity, and When it fits. The chips beside its name show what's set " ..
-			"apart from the usual. Move a row with its arrows, copy it with its two squares, take it off with its x. " ..
+			"mark, the plate's colors and opacity, and When it fits. Beside its name, its Mark column shows its " ..
+			"mark (- for none), its Plate column what it changes on the plate (- for nothing), and its When " ..
+			"column when it fits. Hovering a row lights its plate in the preview. Move a row with its arrows, copy it with its two squares, take it off with its x. " ..
 			"Add row puts a new one at " ..
 			"the end; its Row line says what it's for: a Kind, for Aggro and Units which of them, Who for just its " ..
 			"enemies, neutral units or friends, and Distance for just those within or past 11, 28 or 40 yards (Any " ..
@@ -9876,6 +10186,24 @@ do
 			"a different When for raids. Put a " ..
 			"row for just some units above its kind's own row, so it comes first for them. Default, always " ..
 			"last, is for plates no row fits: the game's look unless you change it."])
+		-- (The columns' headings: what a row sets on the mark, on the plate, and when.)
+		local headings = CreateFrame("Frame", nil, content)
+		headings:SetSize(ROW_W, 16)
+		stack:Add(headings, "label")
+		for _, column in ipairs({ { "Mark", L["Mark"], PREVIEW_X, L["The mark over the plate: its shape and color. " ..
+			"- when the row has none."] },
+			{ "Plate", L["Look"], PLATE_X, L["What the row changes on the plate itself: its opacity, which of its " ..
+			"name, bar and border take a color, its size and its own look. - when it changes none of them."] },
+			{ "When", L["When"], WHEN_X, L["When the row fits. Always when it always does."] } }) do
+			local heading = CreateFrame("Frame", nil, headings)
+			heading:SetSize(60, 16)
+			heading:SetPoint("LEFT", headings, "LEFT", column[3], 0)
+			local text = Label(heading, "GameFontNormalSmall", column[2])
+			text:SetPoint("LEFT")
+			text:SetTextColor(unpack(COLUMN_COLORS[column[1]]))
+			text.searchSkip = true
+			Tooltip(heading, column[4])
+		end
 		local grid = CreateFrame("Frame", nil, content)
 		grid:SetSize(ROW_W, ROW_H * #MARK_KINDS)
 		stack:Add(grid, "label")
@@ -10013,52 +10341,60 @@ do
 			raid = L["Raids"], group = L["Grouped"] }
 
 		-- What's set apart from the usual on a row, for its chips: { text,
-		-- what (fade: an opacity; when: its When; nil: the rest) }. Nothing at
-		-- 100%, normal size, no Also color and When on Always.
+		-- what (fade: an opacity; when: its When; nil: the rest), column
+		-- (mark, plate or when: the mark's only in the row's tip) }. Nothing
+		-- at 100%, normal size, no Also color and When on Always.
 		local function RowChips(kind)
 			local db, list = ns.GetDB(), {}
 			local alpha = ns.TargetMarkSetting("Alpha", kind) or 1
 			if alpha < 1 then
-				list[#list + 1] = { ("%d%%"):format(alpha * 100 + 0.5), "fade" }
+				list[#list + 1] = { ("%d%%"):format(alpha * 100 + 0.5), "fade", "plate" }
 			end
 			local key = kind .. "When"
 			local rule = db.frameRules and db.frameRules[key]
 			if type(rule) == "string" and rule:find("%S") then
-				list[#list + 1] = { rule, "when" }
+				list[#list + 1] = { rule, "when", "when" }
 			elseif not db[key] then
 				local ticked = {}
 				for _, word in ipairs(ns.MARK_WHEN_WORDS) do
 					if db[key .. word[2]] then ticked[#ticked + 1] = WHEN_NAMES[word[1]] end
 				end
 				list[#list + 1] = { #ticked == 0 and L["Never"] or #ticked == 1 and ticked[1]
-					or ticked[1] .. " +" .. (#ticked - 1), "when" }
+					or ticked[1] .. " +" .. (#ticked - 1), "when", "when" }
 			end
+			-- (The colors' chip with a swatch of the color they take: swatch.)
+			local tintKind = ns.TargetMarkTintKind and ns.TargetMarkTintKind(kind) or kind
+			local swatch = ns.TargetPlateColour and { ns.TargetPlateColour(nil, tintKind) } or nil
 			if ns.MarkRowBase(kind) == "aggro" and ns.TargetMarkOwn("AlsoSame", kind) then
-				list[#list + 1] = { L["Your target's"] }
+				list[#list + 1] = { L["Your target's"], nil, "plate", swatch = swatch }
 			else
 				local parts = {}
 				for _, part in ipairs(ALSO_PARTS) do
 					if ns.TargetMarkAlso("Color" .. part[1], kind) then parts[#parts + 1] = ALSO_SHORT[part[1]] end
 				end
-				if #parts > 0 then list[#list + 1] = { table.concat(parts, ", ") } end
+				if #parts > 0 then list[#list + 1] = { table.concat(parts, ", "), nil, "plate", swatch = swatch } end
+			end
+			if ns.PlateRowHasLook and ns.PlateRowHasLook(kind) then
+				list[#list + 1] = { L["Own look"], nil, "plate" }
 			end
 			local size = ns.TargetMarkSetting("Size", kind) or 1
 			if math.abs(size - 1) > 0.001 and ns.TargetMarkSetting("Style", kind) ~= "none" then
-				list[#list + 1] = { (L["Size %d%%"]):format(size * 100 + 0.5) }
+				list[#list + 1] = { (L["Size %d%%"]):format(size * 100 + 0.5), nil, "mark" }
 			end
 			local markAlpha = ns.TargetMarkSetting("Opacity", kind) or 1
 			if markAlpha < 1 and ns.TargetMarkSetting("Style", kind) ~= "none" then
-				list[#list + 1] = { (L["Mark %d%%"]):format(markAlpha * 100 + 0.5), "fade" }
+				list[#list + 1] = { (L["Mark %d%%"]):format(markAlpha * 100 + 0.5), "fade", "mark" }
 			end
 			local sizes = ns.plateSizes or {}
 			local width = sizes.width and ns.TargetMarkSetting("PlateWidth", kind) or 1
 			local height = sizes.height and ns.TargetMarkSetting("PlateHeight", kind) or 1
 			if not sizes.height and math.abs(width - 1) > 0.001 then
-				list[#list + 1] = { (L["Plate width %d%%"]):format(width * 100 + 0.5) }
+				list[#list + 1] = { (L["Plate width %d%%"]):format(width * 100 + 0.5), nil, "plate" }
 			elseif math.abs(width - height) > 0.001 then
-				list[#list + 1] = { (L["Plate size %d%% x %d%%"]):format(width * 100 + 0.5, height * 100 + 0.5) }
+				list[#list + 1] = { (L["Plate size %d%% x %d%%"]):format(width * 100 + 0.5, height * 100 + 0.5), nil,
+					"plate" }
 			elseif math.abs(width - 1) > 0.001 then
-				list[#list + 1] = { (L["Plate size %d%%"]):format(width * 100 + 0.5) }
+				list[#list + 1] = { (L["Plate size %d%%"]):format(width * 100 + 0.5), nil, "plate" }
 			end
 			return list
 		end
@@ -10159,6 +10495,11 @@ do
 			opened[id] = not opened[id]
 			grid:Refresh()
 			if button ~= "RightButton" then preview:Pick(id) end
+		end
+		-- (A plate clicked in the preview: its row opened.)
+		preview.OnPlateClick = function(id)
+			opened[id] = true
+			grid:Refresh()
 		end
 		local function SetOrder(order)
 			ns.GetDB().markOrder = table.concat(order, ",")
@@ -10599,6 +10940,136 @@ do
 			preview:Pick(new)
 		end
 
+		-- Look: a Look panel, as the Style pages': the bar's texture and
+		-- border, the name's font, size, outline and shadow; and beside it
+		-- the level box (Forever's). Each the Default row's to start (its
+		-- own: the plate's usual look), in keys as the row's others
+		-- (PlateRowLook.lua's, nil while it's the Default row's).
+		function grid.BuildLookLine(kind, info, drawer, At, chips)
+			local LOOK_DEFAULT = ns.PLATE_LOOK_DEFAULTS
+			for _, key in ipairs(ns.PLATE_LOOK_KEYS) do RecordKey(content, MarkKey(kind, key)) end
+			-- (The parts it colors: <kind>Color<part>, not the row's other keys;
+			-- its custom color as the row has it, white to start.)
+			local function FieldOf(key)
+				local part = key:match("^Color(%u%l+)$")
+				local dbKey = part and (kind .. key) or MarkKey(kind, key)
+				return { get = function()
+					if part then return ns.TargetMarkOwn(key, kind) and true or false end
+					if key == "PlateR" or key == "PlateG" or key == "PlateB" then
+						return ns.TargetMarkOwn(key, kind) or 1
+					end
+					local value = ns.GetDB()[dbKey]
+					if value == nil then return LOOK_DEFAULT[key] end
+					return value
+				end, set = function(value)
+					if LOOK_DEFAULT[key] ~= nil and value == LOOK_DEFAULT[key] then value = nil end
+					ns.GetDB()[dbKey] = value
+				end }
+			end
+			local function IsCustom()
+				return ns.TargetMarkOwn("PlateColor", kind) == "custom"
+					and not (ns.MarkRowBase(kind) == "aggro" and ns.TargetMarkOwn("AlsoSame", kind))
+			end
+			local function LookChanged()
+				chips.Refresh()
+				Changed()
+			end
+			local defaultName = kind == "others" and L["Usual"] or L["Default row's"]
+			local defaultTip = kind == "others"
+				and L["Usual: the plate's own look, as the Style hub's General and Name Style pages have it."]
+				or L["Default row's: as the Default row's Look has it."]
+			-- (Its rows placed on the drawer's Look line: the panel's own are in it.)
+			local onLine = { Add = function(_, control)
+				control:SetParent(drawer)
+				return At("Plate", control, LABEL_W + 106)
+			end }
+			local rows = ns.StyleRows(ns.lowHealthKit, content, onLine, LookChanged, "handlePlateStyle", FieldOf)
+			local OUTLINE_NAMES = { [0] = L["None"], L["Thin"], L["Thick"] }
+			local button = rows.Look("", info.full .. " - " .. L["Look"], {
+				texture = function(look)
+					look.Dropdown(L["Texture:"], "LookTexture", function()
+						local list = { { value = "default", text = defaultName } }
+						for _, choice in ipairs(ns.StyleTextureChoices(L["The game's"], "LookTexture")) do
+							list[#list + 1] = choice
+						end
+						return list
+					end, L["The health bar's fill."] .. " " .. defaultTip)
+				end,
+				-- (Its color, and the parts that take it.)
+				barColor = function(look)
+					look.Color(L["Color:"], { "PlateR", "PlateG", "PlateB" },
+						L["The plate's color, for the parts ticked below."])
+					for _, part in ipairs(ALSO_PARTS) do
+						if not part.targetOnly or ns.MarkRowBase(kind) == "target" or ns.MarkRowBase(kind) == "aggro" then
+							RecordKey(content, kind .. "Color" .. part[1])
+							look.Check("Color" .. part[1], (L["%s in its color"]):format(part[2]), part[3])
+						end
+					end
+				end,
+				ground = false,
+				font = function(look)
+					look.Font("LookFont", L["The name's font."] .. " " .. defaultTip, nil, { "default", defaultName })
+				end,
+				textSize = function(look)
+					look.Slider("LookTextSize", L["Size"], 50, 200, 5, "%d%%", 100,
+						L["The name's size, times its usual."])
+				end,
+				textColor = false, outlineColor = false, -- (its color: the Plate line's Name)
+				outline = function(look)
+					look.Outline("LookOutline", L["Outline"], 2, OUTLINE_NAMES, L["The name's outline."] .. " " ..
+						defaultTip, nil, defaultName)
+				end,
+				shadow = function(look)
+					look.Choices(L["Shadow:"], "LookShadow", { { "default", defaultName }, { "game", L["The game's"] },
+						{ "on", L["Shadow"], L["A dark copy of the letters just behind them, down and to the right."] },
+						{ "none", L["None"] } })
+				end,
+				border = function(look)
+					look.Dropdown(L["Border:"], "LookBorder", function()
+						return { { value = "default", text = defaultName }, { value = "game", text = L["The game's"] },
+							{ value = "none", text = L["None"] }, { value = "thin", text = L["Thin"] },
+							{ value = "thick", text = L["Thick"] }, { value = "custom", text = L["Custom"] } }
+					end, L["The health bar's border."] .. " " .. defaultTip)
+					local function Custom(db) return look.On(db) and look.Get("LookBorder") == "custom" end
+					local line = look.Boxes()
+					line:Box(L["Thickness"], look.K("LookBorderSize"), 1, 10, 1, "%d", 1,
+						L["How thick the border is, in pixels."], Custom, "px")
+					look.Swatch(line, "LookBorder", { "LookBorderR", "LookBorderG", "LookBorderB" },
+						L["The border's color. Picking one turns it to Custom."])
+				end,
+				backColor = false, backAlpha = false,
+				-- (Forever's level box at the bar's end: shown, hidden, or the Default row's.)
+				level = not ns.isRetail and function(look)
+					RecordKey(content, MarkKey(kind, "LookLevel"))
+					look.Choices(L["Level box:"], "LookLevel", { { "default", defaultName },
+						{ "show", L["Shown"] }, { "hide", L["Hidden"] } })
+				end or false,
+			})
+			if button then
+				button:SetParent(drawer)
+				button:ClearAllPoints()
+				At("Plate", button, LABEL_W + 106)
+				-- (Its words: what the row has of its own, else Customize. Only on Custom.)
+				local refresh = button.Refresh
+				button.Refresh = function(self)
+					refresh(self)
+					self:SetShown(IsCustom())
+					local parts = {}
+					for _, each in ipairs({ { "LookTexture", L["Texture"] }, { "LookBorder", L["Border"] },
+						{ "LookFont", L["Font"] }, { "LookTextSize", L["Size"] }, { "LookOutline", L["Outline"] },
+						{ "LookShadow", L["Shadow"] } }) do
+						local value = ns.GetDB() and ns.GetDB()[MarkKey(kind, each[1])]
+						if value ~= nil and value ~= LOOK_DEFAULT[each[1]] then parts[#parts + 1] = each[2] end
+					end
+					self:SetText(#parts > 0 and table.concat(parts, " · ") or L["Customize"])
+					self:SetWidth(math.max(120, self:GetFontString():GetStringWidth() + 30))
+				end
+				Tooltip(button, L["This row's own look on its plates: its color and the parts that take it, the " ..
+					"bar's texture and border, the name's font, size, outline and shadow, and the level box."] ..
+					" " .. defaultTip)
+			end
+		end
+
 		function MakeRow(id)
 			local info = RowInfo(id)
 			local kind, base = id, info.base
@@ -10637,8 +11108,8 @@ do
 			end), SHOW_X)
 			show.searchLabel = info.full
 
-			-- Its mark's preview: a plate in small (its bar, in its Also
-			-- color's color if it takes one), the mark on it, at its opacity.
+			-- Its Mark column: the mark in small over a plain grey bar (what
+			-- the row does to the plate is the Plate column's), - for none.
 			local preview = Place(CreateFrame("Frame", nil, row), PREVIEW_X)
 			preview:SetSize(42, 22)
 			if preview.SetClipsChildren then preview:SetClipsChildren(true) end
@@ -10661,21 +11132,24 @@ do
 			barEdge:SetColorTexture(0, 0, 0, 1)
 			local barFill = bar:CreateTexture(nil, "ARTWORK")
 			barFill:SetAllPoints()
+			barFill:SetColorTexture(0.35, 0.35, 0.35, 1)
+			-- (Default's: the game's own look, there being no row below it. Short,
+			-- to fit its column.)
+			local noMark = Label(row, "GameFontDisableSmall", kind == "others" and L["Game's"] or "-")
+			noMark:SetPoint("CENTER", preview, "CENTER")
+			noMark.searchSkip = true
 			preview.Refresh = function()
 				if not ns.MakeTargetArrow then return end
 				local shown = Shown()
+				local marked = ns.TargetMarkSetting("Style", kind) ~= "none"
 				preview.arrow = preview.arrow or ns.MakeTargetArrow(holder, bar)
 				ns.StyleTargetArrow(preview.arrow, nil, kind)
-				preview.arrow:SetShown(shown and ns.TargetMarkSetting("Style", kind) ~= "none")
+				preview.arrow:SetShown(marked)
 				preview.arrow:SetAlpha(ns.TargetMarkSetting("Opacity", kind) or 1)
-				local tintKind = ns.TargetMarkTintKind(kind)
-				if shown and ns.TargetMarkAlso("ColorBar", tintKind) then
-					local r, g, b = ns.TargetPlateColour(nil, tintKind)
-					barFill:SetColorTexture(r, g, b, 1)
-				else
-					barFill:SetColorTexture(0.6, 0.12, 0.12, 1)
-				end
-				holder:SetAlpha(shown and (ns.TargetMarkSetting("Alpha", kind) or 1) or 0.3)
+				holder:SetShown(marked)
+				previewBack:SetShown(marked)
+				noMark:SetShown(not marked)
+				preview:SetAlpha(shown and 1 or 0.4)
 			end
 			controls[#controls + 1] = preview
 
@@ -10701,40 +11175,72 @@ do
 				name:SetAlpha(Shown() and 1 or 0.5)
 			end
 
-			-- The chips: what's set apart from the usual, in order, as many as
-			-- fit (hovering the row lists them all).
-			local chips = Place(CreateFrame("Frame", nil, row), CHIPS_X)
-			chips:SetSize(CHIPS_W, 16)
+			-- The Plate and When columns: each its chips (RowChips' column),
+			-- as many as fit (hovering the row lists them all), or a grey word
+			-- when the row sets nothing there.
+			local function ChipColumn(x, width, column, empty)
+				local holder2 = Place(CreateFrame("Frame", nil, row), x)
+				holder2:SetSize(width, 16)
+				holder2.searchSkip = true
+				holder2.pool = {}
+				holder2.empty = Label(holder2, "GameFontDisableSmall", empty)
+				holder2.empty:SetPoint("LEFT", 2, 0)
+				holder2.empty.searchSkip = true
+				function holder2.Fill(list)
+					local at, shownChips = 0, 0
+					for _, each in ipairs(list) do
+						if each[3] == column then
+							local i = shownChips + 1
+							local chip = holder2.pool[i]
+							if not chip then
+								chip = CreateFrame("Frame", nil, holder2)
+								chip:SetHeight(16)
+								chip.back = chip:CreateTexture(nil, "BACKGROUND")
+								chip.back:SetAllPoints()
+								chip.text = chip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+								chip.swatch = chip:CreateTexture(nil, "ARTWORK")
+								chip.swatch:SetSize(10, 10)
+								chip.swatch:SetPoint("LEFT", 4, 0)
+								chip.swatchEdge = chip:CreateTexture(nil, "BORDER")
+								chip.swatchEdge:SetPoint("TOPLEFT", chip.swatch, -1, 1)
+								chip.swatchEdge:SetPoint("BOTTOMRIGHT", chip.swatch, 1, -1)
+								chip.swatchEdge:SetColorTexture(0, 0, 0, 1)
+								holder2.pool[i] = chip
+							end
+							chip.text:SetText(each[1])
+							local swatch = each.swatch and each.swatch[1] and each.swatch
+							chip.swatch:SetShown(swatch and true or false)
+							chip.swatchEdge:SetShown(swatch and true or false)
+							if swatch then chip.swatch:SetColorTexture(swatch[1], swatch[2], swatch[3], 1) end
+							chip.text:ClearAllPoints()
+							chip.text:SetPoint("CENTER", chip, "CENTER", swatch and 7 or 0, 0)
+							local chipW = math.ceil(chip.text:GetStringWidth()) + 10 + (swatch and 14 or 0)
+							if at + chipW > width then break end
+							local c = CHIP_COLORS[each[2] or ""] or CHIP_PLAIN
+							chip.back:SetColorTexture(c[1], c[2], c[3], 0.9)
+							chip.text:SetTextColor(c[4], c[5], c[6])
+							chip:SetWidth(chipW)
+							chip:ClearAllPoints()
+							chip:SetPoint("LEFT", holder2, "LEFT", at, 0)
+							chip:Show()
+							at, shownChips = at + chipW + 4, i
+						end
+					end
+					for i = shownChips + 1, #holder2.pool do holder2.pool[i]:Hide() end
+					holder2.empty:SetShown(shownChips == 0)
+				end
+				return holder2
+			end
+			local plateChips = ChipColumn(PLATE_X, PLATE_W, "plate", kind == "others" and L["Game's"] or "-")
+			local whenChips = ChipColumn(WHEN_X, WHEN_W, "when", L["Always"])
+			local chips = CreateFrame("Frame", nil, row) -- (a frame, for the page's Refresh to tell its page)
+			chips:SetSize(1, 1)
 			chips.searchSkip = true
-			chips.pool = {}
 			chips.Refresh = function()
 				local list = RowChips(kind)
 				row.chipList = list
-				local x, shownChips = 0, 0
-				for i, info2 in ipairs(list) do
-					local chip = chips.pool[i]
-					if not chip then
-						chip = CreateFrame("Frame", nil, chips)
-						chip:SetHeight(16)
-						chip.back = chip:CreateTexture(nil, "BACKGROUND")
-						chip.back:SetAllPoints()
-						chip.text = chip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-						chip.text:SetPoint("CENTER")
-						chips.pool[i] = chip
-					end
-					chip.text:SetText(info2[1])
-					local width = math.ceil(chip.text:GetStringWidth()) + 10
-					if x + width > CHIPS_W then break end
-					local c = CHIP_COLORS[info2[2] or ""] or CHIP_PLAIN
-					chip.back:SetColorTexture(c[1], c[2], c[3], 0.9)
-					chip.text:SetTextColor(c[4], c[5], c[6])
-					chip:SetWidth(width)
-					chip:ClearAllPoints()
-					chip:SetPoint("LEFT", chips, "LEFT", x, 0)
-					chip:Show()
-					x, shownChips = x + width + 4, i
-				end
-				for i = shownChips + 1, #chips.pool do chips.pool[i]:Hide() end
+				plateChips.Fill(list)
+				whenChips.Fill(list)
 				row:SetName()
 			end
 			controls[#controls + 1] = chips
@@ -10754,7 +11260,13 @@ do
 				GameTooltip:AddLine(L["Click to show or hide its settings."], 0.6, 0.6, 0.6)
 				GameTooltip:Show()
 			end)
-			row:SetScript("OnLeave", GameTooltip_Hide)
+			row:SetScript("OnLeave", function()
+				GameTooltip:Hide()
+				if preview.Hover then preview:Hover(nil) end
+			end)
+			row:HookScript("OnEnter", function()
+				if preview.Hover then preview:Hover(kind) end
+			end)
 
 			-- Its drawer's button, and (every row but Default's own) a button
 			-- to take it off.
@@ -10763,9 +11275,12 @@ do
 			row.toggle:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
 			row.toggle:SetScript("OnClick", function() Toggle(kind) end)
 			Tooltip(row.toggle, L["Show or hide this row's settings."])
+			-- (Not shown: clicking the row opens and closes it. Kept, the grid's
+			-- Refresh still sets its +/-.)
+			row.toggle:Hide()
 			if kind ~= "others" then
-				-- (Copy: two squares, one over the other, drawn here.)
-				local copy = Place(CreateFrame("Button", nil, row), ROW_W - 66)
+				-- (Copy: two squares, one over the other, drawn here, where the +/- was.)
+				local copy = Place(CreateFrame("Button", nil, row), ROW_W - 44)
 				copy:SetSize(16, 16)
 				-- (Back one first, each its edge then its middle, so the front
 				-- one's covers the back one's.)
@@ -10803,9 +11318,10 @@ do
 			-- Plate (color and the parts it colors; size and opacity at the
 			-- end) and When. Default's own no Row: it's always there. Page
 			-- search finding something in it opens it (openSection).
+			-- (Plate's line named Look: its color, and Custom's Look panel.)
 			local LINES = { "Name", "Row", "Mark", "Plate", "When" }
 			if kind == "others" then table.remove(LINES, 2) end
-			local LINE_NAMES = { Row = L["Row"], Name = L["Name"], Mark = L["Mark"], Plate = L["Plate"],
+			local LINE_NAMES = { Row = L["Row"], Name = L["Name"], Mark = L["Mark"], Plate = L["Look"],
 				When = L["When"] }
 			local lineAt = {}
 			for i, line in ipairs(LINES) do lineAt[line] = i end
@@ -10828,7 +11344,14 @@ do
 			for _, line in ipairs(LINES) do
 				local label = At(line, Label(drawer, "GameFontNormalSmall", LINE_NAMES[line]), 6)
 				label.searchSkip = true
+				-- (Look's the plate's too: the Plate column's color.)
+				local tone = COLUMN_COLORS[line] or (line == "Look" and COLUMN_COLORS.Plate)
+				if tone then label:SetTextColor(unpack(tone)) end
 			end
+
+			-- Look: its own line (grid.BuildLookLine, above: kept out of here, and on
+			-- grid, for Lua's 60 upvalues a function).
+			grid.BuildLookLine(kind, info, drawer, At, chips)
 
 			-- A color's swatch: its R, G and B settings (keys), the color it
 			-- shows (Current), the setting a pick puts on Custom (colorKey),
@@ -10933,7 +11456,7 @@ do
 				label:SetPoint("RIGHT", box, "LEFT", -6, 0)
 				label.searchSkip = true
 				-- (The % after the box, the number alone in it.)
-				local percent = Label(drawer, "GameFontHighlightSmall", "%")
+				local percent = Label(box, "GameFontHighlightSmall", "%") -- (on the box: hidden with it)
 				percent:SetPoint("LEFT", box, "RIGHT", 3, 0)
 				percent.searchSkip = true
 				return box, label
@@ -11062,10 +11585,21 @@ do
 			if sameKey then RecordKey(content, sameKey) end
 			local plateChoices = {}
 			if sameKey then plateChoices[1] = { value = "target", text = L["Your target's"] } end
-			for _, choice in ipairs(PLATE_COLORS) do plateChoices[#plateChoices + 1] = choice end
+			for _, choice in ipairs(PLATE_COLORS) do
+				-- (Default's - is the game's look, no row below it: one choice, named so.)
+				if base ~= "others" then
+					plateChoices[#plateChoices + 1] = choice
+				elseif choice.value == "-" then
+					plateChoices[#plateChoices + 1] = { value = "-", text = L["The game's"] }
+				elseif choice.value ~= "game" then
+					plateChoices[#plateChoices + 1] = choice
+				end
+			end
 			local function PlateHow()
 				if sameKey and ns.TargetMarkOwn("AlsoSame", kind) then return "target" end
-				return ns.TargetMarkOwn("PlateColor", kind) or "-"
+				local how = ns.TargetMarkOwn("PlateColor", kind) or "-"
+				if base == "others" and how == "game" then return "-" end
+				return how
 			end
 			local plateColor = At("Plate", Choice(drawer, 100, function() return plateChoices end, PlateHow,
 				function(value)
@@ -11087,20 +11621,16 @@ do
 					Changed()
 				end), LABEL_W)
 			plateColor.searchLabel = info.full .. " " .. L["Plate color"]
-			Tooltip(plateColor, L["The plate's color, for the parts ticked beside it. -: the next row that fits " ..
-				"the plate decides (the game's if none does). The game's: the game's, whatever the rows below say. " ..
-				"Mark's: the mark's color. The rest as the mark's colors."])
+			Tooltip(plateColor, L["The plate's look. -: the next row that fits the plate decides (the game's if " ..
+				"none does). The game's: the game's, whatever the rows below say. Mark's and the rest: that color, " ..
+				"on the parts ticked beside it. Custom: a look of your own, in its Look panel (the button beside " ..
+				"it): its color and parts, the bar's texture and border, the name's font and the level box."])
 			GreyUnless(plateColor, Shown)
 			local function Colors()
 				local how = PlateHow()
 				return how ~= "-" and how ~= "game" and how ~= "target"
 			end
-			local plateSwatch = Swatch("Plate", LABEL_W + 106,
-				{ MarkKey(kind, "PlateR"), MarkKey(kind, "PlateG"), MarkKey(kind, "PlateB") }, plateKey,
-				function()
-					return ns.TargetMarkOwn("PlateR", kind) or 1, ns.TargetMarkOwn("PlateG", kind) or 1,
-						ns.TargetMarkOwn("PlateB", kind) or 1
-				end, function() return PlateHow() == "custom" end, L["Click to choose the plate's custom color."])
+			-- (Custom's color: in its Look panel, with the parts: grid.BuildLookLine.)
 			-- (Its parts, ticks in one dropdown, closing up to the color with
 			-- no swatch beside it.)
 			local parts, partTips = {}, {}
@@ -11141,8 +11671,8 @@ do
 			local placer = CreateFrame("Frame", nil, drawer)
 			placer.Refresh = function()
 				partPick:ClearAllPoints()
-				At("Plate", partPick, LABEL_W + (plateSwatch:IsShown() and 132 or 106))
-				partPick:SetShown(Colors())
+				At("Plate", partPick, LABEL_W + 106)
+				partPick:SetShown(Colors() and PlateHow() ~= "custom")
 			end
 			controls[#controls + 1] = placer
 			-- (Width and Height, W and H, the two boxes where one Size was.)
@@ -11249,7 +11779,7 @@ do
 			"back from where it is, so a quick look away from an elite and back barely shows. A plate just come " ..
 			"into view starts at its row's. 0: at once."], nil, nil, L["sec"])
 		local MASTER_TIP = L["Every plate's, those no row fits too, times its row's own. When they show is the " ..
-			"Target Indicator row's, as the rows'."]
+			"page's Show in row, as the rows'."]
 		if (ns.plateSizes or {}).width then
 			allRows:Box(L["Width"], "plateStyleWidth", 25, 300, 5, "%d", 100,
 				L["The health bar's width."] .. " " .. MASTER_TIP, Changed, nil, "%")
@@ -17945,6 +18475,9 @@ ns.OnLanguage(function()
 	end
 	CreateBuffsPanel()
 	CreatePlatesPanel()
+	if ns.CreatePlateIconsPage then -- (PlateIcons.lua: the Nameplates hub's Icons page)
+		ns.CreatePlateIconsPage(ns.lowHealthKit)
+	end
 	CreateChatPanel()
 	CreateBubblesPanel()
 	-- (their hub, Style, listed after Visions)

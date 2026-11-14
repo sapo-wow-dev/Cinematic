@@ -454,7 +454,9 @@ function ns.UpdateCVars(cinematic, fightStarting)
 	seen.target, seen.place, seen.enabled, seen.at = target, place, ns.db.enabled, now
 	for _, set in ipairs(CVAR_SETS) do
 		-- (Nameplates page's master switch off: names are left to the game.)
-		local want = (cinematic and ns.db.handlePlates and not NameKeptHere(set.key, inCombat)) or immersive
+		-- (Allow outside CineMode's Nameplates: the names too, CineMode on or off.)
+		local want = (ns.PlatesCinematic(cinematic) and ns.db.handlePlates and not NameKeptHere(set.key, inCombat))
+			or immersive
 		ns.ApplyCVarSet(set, want or false)
 	end
 	-- (Kept through the Calm Timer after a fight, like the plates.)
@@ -479,6 +481,11 @@ local plateWarnedAt = 0
 local PLATE_WARN_GAP = 5 -- seconds
 
 -- The last chance to switch names to the "In combat" choices before lockdown.
+-- (Allow outside CineMode's Nameplates ticked or not: the names as it says now.)
+function ns.RefreshNameCVars()
+	ns.UpdateCVars(lastCinematic, true)
+end
+
 function ns.UpdateCVarsForFight()
 	pvpNamesFight = ns.InPvPFight()
 	ns.UpdateCVars(lastCinematic, true)
@@ -4484,7 +4491,7 @@ function ns.UpdatePlates(cinematic, elapsed)
 		if not platesReleased then
 			ReleasePlates()
 		end
-		ns.UpdatePlateParts(false, elapsed)
+		ns.UpdatePlateParts(false, elapsed, cinematic)
 		return
 	end
 	cinematic = cinematic and true or false
@@ -4654,7 +4661,7 @@ function ns.UpdatePlates(cinematic, elapsed)
 	end
 	local rolling = ns.plates.RollStep()
 	platesWereFiltered = filtered
-	if ns.UpdatePlateParts(platesActive, elapsed) then changed = true end
+	if ns.UpdatePlateParts(platesActive, elapsed, cinematic) then changed = true end
 	UpdatePlateClicks()
 
 	if hide and not keep and ns.plates.level == 0 and not ns.plates.off and not InCombatLockdown() then

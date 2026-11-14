@@ -94,6 +94,7 @@ QuestItemButton.lua
 Effects.lua
 TooltipParts.lua
 PlateParts.lua
+PlateIcons.lua
 PlateGuild.lua
 Triggers.lua
 Camera.lua
@@ -159,6 +160,7 @@ PersonalManaCost.lua
 PersonalManaText.lua
 PlateCastStyle.lua
 PlateHealthStyle.lua
+PlateRowLook.lua
 CombatTextStyle.lua
 UnitStyle.lua
 RaidStyle.lua

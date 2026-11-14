@@ -6206,3 +6206,7 @@ L["BigWigs, TomTom, HealBot Continued and Titan Panel get rows of their own and 
 -- What's new: Lore Forever support (Changelog.lua)
 L["Lore Forever support"] = "Compatibilidad con Lore Forever"
 L["Lore Forever's subtitles, floating player, new page note and pin card get rows of their own and fade with Cinematic. With Custom dialogue frames on, a Play button on the box with the NPC's words plays the quest's narration or stops it."] = "Los subtítulos, el reproductor flotante, el aviso de página nueva y la tarjeta de chincheta de Lore Forever tienen sus propias filas y se desvanecen con Cinematic. Con los marcos de diálogo personalizados activados, un botón de reproducir en el cuadro con las palabras del PNJ reproduce la narración de la misión o la detiene."
+
+-- What's new: Nameplates hub (Changelog.lua)
+L["Nameplates hub"] = "Centro de placas de nombre"
+L["Nameplates have a hub of their own: which show, the new Icons page for class and role icons, and their looks. Each kind of plate can have its own parts, and each Nameplate Style row its own bar, border, name font and level box."] = "Las placas de nombre tienen su propio centro: cuáles se muestran, la nueva página de Iconos para los iconos de clase y de rol, y su aspecto. Cada tipo de placa puede tener sus propias partes, y cada fila de Estilo de placas su propia barra, borde, fuente del nombre y recuadro de nivel."
