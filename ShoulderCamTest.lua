@@ -757,12 +757,14 @@ end
 -- a form only).)
 -- (Then, out of the cat: a push past the elf's offset as her model comes
 -- back (boostOut). 15% won, 2026-11-14 (ShoulderCam.lua's SWAP_PUSH_OUT_OF).)
+-- (Then the bear, 2026-11-14: out, 15% the least again; in, +1.1 out over
+-- 2-3 frames after the model came, the push on: stronger ones in.)
 local SHIFT_TIMINGS = {
-	{ "as built (cat: 15% push in, 15% out)" },
-	{ "out: 15% past for 0.035 s", boostOut = 0.15, boostOutFor = 0.035 },
-	{ "out: 35% past for 0.035 s", boostOut = 0.35, boostOutFor = 0.035 },
-	{ "out: 50% past for 0.035 s", boostOut = 0.5, boostOutFor = 0.035 },
-	{ "out: 35% past for 0.07 s", boostOut = 0.35, boostOutFor = 0.07 },
+	{ "as built (15% push in, 15% out)" },
+	{ "in: 25% past for 0.035 s", boost = 0.25, boostFor = 0.035 },
+	{ "in: 35% past for 0.035 s", boost = 0.35, boostFor = 0.035 },
+	{ "in: 25% past for 0.07 s", boost = 0.25, boostFor = 0.07 },
+	{ "in: 50% past for 0.035 s", boost = 0.5, boostFor = 0.035 },
 }
 local SHIFT_TAIL = 0.8 -- seconds logged after the model's change
 local shiftRun, shiftNext = nil, 1
@@ -778,6 +780,15 @@ local function ShiftEnd(why)
 	Log(("shift: %s"):format(why))
 	C_Timer.After(20, function() if not shiftRun then ns.PadTestBoxHide() end end)
 end
+-- (A frame's middle across the screen, -1 to 1, or nil: hidden, unreadable.)
+local function FrameAcross(name)
+	local frame = _G[name]
+	if not (frame and frame.GetCenter and frame:IsShown()) then return nil end
+	local ok, x = pcall(frame.GetCenter, frame)
+	if not ok or type(x) ~= "number" then return nil end
+	local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	return (x * scale / UIParent:GetWidth() - 0.5) * 2
+end
 local function ShiftSummary(run, leg)
 	local list = run.legs[leg]
 	if not list or #list == 0 then
@@ -789,11 +800,25 @@ local function ShiftSummary(run, leg)
 	for _, row in ipairs(list) do
 		most, least = math.max(most, row.x), math.min(least, row.x)
 	end
-	Log(("shift: %s summary (%s): before %s, furthest out %.1f%%, furthest in %.1f%%, settled %.1f%%, %d frames"):format(
-		leg, run.timing[1], before and ("%.1f%%"):format(before * 100) or "?", most * 100, least * 100, last * 100, #list))
+	Log(("shift: %s summary (%s%s): before %s, furthest out %.1f%%, furthest in %.1f%%, settled %.1f%%, %d frames"):format(
+		leg, run.timing[1], run.moving and ", moving" or "", before and ("%.1f%%"):format(before * 100) or "?",
+		most * 100, least * 100, last * 100, #list))
+	-- (Your frames: how far the PRD's middle sat from you, in points of the
+	-- screen's half-width, the same as above.)
+	local gaps, gapMost, gapLast = 0, 0, nil
+	for _, row in ipairs(list) do
+		if row.prd then
+			gaps, gapMost, gapLast = gaps + 1, math.max(gapMost, math.abs(row.prd)), row.prd
+		end
+	end
+	if gaps > 0 then
+		Log(("shift: %s summary, PRD from you: before %s, furthest %.1f, settled %+.1f (%d frames)"):format(leg,
+			run.prdBefore and run.prdBefore[leg] and ("%+.1f"):format(run.prdBefore[leg] * 100) or "?",
+			gapMost * 100, gapLast * 100, gaps))
+	end
 end
 local Shift
-function Shift(at)
+function Shift(at, moving)
 	if shiftRun then
 		ShiftEnd("stopped")
 		ns.Print("shoulder shift: stopped")
@@ -805,7 +830,8 @@ function Shift(at)
 	if UnitExists("target") then return ns.Print("shoulder shift: clear your target first (Esc)") end
 	shiftNext = SHIFT_TIMINGS[at or 1] and at or 1
 	local timing = SHIFT_TIMINGS[shiftNext]
-	local run = { timing = timing, legs = { ["in"] = {}, out = {} }, before = {}, frame = CreateFrame("Frame") }
+	local run = { timing = timing, legs = { ["in"] = {}, out = {} }, before = {}, prdBefore = {}, moving = moving,
+		frame = CreateFrame("Frame") }
 	shiftRun = run
 	ns.shoulderSwap = (timing.boost or timing.early or timing.boostOut) and timing or nil
 	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
@@ -814,7 +840,12 @@ function Shift(at)
 	SendLine(("(run %d)"):format(shiftNext))
 	Log(("shift: %s on | %s | offset %s, zoom %.2f, side %s"):format(timing[1], Who(), Text(GetCVar(SHOULDER)), Zoom(),
 		Text(ns.db.shoulderCamSide)))
-	ns.PadTestBox(("Shift %d/%d: %s"):format(shiftNext, #SHIFT_TIMINGS, timing[1]), "SHIFT INTO YOUR FORM now (stand still, hands off the camera)", 0.3, 1, 0.3)
+	if moving then
+		ns.PadTestBox("Shift while running", "RUN straight ahead (autorun's fine), then SHIFT INTO YOUR FORM", 0.3, 1, 0.3)
+	else
+		ns.PadTestBox(("Shift %d/%d: %s"):format(shiftNext, #SHIFT_TIMINGS, timing[1]),
+			"SHIFT INTO YOUR FORM now (stand still, hands off the camera)", 0.3, 1, 0.3)
+	end
 	local startedAt = GetTime()
 	run.frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 	run.frame:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
@@ -835,6 +866,8 @@ function Shift(at)
 				run.leg, run.legAt, run.modelAt = leg, now, nil
 				local x = BubbleSpot()
 				run.before[leg] = x and math.abs(x) or run.lastX
+				local prd = FrameAcross("PersonalResourceDisplayFrame")
+				run.prdBefore[leg] = x and prd and (prd - x) * (x < 0 and -1 or 1) or nil
 			end
 		elseif run.leg and not run.modelAt then
 			run.modelAt = now
@@ -856,11 +889,15 @@ function Shift(at)
 			if run.leg == "in" and not run.inDone then
 				run.inDone = true
 				ShiftSummary(run, "in")
-				ns.PadTestBox(("Shift: %s"):format(timing[1]), "now SHIFT BACK OUT", 1, 0.82, 0)
+				ns.PadTestBox(moving and "Shift while running" or ("Shift: %s"):format(timing[1]),
+					moving and "keep running, now SHIFT BACK OUT" or "now SHIFT BACK OUT", 1, 0.82, 0)
 			elseif run.leg == "out" then
 				ShiftSummary(run, "out")
 				ShiftEnd("done")
-				if SHIFT_TIMINGS[shiftNext + 1] then
+				if moving then
+					ns.PadTestBox("Shift while running done", "stop running; type it again for another, or /reload and say check log",
+						0.3, 1, 0.3)
+				elseif SHIFT_TIMINGS[shiftNext + 1] then
 					-- (Said again too soon, the game blocks an addon's line:
 					-- ADDON_ACTION_BLOCKED 1.2 s after a run, 2026-11-14.)
 					-- (A button's click got the line blocked, ADDON_ACTION_BLOCKED,
@@ -875,9 +912,17 @@ function Shift(at)
 		end
 		if x then
 			local list = run.legs[run.leg]
-			list[#list + 1] = { t = now - run.legAt, x = math.abs(x) }
-			Log(("shift: %s +%.3f s you %.1f%%, offset %s%s"):format(run.leg, now - run.legAt, math.abs(x) * 100,
-				Text(GetCVar(SHOULDER)), run.modelAt and "" or ", model not changed yet"))
+			-- (Your frames from you, toward your side positive: the PRD's and,
+			-- while casting, the cast bar's.)
+			local side = x < 0 and -1 or 1
+			local prd, cast = FrameAcross("PersonalResourceDisplayFrame"), FrameAcross("PlayerCastingBarFrame")
+			local row = { t = now - run.legAt, x = math.abs(x), prd = prd and (prd - x) * side or nil }
+			list[#list + 1] = row
+			Log(("shift: %s +%.3f s you %.1f%%, offset %s%s | PRD %s, cast %s, slide %s%s"):format(run.leg, now - run.legAt,
+				math.abs(x) * 100, Text(GetCVar(SHOULDER)), run.modelAt and "" or ", model not changed yet",
+				row.prd and ("%+.1f"):format(row.prd * 100) or "-", cast and ("%+.1f"):format((cast - x) * side * 100) or "-",
+				Text((ns.GetShoulderCamDebug and ns.GetShoulderCamDebug() or {}).followShift),
+				IsPlayerMoving and IsPlayerMoving() and ", moving" or ""))
 		elseif not run.saidGone then
 			run.saidGone = true
 			Log(("shift: no reading (%s)"):format(tostring(why)))
@@ -2774,7 +2819,8 @@ function ns.ShoulderTest(arg)
 	elseif what == "try" then Try(rest)
 	elseif what == "walls" then Walls()
 	elseif what == "forms" then Forms()
-	elseif what == "shift" then Shift(tonumber(rest) or 1)
+	elseif what == "shift" then
+		if rest == "move" then Shift(1, true) else Shift(tonumber(rest) or 1) end
 	elseif what == "cams" then Cams()
 	elseif what == "map" then ns.ShoulderMap(rest)
 	elseif what == "zoomcurve" then ns.ShoulderZoomCurve()
@@ -2795,7 +2841,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

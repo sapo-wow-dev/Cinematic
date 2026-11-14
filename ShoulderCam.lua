@@ -214,7 +214,10 @@ local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 
 	["Orc-2"] = 1.23, ["Orc-3"] = 0.96, ["Scourge-2"] = 0.99, ["Scourge-3"] = 0.90, ["Tauren-2"] = 1.68, ["Tauren-3"] = 1.27,
 	["Troll-2"] = 1.22, ["Troll-3"] = 0.95,
 	-- (Druid forms, per race and sex: the calibrate run in each, 2026-11-14.)
-	["NightElf-3-form1"] = 1.63 }
+	["NightElf-3-form1"] = 1.63, ["NightElf-3-form5"] = 1.76,
+	-- (Form 4: 2.32 in five runs, 2.29 at 8 yards and 2.35 at 12, just over
+	-- the spread a run calls good; one run said 2.20, the odd one out.)
+	["NightElf-3-form4"] = 2.32 }
 -- bear, cat, dire bear: off the recordings till the sweep's run in them
 local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 -- Forms that keep your own model (warrior stances 17-19, shadowform 28,
@@ -254,7 +257,12 @@ end
 -- frames, as before). So SWAP_PUSH: into a form the offset's pushed that
 -- share past for SWAP_PUSH_FOR. Those first 2 frames are the model already
 -- changed with our offset not yet in, and no earlier write helps (above).
-local SWAP_PUSH, SWAP_PUSH_FOR = 0.35, 0.035
+-- (Every form since 2026-11-14: the cat's 15% each way, in and out. The
+-- push is a share of the offset's change, so it goes with each form's size
+-- on its own; the bear's 35% was tuned before the cap counted how far you're
+-- moved, the old jump it made up for gone.)
+local SWAP_PUSH, SWAP_PUSH_FOR = 0.15, 0.035
+local SWAP_PUSH_OUT = 0.15
 -- (Per form, where measured: the shift run, a Night Elf's cat, 2026-11-14,
 -- with the cap counted in how far you're moved. In, from where you stood:
 -- 35% went 1 point out as the model came, then 1-1.4 in as the push landed;
@@ -263,6 +271,8 @@ local SWAP_PUSH, SWAP_PUSH_FOR = 0.35, 0.035
 local SWAP_PUSH_OF = { [1] = 0.15 }
 local shownKnown, shownForm, swapBy, swapLed
 local lastYards, boostFrom, boostUntil, boostBy = 0, nil, nil, nil -- (yards at the last frame; a push's start, end and share)
+local steadyYards = 0 -- (the offset without a push: the frames that follow you go by it, TargetShift)
+local pushOver = 0 -- (till when they do: the push's end and a moment more, till the setting's rewritten)
 -- (Out of a form (was: the form left): no push unless one's set for that
 -- form, SWAP_PUSH_OUT_OF, or the shift run's boostOut.)
 -- (The cat, the shift runs, 2026-11-14, from where you stood: no push 0 and
@@ -272,14 +282,16 @@ local SWAP_PUSH_OUT_OF = { [1] = 0.15 }
 local function Swapped(was)
 	local knobs = ns.shoulderSwap
 	if shownForm == nil then
-		local by = knobs and knobs.boostOut or SWAP_PUSH_OUT_OF[was]
+		local by = knobs and knobs.boostOut or SWAP_PUSH_OUT_OF[was] or (was and SWAP_PUSH_OUT)
 		if not by or by <= 0 then return end
 		boostBy = by
 		boostFrom, boostUntil = lastYards, GetTime() + (knobs and knobs.boostOutFor or SWAP_PUSH_FOR)
+		pushOver = boostUntil + 0.1
 		return
 	end
 	boostBy = knobs and knobs.boost or SWAP_PUSH_OF[shownForm] or SWAP_PUSH
 	boostFrom, boostUntil = lastYards, GetTime() + (knobs and knobs.boostFor or SWAP_PUSH_FOR)
+	pushOver = boostUntil + 0.1
 end
 local function ModelForm()
 	local form = FormNow()
@@ -389,6 +401,7 @@ local function SpotYards()
 	local yards = (ns.db.shoulderCamSpot or 0.2) * distance * ns.ShoulderViewWidth() / scale
 	local k = math.min(1, math.max(0, (distance - SPOT_EASE_FROM) / (SPOT_EASE_TO - SPOT_EASE_FROM)))
 	yards = math.min(OFFSET_SAFE / scale, yards * k * k * (3 - 2 * k))
+	steadyYards = yards
 	-- (Just into a form: past the new offset for a moment, SWAP_PUSH.)
 	if boostUntil then
 		if GetTime() < boostUntil then
@@ -1319,6 +1332,14 @@ local function TargetShift()
 	if YouAreTarget() then return 0 end
 	local yards = tonumber(GetCVar("test_cameraOverShoulder")) or 0
 	if yards == 0 then return 0 end
+	-- (A shift's push past the new offset is for the game's ease, which it
+	-- cancels: on screen you hardly move. Read as written, it slid the PRD a
+	-- point the other way as you shifted, running: the moving shift run,
+	-- 2026-11-14. So the push is left out here, and a moment past its end: the
+	-- setting still held it for a frame then, and the PRD hopped 0.3.)
+	if GetTime() < pushOver and steadyYards > 0 then
+		yards = yards < 0 and -steadyYards or steadyYards
+	end
 	-- (The camera as it glides, as the offset follows it (SeenZoom): the
 	-- zoom's end at once put the PRD where it'd be at zoom 4 while you were
 	-- still small at 15, "prdcheck", Forever, 2026-11-13.)
