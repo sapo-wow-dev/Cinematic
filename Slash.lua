@@ -212,6 +212,7 @@ local function PrintDebugHelp()
 	print("  /cine debug layout - Edit Mode's layouts and where the personal resource display is")
 	print("  /cine debug layoutbase - check our layouts made on each of yours (party frames, places kept), saving nothing")
 	print("  /cine debug followhud [setup|undo|update] - the Follow HUD (dev): its pieces, layout and the settings it changed, or set it up, take it off, or make its layout again")
+	print("  /cine debug followtest - one run checking the Follow HUD with each root, across two reloads (dev copy; again to stop)")
 	print("  /cine debug layoutexport - save the Edit Mode layout you're on as an export string (in the saved settings: /reload after)")
 	print("  /cine debug ids - every setting's /cine find id, and the controls on the settings pages that have none yet, to copy")
 	print("  /cine debug changed - which settings make the Profiles page say (changed): each with the profile's value and the default")
@@ -519,6 +520,9 @@ local function HandleSlash(msg)
 		ns.DescribeLayouts()
 	elseif cmd == "debug" and arg == "layoutbase" then
 		ns.LayoutBaseTest()
+	elseif cmd == "debug" and arg == "followtest" then
+		-- (Dev copy: one run setting up the Follow HUD with each root and checking it, across two reloads, FollowHudTest.lua.)
+		if ns.FollowHudTest then ns.FollowHudTest() else ns.Print("/cine debug followtest is in the dev copy only.") end
 	elseif cmd == "debug" and (arg == "followhud" or arg:find("^followhud%s")) and ns.FollowHudDebug then
 		ns.FollowHudDebug(arg:match("^followhud%s+(%S+)"))
 	elseif cmd == "debug" and arg == "layoutexport" then
@@ -1718,6 +1722,9 @@ local function HandleSlash(msg)
 		-- (Dev copy: one run checking Damage Vision's crossfade with the damage meter, DamageVisionMeterTest.lua.)
 		if ns.DamageVisionMeterTest then ns.DamageVisionMeterTest(arg:match("^dvmeter%s*(.*)$"))
 		else ns.Print("/cine debug dvmeter is in the dev copy only.") end
+	elseif cmd == "debug" and arg == "redbar" then
+		-- (Dev copy: one run recording the health bars' colors as you take damage, HealthRedTest.lua.)
+		if ns.HealthRedTest then ns.HealthRedTest() else ns.Print("/cine debug redbar is in the dev copy only.") end
 	elseif cmd == "debug" and arg:find("^platewidth") then
 		-- (Dev copy: one run trying three ways to make your target's nameplate narrower, PlateWidthTest.lua.)
 		if ns.PlateWidthTest then ns.PlateWidthTest(arg:match("^platewidth%s*(.*)$"))

@@ -219,6 +219,7 @@ local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 
 	-- (Form 4: 2.32 in five runs, 2.29 at 8 yards and 2.35 at 12, just over
 	-- the spread a run calls good; one run said 2.20, the odd one out.)
 	["NightElf-form4"] = 2.32 }
+local BORROW_FORMS_FROM = "NightElf" -- (a form not measured for your race: this race's, ScaleOf)
 -- bear, cat, dire bear: off the recordings till the sweep's run in them
 local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 -- Forms that keep your own model (warrior stances 17-19, shadowform 28,
@@ -342,6 +343,12 @@ local function ScaleOf(form, foot)
 		local race = foot:match("^(.-)%-%d+$") or foot
 		local both = MEASURED_SCALES[("%s-form%d"):format(race, form)]
 		if both then return both, "built in, this race's" end
+		-- (Not measured for this race: the Night Elf's, the one race measured
+		-- so far, 2026-11-14. Closer than the race's on-foot size (a Troll in
+		-- form 4 went by 0.95 for a form near 2.3) while the others wait for
+		-- a druid of theirs.)
+		local borrowed = MEASURED_SCALES[("%s-form%d"):format(BORROW_FORMS_FROM, form)]
+		if borrowed then return borrowed, ("built in, the %s's: not measured for this race"):format(BORROW_FORMS_FROM) end
 		if FORM_SCALES[form] then return FORM_SCALES[form], "estimated for this form" end
 		saved = scales and scales[foot]
 		if type(saved) == "number" and saved > 0.2 then return saved, "on-foot one: form not measured" end
@@ -506,39 +513,6 @@ end
 
 -- (Tools/shoulder-sim: a new session, as a reload starts this file again.)
 function ns.ResetShoulderSession() quieted = nil end
-
--- (Not offered on turning it on any more, since the Follow HUD (FollowHud.lua)
--- puts its frames on any profile. Nothing calls it now: kept till the Shoulder
--- Cam profile is made from the Follow HUD's pieces.)
--- Turned on: the Shoulder Cam profile offered, each time (to be safe: made
--- fresh each time it's taken), where there's one for this client (Forever,
--- ProfileChoices.lua: Cinema's settings, the personal resource display in
--- fights in place of your portrait, and the Shoulder Cam layout, Layouts.lua,
--- its HUD hung on the personal resource display, which Frames follow you
--- slides as one). Yes: switched to, put back to the built-in's own settings
--- (what you had in it goes to Backups first), and its layout made again from
--- the code (Edit Mode layouts outlast a reset of Cinematic), with the reload offered.
-local PROFILE_NAME = "Shoulder Cam"
-function ns.OfferShoulderProfile()
-	if not (ns.ProfileExists and ns.ProfileExists(PROFILE_NAME)) or InCombatLockdown() then return end
-	if not StaticPopupDialogs.CINEMATIC_SHOULDER_PROFILE then
-		StaticPopupDialogs.CINEMATIC_SHOULDER_PROFILE = {
-			text = L["Set up the Shoulder Cam profile? It switches you to a profile called Shoulder Cam: " ..
-				"Cinema's settings, with your resources in fights in place of your portrait, and an Edit Mode " ..
-				"layout of its own that puts them at the bottom middle so they slide along with you. It's made " ..
-				"fresh each time (what you had in it goes to Backups), and you can switch back on the Profiles page."],
-			button1 = YES or L["Yes"], button2 = NO or L["No"],
-			OnAccept = function()
-				if not (ns.SetProfile and ns.SetProfile(PROFILE_NAME)) then return end
-				if ns.ResetProfile then ns.ResetProfile() end
-				if ns.RegenerateLayout then ns.RegenerateLayout(PROFILE_NAME) end
-				ns.Log("shoulder", "profile: switched to Shoulder Cam, made fresh, its layout made again")
-			end,
-			timeout = 0, whileDead = true, hideOnEscape = true,
-		}
-	end
-	StaticPopup_Show("CINEMATIC_SHOULDER_PROFILE")
-end
 
 -- Our notice, once: Accept and it starts; Cancel turns it off.
 local asking
@@ -1581,6 +1555,9 @@ function ns.CreateShoulderCamPanel(kit)
 	if not ns.isRetail then
 		tabList[4] = { L["Gamepad"], L["Playing with the gamepad UI on."] }
 	end
+	-- (Last: measuring your race, sex and form, ShoulderCalibrate.lua.)
+	tabList[#tabList + 1] = { L["Calibrate"], L["Measure where you sit for your race, sex and form, and share it."] }
+	local calibrateTab = #tabList
 	local tabHosts, _, TabsShown, Adopt = ns.PageTabsBelow(content, switch, tabList, "Shoulder Cam/page", nil, nil, 1)
 	local stack = kit.Stack(switch, "check")
 
@@ -1670,11 +1647,23 @@ function ns.CreateShoulderCamPanel(kit)
 	local fstack = kit.Stack(top, "check")
 	-- (Dev only for now: setting the Follow HUD up on the profile, FollowHud.lua.)
 	if ns.BuildFollowHudSetup then ns.BuildFollowHudSetup(frames, fstack, kit) end
-	kit.GreyUnless(fstack:Add(kit.Check(frames, "shoulderCamFrames", L["Frames follow you"],
+	local followCheck = fstack:Add(kit.Check(frames, "shoulderCamFrames", L["Frames follow you"],
 		L["The frames ticked below slide over to where you are on the screen, and " ..
 		"glide back as the camera goes behind you. Edit Mode still places them: this moves them from " ..
-		"there."], SaveThen("shoulderCamFrames", UpdateFollow)), "check"), IfOn)
+		"there."], SaveThen("shoulderCamFrames", UpdateFollow)), "check")
+	kit.GreyUnless(followCheck, IfOn)
 	local function IfFollow() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamFrames end
+	-- (Beside it, on its row: with Turn to your target, on the first tab.)
+	local turnFollow = kit.Check(frames, "shoulderCamTargetFollow", L["Frames follow the turn"],
+		L["Your cast bar and Personal Resource Display slide along with you as the camera turns toward " ..
+		"your target. The game doesn't say how far it turned, so this works it out from where you clicked: " ..
+		"picked with Tab, they join in once your mouse passes over it. Experimental: dragging the camera " ..
+		"with the mouse loses it till you pick a target again."], SaveThen("shoulderCamTargetFollow", UpdateFollow))
+	turnFollow:SetPoint("LEFT", followCheck, "LEFT", 280, 0)
+	kit.GreyUnless(turnFollow, function()
+		local db = ns.GetDB()
+		return ns.Setting("shoulderCam") and db.shoulderCamTargetTurn and db.shoulderCamFrames
+	end)
 	local FRAME_TIP = L["Slides with you. A frame placed on it in Edit Mode slides along with it, ticked or not."]
 	local labels = {
 		shoulderCamFollowCast = L["Cast bar"],
@@ -1691,6 +1680,12 @@ function ns.CreateShoulderCamPanel(kit)
 	kit.Tooltip(height, L["Raises (or lowers) all the ticked frames together while the camera is over your " ..
 		"shoulder; they glide back down as it goes behind you. Each one's own slider, on its row, adds to this."])
 	kit.GreyUnless(height, IfFollow)
+	-- (Beside Height (all), on its row.)
+	local strength = kit.Slider(frames, "shoulderCamFramesStrength", L["Follow strength"], 0, 200, 5, "%d%%", 100)
+	strength:SetPoint("LEFT", height, "LEFT", 280, 0)
+	kit.Tooltip(strength, L["How far they slide. Where you are on the screen is worked out from the camera, " ..
+		"not read: if they land short of you or past you, turn this up or down."])
+	kit.GreyUnless(strength, IfFollow)
 	local OWN_TIP = L["This frame's own height, on top of Height (all). A frame placed on it in Edit Mode moves " ..
 		"with it."]
 	for _, group in ipairs(FOLLOW_GROUPS) do
@@ -1710,22 +1705,6 @@ function ns.CreateShoulderCamPanel(kit)
 		kit.Tooltip(own, OWN_TIP)
 		kit.GreyUnless(own, function() return IfFollow() and ns.GetDB()[key] end)
 	end
-	local strength = fstack:Add(kit.Slider(frames, "shoulderCamFramesStrength", L["Follow strength"], 0, 200, 5,
-		"%d%%", 100), "slider")
-	kit.Tooltip(strength, L["How far they slide. Where you are on the screen is worked out from the camera, " ..
-		"not read: if they land short of you or past you, turn this up or down."])
-	kit.GreyUnless(strength, IfFollow)
-	-- (With Turn to your target, on the first tab.)
-	fstack:Header(frames, L["Turning"])
-	kit.GreyUnless(fstack:Add(kit.Check(frames, "shoulderCamTargetFollow", L["Frames follow the turn"],
-		L["Your cast bar and Personal Resource Display slide along with you as the camera turns toward " ..
-		"your target. The game doesn't say how far it turned, so this works it out from where you clicked: " ..
-		"picked with Tab, they join in once your mouse passes over it. Experimental: dragging the camera " ..
-		"with the mouse loses it till you pick a target again."], SaveThen("shoulderCamTargetFollow", UpdateFollow)), "check"),
-		function()
-			local db = ns.GetDB()
-			return ns.Setting("shoulderCam") and db.shoulderCamTargetTurn and db.shoulderCamFrames
-		end)
 
 	-- Beside each camera's tick: the seconds it takes to go back behind you as
 	-- that camera starts, and back over your shoulder as it ends. Empty: the
@@ -1831,7 +1810,9 @@ function ns.CreateShoulderCamPanel(kit)
 	-- The Gamepad tab (Forever): not supported at the moment. The game keeps
 	-- your character centered while its gamepad UI is on, so the Shoulder Cam
 	-- pauses then (PauseReason, "gamepad").
-	if tabHosts[4] then
+	if ns.BuildShoulderCalibrateTab then ns.BuildShoulderCalibrateTab(tabHosts[calibrateTab], kit) end
+
+	if tabHosts[4] and calibrateTab ~= 4 then
 		local pad = tabHosts[4]
 		local padTop = CreateFrame("Frame", nil, pad)
 		padTop:SetSize(1, 1)

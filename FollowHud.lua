@@ -24,21 +24,32 @@ local L = ns.L
 
 local LAYOUT_NAME = "Follow HUD"
 
--- The setting pieces, in the order they're offered. on: picked to start with.
+-- The setting pieces, in the order they're offered. module: its module, or
+-- one by what's at the root (picks.root: "prd", the personal resource
+-- display, or "player", the player frame; a root not listed: none, and the
+-- piece isn't offered). on: picked to start with.
 local SETTING_PIECES = {
-	{ key = "prdOn", module = "follow-prd-on", on = true },
-	{ key = "fights", module = "follow-fights", on = true },
-	{ key = "enemy", module = "follow-enemy", on = true },
-	{ key = "noPortrait", module = "follow-no-portrait", on = false },
+	{ key = "prdOn", module = { prd = "follow-prd-on" }, on = true },
+	{ key = "fights", module = { prd = "follow-fights", player = "follow-fights-player" }, on = true },
+	{ key = "enemy", module = { prd = "follow-enemy", player = "follow-enemy-player" }, on = true },
+	{ key = "noPortrait", module = { prd = "follow-no-portrait" }, on = false },
 	{ key = "frames", module = "follow-frames", on = true },
 }
 ns.FOLLOW_HUD_SETTING_PIECES = SETTING_PIECES
 -- The layout pieces picked to start with (the rest off).
 local LAYOUT_ON = { stack = true, sizes = true, portraits = false }
 
--- The picks to start with: every piece, on or off.
+local function RootOf(picks) return picks and picks.root == "player" and "player" or "prd" end
+
+-- A setting piece's module key with this root (nil: not with it).
+local function PieceModule(piece, root)
+	if type(piece.module) == "table" then return piece.module[root] end
+	return piece.module
+end
+
+-- The picks to start with: every piece, on or off, and the PRD at the root.
 function ns.FollowHudDefaultPicks()
-	local picks = {}
+	local picks = { root = "prd" }
 	for _, piece in ipairs(ns.FOLLOW_HUD_PIECE_ORDER) do picks[piece] = LAYOUT_ON[piece] or false end
 	for _, piece in ipairs(SETTING_PIECES) do picks[piece.key] = piece.on end
 	return picks
@@ -61,7 +72,8 @@ end
 local function Read(key, row)
 	local value = ns.db[key]
 	if row == nil then return value end
-	return type(value) == "table" and value[row] or nil
+	if type(value) ~= "table" then return nil end
+	return value[row] -- (not "and value[row] or nil": a row that's false must stay false)
 end
 
 local function Write(key, row, value)
@@ -130,9 +142,12 @@ function ns.FollowHudSetUp(picks)
 		end
 		Write(key, row, value)
 	end
-	local applied = {}
+	local root = RootOf(picks)
+	picks.root = root
+	local applied = { root }
 	for _, piece in ipairs(SETTING_PIECES) do
-		local module = picks[piece.key] and ns.GetModule(piece.module)
+		local key = picks[piece.key] and PieceModule(piece, root)
+		local module = key and ns.GetModule(key)
 		if module and not (module.client and module.client ~= ns.CLIENT) then
 			module.apply(function(key, value)
 				if type(value) == "table" and key ~= "hoverGroups" then
@@ -199,56 +214,58 @@ function ns.FollowHudUpdate()
 end
 
 -- The set-up section at the top of the Shoulder Cam page's Follow HUD tab (dev
--- only for now): a tick per piece, then Set Up, Undo and Update Layout (each
--- only while it can be used). The ticks start as the profile's set-up has
--- them, or the ones to start with; ticking only changes what Set Up puts on.
+-- only for now): where it stands beside its header, a row of buttons (Set Up,
+-- Undo, Update Layout, Change pieces, each only while it can be used), and the
+-- pieces under them: what's at the root as a dropdown, the rest as ticks in two
+-- columns. Set up, the pieces fold away (Change pieces opens them), so the tab
+-- fits without scrolling. The ticks start as the profile's set-up has them, or
+-- the ones to start with; ticking only changes what Set Up puts on.
+-- (No ticks for the PRD's own switch and Frames follow you: Set Up always puts
+-- those on where they apply, AUTO_PIECES.)
+local AUTO_PIECES = { prdOn = true, frames = true }
 local PIECE_TEXT = {
-	stack = { "Center stack", "Your Personal Resource Display at the bottom middle, with the cast bar, Cooldown " ..
-		"Manager and swing timers on it, so they slide with you as one. Makes an Edit Mode layout called Follow " ..
-		"HUD from the one you're on: everything else in it stays as you had it." },
+	stack = { "Center stack", "Your health and power (picked above) at the bottom middle, with the cast bar, " ..
+		"Cooldown Manager and swing timers, so they slide with you as one. Makes an Edit Mode layout called " ..
+		"Follow HUD from the one you're on: everything else in it stays as you had it." },
 	sizes = { "Same width", "The Personal Resource Display, cast bar and swing timers made one width. Off: your " ..
 		"own sizes stay." },
-	portraits = { "Portraits each side", "Your player and target frames each side of the stack. They don't slide " ..
-		"with you: the game locks them in fights." },
+	portraits = { "Portraits each side", "Your player and target frames each side of the stack (with the player " ..
+		"frame picked above, the target frame alone). They don't slide with you: the game locks them in fights." },
 	prdOn = { "Personal Resource Display on", "Turns on the game's Personal Resource Display, the stack's root." },
-	fights = { "Up in fights", "The Personal Resource Display and its power come up in fights." },
-	enemy = { "Up with an enemy targeted", "The Personal Resource Display and its power come up with an enemy " ..
-		"targeted." },
-	noPortrait = { "In place of your portrait", "Your portrait stays down in fights and with an enemy targeted, " ..
+	fights = { "Up in fights", "Your health and power (picked above) come up in fights, and stay up while your " ..
+		"health or power isn't full with the player frame picked." },
+	enemy = { "Up with an enemy targeted", "Your health and power (picked above) come up with an enemy targeted." },
+	noPortrait = { "Hide portrait while it's up", "Your portrait stays down in fights and with an enemy targeted, " ..
 		"and the Personal Resource Display stays up while your health or power isn't full." },
-	frames = { "Frames follow you on", "Turns on Frames follow you below, with every frame ticked." },
 }
 
 function ns.BuildFollowHudSetup(parent, stack, kit)
 	if not ns.isDev then return end
 	local wanted, wantedFor
+	local editing -- (Change pieces: the pieces open while it's set up)
 	local function Wanted()
 		local profile = ns.ActiveProfile()
 		if wantedFor ~= profile then
-			wanted, wantedFor = Copy(ns.FollowHudPicks() or ns.FollowHudDefaultPicks()), profile
+			wanted, wantedFor, editing = Copy(ns.FollowHudPicks() or ns.FollowHudDefaultPicks()), profile, false
 		end
 		return wanted
 	end
-	stack:Header(parent, L["Set Up"])
-	stack:Note(parent, L["Puts the frames that follow you on this profile, piece by piece. Nothing else changes: " ..
-		"not your styles, nor the rest of your Edit Mode layout. Undo takes it all off again."], 520)
-	local order = {}
-	for _, piece in ipairs(ns.FOLLOW_HUD_PIECE_ORDER) do order[#order + 1] = piece end
-	for _, piece in ipairs(SETTING_PIECES) do order[#order + 1] = piece.key end
-	for _, piece in ipairs(order) do
-		local text = PIECE_TEXT[piece]
-		stack:Add(kit.Check(parent, {
-			get = function() return Wanted()[piece] and true or false end,
-			set = function(value) Wanted()[piece] = value end,
-		}, L[text[1]], L[text[2]]), "check")
-	end
-	-- (The buttons on one row, and a line saying where it stands.)
+	-- (Its header with a "?" holding what it does, and where it stands beside them.)
+	local header = stack:Header(parent, L["Set Up"])
+	stack:Help(parent, L["Puts the frames that follow you on this profile, piece by piece. Nothing else changes: " ..
+		"not your styles, nor the rest of your Edit Mode layout. Undo takes it all off again."])
+	local status = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	status:SetJustifyH("LEFT")
+	status:SetPoint("LEFT", header, "RIGHT", 32, 0)
+
+	-- (The buttons on one row.)
 	local row = CreateFrame("Frame", nil, parent)
 	row:SetSize(1, 24)
 	stack:Add(row, "label")
+	local pieces -- (the box the pieces sit in, below)
 	local function Button(label, tip, onClick)
 		local button = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-		button:SetSize(130, 22)
+		button:SetSize(122, 22)
 		button:SetText(label)
 		if ns.SkinButton then ns.SkinButton(button) end
 		kit.Tooltip(button, tip)
@@ -259,42 +276,118 @@ function ns.BuildFollowHudSetup(parent, stack, kit)
 			elseif kept and kept > 0 then
 				ns.Print(L["Follow HUD taken off; %d settings you've changed since are left as you have them."]:format(kept))
 			end
-			wantedFor = nil -- (the ticks as it's set up now)
+			wantedFor = nil -- (the ticks as it's set up now, folded away again)
 			kit.Refresh()
 		end)
 		return button
 	end
 	local setUp = Button(L["Set Up"], L["Puts the ticked pieces on this profile. Set up already: takes the last " ..
 		"set-up off first, then puts these on. With a layout piece, the game needs a reload to show the layout."],
-		function() return ns.FollowHudSetUp(Wanted()) end)
+		function()
+			local picks = Wanted()
+			for key in pairs(AUTO_PIECES) do picks[key] = true end
+			return ns.FollowHudSetUp(picks)
+		end)
 	setUp:SetPoint("LEFT", row, "LEFT", 0, 0)
 	local undo = Button(L["Undo"], L["Takes the Follow HUD off this profile: each setting it changed back as it " ..
 		"was (one you've changed since stays yours), and Edit Mode back on your layout."], ns.FollowHudUndo)
-	undo:SetPoint("LEFT", setUp, "RIGHT", 8, 0)
+	undo:SetPoint("LEFT", setUp, "RIGHT", 6, 0)
 	local update = Button(L["Update Layout"], L["Makes the Follow HUD layout again from the layout it was made on, " ..
 		"so changes you've made to that one since come over. Changes made to the Follow HUD layout itself in " ..
 		"Edit Mode are lost."], ns.FollowHudUpdate)
-	update:SetPoint("LEFT", undo, "RIGHT", 8, 0)
-	local status = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	status:SetJustifyH("LEFT")
-	stack:Add(status, "label")
+	update:SetPoint("LEFT", undo, "RIGHT", 6, 0)
+	local change = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+	change:SetSize(122, 22)
+	if ns.SkinButton then ns.SkinButton(change) end
+	kit.Tooltip(change, L["Shows the pieces to pick from, for Set Up Again. Hide puts them away, changing nothing."])
+	change:SetScript("OnClick", function()
+		Wanted()
+		editing = not editing
+		kit.Refresh()
+	end)
+
+	-- The pieces: what's at the root (a dropdown), then the rest in two columns
+	-- (what goes in the layout on the left, when it comes up on the right).
+	pieces = CreateFrame("Frame", nil, parent)
+	pieces:SetSize(1, 1)
+	stack:Add(pieces, "label")
+	local rootLabel = kit.Label(pieces, "GameFontHighlight", L["Your health and power"])
+	rootLabel:SetPoint("TOPLEFT", pieces, "TOPLEFT", 0, -5)
+	local ROOT_TEXT = {
+		prd = { "Personal Resource Display", "Your Personal Resource Display at the bottom middle, under you, " ..
+			"sliding with you as the rest do." },
+		player = { "Player frame", "Your player frame at the bottom middle, under the rest. It stays put while " ..
+			"they slide over to you: the game locks it in fights, so it can't follow you." },
+	}
+	local choices = {}
+	for _, root in ipairs(ns.FOLLOW_HUD_ROOTS) do
+		choices[#choices + 1] = { value = root, text = L[ROOT_TEXT[root][1]], tip = L[ROOT_TEXT[root][2]] }
+	end
+	local dropdown = kit.Dropdown(pieces, {
+		get = function() return RootOf(Wanted()) end,
+		set = function(value) Wanted().root = value end, -- (Dropdown refreshes: the root's own pieces hide or come back)
+	}, choices, 220)
+	if dropdown then dropdown:SetPoint("LEFT", rootLabel, "LEFT", 170, 0) end
+	local pieceOf = {}
+	for _, piece in ipairs(SETTING_PIECES) do pieceOf[piece.key] = piece end
+	local columns = { {}, {} }
+	for _, piece in ipairs(ns.FOLLOW_HUD_PIECE_ORDER) do table.insert(columns[1], piece) end
+	for _, piece in ipairs(SETTING_PIECES) do
+		if not AUTO_PIECES[piece.key] then table.insert(columns[2], piece.key) end
+	end
+	local ROW_H, COLUMN_X, TOP = 28, 280, -32
+	local rows = 0
+	for c, column in ipairs(columns) do
+		for r, piece in ipairs(column) do
+			local text = PIECE_TEXT[piece]
+			local check = kit.Check(pieces, {
+				get = function() return Wanted()[piece] and true or false end,
+				set = function(value) Wanted()[piece] = value end,
+			}, L[text[1]], L[text[2]])
+			check:SetPoint("TOPLEFT", pieces, "TOPLEFT", -2 + (c - 1) * COLUMN_X, TOP - (r - 1) * ROW_H)
+			-- (A piece with nothing to do with this root hidden, an empty cell: the PRD's own with the player frame.)
+			if pieceOf[piece] then
+				local refresh = check.Refresh
+				check.Refresh = function(self)
+					refresh(self)
+					self:SetShown(PieceModule(pieceOf[piece], RootOf(Wanted())) ~= nil)
+				end
+			end
+			rows = math.max(rows, r)
+		end
+	end
+	local OPEN_H = -TOP + rows * ROW_H - 4
+
 	row.Refresh = function()
 		local picks = ns.FollowHudPicks()
+		Wanted() -- (a new profile: folded, its own ticks)
 		local withLayout = picks and AnyLayoutPiece(picks)
 		setUp:SetText(picks and L["Set Up Again"] or L["Set Up"])
-		-- (Hidden while it can't be used: nothing to take off or remake.)
+		-- (Hidden while it can't be used: nothing to take off, remake or open.)
 		undo:SetShown(picks ~= nil)
 		update:SetShown(withLayout and true or false)
+		change:SetShown(picks ~= nil)
+		change:SetText(editing and L["Hide Pieces"] or L["Change Pieces"])
+		change:ClearAllPoints()
+		change:SetPoint("LEFT", withLayout and update or undo, "RIGHT", 6, 0)
+		-- (Not set up: the pieces always open, there's nothing else to do here.)
+		local open = picks == nil or editing
+		if pieces:IsShown() ~= open then
+			pieces:SetShown(open)
+			pieces:SetHeight(open and OPEN_H or 1)
+			if kit.FitContentHeight then kit.FitContentHeight(parent:GetParent()) end
+		end
 		if not picks then
 			status:SetText(L["Not set up on this profile."])
 		elseif withLayout then
-			status:SetText(L["Set up on this profile, with the Follow HUD layout made on %s."]:format(
+			status:SetText(L["Set up, with the layout made on %s."]:format(
 				tostring(ns.chardb and ns.chardb.followHudBase or "?")))
 		else
-			status:SetText(L["Set up on this profile, without a layout of its own."])
+			status:SetText(L["Set up, without a layout of its own."])
 		end
 	end
 	kit.AddControl(row)
+	pieces:SetHeight(OPEN_H)
 	row:Refresh()
 	-- (The frames' own settings carry on under a header of their own.)
 	stack:Header(parent, L["Frames"])
@@ -312,10 +405,10 @@ function ns.FollowHudDebug(what)
 	end
 	local picks = ns.FollowHudPicks()
 	local on = {}
-	for key, value in pairs(picks or {}) do if value then on[#on + 1] = key end end
+	for key, value in pairs(picks or {}) do if value == true then on[#on + 1] = key end end
 	table.sort(on)
 	Say(("profile %s, set up %s%s; in combat %s"):format(tostring(ns.ActiveProfile()), tostring(picks ~= nil),
-		picks and (" (" .. table.concat(on, ", ") .. ")") or "", tostring(InCombatLockdown())))
+		picks and (" (root %s: %s)"):format(RootOf(picks), table.concat(on, ", ")) or "", tostring(InCombatLockdown())))
 	Say(("layout: on %s, Follow HUD %s, made on %s, profile's %s, yours to go back to %s"):format(
 		tostring(ns.ActiveLayoutName()), tostring(ns.LayoutState and ns.LayoutState(LAYOUT_NAME)),
 		tostring(ns.chardb and ns.chardb.followHudBase), tostring(ns.db.editModeLayout),

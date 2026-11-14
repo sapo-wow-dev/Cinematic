@@ -105,6 +105,7 @@ Director.lua
 ZoomGuard.lua
 QuestCam.lua
 ShoulderCam.lua
+ShoulderCalibrate.lua
 ShoulderCamTest.lua
 SkyrideCam.lua
 CameraRows.lua
@@ -206,8 +207,10 @@ LowManaTest.lua
 ThresholdTest.lua
 PlateWidthTest.lua
 DamageVisionMeterTest.lua
+HealthRedTest.lua
 SpokenTest.lua
 LoreForeverTest.lua
+FollowHudTest.lua
 CameraScriptsPage.lua
 CameraManager.lua
 Options.lua

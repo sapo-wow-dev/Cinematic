@@ -2901,7 +2901,10 @@ function ns.ShoulderTest(arg)
 		SetQuiet(ns.db.shoulderTestQuiet and true or false)
 		ns.Print(("shoulder quiet %s (stays over a reload; off takes a /reload)"):format(ns.db.shoulderTestQuiet and "on" or "off"))
 	elseif what == "sweep" then Sweep(rest)
-	elseif what == "calibrate" then Sweep("calibrate")
+	-- (The player copy's now, ShoulderCalibrate.lua: typed, so no popup.)
+	elseif what == "calibrate" then
+		local why = ns.ShoulderCalibrateCantStart and ns.ShoulderCalibrateCantStart()
+		if why then ns.Print(why) elseif ns.ShoulderCalibrateStart then ns.ShoulderCalibrateStart() end
 	elseif what == "try" then Try(rest)
 	elseif what == "walls" then Walls()
 	elseif what == "forms" then Forms()

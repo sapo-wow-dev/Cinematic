@@ -158,16 +158,13 @@ ns.PROFILE_MODULES = {
 		end),
 
 	-- (The Shoulder Cam profile's, testers' for now: its HUD centered on the
-	-- personal resource display, which slides with you over your shoulder.)
+	-- personal resource display, which slides with you over your shoulder.
+	-- The Follow HUD's pieces on Retail Inspired's bars: the profile's layout
+	-- choice adds follow-prd-on and follow-fights.)
 	Layout("layout-shoulder", "Shoulder Cam layout", "Shoulder Cam", "forever",
 		"Retail Inspired's bars, with the personal resource display in the middle at the bottom and the cast " ..
 		"bar, Cooldown Manager, swing timers and portraits hung on it, so the Shoulder Cam's Frames follow " ..
-		"you slides them as one; fights bring the personal resource display up. Turns the game's personal " ..
-		"resource display on if it's off.",
-		function(set)
-			set("prdOn", true)
-			set("combatShow", { prd = true, prdpower = true })
-		end),
+		"you slides them as one."),
 
 	-- The Follow HUD's pieces (dev only for now, Forever): the frames that
 	-- follow you over your shoulder, a piece each, so they go on top of any
@@ -192,6 +189,20 @@ ns.PROFILE_MODULES = {
 		scope = { "Standard Frames/Personal Resource Display" },
 		tip = "The personal resource display and its power come up with an enemy targeted.",
 		apply = function(set) set("enemyShow", { prd = true, prdpower = true }) end },
+	-- (With the player frame at the root in place of the personal resource
+	-- display: it's the one that comes up, and stays up while recovering.)
+	{ key = "follow-fights-player", name = "Follow HUD: player frame up in fights", client = "forever",
+		scope = { "Standard Frames/Unit frames", "Standard Frames/top", "Personal Resources" },
+		tip = "Your player frame comes up in fights, and stays up while your health or power isn't full.",
+		apply = function(set)
+			set("combatShow", { player = true })
+			set("prHealthPlayer", 0.99)
+			set("prPowerPlayer", 0.99)
+		end },
+	{ key = "follow-enemy-player", name = "Follow HUD: player frame up with an enemy targeted", client = "forever",
+		scope = { "Standard Frames/Unit frames" },
+		tip = "Your player frame comes up with an enemy targeted.",
+		apply = function(set) set("enemyShow", { player = true }) end },
 	{ key = "follow-no-portrait", name = "Follow HUD: in place of your portrait", client = "forever",
 		scope = { "Standard Frames/Unit frames", "Standard Frames/top", "Personal Resources" },
 		tip = "Your portrait stays down in fights and with an enemy targeted, and the personal resource display, " ..
@@ -312,30 +323,34 @@ ns.PROFILE_MODULES = {
 			-- column starts with the party and raid frames ticked. The bars: pure-cdm's.)
 			set("instanceShow", instance)
 		end },
-	-- (Cinema's frames, over your shoulder: the personal resource display,
-	-- which follows you there, in fights and with an enemy targeted in place
-	-- of the player frame; and the Shoulder Cam on. Made from pure-frames as
-	-- it's written, so the two stay alike.)
+	-- (Cinema's frames with the Shoulder Cam on: the Shoulder Cam profile's.
+	-- Made from pure-frames as it's written, so the two stay alike; the
+	-- profile's frames choice puts the Follow HUD's pieces on after it, the
+	-- personal resource display up in place of your portrait.)
 	{ key = "shoulder-frames", name = "Shoulder Cam: frames", client = "forever",
 		scope = { "Standard Frames", "Personal Resources", "Advanced Frames/Supported addons", "Gamepad/top",
 			"Shoulder Cam" },
-		tip = "Cinema's frames, with the personal resource display (which slides with you over your shoulder) " ..
-		"in fights, with an enemy targeted and while your health or power isn't full, in place of your " ..
-		"portrait; and the Shoulder Cam on.",
+		tip = "Cinema's frames, and the Shoulder Cam on.",
 		apply = function(set)
+			-- (What the Follow HUD's pieces after it set, left to them.)
+			local theirs = {}
+			for _, key in ipairs({ "follow-enemy", "follow-no-portrait", "follow-frames" }) do
+				ns.PROFILE_MODULE_BY_KEY[key].apply(function(setting, value)
+					if type(value) == "table" then
+						theirs[setting] = theirs[setting] or {}
+						for row in pairs(value) do theirs[setting][row] = true end
+					else
+						theirs[setting] = true
+					end
+				end)
+			end
 			ns.PROFILE_MODULE_BY_KEY["pure-frames"].apply(function(key, value)
-				-- (In fights the personal resource display's the layout's to bring up:
-				-- layout-shoulder's. With an enemy targeted, this one's.)
-				if key == "combatShow" and type(value) == "table" then
-					value.player = false
-				elseif key == "enemyShow" and type(value) == "table" then
-					value.player, value.prd, value.prdpower = false, true, true
-				-- (Nor kept up while your health or power isn't full: the
-				-- personal resource display is, 2026-11-13.)
-				elseif key == "prHealthPlayer" or key == "prPowerPlayer" then
-					value = 0
+				if theirs[key] == true then return end
+				if type(value) == "table" and theirs[key] then
+					for row in pairs(theirs[key]) do value[row] = nil end
+				end
 				-- (Rows retail alone has: this module's Forever's, so not written.)
-				elseif key == "instanceShow" and type(value) == "table" then
+				if key == "instanceShow" and type(value) == "table" then
 					value.buffcollapse, value.waypoint = nil, nil
 				end
 				set(key, value)

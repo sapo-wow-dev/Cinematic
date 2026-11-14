@@ -350,12 +350,17 @@ end
 --     locks whatever a protected frame hangs on in a fight, so hung on it
 --     they held the whole HUD still in fights (2026-11-13).
 -- Mockup: https://claude.ai/artifact/PPvLu5DMCUPEgBpNG2zEy6 (2026-11-07).
-local FOLLOW_HUD_PIECES = { stack = {}, sizes = {}, portraits = {} }
+-- Two of each, by what sits at the root (picks.root): "prd", the personal
+-- resource display (as above), or "player", the player frame: then the cast
+-- bar's the root, and the player frame is pinned to the screen under the
+-- stack, centred, as the PRD would be. It can't slide with you: the game locks
+-- it in fights (and anything it hangs on), so it stays put while the rest
+-- glide over to you. Its portraits piece moves the target frame alone.
+local FOLLOW_HUD_PIECES = {}
 ns.FOLLOW_HUD_PIECE_ORDER = { "stack", "sizes", "portraits" }
+ns.FOLLOW_HUD_ROOTS = { "prd", "player" }
 do
-	local stack, sizes = FOLLOW_HUD_PIECES.stack, FOLLOW_HUD_PIECES.sizes
 	local indices = Enum.EditModeUnitFrameSystemIndices or {}
-	local root, rootName = 1, "PlayerCastingBarFrame"
 	-- One width for the three (2026-11-13; the sizes run and screenshots
 	-- measured at 1.22 px a unit): the cast bar's Bar Size (setting 0, 100-150,
 	-- kept in steps of 10: 1 = 110) makes it 229 wide with its art. The PRD's
@@ -368,27 +373,44 @@ do
 	-- 5 = 20) thinner than the game's 30.
 	local SWING_SIZE = { [3] = 19, [4] = 5 }
 	local PRD_SIZE, CAST_SIZE = { [12] = 9, [9] = 1, [4] = 9, [5] = 9 }, { [0] = 1 }
-	if PRD_SYSTEM then
-		root, rootName = PRD_SYSTEM, "PersonalResourceDisplayFrame"
-		stack[#stack + 1] = { 1, nil, "BOTTOM", rootName, "TOP", 0, 26 }               -- cast bar (its name under it)
-		sizes[#sizes + 1] = { 1, nil, nil, nil, nil, nil, nil, CAST_SIZE }
+	local PLAYER, TARGET = indices.Player or 1, indices.Target or 2
+	for _, kind in ipairs(ns.FOLLOW_HUD_ROOTS) do
+		local stack, sizes = {}, {}
+		local root, rootName = 1, "PlayerCastingBarFrame"
+		local withPRD = kind == "prd" and PRD_SYSTEM
+		if withPRD then
+			root, rootName = PRD_SYSTEM, "PersonalResourceDisplayFrame"
+			stack[#stack + 1] = { 1, nil, "BOTTOM", rootName, "TOP", 0, 26 }               -- cast bar (its name under it)
+			sizes[#sizes + 1] = { 1, nil, nil, nil, nil, nil, nil, CAST_SIZE }
+		end
+		-- (330: just under your feet at a normal zoom; 210 put it down by the
+		-- action bars, "too low", 2026-11-13.)
+		stack[#stack + 1] = { root, nil, "BOTTOM", "UIParent", "BOTTOM", 0, 330 }          -- the root
+		sizes[#sizes + 1] = { root, nil, nil, nil, nil, nil, nil, withPRD and PRD_SIZE or CAST_SIZE }
+		stack[#stack + 1] = { 20, 1, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 6 }       -- cooldowns: essential
+		stack[#stack + 1] = { 20, 2, "BOTTOM", "EssentialCooldownViewer", "TOP", 0, 4 }     -- utility
+		stack[#stack + 1] = { 20, 3, "BOTTOM", "UtilityCooldownViewer", "TOP", 0, 4 }       -- buff icons
+		stack[#stack + 1] = { 29, 1, "TOP", rootName, "BOTTOM", 0, -12 }                    -- swing timers: main hand (a gap under the root)
+		stack[#stack + 1] = { 29, 2, "TOP", "SwingTimerMainHandFrame", "BOTTOM", 0, -4 }    -- off hand
+		stack[#stack + 1] = { 29, 3, "TOP", "SwingTimerOffHandFrame", "BOTTOM", 0, -4 }     -- ranged
+		for index = 1, 3 do sizes[#sizes + 1] = { 29, index, nil, nil, nil, nil, nil, SWING_SIZE } end
+		local portraits
+		if kind == "player" then
+			-- (Under the swing timers (12 + 3 x 24 under the cast bar's bottom),
+			-- on the screen, not hung on them: a first guess, untested in game.)
+			stack[#stack + 1] = { UNIT_FRAME, PLAYER, "TOP", "UIParent", "BOTTOM", 0, 240 } -- player frame
+			portraits = {
+				{ UNIT_FRAME, TARGET, "LEFT", "UIParent", "BOTTOM", 300, 345 },              -- target frame
+			}
+		else
+			-- (On the screen, level with the PRD's middle: 330 up, about 15 more.)
+			portraits = {
+				{ UNIT_FRAME, PLAYER, "RIGHT", "UIParent", "BOTTOM", -300, 345 },            -- player frame
+				{ UNIT_FRAME, TARGET, "LEFT", "UIParent", "BOTTOM", 300, 345 },              -- target frame
+			}
+		end
+		FOLLOW_HUD_PIECES[kind] = { stack = stack, sizes = sizes, portraits = portraits }
 	end
-	-- (330: just under your feet at a normal zoom; 210 put it down by the
-	-- action bars, "too low", 2026-11-13.)
-	stack[#stack + 1] = { root, nil, "BOTTOM", "UIParent", "BOTTOM", 0, 330 }          -- the root
-	sizes[#sizes + 1] = { root, nil, nil, nil, nil, nil, nil, PRD_SYSTEM and PRD_SIZE or CAST_SIZE }
-	stack[#stack + 1] = { 20, 1, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 6 }       -- cooldowns: essential
-	stack[#stack + 1] = { 20, 2, "BOTTOM", "EssentialCooldownViewer", "TOP", 0, 4 }     -- utility
-	stack[#stack + 1] = { 20, 3, "BOTTOM", "UtilityCooldownViewer", "TOP", 0, 4 }       -- buff icons
-	stack[#stack + 1] = { 29, 1, "TOP", rootName, "BOTTOM", 0, -12 }                    -- swing timers: main hand (a gap under the PRD)
-	stack[#stack + 1] = { 29, 2, "TOP", "SwingTimerMainHandFrame", "BOTTOM", 0, -4 }    -- off hand
-	stack[#stack + 1] = { 29, 3, "TOP", "SwingTimerOffHandFrame", "BOTTOM", 0, -4 }     -- ranged
-	for index = 1, 3 do sizes[#sizes + 1] = { 29, index, nil, nil, nil, nil, nil, SWING_SIZE } end
-	-- (On the screen, level with the PRD's middle: 330 up, about 15 more.)
-	FOLLOW_HUD_PIECES.portraits = {
-		{ UNIT_FRAME, indices.Player or 1, "RIGHT", "UIParent", "BOTTOM", -300, 345 }, -- player frame
-		{ UNIT_FRAME, indices.Target or 2, "LEFT", "UIParent", "BOTTOM", 300, 345 },   -- target frame
-	}
 end
 
 -- A design from the pieces picked (picks: piece -> true; nil: stack and
@@ -397,6 +419,7 @@ end
 -- base: rows to start from (copied).
 function ns.FollowHudDesign(picks, base)
 	picks = picks or { stack = true, sizes = true }
+	local pieces = FOLLOW_HUD_PIECES[picks.root or "prd"] or FOLLOW_HUD_PIECES.prd
 	local design, at = {}, {}
 	local function Add(row)
 		local key = tostring(row[1]) .. ":" .. tostring(row[2])
@@ -422,7 +445,7 @@ function ns.FollowHudDesign(picks, base)
 	for _, row in ipairs(base or {}) do Add(row) end
 	for _, piece in ipairs(ns.FOLLOW_HUD_PIECE_ORDER) do
 		if picks[piece] then
-			for _, row in ipairs(FOLLOW_HUD_PIECES[piece]) do Add(row) end
+			for _, row in ipairs(pieces[piece]) do Add(row) end
 		end
 	end
 	return design

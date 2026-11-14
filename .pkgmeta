@@ -39,6 +39,10 @@ ignore:
   - SpokenTest.lua
   # (Lore Forever support test: /cine debug loretest, dev copy only)
   - LoreForeverTest.lua
+  # (Health bar colors test: /cine debug redbar, dev copy only)
+  - HealthRedTest.lua
+  # (Follow HUD test: /cine debug followtest, dev copy only)
+  - FollowHudTest.lua
   # (Minimap Copy: the Dev hub page drawing the minimap from the game's own tiles, dev copy only)
   - MinimapTiles.lua
   - MinimapCopy.lua

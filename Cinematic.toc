@@ -113,6 +113,7 @@ Director.lua
 ZoomGuard.lua
 QuestCam.lua
 ShoulderCam.lua
+ShoulderCalibrate.lua
 SkyrideCam.lua
 CameraRows.lua
 TriggerLibrary.lua

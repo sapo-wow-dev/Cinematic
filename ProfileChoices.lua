@@ -60,7 +60,8 @@ ns.SLOT_CHOICES = {
 			line = "Your resources in the middle, the Cooldown Manager above", modules = { "layout-pure" } },
 		-- (The Shoulder Cam profile's, testers' for now: in no list.)
 		{ part = "shoulder", client = "forever", hidden = true, label = "Shoulder Cam", made = true,
-			line = "Your resources at the bottom middle, everything hung on them", modules = { "layout-shoulder" } },
+			line = "Your resources at the bottom middle, everything hung on them",
+			modules = { "layout-shoulder", "follow-prd-on", "follow-fights" } },
 		-- (The Follow HUD's pieces, dev only for now: in no list. Set up from
 		-- the Shoulder Cam page, piece by piece, on top of any profile.)
 		{ part = "follow", client = "forever", hidden = true, label = "Follow HUD", made = true,
@@ -78,16 +79,22 @@ ns.SLOT_CHOICES = {
 		{ part = "pure", label = "Almost always", line = "As little UI as possible, even in fights",
 			modules = { "pure-frames", "pure-minimap", "minimal-target", "pure-plates", "ultra-plates", "pure-tooltips" } },
 		-- (The Shoulder Cam profile's, testers' for now: "Almost always" with
-		-- the personal resource display in fights in place of the player frame.)
+		-- the Follow HUD's pieces, the personal resource display in fights in
+		-- place of the player frame.)
 		{ part = "shoulder", client = "forever", hidden = true, label = "Almost always, over your shoulder",
 			line = "As little UI as possible; your resources, not your portrait, in fights",
-			modules = { "shoulder-frames", "pure-minimap", "minimal-target", "pure-plates", "ultra-plates",
-				"pure-tooltips" } },
+			modules = { "shoulder-frames", "follow-enemy", "follow-no-portrait", "follow-frames", "pure-minimap",
+				"minimal-target", "pure-plates", "ultra-plates", "pure-tooltips" } },
 		-- (The Follow HUD's pieces for when your UI's up, dev only for now: in
 		-- no list. Set up from the Shoulder Cam page on top of any profile.)
 		{ part = "follow", client = "forever", hidden = true, label = "Follow HUD",
 			line = "Your resources, not your portrait, with an enemy targeted and while recovering; frames follow you",
 			modules = { "follow-enemy", "follow-no-portrait", "follow-frames" } },
+		-- (The same with the player frame at its root.)
+		{ part = "follow-player", client = "forever", hidden = true, label = "Follow HUD, player frame",
+			line = "Your player frame, not your resources, in fights, with an enemy targeted and while recovering; " ..
+				"frames follow you",
+			modules = { "follow-fights-player", "follow-enemy-player", "follow-frames" } },
 		{ part = "immersive", label = "Most of the time",
 			line = "Between fights, and fights bring back less: no minimap, fewer group nameplates",
 			modules = { "recovering", "minimap-off-in-fights", "fewer-group-plates" } },
