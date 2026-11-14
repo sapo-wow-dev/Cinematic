@@ -2557,39 +2557,49 @@ do
 	end
 end
 
--- swingsize: what Edit Mode lets the swing timers set (is there a height?),
--- each setting's name, range and value now, and the bars' real sizes. Into
--- the log; read after a /reload.
+-- sizes (swingsize too): what Edit Mode lets the cast bar, personal
+-- resource display and swing timers set (width? height? scale?), each
+-- setting's name, range and value now, and the frames' real sizes, their
+-- bars' too. Into the log; read after a /reload.
 function ns.ShoulderSwingSize()
-	local system = Enum.EditModeSystem and Enum.EditModeSystem.SwingTimer
-	ns.Log("shoulder", ("swingsize: system %s | setting enum %s"):format(Text(system),
-		Text(Enum.EditModeSwingTimerSetting and "there" or "missing")))
-	for name, value in pairs(Enum.EditModeSwingTimerSetting or {}) do
-		ns.Log("shoulder", ("swingsize: enum %s = %s"):format(name, Text(value)))
-	end
+	local systems = Enum.EditModeSystem or {}
 	local manager = _G["EditModeSettingDisplayInfoManager"]
-	local infos = manager and manager.systemSettingDisplayInfo
-	for _, info in ipairs(infos and system and infos[system] or {}) do
-		ns.Log("shoulder", ("swingsize: setting %s %s | type %s min %s max %s step %s"):format(Text(info.setting),
-			Text(info.name), Text(info.type), Text(info.minValue), Text(info.maxValue), Text(info.stepSize)))
-	end
-	for _, name in ipairs({ "SwingTimerMainHandFrame", "SwingTimerOffHandFrame", "SwingTimerRangedFrame" }) do
-		local frame = _G[name]
-		if frame then
-			local values = {}
-			for _, info in ipairs(infos and system and infos[system] or {}) do
-				local ok, value = pcall(frame.GetSettingValue, frame, info.setting)
-				values[#values + 1] = ("%s=%s"):format(Text(info.setting), ok and Text(value) or "?")
-			end
-			ns.Log("shoulder", ("swingsize: %s %.1f x %.1f scale %.2f shown %s | %s"):format(name, frame:GetWidth(),
-				frame:GetHeight(), frame:GetScale(), Text(frame:IsShown()), table.concat(values, " ")))
-			for _, child in ipairs({ frame:GetChildren() }) do
-				ns.Log("shoulder", ("swingsize:   child %s %s %.1f x %.1f"):format(Text(child:GetName()),
-					child:GetObjectType(), child:GetWidth(), child:GetHeight()))
+	local infos = manager and manager.systemSettingDisplayInfo or {}
+	local function Dump(label, system, names)
+		ns.Log("shoulder", ("sizes: %s system %s"):format(label, Text(system)))
+		for _, info in ipairs(system and infos[system] or {}) do
+			ns.Log("shoulder", ("sizes:   setting %s %s | type %s min %s max %s step %s"):format(Text(info.setting),
+				Text(info.name), Text(info.type), Text(info.minValue), Text(info.maxValue), Text(info.stepSize)))
+		end
+		for _, name in ipairs(names) do
+			local frame = _G[name]
+			if frame then
+				local values = {}
+				for _, info in ipairs(system and infos[system] or {}) do
+					local ok, value = pcall(frame.GetSettingValue, frame, info.setting)
+					values[#values + 1] = ("%s=%s"):format(Text(info.setting), ok and Text(value) or "?")
+				end
+				ns.Log("shoulder", ("sizes:   %s %.1f x %.1f scale %.2f eff %.2f shown %s | %s"):format(name,
+					frame:GetWidth(), frame:GetHeight(), frame:GetScale(), frame:GetEffectiveScale(),
+					Text(frame:IsShown()), table.concat(values, " ")))
+				local function Kids(parent, depth)
+					for _, child in ipairs({ parent:GetChildren() }) do
+						ns.Log("shoulder", ("sizes:   %s%s %s %.1f x %.1f eff %.2f"):format(("  "):rep(depth),
+							Text(child:GetName() or child:GetDebugName()), child:GetObjectType(), child:GetWidth(),
+							child:GetHeight(), child:GetEffectiveScale()))
+						if depth < 2 then Kids(child, depth + 1) end
+					end
+				end
+				Kids(frame, 1)
 			end
 		end
 	end
-	ns.Print("shoulder swingsize: logged; /reload and say check log")
+	Dump("cast bar", systems.CastBar, { "PlayerCastingBarFrame" })
+	Dump("personal resource display", systems.PersonalResourceDisplay, { "PersonalResourceDisplayFrame" })
+	Dump("swing timers", systems.SwingTimer, { "SwingTimerMainHandFrame" })
+	ns.Log("shoulder", ("sizes: UIParent eff %.2f, layout %s"):format(UIParent:GetEffectiveScale(),
+		Text(ns.db.editModeLayout)))
+	ns.Print("shoulder sizes: logged; /reload and say check log")
 end
 
 local function Set(key, value)
@@ -2629,7 +2639,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "angles" then ns.ShoulderAngles()
 	elseif what == "padscan" then ns.ShoulderPadScan()
 	elseif what == "prdcheck" then ns.ShoulderPrdCheck()
-	elseif what == "swingsize" then ns.ShoulderSwingSize()
+	elseif what == "swingsize" or what == "sizes" then ns.ShoulderSwingSize()
 	elseif what == "lock" then ns.ShoulderLock()
 	elseif what == "on" then Set("shoulderCam", true)
 	elseif what == "off" then Set("shoulderCam", false)

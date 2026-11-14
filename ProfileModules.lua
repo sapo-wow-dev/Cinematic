@@ -288,6 +288,9 @@ ns.PROFILE_MODULES = {
 				-- personal resource display is, 2026-11-13.)
 				elseif key == "prHealthPlayer" or key == "prPowerPlayer" then
 					value = 0
+				-- (Rows retail alone has: this module's Forever's, so not written.)
+				elseif key == "instanceShow" and type(value) == "table" then
+					value.buffcollapse, value.waypoint = nil, nil
 				end
 				set(key, value)
 			end)

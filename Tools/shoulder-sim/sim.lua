@@ -76,7 +76,7 @@ IsMounted = function() return me.mounted end
 UnitOnTaxi = function() return me.taxi end
 UnitIsDead = function() return me.dead end
 IsIndoors = function() return me.indoors end
-UnitRace = function() return "Human", "Human" end
+UnitRace = function() return "Dwarf", "Dwarf" end -- (Dwarf-2: 1.00 built in, as me.scale)
 UnitSex = function() return 2 end
 GetShapeshiftFormID = function() return me.form end -- (me.model: the form on screen)
 _G.EditModeManagerFrame = { IsEditModeActive = function() return me.editMode end }
@@ -225,7 +225,13 @@ WorldFrame.GetWidth = function() return UI_WIDTH end
 WorldFrame.GetHeight = function() return UI_HEIGHT end
 WorldFrame.GetEffectiveScale = function() return 1 end
 ns.ActiveEvent = function() return me.camera and "Sim", me.camera end
-ns.RowOnNow = function() return me.row end
+-- (The Shoulder Cam row's rule to start with, not mounted and not indoors,
+-- unless a variant takes one out.)
+local pauseMounted, pauseIndoors = variant ~= "mounted", variant ~= "indoors"
+ns.RowOnNow = function()
+	return me.row and not (me.mounted and pauseMounted) and not (me.indoors and pauseIndoors)
+end
+ns.ShoulderPausedMounted = function() return pauseMounted end
 ns.DialogueUICameraOn = function() return false end
 ns.RefreshOptions = function() end
 if variant ~= "yours" then
@@ -238,8 +244,6 @@ StaticPopup_Show = function(name)
 	Note("notice", ("Our notice: %s"):format(variant == "decline" and "Cancel" or "Accept"))
 	if variant == "decline" then dialog.OnCancel() else dialog.OnAccept() end
 end
-if variant == "mounted" then ns.db.shoulderCamNotMounted = false end
-if variant == "indoors" then ns.db.shoulderCamNotIndoors = false end
 -- cams: Cinematic's own cameras played with every one ticked on the Cameras
 -- tab (camsPaused: none, as it ships), the frames following you.
 if variant:find("^cams") then
@@ -250,7 +254,7 @@ if variant:find("^cams") then
 end
 local noticedAtStart = ns.db.shoulderCamNoticed
 -- (tall: its size factor measured, as a sweep on it would have saved.)
-if variant == "tall" then ns.db.shoulderCamScales = { ["Human-2"] = GAME.tallScale } end
+if variant == "tall" then ns.db.shoulderCamScales = { ["Dwarf-2"] = GAME.tallScale } end
 
 local realLog = ns.Log
 ns.Log = function(kind, text, ...)
@@ -633,7 +637,7 @@ for _, row in ipairs(samples) do
 	end
 end
 if variant == "sweep" then
-	local saved = ns.db.shoulderCamScales and ns.db.shoulderCamScales["Human-2"]
+	local saved = ns.db.shoulderCamScales and ns.db.shoulderCamScales["Dwarf-2"]
 	Check("The offset sweep saved the size factor", saved and math.abs(saved - me.scale) < 0.03, "saved " .. tostring(saved))
 end
 if variant ~= "decline" and variant ~= "sweep" then

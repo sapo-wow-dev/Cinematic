@@ -467,8 +467,6 @@ local DEFAULTS = {
 	shoulderCam = false,
 	shoulderCamSpot = 0.2,     -- ...how far off the middle you sit (share of the way to the edge), held as you zoom
 	shoulderCamSide = "right", -- ..."right" or "left" (the swap key flips it)
-	shoulderCamNotMounted = true, -- ...back behind you while mounted
-	shoulderCamNotIndoors = true, -- ...and indoors (walls push the camera in: the offset jerks)
 	-- ...and while one of our cameras that frame you runs, unless allowed (the Cameras tab)
 	shoulderCamAllowVista = false, shoulderCamAllowFish = false, shoulderCamAllowCozy = false,
 	shoulderCamAllowAFK = false, shoulderCamAllowTele = false, shoulderCamAllowFlight = false,
@@ -496,9 +494,8 @@ local DEFAULTS = {
 	shoulderCamTalkTime = 1.5, -- ...seconds that turn takes
 	shoulderCamTalkHold = 0, -- ...seconds it stays on them before gliding back (0: till the window closes)
 	shoulderCamTargetTurn = false, -- ...the camera turns slowly toward an enemy you target (the game's enemy focus, eased in)
-	shoulderCamTargetTurnNoFight = false, -- ...but not in fights (glides back while one's on)
-	shoulderCamTargetFollow = false, -- ...and the cast bar and PRD slide along with that turn (guessed from where you clicked; experimental)
-	shoulderCamAlways = true,  -- ...everywhere: its Show in row's Always (the rest: the row's ticks and rule)
+	shoulderCamTargetFollow = false, -- ...and the cast bar and PRD slide along with that turn (guessed from where you clicked; experimental; off till the PRD-too-far-left bug is found)
+	shoulderCamAlways = false, -- ...everywhere: its Show in row's Always (the rest: the row's ticks and rule; its rule to start with: not mounted and not indoors)
 	indoorLimits = true,      -- indoors, keep the camera modes from pushing into walls:
 	indoorZoomOut = 1,        -- ...zoom out at most this many yards past your own distance
 	indoorSwing = 10,         -- ...swing at most this far either side of behind

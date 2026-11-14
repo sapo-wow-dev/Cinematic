@@ -736,6 +736,9 @@ ns.GRID_NO_CINE_LAYOUT, ns.GRID_TABLE_LABEL_TRIM = NO_CINE_LAYOUT, TABLE_LABEL_T
 -- Combat and Location columns only (no Always, Target or rule): a row that
 -- only says where and whether in fights, the Minimap page's Nearby Dots and Tracking.
 ns.GRID_PLACE_COMBAT_LAYOUT = { always = false, groups = { 1, 3 } }
+-- (The same with the Edit button for a rule: the Shoulder Cam's Turn to your
+-- target, whose rule may want words the dropdowns lack, e.g. targetdead.)
+ns.GRID_PLACE_COMBAT_EDIT_LAYOUT = { always = false, groups = { 1, 3 }, edit = true }
 -- How wide one is, whole, for names labelWidth wide.
 function ns.GridTableWidth(labelWidth, noCine)
 	return labelWidth - TABLE_LABEL_TRIM + ns.GridWidth(noCine and NO_CINE_LAYOUT or TABLE_LAYOUT)

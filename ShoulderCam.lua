@@ -23,8 +23,8 @@
 -- (Not ns.ApplyCVarSet: Keep Character Centered would be put back on logout.)
 --
 -- It's a held setting, not a camera: it doesn't move the view, so it doesn't
--- claim the camera lock. It goes to 0 (paused) while mounted
--- (shoulderCamNotMounted), indoors (shoulderCamNotIndoors) and while one of Cinematic's cameras that frame you
+-- claim the camera lock. It goes to 0 (paused) where its Show in row's off
+-- (mounted or indoors to start with: ROW_KEY's rule) and while one of Cinematic's cameras that frame you
 -- runs, unless its tick on the Cameras tab allows it (shoulderCamAllow<Cam>,
 -- ALLOW_OF below: all off to start with): the standing-still ones (cozy,
 -- vista, fish, AFK, teleport), the flight camera and its fly-bys, the death
@@ -55,10 +55,42 @@ end
 
 local POLL = 0.2 -- seconds between checks for a pause (mounting, a camera starting)
 
--- Where: its Show in row (Always ticked to start with: everywhere). Off
--- there, it's paused (back behind you) as any other pause.
+-- Where: its Show in row. Off there, it's paused (back behind you) as any
+-- other pause. Its rule to start with: not on a mount (a big mount's head
+-- fills the shot from the side) and not indoors (walls push the camera in,
+-- and off to the side it jerks: DynamicCam's help says so too). Those were
+-- two Pause boxes till 2026-11-13 (shoulderCamNotMounted, NotIndoors): moved
+-- into the rule once (MovePauseBoxes).
 local ROW_KEY = "shoulder:cam"
 ns.CINE_SHOW_SETTING[ROW_KEY] = "shoulderCamAlways"
+ns.RULE_DEFAULTS[ROW_KEY] = "not mounted and not indoors"
+local function MovePauseBoxes(db)
+	if db.shoulderPauseMoved then return end
+	db.shoulderPauseMoved = true
+	local mounted, indoors = db.shoulderCamNotMounted ~= false, db.shoulderCamNotIndoors ~= false
+	db.shoulderCamNotMounted, db.shoulderCamNotIndoors = nil, nil
+	-- (Always ticked, as it started: the boxes were all there was. Ticks of
+	-- your own: kept as they are.)
+	if db.shoulderCamAlways == false then return end
+	db.shoulderCamAlways = false
+	db.frameRules = db.frameRules or {}
+	db.frameRules[ROW_KEY] = (mounted and indoors and "not mounted and not indoors") or (mounted and "not mounted")
+		or (indoors and "not indoors") or "always"
+end
+-- Whether its row turns it off on a mount here (as if you were mounted): a
+-- mount being cast eases it out early then.
+function ns.ShoulderPausedMounted()
+	if ns.db.shoulderCamAlways or not (ns.RuleFactsNow and ns.RuleShows) then return false end
+	local ok, off = pcall(function()
+		local facts = ns.RuleFactsNow()
+		local was = facts.mounted
+		facts.mounted = true
+		local shows = ns.RuleShows(ROW_KEY, facts)
+		facts.mounted = was
+		return shows == false
+	end)
+	return ok and off or false
+end
 
 -- Each of our cameras (its key as ns.ScriptStandIn gives it, "yours" for any
 -- other script or shot) and the setting that keeps the Shoulder Cam on through
@@ -89,30 +121,25 @@ local function PauseReason()
 	if not ns.isRetail and ns.IsGamePadOn and ns.IsGamePadOn() then
 		return "gamepad"
 	end
+	MovePauseBoxes(db)
 	if not db.shoulderCamAlways then
 		local ok, here = pcall(ns.RowOnNow, ROW_KEY, false, true)
 		if not (ok and here) then
+			-- (ns.Flag: either can be secret on Forever. The likely why, for the log.)
+			if IsMounted and ns.Flag(IsMounted()) then return "mounted" end
+			if IsIndoors and ns.Flag(IsIndoors()) then return "indoors" end
 			return "show in"
 		end
 	end
-	-- (ns.Flag: any of these can be secret on Forever.)
-	if db.shoulderCamNotMounted and IsMounted and ns.Flag(IsMounted()) then
-		return "mounted"
-	end
-	-- (Casting a mount: already easing out, so you're behind it by the time the
-	-- mount's size comes in (it swings the offset out 2-5 times: the "mounts"
-	-- run). A cast that's stopped puts it back.)
-	if db.shoulderCamNotMounted and C_MountJournal and C_MountJournal.GetMountFromSpell then
+	-- (Casting a mount its row's off on: already easing out, so you're behind
+	-- it by the time the mount's size comes in (it swings the offset out 2-5
+	-- times: the "mounts" run). A cast that's stopped puts it back.)
+	if C_MountJournal and C_MountJournal.GetMountFromSpell then
 		local okCast, spell = pcall(function() return select(9, UnitCastingInfo("player")) end)
 		local okMount, mount = pcall(C_MountJournal.GetMountFromSpell, okCast and spell or nil)
-		if okCast and spell and okMount and ns.Flag(mount ~= nil) then
+		if okCast and spell and okMount and ns.Flag(mount ~= nil) and ns.ShoulderPausedMounted() then
 			return "mounting"
 		end
-	end
-	-- (Indoors the game pushes the camera in off the walls, and the offset jerks
-	-- with each push: DynamicCam's help says so too. Back in the middle there.)
-	if db.shoulderCamNotIndoors and IsIndoors and ns.Flag(IsIndoors()) then
-		return "indoors"
 	end
 	if not db.shoulderCamAllowFlight and UnitOnTaxi and ns.Flag(UnitOnTaxi("player")) then
 		return "flight"
@@ -174,8 +201,10 @@ local paused -- (PauseReason at the last check, every POLL)
 -- offset held: the elf on 10.8% of the way to the edge, the cat on 20.3%,
 -- so 0.82 x 20.3 / 10.8 = 1.55.)
 -- (Mounts change it too: not measured yet.)
--- (Human-3: the offset sweep, Forever, 2026-11-13. Skyborne-2 and -3, Gnome-2 and -3, NightElf-2, Dwarf-3, Human-2: the calibrate run, spreads 0.025 or less.)
-local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 0.88, ["Skyborne-3"] = 0.85, ["Gnome-2"] = 0.90, ["Human-2"] = 0.94, ["Gnome-3"] = 0.84, ["NightElf-2"] = 1.00, ["NightElf-3"] = 0.82, ["Human-3"] = 0.81 }
+-- (Human-3: the offset sweep, Forever, 2026-11-13. Skyborne-2 and -3, Gnome-2 and -3, NightElf-2, Dwarf-3, Human-2, Orc-2 and -3, Scourge-2 and -3, Tauren-2 and -3, Troll-2 and -3: the calibrate run, spreads 0.025 or less.)
+local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 0.88, ["Skyborne-3"] = 0.85, ["Gnome-2"] = 0.90, ["Human-2"] = 0.94, ["Gnome-3"] = 0.84, ["NightElf-2"] = 1.00, ["NightElf-3"] = 0.82, ["Human-3"] = 0.81,
+	["Orc-2"] = 1.23, ["Orc-3"] = 0.96, ["Scourge-2"] = 0.99, ["Scourge-3"] = 0.90, ["Tauren-2"] = 1.68, ["Tauren-3"] = 1.27,
+	["Troll-2"] = 1.22, ["Troll-3"] = 0.95 }
 -- bear, cat, dire bear: off the recordings till the sweep's run in them
 local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 -- Forms that keep your own model (warrior stances 17-19, shadowform 28,
@@ -584,8 +613,32 @@ local function SetAimShare(yours, share)
 	Write(yours, aim.pitchCVar, ("%.3f"):format(k * aim.pitch), true)
 end
 
+-- (A dead one isn't: you target those to loot them, 2026-11-13.)
 local function HasEnemy()
-	return UnitExists("target") and ns.Flag(UnitCanAttack("player", "target")) or false
+	return UnitExists("target") and ns.Flag(UnitCanAttack("player", "target"))
+		and not ns.Flag(UnitIsDeadOrGhost("target")) or false
+end
+-- Turn to your target's Show in row (Frames.lua's rows): where it turns, and
+-- whether in fights. Every place and fights ticked to start with (it turned
+-- everywhere before); Not in fights, a box till 2026-11-13, is its Combat
+-- tick now. Read 4 times a second (rules aren't cheap).
+ns.SHOULDER_TURN_ROW = "shoulder:targetturn"
+for _, list in ipairs({ "combatShow", "worldShow", "cityShow", "bgShow", "instanceShow", "groupShow" }) do
+	ns.LIST_DEFAULTS[list][ns.SHOULDER_TURN_ROW] = true
+end
+local turnRead = { at = -1, on = true }
+local function TurnHere()
+	local now = GetTime()
+	if now - turnRead.at >= 0.25 then
+		turnRead.at = now
+		if ns.db.shoulderCamTargetTurnNoFight then -- (the old box, once)
+			ns.db.combatShow[ns.SHOULDER_TURN_ROW] = false
+			ns.db.shoulderCamTargetTurnNoFight = nil
+		end
+		local ok, on = pcall(ns.RowOnNow, ns.SHOULDER_TURN_ROW, false, true)
+		turnRead.on = not ok or on and true or false
+	end
+	return turnRead.on
 end
 
 -- Frames follow you through the turn. The game won't say how far it turned
@@ -751,9 +804,9 @@ local function AimTick(elapsed)
 		return
 	end
 	local step = elapsed / math.max(0.1, ns.db.shoulderCamTalkTime or 1.5)
-	-- (Not in fights, shoulderCamTargetTurnNoFight: as if none were targeted
-	-- while one's on, so it glides back, and turns again after.)
-	local enemy = HasEnemy() and not (ns.db.shoulderCamTargetTurnNoFight and InCombatLockdown())
+	-- (Its Show in row off here, e.g. Combat unticked in a fight: as if none
+	-- were targeted, so it glides back, and turns again after.)
+	local enemy = HasEnemy() and TurnHere()
 	if enemy ~= aim.had then
 		aim.had = enemy
 		ns.Log("shoulder", ("target turn: %s (target %s, attackable %s; enemy focus %s, turn %s, tilt %s, share %.2f)"):format(
@@ -1300,7 +1353,15 @@ end)
 function ns.CreateShoulderCamPanel(kit)
 	if not ns.ShoulderCamUnlocked() then return end -- (no page: locked, above)
 	-- (A check given its own change function saves nothing itself: this saves, then runs it.)
-	local function SaveThen(key, fn) return function(value) ns.GetDB()[key] = value; fn() end end
+	-- (Saved, then the page refreshed: a control greyed by another one follows
+	-- it at once.)
+	local function SaveThen(key, fn)
+		return function(value)
+			ns.GetDB()[key] = value
+			fn()
+			if ns.RefreshOptions then ns.RefreshOptions() end
+		end
+	end
 	local canvas, content = kit.CreateScrollPage()
 	local title = kit.Label(content, "GameFontNormalLarge", L["Shoulder Cam"])
 	title:SetPoint("TOPLEFT", 16, -16)
@@ -1359,20 +1420,29 @@ function ns.CreateShoulderCamPanel(kit)
 	key:SetPoint("LEFT", keyLabel, "LEFT", 200, 0)
 
 	stack:Header(content, L["Turning"])
-	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTalkTurn", L["Turn to who you talk to"],
+	local talkCheck = stack:Add(kit.Check(content, "shoulderCamTalkTurn", L["Turn to who you talk to"],
 		L["As you talk to an NPC (or open a vendor, bank, flight master or mailbox), the camera turns " ..
 		"slowly to bring them toward the middle of the screen, and glides back at the same pace as you " ..
 		"close the window. " ..
-		"It steps aside while Cinematic's quest or chat camera moves the view."], SaveThen("shoulderCamTalkTurn", ns.ApplyShoulderCam)), "check"), IfOn)
+		"It steps aside while Cinematic's quest or chat camera moves the view."], SaveThen("shoulderCamTalkTurn", ns.ApplyShoulderCam)), "check")
+	kit.GreyUnless(talkCheck, IfOn)
 	local function IfTalk() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTalkTurn end
-	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetTurn", L["Turn to your target"],
-		L["As you target an enemy, the camera turns slowly toward it, and glides back at the same pace " ..
-		"once you clear your target or pick a friendly one."],
-		SaveThen("shoulderCamTargetTurn", ns.ApplyShoulderCam)), "check"), IfOn)
-	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamTargetTurnNoFight", L["Not in fights"],
-		L["In a fight the camera glides back over your shoulder and stays there, and turns to your target " ..
-		"again once the fight's over."], SaveThen("shoulderCamTargetTurnNoFight", ns.ApplyShoulderCam)), "check", 16),
-		function() return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTargetTurn end)
+	-- Turn to your target: a Show in row, its box before the name (on at all),
+	-- Combat and the places after (where it turns).
+	local turnTop = CreateFrame("Frame", nil, content)
+	turnTop:SetSize(1, 1)
+	turnTop:SetPoint("TOPLEFT", talkCheck, "BOTTOMLEFT", 4, 4)
+	local turnRow = ns.ShowTable(content, turnTop, {
+		opts = { anyFight = true }, underHeader = true, layout = ns.GRID_PLACE_COMBAT_EDIT_LAYOUT,
+		{ key = ns.SHOULDER_TURN_ROW, label = L["Turn to your target"], showKey = "shoulderCamTargetTurn",
+			showTip = L["As you target an enemy, the camera turns slowly toward it, and glides back at the same " ..
+			"pace once you clear your target, pick a friendly one or it dies."],
+			showChanged = function() if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end end,
+			apply = function() turnRead.at = -1 end,
+			tip = L["Where the camera turns to your target, and whether in fights. Unticked here, it glides " ..
+			"back over your shoulder, and turns again once you're somewhere ticked."] },
+	}, "Shoulder Cam")
+	stack:Continue(turnRow, "label")
 	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Turn takes"], 0.5, 4, 0.5,
 		L["%.1f sec"]), "slider")
 	kit.Tooltip(talkTime, L["How long the turn toward them (or your target) takes, and the glide back."])
@@ -1385,14 +1455,6 @@ function ns.CreateShoulderCamPanel(kit)
 		"glides back on its own after that long, the window still open."])
 	kit.GreyUnless(talkHold, IfTalk)
 
-	stack:Header(content, L["Pause"])
-	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamNotMounted", L["Not while mounted"],
-		L["On a mount the camera stays straight behind you: a big mount's head fills the shot from " ..
-		"the side."]), "check"), IfOn)
-	kit.GreyUnless(stack:Add(kit.Check(content, "shoulderCamNotIndoors", L["Not indoors"],
-		L["Inside buildings and caves the camera goes back behind you, and comes back out over your " ..
-		"shoulder as you step outside. Near walls the game pushes the camera in, and with it off to " ..
-		"the side it jerks."]), "check"), IfOn)
 	Adopt(switch) -- (all of the above onto the first tab)
 
 	-- The Frames tab: built on its own frame, from its top.

@@ -348,17 +348,25 @@ do
 	local indices = Enum.EditModeUnitFrameSystemIndices or {}
 	local root, rootName = 1, "PlayerCastingBarFrame"
 	local add = function(row) SHOULDER_HUD[#SHOULDER_HUD + 1] = row end
-	-- (Swing timers: the narrowest (setting 3), and thinner (setting 4, Height:
-	-- 15 to 60 in steps of 1, kept as steps up from 15 as Width's are, so 5 =
-	-- 20 tall; the game's is 30, 2026-11-13).
-	local SWING_SIZE = { [3] = 0, [4] = 5 }
+	-- One width for the three (2026-11-13; the sizes run and screenshots
+	-- measured at 1.22 px a unit): the cast bar's Bar Size (setting 0, 100-150,
+	-- kept in steps of 10: 1 = 110) makes it 229 wide with its art. The PRD's
+	-- Bar Width (setting 12, 50-150, steps of 10) can't reach that alone (110:
+	-- 220), so 140 (9) at a Size (setting 9, 70-150, steps of 10) of 80 (1):
+	-- about 224 to the eye, its bars 19 tall (settings 4 and 5, 10-30, steps
+	-- of 1: 9) so 15 after the size, as before. The swing timers' Width
+	-- (setting 3, 213-852) is kept in single units, not steps (1 made it
+	-- 214): 19 = 232, the same to the eye; their Height (setting 4, 15-60,
+	-- 5 = 20) thinner than the game's 30.
+	local SWING_SIZE = { [3] = 19, [4] = 5 }
+	local PRD_SIZE, CAST_SIZE = { [12] = 9, [9] = 1, [4] = 9, [5] = 9 }, { [0] = 1 }
 	if PRD_SYSTEM then
 		root, rootName = PRD_SYSTEM, "PersonalResourceDisplayFrame"
-		add({ 1, nil, "BOTTOM", rootName, "TOP", 0, 26 })                             -- cast bar (its name under it)
+		add({ 1, nil, "BOTTOM", rootName, "TOP", 0, 26, CAST_SIZE })                             -- cast bar (its name under it)
 	end
 	-- (330: just under your feet at a normal zoom; 210 put it down by the
 	-- action bars, "too low", 2026-11-13.)
-	add({ root, nil, "BOTTOM", "UIParent", "BOTTOM", 0, 330 })                         -- the root
+	add({ root, nil, "BOTTOM", "UIParent", "BOTTOM", 0, 330, PRD_SYSTEM and PRD_SIZE or CAST_SIZE })                         -- the root
 	add({ 20, 1, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 6 })                    -- cooldowns: essential
 	add({ 20, 2, "BOTTOM", "EssentialCooldownViewer", "TOP", 0, 4 })                  -- utility
 	add({ 20, 3, "BOTTOM", "UtilityCooldownViewer", "TOP", 0, 4 })                    -- buff icons
