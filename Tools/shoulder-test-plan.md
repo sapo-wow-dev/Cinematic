@@ -256,6 +256,18 @@ Second walk run (flat open ground, zoom 9.6, keyboard only: W, then the turn key
 
 Retail at a Training Dummy (Orc, zoom 13.6, the same strengths 0.5 / 0.4): your facing never moved, but the dummy stood almost straight ahead, ~1% off the middle, and stayed there in every trial, focus off too: nothing to turn. Next: the dummy well off to one side (the camera dragged round with the left mouse button before starting).
 
+#### Map: friend (Forever, Dockmaster Baren, 2026-11-14, zoom 12.3, Night Elf in cat form)
+
+`map friend`: can the view stay on whoever you talk to once the talk's over (Accept ends it on the game's side, then the next quest's window opens: the camera went to the middle and back)? The NPC targeted the whole run (attackable false, friend true), both focuses eased 0 to full (1 / 0.75) over 1.5 s, the window closed 4 s in; screenshots at the open, just before the close, 0.4 s and 2 s after. The NPC's head, x of 1920:
+
+| Trial | Open | Turned | Closed 0.4 s | Closed 2 s |
+| --- | --- | --- | --- | --- |
+| 1 talk turn only | 1170 | 985 | 1170 (snapped back) | 1170 |
+| 2 talk + target turn | 1170 | 985 | 1170 (snapped back) | 1170 |
+| 3 target turn only | 1185 | 1185 (**no turn**) | 1185 | 1185 |
+
+So **the game's turn to your target does nothing for a friendly target** (3), and it doesn't hold the view once the talk's closed (2). Nothing the game gives keeps the turn after the talk ends: what's left is Cinematic turning the camera itself (MoveView), by an amount it can't measure on Forever (plates unreadable).
+
 Retail again, the dummy ~18% right of the middle (your facing never moved), read as the whole picture's slide after each target and clear: focus off, focus on (0.5 / 0.4), strength 0.3, tilt 0 and focus on again: **no turn at all**. Eased in over 1.5 s: a smooth turn of 3.8% of the width in 0.7 s; eased in then back before the clear: the same turn, then a smooth glide back. After a clear the camera **stayed turned** (no snap, unlike the interact focus) till the strengths came down. So out of combat the enemy focus only moves while its strengths are changing (untested: in combat, where it may act on its own).
 
 What the first two tries taught: a turn or tilt speed setting written low is put back by Core.lua's speed watch unless held with `ns.SetHeldSpeed`; `SetView` blends over about a second; the standing-still and chat cameras start mid-run unless the run holds the view (`ns.RegisterCamera`); the recording's clock ran 1.0 s ahead of the log; block matching fails on dark grass, tracking the hair's colour works.

@@ -1329,6 +1329,62 @@ do
 		local made, text = pcall(string.format, "%.1f", ok and facing and math.deg(facing) or -1)
 		return made and text or "secret"
 	end
+	-- Run 6, "friend" (2026-11-14): can the turn stay on whoever you talk to
+	-- once the talk's over? The talk turn is the game's and goes with the talk
+	-- (Accept ends it, then the next quest's window opens: the camera goes to
+	-- the middle and back). The game's turn to your target (the enemy focus)
+	-- stayed turned after a clear on retail, no snap ("enemy" run), but it was
+	-- only ever tried on enemies. So, with the NPC targeted: does it turn to a
+	-- friendly target at all (3), and does it keep the view on them when the
+	-- talk's closed (2, 4) where the talk turn alone snaps back (1)? Both are
+	-- eased in over 1.5 s (out of combat it only moves while its strengths
+	-- change). Screenshots: at the open, just before the close, 0.4 s and 2 s
+	-- after it; read off those.
+	local TE = F .. "Enemy"
+	local TALK_OFF = { [I .. "Enable"] = "1", [I .. "StrengthYaw"] = "0", [I .. "StrengthPitch"] = "0" }
+	local AIM_OFF = { [TE .. "Enable"] = "1", [TE .. "StrengthYaw"] = "0", [TE .. "StrengthPitch"] = "0" }
+	local function Both(a, b)
+		local both = {}
+		for k, v in pairs(a) do both[k] = v end
+		for k, v in pairs(b) do both[k] = v end
+		return both
+	end
+	local MAP_FRIEND = {
+		{ "talk turn only (as now)", TALK_OFF, ramp = 1.5, hold = 4, shots = true },
+		{ "talk turn + target turn", Both(TALK_OFF, AIM_OFF), ramp = 1.5, aimRamp = true, hold = 4, shots = true },
+		{ "target turn only", Both({ [I .. "Enable"] = "0" }, AIM_OFF), ramp = 1.5, aimRamp = true, hold = 4,
+			shots = true },
+		{ "talk turn + target turn again", Both(TALK_OFF, AIM_OFF), ramp = 1.5, aimRamp = true, hold = 4, shots = true },
+	}
+	-- (Who the target is, against who you talk to, and the turn settings now.)
+	local function FriendState()
+		local function Read(fn, ...)
+			local ok, value = pcall(fn, ...)
+			if not ok then return "error" end
+			if issecretvalue and issecretvalue(value) then return "secret" end
+			return tostring(value)
+		end
+		return ("target %s (is the NPC %s, attackable %s, friend %s), npc %s | talk focus %s %s/%s, target focus %s %s/%s"):format(
+			Read(UnitName, "target"), Read(UnitIsUnit, "target", "npc"), Read(UnitCanAttack, "player", "target"),
+			Read(UnitIsFriend, "player", "target"), Read(UnitName, "npc"), Text(GetCVar(I .. "Enable")),
+			Text(GetCVar(I .. "StrengthYaw")), Text(GetCVar(I .. "StrengthPitch")), Text(GetCVar(TE .. "Enable")),
+			Text(GetCVar(TE .. "StrengthYaw")), Text(GetCVar(TE .. "StrengthPitch")))
+	end
+	-- A screenshot, the box hidden for it (back 0.2 s on), named in the log by
+	-- the file's time (WoWScrnShot_MMDDYY_HHMMSS). Called from our own
+	-- function: handed to a timer itself it was refused on Forever.
+	local function Shot(what, line)
+		ns.PadTestBoxHide()
+		local ok, err = pcall(function() Screenshot() end)
+		Log(ok and ("map: screenshot %s at %s | %s"):format(what, date("%m%d%y_%H%M%S"), FriendState())
+			or ("map: screenshot %s failed: %s"):format(what, tostring(err)))
+		local this = run
+		C_Timer.After(0.2, function()
+			if run == this and run.at then
+				ns.PadTestBox(("Talk %d/%d  %s"):format(run.at, #run.list, run.list[run.at][1]), line, 1, 0.82, 0)
+			end
+		end)
+	end
 	local PITCH_FULL = "0.75" -- (the game's default tilt strength)
 	local TALK_SETTLE, TALK_HOLD, TALK_RETURN = 1.5, 2.5, 2.5
 	local TALK_EVENTS = { "GOSSIP_SHOW", "MERCHANT_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS",
@@ -1354,6 +1410,7 @@ do
 		end
 		run.at, run.phase, run.began, run.writes = at, "settle", GetTime(), {}
 		run.lastYaw, run.lastPitch, run.enabled, run.swung = nil, nil, nil, nil
+		run.shotOpen, run.shotTurned, run.shotClosed, run.shotAfter = nil, nil, nil, nil
 		Change(trial[2] or {})
 		Log(("map: talk %d (%s) on, zoom %.2f"):format(at, trial[1], Zoom()))
 		TalkBox("wait...", 0.7, 0.7, 0.7)
@@ -1365,7 +1422,8 @@ do
 		local into = GetTime() - run.began
 		if run.phase == "settle" and into >= TALK_SETTLE then
 			run.phase, run.clickFacing = "click", Facing()
-			TalkBox("RIGHT-CLICK THE NPC now (then hands off)", 0.3, 1, 0.3)
+			TalkBox(run.friend and "LEFT-CLICK THE NPC to target them, then RIGHT-CLICK them (then hands off)"
+				or "RIGHT-CLICK THE NPC now (then hands off)", 0.3, 1, 0.3)
 		elseif run.phase == "open" then
 			local trial = run.list[run.at]
 			if trial.ramp or trial.step then
@@ -1385,6 +1443,11 @@ do
 				if yaw ~= run.lastYaw or pitch ~= run.lastPitch then
 					pcall(SetCVar, I .. "StrengthYaw", yaw)
 					pcall(SetCVar, I .. "StrengthPitch", pitch)
+					-- (The target turn too, to the same strengths as the talk's.)
+					if trial.aimRamp then
+						pcall(SetCVar, TE .. "StrengthYaw", yaw)
+						pcall(SetCVar, TE .. "StrengthPitch", pitch)
+					end
 					run.lastYaw, run.lastPitch = yaw, pitch
 					run.writes[#run.writes + 1] = ("%.2f:%s/%s"):format(into, yaw, pitch)
 				end
@@ -1399,6 +1462,14 @@ do
 				pcall(SetCVar, I .. "Enable", "1")
 				run.writes[#run.writes + 1] = ("%.2f:on"):format(into)
 			end
+			if trial.shots and not run.shotOpen and into >= 0.1 then
+				run.shotOpen = true
+				Shot(("%d open"):format(run.at), "hands off...")
+			end
+			if trial.shots and not run.shotTurned and into >= (trial.hold or TALK_HOLD) - 0.3 then
+				run.shotTurned = true
+				Shot(("%d turned, before the close"):format(run.at), "hands off: the window closes now")
+			end
 			if into >= (trial.hold or TALK_HOLD) then
 				run.phase, run.began = "return", GetTime()
 				TalkClose()
@@ -1407,6 +1478,15 @@ do
 				TalkBox("wait...", 0.7, 0.7, 0.7)
 			end
 		elseif run.phase == "return" then
+			local trial = run.list[run.at]
+			if trial.shots and not run.shotClosed and into >= 0.4 then
+				run.shotClosed = true
+				Shot(("%d closed 0.4 s"):format(run.at), "hands off...")
+			end
+			if trial.shots and not run.shotAfter and into >= 2 then
+				run.shotAfter = true
+				Shot(("%d closed 2 s"):format(run.at), "hands off...")
+			end
 			if into >= TALK_RETURN then
 				Log(("map: talk %d back, facing %s"):format(run.at, Facing()))
 				local keep, back = ns.db.shoulderMapKeep or {}, {}
@@ -1423,7 +1503,8 @@ do
 		ns.shoulderTestHold = true
 		Change(PLAIN)
 		-- (Ramps: the strengths go back too, whichever trial ends the run.)
-		Change({ [I .. "StrengthYaw"] = GetCVar(I .. "StrengthYaw"), [I .. "StrengthPitch"] = GetCVar(I .. "StrengthPitch") })
+		Change({ [I .. "StrengthYaw"] = GetCVar(I .. "StrengthYaw"), [I .. "StrengthPitch"] = GetCVar(I .. "StrengthPitch"),
+			[TE .. "StrengthYaw"] = GetCVar(TE .. "StrengthYaw"), [TE .. "StrengthPitch"] = GetCVar(TE .. "StrengthPitch") })
 		run = { ticker = C_Timer.NewTicker(0.05, TalkTick), view = _G.SaveView and pcall(_G.SaveView, VIEW_SLOT) or false,
 			events = CreateFrame("Frame"), list = list }
 		for _, event in ipairs(TALK_EVENTS) do pcall(run.events.RegisterEvent, run.events, event) end
@@ -1431,8 +1512,8 @@ do
 		run.events:SetScript("OnEvent", function(_, event)
 			if run ~= this or run.phase ~= "click" then return end
 			run.phase, run.began = "open", GetTime()
-			Log(("map: talk %d opened (%s) by %s, facing %s (at the click %s)"):format(run.at, event,
-				Text(UnitName("npc")), Facing(), run.clickFacing or "?"))
+			Log(("map: talk %d opened (%s) by %s, facing %s (at the click %s) | %s"):format(run.at, event,
+				Text(UnitName("npc")), Facing(), run.clickFacing or "?", FriendState()))
 			TalkBox("hands off...", 1, 0.82, 0)
 		end)
 		Log(("map: %s run, %d trials | %s | screen %.0f x %.0f, view saved %s, zoom %.2f"):format(label, #list, Who(),
@@ -1636,9 +1717,14 @@ do
 		if kind == "talk" then return TalkStart(MAP_TALK, "talk") end
 		if kind == "ramp" then return TalkStart(MAP_RAMP, "ramp") end
 		if kind == "back" then return TalkStart(MAP_BACK, "back") end
+		if kind == "friend" then
+			TalkStart(MAP_FRIEND, "friend")
+			if run then run.friend = true end
+			return
+		end
 		if kind == "walk" then return WalkStart() end
 		if kind == "enemy" then return EnemyStart() end
-		if kind ~= "still" then return ns.Print("shoulder map: still [first trial], talk, ramp, back, walk, enemy") end
+		if kind ~= "still" then return ns.Print("shoulder map: still [first trial], talk, ramp, back, friend, walk, enemy") end
 		from = math.max(1, math.min(#MAP_STILL, tonumber(from) or 1))
 		ns.shoulderTestHold = true
 		Change(PLAIN)

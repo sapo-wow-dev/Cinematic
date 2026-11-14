@@ -602,6 +602,13 @@ local talk = {
 	-- after. Gliding back at once turned out and in again each time (user,
 	-- 2026-11-14: "when you accept 2 quests it snaps out and in").
 	swapWait = 0.4, backAt = nil, -- (when a held close's glide back starts)
+	-- Accept and Complete end the talk on the game's side (QUEST_FINISHED),
+	-- and the game's focus snaps back then, the next quest's window snapping
+	-- it in again 0.25 s on (the log and the user, 2026-11-14). A drift back
+	-- while you read (8 s) didn't help: Accept came 0.45-0.8 s in, the turn
+	-- still 0.8-0.9 there. So those calls are held too (closing.calls with
+	-- quick), the turn gliding back over quickTime, then they go.
+	quickTime = 0.5, quick = false, -- (the glide back's for a held Accept or Complete)
 }
 
 -- Seconds the turn toward them takes (shoulderCamTalkIn), and the glide back
@@ -666,7 +673,8 @@ end
 -- master held open unseen would still take a bag click (an item sold or
 -- banked), so those close at once and snap back as the game's do.
 local closing = {
-	calls = { { "C_GossipInfo", "CloseGossip" }, { nil, "CloseQuest" } },
+	calls = { { "C_GossipInfo", "CloseGossip" }, { nil, "CloseQuest" },
+		{ nil, "AcceptQuest", quick = true }, { nil, "GetQuestReward", quick = true } },
 	wrapped = false, held = {}, since = nil,
 	-- (Which hold a safety timer's for: an old one, its calls dropped as the
 	-- next window opened, ended a later hold 0.36 s in, a snap (the log,
@@ -699,18 +707,26 @@ local function WrapCloses()
 		if type(fn) == "function" then
 			names[#names + 1] = label
 			owner[entry[2]] = function(...)
-				if closing.passing or not (TalkOn() and talk.on and talk.share > 0.02) or InCombatLockdown() then
+				if closing.passing or ns.shoulderTestHold or not (TalkOn() and talk.on and talk.share > 0.02)
+					or InCombatLockdown() then
 					return fn(...)
 				end
 				local held = closing.held
+				-- (Accept clicked twice while held: once is enough.)
+				for _, call in ipairs(held) do
+					if call.label == label then return end
+				end
 				held[#held + 1] = { fn = fn, args = { ... }, n = select("#", ...), label = label }
+				-- (Accept or Complete: the quick glide back, at once.)
+				if entry.quick then talk.quick, talk.back, talk.backAt = true, true, nil end
 				if #held == 1 then
-					closing.since, talk.backAt = GetTime(), GetTime() + talk.swapWait
+					closing.since = GetTime()
+					if not entry.quick then talk.backAt = GetTime() + talk.swapWait end
 					closing.token = closing.token + 1
 					local token = closing.token
 					ns.Log("shoulder", ("talk close: %s held while the camera glides back (turn at %.2f)"):format(
 						label, talk.share))
-					local wait = talk.swapWait + TalkOutTime() + 1
+					local wait = entry.quick and talk.quickTime + 1 or talk.swapWait + TalkOutTime() + 1
 					C_Timer.After(wait, function()
 						if closing.token == token then CloseNow("timer") end
 					end)
@@ -1030,11 +1046,21 @@ local function TalkTick(elapsed)
 		CloseNow("talk turn off")
 		return
 	end
+	-- (The last window closed talk.grace ago: glide back from wherever the turn
+	-- is, and it's over once it's all the way back. Dropped to 0 at once
+	-- before, a snap: after Accept the game closes the quest itself
+	-- (QUEST_FINISHED with the close still held), and 0.6 s on the glide back
+	-- was cut off at 0.61 s held (the log, 2026-11-14).)
 	if talk.on and talk.closedAt and GetTime() - talk.closedAt >= talk.grace then
-		talk.on, talk.closedAt = false, nil
+		if talk.share <= 0 then
+			talk.on, talk.closedAt = false, nil
+		elseif not talk.back then
+			talk.back, talk.backAt = true, nil
+		end
 	end
 	if not talk.on then
 		talk.share, talk.back, talk.fullAt, talk.backAt = 0, false, nil, nil
+		talk.quick = false
 	else
 		-- (A held close with no new window after talk.swapWait: the glide back.)
 		if talk.backAt and GetTime() >= talk.backAt then
@@ -1042,7 +1068,8 @@ local function TalkTick(elapsed)
 		end
 		local holder = ns.CameraHolder and ns.CameraHolder("talk")
 		if talk.back or holder and holder ~= "you" then
-			talk.share = math.max(0, talk.share - elapsed / TalkOutTime())
+			local time = talk.quick and talk.back and talk.quickTime or TalkOutTime()
+			talk.share = math.max(0, talk.share - elapsed / time)
 		else
 			talk.share = math.min(1, talk.share + elapsed / TalkInTime())
 			local hold = ns.db.shoulderCamTalkHold or 0
@@ -1438,7 +1465,7 @@ function ns.GetShoulderCamDebug()
 			return #names > 0 and table.concat(names, ", ") or "none"
 		end)(),
 		paused = db and PauseReason() or "no", always = db and db.shoulderCamAlways, key = GetBindingKey(SWAP_ACTION) or "none",
-		talkTurn = db and db.shoulderCamTalkTurn, talking = talk.on, talkShare = talk.share, talkBack = talk.back,
+		talkTurn = db and db.shoulderCamTalkTurn, talking = talk.on, talkShare = talk.share, talkBack = talk.back, talkQuick = talk.quick,
 		targetTurn = db and db.shoulderCamTargetTurn, aimShare = aim.share, enemyTargeted = HasEnemy(), aimClickX = aim.clickX, aimNowX = aim.NowX(),
 		enemyFocus = GetCVar(aim.enable), enemyYaw = GetCVar(aim.yawCVar), enemyPitch = GetCVar(aim.pitchCVar),
 		focus = GetCVar(talk.enable), focusYaw = GetCVar(talk.yawCVar), focusPitch = GetCVar(talk.pitchCVar),
@@ -1492,7 +1519,7 @@ events:SetScript("OnEvent", function(_, event)
 			closing.held = {}
 		end
 		-- (A new window: toward them again, from wherever the turn is.)
-		talk.on, talk.closedAt, talk.back, talk.fullAt, talk.backAt = true, nil, false, nil, nil
+		talk.on, talk.closedAt, talk.back, talk.fullAt, talk.backAt, talk.quick = true, nil, false, nil, nil, false
 	elseif TALK_EVENT[event] == "close" then
 		if talk.on and not talk.closedAt then talk.closedAt = GetTime() end
 	elseif event == "UNIT_MODEL_CHANGED" then
