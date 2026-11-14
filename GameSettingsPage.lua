@@ -58,7 +58,9 @@ local NAMES = {
 	floatingCombatTextPetMeleeDamage_v2 = "Pet melee damage", floatingCombatTextPetSpellDamage_v2 = "Pet spell damage",
 	floatingCombatTextCombatHealingAbsorbSelf_v2 = "Shields on you",
 	floatingCombatTextCombatHealingAbsorbTarget_v2 = "Shields on your target",
-	ObjectSelectionCircle = "Target circle", raidFramesDisplayBuffs = "Raid frame buffs",
+	ObjectSelectionCircle = "Target circle", findYourselfAnywhere = "Self highlight",
+	findYourselfInRaid = "Self highlight in raids", findYourselfInBG = "Self highlight in battlegrounds",
+	raidFramesDisplayBuffs = "Raid frame buffs",
 	raidFramesDisplayDebuffs = "Raid frame debuffs", cooldownViewerEnabled = "Cooldown Manager",
 }
 
@@ -68,6 +70,7 @@ local PURPOSES = {
 	{ "^Plates off$", "Faded nameplates can't be clicked" },
 	{ "^Combat text off$", "CineMode out of fights" },
 	{ "^Target circle off$", "CineMode hides the target circle" },
+	{ "^Self highlight off$", "CineMode hides your self highlight" },
 	{ "^Duel plates$", "Duel Vision" },
 	{ "^Instance plates off", "CineMode in dungeons and raids" },
 	{ "^All plates on$", "CineMode fades nameplates" },

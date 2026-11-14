@@ -7687,6 +7687,8 @@ local function CreateCombatPanel()
 		{ "raid", L["Raid frames"], L["Raid"], raidStyle },
 		-- (On the Party tab too, under the not raid-style ones.)
 		{ "rsparty", L["Party frames (raid-style)"], L["Party"], raidStyle },
+		-- (Game settings that mark your character: Self Highlight, Effects.lua.)
+		{ "highlight", L["Highlight"] },
 		{ false, L["Other"] }, -- (any row not given a section)
 	}
 	for _, section in ipairs(SECTIONS) do

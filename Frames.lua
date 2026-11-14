@@ -2220,6 +2220,12 @@ ns.COMBAT_SHOW = {
 	{ key = "targetcircle", label = L["Target circle"], default = false, noHoverRow = true,
 		tip = L["The selection circle on the ground under your target. Hidden, your own setting is put " ..
 			"back when the UI returns."] },
+	-- The game's Self Highlight (circle and/or outline on your own character),
+	-- on the HUD page's Highlight tab: a setting too (Effects.lua). Always
+	-- ticked to start with (CINE_SHOW_DEFAULT): left to the game until changed.
+	{ key = "selfhighlight", label = L["Self highlight"], default = false, noHoverRow = true,
+		tip = L["The game's Self Highlight: the circle or outline on your own character. Hidden, your own " ..
+			"setting is put back when the UI returns."] },
 	-- The Standard Frames page's Party frames section (page = "party"); the
 	-- raid-style ones are the Raid frames section's.
 	{ key = "party", label = L["Party frames"], default = true, page = "party", groups = { "party" } },
@@ -2459,7 +2465,7 @@ end
 -- above. (Kept in the order above within each.)
 local ROW_SECTIONS = {
 	player = "units", petframe = "units", prd = "prd", prdpower = "prd", prdmana = "prd", target = "units", tot = "units", focus = "units", focustot = "units",
-	targetcircle = "units",
+	targetcircle = "units", selfhighlight = "highlight",
 	buffs = "combat", buffcollapse = "combat", swing = "combat", castbar = "combat", meters = "combat", cooldowns = "combat",
 	cooldownsutility = "combat", cooldownsbuffs = "combat", cooldownsbars = "combat", encounter = "combat",
 	mirror = "combat",
@@ -2941,7 +2947,7 @@ local CINE_SHOW_DEFAULT = {
 	flags = true, castbar = true, partyroles = true, partynames = true, partystatus = true,
 	raidroles = true, raidnames = true, raidpetnames = true, raidtitles = true, raidbuffs = true,
 	raiddebuffs = true, raidthreat = true, raidtarget = true, raidready = true, extra = true, voice = true,
-	encounter = true, targetcircle = true, focustot = true, mirror = true,
+	encounter = true, targetcircle = true, selfhighlight = true, focustot = true, mirror = true,
 }
 function ns.IsCineShowOn(key)
 	key = ns.FollowKey(key)

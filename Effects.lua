@@ -335,6 +335,14 @@ local TARGET_CIRCLE_CVARS = ns.CVarSet("Target circle off", "CineMode, unless it
 	playerWins = true,
 	values = { ObjectSelectionCircle = "0" },
 })
+-- The game's Self Highlight (circle/outline on your own character): off in
+-- CineMode unless its HUD Highlight tab row (selfhighlight) shows it. Off =
+-- none of its "where" settings on; a client without one skips it (GetCVar nil).
+-- (On ns: this file's main chunk is at Lua's 200 locals.)
+ns.selfHighlightCVars = ns.CVarSet("Self highlight off", "CineMode, unless its HUD row shows it", {
+	playerWins = true,
+	values = { findYourselfAnywhere = "0", findYourselfInRaid = "0", findYourselfInBG = "0" },
+})
 
 -- Whether you were PvP flagged as the fight now under way started: names
 -- can't change mid-fight, so In PvP combat names go by that.
@@ -454,6 +462,8 @@ function ns.UpdateCVars(cinematic, fightStarting)
 	ns.ApplyCVarSet(COMBAT_TEXT_CVARS, (cinematic and ns.Setting("hideCombatText") and not fighting) or false)
 	ns.ApplyCVarSet(TARGET_CIRCLE_CVARS, (cinematic and ns.PageOn("handleFrames")
 		and not ns.RowOnNow("targetcircle", nil, true)) or immersive)
+	ns.ApplyCVarSet(ns.selfHighlightCVars, (cinematic and ns.PageOn("handleFrames")
+		and not ns.RowOnNow("selfhighlight", nil, true)) or false)
 	-- The red error text ("Target not in line of sight"): its own In combat
 	-- and Out of combat boxes, CineMode or not (the addon off: always shown).
 	if UIErrorsFrame then

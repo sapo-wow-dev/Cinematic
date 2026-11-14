@@ -436,6 +436,7 @@ Cinema|instanceShow.rspartyplayers=false
 Cinema|instanceShow.rspartyroles=false
 Cinema|instanceShow.rspartythreat=false
 Cinema|instanceShow.rspartytitles=false
+Cinema|instanceShow.selfhighlight=false
 Cinema|instanceShow.stance=false
 Cinema|instanceShow.swing=false
 Cinema|instanceShow.target=true
