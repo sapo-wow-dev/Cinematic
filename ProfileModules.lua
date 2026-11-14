@@ -169,6 +169,52 @@ ns.PROFILE_MODULES = {
 			set("combatShow", { prd = true, prdpower = true })
 		end),
 
+	-- The Follow HUD's pieces (dev only for now, Forever): the frames that
+	-- follow you over your shoulder, a piece each, so they go on top of any
+	-- profile and change nothing else (not its styles, nor the rest of the
+	-- Edit Mode layout). The layout's own pieces (stack, sizes, portraits:
+	-- Layouts.lua) are picked as it's made.
+	Layout("layout-follow", "Follow HUD layout", "Follow HUD", "forever",
+		"Your own Edit Mode layout, with the personal resource display at the bottom middle and the cast bar, " ..
+		"Cooldown Manager and swing timers hung on it, so Frames follow you slides them as one. Everything " ..
+		"else stays where you had it."),
+	{ key = "follow-prd-on", name = "Follow HUD: personal resource display on", client = "forever",
+		scope = { "Profiles/Edit Mode layout" },
+		tip = "Turns the game's personal resource display on, the Follow HUD's root.",
+		apply = function(set) set("prdOn", true) end },
+	-- (In fights: the layout's to say, as every layout does. With an enemy
+	-- targeted: the frames'.)
+	{ key = "follow-fights", name = "Follow HUD: up in fights", client = "forever",
+		scope = { "Standard Frames/Personal Resource Display" },
+		tip = "The personal resource display and its power come up in fights.",
+		apply = function(set) set("combatShow", { prd = true, prdpower = true }) end },
+	{ key = "follow-enemy", name = "Follow HUD: up with an enemy targeted", client = "forever",
+		scope = { "Standard Frames/Personal Resource Display" },
+		tip = "The personal resource display and its power come up with an enemy targeted.",
+		apply = function(set) set("enemyShow", { prd = true, prdpower = true }) end },
+	{ key = "follow-no-portrait", name = "Follow HUD: in place of your portrait", client = "forever",
+		scope = { "Standard Frames/Unit frames", "Standard Frames/top", "Personal Resources" },
+		tip = "Your portrait stays down in fights and with an enemy targeted, and the personal resource display, " ..
+		"not your portrait, stays up while your health or power isn't full.",
+		apply = function(set)
+			set("combatShow", { player = false })
+			set("enemyShow", { player = false })
+			set("prHealthPlayer", 0)
+			set("prPowerPlayer", 0)
+			set("prHealthPrd", 0.99)
+			set("prPowerPrd", 0.99)
+		end },
+	{ key = "follow-frames", name = "Follow HUD: frames follow you", client = "forever",
+		scope = { "Shoulder Cam" },
+		tip = "The Shoulder Cam's Frames follow you on, with each of its frames ticked.",
+		apply = function(set)
+			set("shoulderCamFrames", true)
+			for _, key in ipairs({ "Cast", "PRD", "Swing", "Essential", "Utility", "BuffIcons", "BuffBars",
+				"SpellAlerts" }) do
+				set("shoulderCamFollow" .. key, true)
+			end
+		end },
+
 	-- What fades, and when
 	{ key = "recovering", name = "Up while recovering", scope = { "Standard Frames/top", "Personal Resources" },
 		tip = "The player frame and personal resource display stay up while health or power isn't full (rage and " ..

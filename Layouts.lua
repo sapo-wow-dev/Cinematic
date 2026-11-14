@@ -93,6 +93,12 @@ local function ActiveName(info)
 	return NameAt(info, info.activeLayout)
 end
 
+-- The active layout's name (nil: no Edit Mode here).
+function ns.ActiveLayoutName()
+	if not (C_EditMode and C_EditMode.GetLayouts) then return nil end
+	return ActiveName(C_EditMode.GetLayouts())
+end
+
 -- A profile's layout (db.editModeLayout) as the name to go to. A preset
 -- (ns.LAYOUT_PRESET): the one the player is on now, or was on before a
 -- profile switched it, else the first (Modern); nil: the game has none.
@@ -142,11 +148,13 @@ end
 local function SyncBars(name)
 	if not (GetActionBarToggles and SetActionBarToggles) or not ns.chardb then return end
 	local def = name and ns.EDIT_MODE_LAYOUTS[name]
+	local bars = def and def.bars
+	if type(bars) == "function" then bars = bars() end
 	local toggles = { GetActionBarToggles() }
 	local on = ns.chardb.layoutBarsOn or {}
 	local changed = false
-	if def and def.bars then
-		for _, bar in ipairs(def.bars) do
+	if bars then
+		for _, bar in ipairs(bars) do
 			if toggles[bar - 1] == false then
 				toggles[bar - 1], on[bar] = true, true
 				changed = true
@@ -323,31 +331,31 @@ do
 	DESIGN[#DESIGN + 1] = { 20, 3, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 4 }    -- buff icons
 end
 
--- Shoulder Cam (dev only, Forever): a centred HUD that moves as one, for the
--- Shoulder Cam's Frames follow you (ShoulderCam.lua). Retail Inspired's
--- action bars and the rest, but its centre stack made again around one root,
--- the personal resource display, on the screen's bottom (the only frame
--- placed on the screen): the cast bar on it, the Cooldown Manager's rows and
--- buff icons above that (so the PRD, cast bar and portraits sit at the same
--- height whether the rows are full or empty: 1 unit tall), the swing timers
--- hanging down under it (main hand, off hand, ranged), and the player and
--- target frames each side of it, 300 from the middle (as Retail Inspired's,
--- clear of a 12-icon essential row). Frames follow you moves the PRD and the
--- rest ride along. The portraits are pinned to the screen, not hung on the
--- PRD: they're protected, and the game locks whatever a protected frame
--- hangs on in a fight, so hung on it they held the whole HUD still in fights
--- (2026-11-13). No PRD system: the cast bar is the root.
+-- The Follow HUD (dev only, Forever): a centred HUD that moves as one, for the
+-- Shoulder Cam's Frames follow you (ShoulderCam.lua), in pieces, each its own
+-- set of Edit Mode changes (FOLLOW_HUD_PIECES), so a player can take some and
+-- keep the rest of their own layout. Put together with ns.FollowHudDesign.
+--   stack: one root, the personal resource display, on the screen's bottom
+--     (the only frame placed on the screen): the cast bar on it, the
+--     Cooldown Manager's rows and buff icons above that (so the PRD, cast bar
+--     and portraits sit at the same height whether the rows are full or
+--     empty: 1 unit tall), the swing timers hanging down under it (main
+--     hand, off hand, ranged). Frames follow you moves the PRD and the rest
+--     ride along. No PRD system: the cast bar is the root.
+--   sizes: the PRD, cast bar and swing timers one width (without it, the
+--     player's own sizes stay).
+--   portraits: the player and target frames each side of it, 300 from the
+--     middle (as Retail Inspired's, clear of a 12-icon essential row), pinned
+--     to the screen, not hung on the PRD: they're protected, and the game
+--     locks whatever a protected frame hangs on in a fight, so hung on it
+--     they held the whole HUD still in fights (2026-11-13).
 -- Mockup: https://claude.ai/artifact/PPvLu5DMCUPEgBpNG2zEy6 (2026-11-07).
-local SHOULDER_HUD = {}
+local FOLLOW_HUD_PIECES = { stack = {}, sizes = {}, portraits = {} }
+ns.FOLLOW_HUD_PIECE_ORDER = { "stack", "sizes", "portraits" }
 do
-	local STACK = { [29] = true, [20] = true, [1] = true }
-	if PRD_SYSTEM then STACK[PRD_SYSTEM] = true end
-	for _, row in ipairs(DESIGN) do
-		if not STACK[row[1]] then SHOULDER_HUD[#SHOULDER_HUD + 1] = row end
-	end
+	local stack, sizes = FOLLOW_HUD_PIECES.stack, FOLLOW_HUD_PIECES.sizes
 	local indices = Enum.EditModeUnitFrameSystemIndices or {}
 	local root, rootName = 1, "PlayerCastingBarFrame"
-	local add = function(row) SHOULDER_HUD[#SHOULDER_HUD + 1] = row end
 	-- One width for the three (2026-11-13; the sizes run and screenshots
 	-- measured at 1.22 px a unit): the cast bar's Bar Size (setting 0, 100-150,
 	-- kept in steps of 10: 1 = 110) makes it 229 wide with its art. The PRD's
@@ -362,20 +370,76 @@ do
 	local PRD_SIZE, CAST_SIZE = { [12] = 9, [9] = 1, [4] = 9, [5] = 9 }, { [0] = 1 }
 	if PRD_SYSTEM then
 		root, rootName = PRD_SYSTEM, "PersonalResourceDisplayFrame"
-		add({ 1, nil, "BOTTOM", rootName, "TOP", 0, 26, CAST_SIZE })                             -- cast bar (its name under it)
+		stack[#stack + 1] = { 1, nil, "BOTTOM", rootName, "TOP", 0, 26 }               -- cast bar (its name under it)
+		sizes[#sizes + 1] = { 1, nil, nil, nil, nil, nil, nil, CAST_SIZE }
 	end
 	-- (330: just under your feet at a normal zoom; 210 put it down by the
 	-- action bars, "too low", 2026-11-13.)
-	add({ root, nil, "BOTTOM", "UIParent", "BOTTOM", 0, 330, PRD_SYSTEM and PRD_SIZE or CAST_SIZE })                         -- the root
-	add({ 20, 1, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 6 })                    -- cooldowns: essential
-	add({ 20, 2, "BOTTOM", "EssentialCooldownViewer", "TOP", 0, 4 })                  -- utility
-	add({ 20, 3, "BOTTOM", "UtilityCooldownViewer", "TOP", 0, 4 })                    -- buff icons
-	add({ 29, 1, "TOP", rootName, "BOTTOM", 0, -12, SWING_SIZE })                    -- swing timers: main hand (a gap under the PRD)
-	add({ 29, 2, "TOP", "SwingTimerMainHandFrame", "BOTTOM", 0, -4, SWING_SIZE })    -- off hand
-	add({ 29, 3, "TOP", "SwingTimerOffHandFrame", "BOTTOM", 0, -4, SWING_SIZE })     -- ranged
+	stack[#stack + 1] = { root, nil, "BOTTOM", "UIParent", "BOTTOM", 0, 330 }          -- the root
+	sizes[#sizes + 1] = { root, nil, nil, nil, nil, nil, nil, PRD_SYSTEM and PRD_SIZE or CAST_SIZE }
+	stack[#stack + 1] = { 20, 1, "BOTTOM", "PlayerCastingBarFrame", "TOP", 0, 6 }       -- cooldowns: essential
+	stack[#stack + 1] = { 20, 2, "BOTTOM", "EssentialCooldownViewer", "TOP", 0, 4 }     -- utility
+	stack[#stack + 1] = { 20, 3, "BOTTOM", "UtilityCooldownViewer", "TOP", 0, 4 }       -- buff icons
+	stack[#stack + 1] = { 29, 1, "TOP", rootName, "BOTTOM", 0, -12 }                    -- swing timers: main hand (a gap under the PRD)
+	stack[#stack + 1] = { 29, 2, "TOP", "SwingTimerMainHandFrame", "BOTTOM", 0, -4 }    -- off hand
+	stack[#stack + 1] = { 29, 3, "TOP", "SwingTimerOffHandFrame", "BOTTOM", 0, -4 }     -- ranged
+	for index = 1, 3 do sizes[#sizes + 1] = { 29, index, nil, nil, nil, nil, nil, SWING_SIZE } end
 	-- (On the screen, level with the PRD's middle: 330 up, about 15 more.)
-	add({ UNIT_FRAME, indices.Player or 1, "RIGHT", "UIParent", "BOTTOM", -300, 345 }) -- player frame
-	add({ UNIT_FRAME, indices.Target or 2, "LEFT", "UIParent", "BOTTOM", 300, 345 })   -- target frame
+	FOLLOW_HUD_PIECES.portraits = {
+		{ UNIT_FRAME, indices.Player or 1, "RIGHT", "UIParent", "BOTTOM", -300, 345 }, -- player frame
+		{ UNIT_FRAME, indices.Target or 2, "LEFT", "UIParent", "BOTTOM", 300, 345 },   -- target frame
+	}
+end
+
+-- A design from the pieces picked (picks: piece -> true; nil: stack and
+-- sizes), one row per frame: a later piece's place and settings go over an
+-- earlier's for the same frame (sizes adds its settings to stack's place).
+-- base: rows to start from (copied).
+function ns.FollowHudDesign(picks, base)
+	picks = picks or { stack = true, sizes = true }
+	local design, at = {}, {}
+	local function Add(row)
+		local key = tostring(row[1]) .. ":" .. tostring(row[2])
+		local have = at[key]
+		-- (Ids that aren't plain numbers, as the offline stand-in's Enum gives,
+		-- can look alike for two frames: a second place there is a row of its own.)
+		if have and have[3] and row[3] and type(row[1]) ~= "number" then have = nil end
+		if not have then
+			have = { row[1], row[2], presetOnly = row.presetOnly }
+			at[key] = have
+			design[#design + 1] = have
+		end
+		if row[3] then
+			for i = 3, 7 do have[i] = row[i] end
+		end
+		if row[8] then
+			local settings = {}
+			for setting, value in pairs(have[8] or {}) do settings[setting] = value end
+			for setting, value in pairs(row[8]) do settings[setting] = value end
+			have[8] = settings
+		end
+	end
+	for _, row in ipairs(base or {}) do Add(row) end
+	for _, piece in ipairs(ns.FOLLOW_HUD_PIECE_ORDER) do
+		if picks[piece] then
+			for _, row in ipairs(FOLLOW_HUD_PIECES[piece]) do Add(row) end
+		end
+	end
+	return design
+end
+
+-- Shoulder Cam (the Shoulder Cam profile's layout): Retail Inspired's action
+-- bars and the rest, with all of the Follow HUD's pieces in place of its
+-- centre stack.
+local SHOULDER_HUD
+do
+	local STACK = { [29] = true, [20] = true, [1] = true }
+	if PRD_SYSTEM then STACK[PRD_SYSTEM] = true end
+	local rest = {}
+	for _, row in ipairs(DESIGN) do
+		if not STACK[row[1]] then rest[#rest + 1] = row end
+	end
+	SHOULDER_HUD = ns.FollowHudDesign({ stack = true, sizes = true, portraits = true }, rest)
 end
 
 -- Retail laid out like WoW Forever's default: its party frames raid-style.
@@ -415,6 +479,31 @@ ns.EDIT_MODE_LAYOUTS = {
 -- /cine debug shoulder layout. The Shoulder Cam's for testers for now.)
 ns.EDIT_MODE_LAYOUTS["Shoulder Cam"] = { design = SHOULDER_HUD, bars = { 2, 3 }, client = "forever",
 	onDemand = true }
+-- The Follow HUD (dev only for now, FollowHud.lua): the layout the player was
+-- on as it was set up (chardb.followHudBase: theirs, or one of ours like
+-- Retail Inspired), with just the Follow HUD's pieces picked (the profile's
+-- followHud.picks; none: stack and sizes) on it, the rest as they had it
+-- (their bars, raid frames, chat...). Made only when it's set up, never on
+-- logging in. Its action bars: the ones its base switches on. (Functions,
+-- read as it's made or switched to.)
+local function FollowHudBase() return ns.chardb and ns.chardb.followHudBase end
+ns.EDIT_MODE_LAYOUTS["Follow HUD"] = { client = "forever", onDemand = true,
+	base = FollowHudBase,
+	design = function()
+		local saved = ns.db and ns.db.followHud
+		return ns.FollowHudDesign(saved and saved.picks)
+	end,
+	bars = function()
+		local base = ns.EDIT_MODE_LAYOUTS[FollowHudBase() or ""]
+		local bars = base and base.bars
+		return type(bars) == "table" and bars or nil
+	end }
+
+-- A layout's design rows (def.design, or what its function gives now).
+local function DesignOf(def)
+	if type(def.design) == "function" then return def.design() end
+	return def.design
+end
 
 -- A layout from systems lines (as PURE_CINEMA_SYSTEMS): the export string is
 -- a format version, the number of systems, then the lines. (The Edit Mode
@@ -442,12 +531,17 @@ end
 -- player's own, the one named (ns.ResetLayouts: the one they go back to),
 -- else the one on now, or, on one of ours, the one before a profile
 -- switched to it (chardb.layoutOwn). Never one of ours: Modern then.
--- Second: whether it's a game preset (presetOnly rows apply).
-local function OwnBase(name)
+-- Second: whether it's a game preset (presetOnly rows apply). building: the
+-- one of ours being made, when it may be made on another of ours (the Follow
+-- HUD, on whatever layout the player's on: Retail Inspired too), never itself.
+local function OwnBase(name, building)
 	local info = C_EditMode.GetLayouts()
+	local function Usable(layoutName)
+		return layoutName and (not ns.EDIT_MODE_LAYOUTS[layoutName] or (building and layoutName ~= building))
+	end
 	local want = name or ActiveName(info)
-	if not want or ns.EDIT_MODE_LAYOUTS[want] then want = ns.chardb and ns.chardb.layoutOwn end
-	if want and not ns.EDIT_MODE_LAYOUTS[want] then
+	if not Usable(want) then want = ns.chardb and ns.chardb.layoutOwn end
+	if Usable(want) then
 		for _, layout in ipairs(info.layouts) do
 			if Named(layout) == want then return Copy(layout), false, want end
 		end
@@ -582,9 +676,10 @@ local function BuildLayout(name, base)
 		layout = ExportFromSystems(def.systems)
 	else
 		local onPreset, baseName
-		layout, onPreset, baseName = OwnBase(base)
+		-- (def.base: the layout it's made on, when it says, as the Follow HUD's.)
+		layout, onPreset, baseName = OwnBase(base or (def.base and def.base()), def.base and name or nil)
 		if layout then
-			ApplyDesign(layout, def.design or {}, onPreset)
+			ApplyDesign(layout, DesignOf(def) or {}, onPreset)
 			ns.Log("state", ("edit mode layout %s made on %s"):format(name, tostring(baseName)))
 		end
 	end
@@ -653,12 +748,13 @@ function ns.LayoutBaseTest()
 	for _, preset in ipairs(presets) do bases[#bases + 1] = { name = preset.layoutName, preset = true } end
 	local ours = {}
 	for name, def in pairs(ns.EDIT_MODE_LAYOUTS) do
-		if def.design and (not def.client or def.client == ns.CLIENT) and not def.onDemand then ours[#ours + 1] = name end
+		-- (On-demand ones too: built here, not saved.)
+		if def.design and (not def.client or def.client == ns.CLIENT) then ours[#ours + 1] = name end
 	end
 	table.sort(ours)
 	if #ours == 0 then Line("none of ours is made on the player's layout on this client") end
 	for _, name in ipairs(ours) do
-		local design = ns.EDIT_MODE_LAYOUTS[name].design
+		local design = DesignOf(ns.EDIT_MODE_LAYOUTS[name])
 		local listed = {}
 		for _, row in ipairs(design) do listed[tostring(row[1]) .. ":" .. tostring(row[2])] = row end
 		for _, base in ipairs(bases) do

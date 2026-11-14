@@ -45,6 +45,7 @@ local PROFILE_TABLES = {
 	"cameraRows", -- (the Cameras page's rows: CameraRows.lua)
 	"lowHealthThemeEdits", "lowHealthMyThemes", -- (Vitals Vision's themes: players' versions of ours, and their own)
 	"lowHealthFromTheme", -- (which of the profile's Vitals settings its theme put on, not the player)
+	"followHud", -- (the Follow HUD's pieces set up on this profile and how to undo them: FollowHud.lua)
 }
 ns.PROFILE_TABLES = PROFILE_TABLES
 ns.IS_PROFILE_TABLE = {}
@@ -478,6 +479,7 @@ local function SettingsChanged()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 	optionsMs = debugprofilestop() - started
 end
+ns.SettingsChanged = SettingsChanged -- (FollowHud.lua: its pieces put on, or taken off)
 
 -- Keeps the live settings in the active profile (on switching and logout).
 function ns.SaveProfile()

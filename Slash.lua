@@ -211,6 +211,7 @@ local function PrintDebugHelp()
 	print("  /cine debug bubbles - log each chat bubble's place, frame by frame as it changes, and how far it's moved off the top (again to stop, /reload to save)")
 	print("  /cine debug layout - Edit Mode's layouts and where the personal resource display is")
 	print("  /cine debug layoutbase - check our layouts made on each of yours (party frames, places kept), saving nothing")
+	print("  /cine debug followhud [setup|undo|update] - the Follow HUD (dev): its pieces, layout and the settings it changed, or set it up, take it off, or make its layout again")
 	print("  /cine debug layoutexport - save the Edit Mode layout you're on as an export string (in the saved settings: /reload after)")
 	print("  /cine debug ids - every setting's /cine find id, and the controls on the settings pages that have none yet, to copy")
 	print("  /cine debug changed - which settings make the Profiles page say (changed): each with the profile's value and the default")
@@ -518,6 +519,8 @@ local function HandleSlash(msg)
 		ns.DescribeLayouts()
 	elseif cmd == "debug" and arg == "layoutbase" then
 		ns.LayoutBaseTest()
+	elseif cmd == "debug" and (arg == "followhud" or arg:find("^followhud%s")) and ns.FollowHudDebug then
+		ns.FollowHudDebug(arg:match("^followhud%s+(%S+)"))
 	elseif cmd == "debug" and arg == "layoutexport" then
 		-- (For a layout of Cinematic's own: db.debugLayoutExport, read from the saved settings.)
 		local info = C_EditMode and C_EditMode.GetLayouts()

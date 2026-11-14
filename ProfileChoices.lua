@@ -61,6 +61,11 @@ ns.SLOT_CHOICES = {
 		-- (The Shoulder Cam profile's, testers' for now: in no list.)
 		{ part = "shoulder", client = "forever", hidden = true, label = "Shoulder Cam", made = true,
 			line = "Your resources at the bottom middle, everything hung on them", modules = { "layout-shoulder" } },
+		-- (The Follow HUD's pieces, dev only for now: in no list. Set up from
+		-- the Shoulder Cam page, piece by piece, on top of any profile.)
+		{ part = "follow", client = "forever", hidden = true, label = "Follow HUD", made = true,
+			line = "Your own layout, with your resources at the bottom middle sliding along with you",
+			modules = { "layout-follow", "follow-prd-on", "follow-fights" } },
 		{ part = "own", label = "Your own", line = "Cinematic leaves your Edit Mode layout as it is",
 			modules = {} },
 		{ part = "preset", client = "forever", label = ns.isClassicEra and "Classic's" or "WoW Forever's",
@@ -78,6 +83,11 @@ ns.SLOT_CHOICES = {
 			line = "As little UI as possible; your resources, not your portrait, in fights",
 			modules = { "shoulder-frames", "pure-minimap", "minimal-target", "pure-plates", "ultra-plates",
 				"pure-tooltips" } },
+		-- (The Follow HUD's pieces for when your UI's up, dev only for now: in
+		-- no list. Set up from the Shoulder Cam page on top of any profile.)
+		{ part = "follow", client = "forever", hidden = true, label = "Follow HUD",
+			line = "Your resources, not your portrait, with an enemy targeted and while recovering; frames follow you",
+			modules = { "follow-enemy", "follow-no-portrait", "follow-frames" } },
 		{ part = "immersive", label = "Most of the time",
 			line = "Between fights, and fights bring back less: no minimap, fewer group nameplates",
 			modules = { "recovering", "minimap-off-in-fights", "fewer-group-plates" } },

@@ -191,6 +191,7 @@ Welcome.lua
 Conflicts.lua
 ShowMe.lua
 Layouts.lua
+FollowHud.lua
 ModuleEditor.lua
 HeldSettingsPage.lua
 DemoHub.lua
