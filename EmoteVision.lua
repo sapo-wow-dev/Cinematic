@@ -2029,12 +2029,36 @@ local function AtYou(text)
 	if lower:find("%f[%a]you%f[%A]") then return true end
 	return YOU ~= "you" and lower:find("%f[%a]" .. YOU:lower() .. "%f[%A]") ~= nil
 end
+-- Emotes between you and someone lately (either way): Eyes meet stays quiet
+-- for them, you've already said hello. (Theirs at you by GUID; yours as
+-- lines, matched on their name when you look at each other.)
+-- (On ns, not a local: this file is at Lua's cap of 200.)
+ns.emoteLately = { seconds = 300, theirs = {}, own = {} }
+function ns.emoteLately.Emoted(guid, name)
+	local now, theirs, own = GetTime(), ns.emoteLately.theirs, ns.emoteLately.own
+	if guid and theirs[guid] and now - theirs[guid] < ns.emoteLately.seconds then return true end
+	if type(name) ~= "string" or name == "" then return false end
+	for i = #own, 1, -1 do
+		if now - own[i].at >= ns.emoteLately.seconds then
+			table.remove(own, i)
+		elseif own[i].text:find(name, 1, true) then
+			return true
+		end
+	end
+	return false
+end
 local function Emoted(text, author, guid)
 	text, author, guid = Plain(text), Plain(author), Plain(guid)
 	if type(text) ~= "string" or type(author) ~= "string" then return end
-	if guid == Plain(UnitGUID("player")) then return end
+	if guid == Plain(UnitGUID("player")) then
+		local own = ns.emoteLately.own
+		own[#own + 1] = { text = text, at = GetTime() }
+		if #own > 20 then table.remove(own, 1) end
+		return
+	end
 	if guid and not guid:find("^Player%-") then return end
 	if not AtYou(text) then return end
+	if guid then ns.emoteLately.theirs[guid] = GetTime() end
 	-- (Which one it was, for Same back.)
 	local same, lower = nil, text:lower()
 	for _, pair in ipairs(EMOTE_WORDS) do
@@ -2266,7 +2290,8 @@ end
 
 -- Eyes meet: you and a stranger (a player not in your group or guild)
 -- targeting each other for EYES_MEET seconds straight, out of a fight.
--- Either of you looking away starts it over; one card per look.
+-- Either of you looking away starts it over; one card per look. None when
+-- either of you emoted at the other in the last 5 minutes (ns.emoteLately.Emoted).
 local EYES_MEET = 10
 local gaze      -- (who you're looking at who's looking back: { guid, since, done })
 local gazeTicker
@@ -2276,6 +2301,7 @@ local function LookingBack()
 	if ns.Flag(UnitInParty("target")) or ns.Flag(UnitInRaid("target")) then return end
 	if UnitIsInMyGuild and ns.Flag(UnitIsInMyGuild("target")) then return end
 	if not ns.Flag(UnitIsUnit("targettarget", "player")) then return end
+	if ns.emoteLately.Emoted(guid,Short(Plain(UnitName("target")))) then return end
 	return guid
 end
 local function WatchGaze()
