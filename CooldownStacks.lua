@@ -4,7 +4,8 @@
 -- can't read an aura's stacks (every aura read errors), so the stacks of the
 -- spells listed below are counted from your own casts, which stay readable:
 -- each cast adds one, up to the most, and all of them drop a set time after
--- the first. Out of fights, when the aura can be read, its own count wins.
+-- the first. The game's icon going off clears them (that stays readable),
+-- and out of fights, when its aura can be read, the aura's own count wins.
 local _, ns = ...
 
 -- Stacking spells, by the spell ID you cast. max: the most stacks; lasts:
@@ -43,38 +44,37 @@ local function Log(text)
 	if #log > 40 then table.remove(log, 1) end
 end
 
--- The aura's own stack count, when the game lets it be read (out of fights).
-local function ReadStacks(entry)
-	if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return nil end
-	local ids = {}
-	for _, id in ipairs(entry.casts) do ids[#ids + 1] = id end
-	for _, id in ipairs(entry.icons or {}) do ids[#ids + 1] = id end
-	local readable = false
-	for _, id in ipairs(ids) do
-		local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, id)
-		if ok and not Secret(aura) then
-			readable = true
-			if type(aura) == "table" then
-				local count = PlainNumber(aura.applications)
-				if count then return math.max(count, 1), PlainNumber(aura.expirationTime) end
-			end
-		end
-	end
-	-- (No aura at all, read plainly: none up.)
-	if readable and not InCombatLockdown() then return 0 end
-end
+-- (A cast lands a moment before the game's icon picks the aura up: an icon
+-- still off this soon after one doesn't clear the count.)
+local CAST_GRACE = 0.6
 
--- The stacks up now: counted, unless the aura says.
-local function Stacks(entry)
+-- The stacks up now, put right by the game's icon for the spell: whether it
+-- holds an aura (its auraInstanceID there at all, which stays readable in
+-- fights: Discipline's test, 2026-11-14, on and off at the right times) and,
+-- out of fights where the aura can be read, its own count and end time. (Not
+-- by spell ID: Arcane Blast's debuff is 400573, not the cast's ID.)
+local function Stacks(entry, icon)
 	local now = GetTime()
 	if entry.stacks > 0 and now >= entry.endsAt then entry.stacks = 0 end
-	local read, endsAt = ReadStacks(entry)
-	if read then
-		if read ~= entry.stacks then
-			Log(("read %d (counted %d)"):format(read, entry.stacks))
+	local instance = icon and icon.auraInstanceID
+	if icon and type(instance) == "nil" then
+		if entry.stacks > 0 and now - (entry.castAt or 0) > CAST_GRACE then
+			Log(("icon off: cleared %d"):format(entry.stacks))
+			entry.stacks = 0
 		end
-		entry.stacks = read
-		if read > 0 and endsAt and endsAt > 0 then entry.endsAt = endsAt end
+	elseif PlainNumber(instance) and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+		local ok, aura = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, "player", instance)
+		if ok and type(aura) == "table" and not Secret(aura) then
+			local count, ends = PlainNumber(aura.applications), PlainNumber(aura.expirationTime)
+			if count then
+				count = math.max(count, 1)
+				if count ~= entry.stacks then
+					Log(("read %d (counted %d)"):format(count, entry.stacks))
+				end
+				entry.stacks = count
+				if ends and ends > 0 then entry.endsAt = ends end
+			end
+		end
 	end
 	return entry.stacks
 end
@@ -108,8 +108,11 @@ local function EntryOf(icon)
 end
 
 -- Our number on an icon, over the game's art, in its bottom right corner as
--- the game's stack counts sit.
-local labels = setmetatable({}, { __mode = "k" }) -- icon -> font string
+-- the game's stack counts sit; and the time left (the game's icon shows
+-- none for these): a swipe over the icon and the seconds in its middle.
+-- (The swipe a frame of its own under the text's: a Cooldown draws over
+-- its parent's font strings.)
+local labels = setmetatable({}, { __mode = "k" }) -- icon -> the count's font string
 local function Label(icon)
 	local text = labels[icon]
 	if not text then
@@ -118,12 +121,36 @@ local function Label(icon)
 		if not ok then return nil end
 		holder:SetAllPoints(art)
 		holder:SetFrameLevel(icon:GetFrameLevel() + 10)
+		local made, swipe = pcall(CreateFrame, "Cooldown", nil, icon, "CooldownFrameTemplate")
+		if made then
+			swipe:SetAllPoints(art)
+			swipe:SetFrameLevel(icon:GetFrameLevel() + 9)
+			swipe:SetDrawEdge(false)
+			swipe:SetHideCountdownNumbers(true)
+			swipe:SetReverse(false)
+		else
+			swipe = nil
+		end
 		text = holder:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
 		text:SetPoint("BOTTOMRIGHT", -1, 2)
 		text:SetJustifyH("RIGHT")
+		local time = holder:CreateFontString(nil, "OVERLAY")
+		time:SetFont((text:GetFont()), 15, "OUTLINE")
+		time:SetPoint("CENTER", 0, 0)
+		time:SetTextColor(1, 1, 1)
+		text.time, text.swipe = time, swipe
 		labels[icon] = text
 	end
 	return text
+end
+
+local function HideLabel(text)
+	text:Hide()
+	text.time:Hide()
+	if text.swipe and text.swipeEnds then
+		text.swipe:Clear()
+		text.swipeEnds = nil
+	end
 end
 
 local function On()
@@ -133,21 +160,30 @@ end
 local function ShowIcon(icon)
 	if icon.IsForbidden and icon:IsForbidden() then return end
 	local entry = EntryOf(icon)
-	local stacks = entry and Stacks(entry) or 0
+	local stacks = entry and Stacks(entry, icon) or 0
 	if stacks > 0 then
 		local text = Label(icon)
 		if text then
 			text:SetText(stacks)
 			text:Show()
+			local left = entry.endsAt - GetTime()
+			text.time:SetText(left >= 0.5 and tostring(math.floor(left + 0.5)) or "")
+			text.time:Show()
+			-- (Set again only when the end moves: an aura read out of a
+			-- fight can put it right.)
+			if text.swipe and text.swipeEnds ~= entry.endsAt then
+				text.swipeEnds = entry.endsAt
+				text.swipe:SetCooldown(entry.endsAt - entry.lasts, entry.lasts)
+			end
 		end
 	elseif labels[icon] then
-		labels[icon]:Hide()
+		HideLabel(labels[icon])
 	end
 end
 
 local function Update()
 	if not On() then
-		for _, text in pairs(labels) do text:Hide() end
+		for _, text in pairs(labels) do HideLabel(text) end
 		return
 	end
 	for _, name in ipairs(VIEWERS) do
@@ -183,6 +219,7 @@ watcher:SetScript("OnEvent", function(_, event, _, _, spellID)
 			entry.stacks, entry.endsAt = 0, now + entry.lasts
 		end
 		entry.stacks = math.min(entry.stacks + 1, entry.max)
+		entry.castAt = now
 		Log(("cast %d: counted %d, %s"):format(id, entry.stacks, InCombatLockdown() and "in fight" or "no fight"))
 		if test then test.onCast(id) end
 		since = 1 -- (shown on the next frame)
@@ -349,7 +386,7 @@ function ns.CooldownStacksTest()
 	for _, entry in ipairs(STACKING) do entry.stacks, entry.endsAt = 0, 0 end
 
 	local STEPS = {
-		{ say = "1/3: Target a training dummy and cast ARCANE BLAST 5 times in a row. Nothing else.", time = 24 },
+		{ say = "1/3: Target a mob that will live 20 sec or more and cast ARCANE BLAST 5 times in a row. Nothing else.", time = 24 },
 		{ say = "2/3: STOP casting. Don't cast anything, just wait.", time = 26 },
 		{ say = "3/3: Cast ARCANE BLAST 2 times, then cast ARCANE MISSILES once (or Arcane Explosion " ..
 			"if you don't have it).", time = 22 },
@@ -459,7 +496,9 @@ function ns.CooldownStacksTest()
 		local text = label and label:IsShown() and label:GetText() or nil
 		if text ~= lastText then
 			lastText = text
-			Event(text and ("number shows " .. text) or "number hidden")
+			local time = text and label.time:IsShown() and label.time:GetText()
+			Event(text and ("number shows " .. text .. (time and time ~= "" and (", timer " .. time) or ", no timer"))
+				or "number hidden")
 		end
 	end)
 end

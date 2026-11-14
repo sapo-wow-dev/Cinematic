@@ -12708,10 +12708,10 @@ local function CreateCooldownPanel()
 	notBuff:SetPoint("TOPLEFT", numbers, "BOTTOMLEFT", 0, -2)
 	GreyUnless(notBuff, function(db) return db.handleCooldowns end)
 	-- Stack numbers on tracked buffs of known stacking spells (CooldownStacks.lua).
-	local stacks = Check(settings, "cooldownStacks", L["Show stacks on tracked buffs"],
-		L["Shows how many stacks are up on the tracked buff icons of spells that stack, which the game " ..
-		"shows only as on or off: Arcane Blast for now. In fights the game keeps them secret, so they're " ..
-		"counted from your casts."])
+	local stacks = Check(settings, "cooldownStacks", L["Show stacks and time left on tracked buffs"],
+		L["Shows how many stacks are up, and the seconds till they run out, on the tracked buff icons of " ..
+		"spells that stack, which the game shows only as on or off: Arcane Blast for now. In fights the game " ..
+		"keeps them secret, so they're counted from your casts."])
 	stacks:SetPoint("TOPLEFT", notBuff, "BOTTOMLEFT", 0, -2)
 	stacks:HookScript("OnClick", function() ns.ApplyCooldownStacks() end)
 	GreyUnless(stacks, function(db) return db.handleCooldowns end)
