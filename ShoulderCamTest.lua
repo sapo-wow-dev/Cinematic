@@ -287,7 +287,7 @@ local function BubbleSpot()
 	for _, bubble in ipairs(all) do
 		if not (bubble.IsForbidden and bubble:IsForbidden()) then
 			local okText, says = pcall(BubbleText, bubble)
-			local okSame, same = pcall(function() return says == LINE end)
+			local okSame, same = pcall(function() return type(says) == "string" and says:sub(1, #LINE) == LINE end)
 			if okText and okSame and same then
 				local ok, x, y = pcall(bubble.GetCenter, bubble)
 				if ok and type(x) == "number" and type(y) == "number" then
@@ -312,9 +312,10 @@ local sweep -- { name, steps, at, waited, baseline, held = your settings, readin
 local stepper = CreateFrame("Frame")
 stepper:Hide()
 
-local function SendLine()
+-- (tag: a few words after it, so a line said again isn't the same line.)
+local function SendLine(tag)
 	local send = C_ChatInfo and C_ChatInfo.SendChatMessage or SendChatMessage
-	if send then send(LINE, "SAY") end
+	if send then send(tag and (LINE .. " " .. tag) or LINE, "SAY") end
 end
 
 local function EndSweep()
@@ -680,7 +681,7 @@ local function FormsBox()
 	if run.phase == "wait" then
 		ns.PadTestBox(head, "wait...", 0.7, 0.7, 0.7)
 	elseif run.phase == "in" then
-		ns.PadTestBox(head, "SHIFT INTO BEAR FORM now (stand still, hands off the camera)", 0.3, 1, 0.3)
+		ns.PadTestBox(head, "SHIFT INTO YOUR FORM now (cat, bear...: the same one each time; stand still, hands off the camera)", 0.3, 1, 0.3)
 	else
 		ns.PadTestBox(head, "count to 2, then SHIFT BACK OUT", 1, 0.82, 0)
 	end
@@ -739,6 +740,150 @@ function Forms()
 	end)
 	ns.Print("shoulder forms: record your screen; type it again to stop")
 	FormsStart(1)
+end
+
+-- shift: the bump as you shift into a form and back out, measured, no
+-- recording: it says a line (the typed command lets it talk), you shift in
+-- and out while the bubble's up, and your bubble's spot on screen is logged
+-- every frame from each shift till SHIFT_TAIL after the model's changed, with
+-- the offset and the events, then a summary each way: where you were before,
+-- the furthest out and in on the way, and where you settled. Each run tries
+-- the next of SHIFT_TIMINGS (the push into a form, ns.shoulderSwap); typed
+-- again mid-run, it stops.
+-- (2026-11-14, a Night Elf's cat, as built: out 1 point as the model came,
+-- then in 1 point as the push landed: about twice too much. So smaller ones.)
+-- (Then, with the cat at 15%: part of the new offset written early, at the
+-- form's change, ahead of the model (ShoulderModelScale's early share; into
+-- a form only).)
+-- (Then, the cat in as built (half early, 15% push): out of it, a push
+-- past the elf's offset as her model comes back (boostOut), never tried.)
+local SHIFT_TIMINGS = {
+	{ "as built (out: no push)" },
+	{ "out: 15% past for 0.035 s", boostOut = 0.15, boostOutFor = 0.035 },
+	{ "out: 35% past for 0.035 s", boostOut = 0.35, boostOutFor = 0.035 },
+	{ "out: 50% past for 0.035 s", boostOut = 0.5, boostOutFor = 0.035 },
+	{ "out: 35% past for 0.07 s", boostOut = 0.35, boostOutFor = 0.07 },
+}
+local SHIFT_TAIL = 0.8 -- seconds logged after the model's change
+local shiftRun, shiftNext = nil, 1
+local function ShiftEnd(why)
+	local run = shiftRun
+	if not run then return end
+	shiftRun = nil
+	run.frame:UnregisterAllEvents()
+	run.frame:Hide()
+	ns.shoulderSwap = nil
+	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
+	if run.bubbles then SetCVar("chatBubbles", run.bubbles) end
+	Log(("shift: %s"):format(why))
+	C_Timer.After(20, function() if not shiftRun then ns.PadTestBoxHide() end end)
+end
+local function ShiftSummary(run, leg)
+	local list = run.legs[leg]
+	if not list or #list == 0 then
+		Log(("shift: %s: no bubble readings"):format(leg))
+		return
+	end
+	local before, last = run.before[leg], list[#list].x
+	local most, least = -math.huge, math.huge
+	for _, row in ipairs(list) do
+		most, least = math.max(most, row.x), math.min(least, row.x)
+	end
+	Log(("shift: %s summary (%s): before %s, furthest out %.1f%%, furthest in %.1f%%, settled %.1f%%, %d frames"):format(
+		leg, run.timing[1], before and ("%.1f%%"):format(before * 100) or "?", most * 100, least * 100, last * 100, #list))
+end
+local Shift
+function Shift(at)
+	if shiftRun then
+		ShiftEnd("stopped")
+		ns.Print("shoulder shift: stopped")
+		return
+	end
+	if GetShapeshiftFormID and GetShapeshiftFormID() then
+		return ns.Print("shoulder shift: start out of your forms")
+	end
+	if UnitExists("target") then return ns.Print("shoulder shift: clear your target first (Esc)") end
+	shiftNext = SHIFT_TIMINGS[at or 1] and at or 1
+	local timing = SHIFT_TIMINGS[shiftNext]
+	local run = { timing = timing, legs = { ["in"] = {}, out = {} }, before = {}, frame = CreateFrame("Frame") }
+	shiftRun = run
+	ns.shoulderSwap = (timing.boost or timing.early or timing.boostOut) and timing or nil
+	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
+	run.bubbles = GetCVar("chatBubbles")
+	SetCVar("chatBubbles", "1")
+	SendLine(("(run %d)"):format(shiftNext))
+	Log(("shift: %s on | %s | offset %s, zoom %.2f, side %s"):format(timing[1], Who(), Text(GetCVar(SHOULDER)), Zoom(),
+		Text(ns.db.shoulderCamSide)))
+	ns.PadTestBox(("Shift %d/%d: %s"):format(shiftNext, #SHIFT_TIMINGS, timing[1]), "SHIFT INTO YOUR FORM now (stand still, hands off the camera)", 0.3, 1, 0.3)
+	local startedAt = GetTime()
+	run.frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+	run.frame:RegisterUnitEvent("UNIT_MODEL_CHANGED", "player")
+	run.frame:SetScript("OnEvent", function(_, event)
+		if shiftRun ~= run then return end
+		local form = GetShapeshiftFormID and GetShapeshiftFormID()
+		local now = GetTime()
+		Log(("shift: %s, form %s, offset %s"):format(event, Text(form), Text(GetCVar(SHOULDER))))
+		if event == "UPDATE_SHAPESHIFT_FORM" then
+			local leg = form and "in" or "out"
+			-- (The game says "no form" once more as you shift in: no leg yet.)
+			if leg == "out" and run.leg ~= "in" then return end
+			if run.leg ~= leg then
+				if run.leg and not run.inDone then
+					run.inDone = true
+					ShiftSummary(run, run.leg)
+				end
+				run.leg, run.legAt, run.modelAt = leg, now, nil
+				local x = BubbleSpot()
+				run.before[leg] = x and math.abs(x) or run.lastX
+			end
+		elseif run.leg and not run.modelAt then
+			run.modelAt = now
+		end
+	end)
+	ns.SetOnUpdate(run.frame, function()
+		if shiftRun ~= run then return end
+		local now = GetTime()
+		local x, why = BubbleSpot()
+		if x then run.lastX = math.abs(x) end
+		if not run.leg then
+			if now - startedAt > 15 then
+				ShiftEnd("no shift in 15 s")
+				ns.PadTestBox("Shift: nothing happened", "type the command again and shift within 15 s", 1, 0.3, 0.3)
+			end
+			return
+		end
+		if run.modelAt and now - run.modelAt > SHIFT_TAIL then
+			if run.leg == "in" and not run.inDone then
+				run.inDone = true
+				ShiftSummary(run, "in")
+				ns.PadTestBox(("Shift: %s"):format(timing[1]), "now SHIFT BACK OUT", 1, 0.82, 0)
+			elseif run.leg == "out" then
+				ShiftSummary(run, "out")
+				ShiftEnd("done")
+				if SHIFT_TIMINGS[shiftNext + 1] then
+					-- (Said again too soon, the game blocks an addon's line:
+					-- ADDON_ACTION_BLOCKED 1.2 s after a run, 2026-11-14.)
+					-- (A button's click got the line blocked, ADDON_ACTION_BLOCKED,
+					-- 1.2 and 11 s after a run, 2026-11-14; typed, it's never been.)
+					ns.PadTestBox(("Shift %d/%d done"):format(shiftNext, #SHIFT_TIMINGS),
+						("next: TYPE /cine debug shoulder shift %d"):format(shiftNext + 1), 0.3, 1, 0.3)
+				else
+					ns.PadTestBox("Shift runs all done", "/reload and say check log", 0.3, 1, 0.3)
+				end
+			end
+			return
+		end
+		if x then
+			local list = run.legs[run.leg]
+			list[#list + 1] = { t = now - run.legAt, x = math.abs(x) }
+			Log(("shift: %s +%.3f s you %.1f%%, offset %s%s"):format(run.leg, now - run.legAt, math.abs(x) * 100,
+				Text(GetCVar(SHOULDER)), run.modelAt and "" or ", model not changed yet"))
+		elseif not run.saidGone then
+			run.saidGone = true
+			Log(("shift: no reading (%s)"):format(tostring(why)))
+		end
+	end)
+	run.frame:Show()
 end
 
 local function Walls()
@@ -2629,6 +2774,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "try" then Try(rest)
 	elseif what == "walls" then Walls()
 	elseif what == "forms" then Forms()
+	elseif what == "shift" then Shift(tonumber(rest) or 1)
 	elseif what == "cams" then Cams()
 	elseif what == "map" then ns.ShoulderMap(rest)
 	elseif what == "zoomcurve" then ns.ShoulderZoomCurve()
@@ -2649,7 +2795,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift, cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

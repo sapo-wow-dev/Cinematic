@@ -312,7 +312,7 @@ local function Tick()
 		if off > hud.worst then hud.worst, hud.worstName = off, f.name end
 	end
 	samples[#samples + 1] = { now - 100, tonumber(cvars[SHOULDER]) or 0, cam.offset, cam.zoom, YouOnScreen(),
-		Share(bar, home.bar), Share(prd, home.prd), me.mounted and 1 or 0 }
+		Share(bar, home.bar), Share(prd, home.prd), me.mounted and 1 or 0, ns.ShoulderBlendShare and ns.ShoulderBlendShare() or 1 }
 end
 
 local function Wait(secs)
@@ -602,14 +602,17 @@ Check("Cast bar back on its place", math.abs(Share(bar, home.bar)) < 0.001, ("%.
 Check("PRD back on its place", math.abs(Share(prd, home.prd)) < 0.001, ("%.1f UI units off"):format(Share(prd, home.prd) * UI_WIDTH / 2))
 -- Your spot held (Phase 3): how far you sat from it while it was on and the
 -- game had caught up, 4 to 30 yards away, on a standard model on foot. With
--- the offset at its cap (OFFSET_SAFE in ShoulderCam.lua, near walls, since
+-- the offset at its cap (OFFSET_SAFE / the size factor in ShoulderCam.lua, near walls, since
 -- 2026-11-12) you're meant to sit nearer the middle: those only must not go
 -- past your spot (once the offset's glide after a zoom is done: 0.6 s).
 local OFFSET_SAFE = 1.5
 local spotMiss, spotCount, pastSpot = 0, 0, 0
 local zoomWas, zoomedAt = nil, -math.huge
 -- (Within BLEND of a pause, the offset's easing in or out (BLEND_TIME in
--- ShoulderCam.lua, since 2026-11-13): off your spot by design, so skipped.)
+-- ShoulderCam.lua, since 2026-11-13): off your spot by design, so skipped.
+-- One of our cameras' pauses eases over its Transition box's seconds (the
+-- Cameras tab, 5 to 10 to start with), longer than many a camera plays: a
+-- sample taken while it's not all the way in (row[9]) is skipped too.)
 local BLEND = 1.2
 local zeroAt = {}
 for _, row in ipairs(samples) do
@@ -623,13 +626,13 @@ end
 for _, row in ipairs(samples) do
 	if row[4] ~= zoomWas then zoomWas, zoomedAt = row[4], row[1] end
 	local caught = math.abs(row[3] - row[2] * me.scale) < 0.05
-	if row[2] ~= 0 and not NearPause(row[1]) and caught and row[4] >= 4 and row[4] <= 30 and row[8] == 0 then
+	if row[2] ~= 0 and not NearPause(row[1]) and row[9] >= 1 and caught and row[4] >= 4 and row[4] <= 30 and row[8] == 0 then
 		local spot = ns.db.shoulderCamSpot or 0.2
-		if math.abs(row[2]) >= OFFSET_SAFE - 0.01 then
+		if math.abs(row[2]) >= OFFSET_SAFE / me.scale - 0.01 then
 			if row[1] - zoomedAt < 0.6 then row = nil end
 		end
 		if not row then -- (just zoomed, at the cap: skipped)
-		elseif math.abs(row[2]) >= OFFSET_SAFE - 0.01 then
+		elseif math.abs(row[2]) >= OFFSET_SAFE / me.scale - 0.01 then
 			pastSpot = math.max(pastSpot, math.abs(row[5]) - spot)
 		else
 			spotMiss, spotCount = spotMiss + math.abs(math.abs(row[5]) - spot), spotCount + 1
@@ -647,8 +650,12 @@ if variant ~= "decline" and variant ~= "sweep" then
 end
 if bearEnd and variant ~= "decline" then
 	local spot = ns.db.shoulderCamSpot or 0.2
-	Check("Bear form: still on your spot", math.abs(bearEnd - spot) < 0.01,
-		("%.1f%% off the middle, your spot %.0f%%"):format(bearEnd * 100, spot * 100))
+	-- (Where you sat on foot just before: your spot, or nearer the middle
+	-- held by the offset's cap, which counts how far it moves you, so the
+	-- bear sits there too. 2026-11-14.)
+	local foot = math.min(spot, bearBefore or spot)
+	Check("Bear form: where you sat on foot", math.abs(bearEnd - foot) < 0.01,
+		("%.1f%% off the middle, on foot %.1f%%, your spot %.0f%%"):format(bearEnd * 100, foot * 100, spot * 100))
 	local level = math.min(spot, bearBefore or spot)
 	Check("Into bear form: no dip in first", bearDip > level - 0.01,
 		("%.1f%% off the middle at least, %.1f%% before it"):format(bearDip * 100, level * 100))

@@ -169,6 +169,10 @@ local OFFSET_MOST = 15 -- yards (DynamicCam's range too)
 -- behind a tree or off screen (3.3 yards at 15 away). So the offset stops at
 -- OFFSET_SAFE: zoomed far out you sit nearer the middle than your spot, and a
 -- pull-in throws you less far (right up close it still can).
+-- (Counted in how far it moves you, a Dwarf's yards: the offset's cap is
+-- OFFSET_SAFE / the model's size factor. Capped in plain offset yards, a
+-- Night Elf held at 1.50 sat on ~12% while her cat, not capped, sat on her
+-- 20% spot: each shift jumped between them (the forms run, 2026-11-14).)
 local OFFSET_SAFE = 1.5 -- yards
 local OFFSET_STEP = 0.02 -- yards: a smaller change to the offset isn't written
 local paused -- (PauseReason at the last check, every POLL)
@@ -205,10 +209,12 @@ local paused -- (PauseReason at the last check, every POLL)
 -- offset held: the elf on 10.8% of the way to the edge, the cat on 20.3%,
 -- so 0.82 x 20.3 / 10.8 = 1.55.)
 -- (Mounts change it too: not measured yet.)
--- (Human-3: the offset sweep, Forever, 2026-11-13. Skyborne-2 and -3, Gnome-2 and -3, NightElf-2, Dwarf-3, Human-2, Orc-2 and -3, Scourge-2 and -3, Tauren-2 and -3, Troll-2 and -3: the calibrate run, spreads 0.025 or less.)
-local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 0.88, ["Skyborne-3"] = 0.85, ["Gnome-2"] = 0.90, ["Human-2"] = 0.94, ["Gnome-3"] = 0.84, ["NightElf-2"] = 1.00, ["NightElf-3"] = 0.82, ["Human-3"] = 0.81,
+-- (Human-3: the offset sweep, Forever, 2026-11-13. Skyborne-2 and -3, Gnome-2 and -3, NightElf-2, Dwarf-3, Human-2, Orc-2 and -3, Scourge-2 and -3, Tauren-2 and -3, Troll-2 and -3: the calibrate run, spreads 0.025 or less. NightElf-3 again, 2026-11-14: 0.88, not the 0.82 read off a recording.)
+local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 0.88, ["Skyborne-3"] = 0.85, ["Gnome-2"] = 0.90, ["Human-2"] = 0.94, ["Gnome-3"] = 0.84, ["NightElf-2"] = 1.00, ["NightElf-3"] = 0.88, ["Human-3"] = 0.81,
 	["Orc-2"] = 1.23, ["Orc-3"] = 0.96, ["Scourge-2"] = 0.99, ["Scourge-3"] = 0.90, ["Tauren-2"] = 1.68, ["Tauren-3"] = 1.27,
-	["Troll-2"] = 1.22, ["Troll-3"] = 0.95 }
+	["Troll-2"] = 1.22, ["Troll-3"] = 0.95,
+	-- (Druid forms, per race and sex: the calibrate run in each, 2026-11-14.)
+	["NightElf-3-form1"] = 1.63 }
 -- bear, cat, dire bear: off the recordings till the sweep's run in them
 local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 -- Forms that keep your own model (warrior stances 17-19, shadowform 28,
@@ -249,12 +255,28 @@ end
 -- share past for SWAP_PUSH_FOR. Those first 2 frames are the model already
 -- changed with our offset not yet in, and no earlier write helps (above).
 local SWAP_PUSH, SWAP_PUSH_FOR = 0.35, 0.035
+-- (Per form, where measured: the shift run, a Night Elf's cat, 2026-11-14,
+-- with the cap counted in how far you're moved. In, from where you stood:
+-- 35% went 1 point out as the model came, then 1-1.4 in as the push landed;
+-- no push 1 out, creeping back; 15% 0.7 out and 0.2-0.3 in, the least. The
+-- first frame out is the model come before any offset can follow it.)
+local SWAP_PUSH_OF = { [1] = 0.15 }
 local shownKnown, shownForm, swapBy, swapLed
 local lastYards, boostFrom, boostUntil, boostBy = 0, nil, nil, nil -- (yards at the last frame; a push's start, end and share)
-local function Swapped()
-	if shownForm == nil then return end
+-- (Out of a form (was: the form left): no push unless one's set for that
+-- form, SWAP_PUSH_OUT_OF, or the shift run's boostOut. Out of the cat it dipped
+-- 0.7-0.8 toward the middle every time, never pushed: the shift run tries.)
+local SWAP_PUSH_OUT_OF = {}
+local function Swapped(was)
 	local knobs = ns.shoulderSwap
-	boostBy = knobs and knobs.boost or SWAP_PUSH
+	if shownForm == nil then
+		local by = knobs and knobs.boostOut or SWAP_PUSH_OUT_OF[was]
+		if not by or by <= 0 then return end
+		boostBy = by
+		boostFrom, boostUntil = lastYards, GetTime() + (knobs and knobs.boostOutFor or SWAP_PUSH_FOR)
+		return
+	end
+	boostBy = knobs and knobs.boost or SWAP_PUSH_OF[shownForm] or SWAP_PUSH
 	boostFrom, boostUntil = lastYards, GetTime() + (knobs and knobs.boostFor or SWAP_PUSH_FOR)
 end
 local function ModelForm()
@@ -272,8 +294,9 @@ local function ModelForm()
 		elseif GetTime() >= swapBy then
 			ns.Log("shoulder", swapLed and ("form: going by form %s now"):format(tostring(form))
 				or ("form: no model event in %.1f s, going by form %s"):format(SWAP_WAIT, tostring(form)))
+			local was = shownForm
 			shownForm, swapBy = form, nil
-			Swapped()
+			Swapped(was)
 		end
 	end
 	return shownForm
@@ -281,7 +304,7 @@ end
 local function ModelSwapped()
 	local was, now = shownForm, FormNow()
 	shownKnown, shownForm, swapBy = true, now, nil
-	if was ~= now then Swapped() end
+	if was ~= now then Swapped(was) end
 	ns.Log("shoulder", ("model changed: form %s (was %s)"):format(tostring(shownForm), tostring(was)))
 end
 function ns.ShoulderModelKey()
@@ -290,8 +313,9 @@ function ns.ShoulderModelKey()
 	local form = ModelForm()
 	return form and ("%s-form%d"):format(foot, form) or foot, form, foot
 end
-function ns.ShoulderModelScale()
-	local key, form, foot = ns.ShoulderModelKey()
+-- The size factor for a form (nil: on foot), and where it's from.
+local function ScaleOf(form, foot)
+	local key = form and ("%s-form%d"):format(foot, form) or foot
 	local scales = ns.db and ns.db.shoulderCamScales
 	local saved = scales and scales[key]
 	if type(saved) == "number" and saved > 0.2 then return saved, "measured here" end
@@ -303,6 +327,32 @@ function ns.ShoulderModelScale()
 		if MEASURED_SCALES[foot] then return MEASURED_SCALES[foot], "on-foot one: form not measured" end
 	end
 	return 1, "not measured"
+end
+-- Shifting, the model not changed yet: the old model's factor, or with an
+-- early share (ns.shoulderSwap.early, the shift run's timings) part of the
+-- way to the new one's offset already, the game's own ease given a head
+-- start. (The offset goes as 1 / the factor, its cap too: so the share's of
+-- the offset, 1/f = (1 - share)/old + share/new.)
+-- (The cat, the shift runs, 2026-11-14, with its 15% push, from where you
+-- stood: none early +0.5 then -0.5; a third +0.3 to +0.4, -0.2; half +0.4
+-- and no dip, the least. Without the push each went further out first.)
+local SWAP_EARLY_OF = { [1] = 0.5 } -- (form -> share, into it, once measured)
+function ns.ShoulderModelScale()
+	local _, form, foot = ns.ShoulderModelKey()
+	local scale, from = ScaleOf(form, foot)
+	if swapBy then
+		local knobs = ns.shoulderSwap
+		local coming = FormNow()
+		local share = knobs and knobs.early or SWAP_EARLY_OF[coming]
+		-- (Into a form only: out, the game says "no form" ~0.17 s before the
+		-- model's back, and a third written then slid you from 12.5% out to
+		-- 15.9% of the screen first: the shift run, 2026-11-14.)
+		if share and share > 0 and coming then
+			local new = ScaleOf(coming, foot)
+			return 1 / ((1 - share) / scale + share / new), ("%s, %d%% of the way to the new model's"):format(from, share * 100)
+		end
+	end
+	return scale, from
 end
 
 -- The camera's distance as it is on screen. GetCameraZoom gives where a zoom
@@ -330,9 +380,10 @@ end
 
 local function SpotYards()
 	local distance = SeenZoom()
-	local yards = (ns.db.shoulderCamSpot or 0.2) * distance * ns.ShoulderViewWidth() / ns.ShoulderModelScale()
+	local scale = ns.ShoulderModelScale()
+	local yards = (ns.db.shoulderCamSpot or 0.2) * distance * ns.ShoulderViewWidth() / scale
 	local k = math.min(1, math.max(0, (distance - SPOT_EASE_FROM) / (SPOT_EASE_TO - SPOT_EASE_FROM)))
-	yards = math.min(OFFSET_SAFE, yards * k * k * (3 - 2 * k))
+	yards = math.min(OFFSET_SAFE / scale, yards * k * k * (3 - 2 * k))
 	-- (Just into a form: past the new offset for a moment, SWAP_PUSH.)
 	if boostUntil then
 		if GetTime() < boostUntil then
@@ -375,6 +426,9 @@ local function Blend(toward)
 	blend = toward > blend and math.min(toward, blend + step) or math.max(toward, blend - step)
 	return blend * blend * (3 - 2 * blend)
 end
+
+-- (How far in the offset is, 0 to 1: the sim skips the ease's samples.)
+function ns.ShoulderBlendShare() return blend end
 
 local function ShoulderValue(again)
 	if not again then paused = PauseReason() end
@@ -428,6 +482,9 @@ end
 -- (Tools/shoulder-sim: a new session, as a reload starts this file again.)
 function ns.ResetShoulderSession() quieted = nil end
 
+-- (Not offered on turning it on any more, since the Follow HUD (FollowHud.lua)
+-- puts its frames on any profile. Nothing calls it now: kept till the Shoulder
+-- Cam profile is made from the Follow HUD's pieces.)
 -- Turned on: the Shoulder Cam profile offered, each time (to be safe: made
 -- fresh each time it's taken), where there's one for this client (Forever,
 -- ProfileChoices.lua: Cinema's settings, the personal resource display in
@@ -469,7 +526,6 @@ local function Answered(yes)
 	end
 	ns.ApplyShoulderCam()
 	if ns.RefreshOptions then ns.RefreshOptions() end
-	if yes then ns.OfferShoulderProfile() end
 end
 local function AskNotice()
 	if asking then return end
@@ -496,7 +552,7 @@ end
 -- straight share of the turn, and it follows them while the window's open
 -- (the "ramp" run): so the focus stays on with them at 0, and as a window
 -- opens they're stepped up to the game's own (talk.yaw, talk.pitch) over
--- shoulderCamTalkTime seconds, eased. While one of Cinematic's cameras holds
+-- shoulderCamTalkIn seconds, eased (back down: shoulderCamTalkOut). While one of Cinematic's cameras holds
 -- the view (the quest or chat camera) they're stepped back down over the same
 -- time, and up again once it's done. The way back as the window closes is
 -- the game's 0.2 s, a snap: closed, the focus has no one to turn to, and
@@ -522,10 +578,40 @@ local talk = {
 		"PLAYER_INTERACTION_MANAGER_FRAME_HIDE" },
 	on = false, closedAt = nil, share = 0, -- (a window open; when the last closed; how far the turn is, 0-1)
 	back = false, fullAt = nil, -- (gliding back now; when the turn got all the way there)
+	-- A held close waits this long before the glide back starts: going from
+	-- one window to the next (a quest greeting to its text, Accept to the next
+	-- quest), the panel's close comes first and the next window ~0.1-0.3 s
+	-- after. Gliding back at once turned out and in again each time (user,
+	-- 2026-11-14: "when you accept 2 quests it snaps out and in").
+	swapWait = 0.4, backAt = nil, -- (when a held close's glide back starts)
 }
+
+-- Seconds the turn toward them takes (shoulderCamTalkIn), and the glide back
+-- (shoulderCamTalkOut), each its own slider since 2026-11-14.
+local function TalkInTime() return math.max(0.1, ns.db.shoulderCamTalkIn or 1.5) end
+local function TalkOutTime() return math.max(0.1, ns.db.shoulderCamTalkOut or 1.5) end
 
 local function TalkOn()
 	return ShoulderOn() and ns.db.shoulderCamTalkTurn and paused ~= "show in"
+end
+
+-- Who the window's with, only a living creature: a mailbox, a wanted poster,
+-- a chest (their GUIDs say GameObject, or there's no "npc" at all) and the
+-- dead are left alone. (Read as plain values where it can be: anything secret
+-- or unreadable counts as a creature, as before.)
+local function TalkingToLiving()
+	local okExists, exists = pcall(UnitExists, "npc")
+	if okExists and not exists and not (issecretvalue and issecretvalue(exists)) then return false, "no one" end
+	local okGuid, guid = pcall(function()
+		local g = UnitGUID("npc")
+		return type(g) == "string" and g:match("^(%a+)") or nil
+	end)
+	if okGuid and guid and guid ~= "Creature" and guid ~= "Vehicle" and guid ~= "Pet" then
+		return false, guid
+	end
+	local okDead, dead = pcall(UnitIsDeadOrGhost, "npc")
+	if okDead and ns.Flag(dead) then return false, "dead" end
+	return true
 end
 
 local function SetTalkShare(yours, share)
@@ -564,6 +650,10 @@ end
 local closing = {
 	calls = { { "C_GossipInfo", "CloseGossip" }, { nil, "CloseQuest" } },
 	wrapped = false, held = {}, since = nil,
+	-- (Which hold a safety timer's for: an old one, its calls dropped as the
+	-- next window opened, ended a later hold 0.36 s in, a snap (the log,
+	-- 2026-11-14).)
+	token = 0,
 }
 
 local function CloseNow(why)
@@ -597,11 +687,15 @@ local function WrapCloses()
 				local held = closing.held
 				held[#held + 1] = { fn = fn, args = { ... }, n = select("#", ...), label = label }
 				if #held == 1 then
-					closing.since, talk.back = GetTime(), true
+					closing.since, talk.backAt = GetTime(), GetTime() + talk.swapWait
+					closing.token = closing.token + 1
+					local token = closing.token
 					ns.Log("shoulder", ("talk close: %s held while the camera glides back (turn at %.2f)"):format(
 						label, talk.share))
-					local wait = (ns.db.shoulderCamTalkTime or 1.5) + 1
-					C_Timer.After(wait, function() CloseNow("timer") end)
+					local wait = talk.swapWait + TalkOutTime() + 1
+					C_Timer.After(wait, function()
+						if closing.token == token then CloseNow("timer") end
+					end)
 				else
 					ns.Log("shoulder", ("talk close: %s held too"):format(label))
 				end
@@ -647,8 +741,12 @@ end
 -- Turn to your target's Show in row (Frames.lua's rows): where it turns, and
 -- whether in fights. Every place and fights ticked to start with (it turned
 -- everywhere before); Not in fights, a box till 2026-11-13, is its Combat
--- tick now. Read 4 times a second (rules aren't cheap).
+-- tick now. Read 4 times a second (rules aren't cheap). Its Always
+-- (shoulderCamTargetTurnAlways, on to start with, 2026-11-14) turns it
+-- everywhere; the row had no Always column before, so an Always set by its
+-- rule (cineShow) wasn't seen, its ticks all off: it never turned.
 ns.SHOULDER_TURN_ROW = "shoulder:targetturn"
+ns.CINE_SHOW_SETTING[ns.SHOULDER_TURN_ROW] = "shoulderCamTargetTurnAlways"
 for _, list in ipairs({ "combatShow", "worldShow", "cityShow", "bgShow", "instanceShow", "groupShow" }) do
 	ns.LIST_DEFAULTS[list][ns.SHOULDER_TURN_ROW] = true
 end
@@ -661,7 +759,7 @@ local function TurnHere()
 			ns.db.combatShow[ns.SHOULDER_TURN_ROW] = false
 			ns.db.shoulderCamTargetTurnNoFight = nil
 		end
-		local ok, on = pcall(ns.RowOnNow, ns.SHOULDER_TURN_ROW, false, true)
+		local ok, on = pcall(ns.RowOnNow, ns.SHOULDER_TURN_ROW, ns.db.shoulderCamTargetTurnAlways, true)
 		turnRead.on = not ok or on and true or false
 	end
 	return turnRead.on
@@ -918,14 +1016,17 @@ local function TalkTick(elapsed)
 		talk.on, talk.closedAt = false, nil
 	end
 	if not talk.on then
-		talk.share, talk.back, talk.fullAt = 0, false, nil
+		talk.share, talk.back, talk.fullAt, talk.backAt = 0, false, nil, nil
 	else
-		local step = elapsed / math.max(0.1, ns.db.shoulderCamTalkTime or 1.5)
+		-- (A held close with no new window after talk.swapWait: the glide back.)
+		if talk.backAt and GetTime() >= talk.backAt then
+			talk.back, talk.backAt = true, nil
+		end
 		local holder = ns.CameraHolder and ns.CameraHolder("talk")
 		if talk.back or holder and holder ~= "you" then
-			talk.share = math.max(0, talk.share - step)
+			talk.share = math.max(0, talk.share - elapsed / TalkOutTime())
 		else
-			talk.share = math.min(1, talk.share + step)
+			talk.share = math.min(1, talk.share + elapsed / TalkInTime())
 			local hold = ns.db.shoulderCamTalkHold or 0
 			if talk.share >= 1 and hold > 0 then
 				talk.fullAt = talk.fullAt or GetTime()
@@ -1354,13 +1455,18 @@ for _, event in ipairs(talk.close) do
 end
 events:SetScript("OnEvent", function(_, event)
 	if TALK_EVENT[event] == "open" then
+		local living, why = TalkingToLiving()
+		if not living then
+			ns.LogDetail("cvar", ("Shoulder Cam: no talk turn (%s: %s)"):format(event, tostring(why)))
+			return
+		end
 		if not talk.on then ns.LogDetail("cvar", ("Shoulder Cam: talk turn starts (%s)"):format(event)) end
 		if #closing.held > 0 then
 			ns.Log("shoulder", ("talk close: %d held call(s) dropped, %s opened"):format(#closing.held, event))
 			closing.held = {}
 		end
 		-- (A new window: toward them again, from wherever the turn is.)
-		talk.on, talk.closedAt, talk.back, talk.fullAt = true, nil, false, nil
+		talk.on, talk.closedAt, talk.back, talk.fullAt, talk.backAt = true, nil, false, nil, nil
 	elseif TALK_EVENT[event] == "close" then
 		if talk.on and not talk.closedAt then talk.closedAt = GetTime() end
 	elseif event == "UNIT_MODEL_CHANGED" then
@@ -1397,10 +1503,10 @@ function ns.CreateShoulderCamPanel(kit)
 		L["On: the camera moves over your shoulder. This uses one of Blizzard's experimental " ..
 		"camera settings: the game shows its experimental camera warning (Accept keeps it working). " ..
 		"The game's Keep Character Centered and motion sickness options stop it, so those are turned " ..
-		"off meanwhile. Off: your own settings come back."], intro, function(on)
+		"off meanwhile. Off: your own settings come back."], intro, function()
 			ns.ApplyShoulderCam()
-			-- (Turned on, past our notice: the profile offered. Before it, its Accept does.)
-			if on and ns.db.shoulderCamNoticed then ns.OfferShoulderProfile() end
+			-- (No profile offered any more: the camera works on any profile, and
+			-- the Follow HUD tab puts the frames that follow you on yours.)
 		end)
 	local function IfOn() return ns.Setting("shoulderCam") end
 	-- (Three folder tabs: the camera's settings, built on content as before and
@@ -1409,7 +1515,7 @@ function ns.CreateShoulderCamPanel(kit)
 	-- (A fourth on Forever, which has a gamepad UI: why it's not for that yet.)
 	local tabList = {
 		{ L["Shoulder Cam"], L["Where the camera sits, when it turns, and when it steps back behind you."] },
-		{ L["Frames"], L["Which frames slide with you as the camera sits over your shoulder."] },
+		{ L["Follow HUD"], L["The frames that follow you: which slide with you as the camera sits over your shoulder."] },
 		{ L["Cameras"], L["Which of Cinematic's cameras the Shoulder Cam stays on through."] },
 	}
 	if not ns.isRetail then
@@ -1448,7 +1554,7 @@ function ns.CreateShoulderCamPanel(kit)
 	stack:Header(content, L["Turning"])
 	local talkCheck = stack:Add(kit.Check(content, "shoulderCamTalkTurn", L["Turn to who you talk to"],
 		L["As you talk to an NPC (or open a vendor, bank, flight master or mailbox), the camera turns " ..
-		"slowly to bring them toward the middle of the screen, and glides back at the same pace as you " ..
+		"slowly to bring them toward the middle of the screen, and glides back as you " ..
 		"close the window. " ..
 		"It steps aside while Cinematic's quest or chat camera moves the view."], SaveThen("shoulderCamTalkTurn", ns.ApplyShoulderCam)), "check")
 	kit.GreyUnless(talkCheck, IfOn)
@@ -1461,6 +1567,10 @@ function ns.CreateShoulderCamPanel(kit)
 	local turnRow = ns.ShowTable(content, turnTop, {
 		opts = { anyFight = true }, underHeader = true, layout = ns.GRID_PLACE_COMBAT_EDIT_LAYOUT,
 		{ key = ns.SHOULDER_TURN_ROW, label = L["Turn to your target"], showKey = "shoulderCamTargetTurn",
+			alwaysKey = "shoulderCamTargetTurnAlways",
+			alwaysOn = function() return ns.GetDB().shoulderCamTargetTurnAlways end,
+			setAlways = function(value) ns.GetDB().shoulderCamTargetTurnAlways = value turnRead.at = -1 end,
+			alwaysTip = L["Turns to your target wherever you are, in fights too. (The other columns then have nothing to add.)"],
 			showTip = L["As you target an enemy, the camera turns slowly toward it, and glides back at the same " ..
 			"pace once you clear your target, pick a friendly one or it dies."],
 			showChanged = function() if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end end,
@@ -1469,12 +1579,21 @@ function ns.CreateShoulderCamPanel(kit)
 			"back over your shoulder, and turns again once you're somewhere ticked."] },
 	}, "Shoulder Cam")
 	stack:Continue(turnRow, "label")
-	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Turn takes"], 0.5, 4, 0.5,
+	local talkTime = stack:Add(kit.Slider(content, "shoulderCamTalkTime", L["Target turn takes"], 0.5, 4, 0.5,
 		L["%.1f sec"]), "slider")
-	kit.Tooltip(talkTime, L["How long the turn toward them (or your target) takes, and the glide back."])
+	kit.Tooltip(talkTime, L["How long the turn toward your target takes, and the glide back."])
 	kit.GreyUnless(talkTime, function()
-		return ns.Setting("shoulderCam") and (ns.GetDB().shoulderCamTalkTurn or ns.GetDB().shoulderCamTargetTurn)
+		return ns.Setting("shoulderCam") and ns.GetDB().shoulderCamTargetTurn
 	end)
+	local talkIn = stack:Add(kit.Slider(content, "shoulderCamTalkIn", L["Talk turn in takes"], 0.5, 4, 0.5,
+		L["%.1f sec"]), "slider")
+	kit.Tooltip(talkIn, L["How long the turn toward who you talk to takes as the window opens."])
+	kit.GreyUnless(talkIn, IfTalk)
+	local talkOut = stack:Add(kit.Slider(content, "shoulderCamTalkOut", L["Talk turn back takes"], 0.5, 4, 0.5,
+		L["%.1f sec"]), "slider")
+	kit.Tooltip(talkOut, L["How long the glide back over your shoulder takes as you close the window. " ..
+		"Going from one window to the next with them (a quest's text, the next quest) it stays on them."])
+	kit.GreyUnless(talkOut, IfTalk)
 	local talkHold = stack:Add(kit.Slider(content, "shoulderCamTalkHold", L["Look at them for"], 0, 10, 0.5,
 		L["%.1f sec"]), "slider")
 	kit.Tooltip(talkHold, L["At 0 the camera stays on them till you close the window. Set a time and it " ..
@@ -1489,6 +1608,8 @@ function ns.CreateShoulderCamPanel(kit)
 	top:SetSize(1, 1)
 	top:SetPoint("TOPLEFT", frames, "TOPLEFT", 0, 1)
 	local fstack = kit.Stack(top, "check")
+	-- (Dev only for now: setting the Follow HUD up on the profile, FollowHud.lua.)
+	if ns.BuildFollowHudSetup then ns.BuildFollowHudSetup(frames, fstack, kit) end
 	kit.GreyUnless(fstack:Add(kit.Check(frames, "shoulderCamFrames", L["Frames follow you"],
 		L["The frames ticked below slide over to where you are on the screen, and " ..
 		"glide back as the camera goes behind you. Edit Mode still places them: this moves them from " ..
