@@ -10096,9 +10096,34 @@ do
 		flash.glow:SetShown(db.cooldownFlashGlow and true or false)
 		flash.glow:SetAlpha(0.15 + 0.85 * beat)
 		local r, g, b = db.cooldownFlashR or 1, db.cooldownFlashG or 0.82, db.cooldownFlashB or 0
+		-- (Round icons (round action buttons, ActionBarStyle.lua): the picture
+		-- and glow cut round, and a ring for the border in place of its lines.)
+		local mask, ring
+		if ns.CooldownRoundArt then mask, ring = ns.CooldownRoundArt(BORDER) end
+		if mask and not flash.mask then
+			flash.mask = flash:CreateMaskTexture()
+			flash.mask:SetAllPoints()
+			flash.mask:SetTexture(mask, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			flash.ring = flash:CreateTexture(nil, "OVERLAY", nil, 1)
+			flash.ring:SetAllPoints()
+		end
+		if flash.mask and (mask ~= nil) ~= (flash.masked or false) then
+			flash.masked = mask ~= nil
+			for _, texture in ipairs({ flash.art, flash.glow }) do
+				if mask then texture:AddMaskTexture(flash.mask) else texture:RemoveMaskTexture(flash.mask) end
+			end
+		end
+		local border = db.cooldownFlashBorder and true or false
 		for _, edge in ipairs(flash.edges) do
 			edge:SetColorTexture(r, g, b, 1)
-			edge:SetShown(db.cooldownFlashBorder and true or false)
+			edge:SetShown(border and not ring)
+		end
+		if flash.ring then
+			if ring then
+				flash.ring:SetTexture(ring)
+				flash.ring:SetVertexColor(r, g, b, 1)
+			end
+			flash.ring:SetShown(border and ring ~= nil)
 		end
 		flash:SetAlpha(math.min(1, left / FLASH_OUT))
 		flash:Show()

@@ -725,8 +725,17 @@ local function DressCdmIcon(item, icon, plan)
 	end
 end
 local cdmHooked = false
+local cdmRound = false
+-- The Cooldown Manager's icons round: its Flash when ready (Frames.lua) goes
+-- round with them, else it pulsed a square over a round icon. Gives the mask
+-- to cut it with and the ring for its border (thick: px), or nil while square.
+function ns.CooldownRoundArt(thick)
+	if not cdmRound then return nil end
+	return ROUND_MASK, RING .. math.max(1, math.min(MAX_RING, thick or 1))
+end
 function ns.RefreshCooldownShape()
 	local plan = Plan()
+	cdmRound = plan.round and true or false
 	EachCdmIcon(function(item, icon)
 		local ok, err = pcall(DressCdmIcon, item, icon, plan)
 		if not ok then ns.Log("style", "cooldown icon failed: " .. tostring(err)) end
