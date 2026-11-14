@@ -42,6 +42,7 @@ Support\Platynator.lua
 Support\ThreatPlates.lua
 Support\HorizonSuite.lua
 Support\FlareUI.lua
+Support\FramesForever.lua
 Support\WeakAuras.lua
 Support\DBM.lua
 Support\BigWigs.lua
@@ -62,6 +63,7 @@ Support\LeatrixPlus.lua
 Support\HealBot.lua
 Support\TitanPanel.lua
 Support\TomTom.lua
+Support\ShamanPower.lua
 Frames.lua
 CooldownStacks.lua
 CooldownSituations.lua

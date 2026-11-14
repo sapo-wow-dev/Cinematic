@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-14", page = "Advanced Frames", title = "Frames Forever and ShamanPower support", client = "forever",
+		text = "Frames Forever's unit frames follow the Game Frames rows of the frames they replace. ShamanPower's " ..
+		"totem bar fades with the Totem bar row, and its cooldown bar gets a row of its own." },
 	{ date = "2026-11-14", page = "Nameplates", title = "Nameplates hub",
 		text = "Nameplates have a hub of their own: which show, the new Icons page for class and role icons, and " ..
 		"their looks. Each kind of plate can have its own parts, and each Nameplate Style row its own bar, border, " ..

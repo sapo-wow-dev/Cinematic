@@ -6210,3 +6210,7 @@ L["Lore Forever's subtitles, floating player, new page note and pin card get row
 -- What's new: Nameplates hub (Changelog.lua)
 L["Nameplates hub"] = "Centro de placas de nombre"
 L["Nameplates have a hub of their own: which show, the new Icons page for class and role icons, and their looks. Each kind of plate can have its own parts, and each Nameplate Style row its own bar, border, name font and level box."] = "Las placas de nombre tienen su propio centro: cuáles se muestran, la nueva página de Iconos para los iconos de clase y de rol, y su aspecto. Cada tipo de placa puede tener sus propias partes, y cada fila de Estilo de placas su propia barra, borde, fuente del nombre y recuadro de nivel."
+
+-- What's new: Frames Forever and ShamanPower support (Changelog.lua)
+L["Frames Forever and ShamanPower support"] = "Compatibilidad con Frames Forever y ShamanPower"
+L["Frames Forever's unit frames follow the Game Frames rows of the frames they replace. ShamanPower's totem bar fades with the Totem bar row, and its cooldown bar gets a row of its own."] = "Los marcos de unidad de Frames Forever siguen las filas de Marcos del juego de los marcos que reemplazan. La barra de tótems de ShamanPower se desvanece con la fila de Barra de tótems, y su barra de reutilización tiene su propia fila."
