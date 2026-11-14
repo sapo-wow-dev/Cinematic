@@ -8210,6 +8210,24 @@ do
 	-- /cine debug cooldowns: which spell ID an item's use comes as, if any.)
 	ns.recentCasts = {} -- { id = spell ID or "secret", at = time }, newest last
 	ns.itemCooldownAt = nil
+	-- Casts that come as another spell than the Cooldown Manager's icon: a
+	-- mana gem's use is Replenish Mana (5405 for a Mana Agate; the bigger
+	-- gems' have other IDs but the same name), its icon Mana Gems (1318827).
+	-- (Tested: /cine debug cooldowns' last casts, 2026-11-14.)
+	local CAST_ALIASES = { [5405] = 1318827 }
+	ns.CAST_ALIAS_TARGETS = { [1318827] = true }
+	local aliasByName = {} -- the game's name of each alias, once it says -> its icon's spell
+	local function AliasOf(id)
+		if CAST_ALIASES[id] then return CAST_ALIASES[id] end
+		local GetName = C_Spell and C_Spell.GetSpellName or _G.GetSpellInfo
+		if not GetName then return nil end
+		for from, to in pairs(CAST_ALIASES) do
+			local name = GetName(from)
+			if type(name) == "string" and not Secret(name) then aliasByName[name] = to end
+		end
+		local name = GetName(id)
+		return type(name) == "string" and not Secret(name) and aliasByName[name] or nil
+	end
 	local castWatcher = CreateFrame("Frame")
 	castWatcher:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 	pcall(castWatcher.RegisterEvent, castWatcher, "BAG_UPDATE_COOLDOWN")
@@ -8223,6 +8241,8 @@ do
 		if #recent > 12 then table.remove(recent, 1) end
 		if not Secret(spellID) and type(spellID) == "number" then
 			lastCastOf[spellID] = GetTime()
+			local alias = AliasOf(spellID)
+			if alias then lastCastOf[alias] = GetTime() end
 		end
 	end)
 end
@@ -8485,6 +8505,12 @@ function IconTimeLeft(icon, id, now)
 	end
 	if start then
 		if not Recharging(start, duration, now) then
+			-- (A mana gem's icon spell says ready while the gem's cooldown runs:
+			-- that's on the item. Its last use says.)
+			local cast, length = lastCastOf[id], CooldownLength(id)
+			if ns.CAST_ALIAS_TARGETS[id] and cast and length and cast + length > now then
+				return cast + length - now, length
+			end
 			return 0, CooldownLength(id)
 		end
 		cooldownLength[id] = duration
