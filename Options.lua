@@ -16545,6 +16545,12 @@ local KEYBINDS = {
 	{ action = "CINEMATIC_STOPCAM", label = L["Stop the camera"],
 		tip = L["Stops whichever of Cinematic's cameras is running now, however it started."] },
 }
+if ns.ChatCamCommand then -- (ChatCam.lua; on the Cameras tab, before Stop the camera)
+	table.insert(KEYBINDS, #KEYBINDS, { action = "CLICK CinematicChatTargetButton:LeftButton",
+		label = L["Target the last speaker"],
+		tip = L["Targets the last NPC who spoke near you (your character turns their head to them). " ..
+			"Addons can't target on their own: the game only lets a key press do it. Out of fights."] })
+end
 -- Your own scenes' keys (a trigger on the Triggers page set to Scene key N).
 -- (number: put in the label as the page is built, once it's translated.)
 for n = 1, 5 do
@@ -16561,13 +16567,6 @@ for _, each in ipairs({
 	{ action = "CINEMATIC_TOGGLETOOLTIPS", label = L["Toggle tooltip hiding"],
 		tip = L["Turns the Tooltips page on or off (its Enable Page switch)."] },
 }) do KEYBINDS[#KEYBINDS + 1] = each end
-if ns.ChatCamCommand then -- (ChatCam.lua)
-	KEYBINDS[#KEYBINDS + 1] = { action = "CLICK CinematicChatTargetButton:LeftButton",
-		label = L["Target the last speaker"], section = L["Chat Cam"],
-		tip = L["Targets the last NPC who spoke near you (your character turns their head to them). " ..
-			"Addons can't target on their own: the game only lets a key press do it. Out of fights."] }
-end
-
 -- The Frames tab: a key for each Standard Frames row (the frames it hides,
 -- in CineMode and out, Frames.lua's ns.ToggleFrameKey), under the headings
 -- of that page's tabs. Whole frames only: no parts (role icons...), addons'
