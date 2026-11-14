@@ -1792,13 +1792,14 @@ local function CreatePanel()
 	local version = ns.Version()
 	if version:find("project%-version") then version = "dev" end
 	local versionLabel = Label(panel, "GameFontDisableSmall", version)
-	versionLabel:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 6, 1)
 
 	local subtitle = PageIntro(panel, title,
 		L["Fades the UI and adds letterbox bars between fights. Combat, casting " ..
 		"and opening windows like the spellbook bring it back. Typing just shows the chat. The " ..
 		"pages under this one cover what shows when (CineMode, HUD, Addons, Minimap, Quest tracker, Nameplates, " ..
 		"Chat), visual effects and sound, the camera modes and triggers, and keybinds."])
+	-- (Past the title's "?", which sits where it used to be and hid it.)
+	versionLabel:SetPoint("LEFT", panel.pageHelp, "RIGHT", 6, 0)
 
 	local searchBox = CreateSearch(mainCanvas, panel)
 	searchBox:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 6, -14)
