@@ -10992,7 +10992,10 @@ do
 			local button = rows.Look("", info.full .. " - " .. L["Look"], {
 				-- (Tabbed, the Look settings counted and reset; the row's color and
 				-- the parts it paints are its own, left alone.)
-				tabs = { default = function(key) return LOOK_DEFAULT[key] end },
+				tabs = { default = function(key) return LOOK_DEFAULT[key] end,
+					usual = function(key) return ns.PlateRowUsual(kind, key) end },
+				-- (A plate as this row's Look draws it: PlateRowLook.lua.)
+				preview = function(parent, width) return ns.MakePlateRowLookPreview(parent, width, kind) end,
 				texture = function(look)
 					look.Dropdown(L["Texture:"], "LookTexture", function()
 						local list = { { value = "default", text = defaultName } }
@@ -11033,9 +11036,12 @@ do
 				end,
 				border = function(look)
 					look.Dropdown(L["Border:"], "LookBorder", function()
-						return { { value = "default", text = defaultName }, { value = "game", text = L["The game's"] },
-							{ value = "none", text = L["None"] }, { value = "thin", text = L["Thin"] },
-							{ value = "thick", text = L["Thick"] }, { value = "custom", text = L["Custom"] } }
+						-- (edge: a border's, drawn as one on the panel's tiles.)
+						return { { value = "default", text = defaultName, edge = true },
+							{ value = "game", text = L["The game's"], edge = true },
+							{ value = "none", text = L["None"], edge = true }, { value = "thin", text = L["Thin"], edge = true },
+							{ value = "thick", text = L["Thick"], edge = true },
+							{ value = "custom", text = L["Custom"], edge = true } }
 					end, L["The health bar's border."] .. " " .. defaultTip)
 					local function Custom(db) return look.On(db) and look.Get("LookBorder") == "custom" end
 					local line = look.Boxes()

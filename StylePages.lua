@@ -812,6 +812,7 @@ local function TextureName(value)
 	end
 	return type(value) == "string" and value:match("^lsm:(.+)") or tostring(value)
 end
+ns.StyleTextureName = TextureName -- (PlateRowLook.lua's Usual tiles)
 
 -- The list, for a dropdown: { value, text, texture, atlas } each, the
 -- game's first. game: the first entry's name for the part's own ("The game's").
@@ -1100,6 +1101,24 @@ function ns.SetTextRim(text, level, r, g, b)
 	rim.Sync()
 end
 
+-- The Look panels' small words (tiles, the preview's picks, the footer): the
+-- game's Arial Narrow, crisp at small sizes, 12 high; the game's own small
+-- font on clients whose letters it lacks (Chinese, Korean).
+local function LookFont(name, r, g, b, own)
+	local font = _G.CreateFont(name)
+	if ({ koKR = true, zhCN = true, zhTW = true })[GetLocale and GetLocale() or ""] then
+		font:CopyFontObject(own)
+	else
+		font:SetFont("Fonts\\ARIALN.TTF", 12, "")
+		font:SetShadowOffset(1, -1)
+		font:SetShadowColor(0, 0, 0, 0.9)
+	end
+	font:SetTextColor(r, g, b)
+	return name
+end
+ns.LOOK_TEXT = LookFont("CinematicLookText", 0.92, 0.92, 0.92, _G.GameFontHighlightSmall)
+ns.LOOK_DIM = LookFont("CinematicLookDim", 0.6, 0.6, 0.6, _G.GameFontDisableSmall)
+
 -- The Look panel shown now (one at a time), and where it was popped out to
 -- (nil: docked beside the settings).
 local openLook
@@ -1163,8 +1182,13 @@ local LOOK_BUILD = {
 -- stack, changed() after each change, and its switch's key. fieldOf: for a
 -- page with tabs (the Unit frames page), a setting's key -> the field its
 -- controls edit now (Options.lua's KeyGet/KeyPut); the key itself if not.
-function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
+-- panel: a tabbed Look panel's page (rows.Look): { pictures = true (its
+-- dropdowns and choices as tiles and buttons), hover = fn(key, value) (a
+-- tile pointed at, nil once left: shown, never saved), usual = fn(key, value)
+-- (what a value that's the part's usual gives: its name and value, or nil) }.
+function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf, panel)
 	local rows = {}
+	local pictures = panel and panel.pictures
 	local function On(db) return ns.StyleOn(switchKey, db) end
 	rows.On = On
 	-- (A field already, like the Preset: row's, goes through as it is.)
@@ -1179,6 +1203,10 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 	-- A row of choices for key, after its name: { value, text, tip } each.
 	-- Gives the last, to put a color swatch after.
 	function rows.Choices(label, key, list, test)
+		if pictures then
+			-- (As buttons; a Shadow row's each word in its shadow.)
+			return rows.Segments(label, key, list, nil, test, tostring(key):find("Shadow") and "shadow" or nil)
+		end
 		local name = stack:Add(kit.Label(content, "GameFontHighlight", label), "label")
 		name:SetWidth(150)
 		-- (A long row goes on over more lines, each under the first's choices:
@@ -1244,6 +1272,7 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 
 	-- A color on a row of its own: its name, then its swatch.
 	function rows.Color(label, keys, tip, test)
+		if pictures then return rows.Chips(label, keys, tip, test) end
 		local name = stack:Add(kit.Label(content, "GameFontHighlight", label), "label")
 		name:SetSize(150, 22) -- (room for the swatch, rows of them one under another)
 		return rows.Swatch(name, nil, keys, tip, test)
@@ -1255,21 +1284,25 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 	-- (A shared one: General first, named for the font it gives the page.)
 	-- first: a choice ahead of the fonts ({ value, text }); label: the row's
 	-- name, if not Font:.
-	function rows.Font(key, tip, test, first, label)
-		local font = kit.Dropdown(content, K(key), function()
-			local list, choices = {}, ns.StyleFontChoices()
-			if first then list[1] = { value = first[1], text = first[2] } end
-			local general = ns.GeneralStyleValue(key)
-			if general ~= nil then
-				local entry = { value = "general", text = ns.SharedStyleSource(key) .. " (" .. ns.StyleFontName(general) .. ")" }
-				list[#list + 1] = entry
-				for _, choice in ipairs(choices) do
-					if choice.value == general then entry.font = choice.font end -- (drawn in General's font)
-				end
+	local function FontList(key, first)
+		local list, choices = {}, ns.StyleFontChoices()
+		if first then list[1] = { value = first[1], text = first[2] } end
+		local general = ns.GeneralStyleValue(key)
+		if general ~= nil then
+			local entry = { value = "general", text = ns.SharedStyleSource(key) .. " (" .. ns.StyleFontName(general) .. ")" }
+			list[#list + 1] = entry
+			for _, choice in ipairs(choices) do
+				if choice.value == general then entry.font = choice.font end -- (drawn in General's font)
 			end
-			for _, choice in ipairs(choices) do list[#list + 1] = choice end
-			return list
-		end, 200, changed)
+		end
+		for _, choice in ipairs(choices) do list[#list + 1] = choice end
+		return list
+	end
+	function rows.Font(key, tip, test, first, label)
+		if pictures then
+			return rows.Tiles(label or ns.L["Font:"], key, function() return FontList(key, first) end, tip, test)
+		end
+		local font = kit.Dropdown(content, K(key), function() return FontList(key, first) end, 200, changed)
 		if not font then return end
 		local name = stack:Add(kit.Label(content, "GameFontHighlight", label or ns.L["Font:"]), "label")
 		name:SetSize(150, 30)
@@ -1285,11 +1318,13 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 	-- strips' color ({ r, g, b }).
 	-- game: the first entry's name for the part's own ("The game's").
 	function rows.Texture(label, key, tip, test, tint, game)
-		local dropdown = kit.Dropdown(content, K(key), function()
+		local function List()
 			local list = ns.StyleTextureChoices(game, key)
 			for _, choice in ipairs(list) do choice.tint = tint end
 			return list
-		end, 200, changed)
+		end
+		if pictures then return rows.Tiles(label, key, List, tip, test, tint) end
+		local dropdown = kit.Dropdown(content, K(key), List, 200, changed)
 		if not dropdown then return end
 		local name = stack:Add(kit.Label(content, "GameFontHighlight", label), "label")
 		name:SetSize(150, 30)
@@ -1320,6 +1355,7 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 	-- A dropdown row: its name, then the dropdown (list: a function giving
 	-- { value, text } each, read as it opens).
 	local function DropdownRow(label, key, list, tip, test)
+		if pictures then return rows.Tiles(label, key, list, tip, test) end
 		local dropdown = kit.Dropdown(content, K(key), list, 200, changed)
 		if not dropdown then return end
 		local name = stack:Add(kit.Label(content, "GameFontHighlight", label), "label")
@@ -1336,6 +1372,18 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 	-- first (named for the outline it gives); own: an entry at -1 by that
 	-- name (General's own "Each page's own").
 	function rows.Outline(key, label, maxV, names, tip, test, own)
+		if pictures then
+			-- (As buttons, each word in its outline.)
+			local list = {}
+			local general = ns.GeneralStyleValue(key)
+			if general ~= nil then
+				list[1] = { -1, ns.SharedStyleSource(key), ns.SharedStyleSource(key) .. " (" .. (names[general] or "") .. ")" }
+			elseif own then
+				list[1] = { -1, own }
+			end
+			for value = 0, maxV do list[#list + 1] = { value, names[value] or tostring(value) } end
+			return rows.Segments(label .. ":", key, list, tip, test, "outline")
+		end
 		return DropdownRow(label .. ":", key, function()
 			local list = {}
 			local general = ns.GeneralStyleValue(key)
@@ -1367,10 +1415,12 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 			if general ~= nil then
 				list[1] = { value = "general", text = ns.SharedStyleSource(key) .. " (" .. Name(general) .. ")" }
 			end
-			if opts.game then list[#list + 1] = { value = "game", text = Name("game") } end
-			for _, value in ipairs({ "none", "thin", "thick" }) do list[#list + 1] = { value = value, text = Name(value) } end
+			if opts.game then list[#list + 1] = { value = "game", text = Name("game"), edge = true } end
+			for _, value in ipairs({ "none", "thin", "thick" }) do
+				list[#list + 1] = { value = value, text = Name(value), edge = true }
+			end
 			if opts.colored then list[#list + 1] = { value = "colored", text = Name("colored") } end
-			list[#list + 1] = { value = "custom", text = Name("custom") }
+			list[#list + 1] = { value = "custom", text = Name("custom"), edge = true }
 			return list
 		end, tip, test)
 		-- (Custom's: greyed unless it's picked.)
@@ -1389,6 +1439,7 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 	-- boxes, to save room). fmt: "%d%%" and the like (what's after the number
 	-- shown after the box), or a function for the box's text.
 	function rows.Slider(key, label, minV, maxV, step, fmt, scale, tip, test)
+		if pictures and type(fmt) ~= "function" then return rows.Slide(key, label, minV, maxV, step, fmt, scale, tip, test) end
 		local unit, shown, width
 		if type(fmt) == "function" then
 			shown, width = fmt, 70
@@ -1456,6 +1507,7 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 	end
 
 	function rows.Check(key, label, tip, test)
+		if pictures then return rows.Toggle(key, label, tip, test) end
 		local check = stack:Add(kit.Check(content, K(key), label, tip, function(value)
 			Put(key, value)
 			changed()
@@ -1463,6 +1515,537 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 		end), "check")
 		kit.GreyUnless(check, test or On)
 		return check
+	end
+
+	-- (A tabbed Look panel's: what the part's usual gives, for a value that's
+	-- its usual: its name and value, else nil.)
+	local function Usual(key, value)
+		if panel and panel.usual then return panel.usual(key, value) end
+	end
+	local function Hover(key, value)
+		if panel and panel.hover then panel.hover(key, value) end
+	end
+	local function TipOn(frame, text)
+		if not text then return end
+		GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+		GameTooltip:SetText(text, 1, 1, 1, 1, true)
+		GameTooltip:Show()
+	end
+
+	-- Tiles (a tabbed Look panel's dropdowns): the row's name over a grid of
+	-- tiles, one per choice, each showing what it gives (a texture's strip, a
+	-- font's name in that font, a border round a little bar), the picked one
+	-- edged in gold, the usual one saying what it is. Pointed at: shown on the
+	-- panel's preview, never saved. Past 12, the rest behind More (open while
+	-- one of them is picked). list: { value, text, texture, atlas, font, edge,
+	-- tip, enabled } each, or a function giving them, read on each refresh.
+	local TILE_W, TILE_GAP, TILES_ACROSS, TILES_SHOWN = 118, 8, 4, 12
+	local ROW_W = TILE_W * TILES_ACROSS + TILE_GAP * (TILES_ACROSS - 1)
+
+	-- A tabbed Look panel's row heading: its name in gold, what it's set to
+	-- after it (head:Set, from the row's control), and Reset at the right
+	-- while it isn't its usual (key nil: none).
+	local function Heading(label, key, tip)
+		local head = CreateFrame("Frame", nil, content)
+		head:SetSize(ROW_W, 16)
+		stack:Add(head, "label")
+		local name = kit.Label(head, "GameFontNormal", (tostring(label):gsub(":%s*$", "")))
+		name:SetPoint("LEFT", 0, 0)
+		name.searchTip = tip
+		local value = head:CreateFontString(nil, "OVERLAY", ns.LOOK_DIM)
+		value:SetPoint("LEFT", name, "RIGHT", 8, 0)
+		value:SetPoint("RIGHT", head, "RIGHT", -64, 0)
+		value:SetJustifyH("LEFT")
+		value:SetWordWrap(false)
+		local reset = CreateFrame("Button", nil, head)
+		reset:SetSize(58, 16)
+		reset:SetPoint("RIGHT", 0, 0)
+		local icon = reset:CreateTexture(nil, "ARTWORK")
+		icon:SetTexture("Interface\\Buttons\\UI-RefreshButton")
+		icon:SetSize(12, 12)
+		icon:SetPoint("RIGHT", 0, 0)
+		local words = reset:CreateFontString(nil, "OVERLAY", ns.LOOK_DIM)
+		words:SetPoint("RIGHT", icon, "LEFT", -3, 0)
+		words:SetText(ns.L["Reset"])
+		reset:SetScript("OnEnter", function(self)
+			words:SetTextColor(1, 0.82, 0)
+			TipOn(self, ns.L["This setting back to its usual."])
+		end)
+		reset:SetScript("OnLeave", function()
+			words:SetTextColor(0.6, 0.6, 0.6)
+			GameTooltip:Hide()
+		end)
+		local function Default()
+			return key and panel and panel.default and panel.default(key)
+		end
+		reset:SetScript("OnClick", function()
+			local default = Default()
+			if default == nil then return end
+			Put(key, default)
+			changed(default)
+			kit.Refresh()
+		end)
+		function head.Set(_, text) value:SetText(text or "") end
+		head.Refresh = function()
+			local default = Default()
+			local db = ns.GetDB()
+			reset:SetShown(db and default ~= nil and Get(key) ~= default and On(db) or false)
+		end
+		kit.AddControl(head)
+		return head
+	end
+
+	function rows.Tiles(label, key, list, tip, test, tint)
+		local head = Heading(label, key, tip)
+		local grid = CreateFrame("Frame", nil, content)
+		grid:SetSize(TILE_W * TILES_ACROSS + TILE_GAP * (TILES_ACROSS - 1), 1)
+		stack:Add(grid, "label")
+		local tiles, open, enabled = {}, false, true
+		local function MakeTile()
+			local tile = CreateFrame("Button", nil, grid)
+			local back = tile:CreateTexture(nil, "BACKGROUND")
+			back:SetAllPoints()
+			back:SetColorTexture(0.1, 0.1, 0.12, 0.95)
+			tile.edges = ns.MakeStyleEdges(tile)
+			local glow = tile:CreateTexture(nil, "HIGHLIGHT")
+			glow:SetAllPoints()
+			glow:SetColorTexture(1, 1, 1, 0.07)
+			tile.strip = tile:CreateTexture(nil, "ARTWORK")
+			tile.strip:SetSize(TILE_W - 16, 9)
+			tile.strip:SetPoint("TOP", 0, -8)
+			-- (A border's: a little bar with it round.)
+			tile.bar = CreateFrame("Frame", nil, tile)
+			tile.bar:SetSize(TILE_W - 28, 8)
+			tile.bar:SetPoint("TOP", 0, -9)
+			local fill = tile.bar:CreateTexture(nil, "ARTWORK")
+			fill:SetAllPoints()
+			fill:SetColorTexture(0.3, 0.68, 0.32, 1)
+			tile.ground = tile.bar:CreateTexture(nil, "BACKGROUND")
+			tile.ground:SetPoint("TOPLEFT", -2, 2)
+			tile.ground:SetPoint("BOTTOMRIGHT", 2, -2)
+			tile.ground:SetColorTexture(0, 0, 0, 0.85)
+			tile.barEdges = ns.MakeStyleEdges(tile.bar)
+			tile.words = tile:CreateFontString(nil, "OVERLAY", ns.LOOK_TEXT)
+			tile.words:SetPoint("LEFT", 7, 0)
+			tile.words:SetPoint("RIGHT", -7, 0)
+			tile.words:SetJustifyH("LEFT")
+			tile.words:SetWordWrap(false)
+			tile.sub = tile:CreateFontString(nil, "OVERLAY", ns.LOOK_DIM)
+			tile.sub:SetPoint("LEFT", 7, 0)
+			tile.sub:SetPoint("RIGHT", -7, 0)
+			tile.sub:SetJustifyH("LEFT")
+			tile.sub:SetWordWrap(false)
+			tile:SetScript("OnEnter", function(self)
+				if not self.isMore and self:IsEnabled() then Hover(key, self.value) end
+				TipOn(self, self.tip)
+			end)
+			tile:SetScript("OnLeave", function()
+				Hover(nil)
+				GameTooltip:Hide()
+			end)
+			tile:SetScript("OnClick", function(self)
+				if self.isMore then
+					open = not open
+					grid:Refresh()
+					return
+				end
+				Put(key, self.value)
+				changed(self.value)
+				kit.Refresh()
+			end)
+			return tile
+		end
+		-- (One tile as its choice: what it shows, how high the grid's are.)
+		local function Dress(tile, item, kind, height, picked)
+			tile.value, tile.tip, tile.isMore = item.value, item.tip, item.isMore
+			tile.itemOn = not (item.enabled and not item.enabled())
+			tile:SetSize(TILE_W, height)
+			local usualText, usualValue = Usual(key, item.value)
+			local shows = usualValue ~= nil and usualValue or item.value
+			-- Its picture.
+			local strip = kind == "texture" and not item.isMore and ns.SetStyleTexture(tile.strip, shows) or false
+			tile.strip:SetShown(strip)
+			if strip then
+				local t = item.tint or tint or { 0.3, 0.75, 0.35 }
+				tile.strip:SetVertexColor(t[1], t[2], t[3], 1)
+			end
+			local edgeKind, size, r, g, b = "none", 0, 0, 0, 0
+			if kind == "border" and not item.isMore then
+				edgeKind, size, r, g, b = ns.StyleBorder({ b = shows, bSize = Get(key .. "Size"), bR = Get(key .. "R"),
+					bG = Get(key .. "G"), bB = Get(key .. "B") }, "b")
+			end
+			tile.bar:SetShown(kind == "border" and not item.isMore)
+			tile.ground:SetShown(edgeKind == "game")
+			tile.barEdges:SetShown(edgeKind == "line")
+			if edgeKind == "line" then ns.DressStyleEdges(tile.barEdges, size, r, g, b, 1, true) end
+			-- Its name (in its own font, set before the text: else other
+			-- alphabets show boxes), and what the usual one gives under it.
+			local file = kind == "font" and not item.isMore and (item.font or (usualValue ~= nil and item.fontUsual))
+			if file then
+				tile.words:SetFont(file, 13, "")
+			else
+				tile.words:SetFontObject(ns.LOOK_TEXT)
+			end
+			tile.words:SetText(item.text or tostring(item.value))
+			tile.sub:SetText(usualText or "")
+			local top = (kind == "texture" or kind == "border") and -22 or -9
+			tile.words:ClearAllPoints()
+			tile.words:SetPoint("TOPLEFT", 9, top)
+			tile.words:SetPoint("TOPRIGHT", -9, top)
+			tile.sub:ClearAllPoints()
+			tile.sub:SetPoint("TOPLEFT", tile.words, "BOTTOMLEFT", 0, -2)
+			tile.sub:SetPoint("TOPRIGHT", tile.words, "BOTTOMRIGHT", 0, -2)
+			if item.isMore then tile.words:SetTextColor(1, 0.82, 0) else tile.words:SetTextColor(0.92, 0.92, 0.92) end
+			-- The picked one in gold.
+			if picked then
+				ns.DressStyleEdges(tile.edges, 2, 1, 0.82, 0, 1)
+			else
+				ns.DressStyleEdges(tile.edges, 1, 0.24, 0.24, 0.28, 1)
+			end
+		end
+		function grid.Refresh()
+			local items = (type(list) == "function" and list() or list) or {}
+			local picked = ns.GetDB() and Get(key)
+			if ns.IsGeneralStyle and ns.IsGeneralStyle(picked) then picked = "general" end
+			local count = #items
+			if count > TILES_SHOWN then
+				for i = TILES_SHOWN, count do
+					if items[i].value == picked then open = true end
+				end
+				if not open then count = TILES_SHOWN - 1 end
+			end
+			-- (What it's set to, after its name.)
+			for _, item in ipairs(items) do
+				if item.value == picked then
+					local usualText = Usual(key, item.value)
+					head:Set((item.text or tostring(item.value)) .. (usualText and (" · " .. usualText) or ""))
+				end
+			end
+			-- (What the grid's tiles show, and so how high they are.)
+			local kind, subs = nil, false
+			for i = 1, count do
+				local item = items[i]
+				if item.texture or item.atlas then kind = "texture" end
+				if item.font and kind ~= "texture" then kind = "font" end
+				if item.edge then kind = "border" end
+				if Usual(key, item.value) then subs = true end
+			end
+			-- (The usual one in the font it gives.)
+			if kind == "font" then
+				for i = 1, count do
+					local _, usualValue = Usual(key, items[i].value)
+					if usualValue ~= nil and usualValue ~= "game" then
+						items[i].fontUsual = ns.StyleFontFile and ns.StyleFontFile(usualValue) or nil
+					end
+				end
+			end
+			local height = ((kind == "texture" or kind == "border") and 40 or kind == "font" and 32 or 28) + (subs and 11 or 0)
+			local shown = {}
+			for i = 1, count do shown[i] = items[i] end
+			if #items > TILES_SHOWN then
+				shown[#shown + 1] = { isMore = true, text = open and ns.L["Fewer"] or (ns.L["More (%d)"]):format(#items -
+					TILES_SHOWN + 1) }
+			end
+			for i, item in ipairs(shown) do
+				local tile = tiles[i] or MakeTile()
+				tiles[i] = tile
+				Dress(tile, item, kind, height, not item.isMore and item.value == picked)
+				tile:ClearAllPoints()
+				tile:SetPoint("TOPLEFT", grid, "TOPLEFT", ((i - 1) % TILES_ACROSS) * (TILE_W + TILE_GAP),
+					-math.floor((i - 1) / TILES_ACROSS) * (height + TILE_GAP))
+				tile:Show()
+			end
+			for i = #shown + 1, #tiles do tiles[i]:Hide() end
+			local lines = math.max(1, math.ceil(#shown / TILES_ACROSS))
+			local tall = lines * (height + TILE_GAP) - TILE_GAP
+			if math.abs(grid:GetHeight() - tall) > 0.5 then
+				grid:SetHeight(tall)
+				if panel and panel.resized then panel.resized() end -- (the panel as tall as its pages again)
+			end
+			grid:SetEnabled(enabled)
+		end
+		-- (Greyed with the page's switch: each tile, and a choice that can't be
+		-- picked now.)
+		function grid.SetEnabled(_, on)
+			enabled = on
+			for _, tile in ipairs(tiles) do
+				local can = on and (tile.isMore or tile.itemOn ~= false)
+				tile:SetEnabled(can)
+				tile:SetAlpha(can and 1 or 0.4)
+			end
+		end
+		kit.GreyUnless(grid, test or On)
+		kit.AddControl(grid)
+		return grid
+	end
+
+	-- Buttons in a row (a tabbed Look panel's choices): the row's name, then
+	-- one joined button per choice ({ value, text, tip } each), the picked one
+	-- gold. sample: "outline" (each word in its outline) or "shadow" (in its
+	-- shadow). Gives the last, to put a swatch after.
+	function rows.Segments(label, key, list, tip, test, sample)
+		local head = Heading(label, key, tip)
+		local last
+		for _, info in ipairs(list) do
+			local button = CreateFrame("Button", nil, content)
+			button.value = info[1]
+			local back = button:CreateTexture(nil, "BACKGROUND")
+			back:SetAllPoints()
+			local line = button:CreateTexture(nil, "ARTWORK")
+			line:SetPoint("BOTTOMLEFT")
+			line:SetPoint("BOTTOMRIGHT")
+			line:SetHeight(2)
+			line:SetColorTexture(1, 0.82, 0, 1)
+			local glow = button:CreateTexture(nil, "HIGHLIGHT")
+			glow:SetAllPoints()
+			glow:SetColorTexture(1, 1, 1, 0.07)
+			local words = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			words:SetPoint("CENTER", 0, 1)
+			-- (Its sample: the usual one as what it gives. The font before the text.)
+			local _, usualValue = Usual(key, info[1])
+			local shows = usualValue ~= nil and usualValue or info[1]
+			if sample == "outline" and ns.OutlinedFlags and tonumber(shows) and tonumber(shows) >= 0 then
+				local file, height, flags = words:GetFont()
+				if file then words:SetFont(file, height, ns.OutlinedFlags(flags, tonumber(shows)) or "") end
+			end
+			words:SetText(info[2])
+			if sample == "shadow" then
+				if shows == "on" then
+					words:SetShadowOffset(1.5, -1.5)
+					words:SetShadowColor(0, 0, 0, 1)
+				elseif shows == "none" then
+					words:SetShadowOffset(0, 0)
+				end
+			end
+			button:SetSize(math.max(48, words:GetStringWidth() + 20), 22)
+			if last then
+				button:SetPoint("LEFT", last, "RIGHT", 1, 0)
+			else
+				stack:Add(button, "label")
+			end
+			button:SetScript("OnClick", function(self)
+				Put(key, self.value)
+				changed(self.value)
+				kit.Refresh()
+			end)
+			button:SetScript("OnEnter", function(self)
+				if self:IsEnabled() then Hover(key, self.value) end
+				local usualText = Usual(key, self.value)
+				TipOn(self, info[3] or (usualText and ns.L["%s: %s"]:format(info[2], usualText)) or tip)
+			end)
+			button:SetScript("OnLeave", function()
+				Hover(nil)
+				GameTooltip:Hide()
+			end)
+			button.Refresh = function(self)
+				local on = ns.GetDB() and Get(key) == self.value
+				if on then
+					local usualText = Usual(key, self.value)
+					head:Set(info[2] .. (usualText and (" · " .. usualText) or ""))
+				end
+				back:SetColorTexture(on and 0.2 or 0.1, on and 0.17 or 0.1, on and 0.08 or 0.12, 0.95)
+				line:SetShown(on and true or false)
+				if on then words:SetTextColor(1, 0.82, 0) else words:SetTextColor(0.85, 0.85, 0.85) end
+			end
+			button:SetScript("OnEnable", function(self) self:SetAlpha(1) end)
+			button:SetScript("OnDisable", function(self) self:SetAlpha(0.4) end)
+			kit.GreyUnless(button, test or On)
+			kit.AddControl(button)
+			last = button
+		end
+		return last
+	end
+
+	-- A slider (a tabbed Look panel's numbers): the heading, then a gold
+	-- track with marks under it at a quarter, a half and three quarters'
+	-- way. Values as rows.Slider's (shown = saved * scale, fmt "%d%%").
+	function rows.Slide(key, label, minV, maxV, step, fmt, scale, tip, test)
+		scale = scale or 1
+		local head = Heading(label, key, tip)
+		local holder = CreateFrame("Frame", nil, content)
+		holder:SetSize(ROW_W, 30)
+		stack:Add(holder, "label")
+		local slider = CreateFrame("Slider", nil, holder)
+		slider:SetOrientation("HORIZONTAL")
+		slider:SetPoint("TOPLEFT", 0, 0)
+		slider:SetPoint("TOPRIGHT", 0, 0)
+		slider:SetHeight(16)
+		slider:SetMinMaxValues(minV, maxV)
+		slider:SetValueStep(step)
+		if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
+		local track = slider:CreateTexture(nil, "BACKGROUND")
+		track:SetPoint("LEFT", 0, 0)
+		track:SetPoint("RIGHT", 0, 0)
+		track:SetHeight(4)
+		track:SetColorTexture(0.22, 0.22, 0.26, 1)
+		local thumb = slider:CreateTexture(nil, "OVERLAY")
+		thumb:SetColorTexture(1, 0.82, 0, 1)
+		thumb:SetSize(8, 16)
+		slider:SetThumbTexture(thumb)
+		local fill = slider:CreateTexture(nil, "ARTWORK")
+		fill:SetPoint("LEFT", track, "LEFT")
+		fill:SetPoint("RIGHT", thumb, "CENTER")
+		fill:SetHeight(4)
+		fill:SetColorTexture(1, 0.82, 0, 0.7)
+		for i = 0, 3 do
+			local mark = holder:CreateFontString(nil, "OVERLAY", ns.LOOK_DIM)
+			mark:SetText(fmt:format(minV + (maxV - minV) * i / 3))
+			local x = 4 + (ROW_W - 8) * i / 3
+			mark:SetPoint(i == 0 and "TOPLEFT" or i == 3 and "TOPRIGHT" or "TOP", holder, "TOPLEFT",
+				i == 3 and ROW_W or (i == 0 and 0 or x), -18)
+		end
+		local setting = false
+		local function Shown(value) return fmt:format(value) end
+		slider:SetScript("OnValueChanged", function(_, value)
+			if setting then return end
+			value = math.floor(value / step + 0.5) * step
+			Put(key, value / scale)
+			head:Set(Shown(value))
+			changed(value / scale)
+		end)
+		slider:SetScript("OnMouseUp", function() kit.Refresh() end)
+		slider:SetScript("OnEnter", function(self) TipOn(self, tip) end)
+		slider:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		slider.Refresh = function(self)
+			local value = (tonumber(ns.GetDB() and Get(key)) or (minV / scale)) * scale
+			setting = true
+			self:SetValue(value)
+			setting = false
+			head:Set(Shown(value))
+		end
+		kit.GreyUnless(slider, test or On)
+		local refresh = slider.Refresh
+		slider.Refresh = function(self)
+			refresh(self)
+			holder:SetAlpha((test or On)(ns.GetDB()) and 1 or 0.4)
+		end
+		kit.AddControl(slider)
+		return slider
+	end
+
+	-- A color (a tabbed Look panel's): the heading, then chips of ready
+	-- colors and one of your own (the color picker), the one it is edged gold.
+	local CHIPS = { { 1, 0.3, 0.23 }, { 1, 0.62, 0.1 }, { 1, 0.88, 0.3 }, { 0.37, 0.88, 0.37 }, { 0.25, 0.78, 0.92 },
+		{ 0.56, 0.49, 1 }, { 1, 0.44, 0.85 }, { 1, 1, 1 } }
+	function rows.Chips(label, keys, tip, test)
+		Heading(label, nil, tip)
+		local holder = CreateFrame("Frame", nil, content)
+		holder:SetSize(ROW_W, 24)
+		stack:Add(holder, "label")
+		local function Now()
+			return tonumber(Get(keys[1])) or 1, tonumber(Get(keys[2])) or 1, tonumber(Get(keys[3])) or 1
+		end
+		local function Same(color)
+			local r, g, b = Now()
+			return math.abs(r - color[1]) < 0.01 and math.abs(g - color[2]) < 0.01 and math.abs(b - color[3]) < 0.01
+		end
+		local function Set(r, g, b)
+			Put(keys[1], r)
+			Put(keys[2], g)
+			Put(keys[3], b)
+			changed()
+			kit.Refresh()
+		end
+		local chips = {}
+		local function Chip(i)
+			local chip = CreateFrame("Button", nil, holder)
+			chip:SetSize(22, 22)
+			chip:SetPoint("LEFT", (i - 1) * 28, 0)
+			chip.swatch = chip:CreateTexture(nil, "ARTWORK")
+			chip.swatch:SetPoint("TOPLEFT", 2, -2)
+			chip.swatch:SetPoint("BOTTOMRIGHT", -2, 2)
+			chip.edges = ns.MakeStyleEdges(chip)
+			chips[i] = chip
+			return chip
+		end
+		for i, color in ipairs(CHIPS) do
+			local chip = Chip(i)
+			chip.swatch:SetColorTexture(color[1], color[2], color[3], 1)
+			chip:SetScript("OnClick", function() Set(color[1], color[2], color[3]) end)
+		end
+		-- (Your own: the color now when it's none of these; a + to pick one.)
+		local own = Chip(#CHIPS + 1)
+		-- (Outlined: it shows over any color.)
+		local plus = own:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		local file, height = plus:GetFont()
+		if file then plus:SetFont(file, height + 2, "OUTLINE") end
+		plus:SetPoint("CENTER", 0, 0)
+		plus:SetText("+")
+		own:SetScript("OnClick", function()
+			local r, g, b = Now()
+			kit.OpenColorPicker(r, g, b, function(nr, ng, nb) Set(nr, ng, nb) end)
+		end)
+		own:SetScript("OnEnter", function(self) TipOn(self, tip or ns.L["Pick any color."]) end)
+		own:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		holder.Refresh = function()
+			if not ns.GetDB() then return end
+			local mine = true
+			for i, color in ipairs(CHIPS) do
+				local on = Same(color)
+				mine = mine and not on
+				ns.DressStyleEdges(chips[i].edges, on and 2 or 1, on and 1 or 0, on and 0.82 or 0, 0, 1)
+			end
+			local r, g, b = Now()
+			own.swatch:SetColorTexture(mine and r or 0.15, mine and g or 0.15, mine and b or 0.17, 1)
+			ns.DressStyleEdges(own.edges, mine and 2 or 1, mine and 1 or 0.4, mine and 0.82 or 0.4, mine and 0 or 0.4, 1)
+		end
+		function holder.SetEnabled(_, on)
+			for _, chip in ipairs(chips) do chip:SetEnabled(on) end
+			holder:SetAlpha(on and 1 or 0.4)
+		end
+		kit.GreyUnless(holder, test or On)
+		kit.AddControl(holder)
+		return own
+	end
+
+	-- A tick (a tabbed Look panel's): a toggle with a box, side by side with
+	-- the ticks just before it.
+	local lastToggle, toggleRow
+	function rows.Toggle(key, label, tip, test)
+		local toggle = CreateFrame("Button", nil, content)
+		local back = toggle:CreateTexture(nil, "BACKGROUND")
+		back:SetAllPoints()
+		back:SetColorTexture(0.1, 0.1, 0.12, 0.95)
+		local edges = ns.MakeStyleEdges(toggle)
+		local box = toggle:CreateTexture(nil, "ARTWORK")
+		box:SetSize(10, 10)
+		box:SetPoint("LEFT", 8, 0)
+		local boxEdges = CreateFrame("Frame", nil, toggle)
+		boxEdges:SetAllPoints(box)
+		boxEdges = ns.MakeStyleEdges(boxEdges)
+		ns.DressStyleEdges(boxEdges, 1, 0.45, 0.45, 0.5, 1)
+		local glow = toggle:CreateTexture(nil, "HIGHLIGHT")
+		glow:SetAllPoints()
+		glow:SetColorTexture(1, 1, 1, 0.07)
+		local words = toggle:CreateFontString(nil, "OVERLAY", ns.LOOK_TEXT)
+		words:SetPoint("LEFT", box, "RIGHT", 7, 0)
+		words:SetText(label)
+		toggle:SetSize(words:GetStringWidth() + 36, 24)
+		if lastToggle and stack.last == toggleRow then
+			toggle:SetPoint("LEFT", lastToggle, "RIGHT", 6, 0)
+		else
+			stack:Add(toggle, "label")
+			toggleRow = toggle
+		end
+		lastToggle = toggle
+		toggle.searchLabel = label
+		toggle:SetScript("OnClick", function()
+			Put(key, not Get(key))
+			changed()
+			kit.Refresh()
+		end)
+		toggle:SetScript("OnEnter", function(self) TipOn(self, tip) end)
+		toggle:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		toggle:SetScript("OnEnable", function(self) self:SetAlpha(1) end)
+		toggle:SetScript("OnDisable", function(self) self:SetAlpha(0.4) end)
+		toggle.Refresh = function()
+			local on = ns.GetDB() and Get(key) and true or false
+			box:SetColorTexture(1, 0.82, 0, on and 1 or 0)
+			ns.DressStyleEdges(edges, 1, on and 0.66 or 0.24, on and 0.54 or 0.24, on and 0.17 or 0.28, 1)
+		end
+		kit.GreyUnless(toggle, test or On)
+		kit.AddControl(toggle)
+		return toggle
 	end
 
 	-- Presets: { name, tip, settings } each; a pick turns the page on and sets
@@ -1597,6 +2180,9 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 		local DefaultOf = type(tabbed) == "table" and tabbed.default or function(key) return ns.DEFAULTS[key] end
 		local tabs, pages, current = {}, {}, 1
 		local strip, footer, summary, resetAll
+		-- (spec.preview(parent, width): the part as it looks now, a frame with
+		-- :Refresh(), between the title and the tabs; drawn again on each change.)
+		local preview = tabbed and spec.preview and spec.preview(pop, 496)
 		local function Field(key) return fieldOf and fieldOf(key) or key end
 		local function PageChanged(page)
 			for _, key in ipairs(page.keys) do
@@ -1628,7 +2214,27 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 			end
 			summary:SetText(#names > 0 and ns.L["Changed: %s"]:format(table.concat(names, " · "))
 				or ns.L["Nothing changed"])
+			if preview and preview:IsVisible() then preview:Refresh() end
 		end
+		-- (Its pages' rows as tiles and buttons: one pointed at shows on the
+		-- preview, never saved; the usual one says what it gives, from
+		-- spec.tabs.usual(key): its name and value.)
+		local refit -- (Fit, once it's made: a page grown or shrunk)
+		local pictured = tabbed and {
+			pictures = true,
+			default = function(key) return DefaultOf(key) end,
+			resized = function()
+				if refit then C_Timer.After(0, refit) end
+			end,
+			hover = function(key, value)
+				if preview then preview:Refresh(key and { [key] = value } or nil) end
+			end,
+			usual = function(key, value)
+				if type(tabbed) == "table" and tabbed.usual and value ~= nil and DefaultOf(key) == value then
+					return tabbed.usual(key)
+				end
+			end,
+		}
 		-- (A change on a tab's page: its dot and the footer too.)
 		local function TabChanged(...)
 			changed(...)
@@ -1637,7 +2243,11 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 		if tabbed then
 			strip = CreateFrame("Frame", nil, pop)
 			strip:SetHeight(26)
-			strip:SetPoint("TOPLEFT", pop, "TOPLEFT", 0, -36)
+			if preview then
+				preview:SetPoint("TOPLEFT", pop, "TOPLEFT", 12, -36)
+				preview:SetPoint("RIGHT", pop, "RIGHT", -12, 0)
+			end
+			strip:SetPoint("TOPLEFT", pop, "TOPLEFT", 0, preview and -(36 + preview:GetHeight() + 10) or -36)
 			strip:SetPoint("RIGHT", pop, "RIGHT")
 			local band = strip:CreateTexture(nil, "BACKGROUND")
 			band:SetAllPoints()
@@ -1676,7 +2286,7 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 			resetAll.Refresh = function() PaintTabs() end
 			kit.GreyUnless(resetAll, function(db) return On(db) and AnyChanged() end)
 			kit.AddControl(resetAll)
-			summary = kit.Label(footer, "GameFontDisableSmall", "")
+			summary = kit.Label(footer, ns.LOOK_DIM, "")
 			summary:SetPoint("LEFT", 12, 0)
 			summary:SetPoint("RIGHT", resetAll, "LEFT", -8, 0)
 			summary:SetJustifyH("LEFT")
@@ -1706,7 +2316,7 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 							page.keys[#page.keys + 1] = key
 						end
 						return Field(key)
-					end)
+					end, pictured)
 					pages[#pages + 1] = page
 					into, stackNow, lookNow = page, page.stack, page.look
 
@@ -1822,6 +2432,9 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 			if titleRight then right = math.max(right, titleRight + 100) end -- (the buttons past the title)
 			pop:SetWidth(math.max(520, right - left + 12))
 			pop:SetHeight(top - under + tallest + 10 + footer:GetHeight())
+		end
+		refit = function()
+			if pop:IsShown() then FitTabbed() end
 		end
 		local function Fit()
 			if tabbed then return FitTabbed() end
