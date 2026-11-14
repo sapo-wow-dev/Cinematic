@@ -344,11 +344,27 @@ end
 -- to write the whole offset at once, which the game crosses in about 0.3 s:
 -- "so fast and jarring" (2026-11-13). So the offset's taken in and out over
 -- BLEND_TIME, eased at both ends; turned on fresh, it eases in too.
+-- One of our cameras' pauses: the seconds typed in its box on the Cameras
+-- tab instead, out as it starts and back in as it ends (empty: BLEND_TIME).
 local BLEND_TIME = 0.9
+ns.SHOULDER_BLEND_TIME = BLEND_TIME
 local blend, blendAt = 0, nil
+local blendTime = BLEND_TIME
+-- (Pauses that aren't one of our cameras: PauseReason's own words.)
+local NOT_A_CAMERA = { gamepad = true, mounted = true, indoors = true, ["show in"] = true, mounting = true }
+local function TimeKey(key)
+	return ALLOW_OF[key] and (ALLOW_OF[key]:gsub("Allow", "Time"))
+end
+ns.ShoulderTimeKey = TimeKey
+local function PauseTime(reason)
+	local key = reason == "dead" and "death" or reason == "flight" and "flight"
+		or not NOT_A_CAMERA[reason] and CameraKey(reason)
+	local seconds = key and tonumber(ns.db[TimeKey(key) or ""])
+	return seconds and seconds >= 0 and seconds or BLEND_TIME
+end
 local function Blend(toward)
 	local now = GetTime()
-	local step = blendAt and math.min(0.25, now - blendAt) / BLEND_TIME or 0
+	local step = blendAt and math.min(0.25, now - blendAt) / math.max(0.01, blendTime) or 0
 	-- (Resting all the way out, it's not asked every frame: no clock kept, so
 	-- the way back in starts from its first frame, not with a jump.)
 	blendAt = not (blend <= 0 and toward <= 0) and now or nil
@@ -358,6 +374,12 @@ end
 
 local function ShoulderValue(again)
 	if not again then paused = PauseReason() end
+	-- (A pause's time is kept as it ends, for the way back in.)
+	if paused then
+		blendTime = PauseTime(paused)
+	elseif blend >= 1 then
+		blendTime = BLEND_TIME
+	end
 	local k = Blend(paused and 0 or 1)
 	if k <= 0 then
 		return "0"
@@ -1520,17 +1542,82 @@ function ns.CreateShoulderCamPanel(kit)
 			return ns.Setting("shoulderCam") and db.shoulderCamTargetTurn and db.shoulderCamFrames
 		end)
 
+	-- Beside each camera's tick: the seconds it takes to go back behind you as
+	-- that camera starts, and back over your shoulder as it ends. Empty: the
+	-- usual time (shown greyed in it). Greyed while ticked: no pause then.
+	local TIME_TIP = L["How many seconds the camera takes to go back behind you as this camera starts, " ..
+		"and back over your shoulder as it ends. Leave it empty for the usual %s seconds."]:format(BLEND_TIME)
+	local function TimeBox(parent, check, timeKey, allowKey)
+		kit.RecordKey(parent, timeKey)
+		local box = ns.SkinEditBox(CreateFrame("EditBox", nil, parent, "InputBoxTemplate"))
+		box:SetSize(40, 20)
+		box:SetAutoFocus(false)
+		box:SetMaxLetters(5)
+		box:SetJustifyH("RIGHT")
+		box:SetPoint("LEFT", check, "LEFT", 250, 0)
+		box.settingKey, box.searchLabel = timeKey, L["Transition"]
+		local unit = box:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		unit:SetPoint("LEFT", box, "RIGHT", 4, 0)
+		unit:SetText(L["sec"])
+		local hint = box:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		hint:SetPoint("RIGHT", box, "RIGHT", -2, 0)
+		hint:SetText(tostring(BLEND_TIME))
+		local function Now()
+			local seconds = tonumber(ns.GetDB()[timeKey])
+			return seconds and tostring(seconds) or ""
+		end
+		local function Save(self)
+			local typed = self:GetText():match("^%s*(.-)%s*$")
+			local seconds = tonumber(typed)
+			if typed == "" then
+				ns.GetDB()[timeKey] = false
+			elseif seconds and seconds >= 0 then
+				ns.GetDB()[timeKey] = math.min(30, seconds)
+			end
+			self:SetText(Now())
+		end
+		box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+		box:SetScript("OnEscapePressed", function(self)
+			self.cancelled = true
+			self:ClearFocus()
+		end)
+		box:SetScript("OnEditFocusLost", function(self)
+			if self.cancelled then
+				self.cancelled = nil
+				self:SetText(Now())
+			else
+				Save(self)
+			end
+		end)
+		box:HookScript("OnTextChanged", function(self) hint:SetShown(self:GetText() == "") end)
+		local setEnabled = box.SetEnabled
+		function box.SetEnabled(self, enabled)
+			if setEnabled then setEnabled(self, enabled) end
+			local alpha = enabled and 1 or 0.5
+			self:SetAlpha(alpha)
+			unit:SetAlpha(alpha)
+		end
+		box.Refresh = function(self)
+			if not self:HasFocus() then self:SetText(Now()) end
+		end
+		kit.Tooltip(box, TIME_TIP)
+		kit.AddControl(box)
+		kit.GreyUnless(box, function(db) return IfOn() and not db[allowKey] end)
+		return box
+	end
+
 	-- The Cameras tab: a tick each for the cameras it stays on through (ALLOW_OF).
 	local cams = tabHosts[3]
 	local camTop = CreateFrame("Frame", nil, cams)
 	camTop:SetSize(1, 1)
 	camTop:SetPoint("TOPLEFT", cams, "TOPLEFT", 0, 1)
 	local cstack = kit.Stack(camTop, "check")
-	cstack:Header(cams, L["Allow the Shoulder Cam"])
+	local allowHead = cstack:Header(cams, L["Allow the Shoulder Cam"])
 	cstack:Note(cams, L["Unticked, the camera goes back behind you while that camera plays and comes back over " ..
 		"your shoulder as it ends. Ticked, it stays: you keep your spot on the screen as the camera turns round you. " ..
 		"The quest and chat cameras always keep it."], 440)
 	local ALLOW_TIP = L["Keeps the camera over your shoulder while this camera plays."]
+	local timeHead
 	for _, row in ipairs({
 		{ "shoulderCamAllowVista", L["Vista camera"] },
 		{ "shoulderCamAllowFish", L["Fish camera"] },
@@ -1544,8 +1631,16 @@ function ns.CreateShoulderCamPanel(kit)
 			"the camera wheel or a key."] },
 	}) do
 		local key = row[1]
-		kit.GreyUnless(cstack:Add(kit.Check(cams, key, row[2], row[3] and (ALLOW_TIP .. " " .. row[3]) or ALLOW_TIP,
-			SaveThen(key, ns.ApplyShoulderCam)), "check"), IfOn)
+		local check = kit.Check(cams, key, row[2], row[3] and (ALLOW_TIP .. " " .. row[3]) or ALLOW_TIP,
+			SaveThen(key, ns.ApplyShoulderCam))
+		kit.GreyUnless(cstack:Add(check, "check"), IfOn)
+		local box = TimeBox(cams, check, (key:gsub("Allow", "Time")), key)
+		if not timeHead then -- (the column's name, over its first box)
+			timeHead = kit.Label(cams, "GameFontNormal", L["Transition"])
+			-- (Level with the section's header: the note's between it and the rows.)
+			timeHead:SetPoint("TOP", allowHead, "TOP", 0, 0)
+			timeHead:SetPoint("LEFT", box, "LEFT", -4, 0)
+		end
 	end
 
 	-- The Gamepad tab (Forever): not supported at the moment. The game keeps

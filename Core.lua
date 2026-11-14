@@ -471,6 +471,10 @@ local DEFAULTS = {
 	shoulderCamAllowVista = false, shoulderCamAllowFish = false, shoulderCamAllowCozy = false,
 	shoulderCamAllowAFK = false, shoulderCamAllowTele = false, shoulderCamAllowFlight = false,
 	shoulderCamAllowDeath = false, shoulderCamAllowYours = false,
+	-- ...and the seconds it takes to go back behind you as each starts, and back as it ends (false: 0.9)
+	shoulderCamTimeVista = 10, shoulderCamTimeFish = 10, shoulderCamTimeCozy = 5,
+	shoulderCamTimeAFK = 10, shoulderCamTimeTele = 5, shoulderCamTimeFlight = 5,
+	shoulderCamTimeDeath = 5, shoulderCamTimeYours = 5,
 	shoulderCamFrames = true,  -- ...the frames picked below slide over with you
 	shoulderCamFollowCast = true,       -- ...the cast bar
 	shoulderCamFollowPRD = true,        -- ...the Personal Resource Display (ours too)
