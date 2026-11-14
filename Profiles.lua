@@ -1073,6 +1073,16 @@ function ns.AddSharedProfile(name, settings, note, icon)
 	ns.db.profileNotes[name] = note
 	ns.SetProfile(name)
 	ns.Log("state", "profile imported: " .. name)
+	-- Some looks (the Personal Resource Display's style, tested) only come
+	-- right after a reload, so one's offered: restoring a backup or a deleted
+	-- profile, or an import, all come through here.
+	StaticPopupDialogs.CINEMATIC_PROFILE_ADDED_RELOAD = {
+		text = L["Some style settings only show right after a reload. Reload now?"],
+		button1 = RELOADUI or L["Reload"], button2 = L["Later"],
+		OnAccept = ReloadUI,
+		timeout = 0, whileDead = true, hideOnEscape = true,
+	}
+	StaticPopup_Show("CINEMATIC_PROFILE_ADDED_RELOAD")
 	return true
 end
 
