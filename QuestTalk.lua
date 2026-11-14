@@ -1161,6 +1161,10 @@ local function CreateBubble()
 	more:SetPoint("BOTTOMRIGHT", -PAD_X + 4, PAD_Y - 4)
 	more:SetText(">>")
 	bubble.more = more
+	-- (Other addons' parts on it: ns.AddQuestTalkPart, AddonSupport.lua.)
+	for _, part in ipairs(ns.QUEST_TALK_PARTS) do
+		if part.make then ns.Guard(part.make, bubble) end
+	end
 	bubble:Hide()
 end
 
@@ -2288,6 +2292,9 @@ function Show(keepPage)
 	Unsnap(bubble)
 	Unsnap(panel)
 	ParkWindows(true)
+	for _, part in ipairs(ns.QUEST_TALK_PARTS) do
+		if part.shown then ns.Guard(part.shown, bubble) end
+	end
 end
 
 local function Hide(why)

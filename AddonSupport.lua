@@ -208,6 +208,16 @@ function ns.AddQuestFocusTracker(fn, name)
 	ns.questFocusTrackerNames[fn] = name
 end
 
+-- Parts other addons put on Quest talk's bubble (CinematicQuestTalkBubble),
+-- e.g. a voice-over addon's Listen button, for buttons they'd otherwise pin
+-- to the game's quest window (parked off the screen while ours is up). Each
+-- part is { make = fn(bubble), shown = fn(bubble) }: make runs once, when the
+-- bubble is first built; shown each time a screen of ours opens.
+ns.QUEST_TALK_PARTS = {}
+function ns.AddQuestTalkPart(part)
+	table.insert(ns.QUEST_TALK_PARTS, part)
+end
+
 -- Features another addon has its own version of: the Addon Conflicts page and
 -- window pick whose plays, per feature (Conflicts.lua). Picks, saved for the
 -- account in db.conflictPicks by row id ("<addon>:<key>"): "theirs" (the
