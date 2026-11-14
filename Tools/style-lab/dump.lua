@@ -112,6 +112,8 @@ local PAGES = {
 	{ id = "page-overrides", name = "Style: Overrides tab", group = "Menu", page = "Style > General > Overrides", pageName = "Style Overrides" },
 	{ id = "page-tooltip", name = "Style: Tooltips page", group = "Menu", page = "Style > Tooltips", pageName = "Tooltip Style" },
 	{ id = "page-cast", name = "Style: Cast Bars page", group = "Menu", page = "Style > Cast Bars", pageName = "Cast Bar Style" },
+	{ id = "page-names", name = "Style: Name Style page", group = "Menu", page = "Style > Nameplates > Name Style", pageName = "Name Style" },
+	{ id = "page-plates", name = "Style: Nameplate Style page", group = "Menu", page = "Style > Nameplates > Nameplate Style", pageName = "Nameplate Style" },
 	{ id = "page-damage", name = "Damage Vision: Style page", group = "Menu", page = "Damage Vision > Style", pageName = "Damage Vision Look" },
 }
 
