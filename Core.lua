@@ -1227,6 +1227,8 @@ DEFAULTS.questTalkPortrait = true -- the NPC's portrait on the bubble's corner
 DEFAULTS.questTalkListY = 0.46 -- the list's top edge up the screen, till it's dragged
 DEFAULTS.duelPlates = true -- in CineMode, the nameplates of two players dueling near you show (see Effects)
 DEFAULTS.duelCC = true -- and crowd control on a duelist shows as an icon by their plate
+DEFAULTS.duelInstants = true -- and the instant spells a duelist uses (no cast bar) pop up as icons by their plate
+DEFAULTS.duelInstantNames = false -- and the newest one's name shows above it
 DEFAULTS.duelHideOthers = true -- and none of that while you duel yourself
 DEFAULTS.minimapHelper = true -- Minimap Glow Helper: the minimap button glows and lists the visions and camera in use (see MinimapButton)
 DEFAULTS.handleCooldowns = true -- the Cooldown Manager page's master switch (off: left alone)
@@ -1524,7 +1526,7 @@ for page, keys in pairs({
 		"reloadButton", "reloadKeepWindows", "xpLeft", "hideCombatText", "hideErrorsInCombat", "hideErrorsOutOfCombat" },
 	handleHunter = { "hunterRightClickShot", "hunterAmmoSort", "hunterQuiverFill", "petUnhappyShow" },
 	handleAddonSupport = { "questieMoveIcons", "eqolMoveIcons" },
-	duelPlates = { "duelCC", "duelHideOthers" }, -- Duel Vision's page
+	duelPlates = { "duelCC", "duelInstants", "duelInstantNames", "duelHideOthers" }, -- Duel Vision's page
 	handleHealVision = { "plateNameHealthFill", "healVisionPlates" }, -- Heal Vision's page: its Names and Nameplates ticks
 	-- The Cards page's rows (Cards.lua) and the time of day at login.
 	cards = { "combatOnEnter", "combatOnLeave", "cardBossOn", "storyZoneCard", "storyZoneSubzones", "storyRecap",

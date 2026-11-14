@@ -2138,6 +2138,31 @@ do
 	-- them, then a random winner (or one fled), and new pairs after.
 	local TEST_PAIRS = 3
 	local testCC -- the crowd control spells' names, as a list
+	-- Instant spells a pretend duelist "uses" (ones a client hasn't are skipped).
+	local TEST_INSTANTS = { 172, 589, 8921, 1752, 78, 2136, 122, 8042, 20271, 1978, 774, 139, 1022, 642, 17, 1766 }
+	local testInstants -- the ids of those the client has
+	local AddInstant -- (plate, spellId, test): below, with the overlays
+
+	local function FakeInstant(pair, byName, now)
+		pair.test.nextInstant = now + math.random(15, 40) / 10
+		if not ns.Setting("duelInstants") then
+			return
+		end
+		if not testInstants then
+			testInstants = {}
+			for _, id in ipairs(TEST_INSTANTS) do
+				local ok, name = pcall(GetSpellName, id)
+				if ok and Known(name) and type(name) == "string" and name ~= "" then
+					testInstants[#testInstants + 1] = id
+				end
+			end
+		end
+		local found = byName[pair.names[math.random(2)] or ""]
+		local id = testInstants[math.random(math.max(#testInstants, 1))]
+		if found and id and AddInstant then
+			AddInstant(found.plate, id)
+		end
+	end
 
 	local function FakeCC(pair, now)
 		if not testCC then
@@ -2176,6 +2201,9 @@ do
 					DuelEnded(pair.names[i], pair.names[3 - i], math.random() < 0.25)
 				elseif now >= pair.test.nextCC then
 					FakeCC(pair, now)
+				end
+				if not pair.endedAt and now >= (pair.test.nextInstant or 0) then
+					FakeInstant(pair, byName, now)
 				end
 			end
 		end
@@ -2443,6 +2471,9 @@ do
 		overlay.info = info
 		overlay:Show()
 		overlay.border:Show()
+		if overlay.instants and (pair.endedAt or not ns.Setting("duelInstants")) then
+			overlay.instants:Clear()
+		end
 		ShowCC(plate, overlay)
 		ns.RefreshClassIcon(plate) -- (the Plate parts class icon gives way to the badge)
 	end
@@ -2471,6 +2502,218 @@ do
 		end
 	end
 
+	-- Instant spells a duelist uses (Duel Vision's Instant spells tick): the
+	-- game's cast bar shows spells with a cast time, these never reach it. A
+	-- row of icons right of the plate's health bar, the newest nearest it with
+	-- its name above, each fading after a few seconds. Made on the first one.
+	do
+		local SIZE, MAX = 24, 3
+		-- Each icon's life, as a running-out buff's: in over IN, then blinking
+		-- the rest of the way (down to 0.7 and back, every PERIOD, as the game's
+		-- buff flash), fading away over its last OUT.
+		local LIFE, IN, PERIOD, OUT, LOW = 4.5, 0.15, 0.6, 0.4, 0.7
+		local BLINK = LIFE - IN
+		-- Auto attack, Auto Shot and wand Shoot: not worth an icon.
+		local IGNORE = { [6603] = true, [75] = true, [5019] = true }
+
+		local function Alpha(age)
+			local left = LIFE - age
+			if age < IN then
+				return age / IN
+			end
+			local wave = (1 + LOW) / 2 + (1 - LOW) / 2 * math.cos(2 * math.pi * (BLINK - left) / PERIOD)
+			return wave * math.min(left / OUT, 1)
+		end
+
+		local function Render(row)
+			local now, any = GetTime(), false
+			for i, slot in ipairs(row.slots) do
+				local entry = row.recent[i]
+				local left = entry and (LIFE - (now - entry.at))
+				if left and left > 0 then
+					slot:SetAlpha(Alpha(now - entry.at))
+					slot:Show()
+					any = true
+				else
+					slot:Hide()
+				end
+			end
+			local newest = row.recent[1]
+			if newest and row.slots[1]:IsShown() and ns.Setting("duelInstantNames") then
+				row.name:SetAlpha(row.slots[1]:GetAlpha())
+				row.name:Show()
+			else
+				row.name:Hide()
+			end
+			if not any then
+				wipe(row.recent)
+				row:Hide()
+			end
+		end
+
+		-- Where the row starts: past the level box when the plate shows one
+		-- (Forever's sits right of the bar), else right of the bar's border.
+		local function Place(row, overlay, plate)
+			local level = plate.UnitFrame and plate.UnitFrame.PlayerLevelDiffFrame
+			local okShown, shown = pcall(function() return level and level:IsVisible() end)
+			local okAlpha, alpha = pcall(function() return level and level:GetAlpha() end)
+			local after = okShown and Known(shown) and shown and okAlpha and Known(alpha)
+				and type(alpha) == "number" and alpha > 0.05 and level or nil
+			if row.after ~= (after or overlay) then
+				row.after = after or overlay
+				row:ClearAllPoints()
+				row:SetPoint("LEFT", row.after, "RIGHT", after and 4 or 2, 0)
+			end
+		end
+
+		local function Row(overlay)
+			if overlay.instants then
+				return overlay.instants
+			end
+			local row = CreateFrame("Frame", nil, overlay)
+			row:SetSize(1, SIZE)
+			row:SetPoint("LEFT", overlay, "RIGHT", 2, 0)
+			row.after = overlay
+			row.recent, row.slots = {}, {}
+			for i = 1, MAX do
+				local slot = CreateFrame("Frame", nil, row)
+				slot:SetSize(SIZE, SIZE)
+				if i == 1 then
+					slot:SetPoint("LEFT", row, "LEFT", 0, 0)
+				else
+					slot:SetPoint("LEFT", row.slots[i - 1], "RIGHT", 2, 0)
+				end
+				local back = slot:CreateTexture(nil, "BACKGROUND")
+				back:SetPoint("TOPLEFT", -1, 1)
+				back:SetPoint("BOTTOMRIGHT", 1, -1)
+				back:SetColorTexture(0, 0, 0, 0.8)
+				slot.icon = slot:CreateTexture(nil, "ARTWORK")
+				slot.icon:SetAllPoints()
+				slot.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+				slot:Hide()
+				row.slots[i] = slot
+			end
+			row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			row.name:SetPoint("BOTTOMLEFT", row.slots[1], "TOPLEFT", 0, 2)
+			row.name:SetWordWrap(false)
+			function row.Clear()
+				wipe(row.recent)
+				Render(row)
+			end
+			-- (Every frame while it shows, so the blink and fade are smooth.)
+			ns.SetOnUpdate(row, Render)
+			row:Hide()
+			overlay.instants = row
+			return row
+		end
+
+		-- A spell (its id, maybe secret) a duelist's plate's player just used.
+		function AddInstant(plate, spellId)
+			local overlay = plate and overlays[plate]
+			local info = overlay and overlay.info
+			if not (info and not info.pair.endedAt and ns.Setting("duelInstants")) then
+				return
+			end
+			local known = Known(spellId) and type(spellId) == "number"
+			if known and IGNORE[spellId] then
+				return
+			end
+			local row, now = Row(overlay), GetTime()
+			Place(row, overlay, plate)
+			local newest = row.recent[1]
+			if known and newest and newest.id == spellId and now - newest.at < 0.3 then
+				return -- (the same one twice)
+			end
+			local okIcon, icon = pcall(GetSpellIcon, spellId)
+			if not okIcon or type(icon) == "nil" then
+				return -- (a hidden spell with no icon)
+			end
+			local okName, name = pcall(GetSpellName, spellId)
+			table.insert(row.recent, 1, { id = known and spellId or nil, at = now })
+			row.recent[MAX + 1] = nil
+			-- Each slot's icon moves along with its spell.
+			for i = MAX, 2, -1 do
+				local from, to = row.slots[i - 1], row.slots[i]
+				if row.recent[i] then
+					to.icon:SetTexture(from.icon:GetTexture())
+				end
+			end
+			if not pcall(row.slots[1].icon.SetTexture, row.slots[1].icon, icon) then
+				row.slots[1].icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+			end
+			if not (okName and type(name) ~= "nil" and pcall(row.name.SetText, row.name, name)) then
+				row.name:SetText("")
+			end
+			row:Show()
+			Render(row)
+		end
+
+		-- Which spells were instant: a SUCCEEDED with no cast or channel going
+		-- (a cast's own SUCCEEDED comes by its START and STOP). Decided a frame
+		-- later, so a channel's START landing just after its SUCCEEDED counts.
+		local busy, stopped, pending = {}, {}, {}
+		local castWatcher = CreateFrame("Frame")
+		castWatcher:Hide()
+		castWatcher:SetScript("OnEvent", function(self, event, unit, _, spellId)
+			if not (Known(unit) and type(unit) == "string" and unit:find("^nameplate")) then
+				return
+			end
+			local now = GetTime()
+			if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START"
+				or event == "UNIT_SPELLCAST_EMPOWER_START" then
+				busy[unit] = now
+			elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+				pending[#pending + 1] = { unit = unit, spellId = spellId, at = now }
+				self:Show()
+			elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
+				busy[unit] = nil -- (a failed instant press says FAILED: no STOP to wait for)
+			else
+				busy[unit], stopped[unit] = nil, now
+			end
+		end)
+		ns.SetOnUpdate(castWatcher, function(self)
+			local now = GetTime()
+			for _, p in ipairs(pending) do
+				local unit = p.unit
+				local casting = (busy[unit] and now - busy[unit] < 15)
+					or (stopped[unit] and math.abs(stopped[unit] - p.at) < 0.15)
+				if not casting then
+					local ok, channel = pcall(UnitChannelInfo, unit)
+					casting = ok and type(channel) ~= "nil"
+				end
+				if not casting then
+					local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+					if ok and plate then
+						AddInstant(plate, p.spellId)
+					end
+				end
+			end
+			wipe(pending)
+			self:Hide()
+		end)
+		local EVENTS = { "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START",
+			"UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_EMPOWER_STOP",
+			"UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_SUCCEEDED" }
+		-- Only listened to while a duel is shown.
+		function duels.WatchCasts(on)
+			if on ~= (castWatcher.on or false) then
+				castWatcher.on = on
+				for _, event in ipairs(EVENTS) do
+					if on then
+						pcall(castWatcher.RegisterEvent, castWatcher, event)
+					else
+						pcall(castWatcher.UnregisterEvent, castWatcher, event)
+					end
+				end
+				if not on then
+					wipe(busy)
+					wipe(stopped)
+					wipe(pending)
+				end
+			end
+		end
+	end
+
 	-- Whether a plate has a duel's border and badge on it.
 	function ns.DuelBadgeShown(plate)
 		local overlay = overlays[plate]
@@ -2485,6 +2728,9 @@ do
 			overlay.info = nil
 			overlay:Hide()
 			overlay.border:Hide()
+			if overlay.instants then
+				overlay.instants:Clear()
+			end
 			ns.RefreshClassIcon(plate)
 		end
 	end
@@ -2550,6 +2796,7 @@ do
 			end
 		end
 		WatchAuras(duels.watching and next(duels.shown) ~= nil and ns.Setting("duelCC") or false)
+		duels.WatchCasts(duels.watching and next(duels.shown) ~= nil and ns.Setting("duelInstants") or false)
 		local moving = false
 		local wanted = {}
 		for plate in pairs(duels.shown) do

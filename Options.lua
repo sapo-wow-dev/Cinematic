@@ -14109,6 +14109,14 @@ local function CreateVisionPanel()
 		L["A feared, stunned, polymorphed, rooted or silenced duelist gets an icon of the spell beside their " ..
 		"nameplate, with the time left."]), "check")
 	GreyUnless(duelCC, function(db) return db.handlePlates and db.duelPlates end)
+	local duelInstants = stack:Add(Check(content, "duelInstants", L["Instant spells"],
+		L["The instant spells a duelist uses, which never show on a cast bar, pop up as icons beside their " ..
+		"nameplate, the newest nearest it, and blink away after a few seconds. Spells with a " ..
+		"cast time show on the game's own cast bar."]), "check")
+	GreyUnless(duelInstants, function(db) return db.handlePlates and db.duelPlates end)
+	local duelInstantNames = stack:Add(Check(content, "duelInstantNames", L["Spell names"],
+		L["The newest instant spell's name shows above its icon."]), "check")
+	GreyUnless(duelInstantNames, function(db) return db.handlePlates and db.duelPlates and db.duelInstants end)
 	local duelHide = stack:Add(Check(content, "duelHideOthers", L["Hide other duels while you duel"],
 		L["While you're in a duel (or have asked for one, or been asked), other players' duels nearby don't " ..
 		"show. Off: they show all through yours."]), "check")
@@ -14119,7 +14127,7 @@ local function CreateVisionPanel()
 	duelTest:SetSize(90, 22)
 	duelTest:SetText(L["Test"])
 	Tooltip(duelTest, L["Friendly players around you duel for 30 seconds, in pretend: their nameplates, " ..
-		"made-up crowd control, and winners and losers, to see how it looks. Needs CineMode and other " ..
+		"made-up crowd control and instant spells, and winners and losers, to see how it looks. Needs CineMode and other " ..
 		"players nearby. Clicking Stop ends it."])
 	duelTest:SetScript("OnClick", function()
 		if ns.DuelTestLeft() then
