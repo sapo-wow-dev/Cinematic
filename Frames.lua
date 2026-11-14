@@ -3063,6 +3063,7 @@ ns.RULE_WORDS = {
 	-- (Out of fights only, as the ticks have them: see SetTargetWords.)
 	enemy = "enemy", friendly = "friendly", target = "target",
 	-- (Your target by what it is, as Effects' TargetRow has it.)
+	targetdead = "targetdead", deadtarget = "targetdead", -- (your target dead: you looting, say)
 	targetself = "targetself", enemyplayer = "enemyplayer", hostilenpc = "hostilenpc", neutralplayer = "neutralplayer",
 	neutralnpc = "neutralnpc", friendlyplayer = "friendlyplayer", friendlynpc = "friendlynpc",
 	noplate = "noplate", plateoff = "noplate", offscreen = "noplate", near = "near", close = "near", near28 = "near28",
@@ -3075,6 +3076,7 @@ ns.RULE_WORDS = {
 	world = "world", group = "group", grouped = "group", instance = "instance",
 	dungeon = "dungeon", raid = "raid", city = "city", inn = "inn",
 	flagged = "flagged", mounted = "mounted", taxi = "taxi", flightpath = "taxi", ontaxi = "taxi",
+	indoors = "indoors", inside = "indoors", -- (inside a building or cave: IsIndoors)
 	dead = "dead", ghost = "dead", casting = "casting", cast = "casting", channeling = "casting",
 	-- (CineMode on: always so for the rows read in it, the frames'; the Cards page's are read any time.)
 	cinemode = "cinemode", cine = "cinemode",
@@ -3869,6 +3871,7 @@ do
 		local targetSelf = hasTarget and ns.Flag(UnitIsUnit("target", "player")) and true or false
 		local row = hasTarget and not targetSelf and ns.TargetNameRow and ns.TargetNameRow("target")
 		facts.targetself = targetSelf
+		facts.targetdead = dead and true or false
 		facts.enemyplayer, facts.hostilenpc = row == "TargetEnemyPlayer", row == "TargetEnemyNPC"
 		facts.neutralplayer, facts.neutralnpc = row == "TargetNeutralPlayer", row == "TargetNeutralNPC"
 		facts.friendlyplayer, facts.friendlynpc = row == "TargetFriendlyPlayer", row == "TargetFriendlyNPC"
@@ -3903,6 +3906,7 @@ do
 		facts.taxi = ns.Flag(ns.OnTaxi()) and true or false
 		-- (You dead, or a ghost after releasing. A secret answer counts as alive.)
 		facts.dead = ns.Flag(UnitIsDeadOrGhost("player")) and true or false
+		facts.indoors = IsIndoors and ns.Flag(IsIndoors()) and true or false
 		-- (Casting or channeling. Secret in a fight on some clients, so false there.)
 		facts.casting = ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player"))
 		-- (A boss fight: an encounter on, the game's boss frames up, or a boss
