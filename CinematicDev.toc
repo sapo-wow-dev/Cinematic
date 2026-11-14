@@ -52,6 +52,7 @@ Support\NaowhForever.lua
 Support\DialogueUI.lua
 Support\Immersion.lua
 Support\Spoken.lua
+Support\LoreForever.lua
 Support\DynamicCam.lua
 Support\RareScanner.lua
 Support\Glass.lua
@@ -201,6 +202,7 @@ ThresholdTest.lua
 PlateWidthTest.lua
 DamageVisionMeterTest.lua
 SpokenTest.lua
+LoreForeverTest.lua
 CameraScriptsPage.lua
 CameraManager.lua
 Options.lua

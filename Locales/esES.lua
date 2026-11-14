@@ -6202,3 +6202,7 @@ L["ClassicUI Forever's action bars, bar art and quest watch now fade with Cinema
 -- What's new: support for 7 more addons (Changelog.lua)
 L["Support for 7 more addons"] = "Compatibilidad con 7 addons más"
 L["BigWigs, TomTom, HealBot Continued and Titan Panel get rows of their own and fade with Cinematic. Platynator and Threat Plates nameplates fade in CineMode, and Prat 3.0's chat follows the Chat page."] = "BigWigs, TomTom, HealBot Continued y Titan Panel tienen sus propias filas y se desvanecen con Cinematic. Las placas de nombre de Platynator y Threat Plates se desvanecen en CineMode, y el chat de Prat 3.0 sigue la página de Chat."
+
+-- What's new: Lore Forever support (Changelog.lua)
+L["Lore Forever support"] = "Compatibilidad con Lore Forever"
+L["Lore Forever's subtitles, floating player, new page note and pin card get rows of their own and fade with Cinematic. With Custom dialogue frames on, a Play button on the box with the NPC's words plays the quest's narration or stops it."] = "Los subtítulos, el reproductor flotante, el aviso de página nueva y la tarjeta de chincheta de Lore Forever tienen sus propias filas y se desvanecen con Cinematic. Con los marcos de diálogo personalizados activados, un botón de reproducir en el cuadro con las palabras del PNJ reproduce la narración de la misión o la detiene."

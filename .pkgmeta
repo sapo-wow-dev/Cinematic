@@ -37,6 +37,8 @@ ignore:
   - DamageVisionMeterTest.lua
   # (Spoken support test: /cine debug spokentest, dev copy only)
   - SpokenTest.lua
+  # (Lore Forever support test: /cine debug loretest, dev copy only)
+  - LoreForeverTest.lua
   # (Minimap Copy: the Dev hub page drawing the minimap from the game's own tiles, dev copy only)
   - MinimapTiles.lua
   - MinimapCopy.lua

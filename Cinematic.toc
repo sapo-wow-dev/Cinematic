@@ -61,6 +61,7 @@ Support\NaowhForever.lua
 Support\DialogueUI.lua
 Support\Immersion.lua
 Support\Spoken.lua
+Support\LoreForever.lua
 Support\DynamicCam.lua
 Support\RareScanner.lua
 Support\Glass.lua

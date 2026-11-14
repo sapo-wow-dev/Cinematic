@@ -11,6 +11,10 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-13", page = "Advanced Frames", title = "Lore Forever support", client = "forever",
+		text = "Lore Forever's subtitles, floating player, new page note and pin card get rows of their own and fade " ..
+		"with Cinematic. With Custom dialogue frames on, a Play button on the box with the NPC's words plays the " ..
+		"quest's narration or stops it." },
 	{ date = "2026-11-13", page = "Advanced Frames", title = "Spoken support", client = "forever",
 		text = "Spoken's narrator windows and subtitles get rows of their own and fade with Cinematic. With Custom " ..
 		"dialogue frames on, Spoken's Play button sits on the box with the NPC's words, to read the quest aloud or stop it." },

@@ -1723,6 +1723,10 @@ local function HandleSlash(msg)
 		-- (Dev copy: one run checking Spoken support, its Play button on Quest talk and its fades, SpokenTest.lua.)
 		if ns.SpokenTest then ns.SpokenTest(arg:match("^spokentest%s*(.*)$"))
 		else ns.Print("/cine debug spokentest is in the dev copy only.") end
+	elseif cmd == "debug" and arg:find("^loretest") then
+		-- (Dev copy: one run checking Lore Forever support, its book button on Quest talk and its fades, LoreForeverTest.lua.)
+		if ns.LoreForeverTest then ns.LoreForeverTest(arg:match("^loretest%s*(.*)$"))
+		else ns.Print("/cine debug loretest is in the dev copy only.") end
 	elseif cmd == "debug" and arg:find("^minimapcopy") and ns.MinimapCopyCommand then
 		-- (Dev copy: minimap tile test and live copy, MinimapCopy.lua.)
 		ns.MinimapCopyCommand(arg:match("^minimapcopy%s*(%a*)"))
