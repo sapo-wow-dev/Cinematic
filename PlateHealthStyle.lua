@@ -118,6 +118,47 @@ local function Dress(bar)
 	end
 end
 
+-- A row Look's gradient on a bar's fill: from the color the game (or our
+-- row colors) gave it, left to right, to the gradient's. r, g, b: that
+-- color, as just set (else read). A secret color is left flat.
+local function Shade(bar, r, g, b)
+	local state = states[bar]
+	local fade = state and state.gradient
+	if not fade then return end
+	if r == nil then r, g, b = bar:GetStatusBarColor() end
+	if not (Known(r) and Known(g) and Known(b) and r) then return end
+	local fill = bar:GetStatusBarTexture()
+	if not (fill and fill.SetGradient and CreateColor) then return end
+	pcall(fill.SetGradient, fill, "HORIZONTAL", CreateColor(r, g, b, 1), CreateColor(fade[1], fade[2], fade[3], 1))
+end
+local colorHooked = setmetatable({}, { __mode = "k" })
+local function ColorSet(bar, r, g, b)
+	if busy then return end
+	Shade(bar, r, g, b)
+end
+
+local function Gradient(bar, state)
+	local own = overrides[bar]
+	local fade = own and own.gradient or nil
+	if fade then
+		if not colorHooked[bar] then
+			colorHooked[bar] = true
+			hooksecurefunc(bar, "SetStatusBarColor", ColorSet)
+		end
+		state.gradient = fade
+		Shade(bar)
+	elseif state.gradient then
+		-- (Flat again: its color set on the fill itself, as the bar's color set
+		-- again the same doesn't clear the gradient.)
+		state.gradient = nil
+		local r, g, b, a = bar:GetStatusBarColor()
+		local fill = bar:GetStatusBarTexture()
+		if fill and Known(r) and Known(g) and Known(b) and r then
+			pcall(fill.SetVertexColor, fill, r, g, b, Known(a) and a or 1)
+		end
+	end
+end
+
 local function GameSet(bar)
 	if busy then return end
 	local state = states[bar]
@@ -125,6 +166,7 @@ local function GameSet(bar)
 	-- (The game's own again, on a plate come back: ours over it, its noted.)
 	state.on = false
 	pcall(Dress, bar)
+	pcall(Shade, bar) -- (a new fill: its gradient again)
 end
 
 local function StylePlate(plate)
@@ -135,12 +177,13 @@ local function StylePlate(plate)
 	if not bar then return end
 	local texture, kind = Look(bar)
 	-- (Left quite alone until there's something to do.)
-	if not (texture or kind ~= "game" or states[bar]) then return end
+	if not (texture or kind ~= "game" or states[bar] or (overrides[bar] and overrides[bar].gradient)) then return end
 	if not hooked[bar] then
 		hooked[bar] = true
 		hooksecurefunc(bar, "SetStatusBarTexture", GameSet)
 	end
 	Dress(bar)
+	Gradient(bar, states[bar])
 end
 
 -- (An error isn't swallowed: the log keeps the first of each, for /cine log.)
@@ -158,7 +201,7 @@ function ns.SetPlateBarOverride(plate, look)
 	local bar = BarOf(plate)
 	if not bar then return end
 	if not look and not overrides[bar] then return end
-	overrides[bar] = look and { texture = look.texture, border = look.border } or nil
+	overrides[bar] = look and { texture = look.texture, border = look.border, gradient = look.gradient } or nil
 	TryPlate(plate)
 end
 

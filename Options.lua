@@ -11015,6 +11015,13 @@ do
 							look.Check("Color" .. part[1], (L["%s in its color"]):format(part[2]), part[3])
 						end
 					end
+					-- (The fill fading, left to right, to a second color: PlateHealthStyle.lua.)
+					look.Choices(L["Gradient:"], "LookGradient", { { "default", defaultName }, { "off", L["Off"] },
+						{ "on", L["On"], L["The health bar's fill fades from its color on the left to the color " ..
+							"below on the right."] } })
+					look.Color(L["Fades to:"], { "LookGradR", "LookGradG", "LookGradB" },
+						L["The color the health bar fades to, at its right end."],
+						function(db) return look.On(db) and look.Get("LookGradient") == "on" end)
 				end,
 				ground = false,
 				font = function(look)
@@ -11070,7 +11077,7 @@ do
 					local parts = {}
 					for _, each in ipairs({ { "LookTexture", L["Texture"] }, { "LookBorder", L["Border"] },
 						{ "LookFont", L["Font"] }, { "LookTextSize", L["Size"] }, { "LookOutline", L["Outline"] },
-						{ "LookShadow", L["Shadow"] } }) do
+						{ "LookShadow", L["Shadow"] }, { "LookGradient", L["Gradient"] } }) do
 						local value = ns.GetDB() and ns.GetDB()[MarkKey(kind, each[1])]
 						if value ~= nil and value ~= LOOK_DEFAULT[each[1]] then parts[#parts + 1] = each[2] end
 					end

@@ -124,8 +124,12 @@ function ns.MakeGeneralPlatePreview(parent, width)
 		-- (Its border: General's, or the game's ground with its outline.)
 		local kind, size, r, g, b = ns.StyleBorder(general, "styleBorder")
 		local game = kind == "game"
-		ground:SetShown(game)
-		if game then
+		-- (The game's: its art copied off a real plate, PlateRowLook.lua; with
+		-- none on the screen yet, its dark ground.)
+		local trim = game and ns.GamePlateTrim and ns.GamePlateTrim(health)
+		for _, piece in ipairs(health.cineGameTrim or {}) do piece:SetShown(game) end
+		ground:SetShown(game and not trim)
+		if game and not trim then
 			if HasAtlas(PLATE_GROUND) then ground:SetAtlas(PLATE_GROUND) else ground:SetColorTexture(0, 0, 0, 0.7) end
 		end
 		back:SetShown(not game)

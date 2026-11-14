@@ -964,6 +964,44 @@ function ns.ReportPlateTextures(which)
 		lines = lines + 1
 		if lines <= 40 then ns.Print("  " .. text) end
 	end
+	-- (A plate's: each texture's edges from its health bar's, + out, - in,
+	-- for the Look panels' preview, PlateRowLook.lua's ns.GamePlateTrim.)
+	local unitFrame = which ~= "prd" and root
+	local container = unitFrame and unitFrame.HealthBarsContainer
+	local health = unitFrame and ((container and container.healthBar) or unitFrame.healthBar)
+	local edges
+	if health then
+		local ok, l, r, t, b = pcall(function() return health:GetLeft(), health:GetRight(), health:GetTop(), health:GetBottom() end)
+		if ok and Plain(l) and Plain(r) and Plain(t) and Plain(b) then
+			edges = { l, r, t, b }
+			ns.Print(("  health bar %s: %.1f x %.1f; preview copy: %s"):format(Name(health), r - l, t - b,
+				ns.GamePlateTrimReport and ns.GamePlateTrimReport() or "?"))
+		else
+			ns.Print("  health bar's place unreadable; preview copy: " .. (ns.GamePlateTrimReport and
+				ns.GamePlateTrimReport() or "?"))
+		end
+	end
+	-- (How it's pinned: each point, on what. Readable where places aren't.)
+	local function Pins(region)
+		local ok, text = pcall(function()
+			local list = {}
+			for i = 1, region:GetNumPoints() do
+				local point, relativeTo, relativePoint, x, y = region:GetPoint(i)
+				local on = relativeTo == health and "bar" or relativeTo == nil and "parent"
+					or (Plain(relativeTo) and relativeTo.GetDebugName and Name(relativeTo)) or "?"
+				list[#list + 1] = ("%s>%s %s %s,%s"):format(tostring(point), on, tostring(relativePoint),
+					Plain(x) and ("%.1f"):format(x) or "?", Plain(y) and ("%.1f"):format(y) or "?")
+			end
+			return table.concat(list, " ")
+		end)
+		return ok and (" pinned " .. text) or " pins ?"
+	end
+	local function Where(region)
+		if not edges then return Pins(region) end
+		local ok, l, r, t, b = pcall(function() return region:GetLeft(), region:GetRight(), region:GetTop(), region:GetBottom() end)
+		if not (ok and Plain(l) and Plain(r) and Plain(t) and Plain(b)) then return " at ?" end
+		return (" at L%+.1f R%+.1f T%+.1f B%+.1f"):format(edges[1] - l, r - edges[2], t - edges[3], edges[4] - b)
+	end
 	local function Walk(frame, depth)
 		if depth > 5 or seen[frame] then return end
 		seen[frame] = true
@@ -973,7 +1011,7 @@ function ns.ReportPlateTextures(which)
 			local fill = frame:GetStatusBarTexture()
 			if fill then
 				seen[fill] = true
-				Line(("bar %s: fill %s"):format(Name(frame), Asset(fill)))
+				Line(("bar %s: fill %s%s; bar%s"):format(Name(frame), Asset(fill), Where(fill), Where(frame)))
 			end
 		end
 		for _, region in ipairs({ frame:GetRegions() }) do
@@ -982,7 +1020,7 @@ function ns.ReportPlateTextures(which)
 				if ok and Plain(regionShown) and regionShown then
 					local alphaOk, alpha = pcall(region.GetEffectiveAlpha or region.GetAlpha, region)
 					local shownAlpha = alphaOk and Plain(alpha) and (" alpha %.2f"):format(alpha) or ""
-					Line(("%s: %s%s"):format(Name(region), Asset(region), which == "prd" and shownAlpha or ""))
+					Line(("%s: %s%s%s"):format(Name(region), Asset(region), which == "prd" and shownAlpha or "", Where(region)))
 				end
 			end
 		end

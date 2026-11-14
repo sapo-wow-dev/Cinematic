@@ -14,11 +14,12 @@ local _, ns = ...
 -- The settings, by their part of a key, and what each holds while it's the
 -- Default row's (nil, or these).
 local KEYS = { "LookTexture", "LookBorder", "LookBorderSize", "LookBorderR", "LookBorderG", "LookBorderB",
-	"LookFont", "LookTextSize", "LookOutline", "LookShadow", "LookLevel" }
+	"LookFont", "LookTextSize", "LookOutline", "LookShadow", "LookLevel", "LookGradient", "LookGradR", "LookGradG",
+	"LookGradB" }
 ns.PLATE_LOOK_KEYS = KEYS
 local DEFAULT_VALUE = { LookTexture = "default", LookBorder = "default", LookFont = "default", LookTextSize = 1,
 	LookOutline = -1, LookShadow = "default", LookLevel = "default", LookBorderSize = 1, LookBorderR = 0,
-	LookBorderG = 0, LookBorderB = 0 }
+	LookBorderG = 0, LookBorderB = 0, LookGradient = "default", LookGradR = 0.1, LookGradG = 0.1, LookGradB = 0.1 }
 ns.PLATE_LOOK_DEFAULTS = DEFAULT_VALUE
 
 local function IsDefault(key, value)
@@ -38,7 +39,7 @@ end
 -- Whether a row has a look of its own (any of the main settings set).
 function ns.PlateRowHasLook(kind)
 	for _, key in ipairs({ "LookTexture", "LookBorder", "LookFont", "LookTextSize", "LookOutline", "LookShadow",
-		"LookLevel" }) do
+		"LookLevel", "LookGradient" }) do
 		if Own(key, kind) ~= nil then return true end
 	end
 	return false
@@ -92,6 +93,22 @@ function ns.PlateRowLookFor(kind, over)
 	if shadow ~= nil then look.shadow, any = shadow, true end
 	local level = Get("LookLevel")
 	if level ~= nil then look.level, any = level == "show", true end
+	-- (The fill fading to a second color, left to right: { r, g, b } it fades
+	-- to, or false for none; its color from the same row as the setting.)
+	local gradient = Get("LookGradient")
+	if gradient ~= nil then
+		look.gradient = false
+		if gradient == "on" then
+			local from = Mine("LookGradient") ~= nil and kind or "others"
+			local function Part(key)
+				local value = from == kind and over and over[key]
+				if value == nil then value = ns.TargetMarkOwn(key, from) end
+				return tonumber(value) or DEFAULT_VALUE[key]
+			end
+			look.gradient = { Part("LookGradR"), Part("LookGradG"), Part("LookGradB") }
+		end
+		any = true
+	end
 	return any and look or nil
 end
 
@@ -118,8 +135,9 @@ local nameBefore = setmetatable({}, { __mode = "k" }) -- [fontstring] = { object
 local function Signature(look)
 	if not look then return "" end
 	local border = look.border and table.concat(look.border, ",") or ""
+	local gradient = look.gradient and table.concat(look.gradient, ",") or tostring(look.gradient)
 	return table.concat({ tostring(look.texture), border, tostring(look.fontValue), tostring(look.size),
-		tostring(look.outline), tostring(look.shadow), tostring(look.level) }, "|")
+		tostring(look.outline), tostring(look.shadow), tostring(look.level), gradient }, "|")
 end
 
 -- The game's name on the plate: its own font back.
@@ -185,7 +203,7 @@ function ns.ApplyPlateRowLook(plate, kind)
 	if look then applied[plate] = { sig = sig, look = look } else applied[plate] = nil end
 	-- (The bar and border: PlateHealthStyle, over General's.)
 	if ns.SetPlateBarOverride then
-		ns.SetPlateBarOverride(plate, look and (look.texture or look.border) and look or nil)
+		ns.SetPlateBarOverride(plate, look and (look.texture or look.border or look.gradient ~= nil) and look or nil)
 	end
 	local unitFrame = plate.UnitFrame
 	pcall(NameLook, unitFrame and unitFrame.name, look)
@@ -231,6 +249,109 @@ local sampleNow, sceneNow, closeNow = 1, true, false
 
 local function HasAtlas(name)
 	return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
+end
+
+-- The game's own art round a real plate's health bar (Forever's border
+-- pieces, retail's dark ground), measured off one on the screen: each
+-- piece's art, layer, color and its edges from the bar's edges, so a copy
+-- sits round a bar of any size as the game's does. Found once, then kept;
+-- nil while no plate is on the screen or its places can't be read. Our own
+-- pieces on the bar (style edges, a theme's veil, anything of ours) left out.
+local function Known(value)
+	return value ~= nil and not (issecretvalue and issecretvalue(value))
+end
+local function Readable(value)
+	return not (issecretvalue and issecretvalue(value))
+end
+-- (Places on a plate can't be read (secret), but how its pieces are pinned
+-- can: the game's dark ground behind the bar, bgTexture, by its points on
+-- the bar. Not the target's yellow edge, nor the absorb's shadow.)
+local gameTrim
+local function MeasureTrim(bar)
+	if not (bar and bar.GetStatusBarTexture) then return nil end
+	if bar.IsForbidden then
+		local forbidden = bar:IsForbidden()
+		if not Readable(forbidden) or forbidden then return nil end
+	end
+	local ground = bar.bgTexture
+	if not (ground and ground.GetNumPoints) then return nil end
+	local atlas, file = ground.GetAtlas and ground:GetAtlas(), ground:GetTexture()
+	if not (Readable(atlas) and Readable(file)) then return nil end
+	local count = ground:GetNumPoints()
+	if not (Known(count) and count > 0) then return nil end
+	local points = {}
+	for i = 1, count do
+		local point, relativeTo, relativePoint, x, y = ground:GetPoint(i)
+		if not (Known(point) and Readable(relativeTo) and Known(relativePoint) and Known(x) and Known(y)) then return nil end
+		-- (Pinned to the bar (or its own parent, the bar): else not ours to copy.)
+		if relativeTo ~= nil and relativeTo ~= bar then return nil end
+		points[i] = { point, relativePoint, x, y }
+	end
+	local width, height = ground:GetSize()
+	local layer, sublevel = ground:GetDrawLayer()
+	return { {
+		atlas = type(atlas) == "string" and atlas ~= "" and atlas or nil, file = file, layer = layer, sublevel = sublevel,
+		color = { ground:GetVertexColor() }, coords = { ground:GetTexCoord() }, alpha = ground:GetAlpha(),
+		points = points, width = Known(width) and width or nil, height = Known(height) and height or nil,
+	} }
+end
+local function GameTrim()
+	if gameTrim or not (C_NamePlate and C_NamePlate.GetNamePlates) then return gameTrim end
+	local skip = {}
+	local personal = C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit("player")
+	if personal then skip[personal] = true end
+	for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+		local unitFrame = not skip[plate] and plate.UnitFrame
+		local container = unitFrame and unitFrame.HealthBarsContainer
+		local bar = unitFrame and ((container and container.healthBar) or unitFrame.healthBar)
+		local ok, pieces = pcall(MeasureTrim, bar)
+		if ok and pieces then
+			gameTrim = pieces
+			return pieces
+		end
+	end
+end
+
+-- What the preview copied (/cine debug platetextures).
+function ns.GamePlateTrimReport()
+	if not gameTrim then return "none yet (no plate measured)" end
+	local names = {}
+	for _, piece in ipairs(gameTrim) do
+		local points = {}
+		for _, each in ipairs(piece.points) do
+			points[#points + 1] = ("%s>%s %+.1f,%+.1f"):format(each[1], each[2], each[3], each[4])
+		end
+		names[#names + 1] = ("%s at %s"):format(tostring(piece.atlas or piece.file), table.concat(points, " "))
+	end
+	return table.concat(names, ", ")
+end
+
+-- The game's art round bar (a preview's), copied off a real plate (made
+-- once per bar): its textures, or nil while there's no plate to copy from.
+function ns.GamePlateTrim(bar)
+	if bar.cineGameTrim then return bar.cineGameTrim end
+	local pieces = GameTrim()
+	if not pieces then return nil end
+	local made = {}
+	for _, piece in ipairs(pieces) do
+		local texture = bar:CreateTexture(nil, piece.layer or "BACKGROUND", nil, piece.sublevel or 0)
+		if piece.atlas then
+			texture:SetAtlas(piece.atlas)
+		else
+			texture:SetTexture(piece.file)
+			if piece.coords[1] then pcall(texture.SetTexCoord, texture, unpack(piece.coords)) end
+		end
+		pcall(texture.SetVertexColor, texture, unpack(piece.color))
+		pcall(texture.SetAlpha, texture, piece.alpha or 1)
+		-- (Pinned as the game pins its own; one point: its size too.)
+		for _, each in ipairs(piece.points) do
+			texture:SetPoint(each[1], bar, each[2], each[3], each[4])
+		end
+		if #piece.points == 1 and piece.width and piece.height then texture:SetSize(piece.width, piece.height) end
+		made[#made + 1] = texture
+	end
+	bar.cineGameTrim = made
+	return made
 end
 
 -- A small pick under the plate: gold while on.
@@ -382,6 +503,16 @@ function ns.MakePlateRowLookPreview(parent, width, kind)
 			if fill and fill.SetDesaturated then fill:SetDesaturated(false) end
 		end
 		health:SetStatusBarColor(barColor[1], barColor[2], barColor[3])
+		-- (Its gradient: from its color to the one it fades to.)
+		-- (Else flat, set on the fill itself: the bar's color set again the
+		-- same doesn't clear a gradient drawn before.)
+		local fill = health:GetStatusBarTexture()
+		if look.gradient and fill and fill.SetGradient and CreateColor then
+			pcall(fill.SetGradient, fill, "HORIZONTAL", CreateColor(barColor[1], barColor[2], barColor[3], 1),
+				CreateColor(look.gradient[1], look.gradient[2], look.gradient[3], 1))
+		elseif fill then
+			fill:SetVertexColor(barColor[1], barColor[2], barColor[3], 1)
+		end
 		if ns.DressThemeVeil then ns.DressThemeVeil(health, "plate") end
 		-- Its border: the row's, else General's (the game's: its ground).
 		local edgeKind, size, r, g, b
@@ -391,8 +522,12 @@ function ns.MakePlateRowLookPreview(parent, width, kind)
 			edgeKind, size, r, g, b = ns.StyleBorder(general, "styleBorder")
 		end
 		local game = edgeKind == "game"
-		ground:SetShown(game)
-		if game then
+		-- (The game's: its art copied off a real plate, as it sits round the bar;
+		-- with none on the screen yet, its dark ground.)
+		local trim = game and ns.GamePlateTrim(health)
+		for _, piece in ipairs(health.cineGameTrim or {}) do piece:SetShown(game) end
+		ground:SetShown(game and not trim)
+		if game and not trim then
 			if HasAtlas(PLATE_GROUND) then ground:SetAtlas(PLATE_GROUND) else ground:SetColorTexture(0, 0, 0, 0.7) end
 		end
 		back:SetShown(not game)
@@ -471,6 +606,9 @@ function ns.PlateRowUsual(kind, key)
 			value = shadow and "on" or "game"
 		end
 		return L[SHADOW_WORDS[value] or "The game's"], value
+	elseif key == "LookGradient" then
+		if value == nil then value = "off" end
+		return value == "on" and L["On"] or L["Off"], value
 	elseif key == "LookLevel" then
 		if value == nil then value = "show" end
 		return value == "hide" and L["Hidden"] or L["Shown"], value
