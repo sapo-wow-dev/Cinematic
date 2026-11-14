@@ -213,11 +213,12 @@ local paused -- (PauseReason at the last check, every POLL)
 local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 0.88, ["Skyborne-3"] = 0.85, ["Gnome-2"] = 0.90, ["Human-2"] = 0.94, ["Gnome-3"] = 0.84, ["NightElf-2"] = 1.00, ["NightElf-3"] = 0.88, ["Human-3"] = 0.81,
 	["Orc-2"] = 1.23, ["Orc-3"] = 0.96, ["Scourge-2"] = 0.99, ["Scourge-3"] = 0.90, ["Tauren-2"] = 1.68, ["Tauren-3"] = 1.27,
 	["Troll-2"] = 1.22, ["Troll-3"] = 0.95,
-	-- (Druid forms, per race and sex: the calibrate run in each, 2026-11-14.)
-	["NightElf-3-form1"] = 1.63, ["NightElf-3-form5"] = 1.76,
+	-- (Druid forms, per race, both sexes alike (ScaleOf): the calibrate run
+	-- in each, 2026-11-14, a Night Elf female and then male.)
+	["NightElf-form1"] = 1.63, ["NightElf-form5"] = 1.76,
 	-- (Form 4: 2.32 in five runs, 2.29 at 8 yards and 2.35 at 12, just over
 	-- the spread a run calls good; one run said 2.20, the odd one out.)
-	["NightElf-3-form4"] = 2.32 }
+	["NightElf-form4"] = 2.32 }
 -- bear, cat, dire bear: off the recordings till the sweep's run in them
 local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 -- Forms that keep your own model (warrior stances 17-19, shadowform 28,
@@ -335,6 +336,12 @@ local function ScaleOf(form, foot)
 	if type(saved) == "number" and saved > 0.2 then return saved, "measured here" end
 	if MEASURED_SCALES[key] then return MEASURED_SCALES[key], "built in" end
 	if form then
+		-- (A form's one model for both sexes of a race: a Night Elf male's
+		-- cat 1.62 and bear 1.76, the female's 1.63 and 1.76, 2026-11-14. So
+		-- the table has it once, race-formN.)
+		local race = foot:match("^(.-)%-%d+$") or foot
+		local both = MEASURED_SCALES[("%s-form%d"):format(race, form)]
+		if both then return both, "built in, this race's" end
 		if FORM_SCALES[form] then return FORM_SCALES[form], "estimated for this form" end
 		saved = scales and scales[foot]
 		if type(saved) == "number" and saved > 0.2 then return saved, "on-foot one: form not measured" end
