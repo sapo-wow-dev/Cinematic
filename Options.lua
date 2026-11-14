@@ -10986,6 +10986,9 @@ do
 			local rows = ns.StyleRows(ns.lowHealthKit, content, onLine, LookChanged, "handlePlateStyle", FieldOf)
 			local OUTLINE_NAMES = { [0] = L["None"], L["Thin"], L["Thick"] }
 			local button = rows.Look("", info.full .. " - " .. L["Look"], {
+				-- (Tabbed, the Look settings counted and reset; the row's color and
+				-- the parts it paints are its own, left alone.)
+				tabs = { default = function(key) return LOOK_DEFAULT[key] end },
 				texture = function(look)
 					look.Dropdown(L["Texture:"], "LookTexture", function()
 						local list = { { value = "default", text = defaultName } }

@@ -1573,20 +1573,171 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 		dock:SetPoint("TOPRIGHT", -28, -6)
 		kit.Tooltip(dock, ns.L["Pop out: drag the window anywhere (by its edge). Dock: back beside the settings."])
 		local popStack = kit.Stack(heading, "label") -- (a header's room under the title)
-		local look = ns.StyleRows(kit, pop, popStack, changed, switchKey, fieldOf)
+
+		-- Tabbed (spec.tabs): a tab per group under the title, each group's rows
+		-- on a page of their own, a gold dot on a tab whose settings aren't
+		-- their defaults, and a footer saying what's changed, with Reset all.
+		-- spec.tabs: true (defaults: ns.DEFAULTS), or { default = fn(key) }
+		-- giving a key's default (nil: not counted nor reset, as a row's color).
+		local tabbed = spec.tabs
+		local DefaultOf = type(tabbed) == "table" and tabbed.default or function(key) return ns.DEFAULTS[key] end
+		local tabs, pages, current = {}, {}, 1
+		local strip, footer, summary, resetAll
+		local function Field(key) return fieldOf and fieldOf(key) or key end
+		local function PageChanged(page)
+			for _, key in ipairs(page.keys) do
+				local default = DefaultOf(key)
+				if default ~= nil then
+					local value = ns.StyleKeyGet(Field(key))
+					if value ~= nil and value ~= default then return true end
+				end
+			end
+			return false
+		end
+		local function AnyChanged()
+			for _, page in ipairs(pages) do
+				if PageChanged(page) then return true end
+			end
+			return false
+		end
+		local function PaintTabs()
+			if not tabbed then return end
+			local names = {}
+			for i, tab in ipairs(tabs) do
+				local on = i == current
+				if on then tab.text:SetTextColor(1, 0.82, 0) else tab.text:SetTextColor(0.62, 0.62, 0.62) end
+				tab.line:SetShown(on)
+				local moved = ns.GetDB() and PageChanged(pages[i]) or false
+				tab.dot:SetShown(moved)
+				if moved then names[#names + 1] = tab.name end
+				pages[i]:SetShown(on)
+			end
+			summary:SetText(#names > 0 and ns.L["Changed: %s"]:format(table.concat(names, " · "))
+				or ns.L["Nothing changed"])
+		end
+		-- (A change on a tab's page: its dot and the footer too.)
+		local function TabChanged(...)
+			changed(...)
+			PaintTabs()
+		end
+		if tabbed then
+			strip = CreateFrame("Frame", nil, pop)
+			strip:SetHeight(26)
+			strip:SetPoint("TOPLEFT", pop, "TOPLEFT", 0, -36)
+			strip:SetPoint("RIGHT", pop, "RIGHT")
+			local band = strip:CreateTexture(nil, "BACKGROUND")
+			band:SetAllPoints()
+			band:SetColorTexture(1, 1, 1, 0.04)
+			local rule = strip:CreateTexture(nil, "BORDER")
+			rule:SetPoint("BOTTOMLEFT")
+			rule:SetPoint("BOTTOMRIGHT")
+			rule:SetHeight(1)
+			rule:SetColorTexture(1, 1, 1, 0.12)
+
+			footer = CreateFrame("Frame", nil, pop)
+			footer:SetHeight(34)
+			footer:SetPoint("BOTTOMLEFT")
+			footer:SetPoint("BOTTOMRIGHT")
+			local line = footer:CreateTexture(nil, "BORDER")
+			line:SetPoint("TOPLEFT")
+			line:SetPoint("TOPRIGHT")
+			line:SetHeight(1)
+			line:SetColorTexture(1, 1, 1, 0.12)
+			resetAll = ns.PanelButton(footer)
+			resetAll:SetSize(90, 20)
+			resetAll:SetPoint("RIGHT", -10, 0)
+			resetAll:SetText(ns.L["Reset all"])
+			kit.Tooltip(resetAll, ns.L["Every setting in this panel back to how it starts."])
+			resetAll:SetScript("OnClick", function()
+				for _, page in ipairs(pages) do
+					for _, key in ipairs(page.keys) do
+						local default = DefaultOf(key)
+						if default ~= nil then ns.StyleKeyPut(Field(key), default) end
+					end
+				end
+				changed()
+				kit.Refresh()
+				PaintTabs()
+			end)
+			resetAll.Refresh = function() PaintTabs() end
+			kit.GreyUnless(resetAll, function(db) return On(db) and AnyChanged() end)
+			kit.AddControl(resetAll)
+			summary = kit.Label(footer, "GameFontDisableSmall", "")
+			summary:SetPoint("LEFT", 12, 0)
+			summary:SetPoint("RIGHT", resetAll, "LEFT", -8, 0)
+			summary:SetJustifyH("LEFT")
+			summary:SetWordWrap(false)
+		end
+
+		local look = not tabbed and ns.StyleRows(kit, pop, popStack, changed, switchKey, fieldOf)
 		for _, group in ipairs(LOOK_GROUPS) do
 			local has = false
 			for _, option in ipairs(group[2]) do has = has or (spec[option[1]] and true) end
 			if has then
-				popStack:Add(kit.Label(pop, "GameFontNormal", ns.L[group[1]]), "header")
+				local into, stackNow, lookNow = pop, popStack, look
+				if tabbed then
+					-- (Its page: under the tabs, its own stack, the keys its rows use.)
+					local page = CreateFrame("Frame", nil, pop)
+					page.recordAs = content
+					page:SetPoint("TOPLEFT", strip, "BOTTOMLEFT", 0, 0)
+					page:SetPoint("RIGHT", pop, "RIGHT")
+					page:SetHeight(1)
+					page.keys, page.seen = {}, {}
+					local top = kit.Label(page, "GameFontNormal", "")
+					top:SetPoint("TOPLEFT", 12, -2)
+					page.stack = kit.Stack(top, "header")
+					page.look = ns.StyleRows(kit, page, page.stack, TabChanged, switchKey, function(key)
+						if not page.seen[key] then
+							page.seen[key] = true
+							page.keys[#page.keys + 1] = key
+						end
+						return Field(key)
+					end)
+					pages[#pages + 1] = page
+					into, stackNow, lookNow = page, page.stack, page.look
+
+					local index = #pages
+					local tab = CreateFrame("Button", nil, strip)
+					tab.name = ns.L[group[1]]
+					tab.text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+					tab.text:SetPoint("LEFT", 12, 1)
+					tab.text:SetText(tab.name)
+					tab.dot = tab:CreateTexture(nil, "OVERLAY")
+					tab.dot:SetSize(6, 6)
+					tab.dot:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+					tab.dot:SetVertexColor(1, 0.82, 0)
+					tab.dot:SetPoint("LEFT", tab.text, "RIGHT", 5, 0)
+					tab.line = tab:CreateTexture(nil, "OVERLAY")
+					tab.line:SetPoint("BOTTOMLEFT", 4, 0)
+					tab.line:SetPoint("BOTTOMRIGHT", -4, 0)
+					tab.line:SetHeight(2)
+					tab.line:SetColorTexture(1, 0.82, 0)
+					local glow = tab:CreateTexture(nil, "HIGHLIGHT")
+					glow:SetAllPoints()
+					glow:SetColorTexture(1, 1, 1, 0.06)
+					tab:SetSize(tab.text:GetStringWidth() + 35, 26)
+					local before = tabs[#tabs]
+					if before then
+						tab:SetPoint("LEFT", before, "RIGHT", 0, 0)
+					else
+						tab:SetPoint("LEFT", strip, "LEFT", 4, 0)
+					end
+					tab:SetScript("OnClick", function()
+						current = index
+						PaintTabs()
+					end)
+					tabs[#tabs + 1] = tab
+				else
+					popStack:Add(kit.Label(pop, "GameFontNormal", ns.L[group[1]]), "header")
+				end
 				for _, option in ipairs(group[2]) do
 					local made = spec[option[1]]
 					if type(made) == "function" then
-						made(look)
+						made(lookNow)
 					elseif made then
-						LOOK_BUILD[option[1]](look, made)
+						LOOK_BUILD[option[1]](lookNow, made)
 					elseif made == nil and ns.isDev then
-						local missing = popStack:Add(kit.Label(pop, "GameFontHighlight",
+						local missing = stackNow:Add(kit.Label(into, "GameFontHighlight",
 							option[2] .. ": not wired on this part (dev copy only)"), "label")
 						missing:SetHeight(22)
 						missing:SetTextColor(1, 0.25, 0.25)
@@ -1605,7 +1756,14 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 		if #sharedKeys > 0 then
 			local back = ns.PanelButton(pop)
 			back:SetSize(110, 20)
-			popStack:Add(back, "label")
+			if tabbed then
+				-- (In the footer, before what's changed.)
+				back:SetParent(footer)
+				back:SetPoint("LEFT", footer, "LEFT", 10, 0)
+				summary:SetPoint("LEFT", back, "RIGHT", 10, 0)
+			else
+				popStack:Add(back, "label")
+			end
 			if shared[sharedKeys[1]].visions then
 				back:SetWidth(140)
 				back:SetText(ns.L["Use Visions Style"])
@@ -1625,7 +1783,34 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf)
 		end
 
 		-- (As tall and wide as what's in it, once it's laid out.)
+		-- (Tabbed: as tall as its tallest page and as wide as its widest, so it
+		-- doesn't jump as tabs change; at least 520 wide.)
+		local function FitTabbed()
+			local top, left, under = pop:GetTop(), pop:GetLeft(), strip:GetBottom()
+			if not (top and left and under) then return end
+			local tallest, right = 0, 0
+			local function Reach(each)
+				if each:IsShown() and each:GetRight() then right = math.max(right, each:GetRight()) end
+			end
+			for _, page in ipairs(pages) do
+				page:Show()
+				local bottom = page.stack.last and page.stack.last:GetBottom()
+				if bottom then tallest = math.max(tallest, under - bottom) end
+				for _, child in ipairs({ page:GetChildren() }) do
+					Reach(child)
+					if child.Text or child.text then Reach(child.Text or child.text) end -- (a check's words)
+				end
+				for _, region in ipairs({ page:GetRegions() }) do Reach(region) end
+			end
+			for _, tab in ipairs(tabs) do Reach(tab) end
+			PaintTabs() -- (back to the one page shown)
+			local titleRight = heading:GetRight()
+			if titleRight then right = math.max(right, titleRight + 100) end -- (the buttons past the title)
+			pop:SetWidth(math.max(520, right - left + 12))
+			pop:SetHeight(top - under + tallest + 10 + footer:GetHeight())
+		end
 		local function Fit()
+			if tabbed then return FitTabbed() end
 			local top, bottom = pop:GetTop(), popStack.last:GetBottom()
 			if top and bottom then pop:SetHeight(top - bottom + 12) end
 			local left, right = pop:GetLeft(), 0
