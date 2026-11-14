@@ -199,6 +199,7 @@ BarHoverTest.lua
 LowManaTest.lua
 ThresholdTest.lua
 PlateWidthTest.lua
+DamageVisionMeterTest.lua
 SpokenTest.lua
 CameraScriptsPage.lua
 CameraManager.lua

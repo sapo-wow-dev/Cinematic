@@ -33,6 +33,8 @@ ignore:
   - ThresholdTest.lua
   # (Nameplate width test: /cine debug platewidth, dev copy only)
   - PlateWidthTest.lua
+  # (Damage Vision meter crossfade test: /cine debug dvmeter, dev copy only)
+  - DamageVisionMeterTest.lua
   # (Spoken support test: /cine debug spokentest, dev copy only)
   - SpokenTest.lua
   # (Minimap Copy: the Dev hub page drawing the minimap from the game's own tiles, dev copy only)

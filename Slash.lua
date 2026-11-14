@@ -1711,6 +1711,10 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "bartest" then
 		-- (Dev copy: one run recording an action bar addon's fade, hover and clicks, BarHoverTest.lua.)
 		if ns.BarHoverTest then ns.BarHoverTest() else ns.Print("/cine debug bartest is in the dev copy only.") end
+	elseif cmd == "debug" and arg:find("^dvmeter") then
+		-- (Dev copy: one run checking Damage Vision's crossfade with the damage meter, DamageVisionMeterTest.lua.)
+		if ns.DamageVisionMeterTest then ns.DamageVisionMeterTest(arg:match("^dvmeter%s*(.*)$"))
+		else ns.Print("/cine debug dvmeter is in the dev copy only.") end
 	elseif cmd == "debug" and arg:find("^platewidth") then
 		-- (Dev copy: one run trying three ways to make your target's nameplate narrower, PlateWidthTest.lua.)
 		if ns.PlateWidthTest then ns.PlateWidthTest(arg:match("^platewidth%s*(.*)$"))

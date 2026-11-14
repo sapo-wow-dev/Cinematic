@@ -26,12 +26,14 @@ DEFAULTS.damageVisionLadderRows = 3        -- the rank ladder: at most this many
 DEFAULTS.damageVisionLadderNames = false   -- the rank ladder: the players' names on their rows
 DEFAULTS.damageVisionAlways = false        -- its Show in row's Always: in every fight, wherever you are
 DEFAULTS.damageVisionHold = 5              -- seconds it stays after a fight
+DEFAULTS.damageVisionMeterHidden = true    -- only while Cinematic has the game's damage meter faded out (crossfading)
 DEFAULTS.damageVisionSize = 1              -- its size, times its own
 -- Where it sits: X right and Y up from the middle of the screen, in the UI's
 -- units, by its top edge. The recap takes the same spot (the display fading
 -- out while it's up). Typed on the Style tab or dragged with its mover.
 DEFAULTS.damageVisionX = -861     -- (top left, beside the game's damage meter window)
 DEFAULTS.damageVisionY = 545
+DEFAULTS.damageVisionSpot = "meter"        -- "meter" (over the middle of the meter's window; none shown: X and Y) or "own" (X and Y)
 DEFAULTS.damageVisionRecapBoss = true      -- a recap as a boss dies
 DEFAULTS.damageVisionRecapRun = true       -- ...and as a dungeon's done
 -- The look (the Style tab's; its switch damageVisionLook, off: these defaults).
@@ -86,6 +88,7 @@ local LEAD = { 0.11, 0.62, 0.46 }  -- ahead: teal
 
 local db, frame, recap
 local shown = 0        -- the whole display's opacity as it fades (0-1)
+local meterShown = 1   -- ...times this: the meter's hidden share as it fades in (Only while it's faded out)
 local nextRead = 0
 local encounter        -- the boss fight on now: its name (ENCOUNTER_START to _END)
 local lastFight = 0    -- GetTime() a fight last ended
@@ -223,6 +226,67 @@ end
 
 -- For the full report (DamageReport.lua).
 ns.DamageVisionMeter = { HasMeter = HasMeter, MeterType = MeterType, Rows = Rows, Restricted = Restricted }
+
+-- The game's damage meter windows (DamageMeterStyle.lua finds them), looked
+-- for once a second: the one it sits over, and how much of the meter shows.
+local meterWindows, meterScanAt = {}, 0
+local function MeterWindows()
+	local now = GetTime()
+	if now >= meterScanAt and ns.DamageMeterWindows then
+		meterScanAt = now + 1
+		local ok, list = pcall(ns.DamageMeterWindows)
+		meterWindows = ok and type(list) == "table" and list or {}
+		table.sort(meterWindows, function(a, b)
+			local okA, nameA = pcall(a.GetName, a)
+			local okB, nameB = pcall(b.GetName, b)
+			return tostring(okA and nameA or "") < tostring(okB and nameB or "")
+		end)
+	end
+	return meterWindows
+end
+
+local function Plain(value)
+	return type(value) == "number" and not Secret(value) and value or nil
+end
+
+local function Visible(window)
+	local ok, visible = pcall(window.IsVisible, window)
+	return ok and not Secret(visible) and visible == true
+end
+
+-- The meter's window to sit over: its first shown one with a size (the
+-- "DamageMeter" holder only if there's no other).
+local function MeterWindow()
+	local holder
+	for _, window in ipairs(MeterWindows()) do
+		if Visible(window) then
+			local okW, width = pcall(window.GetWidth, window)
+			local okH, height = pcall(window.GetHeight, window)
+			width, height = okW and Plain(width), okH and Plain(height)
+			if width and height and width > 1 and height > 1 then
+				local okName, name = pcall(window.GetName, window)
+				if not (okName and name == "DamageMeter") then return window end
+				holder = holder or window
+			end
+		end
+	end
+	return holder
+end
+
+-- How much of the meter shows now, 0-1: its most shown window's alpha as
+-- Cinematic fades it (closed or none: 0, hidden).
+local function MeterShows()
+	local okBase, base = pcall(UIParent.GetEffectiveAlpha, UIParent)
+	base = math.max(okBase and Plain(base) or 1, 0.01)
+	local most = 0
+	for _, window in ipairs(MeterWindows()) do
+		if Visible(window) then
+			local ok, alpha = pcall(window.GetEffectiveAlpha, window)
+			most = math.max(most, (ok and Plain(alpha) or 1) / base)
+		end
+	end
+	return math.min(1, most)
+end
 
 -- Whether it shows now, and why not (for the debug command).
 local function Allowed()
@@ -612,9 +676,23 @@ local function SpotPoint(target, x, y, scale, point)
 	target:SetPoint(point, UIParent, "CENTER", (tonumber(x) or 0) / scale, (tonumber(y) or 0) / scale)
 end
 
+-- Over the middle of the meter's window (Sits: Over the damage meter), else
+-- at its X and Y. Gives the window it sits over.
+local function SpotOn(target)
+	if db.damageVisionSpot == "meter" then
+		local window = MeterWindow()
+		if window then
+			target:ClearAllPoints()
+			target:SetPoint("CENTER", window, "CENTER")
+			return window
+		end
+	end
+	SpotPoint(target, db.damageVisionX, db.damageVisionY, db.damageVisionSize, "TOP")
+end
+
 local function Place()
 	frame:SetScale(db.damageVisionSize)
-	SpotPoint(frame, db.damageVisionX, db.damageVisionY, db.damageVisionSize, "TOP")
+	frame.over = SpotOn(frame)
 end
 
 -- The crown: popping in as you take #1, gone as you lose it (or with Crown unticked).
@@ -774,7 +852,24 @@ local function Update(_, elapsed)
 	if shown ~= target then
 		shown = target > shown and math.min(1, shown + elapsed / FADE_TIME) or math.max(0, shown - elapsed / FADE_TIME)
 	end
-	frame:SetAlpha(shown * (Look().damageVisionOpacity or 1))
+	-- (Only while the meter's hidden: in as it fades out, out as it's back.
+	-- Not the test's, which always shows, but the meter test's: test.meter.)
+	-- Coming in, never faster than its own fade: CineMode's start snaps the
+	-- meter out at once, and it popped in with it (tested Forever 2026-11-13).
+	-- Going out it follows the meter as it is.
+	local meterFade = 1
+	if db.damageVisionMeterHidden and (not test or test.meter) then
+		meterFade = 1 - MeterShows()
+		if want and meterFade == 0 then state.why = "the damage meter shows (Only while it's faded out)" end
+	end
+	if meterFade > meterShown then
+		meterShown = math.min(meterFade, meterShown + elapsed / FADE_TIME)
+	else
+		meterShown = meterFade
+	end
+	frame:SetAlpha(shown * (Look().damageVisionOpacity or 1) * meterShown)
+	-- (Over the meter: onto its window once it's made, or another's up.)
+	if db.damageVisionSpot == "meter" and MeterWindow() ~= frame.over then Place() end
 	if shown == 0 and not want then
 		frame:Hide()
 		return
@@ -891,7 +986,7 @@ local function ShowRecap(title, rows, top, report, test)
 	FillRows(recap.rows, rows, rank, top, nil, true)
 	recap:SetHeight(64 + (button and 28 or 0) + math.min(#rows, RECAP_ROWS) * step)
 	recap:SetScale(db.damageVisionSize)
-	SpotPoint(recap, db.damageVisionX, db.damageVisionY, db.damageVisionSize, "TOP")
+	SpotOn(recap)
 	recap:SetAlpha(0)
 	recap:Show()
 	recap.anim:Stop()
@@ -953,14 +1048,14 @@ function ns.RefreshDamageVision()
 	db = ns.GetDB()
 	Wake()
 	-- (A recap up, or the mover out: to the X and Y as typed.)
-	if recap and recap:IsShown() then
-		SpotPoint(recap, db.damageVisionX, db.damageVisionY, db.damageVisionSize, "TOP")
-	end
+	if recap and recap:IsShown() then SpotOn(recap) end
 	if ns.SnapDamageMovers then ns.SnapDamageMovers() end
 end
 
 -- quiet: no line in chat (Show me, with nothing to close).
-function ns.TestDamageVision(quiet)
+-- meterTest: (DamageVisionMeterTest.lua's) it crossfades with the meter as
+-- Only while it's faded out has it, for that many seconds.
+function ns.TestDamageVision(quiet, meterTest)
 	if not frame then return end
 	local mine = UnitName("player")
 	local _, class = UnitClass("player")
@@ -971,10 +1066,41 @@ function ns.TestDamageVision(quiet)
 		{ name = "Hunter", isLocalPlayer = false, classFilename = "HUNTER", totalAmount = 0, rate = 0.88 },
 		{ name = "Priest", isLocalPlayer = false, classFilename = "PRIEST", totalAmount = 0, rate = 0.5 },
 	} }
+	if meterTest then
+		test.meter = true
+		test.ends = GetTime() + meterTest
+	end
 	lastRank = nil
 	Wake()
 	if quiet then return end
 	ns.Print(L["Damage Vision test: a made-up fight for 25 seconds. Close the settings to see it."])
+end
+
+-- For DamageVisionMeterTest.lua: the meter window it sits over (or would),
+-- how much of the meter shows, its own alpha as seen (0-1, over UIParent's)
+-- and both centers.
+function ns.DamageVisionProbe()
+	db = ns.GetDB()
+	local probe = { window = MeterWindow(), meter = MeterShows(), over = frame and frame.over,
+		opacity = Look().damageVisionOpacity or 1 }
+	if frame then
+		local okBase, base = pcall(UIParent.GetEffectiveAlpha, UIParent)
+		local ok, alpha = pcall(frame.GetEffectiveAlpha, frame)
+		probe.alpha = ok and Plain(alpha) and alpha / math.max(okBase and Plain(base) or 1, 0.01) or nil
+		probe.shown = frame:IsShown()
+		local okX, x, y = pcall(frame.GetCenter, frame)
+		local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		if okX and Plain(x) and Plain(y) then probe.x, probe.y = x * scale, y * scale end
+	end
+	local window = probe.window
+	if window then
+		local okX, x, y = pcall(window.GetCenter, window)
+		local scale = window:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		if okX and Plain(x) and Plain(y) then probe.wx, probe.wy = x * scale, y * scale end
+		local okName, name = pcall(window.GetName, window)
+		probe.name = okName and tostring(name) or "?"
+	end
+	return probe
 end
 
 function ns.TestDamageRecap()
@@ -1094,7 +1220,7 @@ end
 
 ns.OnEditMode(function()
 	db = ns.GetDB()
-	if ns.Setting("damageVision") and HasMeter() then
+	if ns.Setting("damageVision") and HasMeter() and db.damageVisionSpot ~= "meter" then
 		for which in pairs(MOVERS) do ns.MoveDamageVision(which, true) end
 	end
 end, function()
@@ -1122,6 +1248,13 @@ function ns.DamageVisionDebug()
 		tostring(db.damageVision), tostring(db.damageVisionStyle), HasMeter() and "yes" or "no"))
 	ns.Print(("  combat %s, boss fight %s, here %s, CineMode %s, test %s"):format(tostring(InCombatLockdown()),
 		tostring(encounter), tostring(kind), tostring(ns.lastCinematic and true or false), test and "on" or "off"))
+	do
+		local window = MeterWindow()
+		local okName, name = pcall(function() return window and window:GetName() end)
+		ns.Print(("  meter window: %s, shows %.2f; only while faded out %s, sits %s%s"):format(
+			okName and tostring(name or "none shown") or "?", MeterShows(), tostring(db.damageVisionMeterHidden),
+			tostring(db.damageVisionSpot), frame and frame.over and " (on it)" or ""))
+	end
 	if not HasMeter() then return end
 	local ok, available, reason = pcall(C_DamageMeter.IsDamageMeterAvailable)
 	ns.Print(("  game's meter available: %s%s; %s CVar: %s"):format(ok and tostring(available) or "error",
@@ -1340,6 +1473,12 @@ function ns.CreateDamageVisionPanel(kit)
 	}, nil, Any)
 	b.Number(L["Stays after a fight:"], "damageVisionHold", 0, 30, 1, 1, L["sec"],
 		L["How long it stays up once a fight is over."])
+	b.Toggles(L["Damage meter:"], {
+		{ "damageVisionMeterHidden", L["Only while it's faded out"],
+			L["Ticked, it shows only while Cinematic has the game's damage meter faded out: it fades in as the " ..
+			"meter fades out, and out as the meter comes back. (When the meter fades: its row on the Frames page.) " ..
+			"Goes well with Sits: Over the damage meter on the Look tab."] },
+	})
 
 	stack:Header(content, L["What it counts"])
 	rows.Dropdown(L["Count:"], "damageVisionCount", {
@@ -1650,18 +1789,36 @@ function ns.CreateDamageVisionLookPanel(kit)
 	-- Its X and Y from the middle of the screen (the recap's too), and its mover.
 	local XY_TIP = L["How far right (X) and up (Y) from the middle of the screen it sits; below 0, left or down. " ..
 		"Dragging it with Move fills these in."]
+	b.Choices(L["Sits:"], "damageVisionSpot", {
+		{ "own", L["Where you put it"], L["At the X and Y below (or where you drag it with Move)."] },
+		{ "meter", L["Over the damage meter"], L["Over the middle of the game's damage meter window, its recap " ..
+			"too. With Only while it's faded out (the Vision tab), one fades in as the other fades out."] },
+	})
+	local spotMade = {}
 	local function Spot(label, xKey, yKey, buttonText, buttonTip, which)
 		local row, name = b.Row(label)
+		spotMade[#spotMade + 1] = row
 		local line = kit.BoxLine(content) -- (the page's: its Reset puts them back)
 		line:SetPoint("LEFT", name, "RIGHT", 4, 0)
 		line:Box("X", xKey, -2000, 2000, 1, "%d", 1, XY_TIP, Changed, 52)
 		local yBox = line:Box("Y", yKey, -1200, 1200, 1, "%d", 1, XY_TIP, Changed, 52)
 		local button = b.Button(row, buttonText, 110, buttonTip, function() ns.MoveDamageVision(which) end)
 		button:SetPoint("LEFT", yBox, "RIGHT", 16, 0)
+		spotMade[#spotMade + 1] = line
 	end
 	Spot(L["Damage Vision:"], "damageVisionX", "damageVisionY", L["Move"],
 		L["A box where it and its recap show: drag it where you want it, left-click to set, right-click to put " ..
 		"it back. Close the settings to see it."], "display")
+	-- (Over the meter: no X, Y or Move to use, so none shown.)
+	local spotHolder = CreateFrame("Frame", nil, content)
+	spotHolder:Hide()
+	spotHolder.pageSwitch = false
+	spotHolder.Refresh = function()
+		local own = ns.GetDB().damageVisionSpot ~= "meter"
+		for _, each in ipairs(spotMade) do each:SetShown(own) end
+		if not own and movers.display and movers.display:IsShown() then movers.display:Hide() end
+	end
+	kit.AddControl(spotHolder)
 
 	canvas:SetScript("OnShow", kit.PageShown(kit.Refresh, content))
 	canvas:Hide()
