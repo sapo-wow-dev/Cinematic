@@ -41,8 +41,12 @@ local L = ns.L
 -- Soft release: in the player copy it's there but locked, page and all,
 -- till a tester types /cine testshoulder (db.shoulderCamTester) and reloads.
 -- The dev copy always has it.
+-- (Read from CinematicDB itself: the pages are built at ADDON_LOADED by the
+-- language step, Locales.lua, before Core sets ns.db, so ns.db was nil then
+-- and a tester got no page.)
 function ns.ShoulderCamUnlocked()
-	return ns.isDev or (ns.db and ns.db.shoulderCamTester) and true or false
+	local db = ns.db or CinematicDB
+	return ns.isDev or (type(db) == "table" and db.shoulderCamTester) and true or false
 end
 
 -- On, and not standing aside for another addon that owns the shoulder offset
