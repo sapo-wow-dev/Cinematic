@@ -689,7 +689,9 @@ local function DressCdmIcon(item, icon, plan)
 		part = { on = {} }
 		part.mask = item:CreateMaskTexture()
 		part.mask:SetAllPoints(icon)
-		part.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		-- (Ours, as the buttons': a soft edge just inside the ring. The game's
+		-- circle has a hard one, a stair step at icon size.)
+		part.mask:SetTexture(ROUND_MASK, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
 		cdmParts[item] = part
 	end
 	-- (Every texture of the icon's: its picture and any square border or overlay.)

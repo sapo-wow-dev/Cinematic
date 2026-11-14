@@ -11,17 +11,21 @@ from PIL import Image
 
 N = 128
 BUTTON = 45.0  # the game's main bar button, pixels
-SOFT = 1.5     # pixels each edge fades over
+# Texture pixels each edge fades over: one screen pixel on the 45 pixel button.
+# (The game draws our TGAs without mipmaps: shrunk to ~0.35, an edge fading over
+# less than a screen pixel lands on one sample or the next, a stair step.)
+SOFT = 1.0 * N / BUTTON
 OUT = sys.argv[1] if len(sys.argv) > 1 else "."
 
 
 def alpha(x, y, width):
-    outer = N / 2 - SOFT
+    outer = N / 2 - SOFT / 2
     d = ((x + 0.5 - N / 2) ** 2 + (y + 0.5 - N / 2) ** 2) ** 0.5
-    # Distance outside the line (negative: within it), fading to 0 over SOFT.
+    # Distance outside the line (negative: within it); the fade is centered on
+    # the line's edges, so the line keeps its width.
     past = max(d - outer, outer - width - d)
-    t = min(1.0, max(0.0, 1 - past / SOFT))
-    return round(255 * t * t * (3 - 2 * t))
+    t = min(1.0, max(0.0, 0.5 - past / SOFT))
+    return round(255 * t)
 
 
 for size in range(1, 11):
@@ -36,10 +40,10 @@ IN = 1.5  # texture pixels
 
 
 def mask(x, y):
-    edge = N / 2 - SOFT - IN
+    edge = N / 2 - SOFT / 2 - IN
     d = ((x + 0.5 - N / 2) ** 2 + (y + 0.5 - N / 2) ** 2) ** 0.5
-    t = min(1.0, max(0.0, (edge - d) / SOFT))
-    return round(255 * t * t * (3 - 2 * t))
+    t = min(1.0, max(0.0, 0.5 + (edge - d) / SOFT))
+    return round(255 * t)
 
 
 image = Image.new("RGBA", (N, N))
@@ -54,7 +58,7 @@ GLOW = 7.0
 
 
 def glow(x, y):
-    edge = N / 2 - SOFT - IN
+    edge = N / 2 - SOFT / 2 - IN
     d = ((x + 0.5 - N / 2) ** 2 + (y + 0.5 - N / 2) ** 2) ** 0.5
     if d > edge:
         t = max(0.0, 1 - (d - edge) / SOFT)
