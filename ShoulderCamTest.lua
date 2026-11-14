@@ -755,10 +755,10 @@ end
 -- (Then, with the cat at 15%: part of the new offset written early, at the
 -- form's change, ahead of the model (ShoulderModelScale's early share; into
 -- a form only).)
--- (Then, the cat in as built (half early, 15% push): out of it, a push
--- past the elf's offset as her model comes back (boostOut), never tried.)
+-- (Then, out of the cat: a push past the elf's offset as her model comes
+-- back (boostOut). 15% won, 2026-11-14 (ShoulderCam.lua's SWAP_PUSH_OUT_OF).)
 local SHIFT_TIMINGS = {
-	{ "as built (out: no push)" },
+	{ "as built (cat: 15% push in, 15% out)" },
 	{ "out: 15% past for 0.035 s", boostOut = 0.15, boostOutFor = 0.035 },
 	{ "out: 35% past for 0.035 s", boostOut = 0.35, boostOutFor = 0.035 },
 	{ "out: 50% past for 0.035 s", boostOut = 0.5, boostOutFor = 0.035 },

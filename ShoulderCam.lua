@@ -264,9 +264,11 @@ local SWAP_PUSH_OF = { [1] = 0.15 }
 local shownKnown, shownForm, swapBy, swapLed
 local lastYards, boostFrom, boostUntil, boostBy = 0, nil, nil, nil -- (yards at the last frame; a push's start, end and share)
 -- (Out of a form (was: the form left): no push unless one's set for that
--- form, SWAP_PUSH_OUT_OF, or the shift run's boostOut. Out of the cat it dipped
--- 0.7-0.8 toward the middle every time, never pushed: the shift run tries.)
-local SWAP_PUSH_OUT_OF = {}
+-- form, SWAP_PUSH_OUT_OF, or the shift run's boostOut.)
+-- (The cat, the shift runs, 2026-11-14, from where you stood: no push 0 and
+-- -0.6; 15% +0.1 and -0.4, the least; 35% +0.6 and -0.2; 50% +1.1; 35% for
+-- twice as long +1.3.)
+local SWAP_PUSH_OUT_OF = { [1] = 0.15 }
 local function Swapped(was)
 	local knobs = ns.shoulderSwap
 	if shownForm == nil then
@@ -333,10 +335,13 @@ end
 -- way to the new one's offset already, the game's own ease given a head
 -- start. (The offset goes as 1 / the factor, its cap too: so the share's of
 -- the offset, 1/f = (1 - share)/old + share/new.)
--- (The cat, the shift runs, 2026-11-14, with its 15% push, from where you
--- stood: none early +0.5 then -0.5; a third +0.3 to +0.4, -0.2; half +0.4
--- and no dip, the least. Without the push each went further out first.)
-local SWAP_EARLY_OF = { [1] = 0.5 } -- (form -> share, into it, once measured)
+-- (None for now. The cat, the shift runs, 2026-11-14, with its 15% push,
+-- from where you stood: none early about +0.5 then -0.5 every time; a third
+-- or half early +0.3 to +0.4 and -0.2 at most while the game swapped the
+-- model 0.03-0.05 s after the form, but -0.9 to -1.4 at 0.06-0.07 s (the elf
+-- slid in before the cat showed). That wait varies by session (0.03-0.10 s
+-- that day), so a share written up front can't fit it.)
+local SWAP_EARLY_OF = {} -- (form -> share, into it)
 function ns.ShoulderModelScale()
 	local _, form, foot = ns.ShoulderModelKey()
 	local scale, from = ScaleOf(form, foot)
