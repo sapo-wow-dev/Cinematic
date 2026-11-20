@@ -35,7 +35,8 @@ local UNITS = { PLAYER = "player", TARGET = "target", FOCUS = "focus", PET = "pe
 	FOCUSTOT = "focustarget" }
 local GAME_FRAMES = { PLAYER = "PlayerFrame", TARGET = "TargetFrame", FOCUS = "FocusFrame", PET = "PetFrame",
 	TOT = "TargetFrameToT", FOCUSTOT = "FocusFrameToT" }
-local ROLES = { "art", "portrait", "health", "power", "name", "level" }
+-- (power2: the player frame's third bar, under a class resource: retail's Elemental mana.)
+local ROLES = { "art", "portrait", "health", "power", "power2", "name", "level" }
 -- How far apart is "different": places and sizes in widths of the health bar,
 -- a bar's shape (width over height) and a font's size as a part of its own.
 local PLACE_OFF, SIZE_OFF, SHAPE_OFF, FONT_OFF = 0.08, 0.2, 0.25, 0.25
@@ -75,8 +76,22 @@ local function GameParts(frame, id)
 	parts.name = frame.name or frame.Name
 	parts.portrait = frame.portrait or frame.Portrait
 	local holder = frame.PlayerFrameContainer or frame.TargetFrameContainer or frame
-	parts.art = holder.FrameTexture or frame.FrameTexture
+	-- (The art shown: the player's taller class resource one on retail, 2026-11-20.)
+	for _, key in ipairs({ "FrameTexture", "AlternatePowerFrameTexture", "VehicleFrameTexture" }) do
+		local texture = holder[key]
+		if type(texture) == "table" and texture.IsVisible and texture:IsVisible() then
+			parts.art = texture
+			break
+		end
+	end
+	parts.art = parts.art or holder.FrameTexture or frame.FrameTexture
 		or (frame.GetName and frame:GetName() and (_G[frame:GetName() .. "Texture"] or _G[frame:GetName() .. "TextureFrameTexture"]))
+	if id == "PLAYER" then
+		local content = frame.PlayerFrameContent
+		local main = type(content) == "table" and content.PlayerFrameContentMain
+		local area = type(main) == "table" and main.AlternatePowerBarArea
+		parts.power2 = (type(area) == "table" and area.AlternatePowerBar) or _G.AlternatePowerBar
+	end
 	-- (A frame with no art by name (the pet's): its biggest piece of unit frame art.)
 	if type(parts.art) ~= "table" or not parts.art.GetAtlas then
 		local best, most = nil, 0
@@ -110,6 +125,7 @@ end
 local function OurParts(unit)
 	local parts = {}
 	parts.health, parts.power, parts.name = unit.health, unit.power, unit.name
+	parts.power2 = unit.copy and unit.copy.on and unit.copy.power2 or nil
 	parts.portrait = (unit.portrait and unit.portrait:IsShown()) and unit.portrait or unit.face
 	parts.level = unit.badge and unit.badge.text
 	-- (Its frame art: the game look's copy of the game's (UnitFrameCopy.lua), its drawn metal, else nothing.)
@@ -265,7 +281,16 @@ local function Compare(real, ours, id)
 		elseif g and o then
 			findings.checks = findings.checks + (g.kind == "FontString" and 5 or 4)
 			-- (The face is the unit's own: never the same picture.)
-			if role ~= "portrait" and g.art and g.art ~= o.art then
+			-- (A class power's own art (Maelstrom, retail 2026-11-20) is the spec's: the
+			-- sample's bar is mana's. Noted, not counted.)
+			-- (So is another unit's power bar art: a warrior's rage, retail 2026-11-20.)
+			local classPower = role == "power" and type(g.art) == "string"
+				and (not g.art:find("UnitFrame", 1, true) or (id ~= "PLAYER" and id ~= "PET"))
+			if classPower and g.art ~= o.art then
+				findings.notes = findings.notes or {}
+				table.insert(findings.notes, ("power bar art %s in game is its class power's"):format(g.art))
+			end
+			if role ~= "portrait" and not classPower and g.art and g.art ~= o.art then
 				Say(("ART %s: %s in game, %s ours"):format(role, tostring(g.art), tostring(o.art)))
 			end
 			-- (Another's level is colored by how hard it is for you: the unit's, not the look's.)
@@ -489,8 +514,22 @@ local function ReadPhase(phase, treeToo, done)
 		for _, id in ipairs(IDS) do
 			local frame = GameFrame(id)
 			local unit = preview.units and preview.units[id]
-			if frame and K.Plain(K.Call(frame, "IsVisible")) and UnitExists(UNITS[id]) and unit then
-				Keep(phase .. ":game:" .. id, ReadFrame(GameParts(frame, id), "game:" .. id), stamp)
+			local gameParts = frame and GameParts(frame, id)
+			local health = gameParts and gameParts.health
+			if frame and K.Plain(K.Call(frame, "IsVisible")) and health and not K.Showing(health) then
+				-- (Faded out: a HUD rule of yours hides it now, retail 2026-11-20.)
+				Log(("%s: shown but faded out (alpha %s): a HUD rule hides it now, not compared"):format(id,
+					tostring(K.Round(K.Num(K.Call(frame, "GetEffectiveAlpha")), 2))))
+			elseif frame and K.Plain(K.Call(frame, "IsVisible")) and UnitExists(UNITS[id]) and unit then
+				Keep(phase .. ":game:" .. id, ReadFrame(gameParts, "game:" .. id), stamp)
+				-- (How its name was read for the copy: its place, its anchor, or why neither.)
+				local recipe = ns.UnitFrameRecipe and ns.UnitFrameRecipe(unit.id)
+				local entry = recipe and recipe.name
+				local why = gameParts.name and ns.UnitFrameTextWhy and ns.UnitFrameTextWhy[gameParts.name]
+				Log(("  recipe %s name: %s%s"):format(id, entry == nil and "none" or entry.hidden and "hidden"
+					or entry.anchor and ("on its anchor " .. tostring(entry.anchor.point) .. ", " .. tostring(entry.justify))
+					or entry.onBar and ("its side only, on the health bar's top edge, " .. tostring(entry.justify))
+					or ("placed, " .. tostring(entry.justify)), why and (" (" .. why .. ")") or ""))
 				Keep(phase .. ":ours:" .. id, ReadFrame(OurParts(unit), "ours:" .. id), stamp)
 				Log(("  ours %s: %s"):format(id, unit.copy and unit.copy.on and "the copy" or ("drawn (" .. tostring(unit.copyWhy) .. ")")))
 				if treeToo then Tree(id, frame) end
@@ -610,7 +649,7 @@ Missing = function()
 		list[#list + 1] = UnitExists("target") and "a TARGET not yourself" or "a TARGET (a mob with mana is best)"
 	end
 	if not UnitExists("focus") then list[#list + 1] = "a FOCUS (/focus on your target)" end
-	if not UnitExists("pet") then list[#list + 1] = "your PET out" end
+	if not UnitExists("pet") then list[#list + 1] = "your PET out (summoning it in the fight is fine)" end
 	-- (Their targets of target: a target and a focus that are targeting someone.
 	-- A fight's fine: pull the mob you've focused, it targets you or your pet.)
 	if not UnitExists("targettarget") then list[#list + 1] = "your target TARGETING someone (pull it: fighting is fine)" end
@@ -801,6 +840,9 @@ function ns.PreviewMatchUnits(arg)
 	ns.TestPrompt("Preview match (unit frames): putting the game's look on.", 3)
 	C_Timer.After(SETTLE, function()
 		if not run then return end
+		-- (Every frame up read now, out of a fight, in the game's look: in one
+		-- (retail) a name's place is secret, and only this read measures it.)
+		preview:Refresh()
 		run.lookReady = true
 		Ready()
 	end)

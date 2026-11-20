@@ -75,7 +75,25 @@ held to ns.StylePreviewHeight()). Fixed: extras never take another unit frame's 
 the bad ones), level text sized to its words, frames sized against each other by their real scale, a layout pass
 (UnitStyle.lua LayoutStage: yours + pet top left, party under, target + ToT top right, focus + ToT under, then
 shrunk to the screen). ns.UnitPreviewLayoutCheck (Dev/PreviewMatchUnits.lua): CUT / OVERLAP / TEXT lines, run
-offline at 480 and 760 wide and in the in-game test (LAYOUT lines) at the screens' size. Left: then target of target, party, the theme shapes, retail. Still drawn: pet, target of target, party, and every theme shape.
+offline at 480 and 760 wide and in the in-game test (LAYOUT lines) at the screens' size.
+Retail baseline (12.1.5, 2026-11-20): target, pet 100; focus, ToTs 96 (name justify); player 83. No retail recipe
+had been read: the player frame's art there was the class resource one (AlternatePowerFrameTexture, Elemental:
+Maelstrom bar + a mana bar under it), so the read failed and Forever's built-in numbers stood in. Fixed (offline):
+the shown art variant is read, the third bar (power2) read and drawn, parts the game hides are kept hidden (your
+level at the top level, the target's level circle on retail), a text whose place is secret (retail's names and bar
+texts) is placed by its anchor. The test reads the shown art and power2; a class power's own art is noted, not
+counted. Retail run 17:25 (pet summoned in the fight): player, target, focus, pet 100; both ToTs 96: on retail a
+name's anchor is secret too (GetPoint gives nothing), so the ToT name had no place at all: now its side and font
+are read and the copy sets it on the health bar's top edge on that side.
+Retail run 17:28: every pair compared 100 (focus's ToT too). The screenshot showed the Lich King's name on his
+level: the in-fight read (side only) had replaced the place measured before. Now a weaker read (anchor or side
+only) never replaces a measured place, and the test reads every frame up once at its start, out of a fight, in
+the game's look. The focus's level is ~5 px in the preview (true to the game's smaller focus frame, shrunk):
+a minimum text size is the user's call.
+Retail run 17:36: all 11 pairs 100, layout clean; the screenshot shows the Lich King's level then name on the strip
+(retail's built-in places, Style/UnitFrameCopy.lua RETAIL: a name's place is secret on retail even out of a fight).
+The target's power bar came out grey: the mob's bar was the game's plain tinted art "-Bar-Mana-Status"; now drawn
+as mana's colored art too. Next on retail: bar texts ("100%", "554 K"), the aura row, leader/role icons. Left: then target of target, party, the theme shapes, retail. Still drawn: pet, target of target, party, and every theme shape.
 
 Next (the order of work below, step 4): unit frames (copy, B), nameplates, action bars (A), raid (B), tooltip (A),
 personal resource, roll window, quest item, combat text. Each: add pairs to the match test first, get a baseline,

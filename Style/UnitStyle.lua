@@ -2770,6 +2770,7 @@ local function CopyOff(unit)
 		extra:Hide()
 		if extra.mask then extra.mask:Hide() end
 	end
+	if copy.power2 then copy.power2:Hide() end
 	unit.power:Show()
 	unit.face:SetDrawLayer("ARTWORK")
 	unit.portrait:SetDrawLayer("ARTWORK")
@@ -2788,6 +2789,7 @@ local function CopyOff(unit)
 		badge.text:SetJustifyH("CENTER")
 		badge.text:SetFontObject(_G.GameFontHighlightSmall)
 		badge.text:SetSize(0, 0)
+		badge.text:Show()
 		badge.text:SetTextColor(1, 1, 1)
 	end
 end
@@ -2876,7 +2878,7 @@ local function CopyLook(unit, view, on)
 		region:SetSize(math.max(entry.w * scale, 0.1), math.max(entry.h * scale, 0.1))
 	end
 	local function Art(texture, entry)
-		if entry and SetAtlasSafe(texture, entry.atlas) then
+		if entry and not entry.hidden and SetAtlasSafe(texture, entry.atlas) then
 			Place(texture, entry)
 			texture:Show()
 		else
@@ -2898,6 +2900,8 @@ local function CopyLook(unit, view, on)
 	unit.face:SetDrawLayer("BACKGROUND", 1)
 	local portraitMask = recipe.portraitMask
 	if unit.faceMask and portraitMask and SetAtlasSafe(unit.faceMask, portraitMask.atlas) then Place(unit.faceMask, portraitMask) end
+	-- (A part the game hides there: none here either.)
+	local function Shown(entry) return entry and not entry.hidden and entry end
 	CopyBar(copy, unit.health, recipe.health, recipe.healthMask, nil, view, Place, view.ufHealthColor ~= "game")
 	local mana = sample.power[1] == 0 and sample.power[3] == 1
 	local powerType = recipe.info and recipe.info.powerType
@@ -2907,20 +2911,37 @@ local function CopyLook(unit, view, on)
 		if ok and Readable(kind) then powerType = kind end
 	end
 	if unit.id == "PET" and type(powerType) == "number" then mana = powerType == 0 end
-	if recipe.power then
+	if Shown(recipe.power) then
 		unit.power:Show()
 		-- (Mana's art, whatever the frame showed when read: energy's on a druid in
 		-- cat form, 2026-11-20. Another power is a grey of it in its own color.)
+		-- (And the plain one the game tints with a power's color, "-Bar-Mana-Status"
+		-- (a mob's energy on retail, 2026-11-20): white untinted, it came out grey.)
 		local entry = recipe.power
 		if type(entry.atlas) == "string" and entry.atlas:find("%-Bar%-%a+$") then
 			local asMana = {}
 			for key, value in pairs(entry) do asMana[key] = value end
-			asMana.atlas = entry.atlas:gsub("%-Bar%-%a+$", "-Bar-Mana")
+			asMana.atlas = entry.atlas:gsub("%-Bar%-%a+%-Status$", "-Bar-Mana"):gsub("%-Bar%-%a+$", "-Bar-Mana")
 			entry = asMana
 		end
 		CopyBar(copy, unit.power, entry, recipe.powerMask, "ufPower", view, Place, not mana)
 	else
 		unit.power:Hide()
+	end
+	local second = Shown(recipe.power2)
+	if second and not copy.power2 then
+		copy.power2 = CreateFrame("StatusBar", nil, unit)
+		copy.power2:SetMinMaxValues(0, 1)
+		copy.power2:SetValue(0.6)
+		copy.power2.game = copy.power2:CreateTexture(nil, "BACKGROUND")
+		copy.power2.gameFill = true
+	end
+	if copy.power2 then
+		copy.power2:SetShown(second and true or false)
+		if second then
+			copy.power2:SetFrameLevel(unit.power:GetFrameLevel())
+			CopyBar(copy, copy.power2, second, Shown(recipe.power2Mask), "ufPower", view, Place, false)
+		end
 	end
 	-- (The frame's other art as the game showed it: what's over the bars over ours too.)
 	local extras = recipe.extras or {}
@@ -2956,9 +2977,25 @@ local function CopyLook(unit, view, on)
 		copy.extras[i]:Hide()
 		if copy.extras[i].mask then copy.extras[i].mask:Hide() end
 	end
-	local name = recipe.name
+	local name = Shown(recipe.name)
+	-- (Its place secret in the read: on its anchor point, as wide as its words.)
+	local function PlaceText(text, entry)
+		if entry.onBar then
+			-- (Nothing of its place readable: on the health bar's top edge, on its side.)
+			local side = entry.justify == "LEFT" and "LEFT" or entry.justify == "RIGHT" and "RIGHT" or ""
+			text:ClearAllPoints()
+			text:SetSize(0, 0)
+			text:SetPoint("BOTTOM" .. side, unit.health, "TOP" .. side, 0, 1)
+		elseif entry.anchor then
+			text:ClearAllPoints()
+			text:SetSize(0, 0)
+			text:SetPoint(entry.anchor.point, unit, "TOPLEFT", entry.anchor.x * scale, -entry.anchor.y * scale)
+		else
+			Place(text, entry)
+		end
+	end
 	if name then
-		Place(unit.name, name)
+		PlaceText(unit.name, name)
 		unit.name:SetJustifyH(name.justify or "CENTER")
 		local file, _, flags = unit.name:GetFont()
 		if file and name.size then unit.name:SetFont(file, name.size * scale * (tonumber(view.ufNameSize) or 1), flags or "") end
@@ -2980,7 +3017,15 @@ local function CopyLook(unit, view, on)
 		Art(copy.circle, recipe.circle)
 		Art(copy.corner, recipe.corner)
 		local level = recipe.level
-		if level then
+		badge.text:SetShown(not (level and level.hidden))
+		if level and level.anchor then
+			badge.text:SetJustifyH(level.justify or "CENTER")
+			PlaceText(badge.text, level)
+			local file, _, flags = badge.text:GetFont()
+			if file and level.size then badge.text:SetFont(file, level.size * scale, flags or "") end
+			level = nil
+		end
+		if level and not level.hidden then
 			-- (On the game's side of its spot, as wide as its words: in a box as wide
 			-- as the level read ("??", one digit), "63" was cut to "..", 2026-11-20.)
 			local justify = level.justify or "CENTER"

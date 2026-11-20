@@ -44,6 +44,27 @@ local BUILT_IN = {
 }
 BUILT_IN.FOCUS = BUILT_IN.TARGET
 ns.UNIT_FRAME_RECIPES = BUILT_IN
+-- Retail's own, over those (12.1.5, the Preview Match run of 2026-11-20): the
+-- target's and focus's level on the left of the name strip, no circle, the
+-- name after it, left. Their place is secret there most of the time (the
+-- name's always), so a read can't be counted on to give it.
+local RETAIL = {
+	TARGET = {
+		name = { x = 31, y = 9.5, w = 90, h = 12, size = 10, justify = "LEFT" },
+		level = { x = 4, y = 10.5, w = 15, h = 10, size = 10, justify = "CENTER" },
+		circle = { hidden = true },
+	},
+}
+RETAIL.FOCUS = RETAIL.TARGET
+local function BuiltIn(id)
+	local base = BUILT_IN[id]
+	local over = ns.isRetail and RETAIL[id]
+	if not over then return base end
+	local merged = {}
+	for role, entry in pairs(base or {}) do merged[role] = entry end
+	for role, entry in pairs(over) do merged[role] = entry end
+	return merged
+end
 
 -- (The target of target: the target's, else the focus's; one look for both.)
 local FRAME_NAMES = { PLAYER = { "PlayerFrame" }, TARGET = { "TargetFrame" }, FOCUS = { "FocusFrame" }, PET = { "PetFrame" },
@@ -108,9 +129,22 @@ GameRegions = function(frame, id)
 	local health = Region(frame.healthbar) or Region(frame.HealthBar)
 	local power = Region(frame.manabar) or Region(frame.ManaBar)
 	local name = frame.GetName and frame:GetName()
+	-- (Its art as shown: the player's is a taller one with a class resource bar
+	-- under the power (an Elemental shaman's Maelstrom over mana, retail
+	-- 2026-11-20), another in a vehicle.)
+	local art
+	if holder then
+		for _, key in ipairs({ "FrameTexture", "AlternatePowerFrameTexture", "VehicleFrameTexture" }) do
+			local texture = Region(holder[key])
+			if texture and Plain(Call(texture, "IsVisible")) then
+				art = texture
+				break
+			end
+		end
+		art = art or Region(holder.FrameTexture)
+	end
 	local parts = {
-		art = holder and Region(holder.FrameTexture) or Region(frame.FrameTexture)
-			or (name and Region(_G[name .. "Texture"])),
+		art = art or Region(frame.FrameTexture) or (name and Region(_G[name .. "Texture"])),
 		portrait = Region(frame.portrait) or Region(frame.Portrait),
 		health = health,
 		power = power,
@@ -125,6 +159,14 @@ GameRegions = function(frame, id)
 	parts.powerMask = power and Region(power.ManaBarMask) or MaskOf(power and Call(power, "GetStatusBarTexture"))
 	local contextual = type(content) == "table" and content.PlayerFrameContentContextual
 	if id == "PLAYER" and type(contextual) == "table" then parts.corner = Region(contextual.PlayerPortraitCornerIcon) end
+	if id == "PLAYER" then
+		local area = main and type(main.AlternatePowerBarArea) == "table" and main.AlternatePowerBarArea
+		local second = Region(area and area.AlternatePowerBar) or Region(_G.AlternatePowerBar)
+		if second then
+			parts.power2 = second
+			parts.power2Mask = Region(second.PowerBarMask) or MaskOf(Call(second, "GetStatusBarTexture"))
+		end
+	end
 	-- (Its target of target: where its art sits on this frame. Your pet's on yours.)
 	local tot = Region(frame.totFrame) or (name and Region(_G[name .. "ToT"]))
 	if (id == "TARGET" or id == "FOCUS") and tot and Plain(Call(tot, "IsVisible")) then
@@ -153,6 +195,54 @@ end
 local function Round(value) return math.floor(value * 10 + 0.5) / 10 end
 local RECIPE_VERSION = 2
 
+-- Where a point of a region is, in screen units (its rect readable).
+local POINTS = { TOPLEFT = { 0, 1 }, TOP = { 0.5, 1 }, TOPRIGHT = { 1, 1 }, LEFT = { 0, 0.5 }, CENTER = { 0.5, 0.5 },
+	RIGHT = { 1, 0.5 }, BOTTOMLEFT = { 0, 0 }, BOTTOM = { 0.5, 0 }, BOTTOMRIGHT = { 1, 0 } }
+local function PointOf(region, point)
+	local l, b, w, h = Call(region, "GetRect")
+	l, b, w, h = Plain(l), Plain(b), Plain(w), Plain(h)
+	local scale = Plain(Call(region, "GetEffectiveScale"))
+	local at = POINTS[point]
+	if type(l) ~= "number" or type(w) ~= "number" or type(scale) ~= "number" or not at or w ~= w then return nil end
+	return (l + w * at[1]) * scale, (b + h * at[2]) * scale
+end
+
+-- A text whose place the game keeps secret (retail's names and bar texts,
+-- 2026-11-20: their words are, so their size is): its anchor point, from where
+-- it's tied and how far, which are readable. Its justify and font too.
+ns.UnitFrameTextWhy = {} -- [region] = why its place couldn't be read, for the Preview Match test's log
+local function ReadTextAnchor(region, art, artL, artT)
+	local ok, point, relative, relativePoint, x, y = pcall(region.GetPoint, region, 1)
+	point, relativePoint, x, y = Plain(point), Plain(relativePoint), Plain(x), Plain(y)
+	if not (ok and type(point) == "string" and type(relativePoint) == "string" and relative) then
+		ns.UnitFrameTextWhy[region] = ("its anchor unreadable (%s %s %s)"):format(tostring(ok), tostring(point), tostring(relativePoint))
+		-- (Its anchor's secret too (retail's target of target, 2026-11-20): only its
+		-- side and font are read; the copy sets it on the health bar's top edge.)
+		local justify = Plain(Call(region, "GetJustifyH"))
+		if type(justify) ~= "string" then return nil end
+		local _, size = Call(region, "GetFont")
+		size = Plain(size)
+		local scale, artScale = Plain(Call(region, "GetEffectiveScale")), Plain(Call(art, "GetEffectiveScale"))
+		local f = (type(scale) == "number" and type(artScale) == "number" and artScale > 0) and scale / artScale or 1
+		return { onBar = true, justify = justify, size = type(size) == "number" and Round(size * f) or nil }
+	end
+	local rx, ry = PointOf(relative, relativePoint)
+	local scale, artScale = Plain(Call(region, "GetEffectiveScale")), Plain(Call(art, "GetEffectiveScale"))
+	if not (rx and type(scale) == "number" and type(artScale) == "number" and artScale > 0) then
+		ns.UnitFrameTextWhy[region] = ("tied at %s to %s's %s, whose place is unreadable too"):format(point,
+			tostring(Plain(Call(relative, "GetName")) or Plain(Call(relative, "GetObjectType"))), relativePoint)
+		return nil
+	end
+	ns.UnitFrameTextWhy[region] = nil
+	local px, py = rx + (tonumber(x) or 0) * scale, ry + (tonumber(y) or 0) * scale
+	local entry = { anchor = { point = point, x = Round(px / artScale - artL), y = Round(artT - py / artScale) } }
+	local _, size = Call(region, "GetFont")
+	size = Plain(size)
+	entry.size = type(size) == "number" and Round(size * scale / artScale) or nil
+	entry.justify = Plain(Call(region, "GetJustifyH"))
+	return entry
+end
+
 -- One part: its place from the art's top-left, in the art's own units.
 local function ReadPart(region, art, artL, artT)
 	if not Plain(Call(region, "IsVisible")) then return nil end
@@ -161,6 +251,7 @@ local function ReadPart(region, art, artL, artT)
 	local scale, artScale = Plain(Call(region, "GetEffectiveScale")), Plain(Call(art, "GetEffectiveScale"))
 	if type(l) ~= "number" or type(w) ~= "number" or type(scale) ~= "number" or type(artScale) ~= "number"
 		or artScale <= 0 or w ~= w or h ~= h then
+		if Call(region, "GetObjectType") == "FontString" then return ReadTextAnchor(region, art, artL, artT) end
 		return nil
 	end
 	local f = scale / artScale
@@ -270,7 +361,13 @@ function ns.ReadUnitFrameRecipe(id)
 	if type(l) ~= "number" or type(h) ~= "number" or w ~= w then return nil end
 	local recipe = {}
 	for role, region in pairs(parts) do
-		if role ~= "totFrame" and role ~= "petFrame" then recipe[role] = ReadPart(region, art, l, b + h) end
+		if role ~= "totFrame" and role ~= "petFrame" then
+			recipe[role] = ReadPart(region, art, l, b + h)
+			-- (One the game hides is hidden in the copy too: your level at the top
+			-- level, the target's level circle on retail. Not filled in from the
+			-- built-in one, which is Forever's.)
+			if not recipe[role] and not Plain(Call(region, "IsVisible")) then recipe[role] = { hidden = true } end
+		end
 	end
 	-- (A part the live read must have, or it isn't the frame drawn.)
 	if not (recipe.art and recipe.health and recipe.art.atlas) then return nil end
@@ -289,7 +386,7 @@ end
 -- frame with no built-in one (the pet's) has one once it's been read.
 function ns.UnitFrameRecipe(id)
 	if not FRAME_NAMES[id] then return nil end
-	local base = BUILT_IN[id] or {}
+	local base = BuiltIn(id) or {}
 	local client = ns.isRetail and "retail" or "classic"
 	CinematicDB = CinematicDB or {}
 	CinematicDB.unitFrameRecipes = CinematicDB.unitFrameRecipes or {}
@@ -303,7 +400,23 @@ function ns.UnitFrameRecipe(id)
 	local live = ns.ReadUnitFrameRecipe(id)
 	if live then
 		local saved = store[id] or {}
-		for role, entry in pairs(live) do saved[role] = entry end
+		for role, entry in pairs(live) do
+			-- (A weaker read never takes a measured one's place: a name read only by
+			-- its anchor, or only its side (secret in a fight on retail), keeps the
+			-- place read before and takes just its side and size. The target's name
+			-- sat on its level, 2026-11-20.)
+			local before = saved[role]
+			local measured = type(before) == "table" and before.x ~= nil
+			local weaker = type(entry) == "table" and (entry.onBar or entry.anchor)
+			if measured and weaker then
+				before.justify = entry.justify or before.justify
+				before.size = entry.size or before.size
+			elseif type(before) == "table" and before.anchor and type(entry) == "table" and entry.onBar then
+				before.justify = entry.justify or before.justify
+			else
+				saved[role] = entry
+			end
+		end
 		-- (A part the frame doesn't show now (its power, its level) stays as read before.)
 		saved.extras = live.extras
 		store[id] = saved
@@ -317,9 +430,20 @@ function ns.UnitFrameRecipe(id)
 		else
 			-- (A read part keeps the built-in art when the read had none: the
 			-- game's look was off that part.)
+			local built = recipe[role]
 			local merged = {}
-			for key, value in pairs(recipe[role] or {}) do merged[key] = value end
-			for key, value in pairs(entry) do merged[key] = value end
+			if entry.onBar and type(built) == "table" and built.x then
+				-- (Only its side read: the built-in place stands, with that side.)
+				for key, value in pairs(built) do merged[key] = value end
+				merged.justify = entry.justify or merged.justify
+				merged.size = entry.size or merged.size
+			elseif entry.anchor then
+				-- (Its anchor read here: truer than a built-in place, which may be the other client's.)
+				for key, value in pairs(entry) do merged[key] = value end
+			else
+				for key, value in pairs(built or {}) do merged[key] = value end
+				for key, value in pairs(entry) do merged[key] = value end
+			end
 			merged.guess = nil
 			recipe[role] = merged
 		end

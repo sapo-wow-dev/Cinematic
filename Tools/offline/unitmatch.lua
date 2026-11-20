@@ -394,6 +394,177 @@ do
 	preview:Hide()
 end
 
+-- Retail's cases (2026-11-20): your frame in its class resource art with a
+-- third bar and no level (top level); a name whose place is secret (read off
+-- its anchor); parts the game hides kept hidden, not filled in from Forever's.
+do
+	db.ufStyle, db.styleGeneral = false, true
+	CinematicDB.unitFrameRecipes = nil
+	local player = _G.PlayerFrame
+	local holder = player.PlayerFrameContainer
+	local plain = holder.FrameTexture
+	plain:Hide()
+	local tall = player:CreateTexture(nil, "BORDER")
+	tall:SetPoint("TOPLEFT", plain, "TOPLEFT")
+	tall:SetSize(232, 110)
+	tall:SetAtlas("UI-HUD-UnitFrame-Player-PortraitOn-ClassResource")
+	holder.AlternatePowerFrameTexture = tall
+	local second = CreateFrame("StatusBar", nil, player)
+	second:SetSize(124, 8)
+	second:SetPoint("TOP", player.manabar, "BOTTOM", 0, -2)
+	second:SetStatusBarTexture("UI-HUD-UnitFrame-Player-PortraitOn-Bar-Mana")
+	rawset(_G, "AlternatePowerBar", second)
+	_G.PlayerLevelText:Hide()
+	-- (The target's name: its place secret, its anchor readable.)
+	local name = _G.TargetFrame.name
+	local realRect = name.GetRect
+	name.GetRect = function() return nil end
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:SetPoint("CENTER")
+	preview:SetHeight(ns.StylePreviewHeight())
+	preview:Refresh()
+	local recipe = ns.UnitFrameRecipe("PLAYER")
+	Check("retail: your frame's class resource art read", recipe.art and recipe.art.atlas == "UI-HUD-UnitFrame-Player-PortraitOn-ClassResource",
+		recipe.art and recipe.art.atlas)
+	Check("retail: its third bar read and drawn", recipe.power2 and not recipe.power2.hidden and preview.units.PLAYER.copy.power2
+		and preview.units.PLAYER.copy.power2:IsShown())
+	Check("retail: your level hidden there, hidden here (not Forever's)", recipe.level and recipe.level.hidden
+		and not preview.units.PLAYER.badge.text:IsShown())
+	local target = ns.UnitFrameRecipe("TARGET")
+	Check("retail: a name with a secret place read off its anchor", target.name and target.name.anchor ~= nil,
+		target.name and tostring(target.name.anchor))
+	local point, relative = preview.units.TARGET.name:GetPoint(1)
+	Check("retail: that name placed on its anchor point", point == target.name.anchor.point and relative == preview.units.TARGET)
+	local problems = ns.UnitPreviewLayoutCheck(preview)
+	Check("retail: layout clean", #problems == 0, table.concat(problems, "; "))
+	-- (Back to Forever's stand-ins for the checks after.)
+	name.GetRect = realRect
+	tall:Hide()
+	holder.AlternatePowerFrameTexture = false
+	plain:Show()
+	second:Hide()
+	rawset(_G, "AlternatePowerBar", nil)
+	_G.PlayerLevelText:Show()
+	CinematicDB.unitFrameRecipes = nil
+	preview:Hide()
+end
+
+-- Retail's target of target: its name's place and anchor both secret: its
+-- side read, the copy sets it on the health bar's top edge on that side.
+do
+	db.ufStyle, db.styleGeneral = false, true
+	CinematicDB.unitFrameRecipes = nil
+	totUp = true
+	targetTot:Show()
+	local name = targetTot.Name
+	name:SetJustifyH("LEFT")
+	local realRect, realPoint = name.GetRect, name.GetPoint
+	name.GetRect = function() return nil end
+	name.GetPoint = function() return nil end
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:SetPoint("CENTER")
+	preview:SetHeight(ns.StylePreviewHeight())
+	preview:Refresh()
+	local recipe = ns.UnitFrameRecipe("TOT")
+	Check("ToT name all secret: its side read", recipe and recipe.name and recipe.name.onBar and recipe.name.justify == "LEFT",
+		recipe and recipe.name and tostring(recipe.name.justify))
+	local unit = preview.units.TOT
+	local point, relative, relativePoint = unit.name:GetPoint(1)
+	Check("ToT name all secret: on the health bar's top edge, left", point == "BOTTOMLEFT" and relative == unit.health
+		and relativePoint == "TOPLEFT" and unit.name:GetJustifyH() == "LEFT", tostring(point) .. " " .. tostring(relativePoint))
+	name.GetRect, name.GetPoint = realRect, realPoint
+	totUp = false
+	targetTot:Hide()
+	CinematicDB.unitFrameRecipes = nil
+	preview:Hide()
+end
+
+-- A name measured out of a fight, then read in one with its place secret:
+-- the measured place stays (it sat on the target's level when the weaker read
+-- took over, retail 2026-11-20).
+do
+	db.ufStyle, db.styleGeneral = false, true
+	CinematicDB.unitFrameRecipes = nil
+	local first = ns.UnitFrameRecipe("TARGET")
+	local placedX = first and first.name and first.name.x
+	local name = _G.TargetFrame.name
+	local realRect, realPoint = name.GetRect, name.GetPoint
+	name.GetRect = function() return nil end
+	name.GetPoint = function() return nil end
+	name:SetJustifyH("LEFT")
+	local after = ns.UnitFrameRecipe("TARGET")
+	Check("measured name kept over a weaker read in a fight", placedX ~= nil and after.name.x == placedX
+		and not after.name.onBar and after.name.justify == "LEFT", tostring(after.name.x) .. " " .. tostring(after.name.onBar))
+	name.GetRect, name.GetPoint = realRect, realPoint
+	name:SetJustifyH("CENTER")
+	CinematicDB.unitFrameRecipes = nil
+end
+
+-- Retail: the target's name never measured (its place and anchor secret):
+-- retail's built-in place (after the level on the strip), not the bar edge.
+if client == "retail" then
+	db.ufStyle, db.styleGeneral = false, true
+	CinematicDB.unitFrameRecipes = nil
+	local name = _G.TargetFrame.name
+	local realRect, realPoint = name.GetRect, name.GetPoint
+	name.GetRect = function() return nil end
+	name.GetPoint = function() return nil end
+	name:SetJustifyH("LEFT")
+	local recipe = ns.UnitFrameRecipe("TARGET")
+	Check("retail: unmeasured target name on retail's built-in place", recipe.name.x == 31 and not recipe.name.onBar
+		and recipe.circle and recipe.circle.hidden, tostring(recipe.name.x))
+	name.GetRect, name.GetPoint = realRect, realPoint
+	name:SetJustifyH("CENTER")
+	CinematicDB.unitFrameRecipes = nil
+end
+
+-- A power bar read in the game's plain tinted art ("-Bar-Mana-Status", a mob's
+-- energy on retail): drawn as mana's colored art, not the plain one untinted (grey).
+do
+	db.ufStyle, db.styleGeneral = false, true
+	CinematicDB.unitFrameRecipes = nil
+	_G.TargetFrame.manabar:Show()
+	_G.TargetFrame.manabar:SetStatusBarTexture("UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana-Status")
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:SetPoint("CENTER")
+	preview:Refresh()
+	local fill = preview.units.TARGET.power:GetStatusBarTexture()
+	local atlas = fill:GetAtlas() or fill:GetTexture()
+	Check("a power bar read in its plain tinted art: drawn as mana's", atlas == "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana",
+		tostring(atlas))
+	_G.TargetFrame.manabar:SetStatusBarTexture("UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana")
+	CinematicDB.unitFrameRecipes = nil
+	preview:Hide()
+end
+
+-- A frame a HUD rule has faded out: said so, not compared. Another unit's
+-- power bar art (a warrior's rage): the unit's, noted, not counted.
+do
+	db.ufStyle, db.styleGeneral = false, true
+	_G.PlayerFrame:SetAlpha(0)
+	_G.TargetFrame.manabar:Show()
+	_G.TargetFrame.manabar:SetStatusBarTexture("UI-HUD-UnitFrame-Target-PortraitOn-Bar-Rage")
+	ns.PreviewMatch("units")
+	RunTimers()
+	ns.PreviewMatch("units skip")
+	RunTimers()
+	local store = CinematicDB.previewMatch[client .. "-units"]
+	local faded, player, rage = false, nil, nil
+	for _, line in ipairs(store.lines or {}) do
+		if line:find("PLAYER: shown but faded out", 1, true) then faded = true end
+	end
+	for _, pair in ipairs(store.pairs or {}) do
+		if pair.name == "Player frame" then player = pair end
+		if pair.name == "Target frame" then
+			for _, line in ipairs(pair.findings) do if line:find("ART power", 1, true) then rage = line end end
+		end
+	end
+	Check("a faded-out frame: said so, not compared", faded and player == nil)
+	Check("another unit's rage bar art: not counted", rage == nil, rage)
+	_G.PlayerFrame:SetAlpha(1)
+	_G.TargetFrame.manabar:SetStatusBarTexture("UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana")
+end
+
 -- Another shape: the drawn mock-up back, nothing of the copy left on it.
 do
 	db.ufStyle, db.styleGeneral = true, true
