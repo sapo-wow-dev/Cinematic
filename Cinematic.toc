@@ -183,6 +183,7 @@ Plates\PlateRowLook.lua
 Style\CombatTextTexts.lua
 Style\CombatTextStyle.lua
 Style\CombatTextPage.lua
+Style\UnitFrameCopy.lua
 Style\UnitStyle.lua
 Style\UnitFrameWatch.lua
 Style\RaidStyle.lua

@@ -2738,6 +2738,167 @@ local function SampleColor(sample)
 	return 1, 0.2, 0.2
 end
 
+-- (The game's look of the player, target and focus frames: a copy of the
+-- game's own frame, its atlases where the game puts them (UnitFrameCopy.lua's
+-- recipe), not a drawing of it. Preview Match, 2026-11-20: the drawn one
+-- scored 69/68, its art plain color, its bars too thin.)
+local COPIED = { PLAYER = true, TARGET = true, FOCUS = true }
+local function SetAtlasSafe(texture, atlas)
+	if not atlas then return false end
+	local ok, done = pcall(texture.SetAtlas, texture, atlas)
+	return ok and done ~= false
+end
+local function CopyOff(unit)
+	local copy = unit.copy
+	if not (copy and copy.on) then return end
+	copy.on = false
+	for _, texture in ipairs(copy.textures) do texture:Hide() end
+	for fill, mask in pairs(copy.masked) do
+		pcall(fill.RemoveMaskTexture, fill, mask)
+		mask:Hide()
+	end
+	wipe(copy.masked)
+	unit.face:SetDrawLayer("ARTWORK")
+	unit.portrait:SetDrawLayer("ARTWORK")
+	unit.portrait:ClearAllPoints()
+	local side = unit.sample.flip and "RIGHT" or "LEFT"
+	unit.portrait:SetPoint(side, unit, side, 0, 0)
+	unit.name:SetJustifyH("CENTER")
+	local badge = unit.badge
+	if badge then
+		badge.ring:Show()
+		badge.back:Show()
+		badge.text:ClearAllPoints()
+		badge.text:SetPoint("CENTER", badge, "CENTER", 0, 0)
+		badge.text:SetJustifyH("CENTER")
+		badge.text:SetFontObject(_G.GameFontHighlightSmall)
+		badge.text:SetTextColor(1, 1, 1)
+	end
+end
+local function CopyMask(copy, bar, entry, Place)
+	if not (entry and entry.atlas) then return end
+	copy.masks[bar] = copy.masks[bar] or bar:CreateMaskTexture()
+	local mask = copy.masks[bar]
+	Place(mask, entry)
+	if not SetAtlasSafe(mask, entry.atlas) then return end
+	mask:Show()
+	local fill = bar:GetStatusBarTexture()
+	if fill and copy.masked[fill] ~= mask then
+		pcall(fill.AddMaskTexture, fill, mask)
+		copy.masked[fill] = mask
+	end
+end
+local function CopyBar(copy, bar, entry, maskEntry, fadeKey, view, Place, keepColor)
+	Place(bar, entry)
+	bar.game:Hide()
+	if bar.gameFill and entry.atlas then
+		pcall(bar.SetStatusBarTexture, bar, entry.atlas)
+		local fill = bar:GetStatusBarTexture()
+		if fill and fill.GetAtlas and fill:GetAtlas() ~= entry.atlas then SetAtlasSafe(fill, entry.atlas) end
+		-- (The game's fill is colored art: white over it, else its own color on a grey of it.)
+		if fill and keepColor then
+			fill:SetDesaturated(true)
+		elseif fill then
+			fill:SetDesaturated(false)
+			bar:SetStatusBarColor(1, 1, 1)
+			SetFade(fill, 1, 1, 1, Fade(view, fadeKey))
+		end
+	end
+	CopyMask(copy, bar, maskEntry, Place)
+end
+local function CopyLook(unit, view, on)
+	local recipe = on and COPIED[unit.id] and ns.UnitFrameCopyable and ns.UnitFrameCopyable()
+		and ns.UnitFrameRecipe and ns.UnitFrameRecipe(unit.id)
+	if not (recipe and recipe.art and recipe.health) then
+		CopyOff(unit)
+		return
+	end
+	local sample = unit.sample
+	local scale = ((sample.framed and sample.framed[4]) or sample.w) / recipe.health.w
+	local copy = unit.copy
+	if not copy then
+		copy = { masked = {}, masks = {} }
+		copy.art = unit:CreateTexture(nil, "BACKGROUND", nil, 2)
+		copy.reaction = unit:CreateTexture(nil, "BACKGROUND", nil, 0)
+		copy.textures = { copy.art, copy.reaction }
+		if unit.badge then
+			copy.circle = unit.badge:CreateTexture(nil, "ARTWORK")
+			copy.corner = unit.badge:CreateTexture(nil, "OVERLAY")
+			copy.textures[#copy.textures + 1] = copy.circle
+			copy.textures[#copy.textures + 1] = copy.corner
+		end
+		unit.copy = copy
+	end
+	copy.on = true
+	local function Place(region, entry)
+		region:ClearAllPoints()
+		region:SetPoint("TOPLEFT", unit, "TOPLEFT", entry.x * scale, -entry.y * scale)
+		region:SetSize(math.max(entry.w * scale, 0.1), math.max(entry.h * scale, 0.1))
+	end
+	local function Art(texture, entry)
+		if entry and SetAtlasSafe(texture, entry.atlas) then
+			Place(texture, entry)
+			texture:Show()
+		else
+			texture:Hide()
+		end
+	end
+	unit:SetSize(recipe.art.w * scale, recipe.art.h * scale)
+	-- (The frame art, in the theme's ornament color as DressFrameArt tints the game's.)
+	Art(copy.art, recipe.art)
+	local ring = ns.ThemeRing()
+	copy.art:SetDesaturated(ring and true or false)
+	copy.art:SetVertexColor(ring and ring[1] or 1, ring and ring[2] or 1, ring and ring[3] or 1)
+	for _, part in ipairs({ unit.box, unit.plate, unit.bridge, unit.rowShadow, unit.ring }) do part:Hide() end
+	-- (The face under the art, in its round hole, as the game draws it.)
+	Place(unit.portrait, recipe.portrait or recipe.art)
+	unit.portrait:SetDrawLayer("BACKGROUND", 1)
+	unit.face:SetDrawLayer("BACKGROUND", 1)
+	local portraitMask = recipe.portraitMask
+	if unit.faceMask and portraitMask and SetAtlasSafe(unit.faceMask, portraitMask.atlas) then Place(unit.faceMask, portraitMask) end
+	CopyBar(copy, unit.health, recipe.health, recipe.healthMask, nil, view, Place, view.ufHealthColor ~= "game")
+	local mana = sample.power[1] == 0 and sample.power[3] == 1
+	if recipe.power then
+		unit.power:Show()
+		CopyBar(copy, unit.power, recipe.power, recipe.powerMask, "ufPower", view, Place, not mana)
+	end
+	local name = recipe.name
+	if name then
+		Place(unit.name, name)
+		unit.name:SetJustifyH(name.justify or "CENTER")
+		local file, _, flags = unit.name:GetFont()
+		if file and name.size then unit.name:SetFont(file, name.size * scale * (tonumber(view.ufNameSize) or 1), flags or "") end
+	end
+	-- (The strip behind the target's name in its reaction's color; a player's blue.)
+	if recipe.reaction then
+		Art(copy.reaction, recipe.reaction)
+		local color = not sample.class and FACTION_BAR_COLORS and FACTION_BAR_COLORS[sample.reaction or 4]
+		if color then copy.reaction:SetVertexColor(color.r, color.g, color.b) else copy.reaction:SetVertexColor(0, 0, 1) end
+	else
+		copy.reaction:Hide()
+	end
+	local badge = unit.badge
+	if badge then
+		badge:ClearAllPoints()
+		badge:SetAllPoints(unit)
+		badge.ring:Hide()
+		badge.back:Hide()
+		Art(copy.circle, recipe.circle)
+		Art(copy.corner, recipe.corner)
+		local level = recipe.level
+		if level then
+			Place(badge.text, level)
+			badge.text:SetJustifyH(level.justify or "CENTER")
+			local file, _, flags = badge.text:GetFont()
+			if file and level.size then badge.text:SetFont(file, level.size * scale, flags or "") end
+		end
+		-- (Its colors: yours white, another's by how hard it is for you. Read in game 2026-11-20.)
+		local color = unit.id ~= "PLAYER" and _G.GetCreatureDifficultyColor and sample.level
+			and _G.GetCreatureDifficultyColor(sample.level)
+		if color then badge.text:SetTextColor(color.r, color.g, color.b) else badge.text:SetTextColor(1, 1, 1) end
+	end
+end
+
 function ns.MakeUnitStylePreview(parent, width, onPick)
 	local holder = CreateFrame("Frame", nil, parent)
 	holder:SetSize(width, 190)
@@ -2860,6 +3021,9 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 		unit.id, unit.sample = id, sample
 		samples[#samples + 1] = unit
 	end
+	-- (Each mock-up by its frame's id: the Preview Match test reads them, Dev/PreviewMatchUnits.lua.)
+	holder.units = {}
+	for _, unit in ipairs(samples) do holder.units[unit.id] = unit end
 	function holder:Refresh(editing)
 		ns.StyleScene(self, 0.55, 0.85)
 		for _, unit in ipairs(samples) do
@@ -2867,9 +3031,11 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 			unit.mark:SetShown(editing == unit.id)
 			-- (The bars: the look's fill, else the game's look.)
 			for i, bar in ipairs({ unit.health, unit.power }) do
+				bar.gameFill = false
 				if not ns.SetBarTexture(bar, view.ufTexture, i == 1 and ns.StyleTextureFull(view.ufTexture)) then
 					bar:SetStatusBarTexture(GAME_FILL)
 					bar:GetStatusBarTexture():SetDesaturated(false)
+					bar.gameFill = true -- (the game's own fill: CopyLook puts the game's atlas on)
 				end
 				if i == 1 then
 					local r, g, b
@@ -3133,6 +3299,7 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 			else
 				unit.face:SetTexture(SampleFace(sample))
 			end
+			CopyLook(unit, view, framed and not ns.ThemeLayout())
 		end
 	end
 	return holder

@@ -25,6 +25,23 @@ Known gaps on cast bars:
   by the player's nameplate style. Plate anchors read in game would settle it.
 - Retail: no match test run yet.
 
+Unit frames (started 2026-11-20): the match test's pairs are built, `/cine debug previewmatch units`
+(Dev/PreviewMatchUnits.lua; offline Tools/offline/unitmatch.lua). It reads the player, target, focus and pet frames
+and the Unit Frames page's mock-ups by part (frame art, portrait, bars, name, level), placed in health-bar widths,
+in the game's look (page off) and yours, and logs the game frame's whole tree of shown art (TREE lines: the recipe
+for the copy, B). Baseline, Forever 2026-11-20: player 69, target 68 (art drawn in plain color, bars too thin, no
+masks, level not the game's circle).
+Fix (B): Style/UnitFrameCopy.lua keeps a recipe per frame (atlases, places, sizes from the frame art's corner),
+read off the live frame when it's up in the game's look, saved per client (CinematicDB.unitFrameRecipes), built-in
+Forever numbers before that. The preview's game look (player, target, focus) draws from it (UnitStyle.lua
+CopyLook): the game's frame art, its masked bar atlases, the level circle, corner piece, reaction strip. Offline
+94/84 on the stand-in. In game, Forever: player 97 (69 before; the level's color, now white). Target not read:
+targeting yourself makes the target frame's places secret on Forever, so the test now waits for someone else.
+Rerun (a mob targeted): player 100, target 100 in all but the unit's own (no mana bar on that mob, its level's
+difficulty color), which the test now notes, not counts. The target's mana bar place is still the built-in guess
+(no target with mana read yet). Left: focus and pet (need a focus and a pet in the run), target of target, party,
+the theme shapes, and retail. Still drawn: pet, target of target, party, and every theme shape.
+
 Next (the order of work below, step 4): unit frames (copy, B), nameplates, action bars (A), raid (B), tooltip (A),
 personal resource, roll window, quest item, combat text. Each: add pairs to the match test first, get a baseline,
 then fix.

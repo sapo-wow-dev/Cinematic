@@ -181,6 +181,7 @@ Plates\PlateRowLook.lua
 Style\CombatTextTexts.lua
 Style\CombatTextStyle.lua
 Style\CombatTextPage.lua
+Style\UnitFrameCopy.lua
 Style\UnitStyle.lua
 Style\UnitFrameWatch.lua
 Style\RaidStyle.lua
@@ -276,6 +277,7 @@ Dev\Prerelease.lua
 Dev\PreviewWatch.lua
 Dev\TemplateProbe.lua
 Dev\PreviewMatch.lua
+Dev\PreviewMatchUnits.lua
 Dev\PetPlateTest.lua
 Dev\DuelTargetTest.lua
 Dev\EuiSwingTest.lua

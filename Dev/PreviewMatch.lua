@@ -838,8 +838,16 @@ local function Stop()
 	ns.TestPrompt("Preview match stopped. Your settings are back.", 5)
 end
 
+-- (Its readers, for the unit frames' run, Dev/PreviewMatchUnits.lua.)
+ns.PreviewMatchKit = { Client = Client, Plain = Plain, Num = Num, Call = Call, Round = Round, Showing = Showing,
+	ScreenSize = ScreenSize, Pixels = Pixels, Grow = Grow, Art = Art, ColorOff = ColorOff, SetCine = SetCine, DB = DB }
+
 function ns.PreviewMatch(arg)
 	arg = arg or ""
+	if arg:match("^units") then
+		if ns.PreviewMatchUnits then ns.PreviewMatchUnits(arg:match("^units%s*(.-)$")) end
+		return
+	end
 	if arg == "stop" then
 		Stop()
 		return

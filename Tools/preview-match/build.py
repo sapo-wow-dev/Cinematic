@@ -1,7 +1,7 @@
 """Preview Match report: each Style preview next to the game frame it stands for.
 
 Reads what /cine debug previewmatch saved (CinematicDB.previewMatch in the dev copy's SavedVariables) and the
-screenshots it took, cuts each bar out, sizes both to the same bar width and writes one page:
+screenshots it took, cuts each bar (a unit frame: by its health bar) out, sizes both to the same bar width and writes one page:
 game | ours | difference, a pixel match % per pair, and the test's part-by-part differences under each.
 
     python Tools/preview-match/build.py [forever] [retail]
@@ -42,7 +42,7 @@ def to_py(value):
     return {k: to_py(v) for k, v in items}
 
 
-def load(client):
+def load(client, kind=""):
     files = sorted(glob.glob(os.path.join(WOW, CLIENTS[client], "WTF", "Account", "*", "SavedVariables",
                                           "CinematicDev.lua")))
     if not files:
@@ -51,7 +51,7 @@ def load(client):
     with open(files[-1], encoding="utf-8", errors="replace") as handle:
         lua.execute(handle.read())
     db = lua.globals().CinematicDB
-    store = db and db["previewMatch"] and db["previewMatch"][client]
+    store = db and db["previewMatch"] and db["previewMatch"][client + kind]
     return (to_py(store) if store else None), files[-1]
 
 
@@ -122,12 +122,13 @@ def data_url(image):
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
 
 
-def section(client):
-    store, path = load(client)
+def section(client, kind=""):
+    store, path = load(client, kind)
+    title = client + (" unit frames" if kind else " cast bars")
     if not store:
-        return f"<h2>{client}</h2><p class=dim>No /cine debug previewmatch run saved on {client} yet.</p>", []
+        return f"<h2>{title}</h2><p class=dim>No /cine debug previewmatch{' units' if kind else ''} run saved on {client} yet.</p>", []
     reads = store.get("reads") or {}
-    out = [f"<h2>{client} <span class=dim>{html.escape(str(store.get('build')))}, run {html.escape(str(store.get('started')))}"
+    out = [f"<h2>{title} <span class=dim>{html.escape(str(store.get('build')))}, run {html.escape(str(store.get('started')))}"
            f", screen {store.get('screen')}</span></h2>"]
     summary = []
     for pair in store.get("pairs") or []:
@@ -164,9 +165,10 @@ def main():
     clients = [c for c in sys.argv[1:] if c in CLIENTS] or list(CLIENTS)
     parts, summary = [], []
     for client in clients:
-        body, rows = section(client)
-        parts.append(body)
-        summary.extend(rows)
+        for kind in ("", "-units"):  # (cast bars, then unit frames: /cine debug previewmatch units)
+            body, rows = section(client, kind)
+            parts.append(body)
+            summary.extend(rows)
     os.makedirs(OUT, exist_ok=True)
     table = "".join(
         f"<tr><td>{c}</td><td>{html.escape(n)}</td><td>{'-' if s is None else s}</td>"

@@ -53,6 +53,8 @@ OFFLINE_TESTS = [
     ("Cooldown Manager numbered lines (in place of situations)", "Tools/offline/cooldownlines.lua"),
     ("cast bar other kind's look, forever", "Tools/offline/castlook.lua", "forever"),
     ("cast bar other kind's look, retail", "Tools/offline/castlook.lua", "retail"),
+    ("preview match unit frames run, forever", "Tools/offline/unitmatch.lua", "forever"),
+    ("preview match unit frames run, retail", "Tools/offline/unitmatch.lua", "retail"),
     ("Mac notch covers, forever", "Tools/offline/notchgap.lua", "forever"),
     ("Mac notch covers, retail", "Tools/offline/notchgap.lua", "retail"),
     ("XP text font per character at login", "Tools/offline/xpfont.lua"),
