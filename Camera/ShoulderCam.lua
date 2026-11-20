@@ -2704,8 +2704,24 @@ function ns.CreateShoulderCamPanel(kit)
 	title:SetPoint("TOPLEFT", 16, -16)
 	local intro = kit.PageIntro(content, title,
 		L["The camera sits over your shoulder, with you to one side of the screen."])
+	-- An Experimental notice, as Combat Text Style's (not a gate: the page
+	-- works as ever), at the user's ask (2026-11-20): the offset is one of the
+	-- game's test settings, and the rest (the self-select button, the pauses,
+	-- frames that follow you) fills in round it. Skull: the raid marker's.
+	local skull = content:CreateTexture(nil, "ARTWORK")
+	skull:SetSize(20, 20)
+	skull:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -10)
+	skull:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
+	local warnTitle = kit.Label(content, "GameFontNormalLarge", L["Experimental"])
+	warnTitle:SetPoint("LEFT", skull, "RIGHT", 6, 0)
+	warnTitle:SetTextColor(1, 0.25, 0.2)
+	local warnText = kit.Label(content, "GameFontHighlightSmall",
+		L["Shoulder Cam uses some experimental Blizzard features, as well as some hacks to fill in the gaps."])
+	warnText:SetPoint("TOPLEFT", skull, "BOTTOMLEFT", 0, -6)
+	warnText:SetWidth(520)
+	warnText:SetJustifyH("LEFT")
 	local switch = kit.PageSwitch(content, "shoulderCam", L["Enable Page"],
-		L["Moves the camera over your shoulder, using one of Blizzard's experimental camera settings."], intro, function()
+		L["Moves the camera over your shoulder, using one of Blizzard's experimental camera settings."], warnText, function()
 			ns.ApplyShoulderCam()
 			-- (No profile offered any more: the camera works on any profile, and
 			-- the Follow HUD tab puts the frames that follow you on yours.)

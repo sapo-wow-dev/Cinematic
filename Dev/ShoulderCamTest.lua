@@ -3527,6 +3527,206 @@ do
 	end
 end
 
+-- standin: can the game's own target frame template show you, for a stand-in
+-- target frame when Keep the shoulder when selecting yourself clears your
+-- target (user 2026-11-20: "the target frame no longer appears")? One run:
+--   build:  a frame from TargetFrameTemplate, set up for "player" the way the
+--           game sets up the focus frame (its OnLoad with the unit), at your
+--           target frame's spot; each step's error logged;
+--   look:   nothing targeted, the copy up: its name, level, health, power
+--           and auras read, a screenshot;
+--   cast:   a spell cast: whether its power bar moved (the game's code keeps
+--           it up to date) - skips itself after 20 s;
+--   real:   the option off for a moment, you target yourself for real: a
+--           screenshot of the game's own frame of you, to compare.
+-- The copy's hidden and its events dropped at the end (a frame can't be
+-- deleted: built once, used again on the next run); your option put back.
+-- Into db.shoulderStandIn.
+do
+	local CAST_WAIT = 20
+	local run, copy
+	local function Write(text)
+		local lines = ns.db.shoulderStandIn
+		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
+	local function Box(head, line) ns.PadTestBox(head, line, 1, 0.82, 0) end
+	local function Shot(what)
+		ns.PadTestBoxHide()
+		C_Timer.After(0.1, function()
+			local ok = pcall(function() Screenshot() end)
+			if run then Write(("screenshot %s at %s: %s"):format(what, date("%m%d%y_%H%M%S"), ok and "taken" or "failed")) end
+		end)
+	end
+	local function Try(what, fn, ...)
+		local ok, err = pcall(fn, ...)
+		Write(("%s: %s"):format(what, ok and "ok" or ("ERROR " .. Text(err))))
+		return ok
+	end
+	local function Call(frame, method, ...)
+		if type(frame) ~= "table" then return "n/a" end
+		local fn = frame[method]
+		if type(fn) ~= "function" then return "n/a" end
+		local ok, a, b = pcall(fn, frame, ...)
+		if not ok then return "error" end
+		-- (A secret number made into text is secret too: it can't be logged.)
+		local function Plain(v) return issecretvalue and issecretvalue(v) and "secret" or Text(v) end
+		return Plain(a) .. (b ~= nil and ("/" .. Plain(b)) or "")
+	end
+	-- (What the copy shows now: its parts as the focus frame has them.)
+	local function Read(label)
+		local content = copy.TargetFrameContent
+		local main = type(content) == "table" and content.TargetFrameContentMain
+		local auras = "n/a"
+		if type(copy.auraPools) == "table" and copy.auraPools.EnumerateActive then
+			local n = 0
+			pcall(function() for _ in copy.auraPools:EnumerateActive() do n = n + 1 end end)
+			auras = tostring(n)
+		end
+		local mine = 0
+		if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+			for i = 1, 40 do
+				local ok, data = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+				if not (ok and data) then break end
+				mine = i
+			end
+		end
+		Write(("%s: shown %s, unit %s, name %s, level %s, health %s of %s, power %s of %s, portrait %s, auras shown %s (you have %d buffs)"):format(
+			label, Call(copy, "IsVisible"), Text(copy.unit or copy:GetAttribute("unit")), Call(copy.name, "GetText"),
+			Call(type(main) == "table" and main.LevelText, "GetText"), Call(copy.healthbar, "GetValue"),
+			Call(copy.healthbar, "GetMinMaxValues"), Call(copy.manabar, "GetValue"), Call(copy.manabar, "GetMinMaxValues"),
+			Call(copy.portrait, "GetTexture"), auras, mine))
+	end
+	local function TearDown()
+		if not copy then return end
+		if InCombatLockdown() then
+			local wait = CreateFrame("Frame")
+			wait:RegisterEvent("PLAYER_REGEN_ENABLED")
+			wait:SetScript("OnEvent", function(self) self:UnregisterAllEvents() TearDown() end)
+			return
+		end
+		if _G.UnregisterUnitWatch then pcall(_G.UnregisterUnitWatch, copy) end
+		pcall(copy.UnregisterAllEvents, copy)
+		pcall(copy.Hide, copy)
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
+		TearDown()
+		ns.db.shoulderCamFakeSelf = run.yours
+		Write(("end: %s, the copy hidden, your option back to %s"):format(why, Text(run.yours)))
+		Write("verdicts: " .. table.concat(run.verdicts, "; "))
+		Log(("standin: %s, %d lines in db.shoulderStandIn"):format(why, #ns.db.shoulderStandIn))
+		run = nil
+	end
+	local function Verdict(text)
+		run.verdicts[#run.verdicts + 1] = text
+		Write(text)
+	end
+	local function Build()
+		local target = _G.TargetFrame
+		if not copy then
+			local ok = Try("make from TargetFrameTemplate", function()
+				copy = CreateFrame("Button", "CinematicStandInProbe", UIParent, "TargetFrameTemplate")
+			end)
+			if not ok or not copy then return false end
+		end
+		-- (The focus frame: TargetFrameTemplate, its OnLoad given its unit.)
+		local loaded = copy.OnLoad and Try("set up for you (OnLoad player)", copy.OnLoad, copy, "player") or false
+		if not copy.OnLoad then Write("set up: the template has no OnLoad") end
+		local l, b = target and target:GetLeft(), target and target:GetBottom()
+		if l then
+			local scale = target:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			copy:ClearAllPoints()
+			copy:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l * scale, b * scale)
+			local size = tonumber((target:GetScale())) or 1
+			copy:SetScale(size)
+			Write(("placed at your target frame's spot %.0f,%.0f, scale %.2f"):format(l * scale, b * scale, size))
+		else
+			copy:ClearAllPoints()
+			copy:SetPoint("CENTER", UIParent, "CENTER", 250, -150)
+			Write("your target frame has no spot (never shown?): placed right of the middle")
+		end
+		if copy.Update then Try("update", copy.Update, copy) end
+		Try("show", copy.Show, copy)
+		return loaded
+	end
+	local Tick
+	function Tick(_, elapsed)
+		run.clock = run.clock + elapsed
+		if run.phase == "look" then
+			if UnitExists("target") then run.clock = 0 return end
+			if run.clock < 1.5 then return end
+			Read("look")
+			local ok = Call(copy, "IsVisible") == "true" and Call(copy.name, "GetText") == Text(UnitName("player"))
+			Verdict(("look %s: the copy shows you"):format(ok and "PASS" or "FAIL"))
+			Shot("1 the copy of your target frame, showing you")
+			run.phase, run.clock = "wantCast", 0
+			run.powerBefore = Call(copy.manabar, "GetValue")
+			C_Timer.After(0.5, function() if run then Box("Stand-in 2/3: cast", "CAST ANY SPELL THAT COSTS MANA OR ENERGY (skips in 20 s)") end end)
+		elseif run.phase == "wantCast" then
+			if run.castAt and run.clock - run.castAt >= 1.5 then
+				local after = Call(copy.manabar, "GetValue")
+				Read("after the cast")
+				Verdict(("cast %s: power bar %s -> %s"):format(after ~= run.powerBefore and "PASS (it moved)" or "FAIL (it didn't move)",
+					run.powerBefore, after))
+			elseif run.clock < CAST_WAIT then
+				return
+			else
+				Verdict("cast SKIPPED (nothing cast)")
+			end
+			run.phase, run.clock = "wantSelf", 0
+			TearDown()
+			ns.db.shoulderCamFakeSelf = false
+			Write("the copy hidden; your option off for the real look")
+			C_Timer.After(0.6, function()
+				if run then Box("Stand-in 3/3: the real one", "TARGET YOURSELF (your key, or click your frame)") end
+			end)
+		elseif run.phase == "wantSelf" then
+			if not Self() then run.clock = 0 return end
+			if run.clock < 1.5 then return end
+			Shot("2 the game's own target frame of you")
+			run.phase = "ending"
+			C_Timer.After(0.5, function()
+				if not run then return end
+				End("done")
+				ns.PadTestBox("Stand-in run done", "CLEAR YOUR TARGET (Esc), /reload, then say check log", 0.3, 1, 0.3)
+				C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+			end)
+		end
+	end
+	function ns.ShoulderStandIn()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder standin: stopped")
+		end
+		if InCombatLockdown() then return ns.Print("shoulder standin: out of combat, please") end
+		ns.db.shoulderStandIn = {}
+		run = { frame = CreateFrame("Frame"), began = GetTime(), clock = 0, verdicts = {}, phase = "build",
+			yours = ns.db.shoulderCamFakeSelf }
+		Write(("start | %s | %s | your option %s"):format(ns.isRetail and "retail" or "Forever", Who(), Text(run.yours)))
+		local built = Build()
+		Verdict(("build %s"):format(built and "PASS" or "FAIL"))
+		-- (Built but its set-up errored: the copy runs the game's code tainted,
+		-- and on Forever every health or mana update errors on their secret
+		-- numbers, 237 in seconds, the first run 2026-11-20. Stop at once.)
+		if not (copy and built) then return End("the copy couldn't be set up") end
+		run.frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+		run.frame:SetScript("OnEvent", function()
+			if run and run.phase == "wantCast" and not run.castAt then
+				run.castAt = run.clock
+				Write("cast seen")
+			end
+		end)
+		run.phase = "look"
+		run.frame:SetScript("OnUpdate", Tick)
+		Box("Stand-in 1/3: look", "CLEAR YOUR TARGET (Esc), hands off, WAIT for the next box")
+		ns.Print("shoulder standin: follow the box, about 30 seconds; type it again to stop")
+	end
+end
+
 -- selfclicks: a left-click on your player frame, with Keep the shoulder when
 -- selecting yourself on, after a right-click on it (user 2026-11-20: then it
 -- selected you). One run in CineMode (put back after): right-click your frame
@@ -4818,6 +5018,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "fakeself" then ns.ShoulderFakeSelf()
 	elseif what == "fakeselftest" then ns.ShoulderFakeSelfTest()
 	elseif what == "selfclicks" then ns.ShoulderSelfClicks()
+	elseif what == "standin" then ns.ShoulderStandIn()
 	elseif what == "today" then ns.ShoulderToday(rest)
 	elseif what == "profiletest" then ns.ShoulderProfileTest()
 	elseif what == "on" then Set("shoulderCam", true)
@@ -4828,7 +5029,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, today, profiletest, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, today, profiletest, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end
