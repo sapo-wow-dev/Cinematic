@@ -8,7 +8,7 @@
 -- (Tools/style-lab/frames.lua): a theme on, you select yourself through the
 -- option's own button, and the stand-in's health bar, power bar and name are
 -- dressed as the game's target frame is; no error on the way; the game's
--- plain look with the theme off. Says PASS or FAIL per check.
+-- plain look with the theme off. Both clients. Says PASS or FAIL per check.
 local F = dofile("Tools/style-lab/frames.lua")
 local client = ... or "forever"
 
@@ -88,18 +88,6 @@ db.styleTheme = "forge"
 db.ufHealthColor, db.ufHealthR, db.ufHealthG, db.ufHealthB = "custom", 0.8, 0.1, 0.1
 wow.Fire("PLAYER_REGEN_ENABLED") -- (the option's check: keys and the button)
 local state = ns.ShoulderFakeSelfState()
--- (Retail: the option's off there till it's tested, and no stand-in ever.)
-if ns.isRetail then
-	Check("the option's off on retail", not state.want, state.why)
-	local click = state.button and state.button:GetScript("OnClick")
-	if click then click(state.button, "LeftButton", true) end
-	local stand = ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
-	Check("no stand-in on retail", not (stand and stand:IsShown()))
-	Check("no errors", #caught == 0, caught[1])
-	print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
-	if fails > 0 then os.exit(1) end
-	return
-end
 Check("the option's on", state.want, state.why)
 
 -- You select yourself: the button's click (its macro clears the target; then ours).

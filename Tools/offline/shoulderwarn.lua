@@ -35,7 +35,7 @@ local warn = Find("Shoulder Cam uses some experimental Blizzard features, as wel
 Check(client .. ": the notice is on the page", warn ~= nil)
 Check(client .. ": its Experimental title too", Find("Experimental") ~= nil)
 -- The red "!" after Keep the shoulder when selecting yourself, its tip saying
--- the target frame of you is our own copy (Forever only: none on retail).
+-- the target frame of you is our own copy.
 local TIP = "Shows our own copy of your target frame, so it matches only the game's look or a Cinematic theme."
 local function FindTip(text)
 	for _, frame in ipairs(wow.frames) do
@@ -43,15 +43,12 @@ local function FindTip(text)
 	end
 end
 local mark = FindTip(TIP)
-if client == "retail" then
-	Check(client .. ": no \"!\" on retail (the option's hidden there)", mark == nil)
-else
-	Check(client .. ": the \"!\" with its tip", mark ~= nil)
-	local bang = false
-	for _, region in ipairs(mark and mark._regions or {}) do
-		if region._text == "!" then bang = true end
-	end
-	Check(client .. ": it reads \"!\"", bang)
+-- (Both clients since 2026-11-20: hidden on retail till tested there.)
+Check(client .. ": the \"!\" with its tip", mark ~= nil)
+local bang = false
+for _, region in ipairs(mark and mark._regions or {}) do
+	if region._text == "!" then bang = true end
 end
+Check(client .. ": it reads \"!\"", bang)
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
 if fails > 0 then os.exit(1) end

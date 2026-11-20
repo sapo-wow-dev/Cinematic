@@ -1297,7 +1297,7 @@ end
 gameEsc.Sync = SyncGameEscape -- (its PLAYER_REGEN_ENABLED, above)
 
 -- Keep the shoulder when selecting yourself (shoulderCamFakeSelf, off to
--- start with; Forever only till retail's tested). With yourself targeted the
+-- start with; both clients). With yourself targeted the
 -- game centers you and doesn't use the offset at all (selftarget and
 -- selfdodge runs, 13 settings tried, none help). So while the Shoulder Cam
 -- plays, selecting yourself clears your target instead: your Target Self keys
@@ -1355,9 +1355,6 @@ do
 	local function Wanted()
 		local db = ns.db
 		if not (db and db.shoulderCamFakeSelf) then return false, "off" end
-		-- (Retail: off and hidden till tested there; a test run turns it on for
-		-- itself, ns.shoulderFakeSelfRetailTest: selfframe, Dev/ShoulderCamTest.lua.)
-		if ns.isRetail and not ns.shoulderFakeSelfRetailTest then return false, "retail (untested there)" end
 		if not ShoulderOn() then return false, "Shoulder Cam off" end
 		-- ("yourself" can't be ours, but a party frame click still gets there.)
 		if paused and paused ~= "yourself" then return false, "paused: " .. tostring(paused) end
@@ -3422,9 +3419,9 @@ function ns.CreateShoulderCamPanel(kit)
 		L["%.1f sec"]), "slider")
 	kit.Tooltip(swapTime, L["How long the camera takes to swap to your other shoulder."])
 	kit.GreyUnless(swapTime, IfOn)
-	-- (Above its slider, user 2026-11-20. Forever only till retail's tested:
-	-- hidden there, not greyed.)
-	if not ns.isRetail then
+	-- (Above its slider, user 2026-11-20. On retail too since its tests there:
+	-- the party frames, the stand-in, its buffs, 2026-11-20.)
+	do
 		local fakeSelf = stack:Add(kit.Check(content, "shoulderCamFakeSelf", L["Keep the shoulder when selecting yourself"],
 			L["Selecting yourself clears your target instead, so the camera stays over your shoulder. Heals and buffs still land on you."]),
 			"check")

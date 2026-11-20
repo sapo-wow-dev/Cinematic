@@ -3540,10 +3540,9 @@ end
 -- target instead, as Keep the shoulder when selecting yourself does for your
 -- player frame (2026-11-20). Built from this probe's first run (retail
 -- follower dungeon: a click on you cleared your target in a fight, no frame
--- changed who it shows): it now tests the real option, on for the run (and
--- on retail too, ns.shoulderFakeSelfRetailTest), put back after; the option
--- sets the frame up itself (ShoulderCam.lua's SyncParty). The game's compact frames can't change who they
--- show in a fight (that's protected: it waits for the fight's end), so the
+-- changed who it shows): it now tests the real option, on for the run and
+-- put back after; the option sets the frame up itself (ShoulderCam.lua's
+-- SyncParty). The game's compact frames can't change who they show in a fight (that's protected: it waits for the fight's end), so the
 -- frame showing you is found out of fights and its left-click set to clear
 -- your target, the way click-cast addons set up unit frames (its attributes:
 -- *type1 macro, *macrotext1 /cleartarget). One run, in a group, out of a fight
@@ -3651,7 +3650,6 @@ do
 		-- (Your option back; the option puts the frame back itself, after the
 		-- fight if in one.)
 		ns.db.shoulderCamFakeSelf = run.yours
-		ns.shoulderFakeSelfRetailTest = nil
 		Write(("end: %s, your option back to %s"):format(why, Text(run.yours)))
 		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
 		Log(("partyself: %s, %d lines in db.shoulderPartySelf"):format(why, #ns.db.shoulderPartySelf))
@@ -3795,10 +3793,9 @@ do
 		end
 		Verdict(("scan PASS: you're %s (%s)"):format(NameOf(mine), Text(UnitOf(mine))))
 		HookClicks()
-		-- (The real option, on for the run: on retail too, for the run only.)
+		-- (The real option, on for the run.)
 		run.yours, run.mine = ns.db.shoulderCamFakeSelf, NameOf(mine)
 		ns.db.shoulderCamFakeSelf = true
-		if ns.isRetail then ns.shoulderFakeSelfRetailTest = true end
 		Write(("before: %s (%s)"):format(run.mine, Setup(mine)))
 		run.phase = "arming"
 		run.frame:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -4197,7 +4194,6 @@ do
 		if not run then return end
 		run.frame:SetScript("OnUpdate", nil)
 		run.frame:UnregisterAllEvents()
-		ns.shoulderFakeSelfRetailTest = nil
 		ns.db.shoulderCamFakeSelf = run.yours
 		Write(("end: %s, your option back to %s"):format(why, Text(run.yours)))
 		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
@@ -4561,8 +4557,6 @@ do
 				Bar(frame and frame.manabar):gsub(" [%d%.%-]+/[%d%.%-]+/[%d%.%-]+$", ""), Text(font), Text(size))
 		end
 		ns.db.shoulderCamFakeSelf = true
-		-- (On retail the option's off till tested there: on for this run only.)
-		if ns.isRetail then ns.shoulderFakeSelfRetailTest = true end
 		Write(("start | %s | %s | your option %s | your Style: unit frames %s, theme %s"):format(
 			ns.isRetail and "retail" or "Forever", Who(), Text(run.yours),
 			Text(ns.StyleOn and ns.StyleOn("ufStyle")), Text(ns.db.styleTheme)))
