@@ -20,14 +20,21 @@ out="${1:-ChangelogCommits.dev.lua}"
 		prev="$tag"
 	done
 	ranges+=("${prev:+$prev..}HEAD next")
+	# (A change released alone off the last tag, then merged into main, is in
+	# main's history twice: the tag's commit and main's, the same change.
+	# Listed once, under the release it went out in, the oldest: each line
+	# keyed by its change (git patch-id), newest first, so the last is kept.)
+	declare -A pid=()
+	while read -r id commit; do pid[$commit]=$id; done < <(git log --no-merges -p --format='commit %H' HEAD | git patch-id --stable)
 	for (( i = ${#ranges[@]} - 1; i >= 0; i-- )); do
 		read -r range version <<< "${ranges[$i]}"
-		git log --no-merges --format='%as%x09%s' "$range" | while IFS=$'\t' read -r date subject; do
+		git log --no-merges --format='%H%x09%as%x09%s' "$range" | while IFS=$'\t' read -r commit date subject; do
 			# (a long string, so quotes and backslashes need no escaping)
 			subject="${subject//]==]/] ==]}"
-			printf '\t{ "%s", "%s", [==[%s]==] },\n' "$version" "$date" "$subject"
+			printf '%s\t\t{ "%s", "%s", [==[%s]==] },\n' "${pid[$commit]:-$commit}" "$version" "$date" "$subject"
 		done
-	done
+	done | awk -F'\t' '{ key[NR] = $1; line[NR] = substr($0, length($1) + 2); last[$1] = NR }
+		END { for (n = 1; n <= NR; n++) if (last[key[n]] == n) print line[n] }'
 	echo "}"
 } > "$out"
 echo "wrote $out"
