@@ -3858,7 +3858,11 @@ end
 --          stand-in up with your name and level (screenshot);
 --   real:  the option off for a moment, you target yourself for real: the
 --          game's own frame of you (screenshot), its art's place and size
---          against the stand-in's (within 2 px: PASS);
+--          against the stand-in's (within 2 px: PASS); then part by part with
+--          Preview Match's reader and comparer (ns.UnitMatchRead/Compare,
+--          Dev/PreviewMatchUnits.lua: art, portrait, bars, name, level), and
+--          the two it doesn't read: the name strip's color, and the first
+--          buff icon's place, size and border (from the art's top-left);
 --   down:  the option back on, a mob targeted: the stand-in's down;
 --   fight: (one test for both, user 2026-11-20) you start a fight (a pet
 --          tanking: a mob hitting you makes the game target it), select
@@ -3918,6 +3922,93 @@ do
 		return ok and Text(open) or "unknown"
 	end
 	local function Offset() return tonumber(GetCVar(SHOULDER)) or 0 end
+	-- (A plain number, or nil: secret, or not one.)
+	local function Num(v)
+		if issecretvalue and issecretvalue(v) then return nil end
+		return type(v) == "number" and v or nil
+	end
+	-- (A region's place from an art's top-left, in screen pixels: x right, y
+	-- down, w, h; nil if any of it can't be read.)
+	local function From(region, art)
+		local ok, l, t, w, h, al, at, s, as = pcall(function()
+			return region:GetLeft(), region:GetTop(), region:GetWidth(), region:GetHeight(), art:GetLeft(), art:GetTop(),
+				region:GetEffectiveScale(), art:GetEffectiveScale()
+		end)
+		if not ok then return nil end
+		l, t, w, h, al, at, s, as = Num(l), Num(t), Num(w), Num(h), Num(al), Num(at), Num(s), Num(as)
+		if not (l and t and w and h and al and at and s and as) then return nil end
+		return { l * s - al * as, at * as - t * s, w * s, h * s }
+	end
+	local function Art(frame)
+		local holder = type(frame) == "table" and type(frame.TargetFrameContainer) == "table" and frame.TargetFrameContainer
+		return holder and holder.FrameTexture or nil
+	end
+	local function StripColor(frame)
+		local content = type(frame) == "table" and type(frame.TargetFrameContent) == "table" and frame.TargetFrameContent
+		local main = content and type(content.TargetFrameContentMain) == "table" and content.TargetFrameContentMain
+		local strip = main and main.ReputationColor
+		if type(strip) ~= "table" or not strip.GetVertexColor then return nil end
+		local ok, r, g, b = pcall(strip.GetVertexColor, strip)
+		r, g, b = ok and Num(r), ok and Num(g), ok and Num(b)
+		return r and g and b and { r, g, b } or nil
+	end
+	-- (The top-left of a frame's shown aura icons (anything with an Icon
+	-- texture): the game's in its aura pools, else among its children; ours
+	-- are the stand-in's children.)
+	local function FirstIcon(frame)
+		local list = {}
+		local function Add(button)
+			local ok, shown = pcall(function() return button:IsVisible() end)
+			if ok and shown == true and type(button.Icon) == "table" then list[#list + 1] = button end
+		end
+		local pools = type(frame) == "table" and frame.auraPools
+		if type(pools) == "table" and pools.EnumerateActive then
+			pcall(function() for button in pools:EnumerateActive() do Add(button) end end)
+		end
+		if #list == 0 and type(frame) == "table" and frame.GetChildren then
+			for _, child in ipairs({ frame:GetChildren() }) do Add(child) end
+		end
+		local best, bl, bt
+		for _, button in ipairs(list) do
+			local ok, l, t = pcall(function() return button:GetLeft(), button:GetTop() end)
+			l, t = ok and Num(l), ok and Num(t)
+			if l and t and (not best or t > bt + 1 or (math.abs(t - bt) <= 1 and l < bl)) then best, bl, bt = button, l, t end
+		end
+		return best
+	end
+	local function Border(button)
+		for _, key in ipairs({ "Border", "DebuffBorder" }) do
+			local part = type(button) == "table" and button[key]
+			if type(part) == "table" and part.IsShown then
+				local ok, shown = pcall(part.IsShown, part)
+				if ok and shown == true then return key end
+			end
+		end
+		return "none"
+	end
+	-- (What the two match reads leave out, for one frame.)
+	local function Extras(frame)
+		local art = Art(frame)
+		local icon = FirstIcon(frame)
+		return { strip = StripColor(frame), icon = icon and art and From(icon, art) or nil,
+			border = icon and Border(icon) or "no icon" }
+	end
+	local function ShowRect(p) return p and ("%.1f,%.1f %.1fx%.1f"):format(p[1], p[2], p[3], p[4]) or "unreadable" end
+	-- (The mana bar, from the art's top-left: the bar, its fill, its mask; your
+	-- mana now. The game's drew set in one run and full width the next: "mana
+	-- frame looks off", user 2026-11-20.)
+	local function PowerLine(frame)
+		local art, bar = Art(frame), type(frame) == "table" and frame.manabar
+		if not (art and type(bar) == "table") then return "no mana bar" end
+		local ok, fill = pcall(bar.GetStatusBarTexture, bar)
+		local mask = type(bar.ManaBarMask) == "table" and bar.ManaBarMask or nil
+		local now, most = UnitPower("player"), UnitPowerMax("player")
+		local function Plain(v) return Num(v) and ("%d"):format(v) or "secret" end
+		return ("bar %s, fill %s, mask %s, mana %s of %s, Style unit frames %s"):format(ShowRect(From(bar, art)),
+			ok and fill and ShowRect(From(fill, art)) or "none", mask and ShowRect(From(mask, art)) or "none",
+			Plain(now), Plain(most), Text(ns.StyleOn and ns.StyleOn("ufStyle")))
+	end
+	local function ShowColor(c) return c and ("%.2f/%.2f/%.2f"):format(c[1], c[2], c[3]) or "unreadable" end
 	local function TargetText()
 		return Self() and "you" or UnitExists("target") and Text(UnitName("target")) or "none"
 	end
@@ -3967,6 +4058,15 @@ do
 			run.stand = { l, t, w, h }
 			run.standLook = run.Look(stand)
 			Write("stand-in look: " .. run.standLook)
+			-- (Read now, while it's up: Preview Match's record, and the rest.)
+			if ns.UnitMatchRead then
+				local ok, read = pcall(ns.UnitMatchRead, stand, "TARGET")
+				run.standRead = ok and type(read) == "table" and read or { unread = "read error: " .. Text(read) }
+			end
+			run.standExtras = Extras(stand)
+			Write(("stand-in name strip %s, first icon %s, its border %s"):format(ShowColor(run.standExtras.strip),
+				ShowRect(run.standExtras.icon), run.standExtras.border))
+			Write("stand-in mana: " .. PowerLine(stand))
 			-- (Shown isn't seen: at alpha 0 it's up and invisible, the second
 			-- run 2026-11-20 - it had your faded player frame's alpha then.)
 			local entryAlpha = "none"
@@ -4016,6 +4116,42 @@ do
 				or ("stand-in " .. run.standLook .. " | game " .. realLook)))
 			Verdict(("place %s: off by %s"):format(close and "PASS" or "FAIL", l and s[1]
 				and ("%.1f,%.1f size %.1fx%.1f"):format(s[1] - l, s[2] - t, s[3] - w, s[4] - h) or "unknown"))
+			-- Part by part (Preview Match): the game's as the real one, ours as
+			-- the copy, "TARGET" so a level's and power bar's color count.
+			if ns.UnitMatchRead and ns.UnitMatchCompare and run.standRead then
+				local okRead, real = pcall(ns.UnitMatchRead, _G.TargetFrame, "TARGET")
+				if not okRead then real = { unread = "read error: " .. Text(real) } end
+				local okCompare, findings = pcall(ns.UnitMatchCompare, real, run.standRead, "TARGET")
+				if not okCompare or type(findings) ~= "table" or type(real) ~= "table" then
+					Verdict("parts UNSURE: compare error " .. Text(findings))
+				else
+					local checks, notes = findings.checks, findings.notes
+					findings.checks, findings.notes = nil, nil
+					for _, line in ipairs(findings) do Write("parts: " .. Text(line)) end
+					for _, line in ipairs(type(notes) == "table" and notes or {}) do Write("parts (note): " .. Text(line)) end
+					local unreadable = real.unread or run.standRead.unread
+					Verdict(unreadable and ("parts UNSURE: can't read (%s)"):format(Text(unreadable))
+						or ("parts %s: %d differences in %s checks"):format(#findings == 0 and "PASS" or "DIFFER",
+							#findings, Text(checks)))
+				end
+			end
+			-- The two it doesn't read: the name strip's color, the first icon.
+			local realExtras = Extras(_G.TargetFrame)
+			Write("the game's mana: " .. PowerLine(_G.TargetFrame))
+			Write(("the game's name strip %s, first icon %s, its border %s"):format(ShowColor(realExtras.strip),
+				ShowRect(realExtras.icon), realExtras.border))
+			local a, b = realExtras.strip, run.standExtras and run.standExtras.strip
+			local stripSame = a and b and math.abs(a[1] - b[1]) < 0.05 and math.abs(a[2] - b[2]) < 0.05
+				and math.abs(a[3] - b[3]) < 0.05
+			Verdict(("name strip %s: game %s, stand-in %s"):format(not (a and b) and "UNSURE" or stripSame and "PASS"
+				or "DIFFERS", ShowColor(a), ShowColor(b)))
+			local ri, si = realExtras.icon, run.standExtras and run.standExtras.icon
+			local iconSame = ri and si and math.abs(ri[1] - si[1]) <= 1.5 and math.abs(ri[2] - si[2]) <= 1.5
+				and math.abs(ri[3] - si[3]) <= 1.5
+			Verdict(("first icon %s: game %s, stand-in %s%s; border game %s, stand-in %s"):format(
+				not (ri and si) and "UNSURE" or iconSame and "PASS" or "DIFFERS", ShowRect(ri), ShowRect(si),
+				ri and si and (" (off by %.1f,%.1f size %.1f)"):format(si[1] - ri[1], si[2] - ri[2], si[3] - ri[3]) or "",
+				realExtras.border, run.standExtras and run.standExtras.border or "?"))
 			Shot("2 the game's own target frame of you")
 			run.phase, run.clock = "wantDown", 0
 			C_Timer.After(0.6, function()

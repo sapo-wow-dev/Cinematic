@@ -1536,6 +1536,7 @@ do
 		SetAtlas(art, recipe.art.atlas)
 		holder.FrameTexture = art
 		f.TargetFrameContainer = holder
+		stand.art, stand.holder = art, holder
 		local main = {}
 		f.TargetFrameContent = { TargetFrameContentMain = main }
 		if recipe.reaction then
@@ -1551,14 +1552,14 @@ do
 		stand.health = CreateFrame("StatusBar", nil, f)
 		Spot(f, stand.health, recipe.health)
 		pcall(stand.health.SetStatusBarTexture, stand.health, recipe.health.atlas)
-		Mask(f, stand.health:GetStatusBarTexture(), recipe.healthMask)
+		stand.healthMask = Mask(f, stand.health:GetStatusBarTexture(), recipe.healthMask)
 		f.healthbar = stand.health
 		stand.power = CreateFrame("StatusBar", nil, f)
 		Spot(f, stand.power, recipe.power)
 		pcall(stand.power.SetStatusBarTexture, stand.power, recipe.power.atlas)
 		-- (Masked only by a mask the recipe read: a guessed one showed a strip in
 		-- the bar's middle, the first themed run 2026-11-20.)
-		Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask)
+		stand.powerMask = Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask)
 		f.manabar = stand.power
 		local top = CreateFrame("Frame", nil, f)
 		top:SetAllPoints()
@@ -1569,29 +1570,74 @@ do
 			Spot(f, circle, recipe.circle)
 			SetAtlas(circle, recipe.circle.atlas)
 			main.LevelBackgroundCircle = circle
+			stand.circle = circle
 		end
 		stand.name = top:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		Spot(f, stand.name, recipe.name)
 		stand.name:SetJustifyH(recipe.name.justify or "CENTER")
 		f.name = stand.name
-		-- (In the middle of its circle, room for three digits: the recipe's box is
-		-- 11 wide, and "10" in this font read "...", the first themed run.)
 		stand.level = top:CreateFontString(nil, "OVERLAY", "GameNormalNumberFont")
 		-- (At the recipe's size, as the game's: the template's own read smaller.)
 		local file, _, flags = stand.level:GetFont()
 		if file and recipe.level.size then pcall(stand.level.SetFont, stand.level, file, recipe.level.size, flags) end
-		if circle then
-			stand.level:SetPoint("CENTER", circle, "CENTER", 0, 0)
-			stand.level:SetSize(36, recipe.level.h)
-			stand.level:SetJustifyH("CENTER")
-		else
-			Spot(f, stand.level, recipe.level)
-			stand.level:SetJustifyH(recipe.level.justify or "RIGHT")
-		end
 		main.LevelText = stand.level
 		stand.frame = f
 		return f
 	end
+	-- Every part where the recipe has it now: as it comes up, the recipe read
+	-- again (ns.UnitFrameRecipe: a part read off the game's target frame
+	-- replaces its built-in guess; the target's power bar was one, so the
+	-- stand-in's mana bar was too wide and unmasked: "mana frame looks off",
+	-- user 2026-11-20). A mask the recipe has now is made once.
+	local function Respot()
+		local f = stand.frame
+		local recipe = ns.UnitFrameRecipe and ns.UnitFrameRecipe("TARGET")
+		if not (f and recipe and recipe.art and recipe.health and recipe.power) then return end
+		stand.recipe = recipe
+		f:SetSize(recipe.art.w, recipe.art.h)
+		for _, pair in ipairs({ { stand.art, "art" }, { stand.reaction, "reaction" }, { stand.portrait, "portrait" },
+			{ stand.holder and stand.holder.PortraitMask, "portraitMask" }, { stand.health, "health" },
+			{ stand.healthMask, "healthMask" }, { stand.power, "power" }, { stand.powerMask, "powerMask" },
+			{ stand.circle, "circle" }, { stand.name, "name" } }) do
+			local region, entry = pair[1], recipe[pair[2]]
+			if region and entry then Spot(f, region, entry) end
+		end
+		if not stand.powerMask and recipe.powerMask then
+			stand.powerMask = Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask)
+		end
+		-- (The level in the game's box, right-justified as the game's, the box
+		-- widened leftward: 11 wide, "10" in this font read "...", the first
+		-- themed run; centered in the circle, Preview Match found it unlike the
+		-- game's, 2026-11-20.)
+		local level = recipe.level
+		if level then
+			local wide = math.max(level.w, 36)
+			stand.level:ClearAllPoints()
+			stand.level:SetPoint("TOPLEFT", f, "TOPLEFT", level.x + level.w - wide, -level.y)
+			stand.level:SetSize(wide, level.h)
+			stand.level:SetJustifyH(level.justify or "RIGHT")
+		end
+	end
+	-- (The target's power bar still the recipe's guess: after a target change,
+	-- out of a fight, the recipe's read asked for once the game's frame has
+	-- drawn it, a target with power or not: the read keeps what it can see.)
+	local powerAsked = 0
+	local function AskPowerRead()
+		local recipe = stand.recipe
+		if not (recipe and recipe.power and recipe.power.guess) or InCombatLockdown() then return end
+		if GetTime() - powerAsked < 2 or not UnitExists("target") then return end
+		powerAsked = GetTime()
+		C_Timer.After(0.5, function()
+			if ns.UnitFrameRecipe and not InCombatLockdown() then
+				local again = ns.UnitFrameRecipe("TARGET")
+				stand.recipe = again or stand.recipe
+				if again and again.power and not again.power.guess then
+					ns.Log("shoulder", "selecting yourself: the target power bar's place read off the game's frame")
+				end
+			end
+		end)
+	end
+	stand.AskPowerRead = AskPowerRead
 	-- Your health and power on it, as they change (secret ones too: only the
 	-- bars take them). Nothing of its look: that's Looks' and your theme's.
 	local function Values()
@@ -1688,6 +1734,7 @@ do
 			stand.events:RegisterUnitEvent(event, "player")
 		end
 		stand.alpha = nil
+		Respot()
 		stand.frame:SetAlpha(TargetAlpha())
 		Looks()
 		Auras()
@@ -1907,6 +1954,7 @@ do
 	watcher:SetScript("OnEvent", function(_, event)
 		if event == "PLAYER_TARGET_CHANGED" then
 			if UnitExists("target") then StandDown("you targeted something") end
+			ns.Guard(stand.AskPowerRead)
 			return ns.Guard(SelfTargeted)
 		elseif event == "PLAYER_LOGIN" then
 			-- (On key down or up as the game's action buttons are, not both: it'd go twice.)

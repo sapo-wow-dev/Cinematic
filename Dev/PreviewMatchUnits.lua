@@ -465,3 +465,10 @@ function ns.PreviewMatchUnits(arg)
 		ns.TestPrompt("Preview match (unit frames) 1/3: TARGET someone else, an NPC or player WITH MANA is best (not yourself). A focus and your pet out add those frames.", 600)
 	end
 end
+
+-- (For the Shoulder Cam's stand-in target frame test, /cine debug shoulder
+-- selfframe: Dev/ShoulderCamTest.lua reads the stand-in, which carries the
+-- game's target frame part names, and the game's target frame of you, and
+-- compares them. Keep these two names working, or tell that session.)
+function ns.UnitMatchRead(frame, id) return ReadFrame(GameParts(frame, id), id) end
+ns.UnitMatchCompare = Compare
