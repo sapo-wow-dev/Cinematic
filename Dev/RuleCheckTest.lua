@@ -349,8 +349,8 @@ local function Results()
 	Result(c .. ".plate.getpoint-in-fight", f.platefight and ("bgTexture %s; %d pieces readable, %d errors")
 		:format(f.platefight[1], f.platefight[2], f.platefight[3]) or "no plate walked in the fight")
 	Result(c .. ".unit_combat.amount", ("%d of %d amounts secret"):format(f.secretHits or 0, run.hits))
-	Result(c .. ".unit_aura.addedauras", ("%d of %d player UNIT_AURA updates had addedAuras secret (%d plain)")
-		:format(f.secretAuras or 0, f.playerAuras or 0, f.plainAuras or 0))
+	Result(c .. ".unit_aura.addedauras", ("added auras in fights: on you %d secret, %d plain; on others %d secret,"
+		.. " %d plain"):format(f.secretplayer or 0, f.plainplayer or 0, f.secretother or 0, f.plainother or 0))
 	for _, key in ipairs({ "interact", "uivis", "softcvar" }) do
 		local p = f[key]
 		Result(c .. ".probe." .. key, p or "not run (no fight)")
@@ -483,13 +483,17 @@ local function OnEvent(_, event, ...)
 				Show(school)))
 		end
 	elseif event == "UNIT_AURA" then
+		-- (Any unit: yours, and your target's and the plates' that your own
+		-- attacks change, so the fight needs no buff or debuff on you; the
+		-- 2026-11-20 Forever runs heard none on you.)
 		local unit, info = ...
-		if unit ~= "player" or not InCombatLockdown() then return end
-		f.playerAuras = (f.playerAuras or 0) + 1
+		if not InCombatLockdown() or Secret(unit) or type(unit) ~= "string" then return end
+		local who = unit == "player" and "player" or "other"
 		local ok, added = pcall(function() return info and info.addedAuras end)
 		local secret = not ok or Secret(info) or Secret(added)
-		if secret then f.secretAuras = (f.secretAuras or 0) + 1
-		elseif added then f.plainAuras = (f.plainAuras or 0) + 1 end
+		if not (secret or added) then return end
+		local key = (secret and "secret" or "plain") .. who
+		f[key] = (f[key] or 0) + 1
 		if run.auraLines < AURAS and (secret or added) then
 			run.auraLines = run.auraLines + 1
 			local first = ""
@@ -497,7 +501,7 @@ local function OnEvent(_, event, ...)
 				local ok2, id = pcall(function() return added[1].auraInstanceID end)
 				first = (", first auraInstanceID %s"):format(ok2 and Show(id) or "error")
 			end
-			Say(("  UNIT_AURA player: info %s, addedAuras %s%s"):format(Secret(info) and "<secret>" or type(info),
+			Say(("  UNIT_AURA %s: info %s, addedAuras %s%s"):format(unit, Secret(info) and "<secret>" or type(info),
 				ok and (Secret(added) and "<secret>" or (type(added) == "table" and #added .. " auras" or tostring(added)))
 				or "error on read", first))
 		end

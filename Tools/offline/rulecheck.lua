@@ -147,6 +147,8 @@ Fire("UNIT_COMBAT", "target", "WOUND", "", SECRET, 1)
 Fire("UNIT_COMBAT", "player", "WOUND", "", 12, 1)
 Fire("UNIT_AURA", "player", { addedAuras = SECRET })
 Fire("UNIT_AURA", "player", { addedAuras = { { auraInstanceID = 7 } } })
+Fire("UNIT_AURA", "nameplate3", { addedAuras = SECRET })
+Fire("UNIT_AURA", "target", { isFullUpdate = true })
 Advance(4)
 Check("interact probe blocked or not", Has("probe CheckInteractDistance target 3: blocked actions none") ~= nil)
 Check("SetUIVisibility blocked put down to it",
@@ -160,7 +162,7 @@ combat = false
 Advance(0.3)
 Check("result: amounts", Has("RESULT forever.unit_combat.amount: 9 of 10 amounts secret") ~= nil,
 	Has("unit_combat.amount"))
-Check("result: auras", Has("RESULT forever.unit_aura.addedauras: 1 of 2 player UNIT_AURA updates had addedAuras secret (1 plain)") ~= nil,
+Check("result: auras", Has("RESULT forever.unit_aura.addedauras: added auras in fights: on you 1 secret, 1 plain; on others 1 secret, 0 plain") ~= nil,
 	Has("addedauras"))
 Check("result: soft cvar", Has("RESULT forever.probe.softcvar: ran true, blocked") ~= nil, Has("probe.softcvar"))
 Check("result: plate", Has("RESULT forever.plate.bgtexture-getpoint: out of fights bgTexture TOPLEFT") ~= nil)
