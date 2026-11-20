@@ -3527,6 +3527,182 @@ do
 	end
 end
 
+-- selfclicks: why a left-click on your player frame still selects you with
+-- the option on, now and then (user 2026-11-20: 5 of 5 after a /reload, in
+-- CineMode). One run in CineMode (put back after), four clicks on your frame:
+-- once with a mob targeted, then three with nothing targeted, each after
+-- your frame has faded and been parked off the screen (the button should
+-- wait on its spot: FrameRect, ShoulderCam.lua). A verdict each: you
+-- targeted is a FAIL. Every mouse event on our button and on your player
+-- frame is logged (down, up, click, which button, where our button was),
+-- with the button's mouse settings and what's under the mouse.
+-- The button's put back as built at the end. Into db.shoulderSelfClicks.
+do
+	local run
+	local function Write(text)
+		local lines = ns.db.shoulderSelfClicks
+		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
+	local function Other() return UnitExists("target") and not Self() end
+	local function Box(head, line) ns.PadTestBox(head, line, 1, 0.82, 0) end
+	local PASS_ALL = { "RightButton", "MiddleButton", "Button4", "Button5" }
+	local function Built(button)
+		button:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "AnyDown" or "AnyUp")
+		if button.SetPassThroughButtons then pcall(button.SetPassThroughButtons, button, unpack(PASS_ALL)) end
+	end
+	local SETUPS = {
+		-- (First as login left it, nothing applied: the first run applied
+		-- "built" again before its click, and every setup passed.)
+		-- (The click setups all passed, in CineMode too, with a mob targeted:
+		-- your frame stays up then. What failed: nothing targeted, the frame
+		-- faded, shrunk and parked off the screen till hovered. So: once with
+		-- a target, then three with none, each waiting till it's parked.
+		-- [3]: a target wanted.)
+		{ "with a target", function() end, true },
+		{ "nothing targeted 1", function() end, false },
+		{ "nothing targeted 2", function() end, false },
+		{ "nothing targeted 3", function() end, false },
+	}
+	local function Under()
+		local names = {}
+		-- (GetMouseFoci gives a list: wrapped again, it read "nil", the first run.)
+		local foci = GetMouseFoci and GetMouseFoci()
+		if type(foci) ~= "table" or foci.GetObjectType then foci = { foci } end
+		for _, frame in ipairs(foci) do
+			names[#names + 1] = Text(frame.GetDebugName and frame:GetDebugName() or frame.GetName and frame:GetName())
+		end
+		return #names > 0 and table.concat(names, ", ") or "the world"
+	end
+	local function Settings(button)
+		local function Ask(name, ...)
+			local fn = button[name]
+			if not fn then return "n/a" end
+			local ok, a, b, c, d = pcall(fn, button, ...)
+			return ok and Text(a) .. (b ~= nil and "," .. Text(b) or "") .. (c ~= nil and "," .. Text(c) or "")
+				.. (d ~= nil and "," .. Text(d) or "") or "error"
+		end
+		return ("mouse %s, clicks %s, motion %s, pass %s, level %s"):format(Ask("IsMouseEnabled"),
+			Ask("IsMouseClickEnabled"), Ask("IsMouseMotionEnabled"), Ask("GetPassThroughButtons"), Ask("GetFrameLevel"))
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		if run.button and not InCombatLockdown() then Built(run.button) end
+		if run.cine ~= nil and (ns.lastCinematic and true or false) ~= run.cine and Cinematic_ToggleCineMode then
+			pcall(Cinematic_ToggleCineMode)
+		end
+		Write(("end: %s, button back as built, CineMode back %s"):format(why, Text(run.cine)))
+		Write("verdicts: " .. table.concat(run.verdicts, "; "))
+		Log(("selfclicks: %s, %d lines in db.shoulderSelfClicks"):format(why, #ns.db.shoulderSelfClicks))
+		run = nil
+	end
+	local Next
+	local function Tick(_, elapsed)
+		run.clock = run.clock + elapsed
+		local setup = SETUPS[run.at]
+		local rect = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState().rect or ""
+		if run.phase == "wantOther" and not setup[3] then
+			-- (Nothing targeted: wait for the frame to fade and park, 8 s at most.)
+			if UnitExists("target") then run.clock = 0 return end
+			if not rect:find("parked", 1, true) and run.clock < 8 then return end
+			run.phase, run.clock, run.clicked = "wantClick", 0, nil
+			Write(("%s: nothing targeted, our button at %s, asking"):format(setup[1], Text(rect)))
+			Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, setup[1]),
+				"HOVER WHERE YOUR PLAYER FRAME IS, LEFT-CLICK it as soon as it shows")
+		elseif run.phase == "wantOther" then
+			if not Other() then run.clock = 0 return end
+			if run.clock < 1 then return end
+			run.phase, run.clock, run.clicked = "wantClick", 0, nil
+			Write(("%s: target %s, asking; under the mouse now: %s"):format(SETUPS[run.at][1], Text(UnitName("target")),
+				Under()))
+			Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, SETUPS[run.at][1]), "LEFT-CLICK YOUR PLAYER FRAME, once, as soon as it shows")
+		elseif run.phase == "wantClick" then
+			if not run.clicked then
+				if Self() or run.mouseDown then run.clicked = run.clock end
+				if setup[3] and not UnitExists("target") then run.clicked = run.clock end
+				return
+			end
+			if run.clock - run.clicked < 1 then return end
+			run.mouseDown = nil
+			local result = Self() and "you (FAIL)" or UnitExists("target") and ("other: " .. Text(UnitName("target")))
+				or (setup[3] and "cleared (PASS)" or "still nothing (PASS)")
+			run.verdicts[#run.verdicts + 1] = SETUPS[run.at][1] .. " " .. result
+			Write(("%s: result %s"):format(SETUPS[run.at][1], result))
+			run.phase = "between"
+			C_Timer.After(0.5, function() if run then Next() end end)
+		end
+	end
+	function Next()
+		run.at, run.clock = run.at + 1, 0
+		local setup = SETUPS[run.at]
+		if not setup then
+			End("done")
+			ns.PadTestBox("Self clicks run done", "/reload, then say check log", 0.3, 1, 0.3)
+			C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+			return
+		end
+		if InCombatLockdown() then return End("a fight started") end
+		setup[2](run.button)
+		Write(("setup %s: %s"):format(setup[1], Settings(run.button)))
+		run.phase = "wantOther"
+		Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, setup[1]), setup[3]
+			and "TARGET ANY NPC OR CREATURE (Tab or click it)"
+			or "CLEAR YOUR TARGET (Esc), mouse off your frame, WAIT for the next box")
+	end
+	local hooked
+	function ns.ShoulderSelfClicks()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder selfclicks: stopped")
+		end
+		if InCombatLockdown() then return ns.Print("shoulder selfclicks: out of combat, please") end
+		local state = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState()
+		if not (state and state.want and state.covered) then
+			return ns.Print("shoulder selfclicks: tick Keep the shoulder when selecting yourself first (Shoulder Cam on, player frame shown)")
+		end
+		ns.db.shoulderSelfClicks = {}
+		run = { frame = CreateFrame("Frame"), began = GetTime(), clock = 0, at = 0, verdicts = {}, button = state.button }
+		Write(("start | %s | ActionButtonUseKeyDown %s | built: %s"):format(Who(), Text(GetCVar("ActionButtonUseKeyDown")),
+			Settings(run.button)))
+		if not hooked then
+			hooked = true
+			local function Watch(frame, label)
+				for _, script in ipairs({ "OnMouseDown", "OnMouseUp" }) do
+					pcall(frame.HookScript, frame, script, function(_, mouse)
+						if run and script == "OnMouseDown" then run.mouseDown = true end
+						if run then Write(("%s %s %s, target %s, our button at %s"):format(label, script, Text(mouse),
+							Self() and "you" or UnitExists("target") and "other" or "none",
+							Text(ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState().rect))) end
+					end)
+				end
+				pcall(frame.HookScript, frame, "OnClick", function(_, mouse, down)
+					if run then Write(("%s OnClick %s %s, target %s"):format(label, Text(mouse), down and "down" or "up",
+						Self() and "you" or UnitExists("target") and "other" or "none")) end
+				end)
+			end
+			Watch(run.button, "ours")
+			Watch(_G.PlayerFrame, "PlayerFrame")
+			local events = CreateFrame("Frame")
+			events:RegisterEvent("PLAYER_TARGET_CHANGED")
+			events:SetScript("OnEvent", function()
+				if run then Write("target changed: " .. (Self() and "you" or UnitExists("target") and "other" or "none")
+					.. "; under the mouse " .. Under()) end
+			end)
+		end
+		-- (In CineMode, as it failed: your frame faded, shrunk and parked off
+		-- the screen till hovered, Frames.lua. Put back as it was at the end.)
+		run.cine = ns.lastCinematic and true or false
+		if not run.cine and Cinematic_ToggleCineMode then pcall(Cinematic_ToggleCineMode) end
+		Write(("CineMode %s (was %s); hover your frame, then click quickly"):format(Text(ns.lastCinematic and true or false),
+			Text(run.cine)))
+		run.frame:SetScript("OnUpdate", Tick)
+		Next()
+		ns.Print("shoulder selfclicks: follow the box, four clicks; type it again to stop")
+	end
+end
+
 -- fakeselftest: the real option (Keep the shoulder when selecting yourself,
 -- ShoulderCam.lua), on for the run and put back after. Steps, each with its
 -- own verdict, into db.shoulderFakeSelfTest:
@@ -4639,6 +4815,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "selfdodge" then ns.ShoulderSelfDodge()
 	elseif what == "fakeself" then ns.ShoulderFakeSelf()
 	elseif what == "fakeselftest" then ns.ShoulderFakeSelfTest()
+	elseif what == "selfclicks" then ns.ShoulderSelfClicks()
 	elseif what == "today" then ns.ShoulderToday(rest)
 	elseif what == "profiletest" then ns.ShoulderProfileTest()
 	elseif what == "on" then Set("shoulderCam", true)
@@ -4649,7 +4826,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, today, profiletest, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, today, profiletest, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

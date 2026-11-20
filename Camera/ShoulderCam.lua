@@ -1331,11 +1331,34 @@ do
 		if GetCVar("autoSelfCast") == "0" then return false, "auto self-cast off" end
 		return true, "on"
 	end
-	-- Where your player frame is, as a key ("" for none to cover).
+	-- Your player frame's fade entry (Frames.lua's ns.managed), found once.
+	local entry
+	local function FadeEntry(frame)
+		if entry and entry.frame == frame then return entry end
+		entry = nil
+		for _, each in ipairs(ns.managed or {}) do
+			if each.frame == frame then entry = each break end
+		end
+		return entry
+	end
+	-- Where your player frame is, as a key ("" for none to cover). Faded in
+	-- CineMode it's shrunk and parked off the screen, its spot saved for the
+	-- hover (Frames.lua): the button stays on that spot, so it's there as the
+	-- frame comes back. Following the frame, it was off the screen till its
+	-- next check, and a quick click went to the game's frame: "works
+	-- sometimes", user 2026-11-20 (CineMode, mouse on PlayerFrame).
 	local function FrameRect()
 		local frame = _G.PlayerFrame
 		if not (frame and ns.Flag(frame:IsVisible()) and frame:GetLeft()) then return "" end
 		if IsLoaded and ns.Flag(IsLoaded("Clique")) then return "" end
+		local parked = FadeEntry(frame)
+		if parked and (parked.shrunk or parked.parkedFullSize) and parked.savedRect and parked.savedRect[1]
+			and parked.savedEffectiveScale then
+			local left, bottom, width, height = unpack(parked.savedRect)
+			local scale = parked.savedEffectiveScale / UIParent:GetEffectiveScale()
+			return ("%.1f %.1f %.1f %.1f %s %d parked"):format(left * scale, bottom * scale, width * scale, height * scale,
+				frame:GetFrameStrata(), frame:GetFrameLevel())
+		end
 		local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
 		return ("%.1f %.1f %.1f %.1f %s %d"):format(frame:GetLeft() * scale, frame:GetBottom() * scale,
 			frame:GetWidth() * scale, frame:GetHeight() * scale, frame:GetFrameStrata(), frame:GetFrameLevel())
@@ -1377,6 +1400,8 @@ do
 			Place(rect)
 			if want and (rect == "") ~= (state.rect == "") then
 				ns.Log("shoulder", "selecting yourself: player frame " .. (rect ~= "" and "covered" or "not covered"))
+			elseif want and rect ~= "" then
+				ns.Log("shoulder", "selecting yourself: button placed again: " .. rect)
 			end
 			state.rect = rect
 		end
@@ -1387,12 +1412,37 @@ do
 			state.want, state.why = want, why
 		end
 	end
+	-- (Targeted anyway with it on: how, for /cine log. "Not working", user
+	-- 2026-11-20: targeted with the frame covered and the key ours.)
+	local function Rect(frame)
+		if not (frame and frame:GetLeft()) then return "none" end
+		local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		return ("%.0f,%.0f %.0fx%.0f%s"):format(frame:GetLeft() * scale, frame:GetBottom() * scale,
+			frame:GetWidth() * scale, frame:GetHeight() * scale, ns.Flag(frame:IsVisible()) and "" or " hidden")
+			.. (" %s %d%s"):format(frame:GetFrameStrata(), frame:GetFrameLevel(),
+				frame.IsToplevel and frame:IsToplevel() and " toplevel" or "")
+	end
+	local function SelfTargeted()
+		if not (state.want and UnitExists("target") and ns.Flag(UnitIsUnit("target", "player"))) then return end
+		local focus = ns.MouseFocus and ns.MouseFocus()
+		local name = focus and (focus.GetDebugName and focus:GetDebugName() or focus.GetName and focus:GetName())
+		local over = UnitExists("mouseover") and ns.Flag(UnitIsUnit("mouseover", "player"))
+		ns.Log("shoulder", ("selecting yourself: you're targeted anyway: mouse on %s, over you %s, our button %s at %s,"
+			.. " player frame at %s, keys %s, in combat %s"):format(tostring(name or "the world"), tostring(over),
+			fake:IsShown() and "shown" or "hidden", Rect(fake), Rect(_G.PlayerFrame), state.keys ~= "" and state.keys or "none",
+			tostring(InCombatLockdown())) .. (" | our mouse %s, clicks %s, motion %s"):format(tostring(fake:IsMouseEnabled()),
+			tostring(fake.IsMouseClickEnabled and fake:IsMouseClickEnabled()),
+			tostring(fake.IsMouseMotionEnabled and fake:IsMouseMotionEnabled())))
+	end
 	local watcher = CreateFrame("Frame")
 	watcher:RegisterEvent("PLAYER_LOGIN")
 	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 	watcher:RegisterEvent("UPDATE_BINDINGS")
+	watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
 	watcher:SetScript("OnEvent", function(_, event)
-		if event == "PLAYER_LOGIN" then
+		if event == "PLAYER_TARGET_CHANGED" then
+			return ns.Guard(SelfTargeted)
+		elseif event == "PLAYER_LOGIN" then
 			-- (On key down or up as the game's action buttons are, not both: it'd go twice.)
 			fake:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "AnyDown" or "AnyUp")
 			ns.Log("shoulder", ("selecting yourself: other clicks pass through to your frame: %s"):format(
@@ -1415,7 +1465,7 @@ do
 	end)
 	-- (The run and test commands: what it's doing now.)
 	function ns.ShoulderFakeSelfState()
-		return { want = state.want, why = state.why, keys = state.keys, covered = state.rect ~= "",
+		return { want = state.want, why = state.why, keys = state.keys, covered = state.rect ~= "", rect = state.rect,
 			passThrough = passThrough, button = fake }
 	end
 end
