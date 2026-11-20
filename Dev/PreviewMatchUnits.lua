@@ -1,15 +1,19 @@
--- /cine debug previewmatch units [stop]: the Preview Match test for the Unit
+-- /cine debug previewmatch units [skip|stop]: the Preview Match test for the Unit
 -- Frames page's preview (Tools/preview-match-plan.md, step 4). Do its
--- mock-ups look like the game's own player, target, focus and pet frames?
+-- mock-ups look like the game's own player, target, focus, pet and target of
+-- target frames (the target's and the focus's)?
 -- One run, steps on screen, no time limit, CineMode off for the run, never
 -- opens Settings: it makes the page's preview itself (ns.MakeUnitStylePreview)
 -- in a strip at the screen's left.
---   1 you have a target, not yourself (on Forever your own target frame's
---     places are secret, 2026-11-20), one with mana is best; a focus and
---     your pet out add those frames: read at once if you have one already;
---   2 the game's look: the test turns the Unit Frames Style page off, reads
---     the game's frames and the preview's mock-ups, shoots the screen;
---   3 your look (only when your page was on): the same with your settings;
+--   0 the game's look goes on (the Unit Frames Style page off), out of a fight;
+--   1 it waits for a target, not yourself (on Forever your own target
+--     frame's places are secret, 2026-11-20), one with mana is best, a
+--     focus and your pet out, the target and the focus each targeting
+--     someone (their targets of target: pull the focused mob, fighting is
+--     fine) (or "/cine debug previewmatch units skip");
+--   2 the game's frames and the preview's mock-ups read, the screen shot;
+--   3 your look (only when your page was on), once you're out of any fight:
+--     the same with your settings, with what's still up;
 --   then your settings back (at the next login too if a reload cuts it short).
 -- Read, per frame: its parts (frame art, portrait, health and power bars,
 -- name, level), each placed and sized in widths of its health bar, the bars'
@@ -22,9 +26,15 @@ local _, ns = ...
 
 local MAX_LINES, TREE_LINES = 2500, 120
 local SETTLE = 1.2 -- (seconds after a look changes: RefreshUnitStyle settles at 0.4)
-local IDS = { "PLAYER", "TARGET", "FOCUS", "PET" }
-local NAMES = { PLAYER = "Player frame", TARGET = "Target frame", FOCUS = "Focus frame", PET = "Pet frame" }
-local UNITS = { PLAYER = "player", TARGET = "target", FOCUS = "focus", PET = "pet" }
+local DRAWN = 0.5 -- (seconds from the preview's drawing to its shot: masked textures show late)
+-- (Each target of target against its own mock-up: the target's, TOT, and the focus's, FOCUSTOT.)
+local IDS = { "PLAYER", "TARGET", "FOCUS", "PET", "TOT", "FOCUSTOT" }
+local NAMES = { PLAYER = "Player frame", TARGET = "Target frame", FOCUS = "Focus frame", PET = "Pet frame",
+	TOT = "Target's target of target", FOCUSTOT = "Focus's target of target" }
+local UNITS = { PLAYER = "player", TARGET = "target", FOCUS = "focus", PET = "pet", TOT = "targettarget",
+	FOCUSTOT = "focustarget" }
+local GAME_FRAMES = { PLAYER = "PlayerFrame", TARGET = "TargetFrame", FOCUS = "FocusFrame", PET = "PetFrame",
+	TOT = "TargetFrameToT", FOCUSTOT = "FocusFrameToT" }
 local ROLES = { "art", "portrait", "health", "power", "name", "level" }
 -- How far apart is "different": places and sizes in widths of the health bar,
 -- a bar's shape (width over height) and a font's size as a part of its own.
@@ -32,6 +42,7 @@ local PLACE_OFF, SIZE_OFF, SHAPE_OFF, FONT_OFF = 0.08, 0.2, 0.25, 0.25
 
 local K = ns.PreviewMatchKit
 local run -- { step, phase, reads, shots, events, cineWasOn }
+local Missing, Ready -- (step 1, below)
 
 local function Store()
 	CinematicDB.previewMatch = CinematicDB.previewMatch or {}
@@ -53,7 +64,7 @@ end
 
 -- The game's frames and their parts (UnitStyle.lua's Parts, and the level).
 local function GameFrame(id)
-	local frame = _G[({ PLAYER = "PlayerFrame", TARGET = "TargetFrame", FOCUS = "FocusFrame", PET = "PetFrame" })[id]]
+	local frame = _G[GAME_FRAMES[id]]
 	if not frame or K.Plain(K.Call(frame, "IsForbidden")) then return nil end
 	return frame
 end
@@ -66,6 +77,25 @@ local function GameParts(frame, id)
 	local holder = frame.PlayerFrameContainer or frame.TargetFrameContainer or frame
 	parts.art = holder.FrameTexture or frame.FrameTexture
 		or (frame.GetName and frame:GetName() and (_G[frame:GetName() .. "Texture"] or _G[frame:GetName() .. "TextureFrameTexture"]))
+	-- (A frame with no art by name (the pet's): its biggest piece of unit frame art.)
+	if type(parts.art) ~= "table" or not parts.art.GetAtlas then
+		local best, most = nil, 0
+		local function Look(node, depth)
+			if depth > 6 then return end
+			for _, region in ipairs({ K.Call(node, "GetRegions") }) do
+				local atlas = K.Call(region, "GetObjectType") == "Texture" and K.Plain(K.Call(region, "GetAtlas"))
+				local w, h = K.Call(region, "GetSize")
+				w, h = K.Num(w), K.Num(h)
+				if type(atlas) == "string" and atlas:find("UnitFrame", 1, true) and not atlas:find("Bar", 1, true)
+					and w and h and w * h > most and K.Showing(region) then
+					best, most = region, w * h
+				end
+			end
+			for _, child in ipairs({ K.Call(node, "GetChildren") }) do Look(child, depth + 1) end
+		end
+		Look(frame, 0)
+		parts.art = best
+	end
 	if id == "PLAYER" then
 		parts.level = _G.PlayerLevelText
 	else
@@ -239,7 +269,9 @@ local function Compare(real, ours, id)
 				Say(("ART %s: %s in game, %s ours"):format(role, tostring(g.art), tostring(o.art)))
 			end
 			-- (Another's level is colored by how hard it is for you: the unit's, not the look's.)
-			local byUnit = role == "level" and id ~= "PLAYER"
+			-- (And another's power bar's color is its power's: our sample warrior's rage
+			-- against a mana user, 2026-11-20. Yours and your pet's are compared.)
+			local byUnit = (role == "level" and id ~= "PLAYER") or (role == "power" and id ~= "PLAYER" and id ~= "PET")
 			if role ~= "portrait" and not byUnit and K.ColorOff(g.color, o.color) then
 				Say(("COLOR %s: %s in game, %s ours"):format(role, tostring(g.color), tostring(o.color)))
 			end
@@ -270,6 +302,71 @@ local function Compare(real, ours, id)
 		end
 	end
 	return findings
+end
+
+-- Quality control of the preview's layout (user 2026-11-20, a screenshot of
+-- the Style General page: an empty frame under yours, the level cut to "..",
+-- the focus's target of target cut off, frames on each other). Every problem
+-- one line: a frame (or a part of it) past the preview's edge, where it's cut
+-- off; two frames on each other (not one hung off the other, as the game
+-- hangs a target of target or your pet); a text cut short; art left showing
+-- with nothing of its own frame on it.
+function ns.UnitPreviewLayoutCheck(holder)
+	local problems = {}
+	local hl, hr, ht, hb = holder:GetLeft(), holder:GetRight(), holder:GetTop(), holder:GetBottom()
+	if not (hl and hr and ht and hb) then return { "the preview isn't on the screen: nothing to measure" } end
+	local hs = holder:GetEffectiveScale()
+	local function Rect(region)
+		local l, r, t, b = region:GetLeft(), region:GetRight(), region:GetTop(), region:GetBottom()
+		if not (l and r and t and b) then return nil end
+		local k = region:GetEffectiveScale() / hs
+		return { l * k, r * k, t * k, b * k }
+	end
+	local boxes = {}
+	for key, unit in pairs(holder.units or {}) do
+		if unit:IsVisible() then
+			local box = Rect(unit)
+			if box then boxes[key] = box end
+			local parts = { unit, unit.name, unit.health, unit.power, unit.badge and unit.badge.text or false }
+			if unit.copy and unit.copy.on then
+				for _, texture in ipairs(unit.copy.textures) do parts[#parts + 1] = texture end
+				for _, extra in ipairs(unit.copy.extras) do parts[#parts + 1] = extra end
+			end
+			for _, part in ipairs(parts) do
+				local rect = part and part:IsVisible() and Rect(part)
+				if rect and (rect[1] < hl - 1 or rect[2] > hr + 1 or rect[3] > ht + 1 or rect[4] < hb - 1) then
+					problems[#problems + 1] = ("CUT %s: %s past the preview's edge"):format(key,
+						part == unit and "the frame" or tostring(part:GetObjectType()))
+					break
+				end
+			end
+			for _, text in ipairs({ unit.name, unit.badge and unit.badge.text or false }) do
+				if text and text:IsVisible() and text:GetText() then
+					local cut = text.IsTruncated and text:IsTruncated()
+					if type(cut) ~= "boolean" then cut = false end
+					local width = text:GetWidth()
+					if not cut and width and width > 0 and text:GetStringWidth() > width + 1 then cut = true end
+					if cut then problems[#problems + 1] = ("TEXT %s: %q cut short"):format(key, text:GetText()) end
+				end
+			end
+		end
+	end
+	local keys = {}
+	for key in pairs(boxes) do keys[#keys + 1] = key end
+	table.sort(keys)
+	for i = 1, #keys do
+		for j = i + 1, #keys do
+			local a, b = holder.units[keys[i]], holder.units[keys[j]]
+			local hung = a.hungOn == b or b.hungOn == a
+			local x, y = boxes[keys[i]], boxes[keys[j]]
+			local across = math.min(x[2], y[2]) - math.max(x[1], y[1])
+			local down = math.min(x[3], y[3]) - math.max(x[4], y[4])
+			if not hung and across > 2 and down > 2 then
+				problems[#problems + 1] = ("OVERLAP %s and %s: %.0f x %.0f on each other"):format(keys[i], keys[j], across, down)
+			end
+		end
+	end
+	return problems
 end
 
 -- Your settings: the page's switch, kept and put back (at the next login too).
@@ -329,27 +426,93 @@ local function Keep(key, read, stamp)
 end
 
 -- One look: every frame that's up read, game and ours, one screenshot.
-local function ReadPhase(phase, treeToo)
-	run.phase = phase
-	preview:Refresh()
-	local stamp = Shot(phase)
-	for _, id in ipairs(IDS) do
-		local frame = GameFrame(id)
-		local unit = preview.units and preview.units[id]
-		if frame and K.Plain(K.Call(frame, "IsVisible")) and UnitExists(UNITS[id]) and unit then
-			Keep(phase .. ":game:" .. id, ReadFrame(GameParts(frame, id), "game:" .. id), stamp)
-			Keep(phase .. ":ours:" .. id, ReadFrame(OurParts(unit), "ours:" .. id), stamp)
-			if treeToo then Tree(id, frame) end
-		else
-			Log(("%s: not up (%s), not read"):format(id, frame and "no " .. UNITS[id] or "no frame"))
+-- (What a masked texture of ours draws: where it and each of its masks sit,
+-- its alpha and art. In game 2026-11-20 every portrait and health fill of the
+-- preview drew nothing, their art right and their masks in place.)
+local function Masked(label, texture)
+	if not texture then return end
+	local function Box(region)
+		local l, b, w, h = region:GetRect()
+		if not l then return "no place" end
+		return ("%.0f,%.0f %.0fx%.0f"):format(l * region:GetEffectiveScale(), b * region:GetEffectiveScale(),
+			w * region:GetEffectiveScale(), h * region:GetEffectiveScale())
+	end
+	local masks = {}
+	local count = texture.GetNumMaskTextures and texture:GetNumMaskTextures() or 0
+	if type(count) ~= "number" then count = 0 end
+	for i = 1, count do
+		local mask = texture:GetMaskTexture(i)
+		if mask then
+			masks[#masks + 1] = ("%s %s shown %s"):format(tostring(K.Art(mask)), Box(mask), tostring(mask:IsShown()))
 		end
 	end
+	-- (A texture's own alpha: Forever errors on a texture's GetEffectiveAlpha, 2026-11-20.)
+	local alpha = K.Num(K.Call(texture, "GetAlpha")) or -1
+	Log(("  MASKED %s: shown %s visible %s alpha %.2f art %s at %s; %d masks: %s"):format(label, tostring(texture:IsShown()),
+		tostring(texture:IsVisible()), alpha, tostring(K.Art(texture)), Box(texture), count,
+		table.concat(masks, " | ")))
+end
+
+local function ReadPhase(phase, treeToo, done)
+	run.phase = phase
+	-- (On screen for its shot: something put CineMode back on after a fight, and
+	-- the preview wasn't in the shot of your look, 2026-11-20.)
+	K.SetCine(false)
+	if strip then strip:Show() end
+	-- (At the Style screens' own size: every Style page's preview and the
+	-- Style General page's screen are held to it.)
+	if ns.StylePreviewHeight then preview:SetHeight(ns.StylePreviewHeight()) end
+	preview:Refresh()
+	local problems = ns.UnitPreviewLayoutCheck(preview)
+	Log(("  stage scale %.3f, preview visible %s"):format(preview.units.PLAYER:GetParent():GetScale(),
+		tostring(preview:IsVisible())))
+	for _, key in ipairs({ "PLAYER", "PARTY" }) do
+		local unit = preview.units[key]
+		if unit then
+			pcall(Masked, key .. " face", unit.face)
+			pcall(Masked, key .. " class portrait", unit.portrait:IsShown() and unit.portrait or nil)
+			pcall(Masked, key .. " health fill", unit.health:GetStatusBarTexture())
+			Log(("  %s health value %s of %s"):format(key, tostring(unit.health:GetValue()), tostring(select(2, unit.health:GetMinMaxValues()))))
+		end
+	end
+	Log(("LAYOUT %s look: %d problems at %dx%d"):format(phase, #problems, preview:GetWidth(), preview:GetHeight()))
+	for _, line in ipairs(problems) do Log("  " .. line) end
+	run.layout = run.layout or {}
+	run.layout[phase] = problems
+	-- (Shot a moment after it's drawn: a masked texture shows a frame or more
+	-- after it's set up. Shot at once, every face and bar fill of the
+	-- preview was blank in every run till 2026-11-20 (a probe shot 0.5 s
+	-- later drew them all).)
+	C_Timer.After(DRAWN, function()
+		if not run then return end
+		local stamp = Shot(phase)
+		for _, id in ipairs(IDS) do
+			local frame = GameFrame(id)
+			local unit = preview.units and preview.units[id]
+			if frame and K.Plain(K.Call(frame, "IsVisible")) and UnitExists(UNITS[id]) and unit then
+				Keep(phase .. ":game:" .. id, ReadFrame(GameParts(frame, id), "game:" .. id), stamp)
+				Keep(phase .. ":ours:" .. id, ReadFrame(OurParts(unit), "ours:" .. id), stamp)
+				Log(("  ours %s: %s"):format(id, unit.copy and unit.copy.on and "the copy" or ("drawn (" .. tostring(unit.copyWhy) .. ")")))
+				if treeToo then Tree(id, frame) end
+			else
+				Log(("%s: not up (%s), not read"):format(id, frame and "no " .. UNITS[id] or "no frame"))
+			end
+		end
+		-- (After the shot is saved, a moment on: carried on at once, the run's end
+		-- put CineMode back on in the same moment and the shot of your look had no
+		-- UI in it, 2026-11-20.)
+		if done then C_Timer.After(DRAWN, function() if run then done() end end) end
+	end)
 end
 
 local function Finish()
 	local store = Store()
 	store.reads, store.shots, store.pairs = run.reads, run.shots, {}
 	local summary = {}
+	store.layout = run.layout
+	for phase, problems in pairs(run.layout or {}) do
+		summary[#summary + 1] = ("layout (%s) %s"):format(phase, #problems == 0 and "clean" or (#problems .. " problems"))
+	end
 	for _, phase in ipairs({ "game", "yours" }) do
 		for _, id in ipairs(IDS) do
 			local real, ours = run.reads[phase .. ":game:" .. id], run.reads[phase .. ":ours:" .. id]
@@ -379,31 +542,95 @@ local function Finish()
 	ns.Print("preview match: " .. (#summary > 0 and table.concat(summary, ", ") or "nothing read"))
 end
 
-local function Go()
-	run.step = 2
-	ns.TestPrompt("Preview match (unit frames): hands off, reading the game's look.", 3)
-	local db = K.DB()
-	db.ufStyle = false
+-- Fights: the frames are read fine in one (their places aren't secret), but
+-- a look can't be put on or taken off them then (the game holds unit frames
+-- still): read with the page switched off in a fight, our level badge stayed
+-- on and was read as the game's, 2026-11-20. So the game's look goes on
+-- before step 1, out of a fight, and stays through any fight; your look goes
+-- back on once you're out of one, and is read then with what's still up.
+local calm = CreateFrame("Frame")
+local afterCalm
+calm:SetScript("OnEvent", function(self)
+	self:UnregisterAllEvents()
+	local fn = afterCalm
+	afterCalm = nil
+	if fn and run then C_Timer.After(0.5, fn) end
+end)
+local function WhenCalm(fn, why)
+	if not InCombatLockdown() then return true end
+	afterCalm = fn
+	calm:RegisterEvent("PLAYER_REGEN_ENABLED")
+	Log("in a fight: " .. why .. " once it ends")
+	ns.TestPrompt("Preview match (unit frames) 3/3: game's look read. Your own look is read once the fight ends: finish it, then stand still.", 600)
+	return false
+end
+
+-- Step 3: your look, out of a fight, with what's up then.
+local function ReadYours()
+	if not run then return end
+	if not WhenCalm(ReadYours, "your look goes back on and is read") then return end
+	run.step = 3
+	ns.TestPrompt("Preview match (unit frames) 3/3: hands off, reading your look.", 3)
+	K.DB().ufStyle = true
 	if ns.RefreshUnitStyle then pcall(ns.RefreshUnitStyle) end
 	C_Timer.After(SETTLE, function()
 		if not run then return end
-		ReadPhase("game", true)
-		local kept = CinematicDB.previewMatchUnitsKept
-		if not (kept and kept.ufStyle) then
-			Log("your Unit Frames Style page is off: your look is the game's, no second read")
-			Finish()
-			return
-		end
-		run.step = 3
-		ns.TestPrompt("Preview match (unit frames): reading your look.", 3)
-		db.ufStyle = true
-		if ns.RefreshUnitStyle then pcall(ns.RefreshUnitStyle) end
-		C_Timer.After(SETTLE, function()
-			if not run then return end
-			ReadPhase("yours", false)
-			Finish()
+		-- (A fight begun as it went on: dressed partly. Again after that one.)
+		if not WhenCalm(ReadYours, "your look goes on again and is read") then return end
+		ReadPhase("yours", false, Finish)
+	end)
+end
+
+-- Step 2: every frame up (or skipped), the game's look on them since the start.
+local Go
+Go = function()
+	if not run then return end
+	run.step = 2
+	ns.TestPrompt("Preview match (unit frames) 2/3: hands off, reading the game's look.", 3)
+	C_Timer.After(0.3, function()
+		if not run then return end
+		ReadPhase("game", true, function()
+			local kept = CinematicDB.previewMatchUnitsKept
+			if not (kept and kept.ufStyle) then
+				Log("your Unit Frames Style page is off: your look is the game's, no second read")
+				Finish()
+				return
+			end
+			ReadYours()
 		end)
 	end)
+end
+
+-- Step 1: every frame the run compares up: a target not you (on Forever your
+-- own target frame's places are secret), a focus, your pet. Each missing one
+-- named on screen; "/cine debug previewmatch units skip" goes without them.
+Missing = function()
+	local list = {}
+	if not UnitExists("target") or UnitIsUnit("target", "player") then
+		list[#list + 1] = UnitExists("target") and "a TARGET not yourself" or "a TARGET (a mob with mana is best)"
+	end
+	if not UnitExists("focus") then list[#list + 1] = "a FOCUS (/focus on your target)" end
+	if not UnitExists("pet") then list[#list + 1] = "your PET out" end
+	-- (Their targets of target: a target and a focus that are targeting someone.
+	-- A fight's fine: pull the mob you've focused, it targets you or your pet.)
+	if not UnitExists("targettarget") then list[#list + 1] = "your target TARGETING someone (pull it: fighting is fine)" end
+	if not UnitExists("focustarget") then list[#list + 1] = "your focus TARGETING someone" end
+	return list
+end
+Ready = function()
+	if not run.lookReady then return end
+	local missing = Missing()
+	if #missing == 0 then
+		run.step = 1.5
+		C_Timer.After(0.5, function() if run then Go() end end)
+		return
+	end
+	if UnitExists("target") and UnitIsUnit("target", "player") and not run.saidYou then
+		run.saidYou = true
+		Log("target is you: waiting for another (your own target frame's places are secret)")
+	end
+	ns.TestPrompt(("Preview match (unit frames) 1/3: the game's look is on. Waiting for %s. Or type /cine debug previewmatch units skip"):format(
+		table.concat(missing, ", ")), 600)
 end
 
 local function Stop()
@@ -416,17 +643,128 @@ local function Stop()
 	ns.TestPrompt("Preview match (unit frames) stopped. Your settings are back.", 5)
 end
 
+-- "/cine debug previewmatch units masks": when does a masked texture stop
+-- drawing? In game 2026-11-20 every masked face and bar fill of the preview
+-- drew nothing once its layout pass ran (each frame moved twice, measured
+-- between, then the stage sized and scaled), while the game said each was
+-- shown, at full alpha, its mask on it. Shrinking alone draws fine (first
+-- probe, 16:31). Each case below changes one thing after the mask is on, as
+-- the preview does; one screenshot, logged; then gone. Nothing to do.
+local MASK_CASES = {
+	{ "as made" },
+	{ "scaled after", function(_, owner) owner:SetScale(0.8) end },
+	{ "moved after", function(box, owner)
+		box:ClearAllPoints()
+		box:SetPoint("TOP", owner, "TOP", 0, -14)
+	end },
+	{ "moved, measured, moved", function(box, owner)
+		box:ClearAllPoints()
+		box:SetPoint("TOP", owner, "TOP", 10, -4)
+		local _ = box:GetLeft()
+		box:ClearAllPoints()
+		box:SetPoint("TOP", owner, "TOP", 0, -14)
+	end },
+	{ "holder sized + scaled", function(_, owner)
+		owner:SetSize(90, 90)
+		owner:SetScale(0.8)
+	end },
+	{ "mask set again", function(box, _, mask)
+		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		mask:ClearAllPoints()
+		mask:SetAllPoints(box)
+	end },
+}
+local function MaskProbe()
+	local holder = CreateFrame("Frame", nil, UIParent)
+	holder:SetSize(#MASK_CASES * 110, 140)
+	holder:SetPoint("CENTER", 0, 120)
+	holder:SetFrameStrata("DIALOG")
+	local back = holder:CreateTexture(nil, "BACKGROUND")
+	back:SetAllPoints()
+	back:SetColorTexture(0.1, 0.1, 0.12, 0.95)
+	for i, case in ipairs(MASK_CASES) do
+		local cell = CreateFrame("Frame", nil, holder)
+		cell:SetSize(100, 120)
+		cell:SetPoint("TOPLEFT", (i - 1) * 110 + 5, -5)
+		if cell.SetClipsChildren then cell:SetClipsChildren(true) end -- (as the preview's holder)
+		local owner = CreateFrame("Frame", nil, cell) -- (the stage)
+		owner:SetSize(100, 100)
+		owner:SetPoint("TOP")
+		local box = CreateFrame("Frame", nil, owner) -- (a unit)
+		box:SetSize(64, 64)
+		box:SetPoint("TOP", owner, "TOP", 0, -8)
+		local face = box:CreateTexture(nil, "BACKGROUND", nil, 1)
+		face:SetAllPoints()
+		face:SetTexture("Interface\\Icons\\INV_Misc_Head_Orc_01")
+		local mask = box:CreateMaskTexture()
+		mask:SetAllPoints()
+		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		face:AddMaskTexture(mask)
+		if case[2] then pcall(case[2], box, owner, mask) end
+		local label = cell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		label:SetPoint("BOTTOM", 0, 2)
+		label:SetText(case[1])
+	end
+	-- (And whole previews under them: the test's own strip never drew a masked
+	-- face, even before the layout pass (14:08), while the Style General page's
+	-- did. As the test makes it, in another frame layer, and fitted as the
+	-- Style General page fits its screens.)
+	local previews = {}
+	for i, how in ipairs({ "as the test (HIGH)", "DIALOG layer", "fitted as General" }) do
+		local frame = CreateFrame("Frame", nil, UIParent)
+		frame:SetSize(480, 200)
+		frame:SetPoint("TOP", UIParent, "CENTER", (i - 2) * 500, 30)
+		frame:SetFrameStrata(i == 2 and "DIALOG" or "HIGH")
+		local one = ns.MakeUnitStylePreview(frame, 480)
+		one:SetAllPoints()
+		if i == 3 and ns.StylePreviewHeight then
+			frame:SetHeight(ns.StylePreviewHeight())
+			one:Refresh()
+			if ns.ApplyPreviewFit then ns.ApplyPreviewFit(one) end
+		else
+			one:Refresh()
+		end
+		local label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		label:SetPoint("BOTTOM", frame, "TOP", 0, 2)
+		label:SetText(how)
+		previews[#previews + 1] = frame
+		pcall(Masked, how .. ": PLAYER face", one.units and one.units.PLAYER and one.units.PLAYER.face)
+		pcall(Masked, how .. ": PARTY face", one.units and one.units.PARTY and one.units.PARTY.face)
+	end
+	C_Timer.After(0.5, function()
+		local stamp = date("%m%d%y_%H%M%S")
+		Screenshot()
+		CinematicDB.previewMatchMaskShot = stamp
+		C_Timer.After(3, function() for _, frame in ipairs(previews) do frame:Hide() end end)
+		ns.Print("preview match masks: shot " .. stamp .. ". /reload, then tell Claude 'check log'.")
+		C_Timer.After(3, function() holder:Hide() end)
+	end)
+end
+
 function ns.PreviewMatchUnits(arg)
+	if arg == "masks" then
+		MaskProbe()
+		return
+	end
 	if arg == "stop" then
 		Stop()
+		return
+	end
+	if arg == "skip" then
+		if run and run.step == 1 and run.lookReady then
+			Log("skipped waiting for: " .. table.concat(Missing(), ", "))
+			run.step = 1.5
+			C_Timer.After(0.5, function() if run then Go() end end)
+		end
 		return
 	end
 	if run then
 		ns.Print("preview match: already running (/cine debug previewmatch units stop to stop it)")
 		return
 	end
+	-- (Started out of a fight: the game's look goes on first, which a fight forbids.)
 	if InCombatLockdown() then
-		ns.Print("preview match: not in a fight. Try again after it.")
+		ns.Print("preview match: start it out of a fight (fighting is fine once it's going).")
 		return
 	end
 	if not (K and ns.MakeUnitStylePreview) then
@@ -444,26 +782,28 @@ function ns.PreviewMatchUnits(arg)
 	run = { step = 1, phase = "start", reads = {}, shots = {},
 		cineWasOn = ns.IsCineModeOn and ns.IsCineModeOn() and true or false }
 	CinematicDB.previewMatchUnitsKept = { ufStyle = db.ufStyle }
+	local okTot, tot = pcall(GetCVar, "showTargetOfTarget")
+	Log("the game's Target of Target setting (showTargetOfTarget): " .. tostring(okTot and tot))
 	Log(("start: %s %s, screen %dx%d, UI scale %s; ufStyle=%s, Style on %s, theme layout %s"):format(store.client,
 		store.build, physW, physH, tostring(store.uiScale), tostring(db.ufStyle), tostring(ns.StyleOn and ns.StyleOn("ufStyle")),
 		tostring(ns.ThemeLayout and ns.ThemeLayout())))
 	run.events = CreateFrame("Frame")
-	run.events:SetScript("OnEvent", function()
-		if run and run.step == 1 and UnitExists("target") and not UnitIsUnit("target", "player") then
-			run.events:UnregisterEvent("PLAYER_TARGET_CHANGED")
-			C_Timer.After(0.5, function() if run then Go() end end)
-		end
-	end)
+	run.events:SetScript("OnEvent", function() if run and run.step == 1 then Ready() end end)
+	for _, event in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "UNIT_TARGET" }) do
+		pcall(run.events.RegisterEvent, run.events, event)
+	end
 	K.SetCine(false)
 	MakePreview()
 	strip:Show()
-	if UnitExists("target") and not UnitIsUnit("target", "player") then
-		C_Timer.After(0.5, function() if run then Go() end end)
-	else
-		run.events:RegisterEvent("PLAYER_TARGET_CHANGED")
-		if UnitExists("target") then Log("target is you: waiting for another (your own target frame's places are secret)") end
-		ns.TestPrompt("Preview match (unit frames) 1/3: TARGET someone else, an NPC or player WITH MANA is best (not yourself). A focus and your pet out add those frames.", 600)
-	end
+	-- (The game's look on now, out of a fight, kept through the waiting.)
+	db.ufStyle = false
+	if ns.RefreshUnitStyle then pcall(ns.RefreshUnitStyle) end
+	ns.TestPrompt("Preview match (unit frames): putting the game's look on.", 3)
+	C_Timer.After(SETTLE, function()
+		if not run then return end
+		run.lookReady = true
+		Ready()
+	end)
 end
 
 -- (For the Shoulder Cam's stand-in target frame test, /cine debug shoulder

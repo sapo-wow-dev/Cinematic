@@ -39,8 +39,43 @@ CopyLook): the game's frame art, its masked bar atlases, the level circle, corne
 targeting yourself makes the target frame's places secret on Forever, so the test now waits for someone else.
 Rerun (a mob targeted): player 100, target 100 in all but the unit's own (no mana bar on that mob, its level's
 difficulty color), which the test now notes, not counts. The target's mana bar place is still the built-in guess
-(no target with mana read yet). Left: focus and pet (need a focus and a pet in the run), target of target, party,
-the theme shapes, and retail. Still drawn: pet, target of target, party, and every theme shape.
+(no target with mana read yet). Committed a382282d.
+Focus and pet (2026-11-20, offline only): the recipe reader is generic now (frame art found as the biggest unit
+frame atlas, masks read off each part, the frame's other art kept as "extras", states like rest or combat glow
+left out), so the pet is copied once its frame has been seen (no built-in pet recipe), and the focus reads its own
+frame. In-game run 14:32: player 97, target 96, the one difference the copy's art tinted by the theme (Neon) with
+the page off (fixed: tinted only with the page on); no focus or pet up, so the test now waits for both (skip to go
+without). Your style with Neon's petal shape (the drawn theme look): health bar 10:1 vs the game's 6:1, level
+missing, name font too big, theme-shapes work.
+In-game run 14:47: player, target, focus 100; pet 96 (its power bar: your pet's is mana, the sample's yellow; now
+follows your pet's power kind, read with its frame).
+Targets of target (2026-11-20, offline only): one recipe, TOT, read off TargetFrameToT (else FocusFrameToT); the
+target's and focus's recipes keep where their ToT hangs (part "tot"), and the preview has two ToT mock-ups, TOT
+under the target and FOCUSTOT under the focus (both dressed by the Target of target tab), each copy hung off its
+frame's copy at the game's size; the preview grew to 232 tall for it. The test waits for both ToTs up (a target
+and a focus each targeting someone, out of a fight: other players in a city).
+In-game run 14:53: player 97, target 96, focus 96, pet 93, both ToTs 59 (still drawn: the game's ToT names its
+parts HealthBar/Name/Portrait in capitals; the copier now reads those). A fight began a second before the read, so
+the page-off put-back on the real frames (level badge size, pet name side) was held by the game and read as the
+game's. The test now puts the game's look on at its start (out of a fight) and keeps it through the waiting, so
+the game's look is read in a fight too (user: pull the focused mob to get both targets of target); your look goes
+back on and is read once you're out of the fight, with what's still up.
+In-game run 15:31 (in a fight): player 97, target 100, focus 100, pet and both ToTs 67 (drawn). ToTs: never read
+(the copier wouldn't read in a fight, and a ToT is mostly up in one): it reads in fights now. Player: the saved
+power atlas was Energy (a cat-form read): the copy now draws mana's art for the bar (others a grey of it). Pet:
+drawn in the fight with a saved recipe, cause unknown (offline it's the copy): the test now logs each mock-up's
+"the copy" or "drawn (why)".
+In-game run 15:53 (in a fight), Forever: every mock-up the copy; player, target, focus, pet, target's ToT 100;
+focus's ToT 96 (its sample's rage bar vs a mana user: the unit's, now noted, not counted). Unit frames done on
+Forever except party and the theme shapes.
+Quality control (user's screenshot of the Style General screen, 2026-11-20): an empty frame under yours (the pet
+frame, a child of PlayerFrame, read into your frame's extras), the level cut to ".." (boxed to a 1-digit read),
+frames on each other and the focus's ToT cut off (copies placed on the drawn samples' spots; every Style screen is
+held to ns.StylePreviewHeight()). Fixed: extras never take another unit frame's art (recipes versioned, v2 wipes
+the bad ones), level text sized to its words, frames sized against each other by their real scale, a layout pass
+(UnitStyle.lua LayoutStage: yours + pet top left, party under, target + ToT top right, focus + ToT under, then
+shrunk to the screen). ns.UnitPreviewLayoutCheck (Dev/PreviewMatchUnits.lua): CUT / OVERLAP / TEXT lines, run
+offline at 480 and 760 wide and in the in-game test (LAYOUT lines) at the screens' size. Left: then target of target, party, the theme shapes, retail. Still drawn: pet, target of target, party, and every theme shape.
 
 Next (the order of work below, step 4): unit frames (copy, B), nameplates, action bars (A), raid (B), tooltip (A),
 personal resource, roll window, quest item, combat text. Each: add pairs to the match test first, get a baseline,

@@ -32,8 +32,12 @@ end
 local shots = 0
 Screenshot = function() shots = shots + 1 end
 local target = true
-UnitExists = function(unit) return unit == "player" or (unit == "target" and target) end
-InCombatLockdown = function() return false end
+local petOut, focusSet, totUp = false, false, false
+UnitExists = function(unit) return unit == "player" or (unit == "target" and target)
+	or (unit == "pet" and petOut) or (unit == "focus" and focusSet)
+	or ((unit == "targettarget" or unit == "focustarget") and totUp) end
+local fighting = false
+InCombatLockdown = function() return fighting end
 local targetIsYou = false
 UnitIsUnit = function(a, b) return a == "target" and b == "player" and targetIsYou end
 -- luacheck: pop
@@ -74,6 +78,7 @@ local function GameFrame(name, flip)
 	frame.manabar:SetStatusBarTexture("UI-HUD-UnitFrame-" .. (flip and "Target" or "Player") .. "-PortraitOn-Bar-Mana")
 	frame.name = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	frame.name:SetPoint("BOTTOMLEFT", frame.healthbar, "TOPLEFT", 0, 4)
+	frame.name:SetWidth(116) -- (the game's name box, a fixed width)
 	frame.name:SetText("Sapo")
 	local level = frame:CreateFontString(flip and nil or "PlayerLevelText", "OVERLAY", "GameFontNormalSmall")
 	level:SetPoint("BOTTOMRIGHT", frame.healthbar, "TOPRIGHT", 0, 4)
@@ -83,6 +88,79 @@ local function GameFrame(name, flip)
 end
 GameFrame("PlayerFrame", false)
 GameFrame("TargetFrame", true)
+-- A target of target: a frame of its own on its frame's lower right, as the game's.
+local function TotFrame(name, parent)
+	local tot = CreateFrame("Button", name, parent)
+	tot:SetSize(110, 45)
+	tot:SetPoint("TOPRIGHT", parent, "BOTTOMRIGHT", -10, 20)
+	tot.PlayerFrameContainer, tot.TargetFrameContainer, tot.TargetFrameContent, tot.PlayerFrameContent = false, false, false, false
+	-- (Its parts in capitals, as the game's target of target has them: no healthbar, name...)
+	tot.healthbar, tot.manabar, tot.name, tot.portrait, tot.totFrame = false, false, false, false, false
+	tot.FrameTexture = tot:CreateTexture(nil, "BORDER")
+	tot.FrameTexture:SetAllPoints()
+	tot.FrameTexture:SetAtlas("UI-HUD-UnitFrame-TargetofTarget-PortraitOn")
+	tot.Portrait = tot:CreateTexture(nil, "BACKGROUND")
+	tot.Portrait:SetSize(34, 34)
+	tot.Portrait:SetPoint("TOPLEFT", 5, -5)
+	tot.HealthBar = CreateFrame("StatusBar", nil, tot)
+	tot.HealthBar:SetSize(64, 9)
+	tot.HealthBar:SetPoint("TOPLEFT", 42, -18)
+	tot.HealthBar:SetStatusBarTexture("UI-HUD-UnitFrame-TargetofTarget-PortraitOn-Bar-Health")
+	tot.ManaBar = CreateFrame("StatusBar", nil, tot)
+	tot.ManaBar:SetSize(64, 5)
+	tot.ManaBar:SetPoint("TOP", tot.HealthBar, "BOTTOM", 0, -1)
+	tot.ManaBar:SetStatusBarTexture("UI-HUD-UnitFrame-TargetofTarget-PortraitOn-Bar-Mana")
+	tot.Name = tot:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	tot.Name:SetPoint("BOTTOMLEFT", tot.HealthBar, "TOPLEFT", 0, 2)
+	tot.Name:SetWidth(50)
+	tot.Name:SetText("Wolf")
+	parent.totFrame = tot
+	tot:Hide()
+	return tot
+end
+local targetTot = TotFrame("TargetFrameToT", _G.TargetFrame)
+
+-- The focus: the target's template, smaller (as a small focus frame is).
+local focusFrame = GameFrame("FocusFrame", true)
+focusFrame:SetScale(0.8)
+focusFrame:Hide()
+local focusTot = TotFrame("FocusFrameToT", focusFrame)
+-- The pet: no container, its art a texture of its own (found as the biggest
+-- unit frame art), and a piece of extra art.
+-- (A child of the player frame, as the game's: its art must never be read as the player's.)
+local pet = CreateFrame("Button", "PetFrame", _G.PlayerFrame)
+pet:SetSize(120, 49)
+pet:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 60, -130)
+pet.PlayerFrameContainer, pet.TargetFrameContainer, pet.TargetFrameContent, pet.PlayerFrameContent = false, false, false, false
+pet.FrameTexture, pet.HealthBar, pet.ManaBar, pet.Name, pet.Portrait = false, false, false, false, false
+local petArt = pet:CreateTexture(nil, "BORDER")
+petArt:SetAllPoints()
+petArt:SetAtlas("UI-HUD-UnitFrame-Party-PortraitOn")
+pet.extraArt = pet:CreateTexture(nil, "OVERLAY")
+pet.extraArt:SetSize(16, 16)
+pet.extraArt:SetPoint("TOPLEFT", 4, -4)
+pet.extraArt:SetAtlas("UI-HUD-UnitFrame-Pet-Happiness")
+pet.portrait = pet:CreateTexture(nil, "BACKGROUND")
+pet.portrait:SetSize(37, 37)
+pet.portrait:SetPoint("TOPLEFT", 6, -6)
+pet.healthbar = CreateFrame("StatusBar", nil, pet)
+pet.healthbar:SetSize(70, 8)
+pet.healthbar:SetPoint("TOPLEFT", 46, -20)
+pet.healthbar:SetStatusBarTexture("UI-HUD-UnitFrame-Party-PortraitOn-Bar-Health")
+pet.manabar = CreateFrame("StatusBar", nil, pet)
+pet.manabar:SetSize(70, 6)
+pet.manabar:SetPoint("TOP", pet.healthbar, "BOTTOM", 0, -1)
+pet.manabar:SetStatusBarTexture("UI-HUD-UnitFrame-Party-PortraitOn-Bar-Mana")
+pet.name = pet:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+pet.name:SetPoint("BOTTOMLEFT", pet.healthbar, "TOPLEFT", 0, 2)
+pet.name:SetWidth(68)
+pet.name:SetText("Wolf")
+-- (A state, not its look: never copied.)
+pet.restArt = pet:CreateTexture(nil, "OVERLAY")
+pet.restArt:SetSize(16, 16)
+pet.restArt:SetPoint("TOPRIGHT", -4, -4)
+pet.restArt:SetAtlas("UI-HUD-UnitFrame-Player-Rest-Flipbook")
+pet:Hide()
 
 local db = ns.GetDB()
 Check("run there", ns.PreviewMatchUnits ~= nil and ns.PreviewMatchKit ~= nil)
@@ -93,6 +171,8 @@ local function Run(styleOn)
 	db.styleGeneral = true
 	shots = 0
 	ns.PreviewMatch("units")
+	RunTimers()
+	ns.PreviewMatch("units skip") -- (no focus, no pet here)
 	RunTimers()
 	local store = CinematicDB.previewMatch[client .. "-units"]
 	local got = {}
@@ -151,6 +231,169 @@ do
 end
 _G.TargetFrame.manabar:Show()
 
+-- The pet: drawn until its frame has been seen; then the copy, its extra art
+-- too, kept after the pet's gone. The focus: its own frame read, not the target's.
+do
+	db.ufStyle, db.styleGeneral = false, true
+	CinematicDB.unitFrameRecipes = nil
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:Refresh()
+	local unit = preview.units.PET
+	Check("pet never seen: drawn, no copy", not (unit.copy and unit.copy.on) and ns.UnitFrameRecipe("PET") == nil)
+	petOut = true
+	pet:Show()
+	preview:Refresh()
+	local recipe = ns.UnitFrameRecipe("PET")
+	Check("pet out: its recipe read", recipe and recipe.art and recipe.art.atlas == "UI-HUD-UnitFrame-Party-PortraitOn"
+		and recipe.health and recipe.power and recipe.name, recipe and recipe.art and recipe.art.atlas)
+	local extras = recipe and recipe.extras or {}
+	Check("pet out: its extra art read", #extras == 1 and extras[1].atlas == "UI-HUD-UnitFrame-Pet-Happiness", #extras)
+	Check("pet out: the preview's pet is the copy", unit.copy and unit.copy.on and unit.copy.art:IsShown()
+		and unit.copy.art:GetAtlas() == "UI-HUD-UnitFrame-Party-PortraitOn")
+	Check("pet out: its extra art drawn", unit.copy and unit.copy.extras[1] and unit.copy.extras[1]:IsShown()
+		and unit.copy.extras[1]:GetAtlas() == "UI-HUD-UnitFrame-Pet-Happiness")
+	petOut = false
+	pet:Hide()
+	preview:Refresh()
+	Check("pet gone: the copy kept (saved)", unit.copy.on and unit.copy.art:IsShown())
+	local player = ns.UnitFrameRecipe("PLAYER")
+	local leaked = {}
+	for _, extra in ipairs(player and player.extras or {}) do leaked[#leaked + 1] = tostring(extra.atlas) end
+	Check("the pet frame's art not in your frame's (it's the player frame's child)", #leaked == 0, table.concat(leaked, ", "))
+	focusSet = true
+	focusFrame:Show()
+	preview:Refresh()
+	local saved = CinematicDB.unitFrameRecipes.classic or CinematicDB.unitFrameRecipes.retail
+	Check("focus up: its own frame read", saved and saved.FOCUS and saved.FOCUS.art ~= nil)
+	focusSet = false
+	focusFrame:Hide()
+	preview:Hide()
+end
+
+-- The targets of target: their own recipe (read off the target's), each
+-- mock-up placed off its frame as the game hangs it, the target's art without it.
+do
+	db.ufStyle, db.styleGeneral = false, true
+	CinematicDB.unitFrameRecipes = nil
+	focusSet, totUp = true, true
+	focusFrame:Show()
+	targetTot:Show()
+	focusTot:Show()
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:Refresh()
+	local recipe = ns.UnitFrameRecipe("TOT")
+	Check("ToT: its own recipe read", recipe and recipe.art and recipe.art.atlas == "UI-HUD-UnitFrame-TargetofTarget-PortraitOn",
+		recipe and recipe.art and recipe.art.atlas)
+	local target = ns.UnitFrameRecipe("TARGET")
+	Check("ToT: its place on the target's frame read", target and target.tot and target.tot.w and target.tot.w > 0)
+	local leaked = false
+	for _, extra in ipairs(target and target.extras or {}) do
+		if tostring(extra.atlas):find("TargetofTarget", 1, true) then leaked = true end
+	end
+	Check("ToT: not in the target's own art", not leaked)
+	for _, pair in ipairs({ { "TOT", "TARGET" }, { "FOCUSTOT", "FOCUS" } }) do
+		local unit, over = preview.units[pair[1]], preview.units[pair[2]]
+		local _, relative = unit:GetPoint(1)
+		Check(("%s: the copy, hung off the %s copy"):format(pair[1], pair[2]:lower()), unit.copy and unit.copy.on
+			and relative == over and unit.copy.art:GetAtlas() == "UI-HUD-UnitFrame-TargetofTarget-PortraitOn")
+		-- (As big against its frame as the game's: its art's width over its frame's art's.)
+		local want = target.tot.w / target.art.w
+		local got = unit.copy.art:GetWidth() / over.copy.art:GetWidth()
+		Check(("%s: sized against its frame as the game's"):format(pair[1]), math.abs(got - want) < 0.02,
+			("%.3f vs %.3f"):format(got, want))
+	end
+	-- (Drawn before it's on the screen, as a page builds it: laid out once it's shown.)
+	do
+		local early = ns.MakeUnitStylePreview(UIParent, 480)
+		early:SetHeight(ns.StylePreviewHeight())
+		early:Refresh()
+		early:SetPoint("CENTER")
+		early:Hide()
+		early:Show()
+		local problems = ns.UnitPreviewLayoutCheck(early)
+		Check("drawn before shown: laid out when shown, clean", #problems == 0 and not early.layoutPending,
+			table.concat(problems, "; "))
+		early:Hide()
+	end
+	-- (Quality control at the Style screens' size: every frame inside, none on another, no text cut.)
+	for _, width in ipairs({ 480, 760 }) do
+		local screen = ns.MakeUnitStylePreview(UIParent, width)
+		screen:SetPoint("CENTER")
+		screen:SetSize(width, ns.StylePreviewHeight())
+		screen:Refresh()
+		local problems = ns.UnitPreviewLayoutCheck(screen)
+		Check(("layout at %dx%d, every frame copied: clean"):format(width, ns.StylePreviewHeight()), #problems == 0,
+			table.concat(problems, "; "))
+		db.ufShape = "circle"
+		db.ufStyle = true
+		screen:Refresh()
+		problems = ns.UnitPreviewLayoutCheck(screen)
+		Check(("layout at %dx%d, drawn (a theme's shape): clean"):format(width, ns.StylePreviewHeight()), #problems == 0,
+			table.concat(problems, "; "))
+		db.ufShape = "game"
+		db.ufStyle = false
+		screen:Refresh()
+		-- (The checks catch what the user saw: a frame on another, one cut off at the edge.)
+		local target, focus = screen.units.TARGET, screen.units.FOCUS
+		focus:ClearAllPoints()
+		focus:SetPoint("TOPLEFT", target, "TOPLEFT", 10, -5)
+		local seen = table.concat(ns.UnitPreviewLayoutCheck(screen), "; ")
+		Check(("layout check at %d: catches a frame on another"):format(width), seen:find("OVERLAP", 1, true) ~= nil, seen)
+		screen:Refresh()
+		screen.units.PARTY:ClearAllPoints()
+		screen.units.PARTY:SetPoint("TOPLEFT", screen, "BOTTOMLEFT", 10, 20)
+		seen = table.concat(ns.UnitPreviewLayoutCheck(screen), "; ")
+		Check(("layout check at %d: catches a frame cut off"):format(width), seen:find("CUT PARTY", 1, true) ~= nil, seen)
+		screen:Hide()
+	end
+	-- (The test compares both.)
+	petOut = false
+	ns.PreviewMatch("units")
+	RunTimers()
+	ns.PreviewMatch("units skip")
+	RunTimers()
+	local store = CinematicDB.previewMatch[client .. "-units"]
+	local got = {}
+	for _, p in ipairs(store.pairs or {}) do got[p.name] = p end
+	for _, name in ipairs({ "Target's target of target", "Focus's target of target" }) do
+		Check(("test: %s compared"):format(name), got[name] and type(got[name].score) == "number",
+			got[name] and ("%s, %s"):format(tostring(got[name].score), table.concat(got[name].findings, "; ")))
+	end
+	focusSet, totUp = false, false
+	focusFrame:Hide()
+	targetTot:Hide()
+	focusTot:Hide()
+	preview:Hide()
+end
+
+-- In a fight: the target of target read then too (it's mostly up in one);
+-- the power bar mana's art whatever power the frame showed when read.
+do
+	db.ufStyle, db.styleGeneral = false, true
+	CinematicDB.unitFrameRecipes = nil
+	totUp, fighting = true, true
+	targetTot:Show()
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:Refresh()
+	Check("in a fight: the target of target read, copied", ns.UnitFrameRecipe("TOT") ~= nil
+		and preview.units.TOT.copy and preview.units.TOT.copy.on, preview.units.TOT.copyWhy)
+	fighting = false
+	local saved = CinematicDB.unitFrameRecipes.classic or CinematicDB.unitFrameRecipes.retail
+	target = false -- (the target's frame not read live now: the saved one stands)
+	saved.PLAYER = saved.PLAYER or {}
+	_G.PlayerFrame:Hide()
+	saved.PLAYER.power = { x = 70, y = 46.7, w = 124, h = 10, atlas = "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Energy" }
+	preview:Refresh()
+	local fill = preview.units.PLAYER.power:GetStatusBarTexture()
+	local atlas = fill:GetAtlas() or fill:GetTexture()
+	Check("power read as energy: drawn as mana's art", tostring(atlas):find("Bar%-Mana") ~= nil, atlas)
+	_G.PlayerFrame:Show()
+	target = true
+	totUp = false
+	targetTot:Hide()
+	preview:Hide()
+end
+
 -- Another shape: the drawn mock-up back, nothing of the copy left on it.
 do
 	db.ufStyle, db.styleGeneral = true, true
@@ -172,6 +415,48 @@ do
 	preview:Hide()
 end
 
+-- A fight: the game's look read in it (put on before); yours waits for its
+-- end, then reads with what's up.
+do
+	db.ufStyle, db.styleGeneral = true, true
+	ns.PreviewMatch("units")
+	RunTimers()
+	Check("start: the game's look on before any waiting", db.ufStyle == false)
+	fighting = true
+	ns.PreviewMatch("units skip")
+	RunTimers()
+	local store = CinematicDB.previewMatch[client .. "-units"]
+	-- (Its reads are saved at the end: its log says what it read so far.)
+	local function Logged(text)
+		for _, line in ipairs(store and store.lines or {}) do if line:find(text, 1, true) then return true end end
+		return false
+	end
+	Check("in a fight: the game's look read", Logged("game:game:PLAYER: read"))
+	Check("in a fight: your look not put on, not read", db.ufStyle == false and not Logged("yours:game:PLAYER"))
+	fighting = false
+	wow.Fire("PLAYER_REGEN_ENABLED")
+	RunTimers()
+	store = CinematicDB.previewMatch[client .. "-units"]
+	local yours = false
+	for _, pair in ipairs(store.pairs or {}) do if pair.name == "Player frame (your style)" then yours = true end end
+	Check("fight over: your look read, the run done, the page back", yours and db.ufStyle == true
+		and CinematicDB.previewMatchUnitsKept == nil)
+end
+
+-- A target but no focus or pet: waits for them, names them; skip goes without.
+do
+	ns.PreviewMatch("units")
+	RunTimers()
+	local store = CinematicDB.previewMatch[client .. "-units"]
+	Check("no focus or pet: waits", store and (store.pairs == nil or #store.pairs == 0))
+	ns.PreviewMatch("units skip")
+	RunTimers()
+	store = CinematicDB.previewMatch[client .. "-units"]
+	local named = false
+	for _, line in ipairs(store.lines or {}) do if line:find("skipped waiting for: a FOCUS", 1, true) and line:find("PET", 1, true) then named = true end end
+	Check("skip: runs, says what it went without", store.pairs and #store.pairs >= 2 and named)
+end
+petOut, focusSet, totUp = true, true, true -- (from here the waits are for the target only)
 -- Yourself targeted: waits for someone else (Forever keeps your own target frame's places secret).
 targetIsYou = true
 ns.PreviewMatch("units")
@@ -196,6 +481,14 @@ wow.Fire("PLAYER_TARGET_CHANGED")
 RunTimers()
 store = CinematicDB.previewMatch[client .. "-units"]
 Check("no target: runs once there is one", store and store.pairs and #store.pairs >= 2, store and store.pairs and #store.pairs)
+
+-- The masks probe (/cine debug previewmatch units masks) runs through, shot taken.
+do
+	CinematicDB.previewMatchMaskShot = nil
+	local ok, err = pcall(ns.PreviewMatchUnits, "masks")
+	RunTimers()
+	Check("masks probe runs, shot taken", ok and CinematicDB.previewMatchMaskShot ~= nil, err)
+end
 
 if fails > 0 then
 	print(("%d FAIL"):format(fails))

@@ -2707,12 +2707,17 @@ local SAMPLES = {
 		faces = { "Interface\\Icons\\Achievement_Character_Jaina_Proudmoore", "Interface\\Icons\\Achievement_Leader_Jaina_Proudmoore",
 			"Interface\\Icons\\INV_Misc_Head_Human_02" } },
 	PET = { framed = { 30, -96, 36, 70 }, name = "Wolf", x = 30, y = -118, w = 80, reaction = 5, health = 1, power = { 1, 1, 0 }, amount = 0.5,
+		parent = "PLAYER", hang = "pet",
 		small = true, faces = { "Interface\\Icons\\Ability_Hunter_Pet_Wolf" } },
 	PARTY = { framed = { 150, -140, 36, 80 }, name = "Varian", x = 150, y = -146, w = 90, class = "WARRIOR", health = 0.7, power = { 1, 0, 0 },
 		amount = 0.8, small = true,
 		faces = { "Interface\\Icons\\Achievement_Leader_King_Varian_Wrynn", "Interface\\Icons\\INV_Misc_Head_Human_01" } },
 	TOT = { framed = { 360, -86, 36, 70 }, name = "Thrall", x = 372, y = -80, w = 70, class = "SHAMAN", health = 0.86, power = { 0, 0.55, 1 },
-		amount = 0.4, small = true, faces = THRALL },
+		amount = 0.4, small = true, faces = THRALL, parent = "TARGET" },
+	-- (The focus's target of target, dressed by the same tab: the game has one under each.)
+	FOCUSTOT = { framed = { 360, -180, 36, 70 }, name = "Varian", x = 372, y = -174, w = 70, class = "WARRIOR", health = 0.7,
+		power = { 1, 0, 0 }, amount = 0.8, small = true, parent = "FOCUS",
+		faces = { "Interface\\Icons\\Achievement_Leader_King_Varian_Wrynn", "Interface\\Icons\\INV_Misc_Head_Human_01" } },
 }
 local function SampleFace(sample)
 	if not sample.face then
@@ -2743,7 +2748,9 @@ end
 -- game's own frame, its atlases where the game puts them (UnitFrameCopy.lua's
 -- recipe), not a drawing of it. Preview Match, 2026-11-20: the drawn one
 -- scored 69/68, its art plain color, its bars too thin.)
-local COPIED = { PLAYER = true, TARGET = true, FOCUS = true }
+-- (The pet and the target of target once their frames have been read: they
+-- have no built-in recipe.)
+local COPIED = { PLAYER = true, TARGET = true, FOCUS = true, PET = true, TOT = true }
 local function SetAtlasSafe(texture, atlas)
 	if not atlas then return false end
 	local ok, done = pcall(texture.SetAtlas, texture, atlas)
@@ -2759,12 +2766,19 @@ local function CopyOff(unit)
 		mask:Hide()
 	end
 	wipe(copy.masked)
+	for _, extra in ipairs(copy.extras) do
+		extra:Hide()
+		if extra.mask then extra.mask:Hide() end
+	end
+	unit.power:Show()
 	unit.face:SetDrawLayer("ARTWORK")
 	unit.portrait:SetDrawLayer("ARTWORK")
 	unit.portrait:ClearAllPoints()
 	local side = unit.sample.flip and "RIGHT" or "LEFT"
 	unit.portrait:SetPoint(side, unit, side, 0, 0)
 	unit.name:SetJustifyH("CENTER")
+	unit.name:SetSize(0, 0)
+	unit.copyK = nil
 	local badge = unit.badge
 	if badge then
 		badge.ring:Show()
@@ -2773,6 +2787,7 @@ local function CopyOff(unit)
 		badge.text:SetPoint("CENTER", badge, "CENTER", 0, 0)
 		badge.text:SetJustifyH("CENTER")
 		badge.text:SetFontObject(_G.GameFontHighlightSmall)
+		badge.text:SetSize(0, 0)
 		badge.text:SetTextColor(1, 1, 1)
 	end
 end
@@ -2811,14 +2826,38 @@ local function CopyLook(unit, view, on)
 	local recipe = on and COPIED[unit.id] and ns.UnitFrameCopyable and ns.UnitFrameCopyable()
 		and ns.UnitFrameRecipe and ns.UnitFrameRecipe(unit.id)
 	if not (recipe and recipe.art and recipe.health) then
+		-- (Why, for the Preview Match test's log.)
+		unit.copyWhy = not on and "look not the game's" or not COPIED[unit.id] and "not copied"
+			or not (ns.UnitFrameCopyable and ns.UnitFrameCopyable()) and "client's frames not copyable"
+			or not recipe and "no recipe (frame never read)" or "recipe without art or health"
 		CopyOff(unit)
 		return
 	end
+	unit.copyWhy = nil
 	local sample = unit.sample
-	local scale = ((sample.framed and sample.framed[4]) or sample.w) / recipe.health.w
+	-- (Every copy at one size against the screen: yours sets it, the rest as
+	-- big against yours as the game draws them (a focus frame smaller).)
+	local own = recipe.info and recipe.info.scale or 1
+	local mine = unit.peers and unit.peers.PLAYER
+	local k = unit.id ~= "PLAYER" and mine and mine.copy and mine.copy.on and mine.copyK
+	if not k then k = ((sample.framed and sample.framed[4]) or sample.w) / (recipe.health.w * own) end
+	if unit.id == "PLAYER" then unit.copyK = k end
+	local scale = k * own
+	-- (A target of target where the game hangs it off its frame, at that frame's
+	-- scale, when that frame is the copy too and its place was read.)
+	local over = sample.parent and unit.peers and unit.peers[sample.parent]
+	local spot = over and over.copy and over.copy.on and over.copyRecipe and over.copyRecipe[sample.hang or "tot"]
+	unit.hungOn = nil
+	if spot and spot.w and spot.w > 0 then
+		scale = over.copyScale * spot.w / recipe.art.w
+		unit:ClearAllPoints()
+		unit:SetPoint("TOPLEFT", over, "TOPLEFT", spot.x * over.copyScale, -spot.y * over.copyScale)
+		unit.hungOn = over
+	end
+	unit.copyScale, unit.copyRecipe = scale, recipe
 	local copy = unit.copy
 	if not copy then
-		copy = { masked = {}, masks = {} }
+		copy = { masked = {}, masks = {}, extras = {} }
 		copy.art = unit:CreateTexture(nil, "BACKGROUND", nil, 2)
 		copy.reaction = unit:CreateTexture(nil, "BACKGROUND", nil, 0)
 		copy.textures = { copy.art, copy.reaction }
@@ -2845,9 +2884,11 @@ local function CopyLook(unit, view, on)
 		end
 	end
 	unit:SetSize(recipe.art.w * scale, recipe.art.h * scale)
-	-- (The frame art, in the theme's ornament color as DressFrameArt tints the game's.)
+	-- (The frame art, in the theme's ornament color as DressFrameArt tints the
+	-- game's: only with the page on, as the real frame. In game 2026-11-20 the
+	-- page off still had it tinted pink with Neon picked.)
 	Art(copy.art, recipe.art)
-	local ring = ns.ThemeRing()
+	local ring = ns.StyleOn("ufStyle") and ns.ThemeRing()
 	copy.art:SetDesaturated(ring and true or false)
 	copy.art:SetVertexColor(ring and ring[1] or 1, ring and ring[2] or 1, ring and ring[3] or 1)
 	for _, part in ipairs({ unit.box, unit.plate, unit.bridge, unit.rowShadow, unit.ring }) do part:Hide() end
@@ -2859,9 +2900,61 @@ local function CopyLook(unit, view, on)
 	if unit.faceMask and portraitMask and SetAtlasSafe(unit.faceMask, portraitMask.atlas) then Place(unit.faceMask, portraitMask) end
 	CopyBar(copy, unit.health, recipe.health, recipe.healthMask, nil, view, Place, view.ufHealthColor ~= "game")
 	local mana = sample.power[1] == 0 and sample.power[3] == 1
+	local powerType = recipe.info and recipe.info.powerType
+	-- (Not read with its frame yet (read in a fight): your pet's now, if it's out.)
+	if powerType == nil and unit.id == "PET" and UnitExists("pet") then
+		local ok, kind = pcall(UnitPowerType, "pet")
+		if ok and Readable(kind) then powerType = kind end
+	end
+	if unit.id == "PET" and type(powerType) == "number" then mana = powerType == 0 end
 	if recipe.power then
 		unit.power:Show()
-		CopyBar(copy, unit.power, recipe.power, recipe.powerMask, "ufPower", view, Place, not mana)
+		-- (Mana's art, whatever the frame showed when read: energy's on a druid in
+		-- cat form, 2026-11-20. Another power is a grey of it in its own color.)
+		local entry = recipe.power
+		if type(entry.atlas) == "string" and entry.atlas:find("%-Bar%-%a+$") then
+			local asMana = {}
+			for key, value in pairs(entry) do asMana[key] = value end
+			asMana.atlas = entry.atlas:gsub("%-Bar%-%a+$", "-Bar-Mana")
+			entry = asMana
+		end
+		CopyBar(copy, unit.power, entry, recipe.powerMask, "ufPower", view, Place, not mana)
+	else
+		unit.power:Hide()
+	end
+	-- (The frame's other art as the game showed it: what's over the bars over ours too.)
+	local extras = recipe.extras or {}
+	for i, entry in ipairs(extras) do
+		local extra = copy.extras[i]
+		local over = entry.layer == "OVERLAY" or entry.layer == "HIGHLIGHT"
+		local owner = over and unit.nameTop or unit
+		if not extra or extra:GetParent() ~= owner then
+			if extra then extra:Hide() end
+			extra = owner:CreateTexture(nil, "ARTWORK")
+			copy.extras[i] = extra
+		end
+		pcall(extra.SetDrawLayer, extra, entry.layer or "ARTWORK", math.max(-8, math.min(7, tonumber(entry.sub) or 0)))
+		Art(extra, entry)
+		local c = entry.color
+		extra:SetVertexColor(c and c[1] or 1, c and c[2] or 1, c and c[3] or 1, c and c[4] or 1)
+		if entry.blend then pcall(extra.SetBlendMode, extra, entry.blend) end
+		if entry.mask and extra:IsShown() then
+			if not extra.mask then
+				extra.mask = owner:CreateMaskTexture()
+				extra:AddMaskTexture(extra.mask)
+			end
+			Place(extra.mask, entry.mask)
+			SetAtlasSafe(extra.mask, entry.mask.atlas)
+			extra.mask:Show()
+		elseif extra.mask then
+			extra:RemoveMaskTexture(extra.mask)
+			extra.mask:Hide()
+			extra.mask = nil
+		end
+	end
+	for i = #extras + 1, #copy.extras do
+		copy.extras[i]:Hide()
+		if copy.extras[i].mask then copy.extras[i].mask:Hide() end
 	end
 	local name = recipe.name
 	if name then
@@ -2888,7 +2981,14 @@ local function CopyLook(unit, view, on)
 		Art(copy.corner, recipe.corner)
 		local level = recipe.level
 		if level then
-			Place(badge.text, level)
+			-- (On the game's side of its spot, as wide as its words: in a box as wide
+			-- as the level read ("??", one digit), "63" was cut to "..", 2026-11-20.)
+			local justify = level.justify or "CENTER"
+			local x = justify == "LEFT" and level.x or justify == "RIGHT" and level.x + level.w or level.x + level.w / 2
+			badge.text:ClearAllPoints()
+			badge.text:SetSize(0, 0)
+			badge.text:SetPoint(justify == "LEFT" and "LEFT" or justify == "RIGHT" and "RIGHT" or "CENTER", unit, "TOPLEFT",
+				x * scale, -(level.y + level.h / 2) * scale)
 			badge.text:SetJustifyH(level.justify or "CENTER")
 			local file, _, flags = badge.text:GetFont()
 			if file and level.size then badge.text:SetFont(file, level.size * scale, flags or "") end
@@ -2898,6 +2998,116 @@ local function CopyLook(unit, view, on)
 			and _G.GetCreatureDifficultyColor(sample.level)
 		if color then badge.text:SetTextColor(color.r, color.g, color.b) else badge.text:SetTextColor(1, 1, 1) end
 	end
+end
+
+-- The stage's layout. Drawn: the samples' own spots. The copies: as the game
+-- lays its frames out, each block (a frame with what hangs off it: your pet,
+-- a target of target) apart, none on another: yours top left, the party
+-- under it, the target top right, the focus under it. Then the whole stage
+-- shrunk to fit its screen: every Style screen is held to one height, and
+-- what didn't fit was cut off (the focus's target of target, 2026-11-20).
+local STAGE_PAD, STAGE_GAP = 10, 14
+local function BoxOf(stage, list)
+	local sl, st = stage:GetLeft(), stage:GetTop()
+	if not (sl and st) then return nil end
+	local l, t, r, b
+	for _, region in ipairs(list) do
+		if region and region:IsShown() then
+			local rl, rr, rt, rb = region:GetLeft(), region:GetRight(), region:GetTop(), region:GetBottom()
+			if rl and rr and rt and rb then
+				rl, rr, rt, rb = rl - sl, rr - sl, st - rt, st - rb
+				l, r = math.min(l or rl, rl), math.max(r or rr, rr)
+				t, b = math.min(t or rt, rt), math.max(b or rb, rb)
+			end
+		end
+	end
+	if not l then return nil end
+	return { l, t, r, b }
+end
+-- (Everything a unit's block draws: the frame, its copy's art that juts out (the
+-- level circle), and what hangs off it.)
+local function BlockParts(unit, units)
+	local list = { unit }
+	local copy = unit.copy
+	if copy and copy.on then
+		for _, texture in ipairs(copy.textures) do list[#list + 1] = texture end
+		for _, extra in ipairs(copy.extras) do list[#list + 1] = extra end
+	end
+	for _, other in pairs(units) do
+		if other.hungOn == unit then
+			list[#list + 1] = other
+			if other.copy and other.copy.on then
+				for _, texture in ipairs(other.copy.textures) do list[#list + 1] = texture end
+			end
+		end
+	end
+	return list
+end
+local function Put(stage, units, unit, x, y)
+	unit:ClearAllPoints()
+	unit:SetPoint("TOPLEFT", stage, "TOPLEFT", x, -y)
+	-- (Moved so its block's own top-left corner is there: a level circle juts out past the frame.)
+	local box = BoxOf(stage, BlockParts(unit, units))
+	if box then
+		unit:ClearAllPoints()
+		unit:SetPoint("TOPLEFT", stage, "TOPLEFT", x + (x - box[1]), -(y + (y - box[2])))
+	end
+	return BoxOf(stage, BlockParts(unit, units))
+end
+local function LayoutStage(stage, units, holder)
+	local player = units.PLAYER
+	local copies = player and player.copy and player.copy.on
+	local w, h = stage.baseW, stage.baseH
+	-- (Not on the screen yet, nothing to measure: as drawn till it's shown, which draws it again.)
+	holder.layoutPending = nil
+	if copies and not (stage:GetLeft() and stage:GetTop()) then
+		copies = false
+		holder.layoutPending = true
+	end
+	if copies then
+		local pad, gap = STAGE_PAD, STAGE_GAP
+		local left = Put(stage, units, player, pad, pad)
+		local pet = units.PET
+		if pet and pet:IsShown() and not pet.hungOn then
+			local box = Put(stage, units, pet, pad, left[4] + gap)
+			left = { math.min(left[1], box[1]), left[2], math.max(left[3], box[3]), box[4] }
+		end
+		local party = units.PARTY
+		if party and party:IsShown() then
+			local box = Put(stage, units, party, pad, left[4] + gap)
+			left = { left[1], left[2], math.max(left[3], box[3]), box[4] }
+		end
+		local right = { left[3] + gap * 2, pad, left[3] + gap * 2, pad }
+		local target = units.TARGET
+		if target and target:IsShown() then right = Put(stage, units, target, left[3] + gap * 2, pad) end
+		local focus = units.FOCUS
+		if focus and focus:IsShown() then
+			local box = Put(stage, units, focus, right[1], right[4] + gap)
+			right = { right[1], right[2], math.max(right[3], box[3]), box[4] }
+		end
+		-- (A target of target with no frame to hang off: under its frame's block.)
+		for _, key in ipairs({ "TOT", "FOCUSTOT" }) do
+			local tot = units[key]
+			if tot and tot:IsShown() and not tot.hungOn then
+				local box = Put(stage, units, tot, right[1], right[4] + gap)
+				right = { right[1], right[2], math.max(right[3], box[3]), box[4] }
+			end
+		end
+		w = math.max(left[3], right[3]) + pad
+		h = math.max(left[4], right[4]) + pad
+	end
+	stage:SetSize(w, h)
+	-- (Shrunk to its screen, never grown here: the Style General page grows it.)
+	local roomW, roomH = holder:GetWidth() - 4, holder:GetHeight() - 18
+	local fit = 1
+	if roomW > 0 and roomH > 0 then fit = math.min(1, roomW / w, roomH / h) end
+	stage:SetScale(fit)
+end
+
+local PREVIEW_UNITS = {}
+for _, info in ipairs(FRAMES) do
+	PREVIEW_UNITS[#PREVIEW_UNITS + 1] = { id = info[1], key = info[1] }
+	if info[1] == "TOT" then PREVIEW_UNITS[#PREVIEW_UNITS + 1] = { id = "TOT", key = "FOCUSTOT" } end
 end
 
 function ns.MakeUnitStylePreview(parent, width, onPick)
@@ -2918,11 +3128,13 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 	end
 	local stage = CreateFrame("Frame", nil, holder)
 	stage:SetSize(right + 14, bottom + 30) -- (the layout's left and top margins, on the other sides too)
+	stage.baseW, stage.baseH = right + 14, bottom + 30
 	stage:SetPoint("CENTER")
 	local samples = {}
-	for _, info in ipairs(FRAMES) do
-		local id, sample = info[1], SAMPLES[info[1]]
+	for _, entry in ipairs(PREVIEW_UNITS) do
+		local id, sample = entry.id, SAMPLES[entry.key]
 		local unit = CreateFrame("Button", nil, stage)
+		unit.key = entry.key
 		local size = sample.small and 22 or 34
 		unit:SetSize(sample.w + size + 6, size + 6)
 		unit:SetPoint("TOPLEFT", stage, "TOPLEFT", sample.x, sample.y)
@@ -3023,8 +3235,12 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 		samples[#samples + 1] = unit
 	end
 	-- (Each mock-up by its frame's id: the Preview Match test reads them, Dev/PreviewMatchUnits.lua.)
+	-- (By key: the focus's target of target is FOCUSTOT, its look TOT's.)
 	holder.units = {}
-	for _, unit in ipairs(samples) do holder.units[unit.id] = unit end
+	for _, unit in ipairs(samples) do
+		holder.units[unit.key] = unit
+		unit.peers = holder.units
+	end
 	function holder:Refresh(editing)
 		ns.StyleScene(self, 0.55, 0.85)
 		for _, unit in ipairs(samples) do
@@ -3302,7 +3518,14 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 			end
 			CopyLook(unit, view, framed and not ns.ThemeLayout())
 		end
+		LayoutStage(stage, self.units, self)
 	end
+	-- (Laid out again once it can be measured: shown, or sized by its page.)
+	local function Again(self)
+		if self.layoutPending and self.units then LayoutStage(stage, self.units, self) end
+	end
+	holder:HookScript("OnShow", Again)
+	holder:HookScript("OnSizeChanged", Again)
 	return holder
 end
 
