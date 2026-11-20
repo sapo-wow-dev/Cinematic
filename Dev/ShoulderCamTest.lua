@@ -3722,7 +3722,16 @@ do
 			if not (stand and stand:IsShown()) then run.clock = 0 return end
 			if run.clock < 1 then return end
 			local p = Place(stand)
-			Write(("stand-in up at %s, offset %.2f"):format(Show(p), Offset()))
+			local copies, game = 0, 0
+			if ns.ShoulderSelfTargetAuras then copies, game = ns.ShoulderSelfTargetAuras() end
+			copies, game = tonumber(copies) or 0, tonumber(game) or 0
+			Write(("stand-in up at %s, offset %.2f; buffs: %d icons under it, %d shown by the game%s"):format(Show(p),
+				Offset(), copies, game, InCombatLockdown() and " (in a fight)" or ""))
+			if run.fight and not run.buffsSaid then
+				run.buffsSaid = true
+				run.verdicts[#run.verdicts + 1] = ("buffs in the fight %s: %d icons, %d shown by the game"):format(
+					copies == game and "PASS" or "FAIL", copies, game)
+			end
 			run.phase, run.clock = "wantRight", 0
 			Box("Self where: right-click", "RIGHT-CLICK THE TARGET FRAME OF YOU")
 		elseif run.phase == "wantRight" then
@@ -3850,10 +3859,20 @@ end
 --   real:  the option off for a moment, you target yourself for real: the
 --          game's own frame of you (screenshot), its art's place and size
 --          against the stand-in's (within 2 px: PASS);
---   down:  the option back on, a mob targeted: the stand-in's down.
--- Into db.shoulderSelfFrame.
+--   down:  the option back on, a mob targeted: the stand-in's down;
+--   fight: (one test for both, user 2026-11-20) you start a fight (a pet
+--          tanking: a mob hitting you makes the game target it), select
+--          yourself: the stand-in up mid-fight, as many buff and debuff icons
+--          under it as the game shows (screenshot); you right-click it: your
+--          menu, not targeted, the camera kept; you select yourself again: it
+--          and its menu button away, still mid-fight. A mob targeted before
+--          the right-click (the stand-in down): asked again;
+--   esc:   still in the fight, you select yourself and press Esc: the
+--          stand-in and its menu button away, as Esc clears the game's target
+--          of you (whether the game's own Esc menu opened is logged).
+-- Every target change is logged. Into db.shoulderSelfFrame.
 do
-	local run
+	local run, menuHooked
 	local function Write(text)
 		local lines = ns.db.shoulderSelfFrame
 		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
@@ -3881,11 +3900,47 @@ do
 	local function End(why)
 		if not run then return end
 		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
 		ns.db.shoulderCamFakeSelf = run.yours
 		Write(("end: %s, your option back to %s"):format(why, Text(run.yours)))
 		Write("verdicts: " .. table.concat(run.verdicts, "; "))
 		Log(("selfframe: %s, %d lines in db.shoulderSelfFrame"):format(why, #ns.db.shoulderSelfFrame))
 		run = nil
+	end
+	-- (The game's right-click menu open now: whichever of these the client has.)
+	local function MenuOpen()
+		local ok, open = pcall(function()
+			local manager = _G.Menu and _G.Menu.GetManager and _G.Menu.GetManager()
+			if manager and manager.GetOpenMenu then return manager:GetOpenMenu() ~= nil end
+			local list = _G.DropDownList1
+			return type(list) == "table" and list:IsShown() or false
+		end)
+		return ok and Text(open) or "unknown"
+	end
+	local function Offset() return tonumber(GetCVar(SHOULDER)) or 0 end
+	local function TargetText()
+		return Self() and "you" or UnitExists("target") and Text(UnitName("target")) or "none"
+	end
+	local function Buffs(label)
+		if not ns.ShoulderSelfTargetAuras then return end
+		local copies, game = ns.ShoulderSelfTargetAuras()
+		copies, game = tonumber(copies) or 0, tonumber(game) or 0
+		Verdict(("%s %s: %d icons under it, %d shown by the game"):format(label, copies == game and "PASS" or "FAIL",
+			copies, game))
+	end
+	-- (A right-click while the fight step waits for one: counted only on the
+	-- stand-in while it's up.)
+	local function OnRightClick()
+		local stand = ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
+		if not (stand and stand:IsShown()) then
+			Write(("right-click with the stand-in down (target %s): not counted"):format(TargetText()))
+			return
+		end
+		local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+		run.right = { at = run.clock, offset = Offset(),
+			overMenu = menu and menu:IsVisible() and ns.Flag(menu:IsMouseOver()) or false }
+		Write(("right-click: on its menu button %s, target %s, offset %.2f"):format(Text(run.right.overMenu),
+			TargetText(), run.right.offset))
 	end
 	local function Tick(_, elapsed)
 		run.clock = run.clock + elapsed
@@ -3893,12 +3948,12 @@ do
 		if run.phase == "arming" then
 			if run.clock < 1 then return end
 			run.phase, run.clock = "wantOther", 0
-			Box("Self frame 1/3: up", "TARGET ANY NPC OR CREATURE (Tab or click it)")
+			Box("Self frame 1/6: up", "TARGET ANY NPC OR CREATURE (Tab or click it)")
 		elseif run.phase == "wantOther" then
 			if not Other() then run.clock = 0 return end
 			if run.clock < 1 then return end
 			run.phase, run.clock = "wantSelect", 0
-			Box("Self frame 1/3: up", "PRESS YOUR TARGET SELF KEY, or LEFT-CLICK YOUR PLAYER FRAME")
+			Box("Self frame 1/6: up", "PRESS YOUR TARGET SELF KEY, or LEFT-CLICK YOUR PLAYER FRAME")
 		elseif run.phase == "wantSelect" then
 			if not (stand and stand:IsShown()) then
 				if Self() then
@@ -3923,6 +3978,13 @@ do
 				.. " your player frame's alpha %.2f, CineMode %s"):format(l or -1, t or -1, w or -1, h or -1,
 				stand:GetAlpha(), seen or 0, entryAlpha, _G.PlayerFrame and _G.PlayerFrame:GetAlpha() or -1,
 				Text(ns.lastCinematic and true or false)))
+			-- (Your buffs and debuffs under it: as many as the game's icons show.)
+			if ns.ShoulderSelfTargetAuras then
+				local copies, game = ns.ShoulderSelfTargetAuras()
+				copies, game = tonumber(copies) or 0, tonumber(game) or 0
+				Verdict(("buffs %s: %d icons under it, %d shown by the game"):format(copies == game and "PASS" or "FAIL",
+					copies, game))
+			end
 			Verdict(("up %s: target %s, stand-in %s"):format(not UnitExists("target") and (seen or 0) > 0.5 and "PASS" or "FAIL",
 				UnitExists("target") and Text(UnitName("target")) or "cleared",
 				(seen or 0) > 0.5 and "seen" or ("not seen (effective alpha %.2f)"):format(seen or 0)))
@@ -3936,7 +3998,7 @@ do
 				if not run then return end
 				ns.db.shoulderCamFakeSelf = false
 				Write("option off for the real look")
-				Box("Self frame 2/3: the real one", "TARGET YOURSELF (your key, or click your frame)")
+				Box("Self frame 2/6: the real one", "TARGET YOURSELF (your key, or click your frame)")
 			end)
 		elseif run.phase == "wantReal" then
 			if not Self() then run.clock = 0 return end
@@ -3960,13 +4022,83 @@ do
 				if not run then return end
 				ns.db.shoulderCamFakeSelf = true
 				Write("option back on")
-				Box("Self frame 3/3: down", "CLEAR YOUR TARGET (Esc), then TARGET ANY NPC (Tab)")
+				Box("Self frame 3/6: down", "CLEAR YOUR TARGET (Esc), then TARGET ANY NPC (Tab)")
 			end)
 		elseif run.phase == "wantDown" then
 			if not Other() then run.clock = 0 return end
 			if run.clock < 1 then return end
 			Verdict(("down %s: a mob targeted, stand-in %s"):format(stand and stand:IsShown() and "FAIL" or "PASS",
 				stand and stand:IsShown() and "still up" or "down"))
+			run.phase, run.clock = "wantFight", 0
+			Box("Self frame 4/6: a fight", "START A FIGHT and let your pet tank it (a mob hitting you targets it)")
+		elseif run.phase == "wantFight" then
+			if not InCombatLockdown() then run.clock = 0 return end
+			if run.clock < 1 then return end
+			Write("in the fight")
+			run.phase, run.clock = "wantFightSelect", 0
+			Box("Self frame 4/6: a fight", "PRESS YOUR TARGET SELF KEY, or LEFT-CLICK YOUR PLAYER FRAME")
+		elseif run.phase == "wantFightSelect" then
+			if not (stand and stand:IsShown()) then run.clock = 0 return end
+			if run.clock < 1 then return end
+			Write(("stand-in up, in a fight %s, offset %.2f"):format(Text(InCombatLockdown()), Offset()))
+			if not run.fightBuffs then
+				run.fightBuffs = true
+				Buffs("buffs in the fight")
+				Shot("3 the stand-in in the fight")
+			end
+			run.phase, run.clock, run.right = "wantRight", 0, nil
+			C_Timer.After(0.3, function()
+				if run then Box("Self frame 5/6: right-click", "RIGHT-CLICK THE TARGET FRAME OF YOU") end
+			end)
+		elseif run.phase == "wantRight" then
+			if not run.right then
+				if not (stand and stand:IsShown()) then
+					Write(("the stand-in went down before the right-click: target %s"):format(TargetText()))
+					run.phase, run.clock = "wantFightSelect", 0
+					Box("Self frame 5/6: right-click", "SELECT YOURSELF AGAIN, then RIGHT-CLICK the target frame of you")
+				end
+				return
+			end
+			if run.clock - run.right.at < 1.5 then return end
+			local menu, you = MenuOpen(), Self()
+			local kept = math.abs(Offset()) >= math.abs(run.right.offset) * 0.5
+			Verdict(("right-click %s (on its menu button %s, in a fight %s)"):format(
+				(menu == "true" and not you and kept) and "PASS: your menu, not targeted, camera kept"
+				or ("FAIL:%s%s%s"):format(menu ~= "true" and " no menu" or "", you and " you got targeted" or "",
+					kept and "" or " the camera came off your shoulder"),
+				Text(run.right.overMenu), Text(InCombatLockdown())))
+			run.phase, run.clock = "wantAway", 0
+			Box("Self frame 5/6: away", "CLOSE THE MENU (Esc), then SELECT YOURSELF AGAIN (key or click your frame)")
+		elseif run.phase == "wantAway" then
+			local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+			local standUp = stand and stand:IsShown() or false
+			if standUp and run.clock < 20 then return end
+			if not run.awayAt then run.awayAt = run.clock end
+			if run.clock - run.awayAt < 1 then return end
+			local menuUp = menu and menu:IsShown() or false
+			local fighting = InCombatLockdown() and true or false
+			Verdict(("away again %s (stand-in %s, its menu button %s, still in the fight %s)"):format(
+				(not standUp and not menuUp and fighting) and "PASS" or (not fighting and "UNSURE: the fight ended") or "FAIL",
+				standUp and "still up" or "down", menuUp and "still up" or "away", Text(fighting)))
+			run.phase, run.clock = "wantEscUp", 0
+			Box("Self frame 6/6: Esc", "SELECT YOURSELF (key or click your frame), then PRESS ESC")
+		elseif run.phase == "wantEscUp" then
+			if not (stand and stand:IsShown()) then run.clock = 0 return end
+			if run.clock < 0.5 then return end
+			run.phase, run.clock = "wantEsc", 0
+			Write("stand-in up for the Esc step")
+			Box("Self frame 6/6: Esc", "PRESS ESC")
+		elseif run.phase == "wantEsc" then
+			local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+			local standUp = stand and stand:IsShown() or false
+			if standUp and run.clock < 15 then return end
+			if not run.escAt then run.escAt = run.clock end
+			if run.clock - run.escAt < 0.5 then return end
+			local menuUp = menu and menu:IsShown() or false
+			local gameMenu = type(_G.GameMenuFrame) == "table" and _G.GameMenuFrame:IsShown() or false
+			Verdict(("esc %s (stand-in %s, its menu button %s, target %s, the game's Esc menu opened %s, in a fight %s)"):format(
+				(not standUp and not menuUp) and "PASS" or "FAIL: still up after 15 s", standUp and "still up" or "down",
+				menuUp and "still up" or "away", TargetText(), Text(gameMenu), Text(InCombatLockdown())))
 			End("done")
 			ns.PadTestBox("Self frame run done", "/reload, then say check log", 0.3, 1, 0.3)
 			C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
@@ -4004,8 +4136,27 @@ do
 			ns.isRetail and "retail" or "Forever", Who(), Text(run.yours),
 			Text(ns.StyleOn and ns.StyleOn("ufStyle")), Text(ns.db.styleTheme)))
 		run.frame:SetScript("OnUpdate", Tick)
+		run.frame:RegisterEvent("GLOBAL_MOUSE_DOWN")
+		run.frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+		run.frame:SetScript("OnEvent", function(_, event, button)
+			if not run then return end
+			if event == "PLAYER_TARGET_CHANGED" then
+				Write(("target changed: %s; in a fight %s"):format(TargetText(), Text(InCombatLockdown())))
+			elseif button == "RightButton" and run.phase == "wantRight" and not run.right then
+				OnRightClick()
+			end
+		end)
+		-- (Whether the menu button's click ran: hooked out of fights, once.)
+		local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+		if menu and not menuHooked then
+			menuHooked = true
+			menu:HookScript("OnClick", function(_, button, down)
+				if run then Write(("menu button's click ran: %s %s, menu open %s"):format(Text(button),
+					down and "down" or "up", MenuOpen())) end
+			end)
+		end
 		Box("Self frame", "hands off, turning the option on")
-		ns.Print("shoulder selfframe: follow the box, about 30 seconds; type it again to stop")
+		ns.Print("shoulder selfframe: follow the box, a fight at the end; type it again to stop")
 	end
 end
 

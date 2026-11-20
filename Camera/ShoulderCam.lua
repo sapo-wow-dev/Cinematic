@@ -1486,6 +1486,7 @@ do
 	-- select yourself again, or the option's not on.
 	local stand = { at = "" }
 	local TargetAlpha -- (below)
+	local Auras -- (below)
 	local POWER_ATLAS = { MANA = "Mana", RAGE = "Rage", ENERGY = "Energy", FOCUS = "Focus",
 		RUNIC_POWER = "RunicPower", INSANITY = "Insanity", MAELSTROM = "Maelstrom", FURY = "Fury", PAIN = "Pain",
 		LUNAR_POWER = "LunarPower" }
@@ -1689,6 +1690,7 @@ do
 		stand.alpha = nil
 		stand.frame:SetAlpha(TargetAlpha())
 		Looks()
+		Auras()
 		ns.Log("shoulder", "selecting yourself: stand-in target frame up at " .. stand.at)
 	end
 	stand.events = CreateFrame("Frame")
@@ -1716,6 +1718,94 @@ do
 		end
 		return 1
 	end
+	-- Your buffs, then your debuffs, under it as the game's target frame of you
+	-- has them (user 2026-11-20): copies of the game's own buff and debuff
+	-- icons (BuffFrame and DebuffFrame's auraFrames), picture and stack count
+	-- set straight from theirs, so Forever's secret ones in fights draw too
+	-- (as ns.MirrorBuffs' copies do, Frames.lua); each at its icon's own alpha
+	-- (the game pulses one about to end). No timer swirl: its times are
+	-- secret in fights. Sizes in the stand-in's own units, read off the game's
+	-- plain target frame of you (selfframe runs 2026-11-20): 20 square, 4
+	-- apart, 5 to a row, from 56 down the art (just under the bars, 52 touched:
+	-- the art's lower part is clear), 2 in; debuffs on a row of their own
+	-- after. (27, 6 and under the whole art till then, read off a themed one:
+	-- too big, too low.)
+	local AURA_SIZE, AURA_GAP, AURA_ROW, AURA_MOST, AURA_TOP, AURA_LEFT = 20, 4, 5, 20, 56, 2
+	local function ShownIcons(frame, list)
+		local icons = type(frame) == "table" and frame.auraFrames
+		if type(icons) ~= "table" then return end
+		for i = 1, #icons do
+			local button = icons[i]
+			local ok, shown = pcall(button.IsShown, button)
+			if ok and (shown == true or (issecretvalue and issecretvalue(shown))) and type(button.Icon) == "table" then
+				list[#list + 1] = button
+			end
+		end
+	end
+	local function CopyIcon(copy, button)
+		pcall(function() copy.Icon:SetTexture(button.Icon:GetTexture()) end)
+		pcall(function() copy.Icon:SetTexCoord(button.Icon:GetTexCoord()) end)
+		local count = type(button.Count) == "table" and button.Count
+		copy.Count:SetShown(count and true or false)
+		if count then pcall(function() copy.Count:SetText(count:GetText()) end) end
+		local border = type(button.DebuffBorder) == "table" and button.DebuffBorder
+		copy.Border:SetShown(border and true or false)
+		if border then
+			pcall(function() copy.Border:SetTexture(border:GetTexture()) end)
+			pcall(function() copy.Border:SetTexCoord(border:GetTexCoord()) end)
+			pcall(function() copy.Border:SetVertexColor(border:GetVertexColor()) end)
+		end
+		pcall(function() copy:SetAlpha(button:GetAlpha()) end)
+	end
+	local function AuraCopy(i)
+		stand.auras = stand.auras or {}
+		local copy = stand.auras[i]
+		if not copy then
+			copy = CreateFrame("Frame", nil, stand.frame)
+			copy:SetSize(AURA_SIZE, AURA_SIZE)
+			copy.Icon = copy:CreateTexture(nil, "ARTWORK")
+			copy.Icon:SetAllPoints()
+			copy.Border = copy:CreateTexture(nil, "OVERLAY")
+			copy.Border:SetPoint("TOPLEFT", -1, 1)
+			copy.Border:SetPoint("BOTTOMRIGHT", 1, -1)
+			copy.Count = copy:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+			copy.Count:SetPoint("BOTTOMRIGHT", 2, -1)
+			stand.auras[i] = copy
+		end
+		return copy
+	end
+	-- (n-th icon on row, col: under the bars, a row down per five.)
+	local function PlaceAura(copy, row, col)
+		local art = stand.recipe.art
+		copy:ClearAllPoints()
+		copy:SetPoint("TOPLEFT", stand.frame, "TOPLEFT", art.x + AURA_LEFT + col * (AURA_SIZE + AURA_GAP),
+			-(art.y + AURA_TOP + row * (AURA_SIZE + AURA_GAP)))
+	end
+	function Auras()
+		local f = stand.frame
+		if not (f and f:IsShown()) then return end
+		local buffs, debuffs = {}, {}
+		ShownIcons(_G.BuffFrame, buffs)
+		ShownIcons(_G.DebuffFrame, debuffs)
+		-- (Buffs from the first row; debuffs from the row after the buffs' last.)
+		local n, row = 0, 0
+		for _, list in ipairs({ buffs, debuffs }) do
+			local col = 0
+			for _, button in ipairs(list) do
+				if n >= AURA_MOST then break end
+				n = n + 1
+				local copy = AuraCopy(n)
+				PlaceAura(copy, row, col)
+				CopyIcon(copy, button)
+				copy:Show()
+				col = col + 1
+				if col == AURA_ROW then col, row = 0, row + 1 end
+			end
+			if col > 0 then row = row + 1 end
+		end
+		for i = n + 1, #(stand.auras or {}) do stand.auras[i]:Hide() end
+		stand.auraCount = n
+	end
 	-- (Each check: down when it's not wanted; its place and its alpha.)
 	local function StandTick()
 		local f = stand.frame
@@ -1729,10 +1819,21 @@ do
 			ns.LogDetail("shoulder", ("selecting yourself: stand-in alpha %.2f (your target frame's)"):format(alpha))
 		end
 		f:SetAlpha(alpha)
+		-- (The game redraws its icons on the same aura change as us: copied each
+		-- check, a few times a second, not on the event, which can come first.)
+		Auras()
 	end
 	function ns.ShoulderSelfTargetUp() return stand.frame ~= nil and stand.frame:IsShown() end
 	stand.Tick = StandTick
 	function ns.ShoulderSelfTargetFrame() return stand.frame end
+	-- (The tests: how many icon copies it shows, and how many of the game's
+	-- buff and debuff icons are shown, capped as it caps them.)
+	function ns.ShoulderSelfTargetAuras()
+		local buffs, debuffs = {}, {}
+		ShownIcons(_G.BuffFrame, buffs)
+		ShownIcons(_G.DebuffFrame, debuffs)
+		return stand.auraCount or 0, math.min(AURA_MOST, #buffs + #debuffs)
+	end
 	-- Your menu on a right-click of it, as the game's target frame of you has
 	-- ("what right click is supposed to look like", user 2026-11-20). The
 	-- stand-in itself takes no clicks: a secure button of its own, at its spot
@@ -1742,8 +1843,15 @@ do
 	-- button's, wrapped) puts it up or away as it does the stand-in, and a real
 	-- target puts it away (an attribute driver). Placed, and armed (cineon:
 	-- the option on, the stand-in built), out of fights only.
+	-- Esc puts it away, as Esc clears the game's target of you ("esc does not
+	-- clear the target frame when it is me", user 2026-11-20): while the menu
+	-- button's up it holds Esc (bound in its secure show, let go in its hide:
+	-- in fights too), an Esc click hides it, and its hide takes the stand-in
+	-- down. (While it's up Esc closes it first, before any open window.)
 	local menu = CreateFrame("Button", "CinematicShoulderSelfTargetMenu", UIParent,
-		"SecureActionButtonTemplate, SecureHandlerAttributeTemplate")
+		"SecureActionButtonTemplate, SecureHandlerAttributeTemplate, SecureHandlerShowHideTemplate")
+	menu:SetAttribute("_onshow", [[ self:SetBindingClick(true, "ESCAPE", "CinematicShoulderSelfTargetMenu", "Escape") ]])
+	menu:SetAttribute("_onhide", [[ self:ClearBindings() ]])
 	menu:SetAttribute("unit", "player")
 	menu:SetAttribute("*type2", "togglemenu")
 	menu:Hide()
@@ -1751,6 +1859,16 @@ do
 		if name == "state-hastarget" and tostring(value) == "1" then self:Hide() end
 	]])
 	if _G.RegisterAttributeDriver then _G.RegisterAttributeDriver(menu, "state-hastarget", "[@target,exists] 1; 0") end
+	menu:WrapScript(menu, "OnClick", [[
+		if button == "Escape" then
+			self:Hide()
+			return false
+		end
+	]])
+	menu:HookScript("OnHide", function()
+		-- (Esc, a real target, or a select again: the stand-in goes with it.)
+		if stand.frame and stand.frame:IsShown() then StandDown("its menu button put away (Esc or a target)") end
+	end)
 	menu:WrapScript(fake, "OnClick", [[
 		if button ~= "LeftButton" then return end
 		if owner:IsShown() then
