@@ -90,6 +90,15 @@ local function Who()
 end
 
 local function Zoom() return GetCameraZoom and GetCameraZoom() or 0 end
+-- A list of verdict lines joined, any secret one (a name in a fight) put in
+-- words: table.concat errors on a secret value (partyself, retail 2026-11-20).
+function ns.ShoulderTestJoin(list)
+	local out = {}
+	for i, line in ipairs(list) do
+		out[i] = (issecretvalue and issecretvalue(line)) and "(a secret value)" or tostring(line)
+	end
+	return table.concat(out, "; ")
+end
 
 local function Scan()
 	Log(("scan: game build %s | %s | zoom %.2f, screen %.0f x %.0f, UI scale %.3f"):format(Text(select(4, GetBuildInfo())),
@@ -3527,6 +3536,281 @@ do
 	end
 end
 
+-- partyself: selecting yourself in the party or raid frames clears your
+-- target instead, as Keep the shoulder when selecting yourself does for your
+-- player frame (2026-11-20). Built from this probe's first run (retail
+-- follower dungeon: a click on you cleared your target in a fight, no frame
+-- changed who it shows): it now tests the real option, on for the run (and
+-- on retail too, ns.shoulderFakeSelfRetailTest), put back after; the option
+-- sets the frame up itself (ShoulderCam.lua's SyncParty). The game's compact frames can't change who they
+-- show in a fight (that's protected: it waits for the fight's end), so the
+-- frame showing you is found out of fights and its left-click set to clear
+-- your target, the way click-cast addons set up unit frames (its attributes:
+-- *type1 macro, *macrotext1 /cleartarget). One run, in a group, out of a fight
+-- to start:
+--   scan:   every party and raid frame shown, its unit, whether it's you, and
+--           the game's settings that decide whether you're in them;
+--   self:   an NPC targeted, you left-click yourself in the frames: target
+--           cleared, not you;
+--   other:  you left-click someone else in them: they're targeted, as ever;
+--   menu:   you right-click yourself: your menu, not targeted;
+--   fight:  in a fight, you left-click yourself: cleared; any frame changing
+--           who it shows mid-fight is logged (it shouldn't).
+-- The frame's own attributes are put back at the end (after the fight, if in
+-- one). Into db.shoulderPartySelf.
+do
+	local run
+	local function Write(text)
+		local lines = ns.db.shoulderPartySelf
+		-- (A line made of a secret value (a name in a fight) is secret too: it
+		-- saved as nil, the retail partyself run 2026-11-20.)
+		if issecretvalue and issecretvalue(text) then text = "(a line with a secret value in it)" end
+		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
+	-- (No names: in an instance they can be secret, and a verdict made of one
+	-- can't be read back; the second retail run's menu verdict was lost so.)
+	local function TargetText()
+		return Self() and "you" or UnitExists("target") and "someone else" or "none"
+	end
+	local function Box(head, line) ns.PadTestBox(head, line, 1, 0.82, 0) end
+	local function Verdict(text)
+		-- (Never a secret value in the list: joined at the end, it errored.)
+		if issecretvalue and issecretvalue(text) then text = "(a verdict with a secret value in it)" end
+		run.verdicts[#run.verdicts + 1] = text
+		Write(text)
+	end
+	local function MenuOpen()
+		local ok, open = pcall(function()
+			local manager = _G.Menu and _G.Menu.GetManager and _G.Menu.GetManager()
+			if manager and manager.GetOpenMenu then return manager:GetOpenMenu() ~= nil end
+			local list = _G.DropDownList1
+			return type(list) == "table" and list:IsShown() or false
+		end)
+		return ok and Text(open) or "unknown"
+	end
+	-- (Every party and raid frame there could be: the raid-style party frames,
+	-- the raid frames ungrouped and by group, the old-style party frames.)
+	local function Candidates()
+		local list = {}
+		for i = 1, 5 do list[#list + 1] = _G["CompactPartyFrameMember" .. i] end
+		for i = 1, 40 do list[#list + 1] = _G["CompactRaidFrame" .. i] end
+		for g = 1, 8 do
+			for m = 1, 5 do list[#list + 1] = _G["CompactRaidGroup" .. g .. "Member" .. m] end
+		end
+		local party = _G.PartyFrame
+		for i = 1, 4 do
+			local member = type(party) == "table" and party["MemberFrame" .. i]
+			list[#list + 1] = member or nil
+		end
+		return list
+	end
+	local function UnitOf(frame)
+		local ok, unit = pcall(frame.GetAttribute, frame, "unit")
+		unit = ok and unit or frame.unit or frame.displayedUnit
+		return type(unit) == "string" and unit or nil
+	end
+	local function NameOf(frame)
+		local ok, name = pcall(frame.GetDebugName, frame)
+		return ok and Text(name) or Text(frame.GetName and frame:GetName())
+	end
+	-- (The frames shown now: name, unit, you or not.)
+	local function Scan(label)
+		local shown, mine = {}, nil
+		for _, frame in ipairs(Candidates()) do
+			if type(frame) == "table" and frame.IsVisible then
+				local ok, visible = pcall(frame.IsVisible, frame)
+				if ok and visible == true then
+					local unit = UnitOf(frame)
+					local isMe = unit and ns.Flag(UnitIsUnit(unit, "player")) and true or false
+					shown[#shown + 1] = ("%s=%s%s"):format(NameOf(frame), Text(unit), isMe and " (you)" or "")
+					if isMe and not mine then mine = frame end
+				end
+			end
+		end
+		Write(("%s: %d shown: %s"):format(label, #shown, #shown > 0 and table.concat(shown, ", ") or "none"))
+		return mine, shown
+	end
+	local KEYS = { "*type1", "*macrotext1", "type1", "macrotext1" }
+	-- (The frame's click setup now, for the log.)
+	local function Setup(frame)
+		local said = {}
+		for _, key in ipairs(KEYS) do said[#said + 1] = key .. " " .. Text(frame:GetAttribute(key)) end
+		return table.concat(said, ", ")
+	end
+	local function Covered(name)
+		for _, each in ipairs(ns.ShoulderSelfPartyFrames and ns.ShoulderSelfPartyFrames() or {}) do
+			if each == name then return true end
+		end
+		return false
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
+		-- (Your option back; the option puts the frame back itself, after the
+		-- fight if in one.)
+		ns.db.shoulderCamFakeSelf = run.yours
+		ns.shoulderFakeSelfRetailTest = nil
+		Write(("end: %s, your option back to %s"):format(why, Text(run.yours)))
+		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
+		Log(("partyself: %s, %d lines in db.shoulderPartySelf"):format(why, #ns.db.shoulderPartySelf))
+		run = nil
+	end
+	local function Done(line)
+		End("done")
+		ns.PadTestBox("Party self run done", line or "/reload, then say check log", 0.3, 1, 0.3)
+		C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+	end
+	-- (A click on any party or raid frame, which and how: hooked once each, out of fights.)
+	local hooked = {}
+	local function HookClicks()
+		for _, frame in ipairs(Candidates()) do
+			if type(frame) == "table" and frame.HookScript and not hooked[frame] then
+				hooked[frame] = true
+				pcall(frame.HookScript, frame, "OnClick", function(self, button)
+					if run and run.OnClick then run.OnClick(self, button) end
+				end)
+			end
+		end
+	end
+	local STEPS = {
+		{ "self", "LEFT-CLICK YOURSELF in the party or raid frames", "LeftButton", true },
+		{ "other", "LEFT-CLICK SOMEONE ELSE in the party or raid frames", "LeftButton", false },
+		{ "menu", "RIGHT-CLICK YOURSELF in the party or raid frames (then Esc)", "RightButton", true },
+		{ "fight", "IN THE FIGHT: LEFT-CLICK YOURSELF in the party or raid frames", "LeftButton", true },
+	}
+	local Next
+	local function Tick(_, elapsed)
+		run.clock = run.clock + elapsed
+		-- (In a fight: any frame whose unit changes is logged; it shouldn't.)
+		if InCombatLockdown() then
+			run.watch = run.watch or {}
+			for _, frame in ipairs(Candidates()) do
+				if type(frame) == "table" and frame.GetAttribute then
+					local unit = UnitOf(frame)
+					if run.watch[frame] ~= nil and run.watch[frame] ~= (unit or false) then
+						Write(("in the fight, %s now shows %s (was %s)"):format(NameOf(frame), Text(unit), Text(run.watch[frame])))
+						run.moved = true
+					end
+					run.watch[frame] = unit or false
+				end
+			end
+		else
+			run.watch = nil
+		end
+		local step = STEPS[run.at]
+		if run.phase == "arming" then
+			if not Covered(run.mine) and run.clock < 5 then return end
+			Verdict(("armed %s: the option set up %s (%s)"):format(Covered(run.mine) and "PASS" or "FAIL", run.mine,
+				Setup(_G[run.mine] or {})))
+			if not Covered(run.mine) then return Done() end
+			return Next()
+		elseif run.phase == "wantTarget" then
+			if not (UnitExists("target") and not Self()) then run.clock = 0 return end
+			if run.clock < 1 then return end
+			run.phase, run.clock, run.click = "wantClick", 0, nil
+			run.before = UnitName("target")
+			run.OnClick = function(frame, button)
+				if run.click or button ~= step[3] then return end
+				local unit = UnitOf(frame)
+				run.click = { at = run.clock, frame = NameOf(frame), unit = unit,
+					isMe = unit and ns.Flag(UnitIsUnit(unit, "player")) and true or false }
+				Write(("%s: click %s on %s (%s%s), target before: someone else"):format(step[1], button, run.click.frame,
+					Text(unit), run.click.isMe and ", you" or ""))
+			end
+			Box(("Party self %d/%d: %s"):format(run.at, #STEPS, step[1]), step[2])
+		elseif run.phase == "wantClick" then
+			if not run.click then
+				if step[4] and Self() then run.click = { at = run.clock, frame = "?", isMe = true, game = true } end
+				return
+			end
+			if run.clock - run.click.at < 1.2 then return end
+			run.OnClick = nil
+			local c, you = run.click, Self()
+			local verdict
+			if step[1] == "other" then
+				verdict = (not c.isMe and UnitExists("target") and not you) and "PASS" or "FAIL"
+				verdict = ("%s: target %s (clicked %s)"):format(verdict, TargetText(), Text(c.unit))
+			elseif step[1] == "menu" then
+				local open = MenuOpen()
+				verdict = ("%s: menu open %s, target %s"):format((open == "true" and not you) and "PASS" or "FAIL", open,
+					TargetText())
+			else
+				local stand = ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
+				local up = stand and stand:IsShown() and true or false
+				verdict = ("%s: target %s, the target frame of you up %s (clicked %s%s)"):format(
+					(c.isMe and not UnitExists("target") and up) and "PASS"
+					or (not c.isMe and "UNSURE: that wasn't you") or "FAIL", TargetText(), Text(up), Text(c.unit),
+					step[1] == "fight" and (", in a fight " .. Text(InCombatLockdown())) or "")
+			end
+			Verdict(step[1] .. " " .. verdict)
+			run.phase = "between"
+			C_Timer.After(0.8, function() if run then Next() end end)
+		elseif run.phase == "wantFight" then
+			if not InCombatLockdown() then
+				if run.clock > 90 then
+					Verdict("fight SKIPPED (no fight within 90 s)")
+					return Done()
+				end
+				return
+			end
+			if run.clock < 1 then return end
+			run.phase, run.clock = "wantTarget", 0
+			Box(("Party self %d/%d: %s"):format(run.at, #STEPS, step[1]), "TARGET THE MOB you're fighting (Tab)")
+		end
+	end
+	function Next()
+		run.at, run.clock = run.at + 1, 0
+		local step = STEPS[run.at]
+		if not step then
+			if run.moved == nil then Verdict("frames in the fight PASS: none changed who it shows")
+			else Verdict("frames in the fight FAIL: one changed who it shows mid-fight (see above)") end
+			return Done()
+		end
+		if step[1] == "fight" then
+			run.phase = "wantFight"
+			Box(("Party self %d/%d: a fight"):format(run.at, #STEPS), "START A FIGHT (let your pet or the group tank)")
+			return
+		end
+		run.phase = "wantTarget"
+		Box(("Party self %d/%d: %s"):format(run.at, #STEPS, step[1]), "TARGET ANY NPC OR CREATURE (Tab or click it)")
+	end
+	function ns.ShoulderPartySelf()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder partyself: stopped")
+		end
+		if InCombatLockdown() then return ns.Print("shoulder partyself: out of combat, please") end
+		ns.db.shoulderPartySelf = {}
+		run = { frame = CreateFrame("Frame"), began = GetTime(), clock = 0, verdicts = {}, at = 0 }
+		Write(("start | %s | %s | in a group %s, in a raid %s | raid-style party frames %s, show yourself in them %s"):format(
+			ns.isRetail and "retail" or "Forever", Who(), Text(IsInGroup and IsInGroup()), Text(IsInRaid and IsInRaid()),
+			Text(GetCVar("useCompactPartyFrames")), Text(GetCVar("raidOptionShowSelf") or GetCVar("raidFramesDisplayPlayer"))))
+		local mine = Scan("frames")
+		if not mine then
+			Verdict("scan UNSURE: no party or raid frame shows you (in a group? raid-style party frames on, showing yourself?)")
+			return Done("No frame of you: see the log. /reload, then say check log")
+		end
+		Verdict(("scan PASS: you're %s (%s)"):format(NameOf(mine), Text(UnitOf(mine))))
+		HookClicks()
+		-- (The real option, on for the run: on retail too, for the run only.)
+		run.yours, run.mine = ns.db.shoulderCamFakeSelf, NameOf(mine)
+		ns.db.shoulderCamFakeSelf = true
+		if ns.isRetail then ns.shoulderFakeSelfRetailTest = true end
+		Write(("before: %s (%s)"):format(run.mine, Setup(mine)))
+		run.phase = "arming"
+		run.frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+		run.frame:SetScript("OnEvent", function()
+			if run then Write(("target changed: %s; in a fight %s"):format(TargetText(), Text(InCombatLockdown()))) end
+		end)
+		run.frame:SetScript("OnUpdate", Tick)
+		Box("Party self", "hands off, turning the option on")
+		ns.Print("shoulder partyself: follow the box, a fight at the end; type it again to stop")
+	end
+end
+
 -- selfwhere: why, turned on with no /reload, Keep the shoulder when selecting
 -- yourself sometimes leaves its button off your player frame (user
 -- 2026-11-20: ticked at 15:17:48 with Settings open, six clicks on the frame
@@ -3553,6 +3837,9 @@ do
 	local run
 	local function Write(text)
 		local lines = ns.db.shoulderSelfWhere
+		-- (A line made of a secret value (a name in a fight) is secret too: it
+		-- saved as nil, the retail partyself run 2026-11-20.)
+		if issecretvalue and issecretvalue(text) then text = "(a line with a secret value in it)" end
 		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
 	end
 	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
@@ -3608,7 +3895,7 @@ do
 		run.frame:UnregisterAllEvents()
 		ns.db.shoulderCamFakeSelf = run.yours
 		Write(("end: %s, your option back to %s"):format(why, Text(run.yours)))
-		Write("verdicts: " .. table.concat(run.verdicts, "; "))
+		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
 		Log(("selfwhere: %s, %d lines in db.shoulderSelfWhere"):format(why, #ns.db.shoulderSelfWhere))
 		run = nil
 	end
@@ -3879,12 +4166,17 @@ do
 	local run, menuHooked
 	local function Write(text)
 		local lines = ns.db.shoulderSelfFrame
+		-- (A line made of a secret value (a name in a fight) is secret too: it
+		-- saved as nil, the retail partyself run 2026-11-20.)
+		if issecretvalue and issecretvalue(text) then text = "(a line with a secret value in it)" end
 		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
 	end
 	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
 	local function Other() return UnitExists("target") and not Self() end
 	local function Box(head, line) ns.PadTestBox(head, line, 1, 0.82, 0) end
 	local function Verdict(text)
+		-- (Never a secret value in the list: joined at the end, it errored.)
+		if issecretvalue and issecretvalue(text) then text = "(a verdict with a secret value in it)" end
 		run.verdicts[#run.verdicts + 1] = text
 		Write(text)
 	end
@@ -3905,9 +4197,10 @@ do
 		if not run then return end
 		run.frame:SetScript("OnUpdate", nil)
 		run.frame:UnregisterAllEvents()
+		ns.shoulderFakeSelfRetailTest = nil
 		ns.db.shoulderCamFakeSelf = run.yours
 		Write(("end: %s, your option back to %s"):format(why, Text(run.yours)))
-		Write("verdicts: " .. table.concat(run.verdicts, "; "))
+		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
 		Log(("selfframe: %s, %d lines in db.shoulderSelfFrame"):format(why, #ns.db.shoulderSelfFrame))
 		run = nil
 	end
@@ -4268,6 +4561,8 @@ do
 				Bar(frame and frame.manabar):gsub(" [%d%.%-]+/[%d%.%-]+/[%d%.%-]+$", ""), Text(font), Text(size))
 		end
 		ns.db.shoulderCamFakeSelf = true
+		-- (On retail the option's off till tested there: on for this run only.)
+		if ns.isRetail then ns.shoulderFakeSelfRetailTest = true end
 		Write(("start | %s | %s | your option %s | your Style: unit frames %s, theme %s"):format(
 			ns.isRetail and "retail" or "Forever", Who(), Text(run.yours),
 			Text(ns.StyleOn and ns.StyleOn("ufStyle")), Text(ns.db.styleTheme)))
@@ -4385,11 +4680,13 @@ do
 		TearDown()
 		ns.db.shoulderCamFakeSelf = run.yours
 		Write(("end: %s, the copy hidden, your option back to %s"):format(why, Text(run.yours)))
-		Write("verdicts: " .. table.concat(run.verdicts, "; "))
+		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
 		Log(("standin: %s, %d lines in db.shoulderStandIn"):format(why, #ns.db.shoulderStandIn))
 		run = nil
 	end
 	local function Verdict(text)
+		-- (Never a secret value in the list: joined at the end, it errored.)
+		if issecretvalue and issecretvalue(text) then text = "(a verdict with a secret value in it)" end
 		run.verdicts[#run.verdicts + 1] = text
 		Write(text)
 	end
@@ -4562,7 +4859,7 @@ do
 			pcall(Cinematic_ToggleCineMode)
 		end
 		Write(("end: %s, button back as built, CineMode back %s"):format(why, Text(run.cine)))
-		Write("verdicts: " .. table.concat(run.verdicts, "; "))
+		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
 		Log(("selfclicks: %s, %d lines in db.shoulderSelfClicks"):format(why, #ns.db.shoulderSelfClicks))
 		run = nil
 	end
@@ -4693,6 +4990,8 @@ do
 	local function Other() return UnitExists("target") and not Self() end
 	local function Box(head, line, r, g, b) ns.PadTestBox(head, line, r or 1, g or 0.82, b or 0) end
 	local function Verdict(text)
+		-- (Never a secret value in the list: joined at the end, it errored.)
+		if issecretvalue and issecretvalue(text) then text = "(a verdict with a secret value in it)" end
 		run.verdicts[#run.verdicts + 1] = text
 		Write(text)
 	end
@@ -4719,7 +5018,7 @@ do
 		if run.mark then run.mark:Hide() end
 		ns.db.shoulderCamFakeSelf = run.yours
 		Write(("end: %s, your setting back to %s"):format(why, Text(run.yours)))
-		Write(("verdicts: %s"):format(table.concat(run.verdicts, "; ")))
+		Write(("verdicts: %s"):format(ns.ShoulderTestJoin(run.verdicts)))
 		Log(("fakeselftest: %s, %d lines in db.shoulderFakeSelfTest"):format(why, #ns.db.shoulderFakeSelfTest))
 		run = nil
 	end
@@ -4930,7 +5229,7 @@ do
 		local gone = Disarm()
 		if not gone then waiter:RegisterEvent("PLAYER_REGEN_ENABLED") end
 		Write(("end: %s, button and keys %s"):format(why, gone and "taken away" or "taken away after the fight"))
-		Write(("verdicts: %s"):format(table.concat(run.verdicts, "; ")))
+		Write(("verdicts: %s"):format(ns.ShoulderTestJoin(run.verdicts)))
 		Log(("fakeself: %s, %d lines in db.shoulderFakeSelf"):format(why, #ns.db.shoulderFakeSelf))
 		run = nil
 	end
@@ -5790,6 +6089,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "standin" then ns.ShoulderStandIn()
 	elseif what == "selfframe" then ns.ShoulderSelfFrame()
 	elseif what == "selfwhere" then ns.ShoulderSelfWhere(rest)
+	elseif what == "partyself" then ns.ShoulderPartySelf()
 	elseif what == "today" then ns.ShoulderToday(rest)
 	elseif what == "profiletest" then ns.ShoulderProfileTest()
 	elseif what == "on" then Set("shoulderCam", true)
@@ -5800,7 +6100,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, selfframe, selfwhere, today, profiletest, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, selfframe, selfwhere, partyself, today, profiletest, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

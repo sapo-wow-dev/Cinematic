@@ -1355,7 +1355,9 @@ do
 	local function Wanted()
 		local db = ns.db
 		if not (db and db.shoulderCamFakeSelf) then return false, "off" end
-		if ns.isRetail then return false, "retail (untested there)" end
+		-- (Retail: off and hidden till tested there; a test run turns it on for
+		-- itself, ns.shoulderFakeSelfRetailTest: selfframe, Dev/ShoulderCamTest.lua.)
+		if ns.isRetail and not ns.shoulderFakeSelfRetailTest then return false, "retail (untested there)" end
 		if not ShoulderOn() then return false, "Shoulder Cam off" end
 		-- ("yourself" can't be ours, but a party frame click still gets there.)
 		if paused and paused ~= "yourself" then return false, "paused: " .. tostring(paused) end
@@ -1743,14 +1745,18 @@ do
 	stand.events = CreateFrame("Frame")
 	stand.events:SetScript("OnEvent", function(_, event) ns.Guard(LOOK_EVENTS[event] and Looks or Values) end)
 	-- (Your Target Self key or a left-click: our button's click, after it ran.)
-	fake:HookScript("OnClick", function(_, mouse)
+	-- (A select-yourself click, after it cleared your target: our button's, or
+	-- a party or raid frame of you that's set up the same way, below.)
+	local function SelectedYourself(_, mouse)
 		if mouse ~= "LeftButton" or not state.want then return end
 		if stand.frame and stand.frame:IsShown() then
 			StandDown("selected yourself again")
 		elseif not UnitExists("target") then
 			ns.Guard(StandUp)
 		end
-	end)
+	end
+	fake:HookScript("OnClick", SelectedYourself)
+	stand.SelectedYourself = SelectedYourself
 	-- Your target frame's fade (Frames.lua's entry for it): while the stand-in
 	-- is up the show rules count you as your own target (ns.ShoulderSelfTargetUp),
 	-- so this is what your target frame would have. 1 with none (not faded).
@@ -1916,14 +1922,15 @@ do
 		-- (Esc, a real target, or a select again: the stand-in goes with it.)
 		if stand.frame and stand.frame:IsShown() then StandDown("its menu button put away (Esc or a target)") end
 	end)
-	menu:WrapScript(fake, "OnClick", [[
+	local MENU_ON_SELECT = [[
 		if button ~= "LeftButton" then return end
 		if owner:IsShown() then
 			owner:Hide()
 		elseif owner:GetAttribute("cineon") then
 			owner:Show()
 		end
-	]])
+	]]
+	menu:WrapScript(fake, "OnClick", MENU_ON_SELECT)
 	local function SyncMenu()
 		if InCombatLockdown() then return end
 		local on = state.want and Build() ~= nil
@@ -1945,6 +1952,86 @@ do
 		end
 	end
 	stand.SyncMenu = SyncMenu
+	-- Yourself in the party and raid frames too (user 2026-11-20): a left-click
+	-- there clears your target as on your player frame. The game's party and
+	-- raid frames can't change who they show in a fight (protected: it waits for
+	-- the fight's end; the partyself probe, retail follower dungeon, saw none
+	-- change), so the frame showing you is set up out of fights, as click-cast
+	-- addons set up unit frames: its left-click a /cleartarget macro (the exact
+	-- key and the wildcard: the game asks "type1" before "*type1"), its old
+	-- ones kept and put back when it's no longer you or the option's not on.
+	-- Its click puts the stand-in and its menu button up or away, as ours does.
+	-- Right-click and everyone else's frames stay the game's. Not with Clique.
+	local PARTY_KEYS = { "*type1", "type1", "*macrotext1", "macrotext1" }
+	local armedParty, partyHooked, partyClock = {}, {}, 0
+	local function PartyFrames()
+		local list = {}
+		for i = 1, 5 do list[#list + 1] = _G["CompactPartyFrameMember" .. i] end
+		for i = 1, 40 do list[#list + 1] = _G["CompactRaidFrame" .. i] end
+		for g = 1, 8 do
+			for m = 1, 5 do list[#list + 1] = _G["CompactRaidGroup" .. g .. "Member" .. m] end
+		end
+		return list
+	end
+	local function PartyUnit(frame)
+		local ok, unit = pcall(frame.GetAttribute, frame, "unit")
+		unit = ok and unit or frame.unit
+		return type(unit) == "string" and unit or nil
+	end
+	local function PartyName(frame)
+		return frame.GetName and frame:GetName() or "?"
+	end
+	local function ArmParty(frame)
+		local kept = {}
+		for _, key in ipairs(PARTY_KEYS) do kept[key] = frame:GetAttribute(key) or false end
+		armedParty[frame] = kept
+		for _, key in ipairs({ "*type1", "type1" }) do frame:SetAttribute(key, "macro") end
+		for _, key in ipairs({ "*macrotext1", "macrotext1" }) do frame:SetAttribute(key, "/cleartarget") end
+		pcall(menu.WrapScript, menu, frame, "OnClick", MENU_ON_SELECT)
+		if not partyHooked[frame] then
+			partyHooked[frame] = true
+			frame:HookScript("OnClick", function(self, mouse)
+				if armedParty[self] then SelectedYourself(self, mouse) end
+			end)
+		end
+		ns.Log("shoulder", "selecting yourself: party frame covered: " .. PartyName(frame))
+	end
+	local function DisarmParty(frame)
+		for key, value in pairs(armedParty[frame] or {}) do frame:SetAttribute(key, value or nil) end
+		pcall(menu.UnwrapScript, menu, frame, "OnClick")
+		armedParty[frame] = nil
+		ns.Log("shoulder", "selecting yourself: party frame back to the game's: " .. PartyName(frame))
+	end
+	-- (Out of fights, about once a second: the frames showing you now set up,
+	-- any no longer you, or with the option off, put back.)
+	local function SyncParty(elapsed)
+		partyClock = partyClock + (elapsed or 1)
+		if partyClock < 1 or InCombatLockdown() then return end
+		partyClock = 0
+		local mine = {}
+		if state.want and not (IsLoaded and ns.Flag(IsLoaded("Clique"))) then
+			for _, frame in ipairs(PartyFrames()) do
+				if type(frame) == "table" and frame.IsVisible and ns.Flag(frame:IsVisible()) then
+					local unit = PartyUnit(frame)
+					if unit and ns.Flag(UnitIsUnit(unit, "player")) then mine[frame] = true end
+				end
+			end
+		end
+		for frame in pairs(armedParty) do
+			if not mine[frame] then DisarmParty(frame) end
+		end
+		for frame in pairs(mine) do
+			if not armedParty[frame] then ArmParty(frame) end
+		end
+	end
+	stand.SyncParty = SyncParty
+	function stand.PartyArmed() return next(armedParty) ~= nil end
+	function ns.ShoulderSelfPartyFrames()
+		local names = {}
+		for frame in pairs(armedParty) do names[#names + 1] = PartyName(frame) end
+		table.sort(names)
+		return names
+	end
 	function ns.ShoulderSelfTargetMenu() return menu end
 	local watcher = CreateFrame("Frame")
 	watcher:RegisterEvent("PLAYER_LOGIN")
@@ -1969,6 +2056,7 @@ do
 		end
 		ns.Guard(Sync)
 		ns.Guard(stand.SyncMenu)
+		ns.Guard(stand.SyncParty, 1)
 	end)
 	local clock = 0
 	ns.FeatureLoop(watcher, ns.Profiled("Shoulder Cam self select", function(_, elapsed)
@@ -1978,9 +2066,12 @@ do
 		Sync()
 		stand.Tick()
 		stand.SyncMenu()
+		stand.SyncParty(0.25)
 	end), function()
 		return ns.db and ns.db.shoulderCamFakeSelf or state.want or state.rect ~= ""
 			or (stand.frame and stand.frame:IsShown())
+			-- (Till a party frame set up is put back: off, the loop'd stop first.)
+			or stand.PartyArmed()
 	end)
 	-- (The run and test commands: what it's doing now.)
 	function ns.ShoulderFakeSelfState()
@@ -2867,7 +2958,25 @@ local function TargetShift()
 	return math.max(-most, math.min(most, shift))
 end
 
-local CAST_BAR_NAMES = { "PlayerCastingBarFrame", "CastingBarFrame", "GamepadPlayerCastingBarFrame" }
+-- Where you are across the screen while the camera's over your shoulder
+-- (UIParent units, + right), for Text on You (SelfTextStyle.lua): the
+-- frames' slide, without Frames follow you's tick or the turn to a target.
+function ns.ShoulderYouShift()
+	local db = ns.db
+	if not (db and ShoulderOn()) or YouAreTarget() then return 0 end
+	local yards = tonumber(GetCVar("test_cameraOverShoulder")) or 0
+	if yards == 0 then return 0 end
+	if GetTime() < pushOver and steadyYards > 0 then
+		yards = yards < 0 and -steadyYards or steadyYards
+	end
+	local distance = math.max(FOLLOW_MIN_ZOOM, SeenZoom())
+	local shift = -yards * ns.ShoulderModelScale() / (distance * ns.ShoulderViewWidth()) * (UIParent:GetWidth() / 2)
+		* (db.shoulderCamFramesStrength or 1)
+	local most = UIParent:GetWidth() * FOLLOW_MAX
+	return math.max(-most, math.min(most, shift))
+end
+
+local CAST_BAR_NAMES ={ "PlayerCastingBarFrame", "CastingBarFrame", "GamepadPlayerCastingBarFrame" }
 local follower = CreateFrame("Frame")
 follower:Hide()
 ns.SetOnUpdate(follower, function(self, elapsed)
