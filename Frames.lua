@@ -4569,7 +4569,10 @@ do
 		end
 		factsAt, factsFight = now, fight
 		local place = ns.GetPlaceType()
-		local hasTarget = ns.HasTarget()
+		-- (The fake self-target's stand-in target frame up, ShoulderCam.lua: as
+		-- yourself targeted, so your target frame's rules fade it too.)
+		local selfStandIn = ns.ShoulderSelfTargetUp and ns.ShoulderSelfTargetUp() or false
+		local hasTarget = ns.HasTarget() or selfStandIn
 		-- (Dead: as a friend, as the ticks have it. nil: the game won't say, so
 		-- neither enemy nor friendly.)
 		local dead = hasTarget and ns.Flag(UnitIsDeadOrGhost("target"))
@@ -4593,7 +4596,7 @@ do
 		if not hasTarget or dead then enemyTarget = false else enemyTarget = enemy end
 		SetTargetWords()
 		-- Your target by what it is: yourself, else as Effects' TargetRow has it (Effects.lua: players and NPCs, enemy, neutral or friendly; the dead friendly).
-		local targetSelf = hasTarget and ns.Flag(UnitIsUnit("target", "player")) and true or false
+		local targetSelf = selfStandIn or hasTarget and ns.Flag(UnitIsUnit("target", "player")) and true or false
 		local row = hasTarget and not targetSelf and ns.TargetNameRow and ns.TargetNameRow("target")
 		facts.targetself = targetSelf
 		facts.targetdead = dead and true or false

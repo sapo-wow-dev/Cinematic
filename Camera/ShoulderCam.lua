@@ -1437,6 +1437,219 @@ do
 			tostring(fake.IsMouseClickEnabled and fake:IsMouseClickEnabled()),
 			tostring(fake.IsMouseMotionEnabled and fake:IsMouseMotionEnabled())))
 	end
+	-- A stand-in target frame of you while selecting yourself cleared your
+	-- target: with no target the game shows no target frame ("the target frame
+	-- no longer appears", user 2026-11-20). Look only (not clickable: clicks go
+	-- to the world), drawn by us from the game's own atlases where the game's
+	-- target frame puts them (ns.UnitFrameRecipe, Style/UnitFrameCopy.lua), at
+	-- your target frame's spot, its alpha your player frame's. A copy of the
+	-- game's own frame can't work: run by an addon its code errors on Forever's
+	-- secret health and mana (the standin probe). Bars take secret values, never
+	-- compared. No buffs, Esc doesn't close it, the game's look (user's picks).
+	-- Up when our button clears your target, down when you target anything,
+	-- select yourself again, or the option's not on.
+	local stand = { at = "" }
+	local TargetAlpha -- (below)
+	local POWER_ATLAS = { MANA = "Mana", RAGE = "Rage", ENERGY = "Energy", FOCUS = "Focus",
+		RUNIC_POWER = "RunicPower", INSANITY = "Insanity", MAELSTROM = "Maelstrom", FURY = "Fury", PAIN = "Pain",
+		LUNAR_POWER = "LunarPower" }
+	local function AtlasOK(atlas)
+		return atlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) ~= nil
+	end
+	local function SetAtlas(texture, atlas)
+		if not atlas then return false end
+		local ok, done = pcall(texture.SetAtlas, texture, atlas)
+		return ok and done ~= false
+	end
+	local function Spot(f, region, entry)
+		region:ClearAllPoints()
+		region:SetPoint("TOPLEFT", f, "TOPLEFT", entry.x, -entry.y)
+		region:SetSize(entry.w, entry.h)
+	end
+	-- (A bar's fill only once the bar has its texture: masking none errored and
+	-- left the stand-in half built, no name or level, the first game run.)
+	local function Mask(f, region, entry)
+		if not (region and entry and entry.atlas) then return end
+		local mask = f:CreateMaskTexture()
+		Spot(f, mask, entry)
+		if SetAtlas(mask, entry.atlas) then pcall(region.AddMaskTexture, region, mask) end
+	end
+	-- Built once, the first time it's needed (the recipe's read by then); kept
+	-- only once it's all built (a half-built one is dropped, made again).
+	local function Build()
+		if stand.frame then return stand.frame end
+		local recipe = ns.UnitFrameRecipe and ns.UnitFrameRecipe("TARGET")
+		if not (recipe and recipe.art and recipe.health and recipe.power) then return nil end
+		local f = CreateFrame("Frame", nil, UIParent)
+		stand.recipe = recipe
+		f:SetSize(recipe.art.w, recipe.art.h)
+		f:EnableMouse(false)
+		f:Hide()
+		local art = f:CreateTexture(nil, "BACKGROUND", nil, 2)
+		Spot(f, art, recipe.art)
+		SetAtlas(art, recipe.art.atlas)
+		if recipe.reaction then
+			stand.reaction = f:CreateTexture(nil, "BACKGROUND", nil, 0)
+			Spot(f, stand.reaction, recipe.reaction)
+			SetAtlas(stand.reaction, recipe.reaction.atlas)
+		end
+		stand.portrait = f:CreateTexture(nil, "BACKGROUND", nil, 1)
+		Spot(f, stand.portrait, recipe.portrait)
+		Mask(f, stand.portrait, recipe.portraitMask)
+		stand.health = CreateFrame("StatusBar", nil, f)
+		Spot(f, stand.health, recipe.health)
+		pcall(stand.health.SetStatusBarTexture, stand.health, recipe.health.atlas)
+		Mask(f, stand.health:GetStatusBarTexture(), recipe.healthMask)
+		stand.power = CreateFrame("StatusBar", nil, f)
+		Spot(f, stand.power, recipe.power)
+		pcall(stand.power.SetStatusBarTexture, stand.power, recipe.power.atlas)
+		Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask or recipe.healthMask and {
+			x = recipe.power.x - 1, y = recipe.power.y - 2.5, w = recipe.power.w + 2, h = recipe.power.h + 5,
+			atlas = (recipe.power.atlas or ""):gsub("Bar%-Mana$", "Bar-Mana-Mask") })
+		local top = CreateFrame("Frame", nil, f)
+		top:SetAllPoints()
+		top:SetFrameLevel(stand.health:GetFrameLevel() + 2)
+		if recipe.circle then
+			local circle = top:CreateTexture(nil, "ARTWORK")
+			Spot(f, circle, recipe.circle)
+			SetAtlas(circle, recipe.circle.atlas)
+		end
+		stand.name = top:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		Spot(f, stand.name, recipe.name)
+		stand.name:SetJustifyH(recipe.name.justify or "CENTER")
+		stand.level = top:CreateFontString(nil, "OVERLAY", "GameNormalNumberFont")
+		Spot(f, stand.level, recipe.level)
+		stand.level:SetJustifyH(recipe.level.justify or "RIGHT")
+		stand.frame = f
+		return f
+	end
+	-- Your values on it (secret ones too: only bars and text take them).
+	local function Fill()
+		local f = stand.frame
+		if not (f and f:IsShown()) then return end
+		pcall(SetPortraitTexture, stand.portrait, "player")
+		stand.name:SetText(UnitName("player"))
+		stand.level:SetText(UnitLevel("player"))
+		if stand.reaction then
+			local ok, r, g, b = pcall(UnitSelectionColor, "player")
+			if ok and r then pcall(stand.reaction.SetVertexColor, stand.reaction, r, g, b) end
+		end
+		pcall(stand.health.SetMinMaxValues, stand.health, 0, UnitHealthMax("player"))
+		pcall(stand.health.SetValue, stand.health, UnitHealth("player"))
+		local _, token = UnitPowerType("player")
+		if token ~= stand.token then
+			stand.token = token
+			local name = POWER_ATLAS[token or ""]
+			local atlas = name and ("UI-HUD-UnitFrame-Target-PortraitOn-Bar-" .. name)
+			if AtlasOK(atlas) then
+				pcall(stand.power.SetStatusBarTexture, stand.power, atlas)
+				stand.power:SetStatusBarColor(1, 1, 1)
+			else
+				-- (No art of its own: the mana bar's, grey, in the game's color for it.)
+				pcall(stand.power.SetStatusBarTexture, stand.power, stand.recipe.power.atlas)
+				local fill = stand.power:GetStatusBarTexture()
+				if fill then fill:SetDesaturated(true) end
+				local color = _G.PowerBarColor and _G.PowerBarColor[token or ""]
+				if color then stand.power:SetStatusBarColor(color.r, color.g, color.b) end
+			end
+		end
+		pcall(stand.power.SetMinMaxValues, stand.power, 0, UnitPowerMax("player"))
+		pcall(stand.power.SetValue, stand.power, UnitPower("player"))
+	end
+	-- Where the game's target frame art is (its top-left, in its own units) and
+	-- its effective scale; from the art when the frame has a place, else the
+	-- frame's top-left plus the offset last seen.
+	local function TargetSpot()
+		local frame = _G.TargetFrame
+		if not frame then return nil end
+		local container = type(frame.TargetFrameContainer) == "table" and frame.TargetFrameContainer
+		local art = container and container.FrameTexture
+		local left, top = art and art:GetLeft(), art and art:GetTop()
+		local fl, ft = frame:GetLeft(), frame:GetTop()
+		if left and top and fl and ft then
+			stand.offset = { left - fl, top - ft }
+			if ns.db then ns.db.shoulderSelfTargetOffset = stand.offset end
+			return left, top, art:GetEffectiveScale()
+		end
+		local offset = stand.offset or (ns.db and ns.db.shoulderSelfTargetOffset) or { 0, 0 }
+		if fl and ft then return fl + offset[1], ft + offset[2], frame:GetEffectiveScale() end
+	end
+	local function PlaceStand()
+		local left, top, scale = TargetSpot()
+		if not left then return false end
+		local key = ("%.1f %.1f %.3f"):format(left, top, scale)
+		if key ~= stand.at then
+			stand.at = key
+			local f = stand.frame
+			f:SetScale(scale / UIParent:GetEffectiveScale())
+			f:ClearAllPoints()
+			f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+		end
+		return true
+	end
+	local function StandDown(why)
+		if not (stand.frame and stand.frame:IsShown()) then return end
+		stand.frame:Hide()
+		stand.events:UnregisterAllEvents()
+		ns.Log("shoulder", "selecting yourself: stand-in target frame down (" .. why .. ")")
+	end
+	local function StandUp()
+		if not (Build() and PlaceStand()) then
+			ns.Log("shoulder", "selecting yourself: no stand-in target frame (no recipe, or no target frame spot)")
+			return
+		end
+		stand.frame:Show()
+		for _, event in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER",
+			"UNIT_DISPLAYPOWER", "UNIT_PORTRAIT_UPDATE", "UNIT_LEVEL" }) do
+			stand.events:RegisterUnitEvent(event, "player")
+		end
+		stand.token, stand.alpha = nil, nil
+		stand.frame:SetAlpha(TargetAlpha())
+		Fill()
+		ns.Log("shoulder", "selecting yourself: stand-in target frame up at " .. stand.at)
+	end
+	stand.events = CreateFrame("Frame")
+	stand.events:SetScript("OnEvent", function() ns.Guard(Fill) end)
+	-- (Your Target Self key or a left-click: our button's click, after it ran.)
+	fake:HookScript("OnClick", function(_, mouse)
+		if mouse ~= "LeftButton" or not state.want then return end
+		if stand.frame and stand.frame:IsShown() then
+			StandDown("selected yourself again")
+		elseif not UnitExists("target") then
+			ns.Guard(StandUp)
+		end
+	end)
+	-- Your target frame's fade (Frames.lua's entry for it): while the stand-in
+	-- is up the show rules count you as your own target (ns.ShoulderSelfTargetUp),
+	-- so this is what your target frame would have. 1 with none (not faded).
+	-- (Your player frame's till 2026-11-20: faded in CineMode, it hid the
+	-- stand-in while your real target frame of you shows.)
+	-- (Looked up each time, a few times a second: an entry kept would stay
+	-- after its page went off.)
+	function TargetAlpha()
+		local frame = _G.TargetFrame
+		for _, each in ipairs(ns.managed or {}) do
+			if each.frame == frame then return tonumber(each.alpha) or 1 end
+		end
+		return 1
+	end
+	-- (Each check: down when it's not wanted; its place and its alpha.)
+	local function StandTick()
+		local f = stand.frame
+		if not (f and f:IsShown()) then return end
+		if not state.want then return StandDown("option not on: " .. tostring(state.why)) end
+		if UnitExists("target") then return StandDown("you targeted something") end
+		PlaceStand()
+		local alpha = TargetAlpha()
+		if alpha ~= stand.alpha then
+			stand.alpha = alpha
+			ns.LogDetail("shoulder", ("selecting yourself: stand-in alpha %.2f (your target frame's)"):format(alpha))
+		end
+		f:SetAlpha(alpha)
+	end
+	function ns.ShoulderSelfTargetUp() return stand.frame ~= nil and stand.frame:IsShown() end
+	stand.Tick = StandTick
+	function ns.ShoulderSelfTargetFrame() return stand.frame end
 	local watcher = CreateFrame("Frame")
 	watcher:RegisterEvent("PLAYER_LOGIN")
 	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -1444,6 +1657,7 @@ do
 	watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
 	watcher:SetScript("OnEvent", function(_, event)
 		if event == "PLAYER_TARGET_CHANGED" then
+			if UnitExists("target") then StandDown("you targeted something") end
 			return ns.Guard(SelfTargeted)
 		elseif event == "PLAYER_LOGIN" then
 			-- (On key down or up as the game's action buttons are, not both: it'd go twice.)
@@ -1461,8 +1675,10 @@ do
 		if clock < 0.25 then return end
 		clock = 0
 		Sync()
+		stand.Tick()
 	end), function()
 		return ns.db and ns.db.shoulderCamFakeSelf or state.want or state.rect ~= ""
+			or (stand.frame and stand.frame:IsShown())
 	end)
 	-- (The run and test commands: what it's doing now.)
 	function ns.ShoulderFakeSelfState()
