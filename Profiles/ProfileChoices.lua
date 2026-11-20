@@ -299,11 +299,11 @@ ns.BUILTIN_PROFILES = {
 		-- (Lesser Invisibility, the Fading UI tile's: the UI going. The game's
 		-- own spelling, "Invisibilty".)
 		icon = "Interface\\Icons\\Spell_Magic_LesserInvisibilty",
-		tip = L["Just your UI hiding. It fades away and comes right back for a fight, a quest or a look with " ..
-			"the mouse, as in Balanced, with your bars and frames where you know them. Nothing else: no " ..
+		tip = L["Just your UI hiding. It fades away and comes right back for a fight or a quest, as in " ..
+			"Balanced, with your bars and frames where you know them. Nothing else: no mouseover, no " ..
 			"cameras, letterbox, tint or weather, no styles, Visions, cards or music."],
 		picks = { layout = { forever = "preset" }, camera = "off", chat = "lite", sound = "nomusic" },
-		modules = { "ui-pages-only" },
+		modules = { "ui-pages-only", "mouseover-off" },
 		preview = "bars",
 	},
 	-- Nothing on: for players who want just a few parts (Roll, Emote Vision,

@@ -463,9 +463,12 @@ local DEMOS = {
 	-- (Mouseover: above. Only with your frames looked after.)
 	mouseover = { seconds = HOVER_FADE + HOVER_SHOW + HOVER_AFTER + 1.5, fade = true,
 		start = StartHoverDemo, stop = StopHoverDemo,
+		-- (Mouseover on while it plays: a level with it off (Auto-Hide UI)
+		-- still shows it, and its tile keeps its switch, 2026-11-20.)
+		switches = { "mouseover" },
 		blocked = function()
-			if not (ns.ProfileChosen() and ns.AnyFramePageOn and ns.AnyFramePageOn() and ns.db.mouseover) then
-				return L["It brings back a faded frame: pick a level that fades your UI and has Mouseover on."]
+			if not (ns.ProfileChosen() and ns.AnyFramePageOn and ns.AnyFramePageOn()) then
+				return L["It brings back a faded frame: pick a level that fades your UI."]
 			end
 		end },
 	-- (CineMode's music: in, held, out; above. Its fades and hold, and a moment.)
@@ -644,38 +647,6 @@ local function SceneOn(base, key)
 	if not trigger then return true end
 	return not base[trigger.sceneOff] and base[trigger.camera] ~= trigger.off
 end
--- Turn on (the shelf's): the switches written into the profile being tried,
--- the live settings, with every switch over them (a page off holds its
--- settings off). Not the looks set by Show in rows (the letterbox, the tint),
--- the camera orbit (a profile's scenes), the Shoulder Cam (its own question)
--- or Fading UI (the HUD's every section): those have no Turn on.
-local NO_TURN_ON = { bars = true, tint = true, camera = true, shoulder = true, fadeUI = true }
-function ns.ShowMeCanTurnOn(key)
-	return IN_PROFILE[key] ~= nil and not NO_TURN_ON[key]
-end
-function ns.ShowMeTurnOn(key)
-	if not ns.ShowMeCanTurnOn(key) or InCombatLockdown() then return false end
-	local db = ns.db
-	for _, each in ipairs(IN_PROFILE[key]) do
-		db[each] = true
-		local page = ns.PageSwitchOf(each)
-		while page do
-			db[page] = true
-			page = ns.PageSwitchOf(page)
-		end
-	end
-	local trigger = CAM_SCENE[key] and ns.CAMERA_TRIGGER and ns.CAMERA_TRIGGER[CAM_SCENE[key][1]]
-	if trigger then
-		db[trigger.sceneOff] = false
-		if db[trigger.camera] == trigger.off then db[trigger.camera] = CAM_SCENE[key][2] end
-		if ns.CameraRowsChanged then ns.CameraRowsChanged() end
-	end
-	if ns.RefreshOutsideCine then ns.RefreshOutsideCine(true) end
-	ns.letterboxDirty = true
-	if ns.RefreshTint then ns.RefreshTint() end
-	Notify()
-	return true
-end
 local function On(base, key)
 	local page = ns.PageSwitchOf(key)
 	while page do
@@ -684,16 +655,41 @@ local function On(base, key)
 	end
 	return base[key] and true or false
 end
-function ns.ShowMeInProfile(key, name)
+-- The settings a profile's tags go by: the live ones for the profile being
+-- tried (so a tile's switch, below, and your own changes show), with a
+-- forced demo's switches as they were before it (db.showMeRestore); another
+-- profile's, its base.
+local function LiveSettings()
+	local db = ns.db
+	local restore = type(db.showMeRestore) == "table" and db.showMeRestore
+	if not restore then return db end
+	return setmetatable({}, { __index = function(_, k)
+		local v = restore[k]
+		if v == nil then return db[k] end
+		if v == "nil" then return nil end
+		return v
+	end })
+end
+local function IsLive(name)
+	return ns.db ~= nil and name ~= nil and ns.ProfileChosen() and name == ns.ActiveProfile()
+end
+local function SettingsOf(name)
+	if IsLive(name) then return LiveSettings() end
+	return ns.ProfileBase and ns.ProfileBase(name)
+end
+local function InSettings(key, base)
 	local keys = IN_PROFILE[key]
-	local base = keys and name and ns.ProfileBase and ns.ProfileBase(name)
-	if not base then return nil end
+	if not (keys and base) then return nil end
 	if base.visualEffects == false and (key == "bars" or key == "tint") then return false end
 	if key == "tint" and base.tintPreset == "none" then return false end
 	for _, each in ipairs(keys) do
 		if not On(base, each) then return false end
 	end
 	return SceneOn(base, key)
+end
+function ns.ShowMeInProfile(key, name)
+	if not name then return nil end
+	return InSettings(key, SettingsOf(name))
 end
 
 -- When a profile's look shows (the See it first row's tags): ns.ShowMeWhen(key,
@@ -747,7 +743,7 @@ function ns.ShowMeWhen(key, name)
 	local has = ns.ShowMeInProfile(key, name)
 	if has == nil then return nil end
 	if not has then return L["Off"], false, L["Not in this profile."] end
-	local base = ns.ProfileBase(name)
+	local base = SettingsOf(name)
 	local effect = EFFECT_OF[key]
 	if effect then
 		local row = "effect:" .. effect
@@ -777,7 +773,9 @@ function ns.ShowMeWhen(key, name)
 	end
 	-- (Start in CineMode, the row's tick: as saved, which the tick changes for the level picked)
 	if key == "fadeUI" then
-		if ns.ProfileSettings(name).fadeUI ~= false then
+		local fade
+		if IsLive(name) then fade = base.fadeUI else fade = ns.ProfileSettings(name).fadeUI end
+		if fade ~= false then
 			return L["Out of fights"], true, L["Whenever you're out of a fight."]
 		end
 		return L["With cameras"], true, L["Only while a camera brings CineMode on: Start in CineMode is off."]
@@ -788,6 +786,118 @@ function ns.ShowMeWhen(key, name)
 		return L["On"], true, L["Over your shoulder outdoors, off your mount and out of dungeons and raids."]
 	end
 	return L["On"], true, nil
+end
+
+-- A feature's switch (the welcome window's tiles): on or off in the profile
+-- being tried, its live settings. ns.ShowMeCanSwitch(key): it has one;
+-- ns.ShowMeOn(key): it's on now (as ShowMeInProfile has it, a demo's own
+-- switches not counted); ns.ShowMeSwitch(key, on): turned on or off, and
+-- what it changed, { setting = value before } ("nil" for none; a list's row
+-- as "list|row"), for an Undo. Not in a fight. batch: several in a row, the
+-- settings refreshed once after (ns.ShowMeSwitched()).
+-- On: its settings and every page switch over them; a Show in look (the
+-- letterbox, the tint) with nothing ticked gets Out of fights; the camera
+-- with no scenes gets the cameras' scenes; the Shoulder Cam's one-time
+-- question answered yes (its line on the tile says so). Off: only its own
+-- setting (the last of IN_PROFILE's), the pages over it left as they are; a
+-- camera's scene; the camera, the Cameras page.
+local OWN_OFF = { camera = "cameraModes", fadeUI = "handleFrames", tint = "tintPage" }
+function ns.ShowMeCanSwitch(key)
+	return IN_PROFILE[key] ~= nil and DEMOS[key] ~= nil
+end
+function ns.ShowMeOn(key)
+	if not ns.db then return false end
+	-- (the tag's: a Show in look with nothing ticked is off too)
+	local name = ns.ActiveProfile()
+	if IsLive(name) then return select(2, ns.ShowMeWhen(key, name)) == true end
+	return InSettings(key, LiveSettings()) and true or false
+end
+function ns.ShowMeSwitch(key, on, batch)
+	if not ns.ShowMeCanSwitch(key) or InCombatLockdown() or not ns.db then return nil end
+	-- (A demo's own switches back first: they'd be put back over this after.)
+	ns.StopShowMe()
+	local db, changed = ns.db, {}
+	local function Set(k, v)
+		if db[k] == v then return end
+		if changed[k] == nil then changed[k] = db[k] == nil and "nil" or db[k] end
+		db[k] = v
+	end
+	local function SetRow(list, row, v)
+		if type(db[list]) ~= "table" then db[list] = {} end
+		local id = list .. "|" .. row
+		if db[list][row] == v then return end
+		if changed[id] == nil then
+			local was = db[list][row]
+			changed[id] = was == nil and "nil" or was
+		end
+		db[list][row] = v
+	end
+	local trigger = CAM_SCENE[key] and ns.CAMERA_TRIGGER and ns.CAMERA_TRIGGER[CAM_SCENE[key][1]]
+	if on then
+		for _, each in ipairs(IN_PROFILE[key]) do
+			local k = each
+			while k do
+				Set(k, true)
+				k = ns.PageSwitchOf(k)
+			end
+		end
+		if trigger then
+			Set(trigger.sceneOff, false)
+			if db[trigger.camera] == trigger.off then Set(trigger.camera, CAM_SCENE[key][2]) end
+		end
+		local effect = EFFECT_OF[key]
+		if effect then
+			Set("visualEffects", true)
+			if key == "tint" and db.tintPreset == "none" then
+				Set("tintPreset", ns.DEFAULTS.tintPreset ~= "none" and ns.DEFAULTS.tintPreset or "zonetime")
+			end
+			if not ns.ShowMeOn(key) then
+				SetRow("quietShow", "effect:" .. effect, true)
+			end
+		end
+		if key == "camera" and #(Scenes(db)) == 0 then
+			for _, scene in pairs(CAM_SCENE) do
+				local t = ns.CAMERA_TRIGGER and ns.CAMERA_TRIGGER[scene[1]]
+				if t then
+					Set(t.sceneOff, false)
+					if db[t.camera] == t.off then Set(t.camera, scene[2]) end
+				end
+			end
+		end
+		if key == "shoulder" and ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
+	else
+		if trigger then
+			Set(trigger.sceneOff, true)
+		else
+			local keys = IN_PROFILE[key]
+			Set(OWN_OFF[key] or keys[#keys], false)
+		end
+	end
+	if not batch then ns.ShowMeSwitched() end
+	return changed
+end
+function ns.ShowMeSwitched()
+	if ns.SettingsChanged then ns.SettingsChanged() end
+	if ns.CameraRowsChanged then ns.CameraRowsChanged() end
+	if ns.RefreshOutsideCine then ns.RefreshOutsideCine(true) end
+	Notify()
+end
+-- Changes from ns.ShowMeSwitch put back (the welcome window's Undo).
+function ns.ShowMeUnswitch(changed)
+	local db = ns.db
+	if not (db and type(changed) == "table") or InCombatLockdown() then return false end
+	ns.StopShowMe()
+	for id, was in pairs(changed) do
+		if was == "nil" then was = nil end
+		local list, row = id:match("^([^|]+)|(.+)$")
+		if list then
+			if type(db[list]) == "table" then db[list][row] = was end
+		else
+			db[id] = was
+		end
+	end
+	ns.ShowMeSwitched()
+	return true
 end
 
 -- The orbit: the camera turns round you, easing in and out. It claims the
