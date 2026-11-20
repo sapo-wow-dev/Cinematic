@@ -3527,6 +3527,252 @@ do
 	end
 end
 
+-- selfwhere: why, turned on with no /reload, Keep the shoulder when selecting
+-- yourself sometimes leaves its button off your player frame (user
+-- 2026-11-20: ticked at 15:17:48 with Settings open, six clicks on the frame
+-- selected you, fine after a /reload; the log had the button and the frame's
+-- reported place both at 901,295 while the screenshot drew the frame at the
+-- bottom left). One run: the option turned off, then on again as ticking it
+-- does (no reload), then three left-clicks on your player frame where you see
+-- it, an NPC targeted before each. At each click: the mouse's place, what's
+-- under it, the frame's reported place, its art's (what's drawn), our
+-- button's, whether the mouse is over each by the game's own test, the
+-- frame's anchor, scale, alpha, CineMode's shrink and park, Frames follow you;
+-- then whether you were selected. The frame's reported place is also logged
+-- each time it changes. Run it once before a /reload, once after: what
+-- differs names the cause. Then the right-click on the target frame of you
+-- (user 2026-11-20: a right-click there opened your menu): you select
+-- yourself, the stand-in comes up, you right-click it; what's under the
+-- mouse, which frame shows (ours or the game's), your target, the camera's
+-- offset and whether a menu opened are logged. It should give your menu, as
+-- the game's frame of you does (its own secure button), with you not targeted
+-- and the camera kept. Into db.shoulderSelfWhere; your option put back.
+do
+	local CLICKS = 3
+	local menuHooked
+	local run
+	local function Write(text)
+		local lines = ns.db.shoulderSelfWhere
+		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
+	local function Other() return UnitExists("target") and not Self() end
+	local function Box(head, line) ns.PadTestBox(head, line, 1, 0.82, 0) end
+	-- (A region's place in UIParent units: left, bottom, width, height; or nil.)
+	local function Place(region)
+		if type(region) ~= "table" or not region.GetLeft then return nil end
+		local ok, l, b, w, h = pcall(function() return region:GetLeft(), region:GetBottom(), region:GetWidth(), region:GetHeight() end)
+		if not (ok and l and b) then return nil end
+		local scale = region:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		return { l * scale, b * scale, w * scale, h * scale }
+	end
+	local function Show(p) return p and ("%.0f,%.0f %.0fx%.0f"):format(p[1], p[2], p[3], p[4]) or "none" end
+	local function Inside(p, x, y) return p and x >= p[1] and x <= p[1] + p[3] and y >= p[2] and y <= p[2] + p[4] or false end
+	local function Under()
+		local names = {}
+		local foci = GetMouseFoci and GetMouseFoci()
+		if type(foci) ~= "table" or foci.GetObjectType then foci = { foci } end
+		for _, frame in ipairs(foci) do
+			names[#names + 1] = Text(frame.GetDebugName and frame:GetDebugName() or frame.GetName and frame:GetName())
+		end
+		return #names > 0 and table.concat(names, ", ") or "the world"
+	end
+	local function Art(frame)
+		local holder = type(frame) == "table" and frame.PlayerFrameContainer
+		return type(holder) == "table" and holder.FrameTexture or nil
+	end
+	local function Entry(frame)
+		for _, each in ipairs(type(ns.managed) == "table" and ns.managed or {}) do
+			if each.frame == frame then return each end
+		end
+	end
+	-- (Everything about where your player frame is, and our button.)
+	local function State()
+		local frame, state = _G.PlayerFrame, ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState() or {}
+		local point, rel, relPoint, x, y = frame:GetPoint(1)
+		local entry = Entry(frame)
+		local debug = ns.GetShoulderCamDebug and ns.GetShoulderCamDebug() or {}
+		return ("frame %s (art %s), anchor %s %s %s %.1f %.1f, scale %.2f, alpha %.2f, shown %s; fade entry: alpha %s,"
+			.. " shrunk %s, parked %s, saved %s; follow %s shift %s, followed %s; our button %s (%s, want %s)"):format(
+			Show(Place(frame)), Show(Place(Art(frame))), Text(point),
+			Text(type(rel) == "table" and rel.GetName and rel:GetName() or rel), Text(relPoint), tonumber(x) or 0,
+			tonumber(y) or 0, frame:GetScale(), frame:GetAlpha(), Text(frame:IsShown()),
+			Text(entry and entry.alpha), Text(entry and entry.shrunk), Text(entry and entry.parkedFullSize),
+			Text(entry and entry.savedRect and entry.savedRect[1] and ("%.0f,%.0f"):format(entry.savedRect[1], entry.savedRect[2])),
+			Text(debug.follow), Text(debug.followShift and ("%.1f"):format(debug.followShift)), Text(debug.followed),
+			Show(Place(state.button)), Text(state.rect), Text(state.want))
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
+		ns.db.shoulderCamFakeSelf = run.yours
+		Write(("end: %s, your option back to %s"):format(why, Text(run.yours)))
+		Write("verdicts: " .. table.concat(run.verdicts, "; "))
+		Log(("selfwhere: %s, %d lines in db.shoulderSelfWhere"):format(why, #ns.db.shoulderSelfWhere))
+		run = nil
+	end
+	-- (The game's right-click menu open now: whichever of these the client has.)
+	local function MenuOpen()
+		local ok, open = pcall(function()
+			local manager = _G.Menu and _G.Menu.GetManager and _G.Menu.GetManager()
+			if manager and manager.GetOpenMenu then return manager:GetOpenMenu() ~= nil end
+			local list = _G.DropDownList1
+			return type(list) == "table" and list:IsShown() or false
+		end)
+		return ok and Text(open) or "unknown"
+	end
+	local function Stand() return ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame() end
+	local function Offset() return tonumber(GetCVar(SHOULDER)) or 0 end
+	local function OnRightClick()
+		local stand, real = Stand(), _G.TargetFrame
+		local standUp = stand and stand:IsShown() and true or false
+		local realUp = type(real) == "table" and real:IsVisible() and true or false
+		local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+		local menuUp = menu and menu:IsVisible() and true or false
+		run.right = { at = run.clock, standUp = standUp, offset = Offset(),
+			overStand = standUp and ns.Flag(stand:IsMouseOver()) or false,
+			overReal = realUp and ns.Flag(real:IsMouseOver()) or false,
+			overMenu = menuUp and ns.Flag(menu:IsMouseOver()) or false }
+		Write(("right-click: under the mouse %s; stand-in up %s (mouse over it %s), its menu button up %s (mouse over"
+			.. " it %s, at %s), the game's target frame shown %s (mouse over it %s), target %s, offset %.2f, menu open %s"):format(
+			Under(), Text(standUp), Text(run.right.overStand), Text(menuUp), Text(run.right.overMenu),
+			Show(Place(menu)), Text(realUp), Text(run.right.overReal),
+			Self() and "you" or UnitExists("target") and Text(UnitName("target")) or "none", run.right.offset, MenuOpen()))
+	end
+	local function OnMouseDown(button)
+		if run and run.phase == "wantRight" and button == "RightButton" and not run.right then return OnRightClick() end
+		if not (run and run.phase == "wantClick" and button == "LeftButton") or run.click then return end
+		local scale = UIParent:GetEffectiveScale()
+		local x, y = GetCursorPosition()
+		x, y = x / scale, y / scale
+		local frame = _G.PlayerFrame
+		local state = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState() or {}
+		local framePlace, artPlace, ourPlace = Place(frame), Place(Art(frame)), Place(state.button)
+		run.click = { at = run.clock, inFrame = Inside(framePlace, x, y), inArt = Inside(artPlace, x, y),
+			inOurs = Inside(ourPlace, x, y), overFrame = ns.Flag(frame:IsMouseOver()),
+			overOurs = state.button and ns.Flag(state.button:IsMouseOver()) or false }
+		Write(("click %d: mouse %.0f,%.0f, under it %s; inside the frame's place %s, its art's %s, our button's %s;"
+			.. " the game says over the frame %s, over our button %s"):format(run.n, x, y, Under(),
+			Text(run.click.inFrame), Text(run.click.inArt), Text(run.click.inOurs), Text(run.click.overFrame),
+			Text(run.click.overOurs)))
+		Write(("click %d: %s"):format(run.n, State()))
+	end
+	local function Tick(_, elapsed)
+		run.clock = run.clock + elapsed
+		-- (The frame's reported place, each time it changes.)
+		local now = Show(Place(_G.PlayerFrame)) .. " / ours " .. Show(Place((ns.ShoulderFakeSelfState
+			and ns.ShoulderFakeSelfState() or {}).button))
+		if now ~= run.lastPlace then
+			run.lastPlace = now
+			Write("places now: frame " .. now)
+		end
+		if run.phase == "off" then
+			if run.clock < 1 then return end
+			ns.db.shoulderCamFakeSelf = true
+			Write("option on again (no reload)")
+			run.phase, run.clock = "arming", 0
+		elseif run.phase == "arming" then
+			if run.clock < 1.5 then return end
+			Write("armed: " .. State())
+			run.phase, run.clock = "wantOther", 0
+			Box(("Self where %d/%d"):format(run.n, CLICKS), "TARGET ANY NPC OR CREATURE (Tab or click it)")
+		elseif run.phase == "wantOther" then
+			if not Other() then run.clock = 0 return end
+			if run.clock < 1 then return end
+			run.phase, run.clock, run.click = "wantClick", 0, nil
+			Write(("click %d: asking, target %s"):format(run.n, Text(UnitName("target"))))
+			Box(("Self where %d/%d"):format(run.n, CLICKS), "LEFT-CLICK YOUR PLAYER FRAME, where you see it")
+		elseif run.phase == "wantClick" then
+			if not run.click then return end
+			if run.clock - run.click.at < 1.2 then return end
+			local you, cleared = Self(), not UnitExists("target")
+			local c = run.click
+			local why = c.overFrame and not c.inFrame and "the frame's drawn away from its reported place"
+				or c.inOurs and not c.overOurs and "the mouse was in our button's place but the game says not over it"
+				or not c.inOurs and "our button isn't where you clicked" or "-"
+			run.verdicts[#run.verdicts + 1] = ("click %d %s (%s)"):format(run.n, you and "FAIL: you" or cleared
+				and "PASS: cleared" or "?: target kept", why)
+			Write(run.verdicts[#run.verdicts])
+			run.n = run.n + 1
+			if run.n > CLICKS then
+				run.phase, run.clock, run.right = "wantStand", 0, nil
+				Box("Self where: right-click", "PRESS YOUR TARGET SELF KEY, or LEFT-CLICK YOUR PLAYER FRAME")
+				return
+			end
+			run.phase, run.clock = "wantOther", 0
+			Box(("Self where %d/%d"):format(run.n, CLICKS), "TARGET ANY NPC OR CREATURE (Tab or click it)")
+		elseif run.phase == "wantStand" then
+			local stand = Stand()
+			if Self() then
+				run.verdicts[#run.verdicts + 1] = "select FAIL: you got targeted (no stand-in)"
+				Write(run.verdicts[#run.verdicts] .. ": " .. State())
+				End("done")
+				ns.PadTestBox("Self where run done", "CLEAR YOUR TARGET (Esc), /reload, then say check log", 0.3, 1, 0.3)
+				return
+			end
+			if not (stand and stand:IsShown()) then run.clock = 0 return end
+			if run.clock < 1 then return end
+			local p = Place(stand)
+			Write(("stand-in up at %s, offset %.2f"):format(Show(p), Offset()))
+			run.phase, run.clock = "wantRight", 0
+			Box("Self where: right-click", "RIGHT-CLICK THE TARGET FRAME OF YOU")
+		elseif run.phase == "wantRight" then
+			if not run.right then return end
+			if run.clock - run.right.at < 1.5 then return end
+			local menu, you = MenuOpen(), Self()
+			local r = run.right
+			-- (Your menu, as the game's frame of you gives; you not targeted, the
+			-- camera kept over your shoulder.)
+			local kept = math.abs(Offset()) >= math.abs(r.offset) * 0.5
+			local verdict = (menu == "true" and not you and kept) and "PASS: your menu, not targeted, camera kept"
+				or ("FAIL:%s%s%s"):format(menu ~= "true" and " no menu" or "", you and " you got targeted" or "",
+					kept and "" or " the camera came off your shoulder")
+			local where = r.overMenu and "on its menu button" or r.overStand and "on the stand-in"
+				or r.overReal and "on the game's target frame" or "off them all"
+			run.verdicts[#run.verdicts + 1] = ("right-click %s (%s; stand-in was up %s; offset %.2f -> %.2f)"):format(
+				verdict, where, Text(r.standUp), r.offset, Offset())
+			Write(run.verdicts[#run.verdicts])
+			End("done")
+			ns.PadTestBox("Self where run done", "CLOSE ANY MENU (Esc), /reload, then say check log", 0.3, 1, 0.3)
+			C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+		end
+	end
+	function ns.ShoulderSelfWhere()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder selfwhere: stopped")
+		end
+		if InCombatLockdown() then return ns.Print("shoulder selfwhere: out of combat, please") end
+		if not ns.Setting("shoulderCam") then return ns.Print("shoulder selfwhere: turn on the Shoulder Cam first") end
+		ns.db.shoulderSelfWhere = {}
+		run = { frame = CreateFrame("Frame"), began = GetTime(), clock = 0, verdicts = {}, phase = "off", n = 1,
+			yours = ns.db.shoulderCamFakeSelf }
+		Write(("start | %s | %s | your option %s | CineMode %s | Settings open %s"):format(
+			ns.isRetail and "retail" or "Forever", Who(), Text(run.yours), Text(ns.lastCinematic and true or false),
+			Text(type(_G.SettingsPanel) == "table" and _G.SettingsPanel:IsShown())))
+		Write("before: " .. State())
+		ns.db.shoulderCamFakeSelf = false
+		Write("option off")
+		run.frame:RegisterEvent("GLOBAL_MOUSE_DOWN")
+		run.frame:SetScript("OnEvent", function(_, _, button) OnMouseDown(button) end)
+		run.frame:SetScript("OnUpdate", Tick)
+		-- (Whether the menu button's click ran at all: the first run's right-click
+		-- was on it and opened no menu.)
+		local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+		if menu and not menuHooked then
+			menuHooked = true
+			menu:HookScript("OnClick", function(_, button, down)
+				if run then Write(("menu button's click ran: %s %s, menu open %s"):format(Text(button),
+					down and "down" or "up", MenuOpen())) end
+			end)
+		end
+		Box("Self where", "hands off: turning the option off and on again")
+		ns.Print("shoulder selfwhere: follow the box, three clicks then a right-click; type it again to stop")
+	end
+end
+
 -- selfframe: the stand-in target frame (Keep the shoulder when selecting
 -- yourself, ShoulderCam.lua), the option on for the run and put back after:
 --   up:    a mob targeted, you select yourself: your target cleared, the
@@ -5186,6 +5432,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "selfclicks" then ns.ShoulderSelfClicks()
 	elseif what == "standin" then ns.ShoulderStandIn()
 	elseif what == "selfframe" then ns.ShoulderSelfFrame()
+	elseif what == "selfwhere" then ns.ShoulderSelfWhere()
 	elseif what == "today" then ns.ShoulderToday(rest)
 	elseif what == "profiletest" then ns.ShoulderProfileTest()
 	elseif what == "on" then Set("shoulderCam", true)
@@ -5196,7 +5443,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, selfframe, today, profiletest, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, selfframe, selfwhere, today, profiletest, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

@@ -1596,7 +1596,9 @@ do
 			fill = stand.power:GetStatusBarTexture()
 			if fill then fill:SetDesaturated(true) end
 			local color = _G.PowerBarColor and _G.PowerBarColor[token or ""]
-			if color then stand.power:SetStatusBarColor(color.r, color.g, color.b) end
+			if type(color) == "table" and type(color.r) == "number" then
+				stand.power:SetStatusBarColor(color.r, color.g, color.b)
+			end
 		end
 		stand.health:SetStatusBarColor(1, 1, 1)
 		Values()
@@ -1697,6 +1699,54 @@ do
 	function ns.ShoulderSelfTargetUp() return stand.frame ~= nil and stand.frame:IsShown() end
 	stand.Tick = StandTick
 	function ns.ShoulderSelfTargetFrame() return stand.frame end
+	-- Your menu on a right-click of it, as the game's target frame of you has
+	-- ("what right click is supposed to look like", user 2026-11-20). The
+	-- stand-in itself takes no clicks: a secure button of its own, at its spot
+	-- (pinned to the screen, not hung on it: that'd lock the stand-in in
+	-- fights), right-click your menu, left-click nothing. Shown and hidden by
+	-- the game's secure code, so in fights too: a select-yourself click (our
+	-- button's, wrapped) puts it up or away as it does the stand-in, and a real
+	-- target puts it away (an attribute driver). Placed, and armed (cineon:
+	-- the option on, the stand-in built), out of fights only.
+	local menu = CreateFrame("Button", "CinematicShoulderSelfTargetMenu", UIParent,
+		"SecureActionButtonTemplate, SecureHandlerAttributeTemplate")
+	menu:SetAttribute("unit", "player")
+	menu:SetAttribute("*type2", "togglemenu")
+	menu:Hide()
+	menu:SetAttribute("_onattributechanged", [[
+		if name == "state-hastarget" and tostring(value) == "1" then self:Hide() end
+	]])
+	if _G.RegisterAttributeDriver then _G.RegisterAttributeDriver(menu, "state-hastarget", "[@target,exists] 1; 0") end
+	menu:WrapScript(fake, "OnClick", [[
+		if button ~= "LeftButton" then return end
+		if owner:IsShown() then
+			owner:Hide()
+		elseif owner:GetAttribute("cineon") then
+			owner:Show()
+		end
+	]])
+	local function SyncMenu()
+		if InCombatLockdown() then return end
+		local on = state.want and Build() ~= nil
+		if menu:GetAttribute("cineon") ~= (on or nil) then menu:SetAttribute("cineon", on or nil) end
+		-- (Up only with the stand-in: put away with it, once out of a fight.)
+		if menu:IsShown() and not (stand.frame and stand.frame:IsShown()) then menu:Hide() end
+		if not on then return end
+		local left, top, scale = TargetSpot()
+		if not left then return end
+		local key = ("%.1f %.1f %.3f"):format(left, top, scale)
+		if key ~= stand.menuAt then
+			stand.menuAt = key
+			local k = scale / UIParent:GetEffectiveScale()
+			menu:ClearAllPoints()
+			menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left * k, top * k)
+			menu:SetSize(stand.recipe.art.w * k, stand.recipe.art.h * k)
+			menu:SetFrameStrata(stand.frame:GetFrameStrata())
+			menu:SetFrameLevel(stand.frame:GetFrameLevel() + 20)
+		end
+	end
+	stand.SyncMenu = SyncMenu
+	function ns.ShoulderSelfTargetMenu() return menu end
 	local watcher = CreateFrame("Frame")
 	watcher:RegisterEvent("PLAYER_LOGIN")
 	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -1709,12 +1759,16 @@ do
 		elseif event == "PLAYER_LOGIN" then
 			-- (On key down or up as the game's action buttons are, not both: it'd go twice.)
 			fake:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "AnyDown" or "AnyUp")
+			-- (The stand-in's menu button as our button: on mouse up only, its
+			-- right-click opened no menu, the first selfwhere run 2026-11-20.)
+			menu:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "AnyDown" or "AnyUp")
 		elseif event == "UPDATE_BINDINGS" then
 			-- (Ours fire it too: only yours, a key bound again, counts.)
 			if GetTime() - ownChangeAt > 0.5 then state.dirty = true end
 			return
 		end
 		ns.Guard(Sync)
+		ns.Guard(stand.SyncMenu)
 	end)
 	local clock = 0
 	ns.FeatureLoop(watcher, ns.Profiled("Shoulder Cam self select", function(_, elapsed)
@@ -1723,6 +1777,7 @@ do
 		clock = 0
 		Sync()
 		stand.Tick()
+		stand.SyncMenu()
 	end), function()
 		return ns.db and ns.db.shoulderCamFakeSelf or state.want or state.rect ~= ""
 			or (stand.frame and stand.frame:IsShown())
@@ -3065,6 +3120,20 @@ function ns.CreateShoulderCamPanel(kit)
 			L["Selecting yourself clears your target instead, so the camera stays over your shoulder. Heals and buffs still land on you."]),
 			"check")
 		kit.GreyUnless(fakeSelf, IfOn)
+		-- A red "!" after its name, what it can't do in its tip (as the minimap's
+		-- workaround tick, Options.lua): the target frame of you it shows is our
+		-- own copy, so it looks like the game's or one of our themes, not
+		-- another addon's frames (user 2026-11-20).
+		local warn = CreateFrame("Frame", nil, content)
+		warn:SetSize(16, 18)
+		warn:SetPoint("LEFT", fakeSelf.Text or fakeSelf.text or fakeSelf, "RIGHT", 6, 0)
+		local bang = warn:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+		bang:SetPoint("CENTER")
+		bang:SetText("!")
+		bang:SetTextColor(1, 0.3, 0.25)
+		warn:EnableMouse(true)
+		kit.Tooltip(warn, L["Shows our own copy of your target frame, so it matches only the game's look or a Cinematic theme."])
+		fakeSelf.warnMark = warn
 	end
 	local selfTime = stack:Add(kit.Slider(content, "shoulderCamSelfTime", L["Back from targeting yourself"], 0, 3,
 		0.1, L["%.1f sec"]), "slider")
