@@ -115,6 +115,7 @@ Camera\QuestCam.lua
 Camera\ShoulderCam.lua
 Camera\ShoulderCalibrate.lua
 Dev\ShoulderCamTest.lua
+Dev\ShoulderSelfFrontTest.lua
 Camera\MultiQuestFix.lua
 Camera\SkyrideCam.lua
 Camera\CameraRows.lua

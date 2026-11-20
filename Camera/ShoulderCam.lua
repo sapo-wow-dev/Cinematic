@@ -1313,6 +1313,13 @@ gameEsc.Sync = SyncGameEscape -- (its PLAYER_REGEN_ENABLED, above)
 -- user. No click reaches your frame now.) Keys and the button
 -- change out of fights only: what's set as one starts holds till it ends.
 -- Not with Clique (it owns clicks on unit frames): the keys only then.
+-- In front of your frame: any click on your frame (toplevel) brings it in
+-- front of every frame of its strata, whatever their levels, till a /reload:
+-- one with the option off (to select yourself, its menu) left it in front of
+-- our button once ticked, and every click selected you ("works only after a
+-- reload", user 2026-11-20: mouse on PlayerFrame, our button over it at level
+-- 51 to its 1). So ours is toplevel too, brought in front as it's placed, and
+-- again whenever the mouse finds your frame through it (FrameInFront).
 do
 	local fake = CreateFrame("Button", "CinematicShoulderSelfButton", UIParent, "SecureActionButtonTemplate")
 	fake:SetAttribute("*type1", "macro")
@@ -1320,6 +1327,27 @@ do
 	fake:SetAttribute("unit", "player")
 	fake:SetAttribute("*type2", "togglemenu") -- (your menu, as your frame's right-click)
 	fake:Hide()
+	-- (ns.shoulderSelfHoldFront: /cine debug shoulder selffront holds this
+	-- off, to show your frame in front first.)
+	local function Front()
+		if ns.shoulderSelfHoldFront then return false end
+		if not fake:IsToplevel() then fake:SetToplevel(true) end
+		fake:Raise()
+		return true
+	end
+	-- Whether the mouse is on your frame (or a part of it) and not on ours:
+	-- yours in front of ours.
+	local function FrameInFront()
+		local focus = ns.MouseFocus and ns.MouseFocus()
+		local frame = _G.PlayerFrame
+		if not (focus and frame) or focus == fake then return false end
+		for _ = 1, 6 do
+			if focus == frame then return true end
+			focus = focus.GetParent and focus:GetParent()
+			if not focus then return false end
+		end
+		return false
+	end
 	local passThrough = false -- (ns.ShoulderFakeSelfState: none since 2026-11-20, above)
 	local state = { want = false, rect = "", keys = "", why = "off" }
 	local ownChangeAt = -math.huge
@@ -1379,7 +1407,9 @@ do
 		fake:SetSize(tonumber(width), tonumber(height))
 		fake:SetFrameStrata(frame:GetFrameStrata())
 		fake:SetFrameLevel(frame:GetFrameLevel() + 50)
+		fake:SetToplevel(not ns.shoulderSelfHoldFront)
 		fake:Show()
+		Front()
 		ns.hoverStandIn[fake] = frame
 	end
 	local function Sync()
@@ -1409,6 +1439,10 @@ do
 				ns.Log("shoulder", "selecting yourself: button placed again: " .. rect)
 			end
 			state.rect = rect
+		end
+		-- (Your frame came in front of ours anyway: ours in front again.)
+		if rect ~= "" and fake:IsShown() and FrameInFront() and Front() then
+			ns.Log("shoulder", "selecting yourself: your player frame was in front of our button: ours brought in front")
 		end
 		if want ~= state.want or why ~= state.why then
 			ns.Log("shoulder", ("selecting yourself: %s (%s)%s"):format(want and "clears your target" or "the game's",
