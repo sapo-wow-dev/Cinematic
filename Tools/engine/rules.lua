@@ -1,0 +1,14 @@
+-- Loads every engine rules area file (see README.md) and returns one list.
+-- From the repo root: local rules = dofile("Tools/engine/rules.lua")
+local AREAS = { "secrets-combat", "nameplates-units", "camera-movement", "ui-frames" }
+
+local all = {}
+for _, area in ipairs(AREAS) do
+    local path = "Tools/engine/rules/" .. area .. ".lua"
+    local list = assert(loadfile(path))()
+    for _, r in ipairs(list) do
+        r.file = area
+        all[#all + 1] = r
+    end
+end
+return all, AREAS
