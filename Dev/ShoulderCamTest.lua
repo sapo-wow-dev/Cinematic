@@ -3527,16 +3527,13 @@ do
 	end
 end
 
--- selfclicks: why a left-click on your player frame still selects you with
--- the option on, now and then (user 2026-11-20: 5 of 5 after a /reload, in
--- CineMode). One run in CineMode (put back after), four clicks on your frame:
--- once with a mob targeted, then three with nothing targeted, each after
--- your frame has faded and been parked off the screen (the button should
--- wait on its spot: FrameRect, ShoulderCam.lua). A verdict each: you
--- targeted is a FAIL. Every mouse event on our button and on your player
--- frame is logged (down, up, click, which button, where our button was),
--- with the button's mouse settings and what's under the mouse.
--- The button's put back as built at the end. Into db.shoulderSelfClicks.
+-- selfclicks: a left-click on your player frame, with Keep the shoulder when
+-- selecting yourself on, after a right-click on it (user 2026-11-20: then it
+-- selected you). One run in CineMode (put back after): right-click your frame
+-- (your menu from our button; the target kept), then a left-click (target
+-- cleared, not you), twice. Every mouse event on our button and your player
+-- frame is logged (down, up, click, which button, where our button was), with
+-- the button's mouse settings, what's under the mouse and whether a menu is open.
 do
 	local run
 	local function Write(text)
@@ -3546,24 +3543,27 @@ do
 	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
 	local function Other() return UnitExists("target") and not Self() end
 	local function Box(head, line) ns.PadTestBox(head, line, 1, 0.82, 0) end
-	local PASS_ALL = { "RightButton", "MiddleButton", "Button4", "Button5" }
 	local function Built(button)
 		button:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "AnyDown" or "AnyUp")
-		if button.SetPassThroughButtons then pcall(button.SetPassThroughButtons, button, unpack(PASS_ALL)) end
 	end
+	-- (The click setups and CineMode all passed. What failed: a right-click
+	-- on your frame first, let through to it, then left-clicks, "right click
+	-- the panel and then left click the frame it doesn't work", user
+	-- 2026-11-20. So: that, twice. [2]: "right" or "left".)
 	local SETUPS = {
-		-- (First as login left it, nothing applied: the first run applied
-		-- "built" again before its click, and every setup passed.)
-		-- (The click setups all passed, in CineMode too, with a mob targeted:
-		-- your frame stays up then. What failed: nothing targeted, the frame
-		-- faded, shrunk and parked off the screen till hovered. So: once with
-		-- a target, then three with none, each waiting till it's parked.
-		-- [3]: a target wanted.)
-		{ "with a target", function() end, true },
-		{ "nothing targeted 1", function() end, false },
-		{ "nothing targeted 2", function() end, false },
-		{ "nothing targeted 3", function() end, false },
+		{ "right-click", "right" }, { "left-click after it", "left" },
+		{ "right-click again", "right" }, { "left-click after it again", "left" },
 	}
+	-- (The game's right-click menu open now: whichever of these the client has.)
+	local function MenuOpen()
+		local ok, open = pcall(function()
+			local manager = _G.Menu and _G.Menu.GetManager and _G.Menu.GetManager()
+			if manager and manager.GetOpenMenu then return manager:GetOpenMenu() ~= nil end
+			local list = _G.DropDownList1
+			return list and list:IsShown() or false
+		end)
+		return ok and Text(open) or "unknown"
+	end
 	local function Under()
 		local names = {}
 		-- (GetMouseFoci gives a list: wrapped again, it read "nil", the first run.)
@@ -3602,35 +3602,38 @@ do
 		run.clock = run.clock + elapsed
 		local setup = SETUPS[run.at]
 		local rect = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState().rect or ""
-		if run.phase == "wantOther" and not setup[3] then
-			-- (Nothing targeted: wait for the frame to fade and park, 8 s at most.)
-			if UnitExists("target") then run.clock = 0 return end
-			if not rect:find("parked", 1, true) and run.clock < 8 then return end
-			run.phase, run.clock, run.clicked = "wantClick", 0, nil
-			Write(("%s: nothing targeted, our button at %s, asking"):format(setup[1], Text(rect)))
-			Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, setup[1]),
-				"HOVER WHERE YOUR PLAYER FRAME IS, LEFT-CLICK it as soon as it shows")
-		elseif run.phase == "wantOther" then
+		if run.phase == "wantOther" then
 			if not Other() then run.clock = 0 return end
 			if run.clock < 1 then return end
-			run.phase, run.clock, run.clicked = "wantClick", 0, nil
-			Write(("%s: target %s, asking; under the mouse now: %s"):format(SETUPS[run.at][1], Text(UnitName("target")),
-				Under()))
-			Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, SETUPS[run.at][1]), "LEFT-CLICK YOUR PLAYER FRAME, once, as soon as it shows")
+			run.phase, run.clock, run.down, run.before = "wantClick", 0, nil, UnitName("target")
+			Write(("%s: target %s, our button at %s, under the mouse %s, asking"):format(setup[1], Text(run.before),
+				Text(rect), Under()))
+			Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, setup[1]), setup[2] == "right"
+				and "RIGHT-CLICK YOUR PLAYER FRAME (your menu should open)" or "LEFT-CLICK YOUR PLAYER FRAME")
 		elseif run.phase == "wantClick" then
-			if not run.clicked then
-				if Self() or run.mouseDown then run.clicked = run.clock end
-				if setup[3] and not UnitExists("target") then run.clicked = run.clock end
+			if not run.down then
+				if Self() then run.down = { who = "game", at = run.clock } end
 				return
 			end
-			if run.clock - run.clicked < 1 then return end
-			run.mouseDown = nil
-			local result = Self() and "you (FAIL)" or UnitExists("target") and ("other: " .. Text(UnitName("target")))
-				or (setup[3] and "cleared (PASS)" or "still nothing (PASS)")
-			run.verdicts[#run.verdicts + 1] = SETUPS[run.at][1] .. " " .. result
-			Write(("%s: result %s"):format(SETUPS[run.at][1], result))
+			if run.clock - run.down.at < 1.5 then return end
+			local result
+			if setup[2] == "right" then
+				local kept = Other() and Text(UnitName("target")) == Text(run.before)
+				result = ("%s: on %s, target kept %s, menu open %s"):format(
+					run.down.who == "ours" and kept and "PASS" or "FAIL", run.down.who, Text(kept), MenuOpen())
+			else
+				result = (Self() and "FAIL: you" or UnitExists("target") and "FAIL: still " .. Text(UnitName("target"))
+					or "PASS: cleared") .. ", on " .. run.down.who
+			end
+			run.verdicts[#run.verdicts + 1] = setup[1] .. " " .. result
+			Write(("%s: %s"):format(setup[1], result))
 			run.phase = "between"
-			C_Timer.After(0.5, function() if run then Next() end end)
+			if setup[2] == "right" then
+				Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, setup[1]), "CLOSE THE MENU (Esc)")
+				C_Timer.After(2.5, function() if run then Next() end end)
+			else
+				C_Timer.After(0.5, function() if run then Next() end end)
+			end
 		end
 	end
 	function Next()
@@ -3643,12 +3646,9 @@ do
 			return
 		end
 		if InCombatLockdown() then return End("a fight started") end
-		setup[2](run.button)
-		Write(("setup %s: %s"):format(setup[1], Settings(run.button)))
+		Write(("step %s: %s"):format(setup[1], Settings(run.button)))
 		run.phase = "wantOther"
-		Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, setup[1]), setup[3]
-			and "TARGET ANY NPC OR CREATURE (Tab or click it)"
-			or "CLEAR YOUR TARGET (Esc), mouse off your frame, WAIT for the next box")
+		Box(("Self clicks %d/%d: %s"):format(run.at, #SETUPS, setup[1]), "TARGET ANY NPC OR CREATURE (Tab or click it)")
 	end
 	local hooked
 	function ns.ShoulderSelfClicks()
@@ -3671,7 +3671,9 @@ do
 			local function Watch(frame, label)
 				for _, script in ipairs({ "OnMouseDown", "OnMouseUp" }) do
 					pcall(frame.HookScript, frame, script, function(_, mouse)
-						if run and script == "OnMouseDown" then run.mouseDown = true end
+						if run and script == "OnMouseDown" and run.phase == "wantClick" and not run.down then
+							run.down = { who = label == "ours" and "ours" or "PlayerFrame", mouse = mouse, at = run.clock }
+						end
 						if run then Write(("%s %s %s, target %s, our button at %s"):format(label, script, Text(mouse),
 							Self() and "you" or UnitExists("target") and "other" or "none",
 							Text(ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState().rect))) end

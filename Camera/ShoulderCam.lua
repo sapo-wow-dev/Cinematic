@@ -1305,8 +1305,12 @@ gameEsc.Sync = SyncGameEscape -- (its PLAYER_REGEN_ENABLED, above)
 -- With nothing targeted, heals and buffs land on you (auto self-cast: the
 -- fakeself run, Thorns, 2026-11-20). The button sits over your player frame,
 -- pinned to the screen (hung on it, it'd lock it in fights: protected anchor),
--- lets other clicks through to it (your menu on right-click), and counts as
--- your frame for a hover (ns.hoverStandIn, Frames.lua). Keys and the button
+-- opens your menu itself on a right-click, and counts as your frame for a
+-- hover (ns.hoverStandIn, Frames.lua). (It let the right-click through to your
+-- frame till 2026-11-20: your frame is toplevel, so that click brought it in
+-- front of the button, and every left-click after went to it and selected
+-- you: "right click the panel and then left click the frame it doesn't work",
+-- user. No click reaches your frame now.) Keys and the button
 -- change out of fights only: what's set as one starts holds till it ends.
 -- Not with Clique (it owns clicks on unit frames): the keys only then.
 do
@@ -1314,10 +1318,9 @@ do
 	fake:SetAttribute("*type1", "macro")
 	fake:SetAttribute("*macrotext1", "/cleartarget")
 	fake:SetAttribute("unit", "player")
-	fake:SetAttribute("*type2", "togglemenu") -- (if the right button can't pass through)
+	fake:SetAttribute("*type2", "togglemenu") -- (your menu, as your frame's right-click)
 	fake:Hide()
-	local passThrough = fake.SetPassThroughButtons
-		and pcall(fake.SetPassThroughButtons, fake, "RightButton", "MiddleButton", "Button4", "Button5") or false
+	local passThrough = false -- (ns.ShoulderFakeSelfState: none since 2026-11-20, above)
 	local state = { want = false, rect = "", keys = "", why = "off" }
 	local ownChangeAt = -math.huge
 	local IsLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or _G.IsAddOnLoaded
@@ -1445,8 +1448,6 @@ do
 		elseif event == "PLAYER_LOGIN" then
 			-- (On key down or up as the game's action buttons are, not both: it'd go twice.)
 			fake:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "AnyDown" or "AnyUp")
-			ns.Log("shoulder", ("selecting yourself: other clicks pass through to your frame: %s"):format(
-				tostring(passThrough)))
 		elseif event == "UPDATE_BINDINGS" then
 			-- (Ours fire it too: only yours, a key bound again, counts.)
 			if GetTime() - ownChangeAt > 0.5 then state.dirty = true end
