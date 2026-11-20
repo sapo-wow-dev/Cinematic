@@ -3641,7 +3641,15 @@ do
 			Self() and "you" or UnitExists("target") and Text(UnitName("target")) or "none", run.right.offset, MenuOpen()))
 	end
 	local function OnMouseDown(button)
-		if run and run.phase == "wantRight" and button == "RightButton" and not run.right then return OnRightClick() end
+		if run and run.phase == "wantRight" and button == "RightButton" and not run.right then
+			local stand = Stand()
+			if not (stand and stand:IsShown()) then
+				Write(("right-click with the stand-in down (target %s): not counted; under the mouse %s"):format(
+					Self() and "you" or UnitExists("target") and Text(UnitName("target")) or "none", Under()))
+				return
+			end
+			return OnRightClick()
+		end
 		if not (run and run.phase == "wantClick" and button == "LeftButton") or run.click then return end
 		local scale = UIParent:GetEffectiveScale()
 		local x, y = GetCursorPosition()
@@ -3718,7 +3726,16 @@ do
 			run.phase, run.clock = "wantRight", 0
 			Box("Self where: right-click", "RIGHT-CLICK THE TARGET FRAME OF YOU")
 		elseif run.phase == "wantRight" then
-			if not run.right then return end
+			if not run.right then
+				local stand = Stand()
+				if not (stand and stand:IsShown()) then
+					Write(("the stand-in went down before the right-click: target %s"):format(
+						Self() and "you" or UnitExists("target") and Text(UnitName("target")) or "none"))
+					run.phase, run.clock = "wantStand", 0
+					Box("Self where", "SELECT YOURSELF AGAIN (key or click your frame), then RIGHT-CLICK the target frame of you")
+				end
+				return
+			end
 			if run.clock - run.right.at < 1.5 then return end
 			local menu, you = MenuOpen(), Self()
 			local r = run.right
@@ -3733,12 +3750,43 @@ do
 			run.verdicts[#run.verdicts + 1] = ("right-click %s (%s; stand-in was up %s; offset %.2f -> %.2f)"):format(
 				verdict, where, Text(r.standUp), r.offset, Offset())
 			Write(run.verdicts[#run.verdicts])
+			-- (Fight mode: then away again, mid-fight, by the game's secure code.)
+			if run.fight then
+				run.phase, run.clock = "wantAgain", 0
+				Box("Self where: in the fight", "CLOSE THE MENU (Esc), then SELECT YOURSELF AGAIN (key or click your frame)")
+				return
+			end
 			End("done")
 			ns.PadTestBox("Self where run done", "CLOSE ANY MENU (Esc), /reload, then say check log", 0.3, 1, 0.3)
 			C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+		elseif run.phase == "wantFight" then
+			if not InCombatLockdown() then run.clock = 0 return end
+			if run.clock < 1 then return end
+			Write("in the fight: " .. State())
+			run.phase, run.clock = "wantStand", 0
+			Box("Self where: in the fight", "PRESS YOUR TARGET SELF KEY, or LEFT-CLICK YOUR PLAYER FRAME")
+		elseif run.phase == "wantAgain" then
+			local stand = Stand()
+			local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+			local standUp = stand and stand:IsShown() or false
+			if standUp and run.clock < 20 then return end
+			if not run.againAt then run.againAt = run.clock end
+			if run.clock - run.againAt < 1 then return end
+			local menuUp = menu and menu:IsShown() or false
+			local fighting = InCombatLockdown() and true or false
+			run.verdicts[#run.verdicts + 1] = ("away again %s (stand-in %s, its menu button %s, still in the fight %s)"):format(
+				(not standUp and not menuUp and fighting) and "PASS" or (not fighting and "UNSURE: the fight ended") or "FAIL",
+				standUp and "still up" or "down", menuUp and "still up" or "away", Text(fighting))
+			Write(run.verdicts[#run.verdicts])
+			End("done")
+			ns.PadTestBox("Self where run done", "/reload, then say check log", 0.3, 1, 0.3)
+			C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
 		end
 	end
-	function ns.ShoulderSelfWhere()
+	-- mode: "fight" for the right-click in a fight (selfwhere fight): no
+	-- turning the option off and on (not allowed in fights), no left-clicks;
+	-- you start a fight, select yourself, right-click, select yourself again.
+	function ns.ShoulderSelfWhere(mode)
 		if run then
 			End("stopped")
 			ns.PadTestBoxHide()
@@ -3748,15 +3796,32 @@ do
 		if not ns.Setting("shoulderCam") then return ns.Print("shoulder selfwhere: turn on the Shoulder Cam first") end
 		ns.db.shoulderSelfWhere = {}
 		run = { frame = CreateFrame("Frame"), began = GetTime(), clock = 0, verdicts = {}, phase = "off", n = 1,
-			yours = ns.db.shoulderCamFakeSelf }
+			yours = ns.db.shoulderCamFakeSelf, fight = mode == "fight" }
 		Write(("start | %s | %s | your option %s | CineMode %s | Settings open %s"):format(
 			ns.isRetail and "retail" or "Forever", Who(), Text(run.yours), Text(ns.lastCinematic and true or false),
 			Text(type(_G.SettingsPanel) == "table" and _G.SettingsPanel:IsShown())))
 		Write("before: " .. State())
-		ns.db.shoulderCamFakeSelf = false
-		Write("option off")
+		if run.fight then
+			ns.db.shoulderCamFakeSelf = true
+			run.phase = "wantFight"
+			Write("fight mode: the option on, waiting for a fight")
+		else
+			ns.db.shoulderCamFakeSelf = false
+			Write("option off")
+		end
 		run.frame:RegisterEvent("GLOBAL_MOUSE_DOWN")
-		run.frame:SetScript("OnEvent", function(_, _, button) OnMouseDown(button) end)
+		run.frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+		run.frame:SetScript("OnEvent", function(_, event, button)
+			if event == "PLAYER_TARGET_CHANGED" then
+				-- (Who's targeted now, and whether the mouse was on something: a
+				-- fight's mob can be targeted for you, the first fight run.)
+				if run then Write(("target changed: %s; in a fight %s, under the mouse %s"):format(
+					Self() and "you" or UnitExists("target") and Text(UnitName("target")) or "none",
+					Text(InCombatLockdown()), Under())) end
+				return
+			end
+			OnMouseDown(button)
+		end)
 		run.frame:SetScript("OnUpdate", Tick)
 		-- (Whether the menu button's click ran at all: the first run's right-click
 		-- was on it and opened no menu.)
@@ -3767,6 +3832,11 @@ do
 				if run then Write(("menu button's click ran: %s %s, menu open %s"):format(Text(button),
 					down and "down" or "up", MenuOpen())) end
 			end)
+		end
+		if run.fight then
+			Box("Self where: fight", "START A FIGHT (attack a mob or a training dummy)")
+			ns.Print("shoulder selfwhere fight: follow the box; type it again to stop")
+			return
 		end
 		Box("Self where", "hands off: turning the option off and on again")
 		ns.Print("shoulder selfwhere: follow the box, three clicks then a right-click; type it again to stop")
@@ -5432,7 +5502,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "selfclicks" then ns.ShoulderSelfClicks()
 	elseif what == "standin" then ns.ShoulderStandIn()
 	elseif what == "selfframe" then ns.ShoulderSelfFrame()
-	elseif what == "selfwhere" then ns.ShoulderSelfWhere()
+	elseif what == "selfwhere" then ns.ShoulderSelfWhere(rest)
 	elseif what == "today" then ns.ShoulderToday(rest)
 	elseif what == "profiletest" then ns.ShoulderProfileTest()
 	elseif what == "on" then Set("shoulderCam", true)
