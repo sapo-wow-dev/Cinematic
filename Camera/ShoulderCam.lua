@@ -1839,6 +1839,50 @@ do
 			end
 		end
 	end
+	-- Its time left, as the game's target frame of you shows it: a swirl, set
+	-- from the game's icon's own end time and length (SetCooldownFromExpiration
+	-- Time takes the game's values as they are: the durations probe, both
+	-- clients, 2026-11-20, drew it in fights). Where the game won't let it (a
+	-- buff's times hidden: one gained in a fight), the icon's countdown text
+	-- instead, copied as it is. The game's duration object can't be had in a
+	-- fight ("Auras cannot be accessed when secret while tainted"). A buff with
+	-- no time (its length 0) has neither. Set again only when its icon or its
+	-- times change: set each look, the swirl would start over.
+	local TIME_TEXT_SCALE = 0.75
+	local function Timer(copy, button)
+		local info = type(button.buttonInfo) == "table" and button.buttonInfo or nil
+		local ends, length = info and info.expirationTime, info and info.duration
+		local hidden = issecretvalue and (issecretvalue(ends) or issecretvalue(length)) or false
+		local timed = hidden or (type(ends) == "number" and ends > 0 and type(length) == "number" and length > 0)
+		local key = hidden and "hidden" or (timed and (ends .. "/" .. length) or "none")
+		if copy.timerOf == button and copy.timerKey == key then
+			if copy.timeText:IsShown() then pcall(function() copy.timeText:SetText(button.Duration:GetText()) end) end
+			return
+		end
+		copy.timerOf, copy.timerKey = button, key
+		copy.timeText:Hide()
+		if not timed then
+			copy.Swirl:Hide()
+			copy.timer = "none"
+			return
+		end
+		local ok = copy.Swirl.SetCooldownFromExpirationTime
+			and pcall(copy.Swirl.SetCooldownFromExpirationTime, copy.Swirl, ends, length)
+		if ok then
+			copy.Swirl:Show()
+			copy.timer = "swirl"
+			return
+		end
+		copy.Swirl:Hide()
+		local text = type(button.Duration) == "table" and button.Duration
+		if text then
+			copy.timeText:Show()
+			pcall(function() copy.timeText:SetText(text:GetText()) end)
+			copy.timer = "text"
+		else
+			copy.timer = "none"
+		end
+	end
 	local function CopyIcon(copy, button)
 		pcall(function() copy.Icon:SetTexture(button.Icon:GetTexture()) end)
 		pcall(function() copy.Icon:SetTexCoord(button.Icon:GetTexCoord()) end)
@@ -1853,6 +1897,7 @@ do
 			pcall(function() copy.Border:SetVertexColor(border:GetVertexColor()) end)
 		end
 		pcall(function() copy:SetAlpha(button:GetAlpha()) end)
+		Timer(copy, button)
 	end
 	local function AuraCopy(i)
 		stand.auras = stand.auras or {}
@@ -1867,6 +1912,17 @@ do
 			copy.Border:SetPoint("BOTTOMRIGHT", 1, -1)
 			copy.Count = copy:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
 			copy.Count:SetPoint("BOTTOMRIGHT", 2, -1)
+			-- (The swirl without its own numbers, as the game's target frame's.)
+			copy.Swirl = CreateFrame("Cooldown", nil, copy, "CooldownFrameTemplate")
+			copy.Swirl:SetAllPoints()
+			if copy.Swirl.SetHideCountdownNumbers then copy.Swirl:SetHideCountdownNumbers(true) end
+			copy.Swirl:Hide()
+			copy.timeText = copy:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+			copy.timeText:SetPoint("BOTTOM", copy, "BOTTOM", 0, 1)
+			-- (Scaled down, not a new size: SetFont would lose the Cyrillic font.
+			-- Full size, "55 m" ran into the next icon's text, 2026-11-20.)
+			if copy.timeText.SetTextScale then copy.timeText:SetTextScale(TIME_TEXT_SCALE) end
+			copy.timeText:Hide()
 			stand.auras[i] = copy
 		end
 		return copy
@@ -1930,6 +1986,15 @@ do
 		ShownIcons(_G.BuffFrame, buffs)
 		ShownIcons(_G.DebuffFrame, debuffs)
 		return stand.auraCount or 0, math.min(AURA_MOST, #buffs + #debuffs)
+	end
+	-- (The tests: how many of its icons show their time as a swirl, as text, or not at all.)
+	function ns.ShoulderSelfTargetTimers()
+		local count = { swirl = 0, text = 0, none = 0 }
+		for i = 1, stand.auraCount or 0 do
+			local kind = stand.auras[i] and stand.auras[i].timer or "none"
+			count[kind] = (count[kind] or 0) + 1
+		end
+		return count.swirl, count.text, count.none
 	end
 	-- Your menu on a right-click of it, as the game's target frame of you has
 	-- ("what right click is supposed to look like", user 2026-11-20). The

@@ -3575,38 +3575,32 @@ do
 			if run then Write(("screenshot %s at %s: %s"):format(what, date("%m%d%y_%H%M%S"), ok and "taken" or "failed")) end
 		end)
 	end
-	-- (A timed buff on the game's buff icons: its Duration text shown. Out of a
-	-- fight it's read plainly; in one it's the same button, kept.)
-	local function TimedButton(accept)
-		local icons = type(_G.BuffFrame) == "table" and _G.BuffFrame.auraFrames
-		if type(icons) ~= "table" then return nil end
-		for i = 1, #icons do
-			local button = icons[i]
-			local ok, shown = pcall(function() return button:IsShown() and button.Duration and button.Duration:IsShown() end)
-			local info = type(button.buttonInfo) == "table" and button.buttonInfo
-			-- (Any timed one: an end time, its countdown shown. On retail the info has
-			-- no length or aura id (the first runs): those are looked up, Resolve.
-			-- Not a weapon enchant (auraType TempEnchant, hidden unless expanded):
-			-- the second retail run took one, with nothing to look up.)
-			if ok and shown == true and info and type(button.Icon) == "table" and info.expirationTime ~= nil
-				and info.auraType ~= "TempEnchant" and not info.hideUnlessExpanded
-				and (not accept or accept(info)) then
-				return button
-			end
-		end
-	end
-	-- (Out of a fight: the buff behind the icon, by its end time, in the game's
-	-- aura list (plain then): its length and aura id, kept for the fight.)
-	local function Resolve(info)
+	local IconFor
+	-- (The first with a length whose icon is on your buff bar: in a fight its
+	-- live end time, secret, is what's tried; else the first with a length.)
+	local function FirstTimedAura()
 		local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
-		local wanted = info.expirationTime
-		if not get or Secret(wanted) or type(wanted) ~= "number" then return nil end
+		if not get then return nil end
+		local first
 		for i = 1, 40 do
 			local ok, data = pcall(get, "player", i, "HELPFUL")
 			if not (ok and type(data) == "table") then break end
-			local ends = data.expirationTime
-			if type(ends) == "number" and not Secret(ends) and math.abs(ends - wanted) < 0.05 then
-				return data.duration, data.auraInstanceID, data.name
+			local length, ends = data.duration, data.expirationTime
+			if type(length) == "number" and not Secret(length) and length > 0 and type(ends) == "number"
+				and not Secret(ends) and ends > 0 then
+				if IconFor(ends) then return data end
+				first = first or data
+			end
+		end
+		return first
+	end
+	function IconFor(ends)
+		local icons = type(_G.BuffFrame) == "table" and _G.BuffFrame.auraFrames
+		for i = 1, type(icons) == "table" and #icons or 0 do
+			local info = type(icons[i].buttonInfo) == "table" and icons[i].buttonInfo
+			local at = info and info.expirationTime
+			if type(at) == "number" and not Secret(at) and math.abs(at - ends) < 0.05 and type(icons[i].Icon) == "table" then
+				return icons[i]
 			end
 		end
 	end
@@ -3645,15 +3639,17 @@ do
 	-- One look at all three: set from the game's button now.
 	local function Apply(where)
 		local button = run.button
-		local raw = button.buttonInfo
-		-- (The live end time; the length and id from the info, else the ones kept.)
+		local raw = button and type(button.buttonInfo) == "table" and button.buttonInfo or {}
+		-- (The icon's live end time, secret in a fight; else the one kept. The
+		-- length and id from the aura list, kept from before the fight.)
 		local info = { expirationTime = raw.expirationTime, duration = raw.duration, auraInstanceID = raw.auraInstanceID }
+		if info.expirationTime == nil then info.expirationTime = run.ends end
 		if info.duration == nil then info.duration = run.duration end
 		if info.auraInstanceID == nil then info.auraInstanceID = run.auraID end
 		local result = run.results[where]
 		for _, key in ipairs({ "A", "B", "C" }) do
 			local f = run.icons[key]
-			pcall(function() f.Icon:SetTexture(button.Icon:GetTexture()) end)
+			if button then pcall(function() f.Icon:SetTexture(button.Icon:GetTexture()) end) end
 			f:Show()
 			if key == "A" then
 				local swirl = f.Swirl
@@ -3685,9 +3681,11 @@ do
 						result.B = false
 					end
 				end
-			else
+			elseif button then
 				local ok = Try("C " .. where, function() f.Text:SetText(button.Duration:GetText()) end)
 				result.C = ok and (result.C ~= false) or false
+			else
+				result.C = "missing"
 			end
 		end
 	end
@@ -3715,33 +3713,43 @@ do
 		for _, key in ipairs({ "A", "B", "C" }) do
 			local v = r[key]
 			Verdict(("%s %s %s: %s"):format(key, LABELS[key], where, v == true and "PASS (no error; see the screenshot)"
-				or v == "missing" and "MISSING (no such call on this client)" or "FAIL (it errored: see above)"))
+				or v == "missing" and "MISSING (no such call here, or no icon to copy)" or "FAIL (it errored: see above)"))
 		end
 	end
 	local function Tick(_, elapsed)
 		run.clock, run.tick = run.clock + elapsed, run.tick + elapsed
 		if run.phase == "pick" then
-			-- (First one the aura list knows, else any timed one.)
-			local button = TimedButton(function(info) return Resolve(info) ~= nil end) or TimedButton()
-			if not button then
+			-- (Every buff icon, once: what retail's info holds; the first two
+			-- runs guessed wrong about it, twice.)
+			if not run.iconsLogged then
+				run.iconsLogged = true
+				local icons = type(_G.BuffFrame) == "table" and _G.BuffFrame.auraFrames
+				for i = 1, type(icons) == "table" and #icons or 0 do
+					local button = icons[i]
+					local ok, shown = pcall(function() return button:IsShown() end)
+					if ok and shown == true then
+						local okD, dShown = pcall(function() return button.Duration and button.Duration:IsShown() end)
+						Write(("icon %d: countdown shown %s, info %s"):format(i, Text(okD and dShown),
+							type(button.buttonInfo) == "table" and Keys(button.buttonInfo) or "none"))
+					end
+				end
+			end
+			-- (The buff from the game's aura list, plain out of a fight: the
+			-- first with a length.)
+			local aura = FirstTimedAura()
+			if not aura then
 				if run.clock > 30 then
-					Verdict("pick SKIPPED: no buff with a timer in 30 s")
+					Verdict("pick SKIPPED: no buff with a length in your aura list in 30 s")
 					return End("no timed buff")
 				end
 				return
 			end
-			run.button = button
-			local info = button.buttonInfo
-			Write("the icon's info: " .. Keys(info))
-			local length, id, name = Resolve(info)
-			run.duration, run.auraID = info.duration or length, info.auraInstanceID or id
-			Write(("timed buff %s: end %s, length %s (%s), aura id %s (%s), its text %s"):format(Show(name),
-				Show(info.expirationTime), Show(run.duration), info.duration ~= nil and "the icon's" or "looked up",
-				Show(run.auraID), info.auraInstanceID ~= nil and "the icon's" or "looked up",
-				Show(button.Duration and button.Duration:GetText())))
-			if run.duration == nil or run.auraID == nil then
-				Write("couldn't find its length or aura id: A and B will lack them")
-			end
+			run.duration, run.auraID, run.ends = aura.duration, aura.auraInstanceID, aura.expirationTime
+			run.button = IconFor(aura.expirationTime)
+			Write(("timed buff %s: end %s, length %s, aura id %s; its icon on your buff bar %s"):format(Show(aura.name),
+				Show(aura.expirationTime), Show(aura.duration), Show(aura.auraInstanceID),
+				run.button and ("found, its text " .. Show(run.button.Duration and run.button.Duration:GetText()))
+				or "not found (C skipped)"))
 			Write(("calls here: SetCooldownFromExpirationTime %s, SetCooldownFromDurationObject %s, GetAuraDuration %s"):format(
 				Text(run.icons.A.Swirl.SetCooldownFromExpirationTime ~= nil),
 				Text(run.icons.A.Swirl.SetCooldownFromDurationObject ~= nil),
@@ -3774,8 +3782,7 @@ do
 		elseif run.phase == "wantFight" then
 			if not InCombatLockdown() then run.clock = 0 return end
 			if run.clock < 1 then return end
-			-- (The same button, its buff maybe gone: the timed one now, if any.)
-			run.button = TimedButton() or run.button
+			-- (The same icon as before the fight: kept.)
 			Write("in the fight")
 			run.phase, run.clock, run.tick = "in", 0, 1
 			Box("Durations 2/2: in a fight", "hands off: the three test icons again")
@@ -4568,8 +4575,12 @@ do
 		if not ns.ShoulderSelfTargetAuras then return end
 		local copies, game = ns.ShoulderSelfTargetAuras()
 		copies, game = tonumber(copies) or 0, tonumber(game) or 0
-		Verdict(("%s %s: %d icons under it, %d shown by the game"):format(label, copies == game and "PASS" or "FAIL",
-			copies, game))
+		-- (And their time left: a swirl, or the countdown text where the game
+		-- hides a buff's times, a buff gained in the fight.)
+		local swirls, texts, none = 0, 0, 0
+		if ns.ShoulderSelfTargetTimers then swirls, texts, none = ns.ShoulderSelfTargetTimers() end
+		Verdict(("%s %s: %d icons under it, %d shown by the game; time left: %s swirls, %s as text, %s with none"):format(
+			label, copies == game and "PASS" or "FAIL", copies, game, Text(swirls), Text(texts), Text(none)))
 	end
 	-- (A right-click while the fight step waits for one: counted only on the
 	-- stand-in while it's up.)
@@ -4634,8 +4645,10 @@ do
 			if ns.ShoulderSelfTargetAuras then
 				local copies, game = ns.ShoulderSelfTargetAuras()
 				copies, game = tonumber(copies) or 0, tonumber(game) or 0
-				Verdict(("buffs %s: %d icons under it, %d shown by the game"):format(copies == game and "PASS" or "FAIL",
-					copies, game))
+				local swirls, texts, none = 0, 0, 0
+				if ns.ShoulderSelfTargetTimers then swirls, texts, none = ns.ShoulderSelfTargetTimers() end
+				Verdict(("buffs %s: %d icons under it, %d shown by the game; time left: %s swirls, %s as text, %s with none"):format(
+					copies == game and "PASS" or "FAIL", copies, game, Text(swirls), Text(texts), Text(none)))
 			end
 			Verdict(("up %s: target %s, stand-in %s"):format(not UnitExists("target") and (seen or 0) > 0.5 and "PASS" or "FAIL",
 				UnitExists("target") and Text(UnitName("target")) or "cleared",
@@ -4724,7 +4737,9 @@ do
 			if run.clock < 1 then return end
 			Write("in the fight")
 			run.phase, run.clock = "wantFightSelect", 0
-			Box("Self frame 4/6: a fight", "PRESS YOUR TARGET SELF KEY, or LEFT-CLICK YOUR PLAYER FRAME")
+			-- (A buff gained in the fight: its times can be hidden, the case its
+			-- timer falls back to text for.)
+			Box("Self frame 4/6: a fight", "CAST A BUFF WITH A TIMER on yourself, THEN LEFT-CLICK YOUR PLAYER FRAME")
 		elseif run.phase == "wantFightSelect" then
 			if not (stand and stand:IsShown()) then run.clock = 0 return end
 			if run.clock < 1 then return end
