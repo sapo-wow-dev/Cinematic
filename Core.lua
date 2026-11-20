@@ -3323,6 +3323,35 @@ function ns.UseOurCVar(cvar)
 	if ns.ApplyProfileSwitches then ns.ApplyProfileSwitches() end
 	return true
 end
+
+-- The Game Settings page's Yours column: your own value for a setting, set
+-- there. While a set holds it (ours written, yours saved to put back), the
+-- saved one becomes this: written now it would read as your own change and
+-- let go of the hold early. Else written now (kept as yours stays kept).
+-- False in a fight for plate and name settings, or for a setting this
+-- client doesn't have.
+function ns.SetYourCVar(cvar, value)
+	if SecureCVar(cvar) and InCombatLockdown() then
+		return false
+	end
+	if GetCVar(cvar) == nil or value == nil then
+		return false
+	end
+	value = tostring(value)
+	local leftAlone = ns.db.cvarsLeftAlone and ns.db.cvarsLeftAlone[cvar]
+	if not leftAlone and ns.CVarHolder(cvar) and (heldCVars[cvar:lower()] or ns.db.savedCVars[cvar] ~= nil) then
+		ns.db.savedCVars[cvar] = value
+		ns.Log("cvar", ("%s: yours set to %s (put back when it's let go), from the Game Settings page"):format(cvar,
+			value))
+		return true
+	end
+	ns.db.savedCVars[cvar] = nil
+	if not SameValue(GetCVar(cvar), value) then
+		ns.Log("cvar", ("%s: yours set to %s, from the Game Settings page"):format(cvar, value))
+		SetCVar(cvar, value)
+	end
+	return true
+end
 end
 
 -- One camera at a time. Our cameras that move the view on their own (Camera.lua's

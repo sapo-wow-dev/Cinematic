@@ -4461,6 +4461,32 @@ local PLATE_ROW_PARENT = { EnemyMinions = "Enemies", EnemyMinor = "EnemyNPCs", N
 local UNIT_ROW_KIND = { MyPet = "FriendlyMinions", GroupMembers = "Friends", GroupMinions = "FriendlyMinions" }
 local pendingPlateRows = {}
 
+-- The Game Settings page: the HUD row that sets your own value of a name or
+-- plate setting (SetOwnValue wrote it: cvarsOurs), as its id (name:<row>,
+-- plate:<row>) and its label; nil when no row does. Yours there follows the
+-- row, so the page links to it instead of setting it.
+function ns.CVarRowOwner(cvar)
+	local keep = ns.chardb or ns.db
+	if not (keep and keep.cvarsOurs and keep.cvarsOurs[cvar] ~= nil) then
+		return nil
+	end
+	if cvar == NPC_ALL then
+		return ns.NameRuleKey("NeutralNPCs"), L["Neutral NPCs"]
+	end
+	for _, group in ipairs(ns.NAME_GROUPS) do
+		for _, each in ipairs(group.cvars) do
+			if each == cvar then return ns.NameRuleKey(group.key), group.label end
+		end
+	end
+	for _, kind in ipairs({ { "Enemies", "Enemy players" }, { "EnemyNPCs", "Enemy NPCs" },
+		{ "EnemyMinions", "Minions" }, { "EnemyMinor", "Minor enemies" }, { "Friends", "Friendly players" },
+		{ "FriendlyNPCs", "Friendly NPCs" }, { "FriendlyMinions", "Minions" } }) do
+		for _, each in ipairs(PLATE_KIND_CVARS[kind[1]]) do
+			if each == cvar then return "plate:" .. kind[1], L[kind[2]] end
+		end
+	end
+end
+
 -- Whether the player's own settings show a kind's plates (out of fights:
 -- with "Always show nameplates" off they show only in fights). Settings this
 -- client doesn't have count as on.

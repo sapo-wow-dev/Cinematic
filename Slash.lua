@@ -1928,6 +1928,10 @@ local function HandleSlash(msg)
 		-- (Dev copy: Combat Text Style keeps the game's damage numbers through a reset, CombatTextKeepTest.lua.)
 		if ns.CombatTextKeepTest then ns.CombatTextKeepTest()
 		else ns.Print("/cine debug ctkeep is in the dev copy only.") end
+	elseif cmd == "debug" and arg == "gsedit" then
+		-- (Dev copy: Help > Game Settings sets Yours, filters and links, GameSettingsEditTest.lua.)
+		if ns.GameSettingsEditTest then ns.GameSettingsEditTest()
+		else ns.Print("/cine debug gsedit is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "fightopen" then
 		-- (Dev copy: our settings opened in a real fight, then Escape > Options in the next, BlockedLineTest.lua.)
 		if ns.FightOpenTest then ns.FightOpenTest()

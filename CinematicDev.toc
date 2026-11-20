@@ -248,6 +248,7 @@ Dev\LookDockTest.lua
 Dev\BlockedLineTest.lua
 Dev\SecretErrorTest.lua
 Dev\CombatTextKeepTest.lua
+Dev\GameSettingsEditTest.lua
 Dev\DetachedFadeTest.lua
 Dev\XpRelogTest.lua
 Dev\ListFoldTest.lua

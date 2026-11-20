@@ -2125,9 +2125,12 @@ end
 function ns.FindSetting(query)
 	-- A setting's id (/cine find nfHealthPlayer), or a Show in row's
 	-- (/cine find row:player): straight to its control.
-	local id = type(query) == "string" and (query:match("^%s*([%w_]+)%s*$") or query:match("^%s*(row:%S+)%s*$"))
+	-- (A game setting's row on Help > Game Settings too: /cine find cvar:nameplateStyle.)
+	local id = type(query) == "string" and (query:match("^%s*([%w_]+)%s*$") or query:match("^%s*(row:%S+)%s*$")
+		or query:match("^%s*(cvar:%S+)%s*$"))
 	-- (A Nameplates row's setting too, as customMark1Size: ns.MarkRowDefault.)
-	if id and (ns.DEFAULTS[id] ~= nil or id:find("^row:") or (ns.MarkRowDefault and ns.MarkRowDefault(id) ~= nil))
+	if id and (ns.DEFAULTS[id] ~= nil or id:find("^row:") or id:find("^cvar:")
+		or (ns.MarkRowDefault and ns.MarkRowDefault(id) ~= nil))
 		and ns.OpenSettingByKey then
 		local text, pageName = ns.OpenSettingByKey(id)
 		if text then return text, pageName end
