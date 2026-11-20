@@ -1497,15 +1497,35 @@ do
 		local ok, done = pcall(texture.SetAtlas, texture, atlas)
 		return ok and done ~= false
 	end
-	local function Spot(f, region, entry)
+	-- A part where the recipe has it: false if it has no place. The recipe can
+	-- mark a part hidden (retail's target frame has no level circle) or give
+	-- one no place (a part read only by its side): hidden here too, or put at
+	-- the built-in recipe's place. (Every part was taken to have one: the
+	-- stand-in failed to build on retail and its loop was turned off, 2026-11-20.)
+	-- Your power bar shows whatever the recipe says: its "hidden" is a target's
+	-- with no power.
+	local function Placed(e)
+		return type(e) == "table" and type(e.x) == "number" and type(e.y) == "number" and type(e.w) == "number"
+			and type(e.h) == "number"
+	end
+	local function Spot(f, region, entry, role)
+		if type(entry) == "table" and entry.hidden and role ~= "power" and role ~= "powerMask" then
+			region:Hide()
+			return false
+		end
+		local base = role and ns.UNIT_FRAME_RECIPES and ns.UNIT_FRAME_RECIPES.TARGET
+		local spot = Placed(entry) and entry or (base and Placed(base[role]) and base[role]) or nil
+		if not spot then return false end
 		region:ClearAllPoints()
-		region:SetPoint("TOPLEFT", f, "TOPLEFT", entry.x, -entry.y)
-		region:SetSize(entry.w, entry.h)
+		region:SetPoint("TOPLEFT", f, "TOPLEFT", spot.x, -spot.y)
+		region:SetSize(spot.w, spot.h)
+		if region.Show then region:Show() end
+		return true
 	end
 	-- (A bar's fill only once the bar has its texture: masking none errored and
 	-- left the stand-in half built, no name or level, the first game run.)
 	local function Mask(f, region, entry)
-		if not (region and entry and entry.atlas) then return end
+		if not (region and Placed(entry) and entry.atlas) then return end
 		local mask = f:CreateMaskTexture()
 		Spot(f, mask, entry)
 		if SetAtlas(mask, entry.atlas) then pcall(region.AddMaskTexture, region, mask) end
@@ -1531,7 +1551,7 @@ do
 		local holder = CreateFrame("Frame", nil, f)
 		holder:SetAllPoints()
 		local art = holder:CreateTexture(nil, "BACKGROUND", nil, 2)
-		Spot(f, art, recipe.art)
+		Spot(f, art, recipe.art, "art")
 		SetAtlas(art, recipe.art.atlas)
 		holder.FrameTexture = art
 		f.TargetFrameContainer = holder
@@ -1540,21 +1560,21 @@ do
 		f.TargetFrameContent = { TargetFrameContentMain = main }
 		if recipe.reaction then
 			stand.reaction = f:CreateTexture(nil, "BACKGROUND", nil, 0)
-			Spot(f, stand.reaction, recipe.reaction)
+			Spot(f, stand.reaction, recipe.reaction, "reaction")
 			SetAtlas(stand.reaction, recipe.reaction.atlas)
 			main.ReputationColor = stand.reaction
 		end
 		stand.portrait = f:CreateTexture(nil, "BACKGROUND", nil, 1)
-		Spot(f, stand.portrait, recipe.portrait)
+		Spot(f, stand.portrait, recipe.portrait, "portrait")
 		holder.PortraitMask = Mask(f, stand.portrait, recipe.portraitMask)
 		f.portrait = stand.portrait
 		stand.health = CreateFrame("StatusBar", nil, f)
-		Spot(f, stand.health, recipe.health)
+		Spot(f, stand.health, recipe.health, "health")
 		pcall(stand.health.SetStatusBarTexture, stand.health, recipe.health.atlas)
 		stand.healthMask = Mask(f, stand.health:GetStatusBarTexture(), recipe.healthMask)
 		f.healthbar = stand.health
 		stand.power = CreateFrame("StatusBar", nil, f)
-		Spot(f, stand.power, recipe.power)
+		Spot(f, stand.power, recipe.power, "power")
 		pcall(stand.power.SetStatusBarTexture, stand.power, recipe.power.atlas)
 		-- (Masked only by a mask the recipe read: a guessed one showed a strip in
 		-- the bar's middle, the first themed run 2026-11-20.)
@@ -1566,13 +1586,13 @@ do
 		local circle
 		if recipe.circle then
 			circle = top:CreateTexture(nil, "ARTWORK")
-			Spot(f, circle, recipe.circle)
+			Spot(f, circle, recipe.circle, "circle")
 			SetAtlas(circle, recipe.circle.atlas)
 			main.LevelBackgroundCircle = circle
 			stand.circle = circle
 		end
 		stand.name = top:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		Spot(f, stand.name, recipe.name)
+		Spot(f, stand.name, recipe.name, "name")
 		stand.name:SetJustifyH(recipe.name.justify or "CENTER")
 		f.name = stand.name
 		stand.level = top:CreateFontString(nil, "OVERLAY", "GameNormalNumberFont")
@@ -1598,8 +1618,8 @@ do
 			{ stand.holder and stand.holder.PortraitMask, "portraitMask" }, { stand.health, "health" },
 			{ stand.healthMask, "healthMask" }, { stand.power, "power" }, { stand.powerMask, "powerMask" },
 			{ stand.circle, "circle" }, { stand.name, "name" } }) do
-			local region, entry = pair[1], recipe[pair[2]]
-			if region and entry then Spot(f, region, entry) end
+			local region = pair[1]
+			if region then Spot(f, region, recipe[pair[2]], pair[2]) end
 		end
 		if not stand.powerMask and recipe.powerMask then
 			stand.powerMask = Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask)
@@ -1608,13 +1628,19 @@ do
 		-- widened leftward: 11 wide, "10" in this font read "...", the first
 		-- themed run; centered in the circle, Preview Match found it unlike the
 		-- game's, 2026-11-20.)
-		local level = recipe.level
+		-- (Widened round its middle when centered, retail's on the left of the
+		-- name strip: widened leftward it'd sit off the frame.)
+		local level = Placed(recipe.level) and recipe.level
+			or (ns.UNIT_FRAME_RECIPES and Placed(ns.UNIT_FRAME_RECIPES.TARGET.level) and ns.UNIT_FRAME_RECIPES.TARGET.level)
 		if level then
 			local wide = math.max(level.w, 36)
+			local justify = level.justify or "RIGHT"
+			local x = justify == "RIGHT" and level.x + level.w - wide
+				or justify == "CENTER" and level.x + level.w / 2 - wide / 2 or level.x
 			stand.level:ClearAllPoints()
-			stand.level:SetPoint("TOPLEFT", f, "TOPLEFT", level.x + level.w - wide, -level.y)
+			stand.level:SetPoint("TOPLEFT", f, "TOPLEFT", x, -level.y)
 			stand.level:SetSize(wide, level.h)
-			stand.level:SetJustifyH(level.justify or "RIGHT")
+			stand.level:SetJustifyH(justify)
 		end
 	end
 	-- (The target's power bar still the recipe's guess: after a target change,

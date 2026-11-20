@@ -3536,6 +3536,269 @@ do
 	end
 end
 
+-- durations: which way can the stand-in target frame of you (Keep the
+-- shoulder when selecting yourself) show its buffs' time left, as the game's
+-- target frame does with a swirl ("durations next?", user 2026-11-20)? In
+-- fights a buff's times are secret. Three ways, each on a test icon of its
+-- own over the middle of the screen, from one of your timed buffs (the game's
+-- buff icon's own buttonInfo):
+--   A swirl, the icon's end time and length (SetCooldownFromExpirationTime;
+--     SetCooldown(end - length) where that's missing, which can't do secrets);
+--   B swirl, the game's duration object for the buff (C_UnitAuras.
+--     GetAuraDuration + SetCooldownFromDurationObject, as the Cooldown
+--     Manager's spell swirls in Frames.lua);
+--   C the countdown text, copied from the game's buff icon (as Frames.lua's
+--     buff copies do).
+-- Out of a fight, then in one (pet tanking): each set, refreshed twice a
+-- second for 5 s, every call's error logged, what's readable back logged, a
+-- screenshot each. Into db.shoulderDurations.
+do
+	local SHOW = 5
+	local run
+	local function Write(text)
+		local lines = ns.db.shoulderDurations
+		if issecretvalue and issecretvalue(text) then text = "(a line with a secret value in it)" end
+		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Verdict(text)
+		if issecretvalue and issecretvalue(text) then text = "(a verdict with a secret value in it)" end
+		run.verdicts[#run.verdicts + 1] = text
+		Write(text)
+	end
+	local function Box(head, line) ns.PadTestBox(head, line, 1, 0.82, 0) end
+	local function Secret(v) return issecretvalue and issecretvalue(v) or false end
+	local function Show(v) return Secret(v) and "secret" or Text(v) end
+	local function Shot(what)
+		ns.PadTestBoxHide()
+		C_Timer.After(0.1, function()
+			local ok = pcall(function() Screenshot() end)
+			if run then Write(("screenshot %s at %s: %s"):format(what, date("%m%d%y_%H%M%S"), ok and "taken" or "failed")) end
+		end)
+	end
+	-- (A timed buff on the game's buff icons: its Duration text shown. Out of a
+	-- fight it's read plainly; in one it's the same button, kept.)
+	local function TimedButton(accept)
+		local icons = type(_G.BuffFrame) == "table" and _G.BuffFrame.auraFrames
+		if type(icons) ~= "table" then return nil end
+		for i = 1, #icons do
+			local button = icons[i]
+			local ok, shown = pcall(function() return button:IsShown() and button.Duration and button.Duration:IsShown() end)
+			local info = type(button.buttonInfo) == "table" and button.buttonInfo
+			-- (Any timed one: an end time, its countdown shown. On retail the info has
+			-- no length or aura id (the first runs): those are looked up, Resolve.
+			-- Not a weapon enchant (auraType TempEnchant, hidden unless expanded):
+			-- the second retail run took one, with nothing to look up.)
+			if ok and shown == true and info and type(button.Icon) == "table" and info.expirationTime ~= nil
+				and info.auraType ~= "TempEnchant" and not info.hideUnlessExpanded
+				and (not accept or accept(info)) then
+				return button
+			end
+		end
+	end
+	-- (Out of a fight: the buff behind the icon, by its end time, in the game's
+	-- aura list (plain then): its length and aura id, kept for the fight.)
+	local function Resolve(info)
+		local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
+		local wanted = info.expirationTime
+		if not get or Secret(wanted) or type(wanted) ~= "number" then return nil end
+		for i = 1, 40 do
+			local ok, data = pcall(get, "player", i, "HELPFUL")
+			if not (ok and type(data) == "table") then break end
+			local ends = data.expirationTime
+			if type(ends) == "number" and not Secret(ends) and math.abs(ends - wanted) < 0.05 then
+				return data.duration, data.auraInstanceID, data.name
+			end
+		end
+	end
+	local function Keys(t)
+		local names = {}
+		for key, value in pairs(t) do names[#names + 1] = Text(key) .. "=" .. Show(value) end
+		table.sort(names)
+		return table.concat(names, ", ")
+	end
+	local LABELS = { A = "end time + length", B = "duration object", C = "countdown text" }
+	local function MakeIcon(key, x)
+		local f = CreateFrame("Frame", nil, UIParent)
+		f:SetSize(40, 40)
+		f:SetPoint("CENTER", UIParent, "CENTER", x, 220)
+		f:SetFrameStrata("DIALOG")
+		f.Icon = f:CreateTexture(nil, "ARTWORK")
+		f.Icon:SetAllPoints()
+		f.Label = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		f.Label:SetPoint("BOTTOM", f, "TOP", 0, 4)
+		f.Label:SetText(key .. ": " .. LABELS[key])
+		if key == "C" then
+			f.Text = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			f.Text:SetPoint("TOP", f, "BOTTOM", 0, -2)
+		else
+			f.Swirl = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
+			f.Swirl:SetAllPoints()
+		end
+		f:Hide()
+		return f
+	end
+	local function Try(label, fn, ...)
+		local ok, err = pcall(fn, ...)
+		if not ok then Write(("%s: ERROR %s"):format(label, Text(err))) end
+		return ok, err
+	end
+	-- One look at all three: set from the game's button now.
+	local function Apply(where)
+		local button = run.button
+		local raw = button.buttonInfo
+		-- (The live end time; the length and id from the info, else the ones kept.)
+		local info = { expirationTime = raw.expirationTime, duration = raw.duration, auraInstanceID = raw.auraInstanceID }
+		if info.duration == nil then info.duration = run.duration end
+		if info.auraInstanceID == nil then info.auraInstanceID = run.auraID end
+		local result = run.results[where]
+		for _, key in ipairs({ "A", "B", "C" }) do
+			local f = run.icons[key]
+			pcall(function() f.Icon:SetTexture(button.Icon:GetTexture()) end)
+			f:Show()
+			if key == "A" then
+				local swirl = f.Swirl
+				if swirl.SetCooldownFromExpirationTime then
+					result.A = Try("A " .. where, swirl.SetCooldownFromExpirationTime, swirl, info.expirationTime, info.duration)
+						and (result.A ~= false) or false
+				else
+					result.A = Try("A " .. where .. " (SetCooldown)", function()
+						swirl:SetCooldown(info.expirationTime - info.duration, info.duration)
+					end) and (result.A ~= false) or false
+				end
+			elseif key == "B" then
+				local swirl = f.Swirl
+				local get = C_UnitAuras and C_UnitAuras.GetAuraDuration
+				if not (get and swirl.SetCooldownFromDurationObject) then
+					result.B = "missing"
+				else
+					-- (The id alone, as the game's usage line says; the unit and the id
+					-- if that's refused.)
+					local ok, length = pcall(get, info.auraInstanceID)
+					if not ok or length == nil then
+						Write(("B %s GetAuraDuration(id): %s"):format(where, ok and "nothing" or ("ERROR " .. Text(length))))
+						ok, length = Try("B " .. where .. " GetAuraDuration(player, id)", get, "player", info.auraInstanceID)
+					end
+					if ok and length ~= nil then
+						result.B = Try("B " .. where .. " SetCooldownFromDurationObject", swirl.SetCooldownFromDurationObject,
+							swirl, length, true) and (result.B ~= false) or false
+					else
+						result.B = false
+					end
+				end
+			else
+				local ok = Try("C " .. where, function() f.Text:SetText(button.Duration:GetText()) end)
+				result.C = ok and (result.C ~= false) or false
+			end
+		end
+	end
+	local function ReadBack(where)
+		for _, key in ipairs({ "A", "B" }) do
+			local swirl = run.icons[key].Swirl
+			local ok, start, length = pcall(swirl.GetCooldownTimes, swirl)
+			Write(("%s %s: swirl shown %s, its times %s / %s"):format(key, where, Show(swirl:IsShown()),
+				ok and Show(start) or "error", ok and Show(length) or "error"))
+		end
+		local ok, text = pcall(function() return run.icons.C.Text:GetText() end)
+		Write(("C %s: text %s"):format(where, ok and Show(text) or "error"))
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		for _, f in pairs(run.icons or {}) do f:Hide() end
+		Write("end: " .. why)
+		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
+		Log(("durations: %s, %d lines in db.shoulderDurations"):format(why, #ns.db.shoulderDurations))
+		run = nil
+	end
+	local function Judge(where)
+		local r = run.results[where]
+		for _, key in ipairs({ "A", "B", "C" }) do
+			local v = r[key]
+			Verdict(("%s %s %s: %s"):format(key, LABELS[key], where, v == true and "PASS (no error; see the screenshot)"
+				or v == "missing" and "MISSING (no such call on this client)" or "FAIL (it errored: see above)"))
+		end
+	end
+	local function Tick(_, elapsed)
+		run.clock, run.tick = run.clock + elapsed, run.tick + elapsed
+		if run.phase == "pick" then
+			-- (First one the aura list knows, else any timed one.)
+			local button = TimedButton(function(info) return Resolve(info) ~= nil end) or TimedButton()
+			if not button then
+				if run.clock > 30 then
+					Verdict("pick SKIPPED: no buff with a timer in 30 s")
+					return End("no timed buff")
+				end
+				return
+			end
+			run.button = button
+			local info = button.buttonInfo
+			Write("the icon's info: " .. Keys(info))
+			local length, id, name = Resolve(info)
+			run.duration, run.auraID = info.duration or length, info.auraInstanceID or id
+			Write(("timed buff %s: end %s, length %s (%s), aura id %s (%s), its text %s"):format(Show(name),
+				Show(info.expirationTime), Show(run.duration), info.duration ~= nil and "the icon's" or "looked up",
+				Show(run.auraID), info.auraInstanceID ~= nil and "the icon's" or "looked up",
+				Show(button.Duration and button.Duration:GetText())))
+			if run.duration == nil or run.auraID == nil then
+				Write("couldn't find its length or aura id: A and B will lack them")
+			end
+			Write(("calls here: SetCooldownFromExpirationTime %s, SetCooldownFromDurationObject %s, GetAuraDuration %s"):format(
+				Text(run.icons.A.Swirl.SetCooldownFromExpirationTime ~= nil),
+				Text(run.icons.A.Swirl.SetCooldownFromDurationObject ~= nil),
+				Text(C_UnitAuras and C_UnitAuras.GetAuraDuration ~= nil)))
+			run.phase, run.clock, run.tick = "out", 0, 1
+			Box("Durations 1/2: out of a fight", "hands off: three test icons over the middle")
+		elseif run.phase == "out" or run.phase == "in" then
+			if run.tick >= 0.5 then
+				run.tick = 0
+				Apply(run.phase)
+			end
+			if run.clock < SHOW then return end
+			ReadBack(run.phase)
+			Shot(run.phase == "out" and "1 out of a fight" or "2 in a fight")
+			Judge(run.phase)
+			if run.phase == "in" then
+				run.phase = "done" -- (judged once: the ticks till the end must not again)
+				return C_Timer.After(0.5, function()
+					if not run then return end
+					End("done")
+					ns.PadTestBox("Durations run done", "/reload, then say check log", 0.3, 1, 0.3)
+					C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+				end)
+			end
+			for _, f in pairs(run.icons) do f:Hide() end
+			run.phase, run.clock = "wantFight", 0
+			C_Timer.After(0.5, function()
+				if run then Box("Durations 2/2: in a fight", "START A FIGHT and let your pet tank it") end
+			end)
+		elseif run.phase == "wantFight" then
+			if not InCombatLockdown() then run.clock = 0 return end
+			if run.clock < 1 then return end
+			-- (The same button, its buff maybe gone: the timed one now, if any.)
+			run.button = TimedButton() or run.button
+			Write("in the fight")
+			run.phase, run.clock, run.tick = "in", 0, 1
+			Box("Durations 2/2: in a fight", "hands off: the three test icons again")
+		end
+	end
+	function ns.ShoulderDurations()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder durations: stopped")
+		end
+		if InCombatLockdown() then return ns.Print("shoulder durations: out of combat, please") end
+		ns.db.shoulderDurations = {}
+		run = { frame = CreateFrame("Frame"), began = GetTime(), clock = 0, tick = 0, verdicts = {}, phase = "pick",
+			results = { out = {}, ["in"] = {} } }
+		run.icons = { A = MakeIcon("A", -80), B = MakeIcon("B", 0), C = MakeIcon("C", 80) }
+		Write(("start | %s | %s"):format(ns.isRetail and "retail" or "Forever", Who()))
+		run.frame:SetScript("OnUpdate", Tick)
+		Box("Durations", "looking for a buff with a timer on you (cast one if you have none)")
+		ns.Print("shoulder durations: follow the box, a fight at the end; type it again to stop")
+	end
+end
+
 -- partyself: selecting yourself in the party or raid frames clears your
 -- target instead, as Keep the shoulder when selecting yourself does for your
 -- player frame (2026-11-20). Built from this probe's first run (retail
@@ -6084,6 +6347,7 @@ function ns.ShoulderTest(arg)
 	elseif what == "selfframe" then ns.ShoulderSelfFrame()
 	elseif what == "selfwhere" then ns.ShoulderSelfWhere(rest)
 	elseif what == "partyself" then ns.ShoulderPartySelf()
+	elseif what == "durations" then ns.ShoulderDurations()
 	elseif what == "today" then ns.ShoulderToday(rest)
 	elseif what == "profiletest" then ns.ShoulderProfileTest()
 	elseif what == "on" then Set("shoulderCam", true)
@@ -6094,7 +6358,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, selfframe, selfwhere, partyself, today, profiletest, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, selfframe, selfwhere, partyself, durations, today, profiletest, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end
