@@ -711,9 +711,11 @@ ns.EFFECT_GRID = { "letterbox", "tint", "vignette", "weather" }
 -- (Level: units you can't attack; LevelEnemy: ones you can. Hint: the
 -- "<Right click for Frame Settings>" line on unit frames' tooltips, and
 -- items' green "<Right Click to Read>"-style lines. Location: the zone line
--- under a party member's class on their short tooltip.)
+-- under a party member's class on their short tooltip. Faction: the
+-- Horde/Alliance and PvP lines of your faction's units and neutral ones;
+-- FactionEnemy: the other faction's.)
 ns.TOOLTIP_PARTS = { "Border", "Health", "Guild", "Level", "LevelEnemy", "Spec", "Location", "Type", "Corpse", "Faction",
-	"Rep", "Threat", "Quest", "ObjQuest", "Hint" }
+	"FactionEnemy", "Rep", "Threat", "Quest", "ObjQuest", "Hint" }
 for _, part in ipairs(ns.TOOLTIP_PARTS) do
 	DEFAULTS["tooltipShow" .. part .. "First"] = part == "Border"
 	DEFAULTS["tooltipShow" .. part .. "Later"] = true

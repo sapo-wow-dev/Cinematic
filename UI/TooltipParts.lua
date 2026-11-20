@@ -150,6 +150,22 @@ local function ThreatPattern()
 	return threatPattern
 end
 
+-- Your faction ("Horde", "Alliance"), kept from the last time it could be
+-- read: in a fight it may not be (untested), and an unreadable one would put
+-- the other faction's lines on your own faction's row (hidden when the player
+-- keeps only the enemies'). Read again whenever it can be, so a faction change
+-- (a Pandaren picking one) carries over.
+local myFaction
+local function MyFaction()
+	local ok, faction = pcall(UnitFactionGroup, "player")
+	if ok and type(faction) == "string" and not (issecretvalue and issecretvalue(faction))
+		and (faction == "Horde" or faction == "Alliance") then
+		myFaction = faction
+	end
+	return myFaction
+end
+MyFaction() -- (at load too, should the first tooltip come in a fight)
+
 -- The PvP line ("PvP", as the game words it; any case) and the faction lines.
 local function IsFactionLine(text)
 	if text == FACTION_HORDE or text == FACTION_ALLIANCE then
@@ -296,6 +312,22 @@ local function LinesToCut(tooltip, count, unit, object)
 		guildName = okGuild and type(guild) == "string" and guild ~= ""
 			and not (issecretvalue and issecretvalue(guild)) and guild or nil
 	end
+	-- The other faction's unit: its tooltip has the other faction's name on a
+	-- line. Read from the text, not the unit (its faction may be unreadable
+	-- in fights); its faction and PvP lines are then FactionEnemy's.
+	local otherFaction = false
+	pcall(function()
+		local mine = MyFaction()
+		local other = mine == "Horde" and FACTION_ALLIANCE or mine == "Alliance" and FACTION_HORDE or nil
+		if type(other) ~= "string" then return end
+		for i = 2, count do
+			local text = Left(i) and Left(i):GetText()
+			if type(text) == "string" and not (issecretvalue and issecretvalue(text)) and text == other then
+				otherFaction = true
+				return
+			end
+		end
+	end)
 	local questTitles, typed = QuestTitles(), TypedTexts(tooltip)
 	-- (Questie's own lines, as it gives them: Support/Questie.lua.)
 	local questie = ns.QuestieTooltipLines and not object and ns.QuestieTooltipLines(unit) or {}
@@ -349,7 +381,7 @@ local function LinesToCut(tooltip, count, unit, object)
 			elseif Same(text, creatureType) then
 				return "Type"
 			elseif IsFactionLine(text) then
-				return "Faction"
+				return otherFaction and "FactionEnemy" or "Faction"
 			elseif RepFactions()[text] then
 				return "Rep"
 			elseif i == 2 and unit and not isPlayer then
@@ -691,8 +723,8 @@ local function CutWhenShown(tooltip, kind)
 	C_Timer.After(0, function() RunPendingCut(tooltip) end)
 end
 
-local LINE_PARTS = { "Guild", "Level", "LevelEnemy", "Spec", "Location", "Type", "Corpse", "Faction", "Rep", "Threat", "Quest",
-	"Hint" }
+local LINE_PARTS = { "Guild", "Level", "LevelEnemy", "Spec", "Location", "Type", "Corpse", "Faction", "FactionEnemy", "Rep",
+	"Threat", "Quest", "Hint" }
 local function AnyLineCut()
 	for _, part in ipairs(LINE_PARTS) do
 		if Cut(part) then

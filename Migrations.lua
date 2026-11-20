@@ -4929,6 +4929,29 @@ STEPS[#STEPS + 1] = function()
 		for _, point in pairs(ns.db.profileResetPoints or {}) do Copy(point) end
 		ns.db.tooltipLocationV1 = true
 	end
+	-- The Tooltips page's Faction and PvP row split in two, your faction's and
+	-- the other's (a player asked to see it only on the other faction): the
+	-- other faction's row starts as the old row was set, here and in saved
+	-- profiles. Once.
+	if not ns.db.tooltipFactionEnemyV1 then
+		local function Copy(t)
+			if type(t) ~= "table" then return end
+			for _, column in ipairs({ "First", "Later" }) do
+				if t["tooltipShowFaction" .. column] ~= nil and t["tooltipShowFactionEnemy" .. column] == nil then
+					t["tooltipShowFactionEnemy" .. column] = t["tooltipShowFaction" .. column]
+				end
+			end
+		end
+		Copy(ns.db)
+		for _, saved in pairs(ns.db.profiles or {}) do
+			if type(saved) == "table" then
+				Copy(saved)
+				Copy(saved.settings)
+			end
+		end
+		for _, point in pairs(ns.db.profileResetPoints or {}) do Copy(point) end
+		ns.db.tooltipFactionEnemyV1 = true
+	end
 	-- Emote Vision's You level up card started with Cheer, Dance, Flex; now
 	-- Cheer, Congratulate, Commend. A list still as it started takes the new
 	-- one (here and in saved profiles); one you changed stays. Once.
