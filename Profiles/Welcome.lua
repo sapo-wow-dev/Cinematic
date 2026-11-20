@@ -340,8 +340,8 @@ local function Pick(name, level)
 	if level and level.shoulderCam and ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
 	ns.SetProfile(name)
 	if level and level.shoulderCam and ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
-	-- (the shelf's Turn on marks were the last level's)
-	if demoRow and demoRow.LevelPicked then demoRow:LevelPicked() end
+	-- (your switches on the tiles, kept over the level picked)
+	if demoRow and demoRow.LevelPicked then demoRow:LevelPicked(level) end
 	-- (the profile's tint strength on the slider)
 	if demoRow and demoRow.ShowStrength then demoRow.ShowStrength() end
 	if ns.RestartTimers then ns.RestartTimers() end
@@ -640,6 +640,9 @@ local function BuildDemoRow(page, width)
 	-- (Saved for the account: open or closed, the last group. Not a setting.)
 	local saved = type(ns.db.welcomeShelf) == "table" and ns.db.welcomeShelf or {}
 	ns.db.welcomeShelf = saved
+	-- (your switches and their Undo: below, with the tiles)
+	local mine, undo = {}, {}
+	local undoFor -- (the profile the Undo is for)
 	-- Under the buttons, a line of settings. On the left, Start in CineMode:
 	-- the level's the tags are for (hovered, else picked), a tick to change
 	-- for the one picked (a hovered card has the mouse: its own is only
@@ -748,6 +751,38 @@ local function BuildDemoRow(page, width)
 		row.ShowStrength = Show
 		Show()
 	end
+	-- In the middle of that line, once you've used a switch: how many, and
+	-- Undo (back as the level has them).
+	local yours = Text(row, "GameFontHighlightSmall", "", SOFT)
+	local undoButton = FlatButton(row, L["Undo"], nil, function()
+		if ns.ShowMeUnswitch(undo) then
+			wipe(undo)
+			wipe(mine)
+			row:Update(nil, true)
+		end
+	end)
+	yours:SetPoint("RIGHT", undoButton, "LEFT", -4, 0)
+	undoButton:SetScript("OnEnter", function(self)
+		Color(self.text, GOLD)
+		about:SetText("|cffffd100" .. L["Undo"] .. "|r   " ..
+			L["Puts the features you switched here back as the profile you're trying has them."])
+	end)
+	undoButton:SetScript("OnLeave", function(self)
+		Color(self.text, DIM)
+		DescribeSoon()
+	end)
+	local function ShowYours()
+		local n = 0
+		for _ in pairs(mine) do n = n + 1 end
+		local on = n > 0 and next(undo) ~= nil and Active() ~= nil
+		yours:SetText(on and (n == 1 and L["1 switch of yours"] or (L["%d switches of yours"]):format(n)) or "")
+		yours:SetShown(on)
+		undoButton:SetShown(on)
+		undoButton:SetEnabled(not InCombatLockdown())
+		-- (centered, the two together)
+		undoButton:ClearAllPoints()
+		undoButton:SetPoint("BOTTOM", row, "BOTTOM", (yours:GetStringWidth() + 4) / 2, 7)
+	end
 	local closedH = DEMO_ROW_H + strengthH
 	row:SetHeight(closedH)
 	local gap = 6
@@ -756,19 +791,82 @@ local function BuildDemoRow(page, width)
 	local buttonW = math.floor((width - 24 - moreW - gap * #list) / math.max(1, #list))
 	local buttons = {}
 	local show -- (the level the tags are for: Describe's, nil for none)
-	local turned = {} -- (features Turned on in the level picked: key -> true, till another's picked)
-	-- The level the Turn on buttons are for: the one picked, none hovered (a
-	-- hovered card's tags are only shown), not Blank Slate (everything off on
-	-- purpose: no Customize either).
-	local function TurnOnLevel()
+	-- Your switches (the tiles'): key -> on, kept over each level picked
+	-- while the window's open (the user's pick, 2026-11-20), and what they
+	-- changed, for Undo (ns.ShowMeSwitch's: setting -> value before, the first
+	-- kept; anew on each level picked, as that loads its own).
+	local function Remember(changed)
+		for id, was in pairs(changed or {}) do
+			if undo[id] == nil then undo[id] = was end
+		end
+	end
+	-- The level the switches are for: the one picked, none hovered (a hovered
+	-- card's tags are only shown). Blank Slate too: turning on only the parts
+	-- you want is its point.
+	local function SwitchLevel()
 		local active = Active()
 		local level = active and levelOf[active]
-		if not level or show ~= level or level.noCustomize then return nil end
+		if not level or show ~= level then return nil end
 		return active
 	end
-	-- One demo's button: the row's, or a tile on the shelf (the same, with
-	-- Turn on). Its icon, rounded as the level cards' are; its name and when
-	-- it shows beside it.
+	-- A tile's switch: small, at its bottom right beside when it shows, on
+	-- (green, the knob right) or off, for the level picked: the feature on or
+	-- off in it now (ns.ShowMeSwitch). Its own click: the tile's plays.
+	-- Shown once a level's picked and its tags are up; grey in a fight.
+	local SWITCH_W, SWITCH_H = 24, 12
+	local SWITCH_ON = { 0.3, 0.55, 0.35 }
+	local function SwitchOn(b, demo)
+		local sw = CreateFrame("Button", nil, b)
+		sw:SetSize(SWITCH_W, SWITCH_H)
+		sw:SetPoint("BOTTOMRIGHT", -6, 5)
+		sw:SetHitRectInsets(-4, -4, -4, -4)
+		sw.track = sw:CreateTexture(nil, "ARTWORK")
+		sw.track:SetAllPoints()
+		sw.knob = sw:CreateTexture(nil, "OVERLAY")
+		sw.knob:SetSize(SWITCH_H - 4, SWITCH_H - 4)
+		function sw:Paint(on, usable)
+			self.on = on
+			-- (on: a muted green, the user's pick 2026-11-20: gold fought the gold words)
+			self.track:SetColorTexture(unpack(on and SWITCH_ON or EDGE))
+			self.knob:SetColorTexture(unpack(on and WHITE or SOFT))
+			self.knob:ClearAllPoints()
+			self.knob:SetPoint(on and "RIGHT" or "LEFT", on and -2 or 2, 0)
+			self:SetEnabled(usable)
+			self:SetAlpha(usable and 1 or 0.4)
+		end
+		sw:SetScript("OnClick", function(self)
+			local want = not self.on
+			local changed = ns.ShowMeSwitch(demo.key, want)
+			if not changed then return end
+			undoFor = Active()
+			Remember(changed)
+			mine[demo.key] = want
+			row:Update(nil, true)
+			self:GetScript("OnEnter")(self)
+		end)
+		sw:SetScript("OnEnter", function(self)
+			b:SetBackdropBorderColor(unpack(LIT))
+			local level = levelOf[Active()]
+			local text = (self.on and L["Turn %s off"] or L["Turn %s on"]):format(L[demo.label])
+			local line = (self.on and L["Takes it out of %s, the profile you're trying."]
+				or L["Adds it to %s, the profile you're trying."]):format(level and level.label or "")
+			-- (The Shoulder Cam's experimental setting: turning it on is the yes, as its card's.)
+			if demo.key == "shoulder" and not self.on and not (ns.db and ns.db.shoulderCamNoticed) then
+				line = line .. " " ..
+					L["It uses one of Blizzard's experimental camera settings: turning it on agrees to that."]
+			end
+			about:SetText("|cffffd100" .. text .. "|r   " .. line)
+		end)
+		sw:SetScript("OnLeave", function()
+			b:SetBackdropBorderColor(unpack(ns.ShowMeRunning(demo.key) and GOLD or EDGE))
+			DescribeSoon()
+		end)
+		sw:Hide()
+		b.switch = sw
+	end
+	-- One demo's button: the row's, or a tile on the shelf (the same). Its
+	-- icon, rounded as the level cards' are; its name and when it shows
+	-- beside it; its switch.
 	local function DemoButton(parent, demo, w)
 		local b = CreateFrame("Button", nil, parent, BackdropTemplateMixin and "BackdropTemplate")
 		b:SetSize(w, TILE_H)
@@ -786,13 +884,16 @@ local function BuildDemoRow(page, width)
 		b.tag:SetPoint("TOPLEFT", b.name, "BOTTOMLEFT", 0, -3)
 		b.tag:SetWordWrap(false)
 		b:SetScript("OnClick", function() ns.ShowMe(demo.key, window, true) end)
+		if ns.ShowMeCanSwitch and ns.ShowMeCanSwitch(demo.key) then SwitchOn(b, demo) end
 		b:SetScript("OnEnter", function(self)
 			if self:IsEnabled() then self:SetBackdropBorderColor(unpack(LIT)) end
 			-- (and when it shows in the level the tags are for)
 			local when
 			if show then
 				local _, _, sentence = ns.ShowMeWhen(demo.key, show.profile)
-				if turned[demo.key] and TurnOnLevel() then sentence = L["You turned it on."] end
+				if mine[demo.key] ~= nil and SwitchLevel() then
+					sentence = mine[demo.key] and L["You turned it on."] or L["You turned it off."]
+				end
 				when = sentence and "\n|cffffd100" .. (L["In %s"]):format(show.label) .. ":|r " .. sentence
 			end
 			about:SetText("|cffffd100" .. L[demo.label] .. "|r   " .. L[demo.tip] .. (when or ""))
@@ -814,28 +915,6 @@ local function BuildDemoRow(page, width)
 		b.width = w
 		buttons[#buttons + 1] = b
 		return b
-	end
-	-- (A tile's Turn on: small, on its right, the name narrower beside it.)
-	local function TurnOnButton(b)
-		local on = FlatButton(b, L["Turn on"], nil, function()
-			if ns.ShowMeTurnOn(b.demo.key) then
-				turned[b.demo.key] = true
-				row:Update(nil, true)
-			end
-		end)
-		on:SetPoint("RIGHT", -4, 0)
-		on:SetScript("OnEnter", function(self)
-			Color(self.text, GOLD)
-			local level = levelOf[Active()]
-			about:SetText("|cffffd100" .. (L["Turn on %s"]):format(L[b.demo.label]) .. "|r   " ..
-				(L["Adds it to %s, the profile you're trying."]):format(level and level.label or ""))
-		end)
-		on:SetScript("OnLeave", function(self)
-			Color(self.text, DIM)
-			DescribeSoon()
-		end)
-		on:Hide()
-		b.turnOn = on
 	end
 	local rowButtons = {}
 	for i, demo in ipairs(list) do
@@ -991,7 +1070,6 @@ local function BuildDemoRow(page, width)
 	local tiles, labels = {}, {}
 	for _, demo in ipairs(all) do
 		local b = DemoButton(grid, demo, tileW)
-		if ns.ShowMeCanTurnOn and ns.ShowMeCanTurnOn(demo.key) then TurnOnButton(b) end
 		b:Hide()
 		tiles[#tiles + 1] = b
 	end
@@ -1165,21 +1243,15 @@ local function BuildDemoRow(page, width)
 		-- (when it shows in that level: In CineMode, 4 scenes, Off...; turned
 		-- on here: says so)
 		local tag, has = nil, nil
-		local level = TurnOnLevel()
-		if level and turned[key] then
-			tag, has = L["On: you turned it on"], true
-		elseif show then
-			tag, has = ns.ShowMeWhen(key, show.profile)
-		end
+		if show then tag, has = ns.ShowMeWhen(key, show.profile) end
 		b.tag:SetText(tag or "")
 		if tag then Color(b.tag, has and GOLD or DIM) end
-		-- (Turn on: for the level picked when it hasn't it, not mid-demo or in a fight)
-		if b.turnOn then
-			local offer = level ~= nil and tag ~= nil and not has and not running and not InCombatLockdown()
-			b.turnOn:SetShown(offer)
-			local w = b.width - 38 - (offer and b.turnOn:GetWidth() + 8 or 0)
-			b.name:SetWidth(w)
-			b.tag:SetWidth(w)
+		-- (The switch: for the level picked, as it is live; grey in a fight.)
+		if b.switch then
+			local level = SwitchLevel()
+			b.switch:SetShown(level ~= nil and tag ~= nil)
+			if level then b.switch:Paint(ns.ShowMeOn(key), not InCombatLockdown()) end
+			b.tag:SetWidth(b.width - 38 - (b.switch:IsShown() and SWITCH_W + 6 or 0))
 		end
 	end
 	-- The row's buttons that can play, side by side, See all after them, and
@@ -1239,15 +1311,35 @@ local function BuildDemoRow(page, width)
 		play:SetLabel(touring and L["Stop the tour"] or words ~= "" and L["Play these"]
 			or (not group or group.key == "all") and L["Watch the tour"] or (L["Play all in %s"]):format(L[group.label]))
 		UpdateNotice()
+		ShowYours()
 		Recount()
 		for _, b in ipairs(buttons) do
 			if b:IsShown() then Paint(b) end
 		end
 	end
-	-- A new level picked: what was turned on was that one's.
-	function row:LevelPicked()
-		wipe(turned)
+	-- A new level picked: your switches again, over its settings (its own
+	-- card's Shoulder Cam wins over yours: picking it is asking for it). Undo
+	-- then puts back this level's.
+	-- (The same card again: its Undo kept, undoFor above.)
+	function row:LevelPicked(level)
+		if undoFor ~= Active() then wipe(undo) end
+		undoFor = Active()
+		if level and level.shoulderCam then mine.shoulder = nil end
+		if next(mine) then
+			for key, on in pairs(mine) do Remember(ns.ShowMeSwitch(key, on, true)) end
+			ns.ShowMeSwitched()
+		end
+		row:Update(nil, true)
 	end
+	-- (The window closed: kept as they are, the switches done.)
+	function row:ForgetSwitches()
+		wipe(mine)
+		wipe(undo)
+	end
+	-- (for Dev/ShelfTest.lua)
+	row.Switches = function() return mine, undo end
+	row.RowButtons = function() return rowButtons end
+	row.UndoButton = undoButton
 	-- Open or closed (saved): the row grows by the shelf, the window with it
 	-- (row.OnHeight, the levels page's).
 	local function SetOpen(open)
@@ -1789,6 +1881,7 @@ function OpenPageFromWelcome(page)
 	backButton:Show()
 end
 local function OnHide()
+	if demoRow and demoRow.ForgetSwitches then demoRow:ForgetSwitches() end
 	-- (A window waiting its turn, the conflicts one: opened once this has
 	-- closed, a moment on so See Profile's settings open first.)
 	if afterClose then

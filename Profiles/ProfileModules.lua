@@ -566,6 +566,11 @@ ns.PROFILE_MODULES = {
 				if ns.DEFAULTS[key] ~= nil and ns.DEFAULTS[key] ~= false then set(key, false) end
 			end
 		end },
+	-- (Auto-Hide UI's, the user's ask 2026-11-20: pointing at a faded frame
+	-- doesn't bring it back.)
+	{ key = "mouseover-off", name = "No mouseover", scope = { "Mouseover groups/top" },
+		tip = "Pointing at a faded frame doesn't bring it back.",
+		apply = function(set) set("mouseover", false) end },
 	{ key = "no-custom-bubbles", name = "No custom bubbles", scope = { "Chat bubbles/Custom bubbles" },
 		tip = "Only the game's own chat bubbles: no off-screen ones, and none brought down from the top of the screen.",
 		apply = function(set)

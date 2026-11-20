@@ -16,10 +16,12 @@
 --            by what it draws (SHOWS, below); at the end a result line
 --            per tile (on screen, not, can't play here and why), on the
 --            level you're trying;
---   turn on: Subtle picked by its card (the user's OK: a level missing
---            things), the first tile offering Turn on clicked: its tag
---            after, the button gone; then your level's card again and
---            Subtle's saved changes put back as they were;
+--   switches: Balanced picked by its card (what its own on/off is), then
+--            Subtle; a tile's switch that's off clicked on, one that's on
+--            clicked off (live, the tags and the switch with them, Undo
+--            up); Balanced again: both kept over it; Undo: Balanced's own
+--            back. Then your level's card again, Subtle's and Balanced's
+--            saved changes put back as they were;
 --   tour:    Watch the tour clicked: the plan's order, the window faded the
 --            whole way, the notice's n of N, Emote held about 15 s; then
 --            Stop on the notice ends it;
@@ -451,9 +453,9 @@ local function SwitchLevel(name, Next)
 end
 
 -- list: what to test, words apart ("questCam duel search"): tiles by their
--- keys, and the parts groups, search, turnon. None: everything. The size
+-- keys, and the parts groups, search, switches. None: everything. The size
 -- and the closing again always run (a second, and they open the shelf).
-local PARTS = { groups = true, search = true, turnon = true, tour = true, links = true, hover = true }
+local PARTS = { groups = true, search = true, switches = true, tour = true, links = true, hover = true }
 function ns.ShelfTest(list)
 	-- (Never the Ctrl+C copy window over the game: the user's rule; its lines
 	-- are in chat and the log. Set first: the start's lines opened it.)
@@ -492,7 +494,7 @@ function ns.ShelfTest(list)
 		end
 		for word in pairs(only) do
 			if not (known[word] or PARTS[word]) then
-				ns.Print(("Shelf test: no \"%s\". Tiles: %s. Parts: hover, groups, search, turnon, tour, links."):format(word,
+				ns.Print(("Shelf test: no \"%s\". Tiles: %s. Parts: hover, groups, search, switches, tour, links."):format(word,
 					table.concat(keys, ", ")))
 				run = nil
 				return
@@ -758,68 +760,123 @@ function ns.ShelfTest(list)
 		end
 		One()
 	end
-	steps[#steps + 1] = Want("turnon") and function(Next)
-		-- Turn on needs a level missing something: Subtle (the user's OK,
-		-- 2026-11-20), picked by its card as a player would, then yours
-		-- again by its card. Subtle's saved changes put back as they were.
+	steps[#steps + 1] = Want("switches") and function(Next)
+		-- Two built-ins that aren't yours, picked by their cards as a player
+		-- would (Subtle: the user's OK, 2026-11-20; Balanced with it), their
+		-- saved changes put back after; yours again by its card, your
+		-- switches gone first so nothing of the test lands on yours.
 		local cards, level = ns.WelcomeCards and ns.WelcomeCards() or {}, {}
 		for i, each in ipairs(ns.WELCOME_LEVELS) do level[each.profile or ns.DEFAULT_PROFILE] = cards[i] end
-		local mine = ns.ActiveProfile()
-		local subtle = level.Subtle
-		if not subtle or mine == "Subtle" then
-			Log(("turn on: not tried (Subtle's card %s, active %s)"):format(tostring(subtle ~= nil), tostring(mine)))
+		local yours = ns.ActiveProfile()
+		local subtle, balanced = level.Subtle, level.Balanced
+		if not (subtle and balanced) or yours == "Subtle" or yours == "Balanced" or not row.Switches then
+			Log(("switches: not tried (cards %s %s, active %s)"):format(tostring(subtle ~= nil),
+				tostring(balanced ~= nil), tostring(yours)))
 			return Next()
 		end
-		local saved = ns.db.profiles and ns.db.profiles.Subtle
 		local function Copy(t)
 			if type(t) ~= "table" then return t end
 			local out = {}
 			for k, v in pairs(t) do out[k] = Copy(v) end
 			return out
 		end
-		run.subtleSaved = saved and Copy(saved) or false
+		local savedProfiles = {}
+		for _, name in ipairs({ "Subtle", "Balanced" }) do
+			local saved = ns.db.profiles and ns.db.profiles[name]
+			savedProfiles[name] = saved and Copy(saved) or false
+		end
 		run.switchBack = function()
 			run.switchBack = nil
-			if level[mine] then level[mine]:Click() else ns.SetProfile(mine) end
-			-- (switching saved Subtle's live settings, Turn on's among them: as they were)
-			ns.db.profiles.Subtle = run.subtleSaved or nil
+			if row.ForgetSwitches then row:ForgetSwitches() end
+			if level[yours] then level[yours]:Click() else ns.SetProfile(yours) end
+			for name, saved in pairs(savedProfiles) do ns.db.profiles[name] = saved or nil end
 			ns.db.fadeUI = false -- (CineMode still off for the rest of the test)
-			Log(("turn on: back to %s (active %s), Subtle's saved changes put back"):format(mine,
+			Log(("switches: back to %s (active %s), Subtle's and Balanced's saved changes put back"):format(yours,
 				tostring(ns.ActiveProfile())))
 		end
-		subtle:Click()
+		-- (Not the Shoulder Cam: on is agreeing to its setting. Not Fading UI:
+		-- off takes the HUD page with it.)
+		local AVOID = { shoulder = true, fadeUI = true }
+		local function Tiles()
+			local found = {}
+			for _, b in ipairs(row.ShelfTiles()) do
+				if b:IsShown() and b.switch and b.switch:IsShown() and not AVOID[b.demo.key] then found[#found + 1] = b end
+			end
+			return found
+		end
+		local function Find(key)
+			for _, b in ipairs(Tiles()) do if b.demo.key == key then return b end end
+		end
+		local function State(key)
+			local b = Find(key)
+			return ("%s: live %s, switch %s, tag \"%s\""):format(key, tostring(ns.ShowMeOn(key)),
+				tostring(b and b.switch.on), tostring(b and b.tag:GetText()))
+		end
+		balanced:Click()
 		ns.db.fadeUI = false
-		Log("turn on: Subtle picked, active " .. tostring(ns.ActiveProfile()))
 		C_Timer.After(1.5, function()
 			if not run then return end
-			local offered, offers = nil, {}
-			for _, b in ipairs(row.ShelfTiles()) do
-				if b.turnOn and b.turnOn:IsShown() then
-					offered = offered or b
-					offers[#offers + 1] = b.demo.key
-				end
-			end
-			Log("turn on: offered on Subtle: " .. (#offers > 0 and table.concat(offers, ", ") or "none"))
-			Verdict(offered ~= nil, "Subtle offers Turn on for what it hasn't")
-			if offered then
-				local key = offered.demo.key
-				Log(("turn on: %s, tag before \"%s\""):format(key, tostring(offered.tag:GetText())))
-				offered.turnOn:Click()
-				local live = {}
-				for _, each in ipairs({ "cameraModes", "damageVision", "emoteVision", "rollWindow", "deathScreen",
-					"duelPlates", "cards", "lowHealth", "teleportVision", "musicInCinematic" }) do
-					live[#live + 1] = each .. " " .. tostring(ns.db[each])
-				end
-				Log(("turn on: %s, tag after \"%s\", button shown %s; live: %s"):format(key,
-					tostring(offered.tag:GetText()), tostring(offered.turnOn:IsShown()), table.concat(live, ", ")))
-				Verdict(offered.tag:GetText() == ns.L["On: you turned it on"], "Turn on: the tag says you turned it on")
-				Verdict(not offered.turnOn:IsShown(), "Turn on: its button goes")
-			end
-			run.switchBack()
+			local native = {}
+			for _, b in ipairs(Tiles()) do native[b.demo.key] = ns.ShowMeOn(b.demo.key) end
+			Log("switches: Balanced picked, active " .. tostring(ns.ActiveProfile()))
+			subtle:Click()
+			ns.db.fadeUI = false
 			C_Timer.After(1.5, function()
 				if not run then return end
-				Verdict(ns.ActiveProfile() == mine, "back on your profile, " .. tostring(mine))
-				Next()
+				local offB, onB
+				for _, b in ipairs(Tiles()) do
+					if not b.switch.on and not offB then offB = b end
+					if b.switch.on and not onB then onB = b end
+				end
+				Log(("switches: on Subtle, %d tiles with a switch; off one %s, on one %s"):format(#Tiles(),
+					tostring(offB and offB.demo.key), tostring(onB and onB.demo.key)))
+				Verdict(#Tiles() > 0, "Subtle's tiles have switches")
+				local offKey, onKey = offB and offB.demo.key, onB and onB.demo.key
+				if offB then
+					offB.switch:Click()
+					Log("switches: clicked on, " .. State(offKey))
+					Verdict(ns.ShowMeOn(offKey) and Find(offKey).switch.on and Find(offKey).tag:GetText() ~= ns.L["Off"],
+						offKey .. ": switched on (live, switch, tag)")
+				end
+				if onB then
+					onB.switch:Click()
+					Log("switches: clicked off, " .. State(onKey))
+					Verdict(not ns.ShowMeOn(onKey) and not Find(onKey).switch.on and Find(onKey).tag:GetText() == ns.L["Off"],
+						onKey .. ": switched off (live, switch, tag)")
+				end
+				Verdict(row.UndoButton:IsShown(), "Undo shows after a switch")
+				balanced:Click()
+				ns.db.fadeUI = false
+				C_Timer.After(1.5, function()
+					if not run then return end
+					Log("switches: Balanced again, " .. (offKey and State(offKey) or "-") .. "; " ..
+						(onKey and State(onKey) or "-"))
+					if offKey then Verdict(ns.ShowMeOn(offKey), offKey .. ": still on over Balanced") end
+					if onKey then Verdict(not ns.ShowMeOn(onKey), onKey .. ": still off over Balanced") end
+					Verdict(row.UndoButton:IsShown(), "Undo still shows on Balanced")
+					row.UndoButton:Click()
+					C_Timer.After(0.5, function()
+						if not run then return end
+						Log("switches: Undo, " .. (offKey and State(offKey) or "-") .. "; " ..
+							(onKey and State(onKey) or "-") .. (", Balanced's own: %s %s, %s %s"):format(
+							tostring(offKey), tostring(offKey and native[offKey]), tostring(onKey),
+							tostring(onKey and native[onKey])))
+						local mine = row.Switches()
+						Verdict(next(mine) == nil and not row.UndoButton:IsShown(), "Undo: switches forgotten, Undo gone")
+						if offKey and native[offKey] ~= nil then
+							Verdict(ns.ShowMeOn(offKey) == native[offKey], offKey .. ": Undo puts Balanced's own back")
+						end
+						if onKey and native[onKey] ~= nil then
+							Verdict(ns.ShowMeOn(onKey) == native[onKey], onKey .. ": Undo puts Balanced's own back")
+						end
+						run.switchBack()
+						C_Timer.After(1.5, function()
+							if not run then return end
+							Verdict(ns.ActiveProfile() == yours, "back on your profile, " .. tostring(yours))
+							Next()
+						end)
+					end)
+				end)
 			end)
 		end)
 	end
