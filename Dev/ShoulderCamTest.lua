@@ -3594,6 +3594,8 @@ do
 			if run.clock < 1.5 then return end
 			local l, t, w, h = Screen(stand)
 			run.stand = { l, t, w, h }
+			run.standLook = run.Look(stand)
+			Write("stand-in look: " .. run.standLook)
 			-- (Shown isn't seen: at alpha 0 it's up and invisible, the second
 			-- run 2026-11-20 - it had your faded player frame's alpha then.)
 			local entryAlpha = "none"
@@ -3629,6 +3631,11 @@ do
 			local s = run.stand
 			local close = l and s[1] and math.abs(l - s[1]) <= 2 and math.abs(t - s[2]) <= 2
 				and math.abs(w - s[3]) <= 2 and math.abs(h - s[4]) <= 2
+			local realLook = run.Look(_G.TargetFrame)
+			Write("the game's look: " .. realLook)
+			Verdict(("look %s: %s"):format(realLook == run.standLook and "PASS (as your theme dresses your target frame)"
+				or "DIFFERS", realLook == run.standLook and "same bars, color and name font"
+				or ("stand-in " .. run.standLook .. " | game " .. realLook)))
 			Verdict(("place %s: off by %s"):format(close and "PASS" or "FAIL", l and s[1]
 				and ("%.1f,%.1f size %.1fx%.1f"):format(s[1] - l, s[2] - t, s[3] - w, s[4] - h) or "unknown"))
 			Shot("2 the game's own target frame of you")
@@ -3660,8 +3667,26 @@ do
 		ns.db.shoulderSelfFrame = {}
 		run = { frame = CreateFrame("Frame"), began = GetTime(), clock = 0, verdicts = {}, phase = "arming",
 			yours = ns.db.shoulderCamFakeSelf }
+		-- (What Style dresses on a target frame: the health bar's art and color,
+		-- the power bar's art, the name's font and size.)
+		function run.Look(frame)
+			local function Bar(bar)
+				if type(bar) ~= "table" or not bar.GetStatusBarTexture then return "none" end
+				local fill = bar:GetStatusBarTexture()
+				local art = fill and (fill:GetAtlas() or fill:GetTexture())
+				local r, g, b = bar:GetStatusBarColor()
+				return ("%s %.2f/%.2f/%.2f"):format(Text(art), r or -1, g or -1, b or -1)
+			end
+			local font, size = "none", 0
+			local name = type(frame) == "table" and frame.name
+			if type(name) == "table" and name.GetFont then font, size = name:GetFont() end
+			return ("health %s, power %s, name %s %s"):format(Bar(frame and frame.healthbar),
+				Bar(frame and frame.manabar):gsub(" [%d%.%-]+/[%d%.%-]+/[%d%.%-]+$", ""), Text(font), Text(size))
+		end
 		ns.db.shoulderCamFakeSelf = true
-		Write(("start | %s | %s | your option %s"):format(ns.isRetail and "retail" or "Forever", Who(), Text(run.yours)))
+		Write(("start | %s | %s | your option %s | your Style: unit frames %s, theme %s"):format(
+			ns.isRetail and "retail" or "Forever", Who(), Text(run.yours),
+			Text(ns.StyleOn and ns.StyleOn("ufStyle")), Text(ns.db.styleTheme)))
 		run.frame:SetScript("OnUpdate", Tick)
 		Box("Self frame", "hands off, turning the option on")
 		ns.Print("shoulder selfframe: follow the box, about 30 seconds; type it again to stop")

@@ -1391,8 +1391,10 @@ do
 			local keys = {}
 			if want then
 				for _, key in ipairs({ GetBindingKey("TARGETSELF") }) do
-					SetOverrideBindingClick(fake, true, key, fake:GetName())
-					keys[#keys + 1] = key
+					if type(key) == "string" then
+						SetOverrideBindingClick(fake, true, key, fake:GetName())
+						keys[#keys + 1] = key
+					end
 				end
 			end
 			state.dirty = nil
@@ -1473,58 +1475,103 @@ do
 		local mask = f:CreateMaskTexture()
 		Spot(f, mask, entry)
 		if SetAtlas(mask, entry.atlas) then pcall(region.AddMaskTexture, region, mask) end
+		return mask
 	end
 	-- Built once, the first time it's needed (the recipe's read by then); kept
-	-- only once it's all built (a half-built one is dropped, made again).
+	-- only once it's all built (a half-built one is dropped, made again). Its
+	-- parts carry the game's target frame's names (unit, healthbar, manabar,
+	-- name, portrait, TargetFrameContainer.FrameTexture and PortraitMask,
+	-- TargetFrameContent.TargetFrameContentMain.ReputationColor): Style's unit
+	-- frames dress it as your target frame (UnitStyle.lua's TARGET list), so
+	-- it wears your theme, as the real one of you would.
 	local function Build()
 		if stand.frame then return stand.frame end
 		local recipe = ns.UnitFrameRecipe and ns.UnitFrameRecipe("TARGET")
 		if not (recipe and recipe.art and recipe.health and recipe.power) then return nil end
-		local f = CreateFrame("Frame", nil, UIParent)
+		local f = CreateFrame("Frame", "CinematicShoulderSelfTarget", UIParent)
 		stand.recipe = recipe
 		f:SetSize(recipe.art.w, recipe.art.h)
 		f:EnableMouse(false)
 		f:Hide()
-		local art = f:CreateTexture(nil, "BACKGROUND", nil, 2)
+		f.unit = "player"
+		local holder = CreateFrame("Frame", nil, f)
+		holder:SetAllPoints()
+		local art = holder:CreateTexture(nil, "BACKGROUND", nil, 2)
 		Spot(f, art, recipe.art)
 		SetAtlas(art, recipe.art.atlas)
+		holder.FrameTexture = art
+		f.TargetFrameContainer = holder
+		local main = {}
+		f.TargetFrameContent = { TargetFrameContentMain = main }
 		if recipe.reaction then
 			stand.reaction = f:CreateTexture(nil, "BACKGROUND", nil, 0)
 			Spot(f, stand.reaction, recipe.reaction)
 			SetAtlas(stand.reaction, recipe.reaction.atlas)
+			main.ReputationColor = stand.reaction
 		end
 		stand.portrait = f:CreateTexture(nil, "BACKGROUND", nil, 1)
 		Spot(f, stand.portrait, recipe.portrait)
-		Mask(f, stand.portrait, recipe.portraitMask)
+		holder.PortraitMask = Mask(f, stand.portrait, recipe.portraitMask)
+		f.portrait = stand.portrait
 		stand.health = CreateFrame("StatusBar", nil, f)
 		Spot(f, stand.health, recipe.health)
 		pcall(stand.health.SetStatusBarTexture, stand.health, recipe.health.atlas)
 		Mask(f, stand.health:GetStatusBarTexture(), recipe.healthMask)
+		f.healthbar = stand.health
 		stand.power = CreateFrame("StatusBar", nil, f)
 		Spot(f, stand.power, recipe.power)
 		pcall(stand.power.SetStatusBarTexture, stand.power, recipe.power.atlas)
-		Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask or recipe.healthMask and {
-			x = recipe.power.x - 1, y = recipe.power.y - 2.5, w = recipe.power.w + 2, h = recipe.power.h + 5,
-			atlas = (recipe.power.atlas or ""):gsub("Bar%-Mana$", "Bar-Mana-Mask") })
+		-- (Masked only by a mask the recipe read: a guessed one showed a strip in
+		-- the bar's middle, the first themed run 2026-11-20.)
+		Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask)
+		f.manabar = stand.power
 		local top = CreateFrame("Frame", nil, f)
 		top:SetAllPoints()
 		top:SetFrameLevel(stand.health:GetFrameLevel() + 2)
+		local circle
 		if recipe.circle then
-			local circle = top:CreateTexture(nil, "ARTWORK")
+			circle = top:CreateTexture(nil, "ARTWORK")
 			Spot(f, circle, recipe.circle)
 			SetAtlas(circle, recipe.circle.atlas)
+			main.LevelBackgroundCircle = circle
 		end
 		stand.name = top:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		Spot(f, stand.name, recipe.name)
 		stand.name:SetJustifyH(recipe.name.justify or "CENTER")
+		f.name = stand.name
+		-- (In the middle of its circle, room for three digits: the recipe's box is
+		-- 11 wide, and "10" in this font read "...", the first themed run.)
 		stand.level = top:CreateFontString(nil, "OVERLAY", "GameNormalNumberFont")
-		Spot(f, stand.level, recipe.level)
-		stand.level:SetJustifyH(recipe.level.justify or "RIGHT")
+		-- (At the recipe's size, as the game's: the template's own read smaller.)
+		local file, _, flags = stand.level:GetFont()
+		if file and recipe.level.size then pcall(stand.level.SetFont, stand.level, file, recipe.level.size, flags) end
+		if circle then
+			stand.level:SetPoint("CENTER", circle, "CENTER", 0, 0)
+			stand.level:SetSize(36, recipe.level.h)
+			stand.level:SetJustifyH("CENTER")
+		else
+			Spot(f, stand.level, recipe.level)
+			stand.level:SetJustifyH(recipe.level.justify or "RIGHT")
+		end
+		main.LevelText = stand.level
 		stand.frame = f
 		return f
 	end
-	-- Your values on it (secret ones too: only bars and text take them).
-	local function Fill()
+	-- Your health and power on it, as they change (secret ones too: only the
+	-- bars take them). Nothing of its look: that's Looks' and your theme's.
+	local function Values()
+		local f = stand.frame
+		if not (f and f:IsShown()) then return end
+		pcall(stand.health.SetMinMaxValues, stand.health, 0, UnitHealthMax("player"))
+		pcall(stand.health.SetValue, stand.health, UnitHealth("player"))
+		pcall(stand.power.SetMinMaxValues, stand.power, 0, UnitPowerMax("player"))
+		pcall(stand.power.SetValue, stand.power, UnitPower("player"))
+	end
+	-- Its look in the game's way (portrait, name, level, the name strip's color,
+	-- the power bar's art), then your theme over it, as the game sets your
+	-- target frame's and Style dresses it after. As it comes up, and when one of
+	-- those changes; not with each health change (that'd undo the theme's colors).
+	local function Looks()
 		local f = stand.frame
 		if not (f and f:IsShown()) then return end
 		pcall(SetPortraitTexture, stand.portrait, "player")
@@ -1534,28 +1581,28 @@ do
 			local ok, r, g, b = pcall(UnitSelectionColor, "player")
 			if ok and r then pcall(stand.reaction.SetVertexColor, stand.reaction, r, g, b) end
 		end
-		pcall(stand.health.SetMinMaxValues, stand.health, 0, UnitHealthMax("player"))
-		pcall(stand.health.SetValue, stand.health, UnitHealth("player"))
 		local _, token = UnitPowerType("player")
-		if token ~= stand.token then
-			stand.token = token
-			local name = POWER_ATLAS[token or ""]
-			local atlas = name and ("UI-HUD-UnitFrame-Target-PortraitOn-Bar-" .. name)
-			if AtlasOK(atlas) then
-				pcall(stand.power.SetStatusBarTexture, stand.power, atlas)
-				stand.power:SetStatusBarColor(1, 1, 1)
-			else
-				-- (No art of its own: the mana bar's, grey, in the game's color for it.)
-				pcall(stand.power.SetStatusBarTexture, stand.power, stand.recipe.power.atlas)
-				local fill = stand.power:GetStatusBarTexture()
-				if fill then fill:SetDesaturated(true) end
-				local color = _G.PowerBarColor and _G.PowerBarColor[token or ""]
-				if color then stand.power:SetStatusBarColor(color.r, color.g, color.b) end
-			end
+		local name = POWER_ATLAS[token or ""]
+		local atlas = name and ("UI-HUD-UnitFrame-Target-PortraitOn-Bar-" .. name)
+		local fill
+		if AtlasOK(atlas) then
+			pcall(stand.power.SetStatusBarTexture, stand.power, atlas)
+			fill = stand.power:GetStatusBarTexture()
+			if fill then fill:SetDesaturated(false) end
+			stand.power:SetStatusBarColor(1, 1, 1)
+		else
+			-- (No art of its own: the mana bar's, grey, in the game's color for it.)
+			pcall(stand.power.SetStatusBarTexture, stand.power, stand.recipe.power.atlas)
+			fill = stand.power:GetStatusBarTexture()
+			if fill then fill:SetDesaturated(true) end
+			local color = _G.PowerBarColor and _G.PowerBarColor[token or ""]
+			if color then stand.power:SetStatusBarColor(color.r, color.g, color.b) end
 		end
-		pcall(stand.power.SetMinMaxValues, stand.power, 0, UnitPowerMax("player"))
-		pcall(stand.power.SetValue, stand.power, UnitPower("player"))
+		stand.health:SetStatusBarColor(1, 1, 1)
+		Values()
+		if ns.RefreshUnitStyle then ns.RefreshUnitStyle() end
 	end
+	local LOOK_EVENTS = { UNIT_DISPLAYPOWER = true, UNIT_PORTRAIT_UPDATE = true, UNIT_LEVEL = true }
 	-- Where the game's target frame art is (its top-left, in its own units) and
 	-- its effective scale; from the art when the frame has a place, else the
 	-- frame's top-left plus the offset last seen.
@@ -1603,13 +1650,13 @@ do
 			"UNIT_DISPLAYPOWER", "UNIT_PORTRAIT_UPDATE", "UNIT_LEVEL" }) do
 			stand.events:RegisterUnitEvent(event, "player")
 		end
-		stand.token, stand.alpha = nil, nil
+		stand.alpha = nil
 		stand.frame:SetAlpha(TargetAlpha())
-		Fill()
+		Looks()
 		ns.Log("shoulder", "selecting yourself: stand-in target frame up at " .. stand.at)
 	end
 	stand.events = CreateFrame("Frame")
-	stand.events:SetScript("OnEvent", function() ns.Guard(Fill) end)
+	stand.events:SetScript("OnEvent", function(_, event) ns.Guard(LOOK_EVENTS[event] and Looks or Values) end)
 	-- (Your Target Self key or a left-click: our button's click, after it ran.)
 	fake:HookScript("OnClick", function(_, mouse)
 		if mouse ~= "LeftButton" or not state.want then return end

@@ -49,7 +49,8 @@ end
 -- covers (their names, or a function giving the frames themselves).
 local FRAMES = {
 	{ "PLAYER", "Player", { "PlayerFrame" } },
-	{ "TARGET", "Target", { "TargetFrame" } },
+	-- (With the Shoulder Cam's stand-in target frame of you: ShoulderCam.lua.)
+	{ "TARGET", "Target", { "TargetFrame", "CinematicShoulderSelfTarget" } },
 	{ "FOCUS", "Focus", { "FocusFrame" } },
 	{ "PET", "Pet", { "PetFrame" } },
 	{ "TOT", "Target of target", { "TargetFrameToT", "FocusFrameToT" } },
