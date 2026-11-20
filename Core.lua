@@ -476,6 +476,7 @@ local DEFAULTS = {
 	shoulderCamSide = "right", -- ..."right" or "left" (the swap key flips it)
 	shoulderCamSwapTime = 1.5, --...seconds the camera takes to cross to the other shoulder (0: the game's own quick ease)
 	shoulderCamSelfTime = 1,   -- ...seconds back over your shoulder after targeting yourself (the game centers you then)
+	shoulderCamFakeSelf = false, -- ...selecting yourself clears your target instead, so it stays over your shoulder
 	shoulderCamPauseTime = 1.5, -- (1.5 since 2026-11-16, user) ...seconds out and back in going indoors, mounting, Show in and the gamepad UI
 	shoulderCamBackAfter = 2,  -- ...seconds its Show in row's on again before it comes back in (2026-11-17)
 	-- ...and while one of our cameras that frame you runs, unless allowed (the Cameras tab)

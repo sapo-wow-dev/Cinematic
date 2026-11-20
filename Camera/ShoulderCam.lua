@@ -1296,6 +1296,130 @@ local function SyncGameEscape()
 end
 gameEsc.Sync = SyncGameEscape -- (its PLAYER_REGEN_ENABLED, above)
 
+-- Keep the shoulder when selecting yourself (shoulderCamFakeSelf, off to
+-- start with; Forever only till retail's tested). With yourself targeted the
+-- game centers you and doesn't use the offset at all (selftarget and
+-- selfdodge runs, 13 settings tried, none help). So while the Shoulder Cam
+-- plays, selecting yourself clears your target instead: your Target Self keys
+-- and a left-click on your player frame go to a secure /cleartarget button.
+-- With nothing targeted, heals and buffs land on you (auto self-cast: the
+-- fakeself run, Thorns, 2026-11-20). The button sits over your player frame,
+-- pinned to the screen (hung on it, it'd lock it in fights: protected anchor),
+-- lets other clicks through to it (your menu on right-click), and counts as
+-- your frame for a hover (ns.hoverStandIn, Frames.lua). Keys and the button
+-- change out of fights only: what's set as one starts holds till it ends.
+-- Not with Clique (it owns clicks on unit frames): the keys only then.
+do
+	local fake = CreateFrame("Button", "CinematicShoulderSelfButton", UIParent, "SecureActionButtonTemplate")
+	fake:SetAttribute("*type1", "macro")
+	fake:SetAttribute("*macrotext1", "/cleartarget")
+	fake:SetAttribute("unit", "player")
+	fake:SetAttribute("*type2", "togglemenu") -- (if the right button can't pass through)
+	fake:Hide()
+	local passThrough = fake.SetPassThroughButtons
+		and pcall(fake.SetPassThroughButtons, fake, "RightButton", "MiddleButton", "Button4", "Button5") or false
+	local state = { want = false, rect = "", keys = "", why = "off" }
+	local ownChangeAt = -math.huge
+	local IsLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or _G.IsAddOnLoaded
+	local function Wanted()
+		local db = ns.db
+		if not (db and db.shoulderCamFakeSelf) then return false, "off" end
+		if ns.isRetail then return false, "retail (untested there)" end
+		if not ShoulderOn() then return false, "Shoulder Cam off" end
+		-- ("yourself" can't be ours, but a party frame click still gets there.)
+		if paused and paused ~= "yourself" then return false, "paused: " .. tostring(paused) end
+		if GetCVar("autoSelfCast") == "0" then return false, "auto self-cast off" end
+		return true, "on"
+	end
+	-- Where your player frame is, as a key ("" for none to cover).
+	local function FrameRect()
+		local frame = _G.PlayerFrame
+		if not (frame and ns.Flag(frame:IsVisible()) and frame:GetLeft()) then return "" end
+		if IsLoaded and ns.Flag(IsLoaded("Clique")) then return "" end
+		local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		return ("%.1f %.1f %.1f %.1f %s %d"):format(frame:GetLeft() * scale, frame:GetBottom() * scale,
+			frame:GetWidth() * scale, frame:GetHeight() * scale, frame:GetFrameStrata(), frame:GetFrameLevel())
+	end
+	local function Place(rect)
+		if rect == "" then
+			fake:Hide()
+			ns.hoverStandIn[fake] = nil
+			return
+		end
+		local frame = _G.PlayerFrame
+		local left, bottom, width, height = rect:match("^(%S+) (%S+) (%S+) (%S+)")
+		fake:ClearAllPoints()
+		fake:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", tonumber(left), tonumber(bottom))
+		fake:SetSize(tonumber(width), tonumber(height))
+		fake:SetFrameStrata(frame:GetFrameStrata())
+		fake:SetFrameLevel(frame:GetFrameLevel() + 50)
+		fake:Show()
+		ns.hoverStandIn[fake] = frame
+	end
+	local function Sync()
+		if InCombatLockdown() then return end
+		local want, why = Wanted()
+		if want ~= state.want or state.dirty then
+			ownChangeAt = GetTime()
+			ClearOverrideBindings(fake)
+			local keys = {}
+			if want then
+				for _, key in ipairs({ GetBindingKey("TARGETSELF") }) do
+					SetOverrideBindingClick(fake, true, key, fake:GetName())
+					keys[#keys + 1] = key
+				end
+			end
+			state.dirty = nil
+			state.keys = table.concat(keys, ", ")
+		end
+		local rect = want and FrameRect() or ""
+		if rect ~= state.rect then
+			Place(rect)
+			if want and (rect == "") ~= (state.rect == "") then
+				ns.Log("shoulder", "selecting yourself: player frame " .. (rect ~= "" and "covered" or "not covered"))
+			end
+			state.rect = rect
+		end
+		if want ~= state.want or why ~= state.why then
+			ns.Log("shoulder", ("selecting yourself: %s (%s)%s"):format(want and "clears your target" or "the game's",
+				why, want and (", keys %s, player frame %s"):format(state.keys ~= "" and state.keys or "none",
+					rect ~= "" and "covered" or "not covered") or ""))
+			state.want, state.why = want, why
+		end
+	end
+	local watcher = CreateFrame("Frame")
+	watcher:RegisterEvent("PLAYER_LOGIN")
+	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+	watcher:RegisterEvent("UPDATE_BINDINGS")
+	watcher:SetScript("OnEvent", function(_, event)
+		if event == "PLAYER_LOGIN" then
+			-- (On key down or up as the game's action buttons are, not both: it'd go twice.)
+			fake:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "AnyDown" or "AnyUp")
+			ns.Log("shoulder", ("selecting yourself: other clicks pass through to your frame: %s"):format(
+				tostring(passThrough)))
+		elseif event == "UPDATE_BINDINGS" then
+			-- (Ours fire it too: only yours, a key bound again, counts.)
+			if GetTime() - ownChangeAt > 0.5 then state.dirty = true end
+			return
+		end
+		ns.Guard(Sync)
+	end)
+	local clock = 0
+	ns.FeatureLoop(watcher, ns.Profiled("Shoulder Cam self select", function(_, elapsed)
+		clock = clock + elapsed
+		if clock < 0.25 then return end
+		clock = 0
+		Sync()
+	end), function()
+		return ns.db and ns.db.shoulderCamFakeSelf or state.want or state.rect ~= ""
+	end)
+	-- (The run and test commands: what it's doing now.)
+	function ns.ShoulderFakeSelfState()
+		return { want = state.want, why = state.why, keys = state.keys, covered = state.rect ~= "",
+			passThrough = passThrough, button = fake }
+	end
+end
+
 -- Turn to your target (shoulderCamTargetTurn, off by default). The game's
 -- enemy focus (test_cameraTargetFocusEnemy...) turns the camera toward an
 -- enemy you target, but out of combat at fixed strengths it does nothing: it
@@ -2604,6 +2728,14 @@ function ns.CreateShoulderCamPanel(kit)
 		L["%.1f sec"]), "slider")
 	kit.Tooltip(swapTime, L["How long the camera takes to swap to your other shoulder."])
 	kit.GreyUnless(swapTime, IfOn)
+	-- (Above its slider, user 2026-11-20. Forever only till retail's tested:
+	-- hidden there, not greyed.)
+	if not ns.isRetail then
+		local fakeSelf = stack:Add(kit.Check(content, "shoulderCamFakeSelf", L["Keep the shoulder when selecting yourself"],
+			L["Selecting yourself clears your target instead, so the camera stays over your shoulder. Heals and buffs still land on you."]),
+			"check")
+		kit.GreyUnless(fakeSelf, IfOn)
+	end
 	local selfTime = stack:Add(kit.Slider(content, "shoulderCamSelfTime", L["Back from targeting yourself"], 0, 3,
 		0.1, L["%.1f sec"]), "slider")
 	kit.Tooltip(selfTime, L["How long the camera takes to go back over your shoulder after you stop targeting yourself."])

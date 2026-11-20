@@ -3527,6 +3527,450 @@ do
 	end
 end
 
+-- fakeselftest: the real option (Keep the shoulder when selecting yourself,
+-- ShoulderCam.lua), on for the run and put back after. Steps, each with its
+-- own verdict, into db.shoulderFakeSelfTest:
+--   armed:  your Target Self keys go to our button, your frame covered (read);
+--   key:    an NPC targeted, Target Self pressed: target cleared, not you, the
+--           offset kept (screenshot);
+--   frame:  the same with a left-click on your player frame (yellow box);
+--   menu:   a right-click on it reaches your frame (its menu), target kept;
+--   off:    the option off: your keys are the game's again, the button gone.
+do
+	local run
+	local function Write(text)
+		local lines = ns.db.shoulderFakeSelfTest
+		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
+	local function Other() return UnitExists("target") and not Self() end
+	local function Box(head, line, r, g, b) ns.PadTestBox(head, line, r or 1, g or 0.82, b or 0) end
+	local function Verdict(text)
+		run.verdicts[#run.verdicts + 1] = text
+		Write(text)
+	end
+	local function Shot(what)
+		ns.PadTestBoxHide()
+		C_Timer.After(0.1, function()
+			local ok = pcall(function() Screenshot() end)
+			if run then Write(("screenshot %s at %s: %s"):format(what, date("%m%d%y_%H%M%S"), ok and "taken" or "failed")) end
+		end)
+	end
+	local CLICK = "CLICK CinematicShoulderSelfButton:LeftButton"
+	local function KeysAre(action)
+		local keys = { GetBindingKey("TARGETSELF") }
+		local all = #keys > 0
+		for _, key in ipairs(keys) do
+			if GetBindingAction(key, true) ~= action then all = false end
+		end
+		return all, keys
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
+		if run.mark then run.mark:Hide() end
+		ns.db.shoulderCamFakeSelf = run.yours
+		Write(("end: %s, your setting back to %s"):format(why, Text(run.yours)))
+		Write(("verdicts: %s"):format(table.concat(run.verdicts, "; ")))
+		Log(("fakeselftest: %s, %d lines in db.shoulderFakeSelfTest"):format(why, #ns.db.shoulderFakeSelfTest))
+		run = nil
+	end
+	local function Done()
+		End("done")
+		ns.PadTestBox("Fake self test done", "/reload, then say check log", 0.3, 1, 0.3)
+		C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+	end
+	local STEPS = { "key", "frame", "menu" }
+	local ASK = { key = "PRESS YOUR TARGET SELF KEY (%s)", frame = "LEFT-CLICK YOUR PLAYER FRAME (the yellow box)",
+		menu = "RIGHT-CLICK YOUR PLAYER FRAME (the yellow box), then Esc" }
+	local Next
+	local function Tick(_, elapsed)
+		run.clock = run.clock + elapsed
+		local step = STEPS[run.at]
+		if run.phase == "arming" then
+			if run.clock < 1 then return end
+			local state = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState() or {}
+			local bound, keys = KeysAre(CLICK)
+			run.keys = keys
+			Write(("armed: want %s (%s), keys %s, frame covered %s, other clicks pass through %s"):format(Text(state.want),
+				Text(state.why), Text(state.keys), Text(state.covered), Text(state.passThrough)))
+			Verdict(("armed %s: keys to our button %s, frame covered %s"):format(
+				state.want and (bound or #keys == 0) and state.covered and "PASS" or "FAIL", Text(bound), Text(state.covered)))
+			local button = state.button
+			if button and not run.hooked then
+				run.hooked = true
+				button:HookScript("OnClick", function(_, mouse) if run and run.OnClick then run.OnClick("ours", mouse) end end)
+				_G.PlayerFrame:HookScript("OnClick", function(_, mouse) if run and run.OnClick then run.OnClick("frame", mouse) end end)
+				run.mark = button:CreateTexture(nil, "OVERLAY")
+				run.mark:SetAllPoints()
+				run.mark:SetColorTexture(1, 0.82, 0, 0.35)
+			end
+			if run.mark then run.mark:Show() end
+			if not state.want then return End("not armed") end
+			Next()
+		elseif run.phase == "wantOther" then
+			if not Other() then run.clock = 0 return end
+			if run.clock < 1 then return end
+			if step == "key" and #run.keys == 0 then
+				Verdict("key SKIPPED (no Target Self key)")
+				return Next()
+			end
+			run.phase, run.clock, run.got, run.before = "wantPress", 0, nil, UnitName("target")
+			run.OnClick = function(who, mouse)
+				if run.got then return end
+				run.got = { who = who, mouse = mouse, at = run.clock }
+				Write(("%s: click on %s (%s)"):format(step, who, Text(mouse)))
+			end
+			Write(("%s: target %s, asking"):format(step, Text(run.before)))
+			Box(("Fake self test %d/%d: %s"):format(run.at, #STEPS, step), ASK[step]:format(table.concat(run.keys, " or ")))
+		elseif run.phase == "wantPress" then
+			if not run.got then
+				if Self() then run.got = { who = "game", at = run.clock } end
+				return
+			end
+			if run.clock - run.got.at < (step == "menu" and 2 or 1.2) then return end
+			run.OnClick = nil
+			local offset = tonumber(GetCVar(SHOULDER)) or 0
+			if step == "menu" then
+				local kept = Other() and Text(UnitName("target")) == Text(run.before)
+				Verdict(("menu %s: right-click reached %s, target kept %s"):format(
+					run.got.who == "frame" and kept and "PASS" or "FAIL", run.got.who, Text(kept)))
+			else
+				local ok = not UnitExists("target") and run.got.who == "ours" and math.abs(offset) >= math.abs(run.offset) * 0.5
+				Verdict(("%s %s: click on %s, target %s, offset %.2f (start %.2f)"):format(step, ok and "PASS" or "FAIL",
+					run.got.who, UnitExists("target") and Text(UnitName("target")) or "cleared", offset, run.offset))
+				Shot(("%d %s"):format(run.at, step))
+			end
+			run.phase = "between"
+			C_Timer.After(0.6, function() if run then Next() end end)
+		elseif run.phase == "off" then
+			if run.clock < 1 then return end
+			local state = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState() or {}
+			local back = KeysAre("TARGETSELF")
+			Verdict(("off %s: keys the game's %s, frame covered %s"):format(
+				(back or #run.keys == 0) and not state.covered and "PASS" or "FAIL", Text(back), Text(state.covered)))
+			Done()
+		end
+	end
+	function Next()
+		run.at, run.clock = run.at + 1, 0
+		if STEPS[run.at] then
+			run.phase = "wantOther"
+			Box(("Fake self test %d/%d: %s"):format(run.at, #STEPS, STEPS[run.at]), "TARGET ANY NPC OR CREATURE (Tab or click it)")
+		else
+			if run.mark then run.mark:Hide() end
+			run.phase = "off"
+			ns.db.shoulderCamFakeSelf = false
+			Write("option off")
+			Box("Fake self test: off", "hands off, checking your keys are back")
+		end
+	end
+	function ns.ShoulderFakeSelfTest()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder fakeselftest: stopped")
+		end
+		if InCombatLockdown() then return ns.Print("shoulder fakeselftest: out of combat, please") end
+		if not ns.Setting("shoulderCam") then return ns.Print("shoulder fakeselftest: turn on the Shoulder Cam first") end
+		ns.db.shoulderFakeSelfTest = {}
+		run = { frame = CreateFrame("Frame"), phase = "arming", clock = 0, began = GetTime(), at = 0, verdicts = {},
+			yours = ns.db.shoulderCamFakeSelf, offset = tonumber(GetCVar(SHOULDER)) or 0 }
+		ns.db.shoulderCamFakeSelf = true
+		Write(("start | %s | %s | offset %.2f | your setting %s | autoSelfCast %s"):format(ns.isRetail and "retail" or "Forever",
+			Who(), run.offset, Text(run.yours), Text(GetCVar("autoSelfCast"))))
+		run.frame:SetScript("OnUpdate", Tick)
+		Box("Fake self test", "hands off, turning the option on")
+		ns.Print("shoulder fakeselftest: follow the box, about a minute; type it again to stop")
+	end
+end
+
+-- fakeself: can "selecting yourself" clear your target instead, so the game
+-- never centers you (it does with yourself targeted: selfdodge, 2026-11-20)?
+-- A secure button (macro /cleartarget) pinned over your player frame, and the
+-- Target Self keys bound to it while the run's on. Steps, each with its own
+-- verdict and a screenshot, into db.shoulderFakeSelf:
+--   key:   an NPC targeted, Target Self pressed: target gone, not you, the
+--          offset kept (the screenshot: you still aside);
+--   frame: an NPC targeted, your player frame clicked: the same;
+--   cast:  nothing targeted, a heal or buff cast: who the game aimed it at
+--          (UNIT_SPELLCAST_SENT), and whether your auras changed (auto self-cast).
+-- The self-cast settings are logged at the start. Button and keys go at the
+-- end (after the fight, if in one); a /reload drops both by itself. Typed
+-- again: stops.
+do
+	local CAST_WAIT = 25 -- seconds the cast step waits before it skips itself
+	local SELF_CVARS = { "autoSelfCast", "enableAutoSelfCast", "ActionButtonUseKeyDown", "SoftTargetFriend",
+		"SoftTargetEnemy", "SoftTargetInteract" }
+	local run, button
+	local function Write(text)
+		local lines = ns.db.shoulderFakeSelf
+		if #lines < 4000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
+	local function Other() return UnitExists("target") and not Self() end
+	local function Box(head, line, r, g, b) ns.PadTestBox(head, line, r or 1, g or 0.82, b or 0) end
+	local function Shot(what)
+		ns.PadTestBoxHide()
+		C_Timer.After(0.1, function()
+			local ok = pcall(function() Screenshot() end)
+			if run then Write(("screenshot %s at %s: %s"):format(what, date("%m%d%y_%H%M%S"), ok and "taken" or "failed")) end
+		end)
+	end
+	local function Keys()
+		local keys = {}
+		for _, key in ipairs({ GetBindingKey("TARGETSELF") }) do keys[#keys + 1] = key end
+		return keys
+	end
+	local function PlayerFrameShown()
+		return _G.PlayerFrame and _G.PlayerFrame:IsVisible() and _G.PlayerFrame:GetLeft() and true or false
+	end
+	-- (Out of combat only. Pinned to the screen where your player frame is,
+	-- not anchored to it: hung on a protected frame, it locks it: protected-anchor-lock.)
+	local function Arm()
+		if not button then
+			button = CreateFrame("Button", "CinematicFakeSelfButton", UIParent, "SecureActionButtonTemplate")
+			button:SetAttribute("type", "macro")
+			button:SetAttribute("macrotext", "/cleartarget")
+			button:RegisterForClicks("AnyUp", "AnyDown")
+			-- (A yellow box where to click: your frame can be faded or hidden,
+			-- "hard to see my profile": the second run, 2026-11-20.)
+			local mark = button:CreateTexture(nil, "OVERLAY")
+			mark:SetAllPoints()
+			mark:SetColorTexture(1, 0.82, 0, 0.35)
+			button:HookScript("OnClick", function(_, mouse, down)
+				if run and run.OnClick then run.OnClick(mouse, down) end
+			end)
+		end
+		local pinned = "no player frame on screen"
+		if PlayerFrameShown() then
+			local scale = _G.PlayerFrame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			button:ClearAllPoints()
+			button:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", _G.PlayerFrame:GetLeft() * scale, _G.PlayerFrame:GetBottom() * scale)
+			button:SetSize(_G.PlayerFrame:GetWidth() * scale, _G.PlayerFrame:GetHeight() * scale)
+			button:SetFrameStrata(_G.PlayerFrame:GetFrameStrata())
+			button:SetFrameLevel(_G.PlayerFrame:GetFrameLevel() + 50)
+			button:Show()
+			ns.hoverStandIn[button] = _G.PlayerFrame -- (its hover brings your faded frame up: Frames.lua)
+			pinned = ("pinned over the player frame, %.0f x %.0f"):format(button:GetWidth(), button:GetHeight())
+		else
+			button:Hide()
+		end
+		local keys = Keys()
+		for _, key in ipairs(keys) do SetOverrideBindingClick(button, true, key, button:GetName()) end
+		return pinned, keys
+	end
+	local function Disarm()
+		if not button then return true end
+		if InCombatLockdown() then return false end
+		ClearOverrideBindings(button)
+		button:Hide()
+		ns.hoverStandIn[button] = nil
+		return true
+	end
+	local waiter = CreateFrame("Frame")
+	waiter:SetScript("OnEvent", function(self)
+		if Disarm() then
+			self:UnregisterAllEvents()
+			ns.Log("shoulder", "fakeself: button and keys taken away after the fight")
+		end
+	end)
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		run.frame:UnregisterAllEvents()
+		local gone = Disarm()
+		if not gone then waiter:RegisterEvent("PLAYER_REGEN_ENABLED") end
+		Write(("end: %s, button and keys %s"):format(why, gone and "taken away" or "taken away after the fight"))
+		Write(("verdicts: %s"):format(table.concat(run.verdicts, "; ")))
+		Log(("fakeself: %s, %d lines in db.shoulderFakeSelf"):format(why, #ns.db.shoulderFakeSelf))
+		run = nil
+	end
+	local Next
+	-- (A press: watched 1.5 s, the verdict at the end.)
+	local function Pressed(name, mouse, down)
+		if run.pressedAt then
+			Write(("%s: click again (%s %s), counted once"):format(name, Text(mouse), down and "down" or "up"))
+			return
+		end
+		run.pressedAt = run.clock
+		Write(("%s: our button clicked (%s %s)"):format(name, Text(mouse), down and "down" or "up"))
+	end
+	local function Watch(name)
+		run.OnClick = function(mouse, down) Pressed(name, mouse, down) end
+	end
+	local function Verdict(name)
+		local cleared, self = not UnitExists("target"), Self()
+		local offset = tonumber(GetCVar(SHOULDER)) or 0
+		local ok = cleared and not self and math.abs(offset) >= math.abs(run.offset) * 0.5
+		local text = ("%s %s: target %s, yourself %s, offset %.2f (start %.2f)"):format(name, ok and "PASS" or "FAIL",
+			cleared and "cleared" or Text(UnitName("target")), Text(self), offset, run.offset)
+		run.verdicts[#run.verdicts + 1] = text
+		Write(text)
+	end
+	local STEPS
+	STEPS = {
+		{ "key", function()
+			if #run.keys == 0 then
+				Write("key: no key bound to Target Self, skipped")
+				run.verdicts[#run.verdicts + 1] = "key SKIPPED (no Target Self key)"
+				return false
+			end
+			Watch("key")
+			return "PRESS YOUR TARGET SELF KEY (" .. table.concat(run.keys, " or ") .. ")"
+		end },
+		{ "frame", function()
+			if not PlayerFrameShown() then
+				Write("frame: no player frame on screen, skipped")
+				run.verdicts[#run.verdicts + 1] = "frame SKIPPED (no player frame)"
+				return false
+			end
+			Watch("frame")
+			return "LEFT-CLICK YOUR OWN PLAYER FRAME (the yellow box)"
+		end },
+	}
+	local function Tick(_, elapsed)
+		run.clock, run.sampleClock = run.clock + elapsed, run.sampleClock + elapsed
+		if run.sampleClock >= 0.2 then
+			run.sampleClock = 0
+			Write(("s %s | offset %s | target %s | self %s | combat %s"):format(run.phase, Text(GetCVar(SHOULDER)),
+				Text(UnitExists("target")), Text(Self()), Text(InCombatLockdown())))
+		end
+		local step = STEPS[run.at]
+		if run.phase == "wantOther" then
+			if not Other() then run.clock = 0 return end
+			if run.clock < 1 then return end
+			local ask = step[2]()
+			if not ask then return Next() end
+			run.phase, run.clock, run.pressedAt = "wantPress", 0, nil
+			Write(("%s: target %s, asking"):format(step[1], Text(UnitName("target"))))
+			Box(("Fake self %d/3: %s"):format(run.at, step[1]), ask)
+		elseif run.phase == "wantPress" then
+			if not run.pressedAt then
+				-- (The game's own Target Self got through: the override didn't take.)
+				if Self() then
+					run.pressedAt = run.clock
+					Write(step[1] .. ": you're targeted, our button wasn't clicked")
+				end
+				return
+			end
+			if run.clock - run.pressedAt < 1.2 then return end
+			run.OnClick = nil
+			Verdict(step[1])
+			Shot(("%d %s: after the press"):format(run.at, step[1]))
+			run.phase = "between"
+			C_Timer.After(0.6, function() if run then Next() end end)
+		elseif run.phase == "wantNone" then
+			if UnitExists("target") then run.clock = 0 return end
+			if run.clock < 1 then return end
+			run.phase, run.clock, run.cast = "wantCast", 0, nil
+			run.aurasChanged = 0
+			Write("cast: nothing targeted, asking")
+		elseif run.phase == "wantCast" then
+			local left = CAST_WAIT - run.clock
+			if run.cast and run.cast.done and run.clock - run.cast.done >= 1 then
+				local text = ("cast %s: %s, aimed at %s (you: %s), your auras changed %d times after"):format(
+					run.cast.ok and "DONE" or "FAILED", Text(run.cast.spell), Text(run.cast.at), Text(run.cast.atYou),
+					run.aurasChanged)
+				run.verdicts[#run.verdicts + 1] = text
+				Write(text)
+				run.phase = "between"
+				C_Timer.After(0.3, function() if run then End("done") end end)
+				C_Timer.After(0.8, function()
+					ns.PadTestBox("Fake self run done", "/reload, then say check log", 0.3, 1, 0.3)
+					C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+				end)
+				return
+			end
+			if left <= 0 and not run.cast then
+				run.verdicts[#run.verdicts + 1] = "cast SKIPPED (nothing cast in time)"
+				Write("cast: nothing cast, skipped")
+				run.phase = "between"
+				End("done")
+				ns.PadTestBox("Fake self run done", "/reload, then say check log", 0.3, 1, 0.3)
+				C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+				return
+			end
+			if not run.cast then
+				Box("Fake self 3/3: cast", "CAST A SPELL YOU CAN PUT ON OTHERS (heal, Unending Breath...), nothing targeted (skips in " .. math.ceil(left) .. " s)")
+			end
+		end
+	end
+	function Next()
+		run.at = run.at + 1
+		run.clock = 0
+		if STEPS[run.at] then
+			run.phase = "wantOther"
+			Box(("Fake self %d/3: %s"):format(run.at, STEPS[run.at][1]), "TARGET ANY NPC OR CREATURE (Tab or click it)")
+		else
+			run.phase = "wantNone"
+			Box("Fake self 3/3: cast", "CLEAR YOUR TARGET (Esc)")
+		end
+	end
+	function ns.ShoulderFakeSelf()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder fakeself: stopped")
+		end
+		if InCombatLockdown() then
+			return ns.Print("shoulder fakeself: out of combat, please (the button can't be set up in a fight)")
+		end
+		if not ns.Setting("shoulderCam") then
+			return ns.Print("shoulder fakeself: turn on the Shoulder Cam first")
+		end
+		ns.db.shoulderFakeSelf = {}
+		run = { frame = CreateFrame("Frame"), phase = "start", clock = 0, sampleClock = 0, began = GetTime(), at = 0,
+			verdicts = {}, offset = tonumber(GetCVar(SHOULDER)) or 0 }
+		local pinned, keys = Arm()
+		run.keys = keys
+		Write(("start | %s | %s | offset %.2f | side %s | button %s | Target Self keys %s"):format(
+			ns.isRetail and "retail" or "Forever", Who(), run.offset, Text(ns.db.shoulderCamSide), pinned,
+			#keys > 0 and table.concat(keys, ", ") or "none"))
+		local said = {}
+		for _, name in ipairs(SELF_CVARS) do said[#said + 1] = name .. " " .. Text(GetCVar(name)) end
+		local modified = _G.GetModifiedClick and select(2, pcall(_G.GetModifiedClick, "SELFCAST"))
+		said[#said + 1] = "self-cast key " .. Text(modified)
+		Write("self-cast settings: " .. table.concat(said, ", "))
+		run.frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+		run.frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
+		run.frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+		run.frame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
+		run.frame:RegisterUnitEvent("UNIT_AURA", "player")
+		run.frame:SetScript("OnEvent", function(_, event, _, a, _, d)
+			if not run then return end
+			if event == "PLAYER_TARGET_CHANGED" then
+				Write("target changed: " .. (Self() and "yourself" or UnitExists("target") and "other" or "none"))
+			elseif run.phase ~= "wantCast" then
+				return
+			elseif event == "UNIT_SPELLCAST_SENT" then
+				-- (unit, target name, castGUID, spellID; the name can be secret)
+				local name = C_Spell and C_Spell.GetSpellName and select(2, pcall(C_Spell.GetSpellName, d))
+				-- (The name comes with your realm: "Sapo Druid" or "Sapo-Druid".)
+				local me, said = Text(UnitName("player")), Text(a)
+				local atYou = said == "" and "no name given" or said == me or said:sub(1, #me + 1) == me .. " "
+					or said:sub(1, #me + 1) == me .. "-"
+				run.cast = { spell = name or d, at = Text(a) == "" and "(none named)" or a, atYou = atYou }
+				Write(("cast sent: %s at %s"):format(Text(run.cast.spell), Text(run.cast.at)))
+			elseif event == "UNIT_SPELLCAST_SUCCEEDED" and run.cast then
+				run.cast.ok, run.cast.done = true, run.clock
+				Write("cast succeeded")
+			-- (A failed line can follow a success in the same frame, a second
+			-- press of the key: the first run, 2026-11-20. The success stands.)
+			elseif event == "UNIT_SPELLCAST_FAILED" and run.cast and not run.cast.ok then
+				run.cast.ok, run.cast.done = false, run.clock
+				Write("cast failed")
+			elseif event == "UNIT_AURA" and run.cast then
+				run.aurasChanged = run.aurasChanged + 1
+			end
+		end)
+		run.frame:SetScript("OnUpdate", Tick)
+		Next()
+		ns.Print("shoulder fakeself: follow the box, about a minute; type it again to stop")
+	end
+end
+
 -- today: one run over the Shoulder Cam changes of 2026-11-15, each with its
 -- own verdict and screenshots, into db.shoulderTodayRun:
 --   swap:   the swap key pressed for you: the offset glides across over
@@ -4193,6 +4637,8 @@ function ns.ShoulderTest(arg)
 	elseif what == "lock" then ns.ShoulderLock()
 	elseif what == "selftarget" then ns.ShoulderSelfTarget()
 	elseif what == "selfdodge" then ns.ShoulderSelfDodge()
+	elseif what == "fakeself" then ns.ShoulderFakeSelf()
+	elseif what == "fakeselftest" then ns.ShoulderFakeSelfTest()
 	elseif what == "today" then ns.ShoulderToday(rest)
 	elseif what == "profiletest" then ns.ShoulderProfileTest()
 	elseif what == "on" then Set("shoulderCam", true)
@@ -4203,7 +4649,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, today, profiletest, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, today, profiletest, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

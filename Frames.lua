@@ -2092,6 +2092,10 @@ do
 	end
 end
 
+-- Our buttons laid over a game frame (the fake self-target's over your player
+-- frame) count as that frame's for a hover: on the screen, not its children,
+-- they kept a faded frame from coming up (user, 2026-11-20). [button] = frame.
+ns.hoverStandIn = ns.hoverStandIn or setmetatable({}, { __mode = "k" })
 local function IsInside(frame, ancestor)
 	while frame do
 		if frame == ancestor then
@@ -2100,7 +2104,7 @@ local function IsInside(frame, ancestor)
 		if IsForbidden(frame) then
 			return false
 		end
-		frame = frame:GetParent()
+		frame = ns.hoverStandIn[frame] or frame:GetParent()
 	end
 	return false
 end
