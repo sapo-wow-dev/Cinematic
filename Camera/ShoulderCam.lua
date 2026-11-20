@@ -1508,12 +1508,32 @@ do
 		return type(e) == "table" and type(e.x) == "number" and type(e.y) == "number" and type(e.w) == "number"
 			and type(e.h) == "number"
 	end
+	-- (Besides a place: a text by its anchor point {anchor = {point, x, y}}, art
+	-- units from the art's top-left, no width; or one whose side alone is known
+	-- {onBar}, on the health bar's top edge on that side, as the Unit Frames
+	-- preview puts it. The built-in recipe's place is WoW Forever's layout: on
+	-- retail it'd put the name on the level, so a part with nothing there stays
+	-- where it was. The recipe's own owner, 2026-11-20.)
 	local function Spot(f, region, entry, role)
 		if type(entry) == "table" and entry.hidden and role ~= "power" and role ~= "powerMask" then
 			region:Hide()
 			return false
 		end
-		local base = role and ns.UNIT_FRAME_RECIPES and ns.UNIT_FRAME_RECIPES.TARGET
+		local anchor = type(entry) == "table" and type(entry.anchor) == "table" and entry.anchor
+		if anchor and type(anchor[2]) == "number" and type(anchor[3]) == "number" then
+			region:ClearAllPoints()
+			region:SetPoint(anchor[1] or "TOPLEFT", f, "TOPLEFT", anchor[2], -anchor[3])
+			if region.Show then region:Show() end
+			return true
+		end
+		if type(entry) == "table" and entry.onBar and stand.health then
+			local right = entry.justify == "RIGHT"
+			region:ClearAllPoints()
+			region:SetPoint(right and "BOTTOMRIGHT" or "BOTTOMLEFT", stand.health, right and "TOPRIGHT" or "TOPLEFT", 0, 2)
+			if region.Show then region:Show() end
+			return true
+		end
+		local base = role and not ns.isRetail and ns.UNIT_FRAME_RECIPES and ns.UNIT_FRAME_RECIPES.TARGET
 		local spot = Placed(entry) and entry or (base and Placed(base[role]) and base[role]) or nil
 		if not spot then return false end
 		region:ClearAllPoints()
@@ -1631,7 +1651,8 @@ do
 		-- (Widened round its middle when centered, retail's on the left of the
 		-- name strip: widened leftward it'd sit off the frame.)
 		local level = Placed(recipe.level) and recipe.level
-			or (ns.UNIT_FRAME_RECIPES and Placed(ns.UNIT_FRAME_RECIPES.TARGET.level) and ns.UNIT_FRAME_RECIPES.TARGET.level)
+			or (not ns.isRetail and ns.UNIT_FRAME_RECIPES and Placed(ns.UNIT_FRAME_RECIPES.TARGET.level)
+				and ns.UNIT_FRAME_RECIPES.TARGET.level)
 		if level then
 			local wide = math.max(level.w, 36)
 			local justify = level.justify or "RIGHT"
