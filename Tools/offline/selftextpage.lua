@@ -26,6 +26,8 @@ function M:SetPoint(point, rel, relPoint, x, y)
 	self._points[#self._points + 1] = { point, rel, relPoint, x or 0, y or 0 }
 end
 function M:ClearAllPoints() self._points = nil end
+function M:SetSize(w, h) self._w, self._h = w, h end
+function M:GetSize() return self._w or 100, self._h or 20 end
 function M:GetPoint(i)
 	local p = self._points and self._points[i or 1]
 	if p then return unpack(p) end
@@ -65,7 +67,9 @@ local function NewText()
 	fs.SetTextColor = function(self, r, g, b, a) self.color = { r, g, b, a } end
 	fs.SetText = function(self, words) self.words = words end
 	fs.SetFormattedText = function(self, _, words, count) self.words, self.count = words, count end
-	for _, m in ipairs({ "SetShadowColor", "SetShadowOffset", "ClearAllPoints", "SetPoint", "SetAlpha", "SetTextScale" }) do
+	fs.SetPoint = function(self, point, rel, relPoint, x, y) self.point = { point, rel, relPoint, x, y } end
+	fs.GetPoint = function(self) if self.point then return unpack(self.point) end end
+	for _, m in ipairs({ "SetShadowColor", "SetShadowOffset", "ClearAllPoints", "SetAlpha", "SetTextScale" }) do
 		fs[m] = function() end
 	end
 	fs.Show = function(self) self.shown = true end
@@ -147,6 +151,14 @@ CreateFrame = realCreateFrame -- luacheck: ignore 121
 Check("page builds", ok, err)
 Check("registered as Self Text Style", registered == "Self Text Style", registered)
 local page = ns.selfTextPage
+-- (The preview's size as the game keeps it: the stand-in says 100 x 20 for
+-- every frame. On the page, 520 x 210; docked, what the window gives.)
+local previewW, previewH = 520, 210
+if page and page.preview then
+	rawset(page.preview, "GetWidth", function() return previewW end)
+	rawset(page.preview, "GetHeight", function() return previewH end)
+	if page.Fit then page.Fit() end
+end
 Check("three tabs", page.hosts and #page.hosts == 3)
 local db = ns.db
 db.styleGeneral, db.selfTextStyle = true, true
@@ -363,6 +375,63 @@ do
 	_, _, _, hx = page.handle:GetPoint(1)
 	Check("Over you: the mark on you", math.abs(hx - you * page.SCALE) < 0.5, hx)
 	db.selfTextSide = "free"
+end
+
+-- Docked bigger (the user's shot 2026-11-21: the texts in the top-left
+-- corner, the mark off them, you under the bottom edge): everything follows
+-- the window's size; the mark sits where a text starts; no Shoulder Cam view
+-- (behind you): the texts and the mark straight over you.
+local function MarkOnText(name)
+	local board = page.board
+	board:Clear()
+	local update = board.layer._scripts.OnUpdate
+	if update then update(board.layer, 1) end -- (your spot settled, as a second in game)
+	local text = ns.SelfTextSample("-12", "damage", false, board)
+	if update then update(board.layer, 0) end
+	page.PlaceHandle()
+	local _, _, _, tx, ty = text:GetPoint(1)
+	local _, _, _, hx, hy = page.handle:GetPoint(1)
+	Check(name .. ": the mark on the text's start", type(tx) == "number" and type(hx) == "number"
+		and math.abs(tx - hx) < 0.5 and math.abs(ty - hy) < 0.5,
+		("text %s,%s mark %s,%s"):format(tostring(tx), tostring(ty), tostring(hx), tostring(hy)))
+	return tx, hx
+end
+do
+	db.selfTextSide, db.selfTextAcross, db.selfTextHeight, db.selfTextMotion = "free", 0, 0, "up"
+	page.view.over = true
+	MarkOnText("on the page")
+	previewW, previewH = 740, 300
+	page.Fit()
+	local lw, lh = page.board.layer:GetSize()
+	Check("docked: the texts' layer as big as the window", lw == 740 and lh == 300, ("%s x %s"):format(lw, lh))
+	Check("docked: the texts zoom with it", math.abs(page.board.scale - page.SCALE * 300 / 210) < 0.001, page.board.scale)
+	local _, _, _, mx, my = page.model:GetPoint(1)
+	local _, mh = page.model:GetSize()
+	Check("docked: you inside it (your top in, your feet under the edge)", mx == -0.1 * 740 and my == -300 * 0.85
+		and mh == 300 * 1.8 and my + mh > 300 * 0.5, ("%s %s %s"):format(mx, my, mh))
+	local _, _, _, gx, gy = page.ghost:GetPoint(1)
+	Check("docked: the game's spot zoomed too", gx == 0 and math.abs(gy - 62 * 300 / 210) < 0.01, gy)
+	MarkOnText("docked")
+	-- (The Style previews' fit runs on each refresh: it leaves you and the marks be.)
+	if ns.ApplyPreviewFit then
+		local _, _, _, x1, y1 = page.model:GetPoint(1)
+		local _, _, _, g1, h1 = page.ghost:GetPoint(1)
+		ns.ApplyPreviewFit(page.preview)
+		local _, _, _, x2, y2 = page.model:GetPoint(1)
+		local _, _, _, g2, h2 = page.ghost:GetPoint(1)
+		Check("the previews' fit leaves you and the game's spot", x1 == x2 and y1 == y2 and g1 == g2 and h1 == h2,
+			("%s,%s -> %s,%s; %s,%s -> %s,%s"):format(tostring(x1), tostring(y1), tostring(x2), tostring(y2), tostring(g1), tostring(h1), tostring(g2), tostring(h2)))
+	end
+	page.view.over = false
+	local tx, hx = MarkOnText("behind you (no Shoulder Cam)")
+	Check("behind you: texts over you, centered", math.abs(tx or 99) < 0.5 and math.abs(hx or 99) < 0.5, tx)
+	db.selfTextAcross, db.selfTextHeight = 20, 30
+	MarkOnText("moved")
+	db.selfTextAcross, db.selfTextHeight = 0, 0
+	page.view.over = true
+	previewW, previewH = 520, 210
+	page.Fit()
+	page.board:Clear()
 end
 
 -- Reset page: every kind's parts too.

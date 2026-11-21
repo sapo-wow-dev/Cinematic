@@ -185,11 +185,27 @@ db.selfTextSide = "split"
 Message("HEAL", S("+50"), { 0.1, 1, 0.1 })
 Frame(0.02)
 Check("split: gained on the other side", math.abs(Newest().x + 310) < 2, Newest().x)
+db.selfTextSide = "free"
 db.selfTextFollow = false
 Frame(1)
 Message("DAMAGE", S("-7"), { 1, 0.1, 0.1 })
 Frame(0.02)
-Check("follow off: the middle", math.abs(Newest().x) < 100, Newest().x)
+Check("follow off: over you in the middle (no side to be free on)", math.abs(Newest().x) < 2, Newest().x)
+shift = 0
+db.selfTextFollow = true
+Frame(1)
+Message("DAMAGE", S("-6"), { 1, 0.1, 0.1 })
+Frame(0.02)
+Check("no Shoulder Cam: over you, centered", math.abs(Newest().x) < 2, Newest().x)
+db.selfTextSide = "split"
+Message("HEAL", S("+40"), { 0.1, 1, 0.1 })
+Frame(0.02)
+Check("split in the middle: gained on the left", Newest().x < -80, Newest().x)
+Message("DAMAGE", S("-5"), { 1, 0.1, 0.1 })
+Frame(0.02)
+Check("split in the middle: taken on the right", Newest().x > 80, Newest().x)
+shift = -400
+Frame(1)
 db.selfTextSide, db.selfTextFollow = "free", true
 
 -- 7. Texts go after their time.

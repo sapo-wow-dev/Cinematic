@@ -309,12 +309,28 @@ function ns.CreateSelfTextStylePanel(kit)
 		if model:IsShown() == hide then model:SetShown(not hide) end
 	end)
 	page.modelWatch = modelWatch
-	local function YouX() -- (UI units across from the preview's middle, as the board takes it)
-		return view.over and (OVER_X * PREVIEW_W) / SCALE or 0
+	-- (The preview's size now: the page widens it, the docked window sizes it
+	-- as dragged. Laid out for 520 x 210 alone, docked bigger the texts sat in
+	-- its top-left corner, the mark off them and you under its bottom edge,
+	-- the user 2026-11-21. Everything zooms with its height.)
+	local function Size()
+		local w, h = preview:GetWidth(), preview:GetHeight()
+		if not (type(w) == "number" and w > 1 and type(h) == "number" and h > 1) then return PREVIEW_W, PREVIEW_H end
+		return w, h
 	end
+	local function Zoom() return select(2, Size()) / PREVIEW_H end
+	local function Scale() return SCALE * Zoom() end
+	page.Scale = Scale
+	local function YouX() -- (UI units across from the preview's middle, as the board takes it)
+		return view.over and (OVER_X * Size()) / Scale() or 0
+	end
+	page.YouX = YouX
 	local function PlaceModel()
+		local w, h = Size()
+		local zoom = h / PREVIEW_H
+		model:SetSize(260 * zoom, h * 1.8)
 		model:ClearAllPoints()
-		model:SetPoint("BOTTOM", preview, "BOTTOM", view.over and OVER_X * PREVIEW_W or 0, -PREVIEW_H * 0.85)
+		model:SetPoint("BOTTOM", preview, "BOTTOM", view.over and OVER_X * w or 0, -h * 0.85)
 	end
 	PlaceModel()
 	-- The texts: on their own layer over the preview, the real code's board,
@@ -332,11 +348,29 @@ function ns.CreateSelfTextStylePanel(kit)
 	local board = ns.SelfTextNewBoard(layer, layer, SCALE, YouX, LIFT)
 	board.middleY = GAME_Y / SCALE
 	page.board = board
+	local ghost -- (made below: where the game draws, zoomed too)
+	local function Fit()
+		local w, h = Size()
+		layer:SetSize(w, h)
+		board.scale = Scale()
+		PlaceModel()
+		if ghost then
+			ghost:ClearAllPoints()
+			ghost:SetPoint("CENTER", preview, "CENTER", 0, GAME_Y * h / PREVIEW_H)
+		end
+	end
+	page.Fit = Fit
+	-- (Sized here, not by the Style previews' fit (ApplyPreviewFit): it scaled
+	-- and moved them from the samples' middle on each refresh, you included,
+	-- whose frame runs past the edges on purpose.)
+	model.zoomSkip, modelWatch.zoomSkip = true, true
+	preview:HookScript("OnSizeChanged", Fit)
 	-- Where the game would draw it: a faint box in the middle (Game's spot).
-	local ghost = CreateFrame("Frame", nil, preview)
+	ghost = CreateFrame("Frame", nil, preview)
 	ghost:SetSize(110, 22)
-	ghost:SetPoint("CENTER", preview, "CENTER", 0, GAME_Y) -- (where the game's look draws: board.middleY)
+	ghost:SetPoint("CENTER", preview, "CENTER", 0, GAME_Y) -- (where the game's look draws: board.middleY; Fit zooms it)
 	ghost:SetFrameLevel(preview:GetFrameLevel() + 10)
+	ghost.zoomSkip = true
 	local ghostBack = ghost:CreateTexture(nil, "BACKGROUND")
 	ghostBack:SetAllPoints()
 	ghostBack:SetColorTexture(1, 1, 1, 0.08)
@@ -449,6 +483,7 @@ function ns.CreateSelfTextStylePanel(kit)
 	local handle = CreateFrame("Button", nil, preview)
 	handle:SetSize(14, 14)
 	handle:SetFrameLevel(preview:GetFrameLevel() + 40)
+	handle.zoomSkip = true -- (placed by PlaceHandle, every frame)
 	local ring = handle:CreateTexture(nil, "OVERLAY")
 	ring:SetAllPoints()
 	ring:SetColorTexture(1, 0.82, 0, 0.9)
@@ -476,8 +511,8 @@ function ns.CreateSelfTextStylePanel(kit)
 	function page.DragTo(dxPixels, dyPixels, from)
 		local db = DB()
 		from = from or { height = db.selfTextHeight or 0, across = db.selfTextAcross or 0 }
-		db.selfTextHeight = Snap(from.height + dyPixels / SCALE, -300, 300)
-		db.selfTextAcross = Snap(from.across + dxPixels / SCALE, -300, 300)
+		db.selfTextHeight = Snap(from.height + dyPixels / Scale(), -300, 300)
+		db.selfTextAcross = Snap(from.across + dxPixels / Scale(), -300, 300)
 	end
 	local function PlaceHandle()
 		local db = DB()
@@ -486,8 +521,8 @@ function ns.CreateSelfTextStylePanel(kit)
 		-- other side mirrors it), Across and Height. On your spot alone it sat on
 		-- your hip, away from them, 2026-11-21.)
 		local side = ns.SelfTextSideOf and ns.SelfTextSideOf("damage", YouX()) or 0
-		handle:SetPoint("CENTER", preview, "CENTER", (YouX() + side * ns.SELF_TEXT_SIDE + (db.selfTextAcross or 0)) * SCALE,
-			((db.selfTextHeight or 0) + LIFT) * SCALE)
+		handle:SetPoint("CENTER", preview, "CENTER", (YouX() + side * ns.SELF_TEXT_SIDE + (db.selfTextAcross or 0)) * Scale(),
+			((db.selfTextHeight or 0) + LIFT) * Scale())
 	end
 	page.PlaceHandle = PlaceHandle
 	handle:SetScript("OnDragStart", function(self)
@@ -514,7 +549,7 @@ function ns.CreateSelfTextStylePanel(kit)
 	if ns.StylePopout then ns.StylePopout(preview, kit.Tooltip) end
 
 	-- Tabs ----------------------------------------------------------------------------
-	local hosts, _, TabsShown = ns.PageTabsBelow(content, preview, {
+	local hosts, _, TabsShown, _, _, _, tabFrames = ns.PageTabsBelow(content, preview, {
 		{ L["General"], L["Who draws it, where it sits and how it moves."] },
 		{ L["Look"], L["Its font, edge and size."] },
 		{ L["Kinds"], L["Each kind's own look."] },
@@ -527,6 +562,7 @@ function ns.CreateSelfTextStylePanel(kit)
 		end
 	end)
 	page.hosts = hosts
+	page.tabFrames = tabFrames -- (its tab buttons: /cine debug selftextpage clicks them)
 	-- (What's made from here on goes onto a tab, its heading at the tab's top.)
 	local made = {}
 	for _, object in ipairs({ content:GetChildren() }) do made[object] = true end

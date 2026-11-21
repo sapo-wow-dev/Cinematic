@@ -22,6 +22,28 @@ function M:GetStringWidth() return 8 * #tostring(self._text or "") end
 function M:GetPoint() if self._point then return unpack(self._point) end return "CENTER", nil, "CENTER", 0, 0 end
 function M:GetTextColor() return unpack(self._color or { 1, 1, 1 }) end
 function M:SetFormattedText(fmt, ...) self._text = fmt:format(tostring((...)), select(2, ...)) end
+-- (A click runs its OnClick; alpha kept: the off card fades the page to 0.)
+function M:Click(button) local fn = self._scripts.OnClick if fn then fn(self, button or "LeftButton") end end
+-- (Show and Hide fire OnShow and OnHide on a change, as the game does: the Look
+-- panels note which one is open there.)
+function M:Show() if not self._shown then self._shown = true local fn = self._scripts.OnShow if fn then fn(self) end end end
+function M:Hide() if self._shown then self._shown = false local fn = self._scripts.OnHide if fn then fn(self) end end end
+function M:SetShown(on) if on then self:Show() else self:Hide() end end
+function M:SetAlpha(a) self._alpha = a end
+function M:GetAlpha() return self._alpha or 1 end
+-- (Sizes kept: the stand-in says 100 x 20 for every frame, so a texts' layer
+-- left at its first size matched its preview anyway.)
+function M:SetSize(w, h) self._w, self._h = w, h end
+function M:SetWidth(w) self._w = w end
+function M:SetHeight(h) self._h = h end
+function M:GetWidth() return self._w or 100 end
+function M:GetHeight() return self._h or 20 end
+function M:GetSize() return self:GetWidth(), self:GetHeight() end
+function M:SetScale(k) self._scale = k end
+function M:GetScale() return self._scale or 1 end
+-- (A frame sized fires OnSizeChanged, as the game does: the docked window scales its preview there.)
+local setSize = M.SetSize
+function M:SetSize(w, h) setSize(self, w, h) local fn = self._scripts.OnSizeChanged if fn then fn(self, w, h) end end
 local modelFile = 12345
 M.GetModelFileID = function() return modelFile end
 local timers, tickers = {}, {}
@@ -68,6 +90,18 @@ ns.SelfTextNewBoard = function(layer, ...)
 	layer._isBoard = true
 	return realNewBoard(layer, ...)
 end
+-- (The page's model watch runs each frame too: it hides you under the off card.)
+if ns.selfTextPage and ns.selfTextPage.modelWatch then ns.selfTextPage.modelWatch._isBoard = true end
+-- (The off card, as the hub draws it: the page's topmost frame faded to 0
+-- while its switch is off. Off the hub, offline, nothing faded it.)
+local realPaint = ns.PaintPageSwitches
+ns.PaintPageSwitches = function(...)
+	if realPaint then realPaint(...) end
+	local page = ns.selfTextPage
+	local top = page and page.preview
+	while top and top:GetParent() do top = top:GetParent() end
+	if top then top:SetAlpha(ns.db.selfTextStyle and 1 or 0) end
+end
 local function Has(want)
 	for _, line in ipairs(CinematicDB.selfTextPageTestLog or {}) do if line:find(want, 1, true) then return line end end
 end
@@ -81,14 +115,15 @@ local undo = CinematicDB.selfTextPageTestUndo
 Check("settings kept for a reload", undo and undo.extra and undo.extra.selfText
 	and undo.extra.selfText.selfTextSide == "over")
 Tick(90)
-for _, step in ipairs({ "model", "where", "bold", "kind", "merge", "crits", "games", "screen" }) do
+for _, step in ipairs({ "model", "where", "bold", "kind", "merge", "crits", "games", "screen", "center", "page", "docked",
+	"kinds", "tabs", "mark", "off" }) do
 	Check("verdict " .. step .. ": PASS", Has("verdict PASS " .. step .. ":") ~= nil, Has(" " .. step .. ":"))
 end
-Check("DONE: 8 pass, 0 fail", Has("DONE: 8 pass, 0 fail") ~= nil, Has("DONE"))
+Check("DONE: 15 pass, 0 fail", Has("DONE: 15 pass, 0 fail") ~= nil, Has("DONE"))
 Check("settings back", db.selfTextStyle == false and db.selfTextSide == "over" and db.selfText_damageSize == 1.3
 	and CinematicDB.selfTextPageTestUndo == nil)
 Check("CineMode back", cine == true)
-Check("8 screenshots", shots == 8, shots)
+Check("14 screenshots", shots == 14, shots)
 
 -- A step that can't pass fails: no model loaded.
 modelFile = 0

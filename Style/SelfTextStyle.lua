@@ -225,8 +225,15 @@ SideOf = function(group, youX)
 	if own == "right" then return 1 end
 	local side = DB().selfTextSide or "free"
 	if side == "over" then return 0 end
-	local away = (youX or 0) < -1 and -1 or 1 -- (away from the screen's middle; in it: right)
-	if side == "split" and not BY_ID[group].taken then return -away end
+	-- (Away from the screen's middle. In it (no Shoulder Cam, or Follow off):
+	-- over you, there's no free side; it sat 90 to your right and read off
+	-- center, the user 2026-11-21. Split keeps its two sides there: right and left.)
+	local x = youX or 0
+	local away = x < -1 and -1 or x > 1 and 1 or 0
+	if side == "split" then
+		local out = away ~= 0 and away or 1
+		return BY_ID[group].taken and out or -out
+	end
 	return away
 end
 
