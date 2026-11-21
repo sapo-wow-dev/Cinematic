@@ -20,7 +20,8 @@
 -- only (CinematicDev.toc).
 local _, ns = ...
 
-local STILL = 6 -- seconds hands off
+local STILL = 6 -- seconds hands off, measured
+local SETTLE = 4 -- seconds first, for a change's fades to end (fades 1.5 s, music and zone tint 3 s, +0.5)
 local FIGHT_SAMPLE = 5 -- seconds measured in the fight, once its fade in is done
 local FIGHT_SETTLE = 3 -- seconds into the fight before measuring
 local AFTER = 8 -- seconds after the fight
@@ -94,7 +95,7 @@ end
 -- A measured stretch: counts from now, the profiler on, pace sampled.
 local function Begin()
 	for key in pairs(run.count) do run.count[key] = 0 end
-	run.span = { at = GetTime(), samples = 0, quiet = 0, waitSum = 0, platesQuiet = 0 }
+	run.span = { at = GetTime(), samples = 0, quiet = 0, waitSum = 0, platesQuiet = 0, why = {} }
 	if ns.StartProfile then run.profiling = ns.StartProfile(600, true) end
 end
 local function Sample()
@@ -105,6 +106,27 @@ local function Sample()
 	if p and p.quiet then
 		span.quiet = span.quiet + 1
 		span.waitSum = span.waitSum + p.wait
+	elseif p then
+		-- (Why not quiet, as ns.Pace asks; "busy" = none of these: a change's
+		-- fades still under way, Core.lua's idleTick.busyUntil.)
+		local why = {}
+		local function Add(on, name) if on then why[#why + 1] = name end end
+		Add(p.fight, "fight")
+		Add(not ns.framesSettled, "frames not settled")
+		Add(ns.framesFadeOnly, "frames fading")
+		Add(CineOn() and ns.framesWake, "woken by " .. tostring(ns.framesWake))
+		Add(ns.previewRows or ns.layoutFadeUntil or ns.fadeDemo or ns.effectsDemo or ns.plateDemo, "preview or demo")
+		Add(ns.playerMoving or ns.stopWhileGliding, "moving")
+		Add(ns.OnTaxi and ns.OnTaxi(), "flight")
+		Add(IsModifierKeyDown(), "modifier key")
+		Add(ns.IsChatActive and ns.IsChatActive(), "chat typing")
+		Add(ns.Flag(GameTooltip:IsShown()), "tooltip")
+		Add(ns.ChatCamImmersive and ns.ChatCamImmersive(), "chat camera")
+		local x, y = ns.CursorPosition()
+		Add(span.x and (x ~= span.x or y ~= span.y), "mouse moved")
+		span.x, span.y = x, y
+		local key = #why > 0 and table.concat(why, " + ") or "busy (a change's fades)"
+		span.why[key] = (span.why[key] or 0) + 1
 	end
 	if ns.plates and ns.plates.quiet then span.platesQuiet = span.platesQuiet + 1 end
 end
@@ -124,6 +146,13 @@ local function End(label)
 		run.profiling = false
 		ms = ns.lastProfile and ns.lastProfile.total
 	end
+	local whys = {}
+	for why, n in pairs(span.why) do whys[#whys + 1] = { why, n } end
+	table.sort(whys, function(a, b) return a[2] > b[2] end)
+	for i, item in ipairs(whys) do
+		whys[i] = ("%s %d%%"):format(item[1], math.floor(item[2] * 100 / math.max(span.samples, 1)))
+	end
+	Say("  not quiet because: " .. (#whys > 0 and table.concat(whys, ", ") or "(always quiet)"))
 	local m = {
 		ticks = run.count.tick / seconds, frames = run.count.frames / seconds, plates = run.count.plates / seconds,
 		quiet = span.samples > 0 and span.quiet / span.samples or 0,
@@ -183,7 +212,8 @@ local function Tick()
 		Say(("  player frame opacity %s"):format(tostring(alpha)))
 	end
 	if step == "still" then
-		if since >= STILL then
+		if not run.span and since >= SETTLE then Begin() end
+		if run.span and GetTime() - run.span.at >= STILL then
 			local m = End("normal UI, hands off")
 			-- (Out of CineMode with nothing kept up outside it: a second apart, was 33 a second.)
 			Result("still", m.ticks > 0 and m.ticks <= 12, ("normal UI, hands off: the update tick ran %.1f times a second"
@@ -198,11 +228,11 @@ local function Tick()
 			Result("cine", took ~= nil and took <= QUICK, took and ("CineMode on: your frame started fading %.2f s after"
 				):format(took) or "CineMode on: your frame didn't fade within 5 s (its row may keep it up)")
 			Go("cstill")
-			Begin()
-			Prompt("Pace test 3/7: hands off", ("Don't touch the mouse or keys for %d seconds."):format(STILL))
+			Prompt("Pace test 3/7: hands off", ("Don't touch the mouse or keys for %d seconds."):format(SETTLE + STILL))
 		end
 	elseif step == "cstill" then
-		if since >= STILL then
+		if not run.span and since >= SETTLE then Begin() end
+		if run.span and GetTime() - run.span.at >= STILL then
 			local m = End("CineMode, hands off")
 			Result("cstill", m.ticks > 0 and m.ticks <= 15, ("CineMode, hands off: the update tick ran %.1f times a second"
 				.. " (about 10 when nothing moves), quiet %d%%"):format(m.ticks, m.quiet * 100))
@@ -250,7 +280,7 @@ local function Tick()
 			if run.span and inFight >= FIGHT_SETTLE + FIGHT_SAMPLE then
 				run.fightMeasured = true
 				local m = End("in the fight, its fade in done")
-				Result("fightup", run.fightUp == nil and nil or run.fightUp <= QUICK, run.fightUp
+				Result("fightup", run.fightUp ~= nil and run.fightUp <= QUICK or nil, run.fightUp
 					and ("fight started: your frame started coming up %.2f s after"):format(run.fightUp)
 					or "fight started: your frame didn't come up (it may not be ticked to show in fights)")
 				Result("fightpass", m.frames > 0 and m.frames <= 4, ("in the fight: the frames' pass ran %.1f times a second (about 2"
@@ -274,6 +304,13 @@ local function OnEvent(_, event)
 		Say("  fight started (PLAYER_REGEN_DISABLED)")
 		if run.step == "fight" and not run.fightAt then
 			run.fightAt, run.fightAlpha = GetTime(), run.alphaAt
+			for _, entry in ipairs(ns.managed or {}) do
+				if entry.frame == _G.PlayerFrame then
+					local row = entry.row or (ns.HoverRowFor and ns.HoverRowFor(entry))
+					Say(("  your player frame: group %s, row %s, shown in fights %s"):format(tostring(entry.group),
+						tostring(row), tostring(row and ns.IsCombatShowOn and ns.IsCombatShowOn(row))))
+				end
+			end
 			Prompt("Pace test 6/7: keep fighting", ("Measuring. Keep fighting about %d seconds."):format(
 				FIGHT_SETTLE + FIGHT_SAMPLE))
 		end
@@ -322,8 +359,8 @@ function ns.PaceTest()
 	end)
 	SetCine(false)
 	Go("still")
-	Begin()
-	Prompt("Pace test 1/7: hands off", ("Stand still and don't touch the mouse or keys for %d seconds."):format(STILL))
+	Prompt("Pace test 1/7: hands off", ("Stand still and don't touch the mouse or keys for %d seconds."):format(
+		SETTLE + STILL))
 	run.ticker = C_Timer.NewTicker(0.05, function()
 		if not run then return end
 		local ok, err = pcall(Tick)
