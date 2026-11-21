@@ -12411,7 +12411,9 @@ function tickTables.FocusOnly(entry)
 	return not (name and ns.HOVER_BY_RECT[name])
 end
 -- The mouse's frame and each of its parents, as a set (as IsInside walks
--- them: up to and including a forbidden one). Once per frame drawn and focus.
+-- them: up to and including a forbidden one, and through a stand-in to the
+-- frame it stands in for, ns.hoverStandIn: Shoulder Cam's button over your
+-- player frame). Once per frame drawn and focus.
 do
 	local chain, chainFocus, chainAt = {}, nil, -1
 	function tickTables.FocusChain(focus)
@@ -12420,10 +12422,10 @@ do
 			chainFocus, chainAt = focus, now
 			wipe(chain)
 			local frame = focus
-			while frame do
+			while frame and not chain[frame] do
 				chain[frame] = true
 				if IsForbidden(frame) then break end
-				frame = frame:GetParent()
+				frame = ns.hoverStandIn[frame] or frame:GetParent()
 			end
 		end
 		return chain

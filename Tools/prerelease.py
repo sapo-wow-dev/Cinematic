@@ -75,6 +75,7 @@ OFFLINE_TESTS = [
     ("a logout forgets the last tab under each icon, retail", "Tools/offline/hublasttab.lua", "retail"),
     ("Allow offscreen nameplates: the old tick moved, Auto / Always / Never, forever", "Tools/offline/offscreenallow.lua", "forever"),
     ("Allow offscreen nameplates: the old tick moved, Auto / Always / Never, retail", "Tools/offline/offscreenallow.lua", "retail"),
+    ("hover through a stand-in (Shoulder Cam's button over your player frame)", "Tools/offline/hoverstandin.lua"),
 ]
 
 
