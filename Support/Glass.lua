@@ -61,7 +61,11 @@ local function FindLines()
 	if type(container) ~= "table" or not container.GetChildren then return end
 	for _, frame in ipairs({ container:GetChildren() }) do
 		local window = frame.chatFrame
+		-- (Not the game's input boxes Glass moves in here: they carry a
+		-- .chatFrame too, and linked as a window's panel they hid with the
+		-- input, so a line no longer brought chat up. Tested 2026-11-21.)
 		if type(window) == "table" and not (frame.IsForbidden and frame:IsForbidden())
+			and not (frame.GetObjectType and frame:GetObjectType() == "EditBox")
 			and type(window.GetName) == "function" and (window:GetName() or ""):match("^ChatFrame%d+$") then
 			if not ns.IsFaded(frame) then
 				ns.AddFoundFrame(frame, "chat", true, true)
