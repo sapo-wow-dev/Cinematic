@@ -92,6 +92,51 @@ local function Place(text, bar, theirs)
 	return side
 end
 
+-- An amount of mana in words, shortened as the game's (12.3K) and a whole
+-- number under 1000, secret or not. A curve's answer (a secret amount
+-- after a cast) is a float, 338.00003051758, and the game's own shortening
+-- leaves anything under 1000 as it is (the player's screenshot 2026-11-21,
+-- max mana over 1000): so its rules plus one under them, from 1 up whole
+-- (divide by 1, no decimals; cuts the fraction off). The game takes rules
+-- of ours on a secret amount in this form ({ config = ... }, tested by
+-- /cine debug numbers on both clients). nil stays nil.
+local WHOLE_RULES = {
+	{ 10000000000, "B", 1000000000, 1 }, { 1000000000, "B", 100000000, 10 },
+	{ 10000000, "M", 1000000, 1 }, { 1000000, "M", 100000, 10 },
+	{ 10000, "K", 1000, 1 }, { 1000, "K", 100, 10 },
+	{ 1, "", 1, 1 },
+}
+local wholeOptions -- the game's options for them, made once (false: it can't)
+function ns.WholeManaWords(amount)
+	if amount == nil then return nil end
+	local abbreviate = _G.AbbreviateNumbers
+	if Readable(amount) then
+		amount = math.floor(amount + 0.5)
+		return abbreviate and abbreviate(amount) or tostring(amount)
+	end
+	if wholeOptions == nil then
+		wholeOptions = false
+		if _G.CreateAbbreviateConfig then
+			local data = {}
+			for i, rule in ipairs(WHOLE_RULES) do
+				data[i] = { breakpoint = rule[1], abbreviation = rule[2], significandDivisor = rule[3],
+					fractionDivisor = rule[4], abbreviationIsGlobal = false }
+			end
+			local ok, config = pcall(_G.CreateAbbreviateConfig, data)
+			if ok and config then wholeOptions = { config = config } end
+		end
+	end
+	if abbreviate and wholeOptions then
+		local ok, words = pcall(abbreviate, amount, wholeOptions)
+		if ok and words ~= nil then return words end
+	end
+	-- (No rules of ours: the game's formatting rounds it, a secret string.)
+	local ok, words = pcall(string.format, "%.0f", amount)
+	if ok then return words end
+	return abbreviate and abbreviate(amount) or tostring(amount)
+end
+ns.WHOLE_MANA_RULES = WHOLE_RULES
+
 -- Mana less cost, worked out by the game from your secret mana: as an
 -- amount, or as a percent of the max (nil: it can't be).
 local function SecretAfter(cost, asPercent)
@@ -106,9 +151,22 @@ local function SecretAfter(cost, asPercent)
 		if not (ok and made) then return end
 		made:SetType(Enum.LuaCurveType.Linear)
 		local share = math.min(1, cost / maxMana)
+		local step = 1 / maxMana -- one point of mana
 		made:AddPoint(0, 0)
-		if share < 1 then made:AddPoint(share, 0) end
-		made:AddPoint(1, asPercent and (1 - share) * 100 or math.max(0, maxMana - cost))
+		if asPercent then
+			if share > 0 and share < 1 then made:AddPoint(share, 0) end
+			made:AddPoint(1, (1 - share) * 100)
+		else
+			-- (Half a point up from 1 on: the whole-number words cut the
+			-- fraction off, so that rounds to the nearest, 337.9999 is 338.
+			-- Flat 0 till half a point past the cost, so a mana a hair
+			-- over the cost, by the game's float sums, still says 0.)
+			if share + step < 1 then
+				made:AddPoint(share + step / 2, 0)
+				made:AddPoint(share + step, 1.5)
+			end
+			made:AddPoint(1, math.max(0, maxMana - cost) + (share < 1 and 0.5 or 0))
+		end
 		curve = made
 		curves[key] = curve
 	end
@@ -120,39 +178,32 @@ end
 -- percent, either nil where it can't be worked out.
 local function AfterWords(cost)
 	local mana, maxMana = UnitPower("player", MANA), UnitPowerMax("player", MANA)
-	local amount, percent
+	local amount, percent, fromCurve
 	if Readable(mana) and Readable(cost) then
 		amount = math.max(0, mana - cost)
 		if Readable(maxMana) and maxMana > 0 then percent = amount / maxMana * 100 end
 		last = ("%s left of %s"):format(tostring(amount), tostring(mana))
 	else
 		amount, percent = SecretAfter(cost), SecretAfter(cost, true)
+		fromCurve = true
 		last = amount == nil and "mana secret, no curve for it: the game's words"
 			or Readable(amount) and ("%s left (by curve)"):format(tostring(amount))
 			or "worked out by the game's curves (secret)"
 	end
-	-- (A whole number: a cost or a curve's answer can come with a fraction,
-	-- 234.999999999, and the game's shortening leaves a number under 1000
-	-- as it is. A secret one can't be rounded by us: with a max under 1000
-	-- the game's formatting rounds it, above that its shortening does.)
-	local whole
+	-- (A whole number, never a fraction: ns.WholeManaWords. A curve's
+	-- answer is already half a point up, SecretAfter: cut, not rounded.)
 	if Readable(amount) then
-		amount = math.floor(amount + 0.5)
-	elseif amount ~= nil and Readable(maxMana) and maxMana < 1000 then
-		local ok, words = pcall(string.format, "%.0f", amount)
-		if ok then whole = words end
+		amount = fromCurve and math.floor(amount) or math.floor(amount + 0.5)
 	end
-	local abbreviate = _G.AbbreviateNumbers
-	local okAmount, amountWords = pcall(function()
-		if whole then return whole end
-		return amount ~= nil and (abbreviate and abbreviate(amount) or tostring(amount)) or nil
-	end)
+	local okAmount, amountWords = pcall(ns.WholeManaWords, amount)
 	local okPercent, percentWords = pcall(function()
 		return percent ~= nil and ("%d%%"):format(percent) or nil
 	end)
 	if not (okAmount and okPercent) then last = last .. ", some words failed" end
 	return okAmount and amountWords or nil, okPercent and percentWords or nil
 end
+
+ns.ManaAfterWords = AfterWords -- (for Tools/offline/wholemana.lua)
 
 -- For the cast going on (cost: its mana cost, nil while none), on the bars
 -- your mana is on now (by where).

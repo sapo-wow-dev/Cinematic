@@ -138,6 +138,8 @@ local function UpdateValue()
 					end
 					return type(percent) == "number" and ("%d%%"):format(percent) or nil
 				end
+				-- (A whole number, never a fraction: PersonalManaText.lua.)
+				if ns.WholeManaWords then return ns.WholeManaWords(mana) end
 				local abbreviate = _G.AbbreviateNumbers
 				return abbreviate and abbreviate(mana) or tostring(mana)
 			end)

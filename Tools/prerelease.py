@@ -86,6 +86,7 @@ OFFLINE_TESTS = [
     ("addon test: steps that showed nothing skipped, frames never made can't pass", "Tools/offline/addontestsmarts.lua"),
     ("test kit (/cine debug kitcheck): steps, undo, stop, login put back", "Tools/offline/testkit.lua"),
     ("old tests on the kit's logs (Dev/TestKitWrap.lua): context, run before kept, totals", "Tools/offline/testkitwrap.lua"),
+    ("mana words are whole numbers, never 338.00003051758 (secret mana after a cast)", "Tools/offline/wholemana.lua"),
 ]
 
 
