@@ -4967,6 +4967,9 @@ ns.plates.Release = ReleasePlates
 -- (A profile showed it every tick for everyone, mostly finding no change.)
 -- (On ns.plates: this file's main chunk is at Lua's 200 locals.)
 ns.plates.SETTLED_EVERY = 0.5
+-- (2 s while the "in case" checks may slow, Core.lua's ns.SlowChecks: the
+-- events below, and a profile picked, still bring the pass at once.)
+ns.plates.SETTLED_SLOW = 2
 ns.plates.seen = {}
 function ns.plates.SameAsBefore(cinematic, now)
 	local seen = ns.plates.seen
@@ -4975,7 +4978,8 @@ function ns.plates.SameAsBefore(cinematic, now)
 	local place = ns.GetPlaceType() or false
 	local immersive = (ns.ChatCamImmersive and ns.ChatCamImmersive()) and true or false
 	local same = seen.cinematic == cinematic and seen.fight == fight and seen.target == target
-		and seen.place == place and seen.immersive == immersive and now - (seen.at or -math.huge) < ns.plates.SETTLED_EVERY
+		and seen.place == place and seen.immersive == immersive
+		and now - (seen.at or -math.huge) < (ns.SlowChecks() and ns.plates.SETTLED_SLOW or ns.plates.SETTLED_EVERY)
 	if not same then
 		seen.cinematic, seen.fight, seen.target, seen.place, seen.immersive, seen.at = cinematic, fight, target, place,
 			immersive, now
@@ -5121,6 +5125,7 @@ function ns.UpdatePlates(cinematic, elapsed)
 	-- out (cinematic again), they stay hidden until the fade has caught up.
 	-- Held up after a fight, the kinds not ticked for fights (bar those kept
 	-- up where you are) fade down the same way.
+	local capsHeld = 0 -- (kinds held at 0 for this fight: steady, see below)
 	for _, kind in ipairs(ns.PLATE_KINDS) do
 		local combat = ShownInFights(kind)
 		local cinematicKept = KeptHere(kind)
@@ -5133,7 +5138,11 @@ function ns.UpdatePlates(cinematic, elapsed)
 			changed = true
 		end
 		if inCombat and platesActive and not combat then
+			-- (Held at 0 for the fight: settled, not moving, once there. It
+			-- kept the pass running every tick through every fight, 2026-11-21.)
+			if combatCap[kind] ~= 0 then changed = true end
 			combatCap[kind] = 0
+			capsHeld = capsHeld + 1
 		elseif holding and not combat and not cinematicKept then
 			local from = combatCap[kind] or 1
 			if from > 0 then
@@ -5199,7 +5208,9 @@ function ns.UpdatePlates(cinematic, elapsed)
 		ns.plates.off = true
 	end
 	-- (Nothing moving: the next passes outside CineMode may be skipped.)
-	local still = not changed and next(combatCap) == nil and next(leavingTargets) == nil
+	local caps = 0
+	for _ in pairs(combatCap) do caps = caps + 1 end
+	local still = not changed and caps == capsHeld and next(leavingTargets) == nil
 		and next(pendingPlateRows) == nil
 	ns.plates.quiet = still and not rolling
 	ns.plates.rollOnly = still and rolling and cinematic

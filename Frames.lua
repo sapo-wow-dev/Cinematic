@@ -1743,8 +1743,24 @@ end
 do
 	local step, countBefore, rounds = 0, 0, 0
 	local NESTING_EVERY = 6 -- rounds
+	local part -- (this step's part, for /cine debug cpu's counts below)
+	local StepOnce
+	-- (Profiling: a step over 5 ms is counted by its part, so a slow one's
+	-- named; the profile only had the scan's worst, 61 ms, 2026-11-21.)
 	function ns.BuildManagedListStep()
+		if not ns.profiling then return StepOnce() end
+		local started = debugprofilestop()
+		local done = StepOnce()
+		local ms = debugprofilestop() - started
+		if ms > 5 and ns.ProfileCount then
+			ns.ProfileCount(("scan step over 5 ms: %s (%d managed), worst %.0f ms"):format(part or "?", #ns.managed,
+				math.floor(ms / 5) * 5))
+		end
+		return done
+	end
+	function StepOnce()
 		step = step + 1
+		part = "named frames"
 		if step == 1 then
 			countBefore = #ns.managed
 			for group, names in pairs(FRAME_GROUPS) do
@@ -1761,24 +1777,31 @@ do
 		end
 		local k = step - 1
 		if k <= #scanners then
+			part = "scanner " .. k
 			scanners[k]()
 			return false
 		end
 		k = k - #scanners
 		if k == 1 then
+			part = "top level frames"
 			ScanTopLevelFrames()
 		elseif k == 2 then
+			part = "addon frames"
 			ScanAddonFrames()
 		elseif k == 3 then
+			part = "issue reporter, bar art, detached"
 			FindIssueReporter()
 			FindBarArt()
 			ns.RefreshDetached()
 		elseif k == 4 then
+			part = "minimap header"
 			ns.FindMinimapHeader()
 		else
+			part = "buff collapse"
 			AddFrame(type(_G.BuffFrame) == "table" and _G.BuffFrame.CollapseAndExpandButton or nil, "buffcollapse")
 			rounds = rounds + 1
 			if #ns.managed ~= countBefore or rounds >= NESTING_EVERY then
+				part = "parents check (RecomputeNesting)"
 				rounds = 0
 				RecomputeNesting()
 			end
@@ -3456,9 +3479,19 @@ function ns.IsCombatShowOn(key)
 		if ns.LIST_DEFAULTS.combatShow[key] ~= nil then
 			return ns.LIST_DEFAULTS.combatShow[key]
 		end
-		for _, item in ipairs(ns.COMBAT_SHOW) do
-			if item.key == key then return item.default end
+		-- (Each row's own default, by key: it walked every row for each key
+		-- asked, two thirds of the combat list's work in a fight, 2026-11-21.
+		-- Made again as rows are added: other files' and supported addons' rows.)
+		local defaults = ns.combatDefaults -- (on ns: tickTables is made further down)
+		if not defaults or defaults.n ~= #ns.COMBAT_SHOW then
+			defaults = { n = #ns.COMBAT_SHOW, by = {} }
+			for i = #ns.COMBAT_SHOW, 1, -1 do -- (the first row with a key wins, as before)
+				local item = ns.COMBAT_SHOW[i]
+				defaults.by[item.key] = item.default
+			end
+			ns.combatDefaults = defaults
 		end
+		return defaults.by[key]
 	end
 	return on
 end
@@ -4490,6 +4523,10 @@ do
 	local factsBefore = {} -- (its values as last stamped: see the end of ns.RuleFacts)
 	local factsAt, factsFight, factsCameraAt -- (not in facts: Frames.lua walks its fields for changes)
 	local FACTS_HOLD = 0.1
+	-- (Held longer while the "in case" checks may slow, Core.lua's
+	-- ns.SlowChecks: the events below still work them out at once. What has
+	-- none, a distance, the room indoors, waits this long.)
+	local FACTS_SLOW_HOLD = 0.5
 	do
 		local factsWatch = CreateFrame("Frame")
 		for _, event in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_MOUNT_DISPLAY_CHANGED", "ZONE_CHANGED",
@@ -4545,7 +4582,8 @@ do
 		facts.tipgather, facts.tipquest = tip and tip.tipgather or false, tip and tip.tipquest or false
 		facts.tipother = tip and tip.tipother or false
 		local fight = (InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))) and true or false
-		if factsAt and now >= factsAt and now - factsAt < FACTS_HOLD and fight == factsFight then
+		if factsAt and now >= factsAt and now - factsAt < (ns.SlowChecks() and FACTS_SLOW_HOLD or FACTS_HOLD)
+			and fight == factsFight then
 			facts.combat = inCombat
 			facts.nocombat = not inCombat and not facts.calm
 			-- (The camera words: as they are this frame.)
@@ -4857,6 +4895,26 @@ do
 	local function CastIsOn(key)
 		return ns.IsCombatShowOn(key) or (targetIsOn and targetIsOn(key))
 	end
+	-- (A row's ticks for the list being worked out: kept for the fight when
+	-- tickNow.ticks is, see GetCombatShownFrames. Not closures, as above.)
+	local tickNow = {}
+	local function Ticked(key)
+		local ticks, placeLists, isOn = tickNow.ticks, tickNow.places, tickNow.isOn
+		if not ticks then
+			return ns.IsCineShowOn(key) or KeptHere(placeLists, key) or (isOn and isOn(key)) or false
+		end
+		if ticks.on[key] == nil then
+			ticks.cine[key] = ns.IsCineShowOn(key) or false
+			ticks.kept[key] = KeptHere(placeLists, key) or false
+			ticks.on[key] = ticks.cine[key] or ticks.kept[key] or (isOn(key) and true) or false
+		end
+		return ticks.on[key]
+	end
+	local function AlwaysOrKept(key)
+		local ticks = tickNow.ticks
+		if ticks and ticks.on[key] ~= nil then return ticks.cine[key] or ticks.kept[key] end
+		return ns.IsCineShowOn(key) or KeptHere(tickNow.places, key)
+	end
 	function GetCombatShownFrames()
 		local fight = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))
 		-- (The Calm Timer after a fight is the fight still, for the ticks and the rules.)
@@ -4884,6 +4942,24 @@ do
 		-- (And the rows ticked for where you are.)
 		local placeLists = PlaceListsHere()
 		local shown = wipe(tickTables.combatShown)
+		-- In a fight, each row's ticks (Always, the place columns, In combat)
+		-- are worked out once and kept till it ends, or you move to another
+		-- kind of place or group: only your settings decide them, and one
+		-- changed mid-fight counts from its end. Rules and the fight's hold
+		-- are still asked every time. (Two thirds of this list's work, asked
+		-- again and again through each fight, 2026-11-21.)
+		local ticks = nil
+		if fight and isOn == ns.IsCombatShowOn then
+			local where = (placeLists[1] or "") .. (placeLists[2] or "")
+			ticks = tickTables.fightTicks
+			if not ticks or ticks.where ~= where then
+				ticks = { where = where, cine = {}, kept = {}, on = {} }
+				tickTables.fightTicks = ticks
+			end
+		else
+			tickTables.fightTicks = nil
+		end
+		tickNow.ticks, tickNow.places, tickNow.isOn = ticks, placeLists, isOn
 		-- Rows for gamepad mode only, and the ones they stand in for then.
 		local gamepad = ns.IsGamePadOn()
 		local facts = ns.RuleFacts(inCombat)
@@ -4892,13 +4968,13 @@ do
 			-- (A row's rule, when it has one that reads, decides instead of its ticks.)
 			local ticked = ns.RuleShows(item.key, facts)
 			if ticked == nil then
-				ticked = ns.IsCineShowOn(item.key) or KeptHere(placeLists, item.key) or (isOn and isOn(item.key))
+				ticked = Ticked(item.key)
 			end
 			-- (Your bars held back at a fight's start, Personal Resources page:
 			-- up only where Always or a place keeps them. The fight itself, not the
 			-- Calm Timer after it.)
 			if ticked and (fight or isOn == CastIsOn) and ns.FightHold(item.key)
-				and not (ns.IsCineShowOn(item.key) or KeptHere(placeLists, item.key)) then
+				and not AlwaysOrKept(item.key) then
 				ticked = false
 			end
 			if applies and ticked then
@@ -4985,11 +5061,17 @@ do
 	-- (A profile picked, Profiles.lua: worked out afresh next time.)
 	function ns.ForgetCombatShown()
 		keptShown = nil
+		tickTables.fightTicks = nil
 	end
 	-- (Only while the frames' pass is asking: in CineMode.)
+	-- (Not while the "in case" checks are slowed, ns.SlowChecks: the pass
+	-- runs once a second then, and works the list out itself if it must. Nor
+	-- in a fight once every frame's settled: the pass runs every half second
+	-- then (Core.lua's framesPass.fightSettledWait), and the same.)
 	function ns.WarmCombatShown()
 		local now = GetTime()
-		if now - askedAt < 0.5 then
+		if now - askedAt < 0.5 and not ns.SlowChecks()
+			and not (ns.framesSettled and (InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")))) then
 			Kept(now, SHOWN_HOLD)
 		end
 	end
@@ -10817,7 +10899,7 @@ function UpdateReadyOnly(elapsed, now)
 	-- (The game's Cooldown Manager off: nothing to do, once nothing's left
 	-- fading back. Asked as often as the icons are: its bars can be set to
 	-- show only in fights, and must be caught as they come up.)
-	if now - viewersAskedAt >= 0.1 then
+	if now - viewersAskedAt >= (ns.SlowChecks() and 0.5 or 0.1) then
 		viewersAskedAt = now
 		viewersUp = ns.CooldownViewersShown()
 	end
@@ -10830,7 +10912,9 @@ function UpdateReadyOnly(elapsed, now)
 	-- once, ns.readyPace.due.)
 	local pace = ns.readyPace
 	local fight = (InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))) and true or false
-	if pace.due or fight ~= pace.fight or now - readyCheckedAt >= (fight and 0.1 or 0.3) then
+	-- (Once a second while the "in case" checks may slow, ns.SlowChecks.)
+	if pace.due or fight ~= pace.fight
+		or now - readyCheckedAt >= (fight and 0.1 or (ns.SlowChecks() and 1 or 0.3)) then
 		pace.due, pace.fight = nil, fight
 		readyCheckedAt = now
 		wipe(readyTargets)
@@ -12309,6 +12393,56 @@ function tickTables.WorldHover(entry)
 	return name and ns.HOVER_BY_RECT[name] or false
 end
 
+-- The faded frames whose hover is only "the frame under the mouse is one of
+-- theirs": ns.IsEntryHovered's last case, for every group without a case of
+-- its own above it. Those are answered from the mouse's frame and its
+-- parents, worked out once (tickTables.FocusChain), not by each walking up
+-- from the mouse itself: asked of every faded frame, 137 here, as the mouse
+-- moves over the UI. The rest still ask ns.IsEntryHovered. Keep in step with it.
+tickTables.OWN_HOVER = { bars = true, sidebars = true, chat = true, buffs = true, quests = true, raidmanager = true,
+	minimap = true }
+function tickTables.FocusOnly(entry)
+	local group = entry.group
+	if PART_GROUPS[group] or tickTables.OWN_HOVER[group] or entry.shrunk or entry.parkedFullSize
+		or (ns.minimapUnderTest and entry.frame == Minimap) then
+		return false
+	end
+	local name = next(ns.HOVER_BY_RECT) and entry.frame.GetName and entry.frame:GetName()
+	return not (name and ns.HOVER_BY_RECT[name])
+end
+-- The mouse's frame and each of its parents, as a set (as IsInside walks
+-- them: up to and including a forbidden one). Once per frame drawn and focus.
+do
+	local chain, chainFocus, chainAt = {}, nil, -1
+	function tickTables.FocusChain(focus)
+		local now = GetTime()
+		if focus ~= chainFocus or now ~= chainAt then
+			chainFocus, chainAt = focus, now
+			wipe(chain)
+			local frame = focus
+			while frame do
+				chain[frame] = true
+				if IsForbidden(frame) then break end
+				frame = frame:GetParent()
+			end
+		end
+		return chain
+	end
+end
+-- One faded frame under the mouse (focus: MouseFocus()). The same answer as
+-- ns.IsEntryHovered, asked only of the frames it has a case of its own for.
+function tickTables.Hovered(entry, focus)
+	if tickTables.FocusOnly(entry) then
+		-- (Its last case: visible, and the mouse's frame inside it.)
+		return focus ~= nil and tickTables.FocusChain(focus)[entry.frame] == true
+			and ns.Flag(entry.frame:IsVisible()) and true or false
+	end
+	if focus == nil and not tickTables.WorldHover(entry) then
+		return false
+	end
+	return ns.IsEntryHovered(entry) and true or false
+end
+
 -- In CineMode, out of fights, with every frame settled, the frames' pass runs
 -- only a few times a second (Core.lua); these bring it on at once, as what it
 -- goes by changes: your target and focus, your auras, health and power
@@ -12338,7 +12472,12 @@ do
 	wake.soft = { UNIT_AURA = true, UNIT_HEALTH = true, UNIT_MAXHEALTH = true, UNIT_POWER_UPDATE = true,
 		SPELL_UPDATE_COOLDOWN = true, UNIT_SPELLCAST_SUCCEEDED = true, BAG_UPDATE_DELAYED = true,
 		QUEST_LOG_UPDATE = true }
+	-- (Core.lua's idle tick: these wake it, but don't keep it at the full pace after.)
+	ns.FRAMES_SOFT_WAKE = wake.soft
+	-- (A fight's end: the rows' ticks kept for it go, GetCombatShownFrames.)
+	pcall(wake.RegisterEvent, wake, "PLAYER_REGEN_ENABLED")
 	wake:SetScript("OnEvent", function(self, event)
+		if event == "PLAYER_REGEN_ENABLED" then tickTables.fightTicks = nil end
 		if self.soft[event] and InCombatLockdown() then return end
 		ns.framesWake = event
 	end)
@@ -12354,13 +12493,10 @@ function ns.HoverProbe()
 	if not ns.db.mouseover then return false end -- (the mouse brings nothing up)
 	if ns.whyPicking then return true end -- (Inspect picking frames: as before)
 	local changed = false
-	local overWorld, WorldHover = not MouseFocus(), tickTables.WorldHover
+	local focus, Hovered = MouseFocus(), tickTables.Hovered
 	for _, entry in ipairs(ns.managed) do
 		entry.row = entry.row or ns.HoverRowFor(entry)
-		local over = false
-		if not overWorld or WorldHover(entry) then
-			over = ns.IsEntryHovered(entry) and true or false
-		end
+		local over = Hovered(entry, focus)
 		if over ~= (entry.hoverWas or false) then changed = true end
 		entry.hoverWas = over
 	end
@@ -12527,7 +12663,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 			local over = entry.hoverWas
 			if not still or over == nil then
 				-- (Over the world: only the few that can be, tickTables.WorldHover.)
-				over = (focus ~= nil or tickTables.WorldHover(entry)) and ns.IsEntryHovered(entry) and true or false
+				over = tickTables.Hovered(entry, focus)
 				entry.hoverWas = over
 			end
 			if over then
