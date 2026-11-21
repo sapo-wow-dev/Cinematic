@@ -1052,6 +1052,7 @@ local function MakeHeaderSwitch(content, switch)
 	local toggle = CreateFrame("Button", nil, at and at[1] or content.pageHelp:GetParent())
 	toggle:SetSize(46, 18)
 	toggle:SetPoint("LEFT", at and at[2] or content.pageHelpLast or content.pageHelp, "RIGHT", 8, 0)
+	if not at then content.pageSwitch = toggle end -- (Favorites.lua's star goes past it)
 	toggle:SetFrameLevel((at and at[1] or content.pageHelp):GetFrameLevel() + (at and 2 or 0))
 	toggle.key, toggle.check = switch.key, switch.check
 	local edge = toggle:CreateTexture(nil, "BACKGROUND")
@@ -2532,7 +2533,7 @@ local subpages = {}
 -- queued as they're made and handed to the game in this order when setup ends
 -- (menu.Flush), so the order of the Create calls doesn't matter. One not named
 -- here goes last; a hub under another (hub.under) right under that one.
-local menu = { order = { "Profiles", "UI Manager", "Addons", "Visions", "Style", "Atmosphere", "Camera",
+local menu = { order = { "Favorites", "Profiles", "UI Manager", "Addons", "Visions", "Style", "Atmosphere", "Camera",
 	"Keybinds", "Quality of life", "Help", "Community", "Dev" }, queue = {} }
 do
 	local function Register(entry)
@@ -2553,6 +2554,14 @@ do
 		local entry = { key = key, frame = frame, shown = shown, parent = parent }
 		if menu.flushed then Register(entry) else menu.queue[#menu.queue + 1] = entry end
 	end
+	-- (Favorites.lua: its lines under its own, made before menu.Flush only;
+	-- lines changed after login break Forever's settings in fights, 1831
+	-- blocked lines, /cine debug favlines 2026-11-20. And a line's category.)
+	function ns.AddMenuLine(key, frame, shown, parent)
+		if menu.flushed then return end
+		menu.Add(key, frame, shown, parent)
+	end
+	function ns.MenuCategory(key) return subpages[key] end
 	function menu.Flush()
 		local done = {}
 		local function Put(entry)
@@ -3512,6 +3521,9 @@ do
 		local shown = run and debugprofilestop()
 		if run then run.select = shown - run.started end
 		tile.canvas:Show()
+		-- (Favorites.lua's star: on or off for where you are now. Icons can share
+		-- a frame (the HUD's sections), shown already: its OnShow says nothing.)
+		if ns.FavoriteStarsPaint then ns.FavoriteStarsPaint() end
 		local painted = run and debugprofilestop()
 		if run then run.show = painted - shown end
 		-- (Reset page: for a page with settings of its own)
@@ -3585,6 +3597,7 @@ do
 		box:SetPoint("RIGHT", reset, "LEFT", -12, 0)
 		-- (A Style preview held over the icons as you scroll stops left of it.)
 		frame.hubSearch = box
+		if ns.AddFavoriteStar then ns.AddFavoriteStar(box) end -- (Favorites.lua: left of it)
 		frame:SetScript("OnSizeChanged", function() Layout(hub) end)
 		frame:SetScript("OnShow", function()
 			Layout(hub)
@@ -4044,6 +4057,61 @@ do
 		return byName[name] ~= nil
 	end
 
+	-- A line in the left list showing a hub's frame at target's icon. (A field
+	-- on menu, not a local: this block's locals are near Lua's cap.)
+	function menu.HubLine(hub, key, label, parentKey, target, exact, onShown)
+		local frame = CreateFrame("Frame")
+		frame.name, frame.parent = label, L[hub.label or hub.name]
+		-- (Put back as it was as this one hides, before the next shows:
+		-- where the settings had it, for the hub's own line.)
+		local kept
+		frame:SetScript("OnShow", function(self)
+			local hubFrame = hub.frame
+			-- (Held by another line still: that one hands it back first.)
+			if hub.heldBy and hub.heldBy ~= self then
+				local onHide = hub.heldBy:GetScript("OnHide")
+				if onHide then onHide(hub.heldBy) end
+			end
+			hub.heldBy = self
+			kept = { parent = hubFrame:GetParent(), points = {} }
+			for i = 1, hubFrame:GetNumPoints() do kept.points[i] = { hubFrame:GetPoint(i) } end
+			hubFrame:SetParent(self)
+			hubFrame:ClearAllPoints()
+			hubFrame:SetAllPoints(self)
+			hubFrame:Show()
+			-- (This line picked already: its icon's line not picked over
+			-- it, a band's line staying lit.)
+			local was = menu.selecting
+			menu.selecting = true
+			-- (At the tab last open under that icon: ns.LastHubTab.)
+			-- (exact: that page itself, a favorite's line, Favorites.lua)
+			local tile = byName[target]
+			if tile then Select(exact and tile or ns.LastHubTab(tile)) end
+			menu.selecting = was
+			-- (onShown: a favorite's line, its tabs opened again: Favorites.lua)
+			if onShown then onShown() end
+		end)
+		frame:SetScript("OnHide", function(self)
+			local hubFrame = hub.frame
+			if hub.heldBy == self then hub.heldBy = nil end
+			if not kept or hubFrame:GetParent() ~= self then return end
+			hubFrame:SetParent(kept.parent)
+			hubFrame:ClearAllPoints()
+			for _, point in ipairs(kept.points) do hubFrame:SetPoint(unpack(point)) end
+			if not kept.parent then hubFrame:Hide() end -- (never shown on its own line yet)
+			kept = nil
+		end)
+		frame:Hide() -- (made shown, its OnShow would never come as the list shows it)
+		menu.Add(key, frame, label, parentKey)
+	end
+	-- A favorite's line (Favorites.lua), made before menu.Flush: true when
+	-- target is a hub's icon or tab, shown there as its band lines are.
+	function ns.AddFavoriteHubLine(key, label, parentKey, target, onShown)
+		local tile = byName[target]
+		if menu.flushed or not (tile and tile.hub and tile.hub.frame) then return false end
+		menu.HubLine(tile.hub, key, label, parentKey, target, true, onShown)
+		return true
+	end
 	-- Lines in the left list under a hub (2026-11-16): one for each of its
 	-- bands (Combat..., Nameplates...), each icon's line under its band's, and
 	-- an icon in no band past the first (the hub's own line opens that) on
@@ -4056,46 +4124,7 @@ do
 		for _, hub in ipairs(HUBS) do
 			if hub.name == hubName and hub.frame then
 				local function Line(key, label, parentKey, target)
-					local frame = CreateFrame("Frame")
-					frame.name, frame.parent = label, L[hub.label or hub.name]
-					-- (Put back as it was as this one hides, before the next shows:
-					-- where the settings had it, for the hub's own line.)
-					local kept
-					frame:SetScript("OnShow", function(self)
-						local hubFrame = hub.frame
-						-- (Held by another line still: that one hands it back first.)
-						if hub.heldBy and hub.heldBy ~= self then
-							local onHide = hub.heldBy:GetScript("OnHide")
-							if onHide then onHide(hub.heldBy) end
-						end
-						hub.heldBy = self
-						kept = { parent = hubFrame:GetParent(), points = {} }
-						for i = 1, hubFrame:GetNumPoints() do kept.points[i] = { hubFrame:GetPoint(i) } end
-						hubFrame:SetParent(self)
-						hubFrame:ClearAllPoints()
-						hubFrame:SetAllPoints(self)
-						hubFrame:Show()
-						-- (This line picked already: its icon's line not picked over
-						-- it, a band's line staying lit.)
-						local was = menu.selecting
-						menu.selecting = true
-						-- (At the tab last open under that icon: ns.LastHubTab.)
-						local tile = byName[target]
-						if tile then Select(ns.LastHubTab(tile)) end
-						menu.selecting = was
-					end)
-					frame:SetScript("OnHide", function(self)
-						local hubFrame = hub.frame
-						if hub.heldBy == self then hub.heldBy = nil end
-						if not kept or hubFrame:GetParent() ~= self then return end
-						hubFrame:SetParent(kept.parent)
-						hubFrame:ClearAllPoints()
-						for _, point in ipairs(kept.points) do hubFrame:SetPoint(unpack(point)) end
-						if not kept.parent then hubFrame:Hide() end -- (never shown on its own line yet)
-						kept = nil
-					end)
-					frame:Hide() -- (made shown, its OnShow would never come as the list shows it)
-					menu.Add(key, frame, label, parentKey)
+					menu.HubLine(hub, key, label, parentKey, target)
 				end
 				local bands = {}
 				for i, tile in ipairs(hub.tiles) do
@@ -4274,6 +4303,30 @@ do
 		local tile = byName[name]
 		local switch = tile and TileSwitch(tile, true)
 		return switch and not switch.follows and switch.key or nil
+	end
+	-- The hub icon showing on canvas, or nil: a frame several icons share
+	-- (the HUD's sections, Nameplates and Names) shows as its frame's own
+	-- page otherwise. (Favorites.lua's star: /cine debug favstars 2026-11-20,
+	-- 14 icons' stars were their frame's.)
+	function ns.HubTileShowing(canvas)
+		for _, hub in ipairs(HUBS) do
+			local current = hub.current
+			if current and current.canvas == canvas then return current.english end
+		end
+	end
+	-- Every switch key a page goes by: its own, or each of its group's (an
+	-- icon over tabs with switches of their own: Unit Frames). (Dev/FavStarsTest.lua.)
+	function ns.PageSwitchKeys(name)
+		local tile = byName[name]
+		local list = {}
+		if tile and tile.groupSwitches and #tile.groupSwitches > 0 then
+			for _, switch in ipairs(tile.groupSwitches) do
+				if switch.key and not switch.follows then list[#list + 1] = switch.key end
+			end
+		else
+			list[1] = ns.PageSwitchKey(name)
+		end
+		return list
 	end
 	-- Whether a page has a switch a right-click on its icon or tab flips.
 	function ns.HasPageSwitch(name)
@@ -4583,6 +4636,7 @@ local function RegisterSubpage(subpanel, name, shown)
 	local watch = CreateFrame("Frame", nil, subpanel)
 	watch:SetScript("OnShow", function()
 		ns.lastOptionsPage = name -- (Cinematic_ToggleSettings)
+		if ns.FavoriteStarsPaint then ns.FavoriteStarsPaint() end -- (Favorites.lua)
 		if subpanel.stale then
 			subpanel.stale = nil
 			Refresh()
@@ -4608,6 +4662,7 @@ local function RegisterSubpage(subpanel, name, shown)
 		local box = CreateSearch(subpanel, subpanel.content, { page })
 		box:SetPoint("RIGHT", subpanel.resetButton, "LEFT", -12, 0)
 		subpanel.searchBox = box -- (the CineMode page narrows it: its tabs run under it)
+		if ns.AddFavoriteStar then ns.AddFavoriteStar(box) end -- (Favorites.lua: left of it)
 	end
 	menu.Add(name, subpanel, L[name])
 end
@@ -10308,6 +10363,7 @@ function ns.FolderTabs(parent, list, onClick, width, maxWidth, onRightClick)
 	base:SetSize(1, 1)
 	local function Show(picked)
 		tabs.picked = picked
+		if ns.FavoriteStarsPaint then ns.FavoriteStarsPaint() end -- (Favorites.lua: where you are changed)
 		Rows()
 		tabs.height = #rows * (TAB_H + 4) -- (how high they reach now: their rows can change as they're measured again)
 		-- (The picked one's row at the bottom, the rest above it in order.
@@ -10352,6 +10408,13 @@ function ns.FolderTabs(parent, list, onClick, width, maxWidth, onRightClick)
 		topRight:SetShown(open)
 	end
 	Show(1)
+	-- (Every row of tabs, its lit one (tabs.picked) and what a click on one
+	-- does: a favorite keeps the tab open in each row shown and clicks them
+	-- open again, Favorites.lua.)
+	ns.tabRows = ns.tabRows or {}
+	local labels = {}
+	for i, each in ipairs(list) do labels[i] = tostring(each[1]) end
+	ns.tabRows[#ns.tabRows + 1] = { tabs = tabs, click = onClick, parent = parent, labels = labels }
 	return panel, tabs, Show, base, #rows * (TAB_H + 4)
 end
 
@@ -22287,10 +22350,15 @@ ns.OnLanguage(function()
 		ns.CreateMinimapCopyPage(ns.lowHealthKit)
 		Lap("CreateMinimapCopyPage")
 	end
+	if ns.CreateFavoritesPage then -- (Favorites.lua: its line on top, one under it a favorite)
+		ns.CreateFavoritesPage(ns.lowHealthKit)
+		Lap("CreateFavoritesPage")
+	end
 	ns.AddBandShortcuts("UI Manager") -- (a line for each of the Interface hub's bands, under it)
 	ns.AddBandShortcuts("Visions") -- (and the Visions hub's: Combat, World, each Vision under its band)
 	ns.AddBandShortcuts("Style") -- (and the Style hub's: Interface, Visions, Atmosphere, each look under its band)
 	menu.Flush() -- (the left list, in menu.order)
+	if ns.FavoritesAfterFlush then ns.FavoritesAfterFlush() end
 	menu.AutoFold()
 	Lap("(the left list)")
 	local buildEnded = type(buildStarted) == "number" and debugprofilestop()

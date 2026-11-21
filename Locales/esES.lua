@@ -9528,3 +9528,7 @@ L["Right-click: options"] = "Clic derecho: opciones"
 
 -- Diagnostics.lua
 L["hit a Lua error. Type /cine log to copy the details for a bug report."] = "ha tenido un error de Lua. Escribe /cine log para copiar los detalles para un informe de error."
+
+-- What's new: Favorites
+L["Favorites"] = "Favoritos"
+L["Click the star beside any settings page's search box to save that page, open at the tab you're on. Your favorites get their own line at the top of Cinematic's list."] = "Pulsa la estrella junto a la búsqueda de cualquier página de opciones para guardar esa página, abierta en la pestaña en la que estás. Tus favoritos tienen su propia línea arriba en la lista de Cinematic."

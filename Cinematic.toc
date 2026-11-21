@@ -220,6 +220,7 @@ Profiles\FollowHud.lua
 Camera\CameraScriptsPage.lua
 Camera\CameraManager.lua
 Options.lua
+UI\Favorites.lua
 Changelog.lua
 ChangelogCommits.lua
 WhatsNew.lua

@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-21", title = "Favorites",
+		text = "Click the star beside any settings page's search box to save that page, open at the tab you're " ..
+		"on. Your favorites get their own line at the top of Cinematic's list." },
 	{ date = "2026-11-20", title = "Try every feature",
 		text = "The welcome window's Feature List now previews almost any feature in a few seconds. Open it with " ..
 		"/cine welcome, then See all." },

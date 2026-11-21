@@ -252,6 +252,9 @@ Dev\GameSettingsEditTest.lua
 Dev\DetachedFadeTest.lua
 Dev\XpRelogTest.lua
 Dev\ListFoldTest.lua
+Dev\FavLinesTest.lua
+Dev\FavoritesTest.lua
+Dev\FavStarsTest.lua
 Dev\GradientTest.lua
 Dev\QuestFocusTest.lua
 Dev\PlateFlickerTest.lua
@@ -302,6 +305,7 @@ Dev\PageStateDebug.lua
 Camera\CameraScriptsPage.lua
 Camera\CameraManager.lua
 Options.lua
+UI\Favorites.lua
 Changelog.lua
 ChangelogCommits.lua
 # (made by Tools/commits.sh, not kept in git)

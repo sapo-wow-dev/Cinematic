@@ -236,6 +236,9 @@ local function PrintDebugHelp()
 	print("  /cine debug reloadpaths - one run checking each of our reloads (Reload button and key, the popups that reload) reloads rather than being blocked: you click each, one /reload a step (dev copy; again to stop)")
 	print("  /cine debug reloadcover - runs itself: each popup that reloads shows, and the secure Reload over it is checked on its button with no error (dev copy; again to stop)")
 	print("  /cine debug listfold - one run checking our settings' left list is never made again in a fight (no yellow \"Interface action failed\" lines); you start and end a fight (dev copy; again to stop)")
+	print("  /cine debug favstars [words] - opens every settings page and icon (or those whose names have a word given) by itself and checks its Favorites star: shown, for that page, overlapping nothing; a screenshot per failing page (dev copy; again to stop)")
+	print("  /cine debug favorites - one run over a reload testing Favorites: stars on two pages, Reload in the popup, the lines and the Favorites page after it, then Escape > Options in a fight you start; your favorites put back after (dev copy; again to stop)")
+	print("  /cine debug favlines - one run probing Favorites lines in our settings' left list: a line added and taken out live, and hidden placeholder slots shown, renamed and hidden; then Escape > Options in a fight you start (dev copy; again to stop)")
 	print("  /cine debug euiswing - one run recording why EllesmereUI's swing timer stays hidden in CineMode (dev copy; again to stop)")
 	print("  /cine debug solo <Addon> [more] - only that addon (its parts and what it needs) and Cinematic load: turns the rest off and reloads; solo off brings them back (dev copy)")
 	print("  /cine debug addontest <Addon> [quick] - one run testing our support for it: every row hidden and shown, and every frame of it on screen covered or not (dev copy; again to stop)")
@@ -1959,6 +1962,19 @@ local function HandleSlash(msg)
 		-- (Dev copy: our settings' left list never made again in a fight, ListFoldTest.lua.)
 		if ns.ListFoldTest then ns.ListFoldTest()
 		else ns.Print("/cine debug listfold is in the dev copy only.") end
+	elseif cmd == "debug" and (arg == "favstars" or arg:find("^favstars ")) then
+		-- (Dev copy: every page's Favorites star looked at as drawn, FavStarsTest.lua;
+		-- words after it: only the pages whose names have one of them.)
+		if ns.FavStarsTest then ns.FavStarsTest(arg:match("^favstars%s*(.*)$"))
+		else ns.Print("/cine debug favstars is in the dev copy only.") end
+	elseif cmd == "debug" and arg == "favorites" then
+		-- (Dev copy: the Favorites lines and stars over a reload, FavoritesTest.lua.)
+		if ns.FavoritesTest then ns.FavoritesTest()
+		else ns.Print("/cine debug favorites is in the dev copy only.") end
+	elseif cmd == "debug" and arg == "favlines" then
+		-- (Dev copy: can the left list take Favorites lines that come and go, FavLinesTest.lua.)
+		if ns.FavLinesTest then ns.FavLinesTest()
+		else ns.Print("/cine debug favlines is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "lookdock" then
 		-- (Dev copy: a Look panel and the popped preview both in sight on every Style page, LookDockTest.lua.)
 		if ns.LookDockTest then ns.LookDockTest()

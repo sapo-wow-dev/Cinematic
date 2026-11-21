@@ -176,6 +176,7 @@ local function TaintScan(label, showMax, sayTo)
 	end
 	return total, groups
 end
+ns.SettingsTaintScan = TaintScan -- (FavLinesTest.lua: the left list's share before and after)
 
 -- Each step: a title, what it does, and its check (given the counts before).
 local STEPS = {
