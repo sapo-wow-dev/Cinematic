@@ -385,8 +385,8 @@ return {
     works = { "SetAlpha(UnitPowerPercent(\"player\", 0, false, curve))" },
     fails = { "UnitPower(\"player\", 0) < share" },
     status = "tested",
-    tested = "2026-11-13",
-    proof = "/cine debug lowmana (LowManaTest.lua)",
+    tested = "2026-11-21",
+    proof = "/cine debug lowmana (LowManaTest.lua); again 2026-11-21 /cine debug kitcheck (level 11 warlock, Elwynn, out of combat)",
     source = "memory: forever-mana-secret",
   },
   {

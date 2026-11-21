@@ -11,6 +11,7 @@
 # ## X-Cinematic-Locale: esES
 
 Dev\ErrorWindow.lua
+Dev\TestKit.lua
 Dev\CVarTraceTest.lua
 Checks.lua
 FrameGuess.lua
@@ -252,6 +253,7 @@ Dev\GameSettingsEditTest.lua
 Dev\DetachedFadeTest.lua
 Dev\XpRelogTest.lua
 Dev\ListFoldTest.lua
+Dev\KitCheckTest.lua
 Dev\FavLinesTest.lua
 Dev\FavoritesTest.lua
 Dev\FavStarsTest.lua

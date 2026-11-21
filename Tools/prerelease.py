@@ -78,6 +78,7 @@ OFFLINE_TESTS = [
     ("Allow offscreen nameplates: the old tick moved, Auto / Always / Never, retail", "Tools/offline/offscreenallow.lua", "retail"),
     ("hover through a stand-in (Shoulder Cam's button over your player frame)", "Tools/offline/hoverstandin.lua"),
     ("Interface Recolor with Glass's HookScript on the chat tabs", "Tools/offline/glasshook.lua"),
+    ("test kit (/cine debug kitcheck): steps, undo, stop, login put back", "Tools/offline/testkit.lua"),
 ]
 
 

@@ -72,6 +72,17 @@ without asking.
      named there). A run from before the last code change in this release
      doesn't count: say so and offer to skip or run again. Each NEW FAIL is
      a finding; "still failing" lines are listed once, briefly.
+   - **Test logs and ledgers** (not in `/release quick`): run
+     `python -I .claude/skills/test/read_log.py` first, so every saved test
+     log is archived before a run clears it, and look at its FAIL counts.
+     Then `grep -l "| open |" Tools/tests/*.md`: a ledger with open
+     questions is a feature in this release that was never proved in game.
+     A feature in the diff with no ledger and no in-game test run since its
+     last code change is "untested in game". Each goes in the review with
+     the one test-kit run (/test skill) that would settle it.
+   - Test kit: `Dev/TestKit.lua` and every kit test are dev-copy only. A
+     `Dev\` line in Cinematic.toc, or player code calling `ns.TestKit`, is a
+     finding (check-toc and the packaged build would ship it).
    - A NEW line in an offline sweep: a setting erroring on the stand-in. A
      real error is a finding; stand-in noise (a stub's nil) is saved with
      `python -I Tools/offline/run.py Tools/offline/sweep.lua <client> --update`

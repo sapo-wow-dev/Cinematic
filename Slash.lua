@@ -238,6 +238,7 @@ local function PrintDebugHelp()
 	print("  /cine debug reloadcover - runs itself: each popup that reloads shows, and the secure Reload over it is checked on its button with no error (dev copy; again to stop)")
 	print("  /cine debug listfold - one run checking our settings' left list is never made again in a fight (no yellow \"Interface action failed\" lines); you start and end a fight (dev copy; again to stop)")
 	print("  /cine debug favstars [words] - opens every settings page and icon (or those whose names have a word given) by itself and checks its Favorites star: shown, for that page, overlapping nothing; a screenshot per failing page (dev copy; again to stop)")
+	print("  /cine debug kit - lists the tests made with the test kit (Dev/TestKit.lua); /cine debug kitcheck runs the kit's own check, nothing to do (dev copy; again to stop)")
 	print("  /cine debug favorites - one run testing Favorites, no reload: stars on two pages, a favorite renamed, the Favorites line and its tiles, a tile's menu, then Escape > Options in a fight you start; your favorites put back after (dev copy; again to stop)")
 	print("  /cine debug favlines - one run probing Favorites lines in our settings' left list: a line added and taken out live, and hidden placeholder slots shown, renamed and hidden; then Escape > Options in a fight you start (dev copy; again to stop)")
 	print("  /cine debug euiswing - one run recording why EllesmereUI's swing timer stays hidden in CineMode (dev copy; again to stop)")
@@ -2432,6 +2433,8 @@ local function HandleSlash(msg)
 		if ns.RefreshOptions then ns.RefreshOptions() end
 		ns.Print("no profile picked: Cinematic is off until you pick one")
 		ns.ShowWelcome()
+	elseif cmd == "debug" and ns.TestKitRun and ns.TestKitRun(arg) then
+		-- (Dev copy: a test made with the test kit, Dev/TestKit.lua; "kit" lists them.)
 	elseif cmd == "debug" then
 		-- Hover over something and run this to see how the addon sees it.
 		local found = false

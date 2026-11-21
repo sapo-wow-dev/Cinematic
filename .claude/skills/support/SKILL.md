@@ -108,11 +108,19 @@ and the player gets a fix instead of homework.
 - **Setup**: can the player's state be made here (class, zone, combat,
   settings from their `/cine log` or what they said)?
 
-If it can be tested: plan **one recorder run** (in-game testing hub rules):
-one command, under 255 characters, that logs everything that could decide it
-(and takes screenshots for something visual). The user does the steps and
-says "check log", and I read the log myself. If the recorder needs new debug
-code, say what it would log and ask before writing it. In the report, offer
+Before planning any run, look up what we already know about the calls and
+frames the problem touches: `python -I .claude/skills/test/known.py <call>
+<frame> <addon> ...` (engine rules, past test logs, memory, earlier tests). A
+tested rule may already explain it (category e) with no test at all.
+
+If it can be tested: plan **one run** with the /test skill (its steps 2-4):
+widen it to the player's setup (their client, addons, the settings from their
+`/cine log`, in and out of combat), probe every open question in the same
+run, and build it with the test kit (`Dev/TestKit.lua`,
+`ns.TestKit.Define`), which makes the `/cine debug <name>` command, the box,
+the undo and the context line. The user runs it and says "check log", and I
+read it with `python -I .claude/skills/test/read_log.py <key>`. If the run
+needs new debug code, say what it would log and ask before writing it. In the report, offer
 the local test as the next step, ahead of any player diagnostic. A draft
 reply asking the player for something is only for when we can't test it, or
 as a fallback the user picks.

@@ -25,3 +25,6 @@ __pycache__/
 *-profile.txt
 out.html
 *.stackdump
+
+# Archived test logs (.claude/skills/test/read_log.py): game data from this PC, kept here
+Tools/tests/logs/

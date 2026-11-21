@@ -20,6 +20,8 @@ The user hit an error in game and wants it looked at without pasting the log.
 
 4. Read the code at the stack's lines, find the cause (who passed what), fix it, then run luacheck and `~/bin/luacompile.py` on the changed files as usual. Errors raised inside Blizzard files: look at our frame in the stack (pcall, hooks) to see what we did to cause it.
 
-5. Any other words after /error are what the user was doing when it happened: use them to narrow it down.
+5. Any other words after /error are what the user was doing when it happened: use them to narrow it down. An error during a test: `python -I .claude/skills/test/read_log.py <test key>` shows that test's log with its context and state lines (combat, zone, addons) around the error. A test-kit test's own Lua error is its `verdict FAIL Lua error in the test` line, with the stack.
+
+6. A cause that rests on what the game does (a secret value, a blocked call, combat lockdown): check `python -I .claude/skills/test/known.py <call>` first. Not known: the fix comes with one test-kit test that proves it (the /test skill), never a guessed fix and "try it".
 
 Don't commit; report the cause, the fix, and how to check it in game.
