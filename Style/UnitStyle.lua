@@ -11,6 +11,47 @@
 local _, ns = ...
 local L = ns.L
 
+-- (Dev copy: whether a preview unit's portrait hangs, through its anchors, on
+-- the unit's health bar; the chain into the log when it does. See DressUnit.)
+function ns.PreviewAnchorCheck(unit)
+	if not (unit and unit.portrait and unit.health) then return end
+	local function Name(object)
+		if object == unit.health then return "HEALTH" end
+		for key, value in pairs(unit) do if value == object then return key end end
+		local ok, name = pcall(object.GetDebugName, object)
+		return ok and type(name) == "string" and name:gsub("^.*%.", "") or tostring(object)
+	end
+	local seen, path, found = {}, {}, nil
+	local function Walk(object, depth)
+		if found or depth > 8 or seen[object] then return end
+		seen[object] = true
+		if object == unit.health then found = table.concat(path, " > ") return end
+		local points = object.GetNumPoints and tonumber(object:GetNumPoints()) or 0
+		for i = 1, points do
+			local point, relative, relPoint = object:GetPoint(i)
+			if relative then
+				path[#path + 1] = ("%s.%s->%s.%s"):format(Name(object), tostring(point), Name(relative), tostring(relPoint))
+				Walk(relative, depth + 1)
+				path[#path] = nil
+			end
+		end
+		-- (a mask on it hangs it on the mask's anchors too)
+		local masks = object.GetNumMaskTextures and tonumber(object:GetNumMaskTextures()) or 0
+		for i = 1, masks do
+			local mask = object:GetMaskTexture(i)
+			if mask then
+				path[#path + 1] = ("%s masked by %s"):format(Name(object), Name(mask))
+				Walk(mask, depth + 1)
+				path[#path] = nil
+			end
+		end
+	end
+	Walk(unit.portrait, 1)
+	ns.previewLoops = (ns.previewLoops or 0) + (found and 1 or 0)
+	if found and ns.Log then ns.Log("ui", ("preview anchors: %s portrait hangs on its health bar: %s"):format(
+		tostring(unit.key), found)) end
+end
+
 local DEFAULTS = ns.DEFAULTS
 DEFAULTS.ufStyle = true
 
@@ -150,6 +191,16 @@ local function View(id)
 	return view
 end
 ns.UnitStyleView = View
+-- The look on a frame now, as its parts' measured places are kept by
+-- (UnitFrameCopy.lua's ns.UnitHangs): the game's, or a theme's shape.
+function ns.UnitLookKey(id)
+	if not ns.StyleOn("ufStyle") then return "game" end
+	-- (And the theme's name: Gilded Codex and the game's own look share a shape and
+	-- a layout, but Codex hides the level's circle; one record mixed both, 2026-11-21.)
+	local db = ns.db
+	return tostring(View(id).ufShape or "game") .. "|" .. tostring(ns.ThemeLayout and ns.ThemeLayout() or "-")
+		.. "|" .. tostring(db and db.styleTheme or "game")
+end
 
 local function Readable(value)
 	return value ~= nil and not (issecretvalue and issecretvalue(value))
@@ -617,12 +668,12 @@ local function DressSkin(skin, view, under)
 	end
 	-- (A cell of a shaped frame: square, in a line of its own, with the fine work. The
 	-- style theme's bar shape is for bars that stand alone: a straight border can't follow it.)
-	local cell = not view.isTile and view.ufShape and view.ufShape ~= "game" and ns.ThemeLayout() ~= "slab"
+	local cell = not view.isTile and view.ufShape and view.ufShape ~= "game" and ns.UnitThemeLayout() ~= "slab"
 	skin.shine:SetShown(cell and true or false)
 	skin.shade:SetShown(cell and true or false)
 	-- (A slab: no line or dirt to carry it, so it's light that stops it being one flat
 	-- block of color, and a touch of grain.)
-	local slab = not view.isTile and ns.ThemeLayout() == "slab"
+	local slab = not view.isTile and ns.UnitThemeLayout() == "slab"
 	-- (Not on a thin bar: the shading would be all there is of it, and dim it to nothing.)
 	local barTall = skin:GetParent():GetHeight()
 	local thin = Readable(barTall) and barTall < 8
@@ -646,7 +697,7 @@ local function DressSkin(skin, view, under)
 	end
 	skin.shine:SetShown((cell or slab) and true or false)
 	-- (An open frame: the bars stand alone, no cell lines or dirt round them.)
-	local open = ns.ThemeLayout() == "open"
+	local open = ns.UnitThemeLayout() == "open"
 	skin.grit:SetShown((cell or slab) and not open and not thin and true or false)
 	skin.grit:SetAlpha(slab and 0.14 or 0.18)
 	DressCell(skin.cell, cell and not open and true or false, { r or 0.5, g or 0.5, b or 0.5 }, thin and 1.5 or 2)
@@ -1276,7 +1327,7 @@ end
 -- Only on a bar tall enough to hold a name: the small frames keep theirs above.
 local SLAB_HEIGHT = 12
 local function SlabOn(health)
-	if not (health and ns.StyleOn("ufStyle") and ns.ThemeLayout() == "slab") then return false end
+	if not (health and ns.StyleOn("ufStyle") and ns.UnitThemeLayout() == "slab") then return false end
 	local tall = health:GetHeight()
 	return Readable(tall) and tall >= SLAB_HEIGHT
 end
@@ -1409,7 +1460,7 @@ end
 
 local function FramePlate(frame, state, portrait, on, over, shape)
 	-- (A slab theme's whole point is nothing round its bars; an open one's too.)
-	if not (on and not over) or ns.ThemeLayout() == "slab" or ns.ThemeLayout() == "open" then
+	if not (on and not over) or ns.UnitThemeLayout() == "slab" or ns.UnitThemeLayout() == "open" then
 		if state.plate then state.plate:Hide() end
 		if state.bridge then state.bridge:Hide() end
 		if state.shadow then state.shadow:Hide() end
@@ -1595,7 +1646,7 @@ local lifted = setmetatable({}, { __mode = "k" })
 local lifting = false
 local function Lift(text, r, g, b)
 	if lifting or not (type(r) == "number" and Readable(r) and Readable(g) and Readable(b)) then return end
-	if ns.ThemeLayout() ~= "slab" then return end
+	if ns.UnitThemeLayout() ~= "slab" then return end
 	lifted[text] = { r, g, b }
 	lifting = true
 	local x, y, z = r + (1 - r) * 0.7, g + (1 - g) * 0.7, b + (1 - b) * 0.7
@@ -1842,7 +1893,7 @@ function FitBars(frame, bars, portrait, shape, on, name)
 				end
 			end
 		end
-	elseif name and ns.ThemeLayout() == "open" then
+	elseif name and ns.UnitThemeLayout() == "open" then
 		-- (An open frame: the name over the health bar, at the portrait's end, as the
 		-- preview draws it; on retail its level across from it, at the far end.)
 		SpotsOf(name)
@@ -1939,7 +1990,7 @@ local slabs = setmetatable({}, { __mode = "k" })
 local function DressSlab(frame, health, name, power, portrait, bare)
 	if InCombatLockdown() or not (health and name) then return end
 	local state = slabs[frame]
-	local on = state ~= nil and ns.StyleOn("ufStyle") and ns.ThemeLayout() == "slab" or SlabOn(health)
+	local on = state ~= nil and ns.StyleOn("ufStyle") and ns.UnitThemeLayout() == "slab" or SlabOn(health)
 	local middle = health.TextString
 	if on then
 		if not state then
@@ -2204,7 +2255,7 @@ local function DressShape(frame, portrait, view, artOver)
 	-- dragon, tinted with the rest. It tells you what you're up against.)
 	local holder = frame.TargetFrameContainer
 	local rank = holder and holder.BossPortraitFrameTexture
-	local keepRank = shape ~= "none" and ns.ThemeLayout() ~= "slab"
+	local keepRank = shape ~= "none" and ns.UnitThemeLayout() ~= "slab"
 	for _, art in ipairs(FrameArt(frame)) do SetClear(art, own and not (keepRank and art == rank)) end
 	for _, art in ipairs(ArtExtras(frame)) do SetClear(art, own and not (keepRank and art == rank)) end
 	SetClear(portrait, shape == "none")
@@ -2212,7 +2263,7 @@ local function DressShape(frame, portrait, view, artOver)
 	FramePlate(frame, state, portrait, own, artOver, shape)
 	-- (Buffs on top kept off the plate: UnitAuraLift.lua.)
 	if ns.UnitAuraLift then ns.UnitAuraLift(frame, state.plate) end
-	local slab = ns.ThemeLayout() == "slab"
+	local slab = ns.UnitThemeLayout() == "slab"
 	PlaceBadge(frame, state, shape == "none" and not slab)
 	ShrinkBadge(frame, state, own and not slab and shape ~= "none", portrait, shape)
 	TintBadge(frame, own)
@@ -2314,7 +2365,7 @@ local function DressShape(frame, portrait, view, artOver)
 	-- (Art behind the portrait and under the rows: Void Whisper's eye round its circle.
 	-- Cut away inside the ring, so it can't show through the picture as it fades.)
 	local backFile, backMask, backMist, backVeins
-	if own and not artOver and ns.ThemeLayout() ~= "slab" then
+	if own and not artOver and ns.UnitThemeLayout() ~= "slab" then
 		backFile, backMask, backMist, backVeins = ns.ThemePortraitBack(shape)
 	end
 	if backFile and not state.back and not InCombatLockdown() then
@@ -2428,7 +2479,7 @@ local function DressFrame(info)
 			local r, g, b
 			if view then r, g, b = HealthColor(view, unit) end
 			-- (A theme's color, fuller for a bar this big. Class colors stand as they are.)
-			if r and view.ufHealthColor == "custom" and ns.ThemeLayout() ~= "slab" and ns.ThemeRing() then
+			if r and view.ufHealthColor == "custom" and ns.UnitThemeLayout() ~= "slab" and ns.ThemeRing() then
 				local vivid = ns.ThemeVivid({ r, g, b })
 				r, g, b = vivid[1], vivid[2], vivid[3]
 			end
@@ -2462,14 +2513,14 @@ local function DressFrame(info)
 			DressFrameArt(frame, active)
 			-- (A slab's taken off first: the badge measures the level's place next, and
 			-- would keep the bar as the spot to put it back to.)
-			local slabTheme = view and ns.ThemeLayout() == "slab"
+			local slabTheme = view and ns.UnitThemeLayout() == "slab"
 			local bare = view and view.ufShape == "none"
 			if not slabTheme then DressSlab(frame, health, text, power, portrait, bare) end
 			DressShape(frame, portrait, view, ns.StyleOverride("unitPart" .. info[2] .. "Art") == "hide")
 			SoftenForecast(frame, health, view and view.ufShape ~= "game")
 			-- (One's taken off before the other's measured from the game's own sizes.)
 			local fit = health and power and portrait and view and view.ufShape ~= "game" and view.ufShape ~= "none"
-				and ns.ThemeLayout() ~= "slab"
+				and ns.UnitThemeLayout() ~= "slab"
 			local bars = { health, power }
 			local extra = frame == _G.PlayerFrame and _G.AlternatePowerBar
 			if extra and health and power then bars[3] = extra end
@@ -2702,9 +2753,11 @@ local SAMPLES = {
 	PLAYER = { framed = { 14, -22, 54, 104 }, name = "Thrall", level = 60, x = 14, y = -30, w = 150, class = "SHAMAN", health = 0.86, power = { 0, 0.55, 1 },
 		amount = 0.4, faces = THRALL },
 	TARGET = { framed = { 300, -22, 54, 104 }, name = "The Lich King", level = 63, x = 270, y = -30, w = 150, reaction = 2, health = 0.62,
+		boss = true, auras = true, maxHealth = 554000, maxPower = 120000,
 		power = { 0, 0.55, 1 }, amount = 1, flip = true,
 		faces = { "Interface\\Icons\\Achievement_Boss_LichKing", "Interface\\Icons\\INV_Misc_Head_Undead_01" } },
 	FOCUS = { framed = { 300, -126, 54, 104 }, name = "Jaina", level = 60, x = 300, y = -112, w = 110, class = "MAGE", health = 0.95, power = { 0, 0.55, 1 },
+		auras = true, maxHealth = 186000, maxPower = 250000,
 		amount = 0.7, flip = true,
 		faces = { "Interface\\Icons\\Achievement_Character_Jaina_Proudmoore", "Interface\\Icons\\Achievement_Leader_Jaina_Proudmoore",
 			"Interface\\Icons\\INV_Misc_Head_Human_02" } },
@@ -2716,6 +2769,11 @@ local SAMPLES = {
 		faces = { "Interface\\Icons\\Achievement_Leader_King_Varian_Wrynn", "Interface\\Icons\\INV_Misc_Head_Human_01" } },
 	TOT = { framed = { 360, -86, 36, 70 }, name = "Thrall", x = 372, y = -80, w = 70, class = "SHAMAN", health = 0.86, power = { 0, 0.55, 1 },
 		amount = 0.4, small = true, faces = THRALL, parent = "TARGET" },
+	-- (The Cast Bars page's boss, over its Boss & arena cast bar: the target's look.)
+	BOSSCAST = { framed = { 300, -22, 54, 104 }, name = "Onyxia", level = 63, x = 270, y = -30, w = 150, reaction = 2,
+		boss = true, auras = true, maxHealth = 1260000, maxPower = 100000,
+		health = 0.48, power = { 0, 0.55, 1 }, amount = 0.8, flip = true,
+		faces = { "Interface\\Icons\\Achievement_Boss_Onyxia", "Interface\\Icons\\INV_Misc_Head_Dragon_01" } },
 	-- (The focus's target of target, dressed by the same tab: the game has one under each.)
 	FOCUSTOT = { framed = { 360, -180, 36, 70 }, name = "Varian", x = 372, y = -174, w = 70, class = "WARRIOR", health = 0.7,
 		power = { 1, 0, 0 }, amount = 0.8, small = true, parent = "FOCUS",
@@ -2752,7 +2810,7 @@ end
 -- scored 69/68, its art plain color, its bars too thin.)
 -- (The pet and the target of target once their frames have been read: they
 -- have no built-in recipe.)
-local COPIED = { PLAYER = true, TARGET = true, FOCUS = true, PET = true, TOT = true }
+local COPIED = { PLAYER = true, TARGET = true, FOCUS = true, PET = true, TOT = true, PARTY = true }
 local function SetAtlasSafe(texture, atlas)
 	if not atlas then return false end
 	local ok, done = pcall(texture.SetAtlas, texture, atlas)
@@ -2845,6 +2903,7 @@ local function CopyLook(unit, view, on)
 	local mine = unit.peers and unit.peers.PLAYER
 	local k = unit.id ~= "PLAYER" and mine and mine.copy and mine.copy.on and mine.copyK
 	if not k then k = ((sample.framed and sample.framed[4]) or sample.w) / (recipe.health.w * own) end
+	if unit.alone then k = 1 end
 	if unit.id == "PLAYER" then unit.copyK = k end
 	local scale = k * own
 	-- (A target of target where the game hangs it off its frame, at that frame's
@@ -3062,7 +3121,9 @@ local function BoxOf(stage, list)
 		if region and region:IsShown() then
 			local rl, rr, rt, rb = region:GetLeft(), region:GetRight(), region:GetTop(), region:GetBottom()
 			if rl and rr and rt and rb then
-				rl, rr, rt, rb = rl - sl, rr - sl, st - rt, st - rb
+				-- (In the stage's units: a target of target sized by a measured place has a scale of its own.)
+				local k = region:GetEffectiveScale() / stage:GetEffectiveScale()
+				rl, rr, rt, rb = rl * k - sl, rr * k - sl, st - rt * k, st - rb * k
 				l, r = math.min(l or rl, rl), math.max(r or rr, rr)
 				t, b = math.min(t or rt, rt), math.max(b or rb, rb)
 			end
@@ -3074,7 +3135,9 @@ end
 -- (Everything a unit's block draws: the frame, its copy's art that juts out (the
 -- level circle), and what hangs off it.)
 local function BlockParts(unit, units)
-	local list = { unit }
+	local list = { unit, unit.label or nil }
+	for _, aura in ipairs(unit.auras or {}) do list[#list + 1] = aura end
+	if unit.dragon then list[#list + 1] = unit.dragon end
 	local copy = unit.copy
 	if copy and copy.on then
 		for _, texture in ipairs(copy.textures) do list[#list + 1] = texture end
@@ -3101,17 +3164,79 @@ local function Put(stage, units, unit, x, y)
 	end
 	return BoxOf(stage, BlockParts(unit, units))
 end
+-- (Every look laid out the same way, a theme's drawn frames too (user
+-- 2026-11-20: "player and pet are not together, your target and target target
+-- are not together"). A drawn pet hangs under your bars, its face under their
+-- start, as the game's; a drawn target of target under its frame's bars, at
+-- their end. The copies hang theirs where the game reads them: CopyLook.)
+-- (Its health bar where the live frames put the target of target's in this
+-- look: measured, ns.UnitHangs. The unit sized so its bar is that wide.)
+local function HangMeasured(unit, over, spot)
+	local hw = over.health:GetWidth()
+	unit:ClearAllPoints()
+	unit:SetPoint("TOPLEFT", over.health, "TOPLEFT", 0, 0)
+	local hx = unit.health:GetLeft() and unit:GetLeft() and unit.health:GetLeft() - unit:GetLeft()
+	local hy = unit.health:GetTop() and unit:GetTop() and unit:GetTop() - unit.health:GetTop()
+	local own = unit.health:GetWidth()
+	if not (hx and hy and hw and hw > 0 and own and own > 0 and spot.w and spot.w > 0) then return false end
+	local s = spot.w * hw / own
+	unit:SetScale(s)
+	unit:ClearAllPoints()
+	unit:SetPoint("TOPLEFT", over.health, "TOPLEFT", spot.x * hw / s - hx, -spot.y * hw / s + hy)
+	return true
+end
+local function HangDrawn(units)
+	for _, key in ipairs({ "PET", "TOT", "FOCUSTOT" }) do
+		local unit = units[key]
+		local over = unit and units[unit.sample.parent]
+		-- (A copy hung by its read place already (CopyLook) stays as it is.)
+		local placed = unit and unit.copy and unit.copy.on and unit.hungOn
+		if unit and not (unit.copy and unit.copy.on) and unit:GetScale() ~= 1 then unit:SetScale(1) end
+		local hangs = over and key ~= "PET" and ns.UnitHangs and ns.UnitLookKey
+			and ns.UnitHangs(over.id, ns.UnitLookKey(over.id))
+		if unit and over and not placed and hangs and hangs.tot and unit:IsShown() and over:IsShown()
+			and HangMeasured(unit, over, hangs.tot) then
+			unit.hungOn = over
+		elseif unit and over and not placed then
+			unit.hungOn = nil
+			if unit:IsShown() and over:IsShown() and over.power then
+				unit:ClearAllPoints()
+				if key == "PET" then
+					unit:SetPoint("TOPLEFT", over.power, "BOTTOMLEFT", -4, -6)
+				else
+					-- (Under its frame's row of buffs when it has one: on them, they drew
+					-- over it, user 2026-11-20.)
+					-- (Measured: the row hangs under the portrait, lower than the bars.)
+					local auras = over.auras and over.auras[1]
+					local down = 6
+					if auras and auras:IsShown() then
+						local bars, row = over.power:GetBottom(), auras:GetBottom()
+						down = (bars and row) and (bars - row + 4) or (auras:GetHeight() + 20)
+					end
+					unit:SetPoint("TOPRIGHT", over.power, "BOTTOMRIGHT", 4, -down)
+				end
+				unit.hungOn = over
+			end
+		end
+	end
+end
 local function LayoutStage(stage, units, holder)
 	local player = units.PLAYER
-	local copies = player and player.copy and player.copy.on
 	local w, h = stage.baseW, stage.baseH
+	HangDrawn(units)
+	-- (Each frame's buffs short of its target of target, as the game's: UnitFrameParts.lua.)
+	if ns.WrapUnitAuras then
+		if units.TARGET then ns.WrapUnitAuras(units.TARGET, units.TOT) end
+		if units.FOCUS then ns.WrapUnitAuras(units.FOCUS, units.FOCUSTOT) end
+	end
 	-- (Not on the screen yet, nothing to measure: as drawn till it's shown, which draws it again.)
 	holder.layoutPending = nil
-	if copies and not (stage:GetLeft() and stage:GetTop()) then
-		copies = false
+	local laid = player ~= nil
+	if laid and not (stage:GetLeft() and stage:GetTop()) then
+		laid = false
 		holder.layoutPending = true
 	end
-	if copies then
+	if laid then
 		local pad, gap = STAGE_PAD, STAGE_GAP
 		local left = Put(stage, units, player, pad, pad)
 		local pet = units.PET
@@ -3157,6 +3282,412 @@ for _, info in ipairs(FRAMES) do
 	if info[1] == "TOT" then PREVIEW_UNITS[#PREVIEW_UNITS + 1] = { id = "TOT", key = "FOCUSTOT" } end
 end
 
+-- One unit frame's mock-up, as the preview makes each (its id's look, key's sample):
+-- the Unit Frames preview's, and the Cast Bars pages' frame over their cast bar.
+local function NewUnit(stage, id, key, onPick)
+	local sample = SAMPLES[key]
+	local unit = CreateFrame("Button", nil, stage)
+	unit.key = key
+	local size = sample.small and 22 or 34
+	unit:SetSize(sample.w + size + 6, size + 6)
+	unit:SetPoint("TOPLEFT", stage, "TOPLEFT", sample.x, sample.y)
+	unit.portrait = unit:CreateTexture(nil, "ARTWORK")
+	unit.portrait:SetSize(size, size)
+	unit.portrait:SetPoint(sample.flip and "RIGHT" or "LEFT", unit, sample.flip and "RIGHT" or "LEFT", 0, 0)
+	-- (The face: an icon cut round like the game's portraits.)
+	unit.face = unit:CreateTexture(nil, "ARTWORK")
+	unit.face:SetAllPoints(unit.portrait)
+	unit.face:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	if unit.CreateMaskTexture then
+		local mask = unit:CreateMaskTexture()
+		mask:SetAllPoints(unit.portrait)
+		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL",
+			"CLAMPTOBLACKADDITIONAL")
+		unit.face:AddMaskTexture(mask)
+		unit.faceMask, unit.faceMasked = mask, true
+	end
+	-- (Its ring: a disc a little bigger behind it, as the class icons have.)
+	unit.ring = unit:CreateTexture(nil, "BORDER")
+	unit.ring:SetPoint("TOPLEFT", unit.portrait, -2, 2)
+	unit.ring:SetPoint("BOTTOMRIGHT", unit.portrait, 2, -2)
+	unit.ring:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+	unit.ring:SetVertexColor(0.8, 0.65, 0.25)
+	unit.name = unit:CreateFontString(nil, "OVERLAY", sample.small and "GameFontNormalSmall" or "GameFontNormal")
+	unit.health = CreateFrame("StatusBar", nil, unit)
+	unit.health:SetSize(sample.w, sample.small and 6 or 10)
+	unit.power = CreateFrame("StatusBar", nil, unit)
+	unit.power:SetSize(sample.w, sample.small and 3 or 5)
+	local side = sample.flip and "RIGHT" or "LEFT"
+	unit.health:SetPoint("TOP" .. side, unit.portrait, "TOP" .. (sample.flip and "LEFT" or "RIGHT"),
+		sample.flip and -6 or 6, -(sample.small and 9 or 13))
+	unit.power:SetPoint("TOP", unit.health, "BOTTOM", 0, -2)
+	unit.name:SetPoint("BOTTOM" .. side, unit.health, "TOP" .. side, 0, 2)
+	-- (Over the bars, for a slab's name.)
+	unit.nameTop = CreateFrame("Frame", nil, unit)
+	unit.nameTop:SetAllPoints()
+	unit.name:SetParent(unit.nameTop)
+	unit.value = unit.nameTop:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	unit.value:SetPoint(sample.flip and "LEFT" or "RIGHT", unit.health, sample.flip and "LEFT" or "RIGHT",
+		sample.flip and 7 or -7, 0)
+	-- (On the stage, so it's under the portrait, as it is on the game's frames.)
+	unit.plate = MakePlate(stage)
+	unit.plate:SetFrameLevel(stage:GetFrameLevel())
+	unit.bridge = MakeBridge(stage)
+	unit.bridge:SetFrameLevel(stage:GetFrameLevel())
+	unit.rowShadow = MakeRowShadow(stage)
+	unit.rowShadow:SetFrameLevel(stage:GetFrameLevel())
+	PlacePlate(unit.plate, unit.health)
+	for _, bar in ipairs({ unit.health, unit.power }) do
+		bar:SetMinMaxValues(0, 1)
+		local ground = bar:CreateTexture(nil, "BACKGROUND", nil, -7)
+		ground:SetAllPoints()
+		ground:SetColorTexture(0, 0, 0, 0.5)
+		bar.game = ground
+		-- (The game's frame: a dark line just inside its metal, small corners in it.)
+		bar.gameCell = MakeCell(bar, "OVERLAY", 2)
+	end
+	-- (The game's frame: one piece of metal behind its rows, the gaps between them its
+	-- lines, round at the far end; the connector joins it at the portrait's.)
+	unit.box = CreateFrame("Frame", nil, stage)
+	unit.box:SetFrameLevel(stage:GetFrameLevel())
+	unit.box.wide = unit.box:CreateTexture(nil, "BACKGROUND", nil, -8)
+	unit.box.tall = unit.box:CreateTexture(nil, "BACKGROUND", nil, -8)
+	unit.box.corners = {}
+	for i, coords in ipairs({ { 0, 0.5, 0, 0.5 }, { 0.5, 1, 0, 0.5 }, { 0, 0.5, 0.5, 1 }, { 0.5, 1, 0.5, 1 } }) do
+		local corner = unit.box:CreateTexture(nil, "BACKGROUND", nil, -8)
+		corner:SetPoint(CORNERS[i][1])
+		corner.coords = coords
+		unit.box.corners[i] = corner
+	end
+	-- (The game's level badge, on the portrait's lower corner.)
+	if sample.level then
+		unit.badge = CreateFrame("Frame", nil, unit)
+		unit.badge:SetSize(18, 18)
+		unit.badge:SetPoint("CENTER", unit.portrait, sample.flip and "BOTTOMRIGHT" or "BOTTOMLEFT",
+			sample.flip and -6 or 6, 6) -- (on the ring, as ns.ThemeBadgeSpot's circle)
+		unit.badge.ring = unit.badge:CreateTexture(nil, "ARTWORK")
+		unit.badge.ring:SetAllPoints()
+		unit.badge.ring:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+		unit.badge.back = unit.badge:CreateTexture(nil, "ARTWORK", nil, 1)
+		unit.badge.back:SetPoint("TOPLEFT", 2, -2)
+		unit.badge.back:SetPoint("BOTTOMRIGHT", -2, 2)
+		unit.badge.back:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+		unit.badge.back:SetVertexColor(0.1, 0.08, 0.06)
+		unit.badge.text = unit.badge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		unit.badge.text:SetPoint("CENTER", 0, 0)
+		unit.badge.text:SetText(sample.level)
+	end
+	unit.health:SetValue(sample.health)
+	unit.power:SetValue(sample.amount)
+	unit.mark = unit:CreateTexture(nil, "OVERLAY")
+	unit.mark:SetPoint("TOPLEFT", -3, 3)
+	unit.mark:SetPoint("BOTTOMRIGHT", 3, -3)
+	unit.mark:SetColorTexture(1, 0.82, 0, 0.12)
+	unit:SetScript("OnClick", function() if onPick then onPick(id) end end)
+	unit.id, unit.sample = id, sample
+	return unit
+end
+
+-- One mock-up dressed as its frame's look says (editing: the frame whose tab is open, marked).
+local function DressUnit(unit, stage, editing)
+		local view, sample = View(unit.id), unit.sample
+		unit.mark:SetShown(editing == unit.id)
+		-- (The bars: the look's fill, else the game's look.)
+		for i, bar in ipairs({ unit.health, unit.power }) do
+			bar.gameFill = false
+			if not ns.SetBarTexture(bar, view.ufTexture, i == 1 and ns.StyleTextureFull(view.ufTexture)) then
+				bar:SetStatusBarTexture(GAME_FILL)
+				bar:GetStatusBarTexture():SetDesaturated(false)
+				bar.gameFill = true -- (the game's own fill: CopyLook puts the game's atlas on)
+			end
+			if i == 1 then
+				local r, g, b
+				if view.ufHealthColor == "class" then
+					r, g, b = SampleColor(sample)
+				elseif view.ufHealthColor == "custom" then
+					r, g, b = view.ufHealthR, view.ufHealthG, view.ufHealthB
+					-- (Fuller, as the real frame's (DressFrames: a theme's color for a bar
+					-- this big). Without, 8 themes' bars were darker, 2026-11-21.)
+					if r and ns.StyleOn("ufStyle") and ns.UnitThemeLayout() ~= "slab" and ns.ThemeRing() and ns.ThemeVivid then
+						local vivid = ns.ThemeVivid({ r, g, b })
+						r, g, b = vivid[1], vivid[2], vivid[3]
+					end
+				elseif view.ufHealthColor == "health" then
+					local _, most = bar:GetMinMaxValues()
+					r, g, b = HealthMix(view, (most and most > 0) and bar:GetValue() / most or 1)
+				end
+				bar:SetStatusBarColor(r or 0, g or 0.8, b or 0)
+				-- (Its gradient, else flat: the color on the fill itself clears one.)
+				local fill, fade = bar:GetStatusBarTexture(), Fade(view)
+				SetFade(fill, r or 0, g or 0.8, b or 0, fade)
+			else
+				local mana = ns.ThemeMana()
+				-- (Your pet's own power when it's out (a warlock's imp: mana, not the
+				-- sample wolf's focus), 2026-11-21.)
+				local power = (unit.id == "PET" and ns.LivePetPower and ns.LivePetPower()) or sample.power
+				local pr, pg, pb = unpack(power)
+				if mana and power[1] == 0 and power[3] == 1 then pr, pg, pb = mana[1], mana[2], mana[3] end
+				bar:SetStatusBarColor(pr, pg, pb)
+				local fill, fade = bar:GetStatusBarTexture(), Fade(view, "ufPower")
+				SetFade(fill, pr, pg, pb, fade)
+			end
+			local kind = ns.StyleBorder(view, "ufBorder")
+			bar.game:SetShown(kind == "game")
+			DressSkin(Skin(bar), view, i == 2 and unit.health or nil)
+		end
+		local open = ns.UnitThemeLayout() == "open"
+		DressPlateLook(unit.plate, view.ufShape ~= "game" and ns.UnitThemeLayout() ~= "slab" and not open)
+		-- (The game's shape: its own frame, as it draws it. A name box over the bars, each
+		-- bar boxed in metal, the level on a badge. In the ring's color, as a theme tints the art.)
+		local framed = view.ufShape == "game" and ns.UnitThemeLayout() ~= "slab"
+		local metal = ns.ThemeRing() or { 0.6, 0.47, 0.24 } -- (the game's: a browner gold than its ring)
+		if framed then
+			unit.plate:Show()
+			-- (Its name box brown, lit from above, as the game's.)
+			unit.plate.back:SetColorTexture(0.22, 0.15, 0.08, 1)
+			unit.plate.grit:Hide()
+			unit.plate.sheen:SetAlpha(0.8)
+			unit.plate.left:SetColorTexture(0, 0, 0, 0)
+			unit.plate.right:SetColorTexture(0, 0, 0, 0)
+			unit.plate.edges:Hide()
+			-- (No small corners or fine lines in it: at the preview's size they
+			-- land between screen pixels and smear. 2026-11-17.)
+			DressCell(unit.plate.cell, false, metal, BAR_GAP)
+		else
+			unit.plate.grit:Show()
+			unit.plate.sheen:SetAlpha(1)
+		end
+		for _, bar in ipairs({ unit.health, unit.power }) do
+			DressCell(bar.gameCell, false, metal, BAR_GAP)
+			-- (Solid, or the metal behind would show through the empty part.)
+			if framed then bar.game:SetColorTexture(0.05, 0.04, 0.03, 1) else bar.game:SetColorTexture(0, 0, 0, 0.5) end
+		end
+		unit.box:SetShown(framed)
+		-- (Over the metal: the name box and the connector.)
+		unit.plate:SetFrameLevel(stage:GetFrameLevel() + (framed and 1 or 0))
+		unit.bridge:SetFrameLevel(stage:GetFrameLevel() + (framed and 1 or 0))
+		if unit.badge then
+			unit.badge:SetShown(framed)
+			unit.badge.ring:SetVertexColor(metal[1], metal[2], metal[3])
+		end
+		-- (A slab: as the game's frames get it, with a taller bar, as they have.)
+		local slab = ns.UnitThemeLayout() == "slab" and not sample.small
+		-- (Every frame with a portrait as the game's are sized, theirs or a theme's shape: its
+		-- portrait big, its rows short. A slab's and a bare one's have none, and keep their own.)
+		local base = sample.small and 22 or 34
+		local spot = ns.UnitThemeLayout() ~= "slab" and view.ufShape ~= "none" and sample.framed
+		if spot then base = framed and spot[3] or math.floor(spot[3] / 1.14) end
+		local across = base * (view.ufShape ~= "game" and view.ufShape ~= "none" and 1.14 or 1)
+		unit:ClearAllPoints()
+		unit:SetPoint("TOPLEFT", stage, "TOPLEFT", spot and spot[1] or sample.x, spot and spot[2] or sample.y)
+		unit:SetSize((spot and spot[4] or sample.w) + across + 6, across + 6)
+		unit.portrait:SetSize(across, across)
+		if unit.badge then
+			local badge = spot and math.floor(across * 0.4) or 18
+			local inset = spot and math.floor(across * 0.16) or 6
+			unit.badge:SetSize(badge, badge)
+			unit.badge:ClearAllPoints()
+			unit.badge:SetPoint("CENTER", unit.portrait, sample.flip and "BOTTOMRIGHT" or "BOTTOMLEFT",
+				sample.flip and -inset or inset, inset)
+		end
+		local bare = slab and view.ufShape == "none"
+		local side = sample.flip and "RIGHT" or "LEFT"
+		-- (Dev copy: the portrait's anchors walked, the chain said if it leads to
+		-- the health bar: pinning the bar to it then fails, "Cannot anchor to a
+		-- region dependent on it" (Style General's Visions tab, 2026-11-20).
+		-- /cine debug previewloop.)
+		-- (A theme's drawn frame hung the portrait off the health bar last time
+		-- (UnitFrameParts MeasuredBody): back on its own spot before the bar is
+		-- pinned to it, or that's the loop. It runs after this, too late.)
+		if unit.portraitMeasured then
+			unit.portrait:ClearAllPoints()
+			unit.portrait:SetPoint(side, unit, side, 0, 0)
+			unit.portraitMeasured = nil
+		end
+		if ns.isDev and ns.PreviewAnchorCheck then ns.PreviewAnchorCheck(unit) end
+		unit.health:ClearAllPoints()
+		if bare then
+			unit.health:SetPoint("TOP" .. side, unit.portrait, "TOP" .. side, 0, -6)
+		else
+			-- (A shape's rows in the portrait's middle, as FitBars puts them.)
+			local down = sample.small and 9 or 13
+			if framed then
+				local row = 10 + BAR_GAP
+				local rows = row + (sample.small and 6 + 3 or 10 + 5) + BAR_GAP
+				down = (across - rows) / 2 + row
+			elseif view.ufShape ~= "game" and not slab then
+				local row = (sample.small and NAME_ROW_SMALL or NAME_ROW) + BAR_GAP
+				local rows = row + (sample.small and 9 or 15) + BAR_GAP
+				down = (across - rows) / 2 + row
+			end
+			local gap = framed and 5 or 6
+			if view.ufShape ~= "game" and not slab then
+				local fit = ns.ThemePortraitFit(view.ufShape)
+				gap = 5 + across * (fit - 1) / 2 - across * fit * ns.ThemePortraitSide(view.ufShape)
+			end
+			unit.health:SetPoint("TOP" .. side, unit.portrait, "TOP" .. (sample.flip and "LEFT" or "RIGHT"),
+				sample.flip and -gap or gap, -down)
+		end
+		-- (The game's rows are short: about three times as wide as they are tall.)
+		local wide = spot and spot[4] or sample.w
+		unit.health:SetSize(wide + (bare and across + 6 or 0), slab and 22 or sample.small and 6 or 10)
+		unit.power:SetSize(wide + (bare and across + 6 or 0),
+			slab and 4 or sample.small and 3 or 5)
+		unit.name:ClearAllPoints()
+		if slab then
+			unit.name:SetPoint(sample.flip and "RIGHT" or "LEFT", unit.health, sample.flip and "RIGHT" or "LEFT",
+				sample.flip and -7 or 7, 0)
+		else
+			local side = sample.flip and "RIGHT" or "LEFT"
+			if (view.ufShape ~= "game" or framed) and not open then
+				unit.name:SetPoint("CENTER", unit.plate, "CENTER")
+			else
+				unit.name:SetPoint("BOTTOM" .. side, unit.health, "TOP" .. side, 0, 2)
+			end
+		end
+		unit.nameTop:SetFrameLevel(unit.health:GetFrameLevel() + 3)
+		unit.value:SetShown(slab)
+		if slab then
+			unit.value:SetFontObject(_G.GameFontHighlightSmall)
+			unit.value:SetText(("%d%%"):format(sample.health * 100))
+		end
+		PlacePlate(unit.plate, unit.health)
+		-- (The game's frame: its metal a whole number of screen pixels, so every
+		-- line between and round the rows comes out the same, and sharp. Rows
+		-- whose edges are all that far apart round to the screen alike.)
+		local metalGap = BAR_GAP
+		local factor = PixelUtil and PixelUtil.GetPixelToUIUnitFactor and PixelUtil.GetPixelToUIUnitFactor()
+		local scale = unit.health:GetEffectiveScale()
+		if framed and factor and Readable(scale) and scale > 0 then
+			local px = factor / scale
+			metalGap = math.max(1, math.floor(BAR_GAP / px + 0.5)) * px
+		end
+		unit.power:ClearAllPoints()
+		unit.power:SetPoint("TOP", unit.health, "BOTTOM", 0, framed and -metalGap or -2)
+		if framed then
+			unit.plate:SetHeight(10)
+			unit.plate:ClearAllPoints()
+			unit.plate:SetPoint("BOTTOMLEFT", unit.health, "TOPLEFT", 0, metalGap)
+			unit.plate:SetPoint("BOTTOMRIGHT", unit.health, "TOPRIGHT", 0, metalGap)
+		end
+		PlaceBridge(unit.bridge, unit.plate, unit.power, sample.flip, unit.portrait, true, view.ufShape)
+		PlaceRowShadow(unit.rowShadow, unit.plate, unit.power)
+		unit.rowShadow:SetShown(view.ufShape ~= "game" and view.ufShape ~= "none" and ns.UnitThemeLayout() ~= "slab"
+			and not open)
+		DressBridge(unit.bridge, view.ufShape ~= "game" and view.ufShape ~= "none" and ns.UnitThemeLayout() ~= "slab"
+			and not open
+			and not ns.ThemePortraitBack(view.ufShape))
+		if framed then
+			-- (The game's connector: dark, the rows' metal along its top and bottom.)
+			PlaceBridge(unit.bridge, unit.plate, unit.power, sample.flip, unit.portrait, true, "game", metalGap)
+			local bridge = unit.bridge
+			bridge:Show()
+			bridge.back:SetColorTexture(0.09, 0.07, 0.05, 1)
+			bridge.top:SetColorTexture(metal[1], metal[2], metal[3], 1)
+			bridge.low:SetColorTexture(metal[1], metal[2], metal[3], 1)
+			bridge.braceTop:Hide()
+			bridge.braceLow:Hide()
+			-- (Its metal block, square: small round corners smeared at the preview's size.)
+			local box, round = unit.box, 0
+			box:ClearAllPoints()
+			box:SetPoint("TOPLEFT", unit.plate, "TOPLEFT", -metalGap, metalGap)
+			box:SetPoint("BOTTOMRIGHT", unit.power, "BOTTOMRIGHT", metalGap, -metalGap)
+			box.wide:ClearAllPoints()
+			box.wide:SetPoint("TOPLEFT", 0, -round)
+			box.wide:SetPoint("BOTTOMRIGHT", 0, round)
+			box.tall:ClearAllPoints()
+			box.tall:SetPoint("TOPLEFT", round, 0)
+			box.tall:SetPoint("BOTTOMRIGHT", -round, 0)
+			box.wide:SetColorTexture(metal[1], metal[2], metal[3], 1)
+			box.tall:SetColorTexture(metal[1], metal[2], metal[3], 1)
+			for _, corner in ipairs(box.corners) do corner:Hide() end
+		end
+		-- (The name.)
+		-- (The game's frame: small text in its name box.)
+		local object = (sample.small or framed) and _G.GameFontNormalSmall or _G.GameFontNormal
+		unit.name:SetFontObject(object)
+		local file, height, flags = object:GetFont()
+		local font, outline = view.ufFont, tonumber(view.ufOutline) or 0
+		if ROMAN then
+			file = ns.StyleFontFile(font) or file
+		end
+		if outline >= 0 and ns.OutlinedFlags then flags = ns.OutlinedFlags(flags, outline) end
+		if file and height then unit.name:SetFont(file, height * (tonumber(view.ufNameSize) or 1), flags or "") end
+		ns.SetTextShadow(unit.name, view.ufShadow)
+		unit.name:SetText(L[sample.name])
+		local nr, ng, nb = 1, 0.82, 0
+		if view.ufNameColor == "class" then
+			nr, ng, nb = SampleColor(sample)
+		elseif view.ufNameColor == "white" then
+			nr, ng, nb = 1, 1, 1
+		elseif view.ufNameColor == "theme" and ns.ThemeAccent() then
+			nr, ng, nb = unpack(ns.ThemeAccent())
+		end
+		unit.name:SetTextColor(nr, ng, nb)
+		-- (The portrait: a class icon for a player with Class icon picked.)
+		local coords = view.ufPortrait == "class" and sample.class and _G.CLASS_ICON_TCOORDS
+			and _G.CLASS_ICON_TCOORDS[sample.class]
+		unit.portrait:SetShown(coords and true or false)
+		unit.face:SetShown(not coords)
+		unit.ring:SetShown(not coords)
+		-- (Its shape: a square's ring a plain block behind it, no ring at all with None.)
+		local shape, ring = view.ufShape, ns.ThemeRing() or { 0.8, 0.65, 0.25 }
+		local square = shape == "square"
+		if unit.faceMask and square == unit.faceMasked then
+			if square then unit.face:RemoveMaskTexture(unit.faceMask) else unit.face:AddMaskTexture(unit.faceMask) end
+			unit.faceMasked = not square
+		end
+		local shapeFile = ns.ThemePortraitMask(shape) or "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+		local grow = base * (ns.ThemePortraitFit(shape) - 1) / 2
+		unit.ring:ClearAllPoints()
+		-- (The game's ring is heavier than a theme's.)
+		local thick = (framed and (sample.small and 3 or 4) or 2) + grow
+		unit.ring:SetPoint("TOPLEFT", unit.portrait, -thick, thick)
+		unit.ring:SetPoint("BOTTOMRIGHT", unit.portrait, thick, -thick)
+		if unit.faceMask then
+			unit.faceMask:ClearAllPoints()
+			unit.faceMask:SetPoint("TOPLEFT", unit.portrait, -grow, grow)
+			unit.faceMask:SetPoint("BOTTOMRIGHT", unit.portrait, grow, -grow)
+			unit.faceMask:SetTexture(shapeFile, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		end
+		if square then
+			unit.ring:SetColorTexture(ring[1], ring[2], ring[3], 1)
+		else
+			unit.ring:SetTexture(shapeFile)
+			unit.ring:SetVertexColor(ring[1], ring[2], ring[3])
+		end
+		if shape == "none" then
+			unit.face:Hide()
+			unit.ring:Hide()
+			unit.portrait:Hide()
+		end
+		-- (Art behind it, on the stage under the rows: Void Whisper's eye.)
+		local back = not coords and ns.UnitThemeLayout() ~= "slab" and ns.ThemePortraitBack(shape)
+		if back and not unit.back then
+			unit.back = unit.bridge:GetParent():CreateTexture(nil, "BACKGROUND", nil, -8)
+			ns.ThemeNoSnap(unit.back)
+		end
+		if unit.back then
+			unit.back:SetShown(back and true or false)
+			if back then
+				local size = (base + 4) * EYE_SPAN
+				unit.back:SetTexture(back)
+				unit.back:ClearAllPoints()
+				unit.back:SetPoint("CENTER", unit.portrait, "CENTER")
+				unit.back:SetSize(size, size)
+				unit.back:SetVertexColor(ring[1], ring[2], ring[3], 1)
+			end
+		end
+		if coords then
+			unit.portrait:SetTexture(CLASS_ICONS)
+			unit.portrait:SetTexCoord(unpack(coords))
+		else
+			unit.face:SetTexture(SampleFace(sample))
+		end
+		CopyLook(unit, view, framed and not ns.UnitThemeLayout())
+		if ns.DressUnitParts then ns.DressUnitParts(unit) end -- (UnitFrameParts.lua)
+end
+
 function ns.MakeUnitStylePreview(parent, width, onPick)
 	local holder = CreateFrame("Frame", nil, parent)
 	holder:SetSize(width, 190)
@@ -3179,106 +3710,7 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 	stage:SetPoint("CENTER")
 	local samples = {}
 	for _, entry in ipairs(PREVIEW_UNITS) do
-		local id, sample = entry.id, SAMPLES[entry.key]
-		local unit = CreateFrame("Button", nil, stage)
-		unit.key = entry.key
-		local size = sample.small and 22 or 34
-		unit:SetSize(sample.w + size + 6, size + 6)
-		unit:SetPoint("TOPLEFT", stage, "TOPLEFT", sample.x, sample.y)
-		unit.portrait = unit:CreateTexture(nil, "ARTWORK")
-		unit.portrait:SetSize(size, size)
-		unit.portrait:SetPoint(sample.flip and "RIGHT" or "LEFT", unit, sample.flip and "RIGHT" or "LEFT", 0, 0)
-		-- (The face: an icon cut round like the game's portraits.)
-		unit.face = unit:CreateTexture(nil, "ARTWORK")
-		unit.face:SetAllPoints(unit.portrait)
-		unit.face:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-		if unit.CreateMaskTexture then
-			local mask = unit:CreateMaskTexture()
-			mask:SetAllPoints(unit.portrait)
-			mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL",
-				"CLAMPTOBLACKADDITIONAL")
-			unit.face:AddMaskTexture(mask)
-			unit.faceMask, unit.faceMasked = mask, true
-		end
-		-- (Its ring: a disc a little bigger behind it, as the class icons have.)
-		unit.ring = unit:CreateTexture(nil, "BORDER")
-		unit.ring:SetPoint("TOPLEFT", unit.portrait, -2, 2)
-		unit.ring:SetPoint("BOTTOMRIGHT", unit.portrait, 2, -2)
-		unit.ring:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-		unit.ring:SetVertexColor(0.8, 0.65, 0.25)
-		unit.name = unit:CreateFontString(nil, "OVERLAY", sample.small and "GameFontNormalSmall" or "GameFontNormal")
-		unit.health = CreateFrame("StatusBar", nil, unit)
-		unit.health:SetSize(sample.w, sample.small and 6 or 10)
-		unit.power = CreateFrame("StatusBar", nil, unit)
-		unit.power:SetSize(sample.w, sample.small and 3 or 5)
-		local side = sample.flip and "RIGHT" or "LEFT"
-		unit.health:SetPoint("TOP" .. side, unit.portrait, "TOP" .. (sample.flip and "LEFT" or "RIGHT"),
-			sample.flip and -6 or 6, -(sample.small and 9 or 13))
-		unit.power:SetPoint("TOP", unit.health, "BOTTOM", 0, -2)
-		unit.name:SetPoint("BOTTOM" .. side, unit.health, "TOP" .. side, 0, 2)
-		-- (Over the bars, for a slab's name.)
-		unit.nameTop = CreateFrame("Frame", nil, unit)
-		unit.nameTop:SetAllPoints()
-		unit.name:SetParent(unit.nameTop)
-		unit.value = unit.nameTop:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		unit.value:SetPoint(sample.flip and "LEFT" or "RIGHT", unit.health, sample.flip and "LEFT" or "RIGHT",
-			sample.flip and 7 or -7, 0)
-		-- (On the stage, so it's under the portrait, as it is on the game's frames.)
-		unit.plate = MakePlate(stage)
-		unit.plate:SetFrameLevel(stage:GetFrameLevel())
-		unit.bridge = MakeBridge(stage)
-		unit.bridge:SetFrameLevel(stage:GetFrameLevel())
-		unit.rowShadow = MakeRowShadow(stage)
-		unit.rowShadow:SetFrameLevel(stage:GetFrameLevel())
-		PlacePlate(unit.plate, unit.health)
-		for _, bar in ipairs({ unit.health, unit.power }) do
-			bar:SetMinMaxValues(0, 1)
-			local ground = bar:CreateTexture(nil, "BACKGROUND", nil, -7)
-			ground:SetAllPoints()
-			ground:SetColorTexture(0, 0, 0, 0.5)
-			bar.game = ground
-			-- (The game's frame: a dark line just inside its metal, small corners in it.)
-			bar.gameCell = MakeCell(bar, "OVERLAY", 2)
-		end
-		-- (The game's frame: one piece of metal behind its rows, the gaps between them its
-		-- lines, round at the far end; the connector joins it at the portrait's.)
-		unit.box = CreateFrame("Frame", nil, stage)
-		unit.box:SetFrameLevel(stage:GetFrameLevel())
-		unit.box.wide = unit.box:CreateTexture(nil, "BACKGROUND", nil, -8)
-		unit.box.tall = unit.box:CreateTexture(nil, "BACKGROUND", nil, -8)
-		unit.box.corners = {}
-		for i, coords in ipairs({ { 0, 0.5, 0, 0.5 }, { 0.5, 1, 0, 0.5 }, { 0, 0.5, 0.5, 1 }, { 0.5, 1, 0.5, 1 } }) do
-			local corner = unit.box:CreateTexture(nil, "BACKGROUND", nil, -8)
-			corner:SetPoint(CORNERS[i][1])
-			corner.coords = coords
-			unit.box.corners[i] = corner
-		end
-		-- (The game's level badge, on the portrait's lower corner.)
-		if sample.level then
-			unit.badge = CreateFrame("Frame", nil, unit)
-			unit.badge:SetSize(18, 18)
-			unit.badge:SetPoint("CENTER", unit.portrait, sample.flip and "BOTTOMRIGHT" or "BOTTOMLEFT",
-				sample.flip and -6 or 6, 6) -- (on the ring, as ns.ThemeBadgeSpot's circle)
-			unit.badge.ring = unit.badge:CreateTexture(nil, "ARTWORK")
-			unit.badge.ring:SetAllPoints()
-			unit.badge.ring:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-			unit.badge.back = unit.badge:CreateTexture(nil, "ARTWORK", nil, 1)
-			unit.badge.back:SetPoint("TOPLEFT", 2, -2)
-			unit.badge.back:SetPoint("BOTTOMRIGHT", -2, 2)
-			unit.badge.back:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-			unit.badge.back:SetVertexColor(0.1, 0.08, 0.06)
-			unit.badge.text = unit.badge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-			unit.badge.text:SetPoint("CENTER", 0, 0)
-			unit.badge.text:SetText(sample.level)
-		end
-		unit.health:SetValue(sample.health)
-		unit.power:SetValue(sample.amount)
-		unit.mark = unit:CreateTexture(nil, "OVERLAY")
-		unit.mark:SetPoint("TOPLEFT", -3, 3)
-		unit.mark:SetPoint("BOTTOMRIGHT", 3, -3)
-		unit.mark:SetColorTexture(1, 0.82, 0, 0.12)
-		unit:SetScript("OnClick", function() if onPick then onPick(id) end end)
-		unit.id, unit.sample = id, sample
+		local unit = NewUnit(stage, entry.id, entry.key, onPick)
 		samples[#samples + 1] = unit
 	end
 	-- (Each mock-up by its frame's id: the Preview Match test reads them, Dev/PreviewMatchUnits.lua.)
@@ -3288,282 +3720,18 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 		holder.units[unit.key] = unit
 		unit.peers = holder.units
 	end
+	-- (The party sample named over it: alone it read as a stray frame, user 2026-11-20.)
+	local party = holder.units.PARTY
+	if party then
+		party.label = party:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		party.label:SetPoint("BOTTOMLEFT", party, "TOPLEFT", 2, 2)
+		party.label:SetText(L["Party"])
+		party.label.searchSkip = true
+	end
 	function holder:Refresh(editing)
 		ns.StyleScene(self, 0.55, 0.85)
 		for _, unit in ipairs(samples) do
-			local view, sample = View(unit.id), unit.sample
-			unit.mark:SetShown(editing == unit.id)
-			-- (The bars: the look's fill, else the game's look.)
-			for i, bar in ipairs({ unit.health, unit.power }) do
-				bar.gameFill = false
-				if not ns.SetBarTexture(bar, view.ufTexture, i == 1 and ns.StyleTextureFull(view.ufTexture)) then
-					bar:SetStatusBarTexture(GAME_FILL)
-					bar:GetStatusBarTexture():SetDesaturated(false)
-					bar.gameFill = true -- (the game's own fill: CopyLook puts the game's atlas on)
-				end
-				if i == 1 then
-					local r, g, b
-					if view.ufHealthColor == "class" then
-						r, g, b = SampleColor(sample)
-					elseif view.ufHealthColor == "custom" then
-						r, g, b = view.ufHealthR, view.ufHealthG, view.ufHealthB
-					elseif view.ufHealthColor == "health" then
-						local _, most = bar:GetMinMaxValues()
-						r, g, b = HealthMix(view, (most and most > 0) and bar:GetValue() / most or 1)
-					end
-					bar:SetStatusBarColor(r or 0, g or 0.8, b or 0)
-					-- (Its gradient, else flat: the color on the fill itself clears one.)
-					local fill, fade = bar:GetStatusBarTexture(), Fade(view)
-					SetFade(fill, r or 0, g or 0.8, b or 0, fade)
-				else
-					local mana = ns.ThemeMana()
-					local pr, pg, pb = unpack(sample.power)
-					if mana and sample.power[1] == 0 and sample.power[3] == 1 then pr, pg, pb = mana[1], mana[2], mana[3] end
-					bar:SetStatusBarColor(pr, pg, pb)
-					local fill, fade = bar:GetStatusBarTexture(), Fade(view, "ufPower")
-					SetFade(fill, pr, pg, pb, fade)
-				end
-				local kind = ns.StyleBorder(view, "ufBorder")
-				bar.game:SetShown(kind == "game")
-				DressSkin(Skin(bar), view, i == 2 and unit.health or nil)
-			end
-			local open = ns.ThemeLayout() == "open"
-			DressPlateLook(unit.plate, view.ufShape ~= "game" and ns.ThemeLayout() ~= "slab" and not open)
-			-- (The game's shape: its own frame, as it draws it. A name box over the bars, each
-			-- bar boxed in metal, the level on a badge. In the ring's color, as a theme tints the art.)
-			local framed = view.ufShape == "game" and ns.ThemeLayout() ~= "slab"
-			local metal = ns.ThemeRing() or { 0.6, 0.47, 0.24 } -- (the game's: a browner gold than its ring)
-			if framed then
-				unit.plate:Show()
-				-- (Its name box brown, lit from above, as the game's.)
-				unit.plate.back:SetColorTexture(0.22, 0.15, 0.08, 1)
-				unit.plate.grit:Hide()
-				unit.plate.sheen:SetAlpha(0.8)
-				unit.plate.left:SetColorTexture(0, 0, 0, 0)
-				unit.plate.right:SetColorTexture(0, 0, 0, 0)
-				unit.plate.edges:Hide()
-				-- (No small corners or fine lines in it: at the preview's size they
-				-- land between screen pixels and smear. 2026-11-17.)
-				DressCell(unit.plate.cell, false, metal, BAR_GAP)
-			else
-				unit.plate.grit:Show()
-				unit.plate.sheen:SetAlpha(1)
-			end
-			for _, bar in ipairs({ unit.health, unit.power }) do
-				DressCell(bar.gameCell, false, metal, BAR_GAP)
-				-- (Solid, or the metal behind would show through the empty part.)
-				if framed then bar.game:SetColorTexture(0.05, 0.04, 0.03, 1) else bar.game:SetColorTexture(0, 0, 0, 0.5) end
-			end
-			unit.box:SetShown(framed)
-			-- (Over the metal: the name box and the connector.)
-			unit.plate:SetFrameLevel(stage:GetFrameLevel() + (framed and 1 or 0))
-			unit.bridge:SetFrameLevel(stage:GetFrameLevel() + (framed and 1 or 0))
-			if unit.badge then
-				unit.badge:SetShown(framed)
-				unit.badge.ring:SetVertexColor(metal[1], metal[2], metal[3])
-			end
-			-- (A slab: as the game's frames get it, with a taller bar, as they have.)
-			local slab = ns.ThemeLayout() == "slab" and not sample.small
-			-- (Every frame with a portrait as the game's are sized, theirs or a theme's shape: its
-			-- portrait big, its rows short. A slab's and a bare one's have none, and keep their own.)
-			local base = sample.small and 22 or 34
-			local spot = ns.ThemeLayout() ~= "slab" and view.ufShape ~= "none" and sample.framed
-			if spot then base = framed and spot[3] or math.floor(spot[3] / 1.14) end
-			local across = base * (view.ufShape ~= "game" and view.ufShape ~= "none" and 1.14 or 1)
-			unit:ClearAllPoints()
-			unit:SetPoint("TOPLEFT", stage, "TOPLEFT", spot and spot[1] or sample.x, spot and spot[2] or sample.y)
-			unit:SetSize((spot and spot[4] or sample.w) + across + 6, across + 6)
-			unit.portrait:SetSize(across, across)
-			if unit.badge then
-				local badge = spot and math.floor(across * 0.4) or 18
-				local inset = spot and math.floor(across * 0.16) or 6
-				unit.badge:SetSize(badge, badge)
-				unit.badge:ClearAllPoints()
-				unit.badge:SetPoint("CENTER", unit.portrait, sample.flip and "BOTTOMRIGHT" or "BOTTOMLEFT",
-					sample.flip and -inset or inset, inset)
-			end
-			local bare = slab and view.ufShape == "none"
-			local side = sample.flip and "RIGHT" or "LEFT"
-			unit.health:ClearAllPoints()
-			if bare then
-				unit.health:SetPoint("TOP" .. side, unit.portrait, "TOP" .. side, 0, -6)
-			else
-				-- (A shape's rows in the portrait's middle, as FitBars puts them.)
-				local down = sample.small and 9 or 13
-				if framed then
-					local row = 10 + BAR_GAP
-					local rows = row + (sample.small and 6 + 3 or 10 + 5) + BAR_GAP
-					down = (across - rows) / 2 + row
-				elseif view.ufShape ~= "game" and not slab then
-					local row = (sample.small and NAME_ROW_SMALL or NAME_ROW) + BAR_GAP
-					local rows = row + (sample.small and 9 or 15) + BAR_GAP
-					down = (across - rows) / 2 + row
-				end
-				local gap = framed and 5 or 6
-				if view.ufShape ~= "game" and not slab then
-					local fit = ns.ThemePortraitFit(view.ufShape)
-					gap = 5 + across * (fit - 1) / 2 - across * fit * ns.ThemePortraitSide(view.ufShape)
-				end
-				unit.health:SetPoint("TOP" .. side, unit.portrait, "TOP" .. (sample.flip and "LEFT" or "RIGHT"),
-					sample.flip and -gap or gap, -down)
-			end
-			-- (The game's rows are short: about three times as wide as they are tall.)
-			local wide = spot and spot[4] or sample.w
-			unit.health:SetSize(wide + (bare and across + 6 or 0), slab and 22 or sample.small and 6 or 10)
-			unit.power:SetSize(wide + (bare and across + 6 or 0),
-				slab and 4 or sample.small and 3 or 5)
-			unit.name:ClearAllPoints()
-			if slab then
-				unit.name:SetPoint(sample.flip and "RIGHT" or "LEFT", unit.health, sample.flip and "RIGHT" or "LEFT",
-					sample.flip and -7 or 7, 0)
-			else
-				local side = sample.flip and "RIGHT" or "LEFT"
-				if (view.ufShape ~= "game" or framed) and not open then
-					unit.name:SetPoint("CENTER", unit.plate, "CENTER")
-				else
-					unit.name:SetPoint("BOTTOM" .. side, unit.health, "TOP" .. side, 0, 2)
-				end
-			end
-			unit.nameTop:SetFrameLevel(unit.health:GetFrameLevel() + 3)
-			unit.value:SetShown(slab)
-			if slab then
-				unit.value:SetFontObject(_G.GameFontHighlightSmall)
-				unit.value:SetText(("%d%%"):format(sample.health * 100))
-			end
-			PlacePlate(unit.plate, unit.health)
-			-- (The game's frame: its metal a whole number of screen pixels, so every
-			-- line between and round the rows comes out the same, and sharp. Rows
-			-- whose edges are all that far apart round to the screen alike.)
-			local metalGap = BAR_GAP
-			local factor = PixelUtil and PixelUtil.GetPixelToUIUnitFactor and PixelUtil.GetPixelToUIUnitFactor()
-			local scale = unit.health:GetEffectiveScale()
-			if framed and factor and Readable(scale) and scale > 0 then
-				local px = factor / scale
-				metalGap = math.max(1, math.floor(BAR_GAP / px + 0.5)) * px
-			end
-			unit.power:ClearAllPoints()
-			unit.power:SetPoint("TOP", unit.health, "BOTTOM", 0, framed and -metalGap or -2)
-			if framed then
-				unit.plate:SetHeight(10)
-				unit.plate:ClearAllPoints()
-				unit.plate:SetPoint("BOTTOMLEFT", unit.health, "TOPLEFT", 0, metalGap)
-				unit.plate:SetPoint("BOTTOMRIGHT", unit.health, "TOPRIGHT", 0, metalGap)
-			end
-			PlaceBridge(unit.bridge, unit.plate, unit.power, sample.flip, unit.portrait, true, view.ufShape)
-			PlaceRowShadow(unit.rowShadow, unit.plate, unit.power)
-			unit.rowShadow:SetShown(view.ufShape ~= "game" and view.ufShape ~= "none" and ns.ThemeLayout() ~= "slab"
-				and not open)
-			DressBridge(unit.bridge, view.ufShape ~= "game" and view.ufShape ~= "none" and ns.ThemeLayout() ~= "slab"
-				and not open
-				and not ns.ThemePortraitBack(view.ufShape))
-			if framed then
-				-- (The game's connector: dark, the rows' metal along its top and bottom.)
-				PlaceBridge(unit.bridge, unit.plate, unit.power, sample.flip, unit.portrait, true, "game", metalGap)
-				local bridge = unit.bridge
-				bridge:Show()
-				bridge.back:SetColorTexture(0.09, 0.07, 0.05, 1)
-				bridge.top:SetColorTexture(metal[1], metal[2], metal[3], 1)
-				bridge.low:SetColorTexture(metal[1], metal[2], metal[3], 1)
-				bridge.braceTop:Hide()
-				bridge.braceLow:Hide()
-				-- (Its metal block, square: small round corners smeared at the preview's size.)
-				local box, round = unit.box, 0
-				box:ClearAllPoints()
-				box:SetPoint("TOPLEFT", unit.plate, "TOPLEFT", -metalGap, metalGap)
-				box:SetPoint("BOTTOMRIGHT", unit.power, "BOTTOMRIGHT", metalGap, -metalGap)
-				box.wide:ClearAllPoints()
-				box.wide:SetPoint("TOPLEFT", 0, -round)
-				box.wide:SetPoint("BOTTOMRIGHT", 0, round)
-				box.tall:ClearAllPoints()
-				box.tall:SetPoint("TOPLEFT", round, 0)
-				box.tall:SetPoint("BOTTOMRIGHT", -round, 0)
-				box.wide:SetColorTexture(metal[1], metal[2], metal[3], 1)
-				box.tall:SetColorTexture(metal[1], metal[2], metal[3], 1)
-				for _, corner in ipairs(box.corners) do corner:Hide() end
-			end
-			-- (The name.)
-			-- (The game's frame: small text in its name box.)
-			local object = (sample.small or framed) and _G.GameFontNormalSmall or _G.GameFontNormal
-			unit.name:SetFontObject(object)
-			local file, height, flags = object:GetFont()
-			local font, outline = view.ufFont, tonumber(view.ufOutline) or 0
-			if ROMAN then
-				file = ns.StyleFontFile(font) or file
-			end
-			if outline >= 0 and ns.OutlinedFlags then flags = ns.OutlinedFlags(flags, outline) end
-			if file and height then unit.name:SetFont(file, height * (tonumber(view.ufNameSize) or 1), flags or "") end
-			ns.SetTextShadow(unit.name, view.ufShadow)
-			unit.name:SetText(L[sample.name])
-			local nr, ng, nb = 1, 0.82, 0
-			if view.ufNameColor == "class" then
-				nr, ng, nb = SampleColor(sample)
-			elseif view.ufNameColor == "white" then
-				nr, ng, nb = 1, 1, 1
-			elseif view.ufNameColor == "theme" and ns.ThemeAccent() then
-				nr, ng, nb = unpack(ns.ThemeAccent())
-			end
-			unit.name:SetTextColor(nr, ng, nb)
-			-- (The portrait: a class icon for a player with Class icon picked.)
-			local coords = view.ufPortrait == "class" and sample.class and _G.CLASS_ICON_TCOORDS
-				and _G.CLASS_ICON_TCOORDS[sample.class]
-			unit.portrait:SetShown(coords and true or false)
-			unit.face:SetShown(not coords)
-			unit.ring:SetShown(not coords)
-			-- (Its shape: a square's ring a plain block behind it, no ring at all with None.)
-			local shape, ring = view.ufShape, ns.ThemeRing() or { 0.8, 0.65, 0.25 }
-			local square = shape == "square"
-			if unit.faceMask and square == unit.faceMasked then
-				if square then unit.face:RemoveMaskTexture(unit.faceMask) else unit.face:AddMaskTexture(unit.faceMask) end
-				unit.faceMasked = not square
-			end
-			local shapeFile = ns.ThemePortraitMask(shape) or "Interface\\CharacterFrame\\TempPortraitAlphaMask"
-			local grow = base * (ns.ThemePortraitFit(shape) - 1) / 2
-			unit.ring:ClearAllPoints()
-			-- (The game's ring is heavier than a theme's.)
-			local thick = (framed and (sample.small and 3 or 4) or 2) + grow
-			unit.ring:SetPoint("TOPLEFT", unit.portrait, -thick, thick)
-			unit.ring:SetPoint("BOTTOMRIGHT", unit.portrait, thick, -thick)
-			if unit.faceMask then
-				unit.faceMask:ClearAllPoints()
-				unit.faceMask:SetPoint("TOPLEFT", unit.portrait, -grow, grow)
-				unit.faceMask:SetPoint("BOTTOMRIGHT", unit.portrait, grow, -grow)
-				unit.faceMask:SetTexture(shapeFile, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
-			end
-			if square then
-				unit.ring:SetColorTexture(ring[1], ring[2], ring[3], 1)
-			else
-				unit.ring:SetTexture(shapeFile)
-				unit.ring:SetVertexColor(ring[1], ring[2], ring[3])
-			end
-			if shape == "none" then
-				unit.face:Hide()
-				unit.ring:Hide()
-				unit.portrait:Hide()
-			end
-			-- (Art behind it, on the stage under the rows: Void Whisper's eye.)
-			local back = not coords and ns.ThemeLayout() ~= "slab" and ns.ThemePortraitBack(shape)
-			if back and not unit.back then
-				unit.back = unit.bridge:GetParent():CreateTexture(nil, "BACKGROUND", nil, -8)
-				ns.ThemeNoSnap(unit.back)
-			end
-			if unit.back then
-				unit.back:SetShown(back and true or false)
-				if back then
-					local size = (base + 4) * EYE_SPAN
-					unit.back:SetTexture(back)
-					unit.back:ClearAllPoints()
-					unit.back:SetPoint("CENTER", unit.portrait, "CENTER")
-					unit.back:SetSize(size, size)
-					unit.back:SetVertexColor(ring[1], ring[2], ring[3], 1)
-				end
-			end
-			if coords then
-				unit.portrait:SetTexture(CLASS_ICONS)
-				unit.portrait:SetTexCoord(unpack(coords))
-			else
-				unit.face:SetTexture(SampleFace(sample))
-			end
-			CopyLook(unit, view, framed and not ns.ThemeLayout())
+			DressUnit(unit, stage, editing)
 		end
 		LayoutStage(stage, self.units, self)
 	end
@@ -3573,6 +3741,56 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 	end
 	holder:HookScript("OnShow", Again)
 	holder:HookScript("OnSizeChanged", Again)
+	return holder
+end
+
+-- One unit frame alone, as the Unit Frames preview draws it (the game's own
+-- frame copied in the game's look, a theme's drawn in its): the Cast Bars
+-- pages show the target's over its cast bar, as the game has them (user
+-- 2026-11-20: their drawn green and blue bars looked nothing like it).
+-- key: its sample (SAMPLES; "BOSSCAST" a boss of its own). Gives a frame the
+-- frame's size, with .unit (its parts: health, power...) and :Refresh().
+function ns.MakeUnitFrameSample(parent, id, key, withToT)
+	local holder = CreateFrame("Frame", nil, parent)
+	local stage = CreateFrame("Frame", nil, holder)
+	stage:SetPoint("TOPLEFT")
+	stage:SetSize(1, 1)
+	local unit = NewUnit(stage, id, key or id)
+	unit:EnableMouse(false)
+	unit.peers = { [unit.key] = unit, TARGET = unit }
+	unit.alone = true -- (CopyLook: the game's own size, against a cast bar the game's size)
+	holder.unit = unit
+	-- (Its target of target, hung off it as the game hangs it: the target's.)
+	local tot
+	if withToT then
+		tot = NewUnit(stage, "TOT", "TOT")
+		tot:EnableMouse(false)
+		tot.alone = true
+		tot.peers = unit.peers
+		unit.peers.TOT = tot
+		holder.tot = tot
+	end
+	function holder:Refresh()
+		DressUnit(unit, stage)
+		unit:ClearAllPoints()
+		unit:SetPoint("TOPLEFT", stage, "TOPLEFT", 0, 0)
+		if tot then
+			DressUnit(tot, stage)
+			HangDrawn(unit.peers)
+		end
+		if ns.WrapUnitAuras then ns.WrapUnitAuras(unit, tot) end
+		-- (Its size: the frame and all that hangs off it, auras, the dragon, its
+		-- target of target. Measured once it's on the screen.)
+		local list = BlockParts(unit, unit.peers)
+		local box = BoxOf(stage, list)
+		if box then
+			self:SetSize(math.max(box[3], 1), math.max(box[4], 1))
+		else
+			self:SetSize(math.max(unit:GetWidth(), 1), math.max(unit:GetHeight(), 1))
+		end
+	end
+	holder:Refresh()
+	holder:HookScript("OnShow", holder.Refresh)
 	return holder
 end
 

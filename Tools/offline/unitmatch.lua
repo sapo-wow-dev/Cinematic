@@ -88,6 +88,16 @@ local function GameFrame(name, flip)
 end
 GameFrame("PlayerFrame", false)
 GameFrame("TargetFrame", true)
+-- (A buff on it, as the game shows one: its first buff measured off it.)
+do
+	local buff = CreateFrame("Frame", "TargetFrameBuff1", _G.TargetFrame)
+	buff:SetSize(19, 19)
+	buff:SetPoint("TOPLEFT", _G.TargetFrame, "BOTTOMLEFT", 8, 18)
+	buff:Show()
+	buff.Icon = buff:CreateTexture(nil, "ARTWORK")
+	buff.Icon:SetAllPoints()
+	buff.Icon:SetTexture("Interface\\Icons\\Spell_Holy_WordFortitude")
+end
 -- A target of target: a frame of its own on its frame's lower right, as the game's.
 local function TotFrame(name, parent)
 	local tot = CreateFrame("Button", name, parent)
@@ -170,7 +180,7 @@ local function Run(styleOn)
 	db.ufStyle = styleOn
 	db.styleGeneral = true
 	shots = 0
-	ns.PreviewMatch("units")
+	ns.PreviewMatch("units nothemes")
 	RunTimers()
 	ns.PreviewMatch("units skip") -- (no focus, no pet here)
 	RunTimers()
@@ -239,7 +249,9 @@ do
 	local preview = ns.MakeUnitStylePreview(UIParent, 480)
 	preview:Refresh()
 	local unit = preview.units.PET
-	Check("pet never seen: drawn, no copy", not (unit.copy and unit.copy.on) and ns.UnitFrameRecipe("PET") == nil)
+	-- (Never seen, it's the copy of the built-in small frame, hung under yours as the game hangs it.)
+	Check("pet never seen: the built-in small frame's copy, under yours", unit.copy and unit.copy.on
+		and unit.hungOn == preview.units.PLAYER)
 	petOut = true
 	pet:Show()
 	preview:Refresh()
@@ -315,6 +327,33 @@ do
 			table.concat(problems, "; "))
 		early:Hide()
 	end
+	-- (Together as the game has them (user 2026-11-20): your pet right under your
+	-- frame, each target of target right under its frame, the party named.)
+	local function Together(screen, look, width)
+		for _, pair in ipairs({ { "PET", "PLAYER" }, { "TOT", "TARGET" }, { "FOCUSTOT", "FOCUS" } }) do
+			local unit, over = screen.units[pair[1]], screen.units[pair[2]]
+			-- (On the screen: each frame's own units times its scale; a measured target of
+			-- target has a scale of its own.)
+			local ku, ko = unit:GetEffectiveScale(), over:GetEffectiveScale()
+			local gap = over:GetBottom() and unit:GetTop() and over:GetBottom() * ko - unit:GetTop() * ku
+			local across = math.min(unit:GetRight() * ku, over:GetRight() * ko) - math.max(unit:GetLeft() * ku, over:GetLeft() * ko)
+			-- (Its frame's buffs row between them: that much more room.)
+			local row = over.auras and over.auras[1] and over.auras[1]:IsShown() and over.auras[1]:GetHeight() + 6 or 0
+			Check(("%s at %d: %s right under %s"):format(look, width, pair[1], pair[2]),
+				unit.hungOn == over and gap and gap > -30 and gap < 14 + row and across > 10,
+				("hung %s, gap %s, side by side %s"):format(tostring(unit.hungOn == over), tostring(gap and math.floor(gap)),
+				tostring(math.floor(across))))
+		end
+		local party = screen.units.PARTY
+		Check(("%s at %d: the party named"):format(look, width), party.label and party.label:IsVisible()
+			and party.label:GetText() == ns.L["Party"])
+		-- (The game's look: the party a copy of the game's small frame, not the drawn slab of metal.)
+		if look == "copied" then
+			Check(("copied at %d: the party the small frame's copy"):format(width), party.copy and party.copy.on
+				and party.copy.art:GetAtlas() == "UI-HUD-UnitFrame-TargetofTarget-PortraitOn" and not party.box:IsShown(),
+				party.copyWhy)
+		end
+	end
 	-- (Quality control at the Style screens' size: every frame inside, none on another, no text cut.)
 	for _, width in ipairs({ 480, 760 }) do
 		local screen = ns.MakeUnitStylePreview(UIParent, width)
@@ -324,12 +363,84 @@ do
 		local problems = ns.UnitPreviewLayoutCheck(screen)
 		Check(("layout at %dx%d, every frame copied: clean"):format(width, ns.StylePreviewHeight()), #problems == 0,
 			table.concat(problems, "; "))
+		Together(screen, "copied", width)
+		-- (A target of target right where the focus's buffs run: they wrap before it, as the game's.)
+		do
+			local focus, tot = screen.units.FOCUS, screen.units.FOCUSTOT
+			local third = focus.auras and focus.auras[3]
+			if third and third:IsShown() then
+				-- (Fixed where the third buff is now: not hung on the buff, which moves when it wraps.)
+				local dx = third:GetLeft() - focus.health:GetLeft()
+				local dy = third:GetTop() - focus.health:GetTop()
+				tot:ClearAllPoints()
+				tot:SetPoint("TOPLEFT", focus.health, "TOPLEFT", dx, dy)
+				ns.WrapUnitAuras(focus, tot)
+				local touching = 0
+				local function Box(f)
+					local k = f:GetEffectiveScale()
+					return f:GetLeft() * k, f:GetRight() * k, f:GetTop() * k, f:GetBottom() * k
+				end
+				local tl, tr, tt, tb = Box(tot)
+				for _, aura in ipairs(focus.auras) do
+					local al, ar, at, ab = Box(aura)
+					if ar > tl + 1 and al < tr - 1 and at > tb + 1 and ab < tt - 1 then touching = touching + 1 end
+				end
+				Check(("copied at %d: buffs wrap before a target of target on their row"):format(width), touching == 0, touching)
+				screen:Refresh()
+			end
+		end
 		db.ufShape = "circle"
 		db.ufStyle = true
 		screen:Refresh()
 		problems = ns.UnitPreviewLayoutCheck(screen)
 		Check(("layout at %dx%d, drawn (a theme's shape): clean"):format(width, ns.StylePreviewHeight()), #problems == 0,
 			table.concat(problems, "; "))
+		Together(screen, "drawn", width)
+		-- (Measured frames drawn again and again: every part still has a place, no anchor loop.)
+		for _ = 1, 3 do screen:Refresh() end
+		local lost = {}
+		for key, unit in pairs(screen.units) do
+			for _, part in ipairs({ unit, unit.health, unit.power, unit.portrait, unit.name }) do
+				if unit:IsShown() and part:IsShown() and not part:GetLeft() then lost[#lost + 1] = key end
+			end
+		end
+		Check(("drawn at %d: drawn again three times, every part placed"):format(width), #lost == 0, table.concat(lost, ", "))
+		-- (Its bars and portrait where the live frame has them, measured.)
+		do
+			local hangs = ns.UnitHangs("PLAYER", ns.UnitLookKey("PLAYER"))
+			local player = screen.units.PLAYER
+			local hw = player.health:GetWidth()
+			local h = hangs and hangs.healthSize and hangs.healthSize.h
+			Check(("drawn at %d: your health bar as thick as measured"):format(width), h and math.abs(player.health:GetHeight() / hw - h) < 0.01,
+				("%.3f vs %s"):format(player.health:GetHeight() / hw, tostring(h)))
+			local p = hangs and hangs.portrait
+			local px = p and (player.portrait:GetLeft() - player.health:GetLeft()) / hw
+			Check(("drawn at %d: your portrait where measured"):format(width), p and math.abs(px - p.x) < 0.02
+				and math.abs(player.portrait:GetWidth() / hw - p.w) < 0.02, p and ("%.2f vs %.2f"):format(px, p.x))
+		end
+		-- (Measured, not guessed: the theme's target of target and first buff where the
+		-- live frames put them, in widths of the target's health bar.)
+		do
+			local hangs = ns.UnitHangs("TARGET", ns.UnitLookKey("TARGET"))
+			local target = screen.units.TARGET
+			local function Spot(region)
+				local k, kh = region:GetEffectiveScale(), target.health:GetEffectiveScale()
+				local hw = target.health:GetWidth() * kh
+				return (region:GetLeft() * k - target.health:GetLeft() * kh) / hw,
+					(target.health:GetTop() * kh - region:GetTop() * k) / hw, region:GetWidth() * k / hw
+			end
+			for _, part in ipairs({ { "tot", screen.units.TOT.health }, { "aura", target.auras and target.auras[1] } }) do
+				local want, region = hangs and hangs[part[1]], part[2]
+				if want and region then
+					local x, y, w = Spot(region)
+					Check(("drawn at %d: %s where measured"):format(width, part[1]),
+						math.abs(x - want.x) < 0.03 and math.abs(y - want.y) < 0.03 and math.abs(w - want.w) < 0.03,
+						("%.2f,%.2f %.2f wide vs %.2f,%.2f %.2f"):format(x, y, w, want.x, want.y, want.w))
+				else
+					Check(("drawn at %d: %s measured off the live frame"):format(width, part[1]), want ~= nil)
+				end
+			end
+		end
 		db.ufShape = "game"
 		db.ufStyle = false
 		screen:Refresh()
@@ -348,7 +459,7 @@ do
 	end
 	-- (The test compares both.)
 	petOut = false
-	ns.PreviewMatch("units")
+	ns.PreviewMatch("units nothemes")
 	RunTimers()
 	ns.PreviewMatch("units skip")
 	RunTimers()
@@ -466,12 +577,13 @@ do
 	preview:SetHeight(ns.StylePreviewHeight())
 	preview:Refresh()
 	local recipe = ns.UnitFrameRecipe("TOT")
-	Check("ToT name all secret: its side read", recipe and recipe.name and recipe.name.onBar and recipe.name.justify == "LEFT",
-		recipe and recipe.name and tostring(recipe.name.justify))
+	-- (Its side read; its place the built-in small frame's, not the bar edge.)
+	Check("ToT name all secret: its side read, on the built-in place", recipe and recipe.name and recipe.name.justify == "LEFT"
+		and not recipe.name.onBar and recipe.name.x == 44, recipe and recipe.name and tostring(recipe.name.justify))
 	local unit = preview.units.TOT
-	local point, relative, relativePoint = unit.name:GetPoint(1)
-	Check("ToT name all secret: on the health bar's top edge, left", point == "BOTTOMLEFT" and relative == unit.health
-		and relativePoint == "TOPLEFT" and unit.name:GetJustifyH() == "LEFT", tostring(point) .. " " .. tostring(relativePoint))
+	local point, relative = unit.name:GetPoint(1)
+	Check("ToT name all secret: placed there, left", point == "TOPLEFT" and relative == unit
+		and unit.name:GetJustifyH() == "LEFT", tostring(point))
 	name.GetRect, name.GetPoint = realRect, realPoint
 	totUp = false
 	targetTot:Hide()
@@ -544,7 +656,7 @@ do
 	_G.PlayerFrame:SetAlpha(0)
 	_G.TargetFrame.manabar:Show()
 	_G.TargetFrame.manabar:SetStatusBarTexture("UI-HUD-UnitFrame-Target-PortraitOn-Bar-Rage")
-	ns.PreviewMatch("units")
+	ns.PreviewMatch("units nothemes")
 	RunTimers()
 	ns.PreviewMatch("units skip")
 	RunTimers()
@@ -563,6 +675,44 @@ do
 	Check("another unit's rage bar art: not counted", rage == nil, rage)
 	_G.PlayerFrame:SetAlpha(1)
 	_G.TargetFrame.manabar:SetStatusBarTexture("UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana")
+end
+
+-- A buff button with no name (Forever's: neither "auraPools" nor "...Buff1"; the
+-- test waited for a debuff that was there, 2026-11-20): found by what it is.
+do
+	focusFrame:Show()
+	local holder = CreateFrame("Frame", nil, focusFrame)
+	holder:SetAllPoints()
+	local button = CreateFrame("Button", nil, holder)
+	button:SetSize(17, 17)
+	button:SetPoint("TOPLEFT", focusFrame, "BOTTOMLEFT", 6, 16)
+	button.Icon = button:CreateTexture(nil, "ARTWORK")
+	button.Icon:SetAllPoints()
+	button.Icon:SetTexture("Interface\\Icons\\Spell_Shadow_AbominationExplosion")
+	button:Show()
+	Check("a buff button with no name found by what it is", ns.UnitFirstAura and ns.UnitFirstAura(focusFrame) == button)
+	-- (In a fight on Forever its size and place are secret: still found, no error,
+	-- as there but not measured. Comparing its size errored 19 times, 2026-11-21.)
+	do
+		local SECRET = setmetatable({}, { __lt = function() error("compared a secret") end,
+			__le = function() error("compared a secret") end, __sub = function() error("did math on a secret") end })
+		local realSecret = rawget(_G, "issecretvalue")
+		rawset(_G, "issecretvalue", function(v) return v == SECRET end)
+		local size, rect = button.GetSize, button.GetRect
+		button.GetSize = function() return SECRET, SECRET end
+		button.GetRect = function() return SECRET, SECRET, SECRET, SECRET end
+		local ok, got = pcall(ns.UnitFirstAura, focusFrame)
+		Check("in a fight (its size and place secret): found, no error", ok and got == button, not ok and got or nil)
+		local okHangs, hangs = pcall(ns.ReadUnitHangs, "FOCUS")
+		Check("in a fight: not measured, no error", okHangs and not (hangs and hangs.aura), not okHangs and hangs or nil)
+		button.GetSize, button.GetRect = size, rect
+		rawset(_G, "issecretvalue", realSecret)
+	end
+	-- (Not a bigger frame with an icon, a target of target's portrait, say.)
+	button:SetSize(60, 60)
+	Check("a 60 px frame with an icon isn't a buff", ns.UnitFirstAura(focusFrame) == nil)
+	button:Hide()
+	focusFrame:Hide()
 end
 
 -- Another shape: the drawn mock-up back, nothing of the copy left on it.
@@ -586,37 +736,313 @@ do
 	preview:Hide()
 end
 
--- A fight: the game's look read in it (put on before); yours waits for its
--- end, then reads with what's up.
+-- Your run as you play it (Forever, 2026-11-21): your look on; out of a fight
+-- a target with a buff; then the pull: a focus, your pet summoned in the
+-- fight, both targeting someone, the buffs' places secret; the mob dies, its
+-- frames gone. Nothing typed, no skip: every goal kept once met, your look
+-- read in the fight, the game's after it, the run done.
+local auraButton
 do
 	db.ufStyle, db.styleGeneral = true, true
-	ns.PreviewMatch("units")
-	RunTimers()
-	Check("start: the game's look on before any waiting", db.ufStyle == false)
-	fighting = true
-	ns.PreviewMatch("units skip")
-	RunTimers()
-	local store = CinematicDB.previewMatch[client .. "-units"]
-	-- (Its reads are saved at the end: its log says what it read so far.)
+	ns.db.unitFrameHangs = nil
+	petOut, focusSet, totUp, target, targetIsYou, fighting = false, false, false, true, false, false
+	pet:Hide()
+	focusFrame:Hide()
+	targetTot:Hide()
+	focusTot:Hide()
+	_G.TargetFrameBuff1:Hide() -- (no buff on your first target)
+	-- (The game's say: a buff only while one is drawn.)
+	local realAuras = rawget(_G, "C_UnitAuras")
+	rawset(_G, "C_UnitAuras", { GetAuraDataByIndex = function(unit, i, filter)
+		return (unit == "target" and i == 1 and filter == "HELPFUL" and auraButton and auraButton:IsShown()) and {} or nil end })
+	local function Store() return CinematicDB.previewMatch[client .. "-units"] end
 	local function Logged(text)
-		for _, line in ipairs(store and store.lines or {}) do if line:find(text, 1, true) then return true end end
-		return false
+		for _, line in ipairs(Store() and Store().lines or {}) do if line:find(text, 1, true) then return line end end
+		return nil
 	end
-	Check("in a fight: the game's look read", Logged("game:game:PLAYER: read"))
-	Check("in a fight: your look not put on, not read", db.ufStyle == false and not Logged("yours:game:PLAYER"))
+	local function Pair(name)
+		for _, pair in ipairs(Store() and Store().pairs or {}) do if pair.name == name then return pair end end
+		return nil
+	end
+	ns.PreviewMatch("units nothemes")
+	RunTimers()
+	Check("your run: your look left on at the start", db.ufStyle == true)
+	Check("your run: waits for the frames and the buffs, says both", Logged("FRAMES: a FOCUS") and Logged("BUFFS: out of a fight"))
+	-- (Out of a fight: your target has a buff. Its button drawn after the event:
+	-- found on the next once-a-second check.)
+	local holder = CreateFrame("Frame", nil, _G.TargetFrame)
+	holder:SetAllPoints()
+	auraButton = CreateFrame("Button", nil, holder)
+	auraButton:SetSize(17, 17)
+	auraButton:SetPoint("TOPLEFT", _G.TargetFrame, "BOTTOMLEFT", 6, 16)
+	auraButton.Icon = auraButton:CreateTexture(nil, "ARTWORK")
+	auraButton.Icon:SetAllPoints()
+	auraButton.Icon:SetTexture("Interface\\Icons\\Spell_Nature_Regeneration")
+	auraButton:Show()
+	RunTimers()
+	Check("your run: the buff measured out of a fight, kept", Logged("BUFFS: the target's first buff measured"))
+	local theme = ns.UnitLookKey("TARGET")
+	local hangs = ns.db.unitFrameHangs and ns.db.unitFrameHangs[ns.isRetail and "retail" or "classic"]
+	Check("your run: measured in your look, not the game's", theme ~= "game" and hangs and hangs[theme]
+		and hangs[theme].TARGET and hangs[theme].TARGET.aura ~= nil, theme)
+	Check("your run: still waits for the frames, not the buffs", Logged("waiting for: FRAMES:") and not Pair("Target frame (your style)"))
+	-- (The pull: in a fight, the buffs' places secret, the rest comes up one by one.)
+	fighting = true
+	local SECRET = setmetatable({}, { __lt = function() error("compared a secret") end,
+		__le = function() error("compared a secret") end, __sub = function() error("did math on a secret") end })
+	local realSecret = rawget(_G, "issecretvalue")
+	rawset(_G, "issecretvalue", function(v) return v == SECRET end)
+	local size, rect = auraButton.GetSize, auraButton.GetRect
+	auraButton.GetSize = function() return SECRET, SECRET end
+	auraButton.GetRect = function() return SECRET, SECRET, SECRET, SECRET end
+	focusSet = true
+	focusFrame:Show()
+	RunTimers()
+	totUp = true
+	targetTot:Show()
+	focusTot:Show()
+	RunTimers()
+	Check("your run: no pet yet, waits for it", Logged("FRAMES: your PET") and not Pair("Target frame (your style)"))
+	petOut = true
+	pet:Show()
+	RunTimers()
+	Check("your run: in the fight, your look read with every frame up", Logged("yours:game:TARGET: read")
+		and Logged("yours:game:TOT: read") and Logged("yours:game:FOCUSTOT: read") and Logged("yours:game:PET: read"))
+	Check("your run: your target of target measured in the fight", hangs and hangs[theme] and hangs[theme].TARGET.tot ~= nil)
+	Check("your run: the game's look not put on in the fight", db.ufStyle == true and not Logged("game:game:PLAYER"))
+	Check("your run: no secret compared", not Logged("errored"), Logged("errored"))
+	auraButton.GetSize, auraButton.GetRect = size, rect
+	rawset(_G, "issecretvalue", realSecret)
+	-- (The mob dies: target, focus and their targets gone; the fight ends.)
+	target, focusSet, totUp = false, false, false
+	auraButton:Hide()
+	focusFrame:Hide()
+	targetTot:Hide()
+	focusTot:Hide()
 	fighting = false
 	wow.Fire("PLAYER_REGEN_ENABLED")
 	RunTimers()
+	Check("your run: done, your look's frames compared", Pair("Target frame (your style)") and Pair("Target's target of target (your style)")
+		and Pair("Pet frame (your style)"))
+	Check("your run: the game's look read after the fight", Logged("game:game:PLAYER: read"))
+	Check("your run: your page put back", db.ufStyle == true and CinematicDB.previewMatchUnitsKept == nil)
+	Check("your run: what's measured per look logged", Logged("HANGS " .. theme .. " look, TARGET:")
+		and Logged("HANGS " .. theme .. " look, TARGET:"):find("aura", 1, true) and Logged("HANGS " .. theme .. " look, TARGET:"):find("tot", 1, true),
+		Logged("HANGS " .. theme .. " look, TARGET:"))
+	target, petOut = true, false
+	pet:Hide()
+	_G.TargetFrameBuff1:Show()
+	rawset(_G, "C_UnitAuras", realAuras)
+end
+
+-- Forever's buffs (2026-11-21): the game says your target has one, but every
+-- call on its button is secret, out of a fight too (its place, its size,
+-- whether it shows). Probed and logged, not waited for: the run ends.
+do
+	db.ufStyle = true
+	ns.db.unitFrameHangs = nil
+	petOut, focusSet, totUp, target, fighting = true, true, true, true, false
+	pet:Show()
+	focusFrame:Show()
+	targetTot:Show()
+	focusTot:Show()
+	_G.TargetFrameBuff1:Hide()
+	local SECRET = setmetatable({}, { __lt = function() error("compared a secret") end,
+		__le = function() error("compared a secret") end, __sub = function() error("did math on a secret") end,
+		__eq = function() error("compared a secret") end })
+	local realSecret, realAuras = rawget(_G, "issecretvalue"), rawget(_G, "C_UnitAuras")
+	rawset(_G, "issecretvalue", function(v) return v == SECRET end)
+	rawset(_G, "C_UnitAuras", { GetAuraDataByIndex = function(unit, i, filter)
+		return (unit == "target" and i == 1 and filter == "HELPFUL") and {} or nil end })
+	local secretButton = CreateFrame("Button", nil, _G.TargetFrame)
+	secretButton.Icon = secretButton:CreateTexture()
+	for _, method in ipairs({ "GetSize", "GetRect", "IsVisible", "IsShown", "GetLeft", "GetTop", "GetWidth", "GetHeight" }) do
+		secretButton[method] = function() return SECRET, SECRET, SECRET, SECRET end
+	end
+	ns.PreviewMatch("units nothemes")
+	RunTimers()
+	local store = CinematicDB.previewMatch[client .. "-units"]
+	local function Logged(text)
+		for _, line in ipairs(store and store.lines or {}) do if line:find(text, 1, true) then return line end end
+		return nil
+	end
+	Check("secret buffs: probed", Logged("AURAPROBE the game: target") and Logged("AURAPROBE frames found on screen under it"))
+	Check("secret buffs: not waited for, the run done", Logged("BUFFS: your target has some, but this client doesn't say where")
+		and store.pairs and #store.pairs >= 10 and db.ufStyle == true and CinematicDB.previewMatchUnitsKept == nil,
+		store.pairs and #store.pairs)
+	Check("secret buffs: no secret compared", not Logged("errored") and not Logged("compared a secret"), Logged("errored"))
+	-- (On its own, /cine debug previewmatch units auras: the same probe, no error.)
+	-- (No target yet: it waits for one with a buff, then probes. Run at once it
+	-- probed no target, 2026-11-21.)
+	target = false
+	local ok, err = pcall(ns.PreviewMatchUnits, "auras")
+	RunTimers()
 	store = CinematicDB.previewMatch[client .. "-units"]
+	Check("buffs probe on its own: no target, waits", ok and not Logged("AURAPROBE"), err)
+	target = true
+	RunTimers()
+	Check("buffs probe on its own: probes once there's one with a buff", Logged("AURAPROBE the game: target")
+		and Logged("AURAPROBE TargetFrame:"))
+	Check("buffs probe on its own: anchors tried, shot taken with the frame's pixels",
+		Logged("AURAPROBE TargetFrame points") and Logged("AURAPROBE shot: screen") and Logged("AURAPROBE SHOT "))
+	secretButton:Hide()
+	secretButton.IsVisible = function() return false end
+	secretButton.IsShown = function() return false end
+	rawset(_G, "issecretvalue", realSecret)
+	rawset(_G, "C_UnitAuras", realAuras)
+	_G.TargetFrameBuff1:Show()
+	petOut, focusSet, totUp = false, false, false
+	pet:Hide()
+	focusFrame:Hide()
+	targetTot:Hide()
+	focusTot:Hide()
+end
+
+-- Forever's buff row worked out (its place secret, 2026-11-21): from the
+-- frame's place, Buffs On Top and Cinematic's lift, as the game's layout was
+-- measured off screenshots (first icon 24 in, 5 under the top on top, 74 under
+-- it below, 17 square). Retail reads its own buttons: never worked out.
+do
+	local frame = _G.TargetFrame
+	_G.TargetFrameBuff1:Hide()
+	local container = CreateFrame("Frame", nil, frame)
+	frame.GetAuraContainer = function() return container end
+	local realLift = ns.UnitAuraLiftNow
+	local lift = 0
+	ns.UnitAuraLiftNow = function() return lift end
+	local scale = frame:GetEffectiveScale()
+	local health = frame.healthbar
+	local hl, ht, hw = health:GetLeft() * health:GetEffectiveScale(), health:GetTop() * health:GetEffectiveScale(),
+		health:GetWidth() * health:GetEffectiveScale()
+	local fl, ft = frame:GetLeft() * scale, frame:GetTop() * scale
+	local function Want(top)
+		return (fl + 24 * scale - hl) / hw, (ht - (ft - top * scale)) / hw, 17 * scale / hw
+	end
+	local function Near(a, b) return a and b and math.abs(a - b) < 0.006 end
+	for _, case in ipairs({ { false, 0, 74 }, { true, 0, 5 }, { true, 6, -1 } }) do
+		frame.buffsOnTop, lift = case[1], case[2]
+		local hangs = ns.ReadUnitHangs("TARGET")
+		local spot = hangs and hangs.aura
+		local x, y, w = Want(case[3])
+		local name = ("buff row worked out, %s%s"):format(case[1] and "Buffs On Top" or "below",
+			case[2] > 0 and (", lifted " .. case[2]) or "")
+		if ns.isRetail then
+			Check(name .. ": not on retail (its buttons are read)", not (spot and spot.workedOut))
+		else
+			Check(name .. ": where the game puts it", spot and spot.workedOut and Near(spot.x, x) and Near(spot.y, y)
+				and Near(spot.w, w) and (spot.up == true) == case[1],
+				spot and ("%s,%s %s want %.3f,%.3f %.3f"):format(tostring(spot.x), tostring(spot.y), tostring(spot.w), x, y, w))
+		end
+	end
+	-- (The preview: its row over the health bar with Buffs On Top, a second row above the first.)
+	if not ns.isRetail then
+		frame.buffsOnTop, lift = true, 0
+		db.ufStyle, db.styleGeneral = false, true
+		ns.db.unitFrameHangs = nil
+		local preview = ns.MakeUnitStylePreview(UIParent, 480)
+		preview:SetPoint("CENTER")
+		preview:SetSize(480, 200)
+		preview:Refresh()
+		local unit = preview.units.TARGET
+		local first = unit.auras and unit.auras[1]
+		Check("preview, Buffs On Top: its row over the health bar", first and first:IsShown()
+			and first:GetBottom() > unit.health:GetTop(), first and first:GetBottom())
+		local row = unit.auraRow
+		Check("preview, Buffs On Top: rows grow up", row and row[6] == true)
+		local problems = ns.UnitPreviewLayoutCheck(preview)
+		Check("preview, Buffs On Top: nothing cut or overlapping", #problems == 0, table.concat(problems, "; "))
+		frame.buffsOnTop = false
+		ns.db.unitFrameHangs = nil
+		preview:Refresh()
+		first = unit.auras and unit.auras[1]
+		Check("preview, below: its row under the health bar", first and first:GetTop() < unit.health:GetBottom(),
+			first and first:GetTop())
+		preview:Hide()
+	end
+	frame.buffsOnTop = nil
+	frame.GetAuraContainer = nil
+	ns.UnitAuraLiftNow = realLift
+	ns.db.unitFrameHangs = nil
+	_G.TargetFrameBuff1:Show()
+end
+
+-- Looks switched back and forth with a portrait measured in each (a theme test
+-- switched themes, then Style General's preview hung its health bar on a
+-- portrait hung on it: "Cannot anchor to a region dependent on it", 2026-11-21).
+do
+	db.ufStyle, db.styleGeneral = true, true
+	local client = ns.isRetail and "retail" or "classic"
+	local spot = { x = -0.5, y = -0.2, w = 0.45, h = 0.45 }
+	ns.db.unitFrameHangs = { [client] = {} }
+	for _, shape in ipairs({ "game", "cut", "circle", "square" }) do
+		db.ufShape = shape
+		local look = ns.UnitLookKey("PLAYER")
+		ns.db.unitFrameHangs[client][look] = { PLAYER = { portrait = spot, power = { x = 0, y = 0.15, w = 1, h = 0.08 },
+			healthSize = { h = 0.16 } }, TARGET = { portrait = spot } }
+	end
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:SetPoint("CENTER")
+	preview:SetSize(480, 200)
+	ns.previewLoops = 0
+	local errors = {}
+	for _, shape in ipairs({ "cut", "cut", "game", "cut", "circle", "game", "square", "cut" }) do
+		db.ufShape = shape
+		local ok, err = pcall(preview.Refresh, preview)
+		if not ok then errors[#errors + 1] = shape .. ": " .. tostring(err) end
+	end
+	Check("looks switched, portraits measured: no anchor loop", ns.previewLoops == 0 and #errors == 0,
+		("%d loops; %s"):format(ns.previewLoops or -1, table.concat(errors, "; ")))
+	db.ufShape = "game"
+	ns.db.unitFrameHangs = nil
+	preview:Hide()
+end
+
+-- The buffs measured before (a past run): not asked again. Your page off:
+-- one read, the game's look, nothing changed.
+do
+	db.ufStyle = false
+	petOut, focusSet, totUp = true, true, true
+	pet:Show()
+	focusFrame:Show()
+	targetTot:Show()
+	focusTot:Show()
+	ns.PreviewMatch("units nothemes")
+	RunTimers()
+	local store = CinematicDB.previewMatch[client .. "-units"]
 	local yours = false
-	for _, pair in ipairs(store.pairs or {}) do if pair.name == "Player frame (your style)" then yours = true end end
-	Check("fight over: your look read, the run done, the page back", yours and db.ufStyle == true
-		and CinematicDB.previewMatchUnitsKept == nil)
+	for _, pair in ipairs(store.pairs or {}) do if pair.name:find("your style", 1, true) then yours = true end end
+	Check("page off: one read, done, no waiting", store.pairs and #store.pairs >= 5 and not yours and db.ufStyle == false,
+		store.pairs and #store.pairs)
+	db.ufStyle = true
+	ns.PreviewMatch("units nothemes")
+	RunTimers()
+	store = CinematicDB.previewMatch[client .. "-units"]
+	local asked = false
+	for _, line in ipairs(store.lines or {}) do if line:find("BUFFS: out of a fight", 1, true) then asked = true end end
+	Check("buffs measured before: not asked again, both looks read", not asked and store.pairs and #store.pairs >= 10,
+		store.pairs and #store.pairs)
+	-- (A fight begun right after your look's read: the game's waits for its end.)
+	ns.PreviewMatch("units nothemes")
+	fighting = true
+	RunTimers()
+	store = CinematicDB.previewMatch[client .. "-units"]
+	local waited = false
+	for _, line in ipairs(store.lines or {}) do if line:find("in a fight: the game's look goes on", 1, true) then waited = true end end
+	Check("fight after your read: the game's look waits", waited and db.ufStyle == true and CinematicDB.previewMatchUnitsKept ~= nil)
+	fighting = false
+	wow.Fire("PLAYER_REGEN_ENABLED")
+	RunTimers()
+	Check("fight after your read: done once it ends, page back", db.ufStyle == true and CinematicDB.previewMatchUnitsKept == nil)
+	petOut, focusSet, totUp = false, false, false
+	pet:Hide()
+	focusFrame:Hide()
+	targetTot:Hide()
+	focusTot:Hide()
 end
 
 -- A target but no focus or pet: waits for them, names them; skip goes without.
 do
-	ns.PreviewMatch("units")
+	ns.PreviewMatch("units nothemes")
 	RunTimers()
 	local store = CinematicDB.previewMatch[client .. "-units"]
 	Check("no focus or pet: waits", store and (store.pairs == nil or #store.pairs == 0))
@@ -630,7 +1056,7 @@ end
 petOut, focusSet, totUp = true, true, true -- (from here the waits are for the target only)
 -- Yourself targeted: waits for someone else (Forever keeps your own target frame's places secret).
 targetIsYou = true
-ns.PreviewMatch("units")
+ns.PreviewMatch("units nothemes")
 RunTimers()
 local mine = CinematicDB.previewMatch[client .. "-units"]
 Check("yourself targeted: waits", mine and (mine.pairs == nil or #mine.pairs == 0))
@@ -642,16 +1068,237 @@ Check("yourself targeted: runs once it's someone else", mine and mine.pairs and 
 
 -- No target: waits for one, then runs.
 target = false
-ns.PreviewMatch("units")
+ns.PreviewMatch("units nothemes")
 RunTimers()
 local store = CinematicDB.previewMatch[client .. "-units"]
 Check("no target: waits", store and (store.pairs == nil or #store.pairs == 0))
 target = true
-ns.PreviewMatch("units") -- (already running: says so, starts nothing)
+ns.PreviewMatch("units nothemes") -- (already running: says so, starts nothing)
 wow.Fire("PLAYER_TARGET_CHANGED")
 RunTimers()
 store = CinematicDB.previewMatch[client .. "-units"]
 Check("no target: runs once there is one", store and store.pairs and #store.pairs >= 2, store and store.pairs and #store.pairs)
+
+-- Step 3, the themes (2026-11-21): out of a fight, a player as target and
+-- focus, your pet: every built-in theme put on the real frames, read and
+-- compared, one shot each; your theme back after. A fight in the middle waits
+-- and goes on with the same theme; no target waits; skip goes without the
+-- rest; a reload in the middle puts your theme back at the next login.
+do
+	local themes = {}
+	for _, theme in ipairs(ns.StyleThemeList()) do if theme.key ~= "game" then themes[#themes + 1] = theme.key end end
+	Check("themes: the list there", #themes >= 10, #themes)
+	db.ufStyle, db.styleGeneral = true, true
+	ns.ApplyStyleTheme("fel", true)
+	local mineTheme = db.styleTheme
+	target, targetIsYou, petOut, focusSet, totUp, fighting = true, false, true, true, true, false
+	pet:Show()
+	focusFrame:Show()
+	targetTot:Show()
+	focusTot:Show()
+	local function Store() return CinematicDB.previewMatch[client .. "-units"] end
+	local function Logged(text)
+		for _, line in ipairs(Store() and Store().lines or {}) do if line:find(text, 1, true) then return line end end
+		return nil
+	end
+	local function Themed()
+		local got = {}
+		for _, pair in ipairs(Store() and Store().pairs or {}) do
+			local name = pair.name:match("^Target frame %(theme (.+)%)$")
+			if name then got[#got + 1] = name end
+		end
+		return got
+	end
+	shots = 0
+	-- (A fight as the 3rd theme goes on: waited out, that theme again.)
+	local realApply, applied = ns.ApplyStyleTheme, 0
+	ns.ApplyStyleTheme = function(key, noUndo)
+		local ok = realApply(key, noUndo)
+		if key ~= mineTheme then
+			applied = applied + 1
+			if applied == 3 then fighting = true end
+		end
+		return ok
+	end
+	ns.PreviewMatch("units")
+	RunTimers()
+	Check("themes: a fight in the middle waits", fighting and Logged("in a fight: this theme goes on again") ~= nil,
+		Logged("in a fight"))
+	fighting = false
+	wow.Fire("PLAYER_REGEN_ENABLED")
+	RunTimers()
+	RunTimers()
+	ns.ApplyStyleTheme = realApply
+	local got = Themed()
+	Check("themes: every theme read and compared", #got == #themes, ("%d of %d"):format(#got, #themes))
+	Check("themes: one shot each, and the two looks'", shots == #themes + 2, shots)
+	Check("themes: your theme back, your page back", db.styleTheme == mineTheme and db.ufStyle == true
+		and CinematicDB.previewMatchUnitsKept == nil, tostring(db.styleTheme))
+	Check("themes: the log not cut short", Logged("BUFFS ") ~= nil and #Store().lines < 4000, #Store().lines)
+	Check("themes: no error", not Logged("errored"), Logged("errored"))
+	Check("themes: the hidden target of target probed", Logged("TOTPROBE") ~= nil or Logged("themes:") ~= nil)
+	-- (What the first themed run found, 2026-11-21, each gone.)
+	local found = { color = {}, circle = {}, level = {}, overlap = {}, pet = {} }
+	for _, pair in ipairs(Store().pairs or {}) do
+		local theme = pair.name:match("%(theme (.+)%)$")
+		if theme then
+			for _, line in ipairs(pair.findings or {}) do
+				if line:find("^COLOR health") then found.color[#found.color + 1] = theme .. ": " .. pair.name:match("^(%S+)") end
+				if line:find("^ART levelBack") then found.circle[#found.circle + 1] = theme end
+				if line:find("^EXTRA level") then found.level[#found.level + 1] = theme .. ": " .. line end
+				if pair.name:find("^Pet") and (line:find("^SIZE health") or line:find("^JUSTIFY name")) then
+					found.pet[#found.pet + 1] = theme .. ": " .. line
+				end
+			end
+		end
+	end
+	for phase, problems in pairs(Store().layout or {}) do
+		if phase:find("^theme:") and #problems > 0 then found.overlap[#found.overlap + 1] = phase .. " " .. problems[1] end
+	end
+	Check("themes: health colored as the real frame", #found.color == 0, table.concat(found.color, "; "))
+	Check("themes: the level circle read as drawn", #found.circle == 0, table.concat(found.circle, "; "))
+	-- (The stand-in's frames have no level circle and keep their level under
+	-- another key, so the slab themes' hidden level is checked on its own below.)
+	Check("themes: no buffs over a target of target", #found.overlap == 0, table.concat(found.overlap, "; "))
+	Check("themes: the pet's bars and name measured", #found.pet == 0, table.concat(found.pet, "; "))
+	-- (No target once the fight's over: waits for one; then goes on.)
+	target, totUp = false, false
+	targetTot:Hide()
+	focusTot:Hide()
+	ns.PreviewMatch("units skip") -- (not running: nothing)
+	ns.PreviewMatch("units")
+	RunTimers()
+	ns.PreviewMatch("units skip") -- (step 1: no target, no targets of target)
+	RunTimers()
+	Check("themes: no target, waits for one", Logged("themes: waiting for a TARGET") ~= nil and #Themed() == 0)
+	target = true
+	RunTimers()
+	RunTimers()
+	Check("themes: a target, goes on", #Themed() == #themes, #Themed())
+	-- (Skip in the themes step: the rest gone without, your theme back.)
+	target = false
+	ns.PreviewMatch("units")
+	RunTimers()
+	ns.PreviewMatch("units skip")
+	RunTimers()
+	ns.PreviewMatch("units skip")
+	RunTimers()
+	Check("themes: skip goes without them, your theme back", Logged("themes: skipped") ~= nil
+		and db.styleTheme == mineTheme and CinematicDB.previewMatchUnitsKept == nil, tostring(db.styleTheme))
+	-- (A reload in the middle: your theme back at the next login.)
+	CinematicDB.previewMatchUnitsKept = { ufStyle = true, theme = ns.StyleSnapshot() }
+	realApply("neon", true)
+	wow.Fire("PLAYER_LOGIN")
+	RunTimers()
+	Check("themes: cut short by a reload, your theme back at login", db.styleTheme == mineTheme
+		and CinematicDB.previewMatchUnitsKept == nil, tostring(db.styleTheme))
+	target, petOut, focusSet = true, false, false
+	pet:Hide()
+	focusFrame:Hide()
+	realApply("game", true)
+end
+
+-- A look that hides the level and its circle on the live frame (the slab
+-- themes, in game 2026-11-21: ours showed both): the preview hides them too;
+-- the circle alone (the level a number): only the circle; the copy as well.
+do
+	db.styleGeneral, db.ufStyle = true, true
+	ns.ApplyStyleTheme("slate", true)
+	local client = ns.isRetail and "retail" or "classic"
+	local look = ns.UnitLookKey("PLAYER")
+	local level = { x = -0.5, y = 0.2, w = 0.1, h = 0.1, font = 0.1 }
+	local function Hangs(hidden, backHidden)
+		ns.db.unitFrameHangs = { [client] = { [look] = {
+			PLAYER = { level = not hidden and level or nil, levelHidden = hidden, levelBackHidden = backHidden },
+			TARGET = { level = level, levelHidden = false, levelBackHidden = backHidden } } } }
+	end
+	local realRead = ns.ReadUnitHangs
+	ns.ReadUnitHangs = function() return nil end -- (the saved ones only: the stand-in's live frames aside)
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:SetPoint("CENTER")
+	preview:SetSize(480, 200)
+	Hangs(true, true)
+	preview:Refresh()
+	local badge = preview.units.PLAYER.badge
+	Check("a look hiding both: our level and circle hidden", not (badge:IsShown() and (badge.text:IsShown()
+		or badge.ring:IsShown() or badge.back:IsShown())))
+	badge = preview.units.TARGET.badge
+	Check("a look hiding the circle only: the level shown, no circle", badge:IsShown() and badge.text:IsShown()
+		and not badge.ring:IsShown() and not badge.back:IsShown())
+	-- (The copy: the game's shape under a theme, Gilded Codex's kind.)
+	ns.ApplyStyleTheme("codex", true)
+	look = ns.UnitLookKey("PLAYER")
+	ns.db.unitFrameHangs = { [client] = { [look] = { PLAYER = { levelBackHidden = true, levelHidden = false } } } }
+	preview:Refresh()
+	local unit = preview.units.PLAYER
+	Check("the copy, a look hiding the circle: no circle", unit.copy and unit.copy.on and not unit.copy.circle:IsShown(),
+		unit.copyWhy)
+	ns.ReadUnitHangs = realRead
+	ns.db.unitFrameHangs = nil
+	preview:Hide()
+	ns.ApplyStyleTheme("game", true)
+end
+
+-- Your pet's own power: a warlock's imp has mana, the sample wolf focus (in
+-- game every theme's pet bar was yellow against the imp's blue, 2026-11-21).
+do
+	db.styleGeneral, db.ufStyle = true, false
+	petOut = true
+	local realType = rawget(_G, "UnitPowerType")
+	rawset(_G, "UnitPowerType", function(unit) if unit == "pet" then return 0, "MANA" end return 0, "MANA" end)
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:SetPoint("CENTER")
+	preview:SetSize(480, 200)
+	preview:Refresh()
+	local r, g, b = preview.units.PET.power:GetStatusBarColor()
+	Check("your pet out: its power bar its own (mana blue, not the wolf's yellow)", r and b and b > r and b > g,
+		("%.2f,%.2f,%.2f"):format(r or -1, g or -1, b or -1))
+	petOut = false
+	preview:Refresh()
+	r, g, b = preview.units.PET.power:GetStatusBarColor()
+	Check("no pet: the sample's own (yellow)", r and g and r > 0.9 and g > 0.9 and b < 0.1,
+		("%.2f,%.2f,%.2f"):format(r or -1, g or -1, b or -1))
+	rawset(_G, "UnitPowerType", realType)
+	preview:Hide()
+end
+
+-- A level faded out, still shown (a slab theme's, in game 2026-11-21): hidden
+-- in this look, as the game shows it; faded back in, shown.
+do
+	db.styleGeneral, db.ufStyle = true, false
+	ns.db.unitFrameHangs = nil
+	local level = _G.PlayerFrame.levelText or _G.PlayerLevelText
+	if level then
+		level:SetAlpha(0)
+		local hangs = ns.ReadUnitHangs("PLAYER")
+		Check("a level faded to nothing: hidden in this look", hangs and hangs.levelHidden == true and hangs.level == nil,
+			hangs and tostring(hangs.levelHidden))
+		level:SetAlpha(1)
+		hangs = ns.ReadUnitHangs("PLAYER")
+		Check("faded back in: shown", hangs and hangs.levelHidden == false and hangs.level ~= nil)
+	else
+		Check("a level faded to nothing: the stand-in's level there", false)
+	end
+	ns.db.unitFrameHangs = nil
+end
+
+-- The page off under a slab theme (Slate): the preview is the game's frame,
+-- as the real one is then; it drew Slate's slab, 2026-11-21.
+do
+	db.styleGeneral = true
+	ns.ApplyStyleTheme("slate", true)
+	db.ufStyle = false
+	local preview = ns.MakeUnitStylePreview(UIParent, 480)
+	preview:SetPoint("CENTER")
+	preview:SetSize(480, 200)
+	preview:Refresh()
+	for _, id in ipairs({ "PLAYER", "TARGET" }) do
+		local unit = preview.units[id]
+		Check(("page off, Slate on: %s the game's frame"):format(id), unit.copy and unit.copy.on, unit.copyWhy)
+	end
+	preview:Hide()
+	ns.ApplyStyleTheme("game", true)
+end
 
 -- The masks probe (/cine debug previewmatch units masks) runs through, shot taken.
 do

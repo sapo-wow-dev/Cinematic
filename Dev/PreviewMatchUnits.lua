@@ -5,15 +5,19 @@
 -- One run, steps on screen, no time limit, CineMode off for the run, never
 -- opens Settings: it makes the page's preview itself (ns.MakeUnitStylePreview)
 -- in a strip at the screen's left.
---   0 the game's look goes on (the Unit Frames Style page off), out of a fight;
---   1 it waits for a target, not yourself (on Forever your own target
---     frame's places are secret, 2026-11-20), one with mana is best, a
---     focus and your pet out, the target and the focus each targeting
---     someone (their targets of target: pull the focused mob, fighting is
---     fine) (or "/cine debug previewmatch units skip");
---   2 the game's frames and the preview's mock-ups read, the screen shot;
---   3 your look (only when your page was on), once you're out of any fight:
---     the same with your settings, with what's still up;
+--   1 in your look as it is (nothing changed), two goals, any order, each
+--     kept once met (or "/cine debug previewmatch units skip"):
+--     FRAMES: a target, not yourself (on Forever your own target frame's
+--       places are secret, 2026-11-20), a focus, your pet out, the target
+--       and the focus each targeting someone (pull the focused mob: fighting
+--       is fine): the game's frames and the preview's read then, a shot;
+--     BUFFS: a target with a buff, out of a fight (a buff's place is secret
+--       in one on Forever): where the game puts it measured;
+--   2 the game's look (only when your page was on), once you're out of any
+--     fight: the same, with what's still up;
+--   3 every built-in theme on the real frames, out of a fight, one after
+--     another (a player as target and focus, your pet): each read, compared
+--     and shot; your theme put back ("units nothemes" goes without);
 --   then your settings back (at the next login too if a reload cuts it short).
 -- Read, per frame: its parts (frame art, portrait, health and power bars,
 -- name, level), each placed and sized in widths of its health bar, the bars'
@@ -24,7 +28,7 @@
 -- python Tools/preview-match/build.py makes the side-by-side page. Dev copy.
 local _, ns = ...
 
-local MAX_LINES, TREE_LINES = 2500, 120
+local MAX_LINES, TREE_LINES = 4000, 120 -- (4000: the themes step, 16 looks, 2026-11-21)
 local SETTLE = 1.2 -- (seconds after a look changes: RefreshUnitStyle settles at 0.4)
 local DRAWN = 0.5 -- (seconds from the preview's drawing to its shot: masked textures show late)
 -- (Each target of target against its own mock-up: the target's, TOT, and the focus's, FOCUSTOT.)
@@ -36,7 +40,9 @@ local UNITS = { PLAYER = "player", TARGET = "target", FOCUS = "focus", PET = "pe
 local GAME_FRAMES = { PLAYER = "PlayerFrame", TARGET = "TargetFrame", FOCUS = "FocusFrame", PET = "PetFrame",
 	TOT = "TargetFrameToT", FOCUSTOT = "FocusFrameToT" }
 -- (power2: the player frame's third bar, under a class resource: retail's Elemental mana.)
-local ROLES = { "art", "portrait", "health", "power", "power2", "name", "level" }
+-- (totHealth, aura1, levelBack: where its target of target, first buff and
+-- level circle sit, user 2026-11-20 "dont guess any more": checked in each look.)
+local ROLES = { "art", "portrait", "health", "power", "power2", "name", "level", "levelBack", "aura1", "totHealth" }
 -- How far apart is "different": places and sizes in widths of the health bar,
 -- a bar's shape (width over height) and a font's size as a part of its own.
 local PLACE_OFF, SIZE_OFF, SHAPE_OFF, FONT_OFF = 0.08, 0.2, 0.25, 0.25
@@ -119,6 +125,36 @@ local function GameParts(frame, id)
 		parts.level = (main and main.LevelText) or frame.levelText
 			or (frame.GetName and frame:GetName() and _G[frame:GetName() .. "TextureFrameLevelText"])
 	end
+	-- (Its level circle, first buff and target of target's health bar.)
+	local content = frame.PlayerFrameContent or frame.TargetFrameContent
+	local main = type(content) == "table" and (content.PlayerFrameContentMain or content.TargetFrameContentMain)
+	parts.levelBack = type(main) == "table" and main.LevelBackgroundCircle or nil
+	-- (A skull in its place for a boss or a unit far over yours: the level then.)
+	local context = type(content) == "table" and content.TargetFrameContentContextual
+	local skull = (type(context) == "table" and context.HighLevelTexture) or (type(main) == "table" and main.HighLevelTexture)
+	if type(skull) == "table" and skull.IsVisible and skull:IsVisible() and not (parts.level and parts.level:IsVisible()) then
+		parts.level = skull
+	end
+	local tot = frame.totFrame or (frame.GetName and frame:GetName() and _G[frame:GetName() .. "ToT"])
+	if type(tot) == "table" and tot.IsVisible and tot:IsVisible() then parts.totHealth = tot.HealthBar or tot.healthbar end
+	local first, firstL, firstT
+	local function Consider(button)
+		if type(button) ~= "table" or not (button.IsVisible and button:IsVisible()) then return end
+		local l, t = K.Num(K.Call(button, "GetLeft")), K.Num(K.Call(button, "GetTop"))
+		if l and t and (not first or t > firstT + 1 or (math.abs(t - firstT) <= 1 and l < firstL)) then
+			first, firstL, firstT = button, l, t
+		end
+	end
+	local pools = frame.auraPools
+	if type(pools) == "table" and type(pools.EnumerateActive) == "function" then
+		local ok, each = pcall(pools.EnumerateActive, pools)
+		if ok and each then for button in each do Consider(button) end end
+	end
+	local name = frame.GetName and frame:GetName()
+	if name then for i = 1, 4 do Consider(_G[name .. "Buff" .. i]) Consider(_G[name .. "Debuff" .. i]) end end
+	-- (By what they are, whatever this client names them: UnitFrameCopy.lua's finder.)
+	if not first and ns.UnitFirstAura then first = ns.UnitFirstAura(frame) end
+	parts.aura1 = first
 	return parts
 end
 -- Our mock-up's parts, as MakeUnitStylePreview builds them.
@@ -127,7 +163,19 @@ local function OurParts(unit)
 	parts.health, parts.power, parts.name = unit.health, unit.power, unit.name
 	parts.power2 = unit.copy and unit.copy.on and unit.copy.power2 or nil
 	parts.portrait = (unit.portrait and unit.portrait:IsShown()) and unit.portrait or unit.face
-	parts.level = unit.badge and unit.badge.text
+	parts.level = (unit.skull and unit.skull:IsShown() and unit.skull)
+		or (unit.badge and unit.badge:IsShown() and unit.badge.text:IsShown() and unit.badge.text) or nil
+	-- (A theme's drawn badge wears the game's circle on its ring (MeasuredLevel): that
+	-- read, not the badge's frame, which has no art: "nil ours" in 12 themes, 2026-11-21.)
+	local badge = unit.badge
+	local ring = badge and badge:IsShown() and badge.ring and badge.ring.gameCircle and badge.ring:IsShown() and badge.ring
+	parts.levelBack = (unit.copy and unit.copy.on and unit.copy.circle) or ring
+		or (badge and badge:IsShown() and (badge.ring:IsShown() or badge.back:IsShown()) and badge) or nil
+	parts.aura1 = unit.auras and unit.auras[1]
+	-- (Its target of target: the preview's hung off it, TOT under the target, FOCUSTOT under the focus.)
+	local peers = unit.peers or {}
+	local tot = (unit.id == "TARGET" and peers.TOT) or (unit.id == "FOCUS" and peers.FOCUSTOT) or nil
+	parts.totHealth = tot and tot:IsVisible() and tot.health or nil
 	-- (Its frame art: the game look's copy of the game's (UnitFrameCopy.lua), its drawn metal, else nothing.)
 	parts.art = (unit.copy and unit.copy.on and unit.copy.art:IsShown() and unit.copy.art)
 		or (unit.box and unit.box:IsShown() and unit.box.wide) or nil
@@ -276,8 +324,23 @@ local function Compare(real, ours, id)
 		elseif o and not g and role == "power" then
 			findings.notes = findings.notes or {}
 			table.insert(findings.notes, "power bar not compared: the unit read shows none")
-		elseif o and not g then
+		-- (aura1 by its own rule below: the game's buffs unreadable on Forever,
+		-- ours counted EXTRA on the target frame of you, 2026-11-21.)
+		elseif o and not g and role == "totHealth" then
+			-- (Its target of target gone (the mob dead by the game's read, 2026-11-21): the unit's state.)
+			findings.notes = findings.notes or {}
+			table.insert(findings.notes, "target of target not compared: none up on the unit read")
+		elseif o and not g and role ~= "aura1" then
 			Say(("EXTRA %s (%s %s) shows ours, not in game"):format(role, tostring(o.kind), tostring(o.art or o.font or "")))
+		elseif role == "aura1" and (g == nil) ~= (o == nil) then
+			-- (A buff on one and none on the other: the unit's state then, not the look.)
+			findings.notes = findings.notes or {}
+			table.insert(findings.notes, g and "a buff on the unit read, none in ours" or "no buff on the unit read: its row not compared")
+		elseif g and o and role == "level" and g.kind ~= o.kind then
+			-- (A skull on one, a number on the other: the unit's level, not the look's.)
+			findings.notes = findings.notes or {}
+			table.insert(findings.notes, ("level a %s in game, a %s ours: the unit's level"):format(
+				g.kind == "FontString" and "number" or "skull", o.kind == "FontString" and "number" or "skull"))
 		elseif g and o then
 			findings.checks = findings.checks + (g.kind == "FontString" and 5 or 4)
 			-- (The face is the unit's own: never the same picture.)
@@ -297,6 +360,13 @@ local function Compare(real, ours, id)
 			-- (And another's power bar's color is its power's: our sample warrior's rage
 			-- against a mana user, 2026-11-20. Yours and your pet's are compared.)
 			local byUnit = (role == "level" and id ~= "PLAYER") or (role == "power" and id ~= "PLAYER" and id ~= "PET")
+			-- (A health bar colored by class or by how much health is left: the
+			-- unit's, our sample's class and health against yours, 2026-11-21.)
+			if role == "health" and o.colorBy and K.ColorOff(g.color, o.color) then
+				byUnit = true
+				findings.notes = findings.notes or {}
+				table.insert(findings.notes, ("health colored by %s: the unit's, not the look's"):format(o.colorBy))
+			end
 			if role ~= "portrait" and not byUnit and K.ColorOff(g.color, o.color) then
 				Say(("COLOR %s: %s in game, %s ours"):format(role, tostring(g.color), tostring(o.color)))
 			end
@@ -357,6 +427,9 @@ function ns.UnitPreviewLayoutCheck(holder)
 				for _, texture in ipairs(unit.copy.textures) do parts[#parts + 1] = texture end
 				for _, extra in ipairs(unit.copy.extras) do parts[#parts + 1] = extra end
 			end
+			-- (Its other parts: the buffs row, the boss dragon. UnitFrameParts.lua.)
+			for _, aura in ipairs(unit.auras or {}) do parts[#parts + 1] = aura end
+			if unit.dragon then parts[#parts + 1] = unit.dragon end
 			for _, part in ipairs(parts) do
 				local rect = part and part:IsVisible() and Rect(part)
 				if rect and (rect[1] < hl - 1 or rect[2] > hr + 1 or rect[3] > ht + 1 or rect[4] < hb - 1) then
@@ -391,6 +464,24 @@ function ns.UnitPreviewLayoutCheck(holder)
 			end
 		end
 	end
+	-- (A frame's buffs on another frame, the one hung off it too: a theme's
+	-- target of target lay under the target's buffs, 2026-11-20.)
+	for key, unit in pairs(holder.units or {}) do
+		for _, aura in ipairs(unit.auras or {}) do
+			local box = aura:IsVisible() and Rect(aura)
+			if box then
+				for other, otherBox in pairs(boxes) do
+					if other ~= key then
+						local across = math.min(box[2], otherBox[2]) - math.max(box[1], otherBox[1])
+						local down = math.min(box[3], otherBox[3]) - math.max(box[4], otherBox[4])
+						if across > 1 and down > 1 then
+							problems[#problems + 1] = ("OVERLAP %s's buffs on %s"):format(key, other)
+						end
+					end
+				end
+			end
+		end
+	end
 	return problems
 end
 
@@ -399,6 +490,12 @@ local function PutBack()
 	local kept = CinematicDB and CinematicDB.previewMatchUnitsKept
 	local db = K.DB()
 	if not (kept and db) then return false end
+	-- (Your theme, as the themes step found it: never in a fight, the game holds
+	-- the frames still then. Kept for the next try.)
+	if kept.theme then
+		if InCombatLockdown() or not ns.RestoreStyleSnapshot then return false end
+		pcall(ns.RestoreStyleSnapshot, kept.theme)
+	end
 	db.ufStyle = kept.ufStyle
 	CinematicDB.previewMatchUnitsKept = nil
 	if ns.RefreshUnitStyle then pcall(ns.RefreshUnitStyle) end
@@ -408,7 +505,7 @@ local restore = CreateFrame("Frame")
 restore:RegisterEvent("PLAYER_LOGIN")
 restore:SetScript("OnEvent", function()
 	C_Timer.After(1.2, function()
-		if PutBack() then ns.Print("preview match: your Unit Frames Style setting put back (a reload cut the test short).") end
+		if PutBack() then ns.Print("preview match: your Unit Frames Style setting and theme put back (a reload cut the test short).") end
 	end)
 end)
 
@@ -433,13 +530,15 @@ local function Shot(name)
 	return stamp
 end
 
-local function Keep(key, read, stamp)
+local function Keep(key, read, stamp, quiet)
 	read.shot = stamp
 	run.reads[key] = read
 	local names = {}
 	for role in pairs(read.parts) do names[#names + 1] = role end
 	table.sort(names)
 	Log(("%s: %s, shows %s"):format(key, read.unread or "read", table.concat(names, ", ")))
+	-- (Quiet: the themes step, 17 looks: their differences say it in PAIR lines.)
+	if quiet then return end
 	for _, role in ipairs(ROLES) do
 		local part = read.parts[role]
 		if part then
@@ -478,7 +577,7 @@ local function Masked(label, texture)
 		table.concat(masks, " | ")))
 end
 
-local function ReadPhase(phase, treeToo, done)
+local function ReadPhase(phase, treeToo, done, quiet)
 	run.phase = phase
 	-- (On screen for its shot: something put CineMode back on after a fight, and
 	-- the preview wasn't in the shot of your look, 2026-11-20.)
@@ -491,7 +590,7 @@ local function ReadPhase(phase, treeToo, done)
 	local problems = ns.UnitPreviewLayoutCheck(preview)
 	Log(("  stage scale %.3f, preview visible %s"):format(preview.units.PLAYER:GetParent():GetScale(),
 		tostring(preview:IsVisible())))
-	for _, key in ipairs({ "PLAYER", "PARTY" }) do
+	for _, key in ipairs(quiet and {} or { "PLAYER", "PARTY" }) do
 		local unit = preview.units[key]
 		if unit then
 			pcall(Masked, key .. " face", unit.face)
@@ -504,13 +603,26 @@ local function ReadPhase(phase, treeToo, done)
 	for _, line in ipairs(problems) do Log("  " .. line) end
 	run.layout = run.layout or {}
 	run.layout[phase] = problems
-	-- (Shot a moment after it's drawn: a masked texture shows a frame or more
-	-- after it's set up. Shot at once, every face and bar fill of the
-	-- preview was blank in every run till 2026-11-20 (a probe shot 0.5 s
-	-- later drew them all).)
-	C_Timer.After(DRAWN, function()
-		if not run then return end
-		local stamp = Shot(phase)
+	-- (Read at once, the screenshot a moment later: a masked texture shows a
+	-- frame or more after it's set up (shot at once, every face and bar fill
+	-- of the preview was blank till 2026-11-20). Read with the shot, the focus's
+	-- target had gone in that half second, 2026-11-21: not read.)
+	local keys = {}
+	local function Kept(key, read)
+		Keep(key, read, nil, quiet)
+		keys[#keys + 1] = key
+	end
+	do
+		-- (The target's target of target while it's hidden: its place readable?
+		-- Then it could be worked out for every look, as the buffs are.)
+		local tot = _G.TargetFrameToT
+		if tot and not run.totProbed and not K.Plain(K.Call(tot, "IsShown")) then
+			run.totProbed = true
+			local l, b, w, h = K.Call(tot, "GetRect")
+			local function V(v) return issecretvalue and issecretvalue(v) and "secret" or tostring(K.Round(K.Num(v), 1)) end
+			Log(("TOTPROBE hidden target of target: rect %s,%s,%s,%s; points %s; point 1 %s"):format(V(l), V(b), V(w), V(h),
+				V(K.Call(tot, "GetNumPoints")), tostring((K.Call(tot, "GetPoint", 1)))))
+		end
 		for _, id in ipairs(IDS) do
 			local frame = GameFrame(id)
 			local unit = preview.units and preview.units[id]
@@ -521,27 +633,44 @@ local function ReadPhase(phase, treeToo, done)
 				Log(("%s: shown but faded out (alpha %s): a HUD rule hides it now, not compared"):format(id,
 					tostring(K.Round(K.Num(K.Call(frame, "GetEffectiveAlpha")), 2))))
 			elseif frame and K.Plain(K.Call(frame, "IsVisible")) and UnitExists(UNITS[id]) and unit then
-				Keep(phase .. ":game:" .. id, ReadFrame(gameParts, "game:" .. id), stamp)
+				Kept(phase .. ":game:" .. id, ReadFrame(gameParts, "game:" .. id))
 				-- (How its name was read for the copy: its place, its anchor, or why neither.)
 				local recipe = ns.UnitFrameRecipe and ns.UnitFrameRecipe(unit.id)
 				local entry = recipe and recipe.name
 				local why = gameParts.name and ns.UnitFrameTextWhy and ns.UnitFrameTextWhy[gameParts.name]
-				Log(("  recipe %s name: %s%s"):format(id, entry == nil and "none" or entry.hidden and "hidden"
-					or entry.anchor and ("on its anchor " .. tostring(entry.anchor.point) .. ", " .. tostring(entry.justify))
-					or entry.onBar and ("its side only, on the health bar's top edge, " .. tostring(entry.justify))
-					or ("placed, " .. tostring(entry.justify)), why and (" (" .. why .. ")") or ""))
-				Keep(phase .. ":ours:" .. id, ReadFrame(OurParts(unit), "ours:" .. id), stamp)
+				if not quiet then
+					Log(("  recipe %s name: %s%s"):format(id, entry == nil and "none" or entry.hidden and "hidden"
+						or entry.anchor and ("on its anchor " .. tostring(entry.anchor.point) .. ", " .. tostring(entry.justify))
+						or entry.onBar and ("its side only, on the health bar's top edge, " .. tostring(entry.justify))
+						or ("placed, " .. tostring(entry.justify)), why and (" (" .. why .. ")") or ""))
+				end
+				local ours = ReadFrame(OurParts(unit), "ours:" .. id)
+				local mode = ns.StyleOn and ns.StyleOn("ufStyle") and ns.StyleLook and ns.StyleLook("ufStyle").ufHealthColor
+				if ours.parts.health and (mode == "class" or mode == "health") then ours.parts.health.colorBy = mode end
+				Kept(phase .. ":ours:" .. id, ours)
 				Log(("  ours %s: %s"):format(id, unit.copy and unit.copy.on and "the copy" or ("drawn (" .. tostring(unit.copyWhy) .. ")")))
 				if treeToo then Tree(id, frame) end
 			else
-				Log(("%s: not up (%s), not read"):format(id, frame and "no " .. UNITS[id] or "no frame"))
+				if not quiet then Log(("%s: not up (%s), not read"):format(id, frame and "no " .. UNITS[id] or "no frame")) end
 			end
 		end
+	end
+	C_Timer.After(DRAWN, function()
+		if not run then return end
+		local stamp = Shot(phase)
+		for _, key in ipairs(keys) do if run.reads[key] then run.reads[key].shot = stamp end end
 		-- (After the shot is saved, a moment on: carried on at once, the run's end
 		-- put CineMode back on in the same moment and the shot of your look had no
 		-- UI in it, 2026-11-20.)
 		if done then C_Timer.After(DRAWN, function() if run then done() end end) end
 	end)
+end
+
+-- (A theme's name in the player's language, by its key.)
+local function ThemeName(key)
+	local theme = ns.StyleThemeByKey and ns.StyleThemeByKey(key)
+	local ok, name = pcall(function() return theme and ns.StyleThemeName and ns.StyleThemeName(theme) end)
+	return ok and type(name) == "string" and name or tostring(key)
 end
 
 local function Finish()
@@ -552,11 +681,15 @@ local function Finish()
 	for phase, problems in pairs(run.layout or {}) do
 		summary[#summary + 1] = ("layout (%s) %s"):format(phase, #problems == 0 and "clean" or (#problems .. " problems"))
 	end
-	for _, phase in ipairs({ "game", "yours" }) do
+	local phases = { "game", "yours" }
+	for _, key in ipairs(run.themes or {}) do phases[#phases + 1] = "theme:" .. key end
+	for _, phase in ipairs(phases) do
 		for _, id in ipairs(IDS) do
 			local real, ours = run.reads[phase .. ":game:" .. id], run.reads[phase .. ":ours:" .. id]
 			if real and ours then
-				local name = NAMES[id] .. (phase == "yours" and " (your style)" or "")
+				local theme = phase:match("^theme:(.+)$")
+				local name = NAMES[id] .. (phase == "yours" and " (your style)"
+					or theme and (" (theme " .. ThemeName(theme) .. ")") or "")
 				local entry = { name = name, real = phase .. ":game:" .. id, ours = phase .. ":ours:" .. id }
 				entry.findings = Compare(real, ours, id)
 				local checks = math.max(entry.findings.checks, #entry.findings, 1)
@@ -572,21 +705,53 @@ local function Finish()
 			end
 		end
 	end
+	-- (What each look has measured for the preview to place its parts by, and
+	-- what's still not: one line per frame.)
+	local client = ns.isRetail and "retail" or "classic"
+	local hangs = ns.db and ns.db.unitFrameHangs and ns.db.unitFrameHangs[client] or {}
+	for look, frames in pairs(hangs) do
+		for id, parts in pairs(frames) do
+			local names = {}
+			for part in pairs(parts) do names[#names + 1] = part end
+			table.sort(names)
+			Log(("HANGS %s look, %s: %s"):format(look, id, table.concat(names, ", ")))
+		end
+	end
+	Log(("BUFFS %s"):format(tostring(run.auraDone)))
 	run.events:UnregisterAllEvents()
-	PutBack()
+	-- (Your look back on out of a fight only: in one the game holds the frames still.)
+	if InCombatLockdown() then
+		local later = CreateFrame("Frame")
+		later:RegisterEvent("PLAYER_REGEN_ENABLED")
+		later:SetScript("OnEvent", function(self)
+			self:UnregisterAllEvents()
+			PutBack()
+		end)
+	else
+		PutBack()
+	end
 	K.SetCine(run.cineWasOn)
 	if strip then strip:Hide() end
+	local buffs = (run.auraDone == "skipped" and " Buffs skipped, not measured.")
+		or (run.auraDone == "unreadable" and " Buffs: their place unreadable, probed.") or ""
 	run = nil
-	ns.TestPrompt(("Preview match (unit frames) DONE: %d frames compared. /reload, then tell Claude 'check log'."):format(#summary), 30)
+	ns.TestPrompt(("Preview match (unit frames) DONE: %d frames compared.%s /reload, then tell Claude 'check log'."):format(#summary, buffs), 30)
 	ns.Print("preview match: " .. (#summary > 0 and table.concat(summary, ", ") or "nothing read"))
 end
 
 -- Fights: the frames are read fine in one (their places aren't secret), but
 -- a look can't be put on or taken off them then (the game holds unit frames
--- still): read with the page switched off in a fight, our level badge stayed
--- on and was read as the game's, 2026-11-20. So the game's look goes on
--- before step 1, out of a fight, and stays through any fight; your look goes
--- back on once you're out of one, and is read then with what's still up.
+-- still), and a buff's place is secret in one on Forever (2026-11-21). A
+-- target of target, though, only shows in one: the mob you pulled. So step 1
+-- has two goals, met in any order, each kept once met:
+--   FRAMES: every frame compared up at once (a fight's fine): the look that's
+--     on (yours, never changed at the start) read right then;
+--   BUFFS: where the game puts the target's first buff, measured in that look,
+--     out of a fight: any target with one (a player near you), before or after.
+-- Then the other look (the game's) once you're out of any fight, with what's
+-- still up: it scored 100 on every frame by 2026-11-20. Before 2026-11-21 the
+-- game's look went on first and yours was read after the fight, its mob dead
+-- and its frames gone: what yours needed measured never was.
 local calm = CreateFrame("Frame")
 local afterCalm
 calm:SetScript("OnEvent", function(self)
@@ -600,49 +765,280 @@ local function WhenCalm(fn, why)
 	afterCalm = fn
 	calm:RegisterEvent("PLAYER_REGEN_ENABLED")
 	Log("in a fight: " .. why .. " once it ends")
-	ns.TestPrompt("Preview match (unit frames) 3/3: game's look read. Your own look is read once the fight ends: finish it, then stand still.", 600)
+	ns.TestPrompt(("Preview match (unit frames): in a fight. %s: finish it, then stand still."):format(why), 600)
 	return false
 end
 
--- Step 3: your look, out of a fight, with what's up then.
-local function ReadYours()
+-- What's measured off the live frames in the look on now (UnitFrameCopy.lua's
+-- ns.UnitHangs, which the preview places its parts by): each part logged once.
+local function Measure()
+	if not (ns.UnitHangs and ns.UnitLookKey) then return end
+	run.measured = run.measured or {}
+	for _, id in ipairs({ "PLAYER", "TARGET", "FOCUS" }) do
+		local look = ns.UnitLookKey(id)
+		local ok, hangs = pcall(ns.UnitHangs, id, look)
+		if not ok then
+			if not run.measured["error " .. id] then
+				run.measured["error " .. id] = true
+				Log(("MEASURE %s errored: %s"):format(id, tostring(hangs)))
+			end
+		elseif type(hangs) == "table" then
+			for part, spot in pairs(hangs) do
+				local key = look .. " " .. id .. " " .. part
+				if not run.measured[key] then
+					run.measured[key] = true
+					if type(spot) == "table" then
+						Log(("MEASURED %s look, %s %s: %s,%s%s"):format(look, id, part, tostring(spot.x), tostring(spot.y or spot.h),
+							spot.workedOut and " (worked out)" or ""))
+					else
+						Log(("MEASURED %s look, %s %s: %s"):format(look, id, part, tostring(spot)))
+					end
+				end
+			end
+		end
+	end
+end
+local function AuraKnown()
+	if not (ns.UnitHangs and ns.UnitLookKey) then return true end
+	local ok, hangs = pcall(ns.UnitHangs, "TARGET", ns.UnitLookKey("TARGET"))
+	return ok and type(hangs) == "table" and hangs.aura ~= nil, ok and type(hangs) == "table" and hangs.aura
+end
+-- (The game says your target has an aura: out of a fight only, read safely.)
+local function TargetHasAura()
+	local ok, has = pcall(function()
+		local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
+		if get then return get("target", 1, "HELPFUL") ~= nil or get("target", 1, "HARMFUL") ~= nil end
+		return (UnitBuff and UnitBuff("target", 1) ~= nil) or (UnitDebuff and UnitDebuff("target", 1) ~= nil)
+	end)
+	return ok and has == true
+end
+-- (Your target has an aura by the game, but no buff button's place was read
+-- (Forever, 2026-11-21: the buffs sit in TargetFrameContentContextual.Auras,
+-- whose size read as nothing, and the scan found none). Every call that could
+-- place them, on that container and everything in it, logged as a value,
+-- "secret" or the error: what's readable, to measure by. Also any small
+-- square frame on screen under the target frame, whoever's child it is.)
+local function ProbeAuras()
+	local lines = 0
+	local function Say(text)
+		if lines >= 160 then return end
+		lines = lines + 1
+		Log("AURAPROBE " .. text)
+	end
+	local function Val(v)
+		if issecretvalue and issecretvalue(v) then return "secret" end
+		if type(v) == "number" then return tostring(K.Round(v, 2)) end
+		if type(v) == "table" then
+			local ok, name = pcall(function() return v.GetName and v:GetName() end)
+			return "<" .. tostring(ok and name or "frame") .. ">"
+		end
+		return tostring(v)
+	end
+	local function Try(node, method, ...)
+		if type(node) ~= "table" or type(node[method]) ~= "function" then return "none" end
+		local out = { pcall(node[method], node, ...) }
+		if not out[1] then return "ERR " .. tostring(out[2]):sub(1, 80) end
+		local parts = {}
+		for i = 2, #out do parts[#parts + 1] = Val(out[i]) end
+		if #out == 1 then return "-" end
+		return table.concat(parts, ",")
+	end
+	local function Describe(node, path)
+		Say(("%s: %s forbidden %s shown %s visible %s size %s rect %s scale %s alpha %s"):format(path,
+			Try(node, "GetObjectType"), Try(node, "IsForbidden"), Try(node, "IsShown"), Try(node, "IsVisible"),
+			Try(node, "GetSize"), Try(node, "GetRect"), Try(node, "GetEffectiveScale"), Try(node, "GetAlpha")))
+		-- (Its anchors tried whatever their count says: a secret count skipped
+		-- them all, 2026-11-21.)
+		Say(("%s points %s: 1 %s | 2 %s"):format(path, Try(node, "GetNumPoints"), Try(node, "GetPoint", 1), Try(node, "GetPoint", 2)))
+		local keys = {}
+		for key, value in pairs(node) do
+			if type(key) == "string" and type(value) == "table" and #keys < 12 then keys[#keys + 1] = key end
+		end
+		if #keys > 0 then Say(path .. " keys: " .. table.concat(keys, " ")) end
+		local okR, regions = pcall(function() return { node:GetRegions() } end)
+		Say(("%s: %s regions"):format(path, okR and tostring(#regions) or ("ERR " .. tostring(regions):sub(1, 80))))
+		for i, region in ipairs(okR and regions or {}) do
+			if i > 6 then break end
+			Say(("%s region %d: %s file %s atlas %s size %s shown %s"):format(path, i, Try(region, "GetObjectType"),
+				Try(region, "GetTexture"), Try(region, "GetAtlas"), Try(region, "GetSize"), Try(region, "IsShown")))
+		end
+	end
+	local function Walk(node, path, depth)
+		Describe(node, path)
+		if depth >= 3 then return end
+		local okC, children = pcall(function() return { node:GetChildren() } end)
+		if not okC then
+			Say(path .. " children: ERR " .. tostring(children):sub(1, 80))
+			return
+		end
+		Say(("%s: %d children"):format(path, #children))
+		for i, child in ipairs(children) do
+			if i > 8 then break end
+			local key
+			for k, v in pairs(node) do if v == child and type(k) == "string" then key = k break end end
+			Walk(child, path .. "." .. tostring(key or i), depth + 1)
+		end
+	end
+	local frame = _G.TargetFrame
+	if not frame then
+		Say("no TargetFrame")
+		return
+	end
+	-- (What the game says the target has.)
+	local helpful, harmful = 0, 0
+	local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
+	for i = 1, 40 do
+		local okH, h = pcall(function() return get and get("target", i, "HELPFUL") ~= nil end)
+		local okD, d = pcall(function() return get and get("target", i, "HARMFUL") ~= nil end)
+		if okH and h then helpful = helpful + 1 end
+		if okD and d then harmful = harmful + 1 end
+	end
+	Say(("the game: target %s, %d buffs, %d debuffs; issecretvalue %s; in a fight %s"):format(
+		tostring(UnitName("target")), helpful, harmful, tostring(issecretvalue ~= nil), tostring(InCombatLockdown())))
+	Describe(frame, "TargetFrame")
+	for _, key in ipairs({ "auraPools", "buffPool", "debuffPool", "Auras", "auraFrames", "buffFrames" }) do
+		if frame[key] ~= nil then Say(("TargetFrame.%s is a %s"):format(key, type(frame[key]))) end
+	end
+	local content = frame.TargetFrameContent
+	local context = type(content) == "table" and content.TargetFrameContentContextual
+	local auras = type(context) == "table" and context.Auras
+	if type(auras) == "table" then
+		Walk(auras, "Auras", 0)
+	else
+		Say("no TargetFrameContent.TargetFrameContentContextual.Auras")
+	end
+	for i = 1, 3 do
+		for _, kind in ipairs({ "Buff", "Debuff" }) do
+			local named = _G["TargetFrame" .. kind .. i]
+			if named then Describe(named, "TargetFrame" .. kind .. i) end
+		end
+	end
+	-- (Any small square frame shown under the target frame on screen.)
+	local fl, fb, fw = K.Num(K.Call(frame, "GetLeft")), K.Num(K.Call(frame, "GetBottom")), K.Num(K.Call(frame, "GetWidth"))
+	local found = 0
+	if fl and fb and fw and EnumerateFrames then
+		local okE = pcall(function()
+			local f, seen = EnumerateFrames(), 0
+			-- (Bounded: a frame list that never ends (the offline stand-in's) can't hang it.)
+			while f and found < 8 and seen < 20000 do
+				seen = seen + 1
+				local w, h = K.Num(K.Call(f, "GetWidth")), K.Num(K.Call(f, "GetHeight"))
+				local l, t = K.Num(K.Call(f, "GetLeft")), K.Num(K.Call(f, "GetTop"))
+				if w and h and l and t and w >= 10 and w <= 40 and math.abs(w - h) <= 2 and K.Plain(K.Call(f, "IsVisible"))
+					and l >= fl - 20 and l <= fl + fw + 20 and t <= fb + 40 and t >= fb - 120 then
+					found = found + 1
+					local parent = K.Call(f, "GetParent")
+					Say(("on screen under it: %s parent %s at %s,%s size %sx%s"):format(Val(f), Val(parent), Val(l), Val(t), Val(w), Val(h)))
+				end
+				f = EnumerateFrames(f)
+			end
+		end)
+		if not okE then Say("frame scan errored") end
+	end
+	Say(("frames found on screen under it: %d"):format(found))
+end
+
+-- Step 3: every theme on the real frames, out of a fight, one after another:
+-- each one's game frames and the preview's read and compared, one shot each.
+-- Needs a target (not you), a focus and your pet (a player near you is fine
+-- for both: no fight). Their targets of target only if they're up. Your
+-- theme back after (at the next login too, CinematicDB.previewMatchUnitsKept).
+local Themes
+local function ThemeMissing()
+	local list = {}
+	if not UnitExists("target") or UnitIsUnit("target", "player") then
+		list[#list + 1] = "a TARGET not yourself (a player near you)"
+	end
+	if not UnitExists("focus") or UnitIsUnit("focus", "player") then list[#list + 1] = "a FOCUS (/focus on your target)" end
+	if not UnitExists("pet") then list[#list + 1] = "your PET out" end
+	return list
+end
+local function ThemesDone()
+	local kept = CinematicDB.previewMatchUnitsKept
+	if kept and kept.theme and ns.RestoreStyleSnapshot then
+		pcall(ns.RestoreStyleSnapshot, kept.theme)
+		kept.theme = nil
+		Log("themes: your theme put back")
+	end
+	if ns.RefreshUnitStyle then pcall(ns.RefreshUnitStyle) end
+	C_Timer.After(SETTLE, function() if run then Finish() end end)
+end
+Themes = function()
 	if not run then return end
-	if not WhenCalm(ReadYours, "your look goes back on and is read") then return end
 	run.step = 3
-	ns.TestPrompt("Preview match (unit frames) 3/3: hands off, reading your look.", 3)
-	K.DB().ufStyle = true
+	if run.skipThemes then
+		Log(("themes: skipped at %d of %d"):format(run.themeAt or 1, #run.themes))
+		ThemesDone()
+		return
+	end
+	if not WhenCalm(Themes, "the themes go on") then return end
+	local missing = ThemeMissing()
+	if #missing > 0 then
+		local text = ("Preview match (unit frames) 3/3, themes: out of a fight, waiting for %s. Or type /cine debug previewmatch units skip")
+			:format(table.concat(missing, ", "))
+		if text ~= run.themePrompted then
+			run.themePrompted = text
+			ns.TestPrompt(text, 600)
+			Log("themes: waiting for " .. table.concat(missing, ", "))
+		end
+		local mine = run
+		C_Timer.After(1, function() if run == mine and run.step == 3 then Themes() end end)
+		return
+	end
+	run.themePrompted = nil
+	local at = run.themeAt or 1
+	local key = run.themes[at]
+	if not key then
+		ThemesDone()
+		return
+	end
+	ns.TestPrompt(("Preview match (unit frames) 3/3, themes: hands off, %d of %d: %s."):format(at, #run.themes, ThemeName(key)), 3)
+	local db = K.DB()
+	db.ufStyle = true
+	local ok = ns.ApplyStyleTheme and ns.ApplyStyleTheme(key, true)
+	if not ok then
+		Log(("themes: %s not put on (%s)"):format(key, tostring(ok)))
+		run.themeAt = at + 1
+		C_Timer.After(0.2, Themes)
+		return
+	end
+	if ns.RefreshUnitStyle then pcall(ns.RefreshUnitStyle) end
+	C_Timer.After(SETTLE, function()
+		if not run then return end
+		-- (A fight begun as it went on: this one again after it.)
+		if not WhenCalm(Themes, "this theme goes on again") then return end
+		Log(("themes: %s on, look %s"):format(key, tostring(ns.UnitLookKey and ns.UnitLookKey("TARGET"))))
+		Measure()
+		ReadPhase("theme:" .. key, false, function()
+			run.themeAt = at + 1
+			Themes()
+		end, true)
+	end)
+end
+local function AfterGame()
+	if run and run.themes and #run.themes > 0 then Themes() else Finish() end
+end
+
+-- Step 2: the game's look, out of a fight, with what's up then.
+local Second
+Second = function()
+	if not run then return end
+	run.step = 2 -- (step 1's checks stop: a fight's end brings this back)
+	if not WhenCalm(Second, "the game's look goes on and is read") then return end
+	ns.TestPrompt("Preview match (unit frames) 2/3: hands off, reading the game's look.", 3)
+	K.DB().ufStyle = false
 	if ns.RefreshUnitStyle then pcall(ns.RefreshUnitStyle) end
 	C_Timer.After(SETTLE, function()
 		if not run then return end
 		-- (A fight begun as it went on: dressed partly. Again after that one.)
-		if not WhenCalm(ReadYours, "your look goes on again and is read") then return end
-		ReadPhase("yours", false, Finish)
+		if not WhenCalm(Second, "the game's look goes on again and is read") then return end
+		Measure()
+		ReadPhase("game", true, AfterGame)
 	end)
 end
 
--- Step 2: every frame up (or skipped), the game's look on them since the start.
-local Go
-Go = function()
-	if not run then return end
-	run.step = 2
-	ns.TestPrompt("Preview match (unit frames) 2/3: hands off, reading the game's look.", 3)
-	C_Timer.After(0.3, function()
-		if not run then return end
-		ReadPhase("game", true, function()
-			local kept = CinematicDB.previewMatchUnitsKept
-			if not (kept and kept.ufStyle) then
-				Log("your Unit Frames Style page is off: your look is the game's, no second read")
-				Finish()
-				return
-			end
-			ReadYours()
-		end)
-	end)
-end
-
--- Step 1: every frame the run compares up: a target not you (on Forever your
--- own target frame's places are secret), a focus, your pet. Each missing one
--- named on screen; "/cine debug previewmatch units skip" goes without them.
+-- Step 1's FRAMES: a target not you (on Forever your own target frame's
+-- places are secret), a focus, your pet, the target's and the focus's targets.
 Missing = function()
 	local list = {}
 	if not UnitExists("target") or UnitIsUnit("target", "player") then
@@ -656,20 +1052,71 @@ Missing = function()
 	if not UnitExists("focustarget") then list[#list + 1] = "your focus TARGETING someone" end
 	return list
 end
+local function Prompt(frames)
+	local parts = {}
+	if not run.framesRead then parts[#parts + 1] = "FRAMES: " .. table.concat(frames, ", ") end
+	if not run.auraDone then
+		parts[#parts + 1] = InCombatLockdown()
+			and "BUFFS: after this fight, target anyone but you with a buff (a player near you): their place can't be read in a fight"
+			or "BUFFS: out of a fight, target anyone but you with a buff on their frame (a player near you)"
+	end
+	local text = ("Preview match (unit frames) 1/3: waiting for %s. Each is kept once met. Or type /cine debug previewmatch units skip")
+		:format(table.concat(parts, " | "))
+	if text ~= run.prompted then
+		run.prompted = text
+		ns.TestPrompt(text, 600)
+		Log("waiting for: " .. table.concat(parts, " | "))
+	end
+end
 Ready = function()
-	if not run.lookReady then return end
-	local missing = Missing()
-	if #missing == 0 then
-		run.step = 1.5
-		C_Timer.After(0.5, function() if run then Go() end end)
+	if not run or run.step ~= 1 then return end
+	Measure()
+	if run.framesRead == "reading" then return end
+	local frames = Missing()
+	if not run.framesRead and (#frames == 0 or run.skipFrames) then
+		if #frames > 0 then Log("skipped waiting for: " .. table.concat(frames, ", ")) end
+		run.framesRead = "reading"
+		ns.TestPrompt("Preview match (unit frames) 1/3: hands off, reading your look.", 3)
+		ReadPhase(run.first, run.first == "game", function()
+			run.framesRead = true
+			run.prompted = nil
+			Ready()
+		end)
 		return
 	end
-	if UnitExists("target") and UnitIsUnit("target", "player") and not run.saidYou then
-		run.saidYou = true
-		Log("target is you: waiting for another (your own target frame's places are secret)")
+	if not run.auraDone then
+		local known, spot = AuraKnown()
+		if known then
+			run.auraDone = spot and spot.workedOut and "worked out" or "measured"
+			Log(spot and spot.workedOut
+				and ("BUFFS: the target's first buff worked out in this look (its place secret here): %s,%s%s"):format(
+					tostring(spot.x), tostring(spot.y), spot.up and ", Buffs On Top" or "")
+				or "BUFFS: the target's first buff measured in this look")
+		elseif run.skipAura then
+			run.auraDone = "skipped"
+			Log("BUFFS: skipped, not measured")
+		elseif not InCombatLockdown() and UnitExists("target") and not UnitIsUnit("target", "player") and TargetHasAura() then
+			-- (3 checks on, out of a fight, the game saying it's there: its place is
+			-- unreadable on this client. Probed, logged, and not waited for: a
+			-- wait for it never ended, 2026-11-21.)
+			run.auraSeen = (run.auraSeen or 0) + 1
+			if run.auraSeen == 3 then
+				pcall(ProbeAuras)
+				run.auraDone = "unreadable"
+				Log("BUFFS: your target has some, but this client doesn't say where: probed (AURAPROBE lines), not waited for")
+			end
+		end
 	end
-	ns.TestPrompt(("Preview match (unit frames) 1/3: the game's look is on. Waiting for %s. Or type /cine debug previewmatch units skip"):format(
-		table.concat(missing, ", ")), 600)
+	if run.framesRead == true and run.auraDone then
+		if run.first == "game" then
+			Log("your Unit Frames Style page is off: your look is the game's, no second read")
+			AfterGame()
+		else
+			Second()
+		end
+		return
+	end
+	Prompt(frames)
 end
 
 local function Stop()
@@ -789,11 +1236,74 @@ function ns.PreviewMatchUnits(arg)
 		Stop()
 		return
 	end
+	-- (On its own: target anyone with a buff, out of a fight. A few seconds.)
+	-- (It waits for that target: run at once, it probed no target at all, 2026-11-21.)
+	if arg == "auras" then
+		Store().lines = {}
+		local token = {}
+		ns.previewMatchAuraProbe = token
+		-- (CineMode off for it: it hides the frames the shot is of. Back on after.)
+		local cineWasOn = ns.IsCineModeOn and ns.IsCineModeOn() and true or false
+		K.SetCine(false)
+		local said
+		local function Wait()
+			if ns.previewMatchAuraProbe ~= token then return end
+			local ready = not InCombatLockdown() and UnitExists("target") and not UnitIsUnit("target", "player")
+				and TargetHasAura()
+			if not ready then
+				local text = InCombatLockdown() and "Buffs probe: waiting for the fight to end."
+					or "Buffs probe: target anyone but you who has a buff (a player near you), out of a fight."
+				if text ~= said then
+					said = text
+					ns.TestPrompt(text, 600)
+				end
+				C_Timer.After(0.5, Wait)
+				return
+			end
+			-- (A moment on: its buff buttons are drawn after the target changes.)
+			C_Timer.After(0.5, function()
+				if ns.previewMatchAuraProbe ~= token then return end
+				ns.previewMatchAuraProbe = nil
+				pcall(ProbeAuras)
+				-- (And a screenshot, the target frame's place in it logged in screen
+				-- pixels from the top-left: its buff icons found in the picture if
+				-- nothing above places them.)
+				pcall(ns.TestPrompt, " ", 0.05)
+				local frame = _G.TargetFrame
+				local physW, physH = K.ScreenSize()
+				local scale = K.Num(K.Call(frame, "GetEffectiveScale"))
+				local l, b, w, h = K.Call(frame, "GetRect")
+				l, b, w, h = K.Num(l), K.Num(b), K.Num(w), K.Num(h)
+				local uiH = K.Num(K.Call(UIParent, "GetHeight"))
+				local uiScale = K.Num(K.Call(UIParent, "GetEffectiveScale"))
+				if l and scale and uiH and uiScale then
+					local px = physH / (uiH * uiScale)
+					Log(("AURAPROBE shot: screen %dx%d, target frame at %d,%d size %dx%d px (top-left)"):format(physW, physH,
+						K.Round(l * scale * px, 0), K.Round(physH - (b + h) * scale * px, 0), K.Round(w * scale * px, 0),
+						K.Round(h * scale * px, 0)))
+				end
+				C_Timer.After(0.3, function()
+					local stamp = date("%m%d%y_%H%M%S")
+					Screenshot()
+					Log("AURAPROBE SHOT " .. stamp)
+					C_Timer.After(1, function()
+						K.SetCine(cineWasOn)
+						ns.TestPrompt("Buffs probe DONE. /reload, then tell Claude 'check log'.", 15)
+					end)
+				end)
+			end)
+		end
+		Wait()
+		return
+	end
 	if arg == "skip" then
-		if run and run.step == 1 and run.lookReady then
-			Log("skipped waiting for: " .. table.concat(Missing(), ", "))
-			run.step = 1.5
-			C_Timer.After(0.5, function() if run then Go() end end)
+		-- (Goes without whatever step 1 still waits for.)
+		if run and run.step == 1 then
+			run.skipFrames, run.skipAura = true, true
+			Ready()
+		elseif run and run.step == 3 then
+			run.skipThemes = true
+			Themes()
 		end
 		return
 	end
@@ -801,7 +1311,7 @@ function ns.PreviewMatchUnits(arg)
 		ns.Print("preview match: already running (/cine debug previewmatch units stop to stop it)")
 		return
 	end
-	-- (Started out of a fight: the game's look goes on first, which a fight forbids.)
+	-- (Started out of a fight: the game's look goes on at its end, which a fight forbids.)
 	if InCombatLockdown() then
 		ns.Print("preview match: start it out of a fight (fighting is fine once it's going).")
 		return
@@ -820,32 +1330,46 @@ function ns.PreviewMatchUnits(arg)
 	local db = K.DB()
 	run = { step = 1, phase = "start", reads = {}, shots = {},
 		cineWasOn = ns.IsCineModeOn and ns.IsCineModeOn() and true or false }
+	-- (Your look first, as it is: nothing changed till step 2.)
+	run.first = (db.ufStyle and ns.StyleOn and ns.StyleOn("ufStyle")) and "yours" or "game"
 	CinematicDB.previewMatchUnitsKept = { ufStyle = db.ufStyle }
+	-- (The themes, step 3: each built-in one but the game's. Your theme kept, as a
+	-- pick's Undo keeps it, put back after.)
+	run.themes = {}
+	if arg ~= "nothemes" and ns.StyleThemeList and ns.ApplyStyleTheme and ns.StyleSnapshot then
+		for _, theme in ipairs(ns.StyleThemeList()) do
+			if theme.key ~= "game" then run.themes[#run.themes + 1] = theme.key end
+		end
+		CinematicDB.previewMatchUnitsKept.theme = ns.StyleSnapshot()
+	end
+	Log(("themes to read: %d (your theme %s, themes reach the frames: %s)"):format(#run.themes, tostring(db.styleTheme),
+		tostring(db.styleThemeReachFrames ~= false)))
 	local okTot, tot = pcall(GetCVar, "showTargetOfTarget")
 	Log("the game's Target of Target setting (showTargetOfTarget): " .. tostring(okTot and tot))
-	Log(("start: %s %s, screen %dx%d, UI scale %s; ufStyle=%s, Style on %s, theme layout %s"):format(store.client,
-		store.build, physW, physH, tostring(store.uiScale), tostring(db.ufStyle), tostring(ns.StyleOn and ns.StyleOn("ufStyle")),
-		tostring(ns.ThemeLayout and ns.ThemeLayout())))
+	Log(("start: %s %s, screen %dx%d, UI scale %s; ufStyle=%s, Style on %s, theme layout %s, look %s; read first: %s"):format(
+		store.client, store.build, physW, physH, tostring(store.uiScale), tostring(db.ufStyle),
+		tostring(ns.StyleOn and ns.StyleOn("ufStyle")), tostring(ns.ThemeLayout and ns.ThemeLayout()),
+		tostring(ns.UnitLookKey and ns.UnitLookKey("TARGET")), run.first))
 	run.events = CreateFrame("Frame")
 	run.events:SetScript("OnEvent", function() if run and run.step == 1 then Ready() end end)
-	for _, event in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "UNIT_TARGET" }) do
+	for _, event in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "UNIT_TARGET", "UNIT_AURA",
+		"PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED" }) do
 		pcall(run.events.RegisterEvent, run.events, event)
 	end
 	K.SetCine(false)
 	MakePreview()
 	strip:Show()
-	-- (The game's look on now, out of a fight, kept through the waiting.)
-	db.ufStyle = false
-	if ns.RefreshUnitStyle then pcall(ns.RefreshUnitStyle) end
-	ns.TestPrompt("Preview match (unit frames): putting the game's look on.", 3)
-	C_Timer.After(SETTLE, function()
-		if not run then return end
-		-- (Every frame up read now, out of a fight, in the game's look: in one
-		-- (retail) a name's place is secret, and only this read measures it.)
-		preview:Refresh()
-		run.lookReady = true
+	preview:Refresh()
+	-- (And once a second: an event comes before the game's frame shows what it
+	-- says (its buff buttons drawn after UNIT_AURA), and no other may follow.)
+	local mine = run
+	local function Tick()
+		if run ~= mine or run.step ~= 1 then return end
 		Ready()
-	end)
+		C_Timer.After(1, Tick)
+	end
+	Ready()
+	C_Timer.After(1, Tick)
 end
 
 -- (For the Shoulder Cam's stand-in target frame test, /cine debug shoulder

@@ -44,6 +44,10 @@ PY = sys.executable
 HOME = os.path.expanduser("~")
 # Offline tests of one fixed bug each, PASS/FAIL per check (any FAIL line fails it).
 OFFLINE_TESTS = [
+    ("Themes page has its own rotating preview, forever", "Tools/offline/themespreview.lua", "forever"),
+    ("Themes page has its own rotating preview, retail", "Tools/offline/themespreview.lua", "retail"),
+    ("Cast Bars pages show the unit frame over their cast bars, forever", "Tools/offline/castframe.lua", "forever"),
+    ("Cast Bars pages show the unit frame over their cast bars, retail", "Tools/offline/castframe.lua", "retail"),
     ("party flicker (DaylightUI range fade)", "Tools/offline/partyflicker.lua"),
     ("map pin: its own Reveal box, Shortest Path's journey pin left out", "Tools/offline/mappin.lua"),
     ("card wait (Rested card behind DaylightUI's zone title)", "Tools/offline/cardwait.lua"),

@@ -93,7 +93,80 @@ a minimum text size is the user's call.
 Retail run 17:36: all 11 pairs 100, layout clean; the screenshot shows the Lich King's level then name on the strip
 (retail's built-in places, Style/UnitFrameCopy.lua RETAIL: a name's place is secret on retail even out of a fight).
 The target's power bar came out grey: the mob's bar was the game's plain tinted art "-Bar-Mana-Status"; now drawn
-as mana's colored art too. Next on retail: bar texts ("100%", "554 K"), the aura row, leader/role icons. Left: then target of target, party, the theme shapes, retail. Still drawn: pet, target of target, party, and every theme shape.
+as mana's colored art too.
+Unit frame parts (2026-11-20, user: "think of all possible unit frame parts"; offline only): Style/UnitFrameParts.lua
+(own file: UnitStyle.lua is at Lua's 200 locals) adds to every mock-up a buffs/debuffs row (target, focus, boss;
+debuff type borders, a stack count), the health and power texts as the game's Status Text setting shows them, the
+level as the game writes it (a skull for a boss or 10+ levels over yours), the boss dragon on the copy (place read,
+built-in from retail). The Cast Bars pages show the Unit Frames preview's own frame over each cast bar
+(ns.MakeUnitFrameSample: NewUnit/DressUnit pulled out of the preview), the target's with its target of target.
+Not done: leader/role/PvP icons, the class resource under your frame, the state parts (raid marker, rest/combat,
+threat, heal prediction, dead/offline).
+Measured, not guessed (user 2026-11-20: "dont guess any more. get it right", a theme's real target frame next to
+the preview): ns.UnitHangs (UnitFrameCopy.lua) measures off the live frames, per look (ns.UnitLookKey), the target
+of target's health bar, the first buff, the level and its circle, in widths of the frame's health bar; the preview
+places them by it (HangMeasured, the auras, MeasuredLevel), today's rules only where nothing's measured. The match
+test compares totHealth, aura1, levelBack (and a skull as the level) in both looks. Offline: the stand-in's ToT and
+buff reproduced exactly (1.06,0.47 0.52; -0.11,0.34 0.15). Fixed on the way: the layout code made CinematicDB before
+the game loaded it (the Cast Bars frames draw at load): a fresh install skipped its profile pick (check.lua caught
+it).
+In-game run 18:50 (Forever): measured the game look (level, circle, both ToTs) and the petal theme (level, circle);
+game look 100 but target/focus 97 (a buff row only ours: the target had none); theme player 86, pet 85 (bars thinner,
+name bigger/centered, own circle art). Now also measured per look: the health bar's thickness, power bar, portrait,
+name (place, size, side), level side; a theme's drawn frame takes them (MeasuredBody, the game's circle art in the
+ring color); the buffs row wraps before a hung target of target (ns.WrapUnitAuras) as the game's does; the test waits
+for a buff or debuff on the target, a buff on one side only is noted. Next on retail: bar texts ("100%", "554 K"), the aura row, leader/role icons. Left: then target of target, party, the theme shapes, retail. Still drawn: pet, target of target, party, and every theme shape.
+
+2026-11-21 (Forever runs 09:52, 10:36; probes 10:19, 10:28):
+- The test's flow, rebuilt after runs that each stalled somewhere new:
+  - step 1 is two goals, met in any order and kept once met: FRAMES (everything up at once, read in your look,
+    a fight is fine) and BUFFS;
+  - step 2, the game's look, once out of the fight;
+  - step 3, every built-in theme (16) on the real frames, out of a fight: a player as target and focus, your pet;
+    quiet log lines, your theme snapshotted and put back, at the next login too;
+  - checks once a second as well as on events;
+  - reads taken before the screenshot (the focus's target of target was lost in the half second between).
+- Offline (unitmatch.lua) now replays the user's real run, start to finish, with no skip, plus the themes cases.
+- Forever's buff row can't be read: the container's place, size and anchors are secret even out of a fight, and
+  it has no children or regions (rule forever.targetframe.aura-container-place-secret). It's worked out instead
+  (UnitFrameCopy.lua WorkedOutAura), from the game's layout measured off screenshots:
+  - first icon 24 units in from the frame's left;
+  - top 5 under the frame's top with Buffs On Top, 74 under it without;
+  - icons 17 units, 3 apart;
+  - with Buffs On Top, Cinematic's theme lift (ns.UnitAuraLiftNow) on top of that.
+  - Rows grow up with Buffs On Top. Retail still reads its buttons.
+- Run 10:36: 9 frames, all 100 (your look was the game shape, no theme).
+
+- Run 10:52 (the first themed run, all 16 themes read): fixed what it found:
+  - with the page off, the preview took the active theme's layout (Slate's slab), so the game look scored player
+    83 and pet 63. ns.UnitThemeLayout() now gives none while the Unit Frames page is off;
+  - a theme's custom health color is made fuller on the real frame (ns.ThemeVivid) but wasn't on ours, so 8 themes
+    were darker;
+  - the pet is now measured per look too (HANG_FRAMES), and its power follows your live pet's (ns.LivePetPower);
+  - the level circle was misread by the test (the badge's frame, not the circle on it);
+  - slab themes hide the level and circle: the hangs keep levelHidden and levelBackHidden, and the preview, drawn
+    or copy, hides them;
+  - targets of target are worked out off the hidden frame (TOTPROBE: its rect reads), which fixes the buffs over
+    the target of target in 12 themes;
+  - class and by-health colors are noted (the unit's), not counted;
+  - the look key names the theme: Gilded Codex and the game look shared one record.
+
+Still to do (unit frames):
+1. A second themed run, to confirm the fixes above.
+2. Theme looks' targets of target: worked out off the hidden frame; confirm in that run.
+3. The other session's findings (Blizzard shoulder cam snap issue, 2026-11-21), unconfirmed:
+   - buff icon crop (the game shows the full icon with its edge);
+   - Codex's name strip brown in game, ours blue.
+4. Parts not drawn or not compared yet:
+   - leader, role and PvP icons;
+   - the class resource under the player frame;
+   - raid marker, rest and combat icons, threat glow;
+   - heal prediction, dead and offline states;
+   - bar texts (statusText) compared, not only drawn.
+5. Retail: bar texts, the aura row, leader/role icons, a themed run.
+6. Party frames: a live read needs a group.
+7. One Style General preview anchor loop (10:25, PLAYER portrait on its health bar) after a theme test, not
+   reproduced offline; the dev anchor check logs the chain if it comes back.
 
 Next (the order of work below, step 4): unit frames (copy, B), nameplates, action bars (A), raid (B), tooltip (A),
 personal resource, roll window, quest item, combat text. Each: add pairs to the match test first, get a baseline,

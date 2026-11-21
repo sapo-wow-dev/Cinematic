@@ -1829,6 +1829,8 @@ local function BuildCastPage(kit, spec)
 	local PREVIEW_W, PREVIEW_H = 480, 150
 	preview = CreateFrame("Frame", nil, content)
 	preview:SetSize(PREVIEW_W, PREVIEW_H)
+	ns.castPreviews = ns.castPreviews or {} -- (by page: the offline checks find it, Tools/offline/castframe.lua)
+	ns.castPreviews[spec.page] = preview
 	stack:Add(preview, "label")
 	ns.StylePopout(preview, kit.Tooltip) -- (StylePages.lua)
 	ns.StyleScene(preview, 0.6, 0.8) -- (StylePages.lua)
@@ -1836,6 +1838,7 @@ local function BuildCastPage(kit, spec)
 	caption:SetPoint("TOPLEFT", 6, -5)
 	caption.searchSkip = true
 	local samples = {}
+	preview.samples = samples
 	-- Three samples, each the game's own bar (MakeSample), as the game lays
 	-- it out: on the nameplates' page three plates (the health bar with the
 	-- unit's name in it, the cast bar under it) casting, channeling and
@@ -1858,12 +1861,23 @@ local function BuildCastPage(kit, spec)
 		preview:SetHeight(PREVIEW_H)
 	end
 	local plates = {}
+	preview.plates = plates
 	local function PlaceSamples(_, width, height)
 		width, height = width or PREVIEW_W, height or PREVIEW_H
 		-- (Plates are as wide as the game's, about 206: the two up top at
 		-- the sides mustn't meet.)
 		local most = units and 1.6 or 0.5 * width / SAMPLE_KINDS.plate[2]
-		local scale = math.max(0.7, math.min(1.6, width / 340, most))
+		-- (A unit frame over its cast bar: as big as fits its share of the preview,
+		-- side by side and top to bottom, none on another.)
+		if units then
+			for i, plate in ipairs(plates) do
+				local share = #plates > 1 and math.min(SPOTS[i][1], 1 - SPOTS[i][1]) * 2 * 0.92 or 0.9
+				local pw, ph = plate:GetWidth(), plate:GetHeight()
+				if pw and pw > 1 then most = math.min(most, width * share / pw) end
+				if ph and ph > 1 then most = math.min(most, (height - 20) * 0.94 / ph) end
+			end
+		end
+		local scale = math.max(units and 0.4 or 0.7, math.min(1.6, width / 340, most))
 		for i, plate in ipairs(plates) do
 			plate:SetScale(scale)
 			plate:ClearAllPoints()
@@ -1903,6 +1917,17 @@ local function BuildCastPage(kit, spec)
 		name.searchSkip = true
 		bar:SetPoint("TOP", health, "BOTTOM", 0, -2)
 		bar.offset = (i - 1) * 0.3
+		-- (Its unit frame, as the Unit Frames preview draws it: the game's own frame
+		-- copied, or a theme's. The drawn bars over it only as a stand-in.)
+		if units and ns.MakeUnitFrameSample then
+			local frameId = slot[1] == "PLAYER" and "PLAYER" or "TARGET"
+			plate.unitFrame = ns.MakeUnitFrameSample(plate, frameId, slot[1] == "BOSS" and "BOSSCAST" or frameId,
+				slot[1] == "TARGET")
+			plate.caption = plate:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+			plate.caption:SetText(SlotLabel(i, info))
+			plate.caption.searchSkip = true
+			health:Hide()
+		end
 		bar.slotId = units and slot[1] or editing
 		samples[i] = bar
 		-- (The unit frames' page: a unit frame's bars, health and mana, dressed as
@@ -1918,6 +1943,7 @@ local function BuildCastPage(kit, spec)
 			powerGround:SetColorTexture(0, 0, 0, 0.6)
 			plate:SetHeight(42)
 			plate.health, plate.power, plate.ground = health, power, ground
+			if plate.unitFrame then power:Hide() end
 			bar.frameBars = plate
 		end
 	end
@@ -1937,8 +1963,43 @@ local function BuildCastPage(kit, spec)
 	local Dress = DressSample
 	-- (A sample's unit frame bars as that frame looks, and its cast bar under
 	-- them: right under, in the frame's border, with the Unit frame's look.)
+	-- (With its unit frame (MakeUnitFrameSample): the cast bar under the frame as
+	-- the game has it, room for a row of buffs between; joined to it, under its
+	-- bars. Yours alone when it isn't joined. The plate the size of it all.)
+	local AURA_ROOM = 8 -- (under the frame's auras and its target of target, which its size takes in)
+	local function DressUnitFrame(bar, framed, id)
+		local plate = bar.frameBars
+		local sample = plate.unitFrame
+		sample:Refresh()
+		local unit = sample.unit
+		local alone = id == "PLAYER" and not framed
+		sample:SetShown(not alone)
+		plate.caption:SetShown(not alone)
+		bar:ClearAllPoints()
+		sample:ClearAllPoints()
+		sample:SetPoint("TOPLEFT", plate, "TOPLEFT", 0, -14)
+		plate.caption:ClearAllPoints()
+		plate.caption:SetPoint("BOTTOMLEFT", sample, "TOPLEFT", 2, 2)
+		local barW = bar.gameW or SAMPLE_W
+		local room = bar.Icon:IsShown() and bar.Icon:GetAlpha() > 0 and bar.Icon:GetWidth() + 4 or 0
+		if alone then
+			bar:SetWidth(barW)
+			bar:SetPoint("TOP", plate, "TOP", 0, 0)
+			plate:SetSize(barW, 26)
+		elseif framed then
+			bar:SetPoint("TOPLEFT", unit.power, "BOTTOMLEFT", room, -PIN_GAP)
+			bar:SetPoint("TOPRIGHT", unit.power, "BOTTOMRIGHT", 0, -PIN_GAP)
+			plate:SetSize(math.max(sample:GetWidth(), 1), 14 + sample:GetHeight() + 24)
+		else
+			bar:SetWidth(barW)
+			bar:SetPoint("TOPLEFT", sample, "BOTTOMLEFT", room + 2, -AURA_ROOM)
+			plate:SetSize(math.max(sample:GetWidth(), room + 2 + barW), 14 + sample:GetHeight() + AURA_ROOM + 30)
+		end
+		ns.DressCastSkin(bar, framed and (id == "PLAYER" and "PLAYER" or "TARGET") or nil)
+	end
 	local function DressFrameBars(bar, framed, id)
 		local plate = bar.frameBars
+		if plate and plate.unitFrame then return DressUnitFrame(bar, framed, id) end
 		if not (plate and ns.UnitFrameLook) then return end
 		local frameId = id == "PLAYER" and "PLAYER" or "TARGET"
 		local view = ns.UnitFrameLook(frameId)
@@ -1977,6 +2038,8 @@ local function BuildCastPage(kit, spec)
 			Dress(bar, bar.info or SAMPLES[i], Look(id), not id or SizedAs(id, db))
 			DressFrameBars(bar, FrameLooked(id, db), id)
 		end
+		-- (Sized to their frames now: placed and fitted again.)
+		if units then PlaceSamples(nil, self:GetWidth(), self:GetHeight()) end
 	end
 	local started = GetTime()
 	local function Fill(bars, look)

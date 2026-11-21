@@ -40,9 +40,28 @@ local BUILT_IN = {
 		name = { x = 5, y = 14.2, w = 116.7, h = 11.7, size = 10, justify = "CENTER" },
 		circle = { x = 161.7, y = 37.5, w = 38, h = 38, atlas = "UI-HUD-UnitFrame-SmallCircle" },
 		level = { x = 175, y = 50.8, w = 11, h = 14, size = 14, justify = "RIGHT" },
+		-- (Read on retail 2026-11-20: the boss dragon round the portrait, the target of target under it.)
+		classification = { x = 121.7, y = -8.3, w = 79.2, h = 78.3 },
+		tot = { x = 104.2, y = 74.2, w = 119.2, h = 48.3, atlas = "UI-HUD-UnitFrame-TargetofTarget-PortraitOn" },
 	},
 }
 BUILT_IN.FOCUS = BUILT_IN.TARGET
+-- The small frames (Forever, read 2026-11-20): the target of target's and the
+-- pet's, one layout. The party's stands in on it till a party frame is read:
+-- the game draws its members on the same small frame (its bars' masks are the
+-- Party ones), and the drawn one was a slab of metal (user 2026-11-20).
+BUILT_IN.TOT = {
+	art = { x = 0, y = 0, w = 120, h = 49, atlas = "UI-HUD-UnitFrame-TargetofTarget-PortraitOn" },
+	portrait = { x = 5, y = 5, w = 37, h = 37 },
+	portraitMask = { x = 5, y = 5, w = 37, h = 37, atlas = "CircleMask" },
+	health = { x = 45, y = 17.5, w = 70, h = 11, atlas = "UI-HUD-UnitFrame-TargetofTarget-PortraitOn-Bar-Health" },
+	healthMask = { x = 17, y = 14.5, w = 128, h = 16, atlas = "UI-HUD-UnitFrame-Party-PortraitOn-Bar-Health-Mask" },
+	power = { x = 42, y = 29.5, w = 78, h = 7, atlas = "UI-HUD-UnitFrame-TargetofTarget-PortraitOn-Bar-Mana" },
+	powerMask = { x = 15, y = 25.5, w = 128, h = 16, atlas = "UI-HUD-UnitFrame-Party-PortraitOn-Bar-Mana-Mask" },
+	name = { x = 44, y = 6, w = 68, h = 10, size = 10, justify = "CENTER" },
+}
+BUILT_IN.PET = BUILT_IN.TOT
+BUILT_IN.PARTY = BUILT_IN.TOT
 ns.UNIT_FRAME_RECIPES = BUILT_IN
 -- Retail's own, over those (12.1.5, the Preview Match run of 2026-11-20): the
 -- target's and focus's level on the left of the name strip, no circle, the
@@ -56,6 +75,10 @@ local RETAIL = {
 	},
 }
 RETAIL.FOCUS = RETAIL.TARGET
+-- (The small frames' names, left on retail: their place secret there.)
+RETAIL.TOT = { name = { x = 44, y = 6, w = 68, h = 10, size = 10, justify = "LEFT" } }
+RETAIL.PET = RETAIL.TOT
+RETAIL.PARTY = RETAIL.TOT
 local function BuiltIn(id)
 	local base = BUILT_IN[id]
 	local over = ns.isRetail and RETAIL[id]
@@ -67,8 +90,13 @@ local function BuiltIn(id)
 end
 
 -- (The target of target: the target's, else the focus's; one look for both.)
+-- (The party's first member: the classic clients' name, retail's in PartyFrame.)
+local function PartyMember()
+	local holder = _G.PartyFrame
+	return type(holder) == "table" and holder.MemberFrame1 or nil
+end
 local FRAME_NAMES = { PLAYER = { "PlayerFrame" }, TARGET = { "TargetFrame" }, FOCUS = { "FocusFrame" }, PET = { "PetFrame" },
-	TOT = { "TargetFrameToT", "FocusFrameToT" } }
+	TOT = { "TargetFrameToT", "FocusFrameToT" }, PARTY = { "PartyMemberFrame1", PartyMember } }
 local UNITS = { PlayerFrame = "player", TargetFrame = "target", FocusFrame = "focus", PetFrame = "pet",
 	TargetFrameToT = "targettarget", FocusFrameToT = "focustarget" }
 
@@ -152,6 +180,8 @@ GameRegions = function(frame, id)
 		circle = main and Region(main.LevelBackgroundCircle),
 		level = id == "PLAYER" and Region(_G.PlayerLevelText) or (main and Region(main.LevelText)),
 		reaction = main and Region(main.ReputationColor),
+		-- (The dragon round an elite's or a boss's portrait: where it sits when shown.)
+		classification = holder and Region(holder.BossPortraitFrameTexture),
 	}
 	-- (Each one's mask, as the game put it on: by its key, else read off it.)
 	parts.portraitMask = holder and Region(holder.PlayerPortraitMask or holder.PortraitMask) or MaskOf(parts.portrait)
@@ -277,7 +307,8 @@ end
 -- the parts, as it is, with its mask. (Not the bars' fills or their own
 -- overlays, not texts: those are the unit's.)
 local MAX_EXTRAS = 24
-local STATES = { "Rest", "Status", "Flash", "Glow", "Highlight", "TempHPLoss", "Attack", "Combat", "PVP", "Leader" }
+local STATES = { "Rest", "Status", "Flash", "Glow", "Highlight", "TempHPLoss", "Attack", "Combat", "PVP", "Leader",
+	"Boss", "Rare", "Elite" } -- (the last: the unit's classification, a part of its own)
 local function ReadExtras(frame, parts, art, artL, artT)
 	local known = {}
 	for _, region in pairs(parts) do known[region] = true end
@@ -340,10 +371,11 @@ end
 function ns.ReadUnitFrameRecipe(id)
 	local frame, unit
 	for _, name in ipairs(FRAME_NAMES[id] or {}) do
-		local candidate = _G[name]
-		if candidate and not Plain(Call(candidate, "IsForbidden")) and Plain(Call(candidate, "IsVisible"))
-			and UnitExists(UNITS[name]) then
-			frame, unit = candidate, UNITS[name]
+		local candidate = type(name) == "function" and name() or _G[name]
+		local who = type(name) == "function" and "party1" or UNITS[name] or "party1"
+		if type(candidate) == "table" and not Plain(Call(candidate, "IsForbidden")) and Plain(Call(candidate, "IsVisible"))
+			and UnitExists(who) then
+			frame, unit = candidate, who
 			break
 		end
 	end
@@ -384,19 +416,35 @@ end
 -- A frame's recipe: the built-in one, under what was read (saved), under
 -- what's read now. Read now is saved for the times the frame isn't up. A
 -- frame with no built-in one (the pet's) has one once it's been read.
+-- (Kept in the saved settings once the game has loaded them, in memory till
+-- then. Never made here: the Cast Bars pages draw their frames as the pages
+-- are built, at load, and a CinematicDB made then had a fresh install taken
+-- for an old one, no profile picked, 2026-11-20.)
+local early = {}
+local function Kept(key)
+	local db = ns.db -- (the saved settings, once the addon has loaded them)
+	if type(db) ~= "table" then
+		early[key] = early[key] or {}
+		return early[key]
+	end
+	-- (Handed over once: kept on, it came back after the saved one was cleared.)
+	if early[key] and not db[key] then db[key] = early[key] end
+	early[key] = nil
+	db[key] = db[key] or {}
+	return db[key]
+end
 function ns.UnitFrameRecipe(id)
 	if not FRAME_NAMES[id] then return nil end
 	local base = BuiltIn(id) or {}
 	local client = ns.isRetail and "retail" or "classic"
-	CinematicDB = CinematicDB or {}
-	CinematicDB.unitFrameRecipes = CinematicDB.unitFrameRecipes or {}
-	local store = CinematicDB.unitFrameRecipes[client] or {}
+	local kept = Kept("unitFrameRecipes")
+	local store = kept[client] or {}
 	-- (Version 2: version 1's player recipe had the pet frame's art in it.)
 	if store.version ~= RECIPE_VERSION then
 		wipe(store)
 		store.version = RECIPE_VERSION
 	end
-	CinematicDB.unitFrameRecipes[client] = store
+	kept[client] = store
 	local live = ns.ReadUnitFrameRecipe(id)
 	if live then
 		local saved = store[id] or {}
@@ -449,4 +497,213 @@ function ns.UnitFrameRecipe(id)
 		end
 	end
 	return recipe
+end
+
+-- Where a frame's other parts sit, measured off the live frame in the look on
+-- it now (user 2026-11-20: "dont guess any more. get it right"): its target of
+-- target's health bar, its first buff, its level and the circle round it. Each
+-- in widths of the frame's health bar, from that bar's top-left (x right, y
+-- down), kept per look (ns.UnitLookKey: the game's, or a theme's shape), so
+-- a theme's preview places them as that theme puts them on the real frame.
+-- (The pet's too since 2026-11-21: its bars, name and portrait, as a theme draws them.)
+local HANG_FRAMES = { PLAYER = "PlayerFrame", TARGET = "TargetFrame", FOCUS = "FocusFrame", PET = "PetFrame" }
+local function ScreenRect(region)
+	if not (region and Plain(Call(region, "IsVisible"))) then return nil end
+	local l, b, w, h = Call(region, "GetRect")
+	l, b, w, h = Plain(l), Plain(b), Plain(w), Plain(h)
+	local scale = Plain(Call(region, "GetEffectiveScale"))
+	if type(l) ~= "number" or type(w) ~= "number" or type(scale) ~= "number" or w ~= w or h ~= h or w <= 0 then return nil end
+	return l * scale, (b + h) * scale, w * scale, h * scale
+end
+-- An aura button by what it is, whatever the client names it (Forever's matched
+-- neither "auraPools" nor "TargetFrameBuff1", 2026-11-20: the test waited for a
+-- debuff that was there): a small square frame on the unit frame, shown, with a
+-- spell's icon in it. Not one of the frame's own parts (its target of target's).
+local function IsAuraButton(child)
+	local kind = Plain(Call(child, "GetObjectType"))
+	if kind ~= "Button" and kind ~= "Frame" then return false end
+	-- (Its size secret in a fight on Forever (comparing it errored, 2026-11-21):
+	-- then known by its icon alone.)
+	local w, h = Call(child, "GetSize")
+	w, h = Plain(w), Plain(h)
+	if type(w) == "number" and type(h) == "number" and not (w >= 10 and w <= 40 and math.abs(w - h) <= 2) then
+		return false
+	end
+	local icon = child.Icon or child.icon
+	if not (type(icon) == "table" and icon.GetTexture) then
+		local name = child.GetName and child:GetName()
+		icon = name and (_G[name .. "Icon"] or _G[name .. "IconTexture"])
+	end
+	if not (type(icon) == "table" and icon.GetTexture and icon.GetObjectType) then return false end
+	local okKind, iconKind = pcall(icon.GetObjectType, icon)
+	if not (okKind and Plain(iconKind) == "Texture") then return false end
+	local ok, file = pcall(icon.GetTexture, icon)
+	return ok and file ~= nil
+end
+local function AuraButtons(frame, skip, out, depth)
+	out, depth = out or {}, depth or 0
+	if depth > 4 then return out end
+	local ok, children = pcall(function() return { frame:GetChildren() } end)
+	for _, child in ipairs(ok and children or {}) do
+		if child ~= skip and Plain(Call(child, "IsVisible")) then
+			if IsAuraButton(child) then out[#out + 1] = child else AuraButtons(child, skip, out, depth + 1) end
+		end
+	end
+	return out
+end
+
+-- (The first of its auras the game shows: the top row's leftmost.)
+local function FirstAura(frame)
+	local best, bestL, bestT, unplaced
+	local function Consider(button)
+		local l, t = ScreenRect(button)
+		if not l then
+			-- (There, its place secret in a fight: it counts as there, not measured.)
+			unplaced = unplaced or (button and Plain(Call(button, "IsVisible")) and button)
+			return
+		end
+		if not best or t > bestT + 1 or (math.abs(t - bestT) <= 1 and l < bestL) then
+			best, bestL, bestT = button, l, t
+		end
+	end
+	local pools = frame.auraPools
+	if type(pools) == "table" and type(pools.EnumerateActive) == "function" then
+		local ok, each = pcall(pools.EnumerateActive, pools)
+		if ok and each then for button in each do Consider(button) end end
+	end
+	local name = Plain(Call(frame, "GetName"))
+	if type(name) == "string" then
+		for i = 1, 4 do
+			for _, kind in ipairs({ "Buff", "Debuff" }) do
+				local button = Region(_G[name .. kind .. i])
+				if button and IsAuraButton(button) then Consider(button) end
+			end
+		end
+	end
+	if not best then
+		local tot = Region(frame.totFrame) or (type(name) == "string" and Region(_G[name .. "ToT"]))
+		for _, button in ipairs(AuraButtons(frame, tot)) do Consider(button) end
+	end
+	return best or unplaced
+end
+ns.UnitFirstAura = FirstAura -- (the Preview Match test finds the game's by it too)
+-- (Forever: the buff row's place is secret, even out of a fight, and its icons
+-- are no frames of their own (rule forever.targetframe.aura-container-place-
+-- secret). Worked out instead from what is readable: the frame's own place,
+-- Edit Mode's Buffs On Top (frame.buffsOnTop) and Cinematic's own lift off a
+-- theme's name plate (Style/UnitAuraLift.lua). The game's layout, measured off
+-- screenshots 2026-11-21 (1.2 px a unit, to the pixel in all three): its first
+-- icon 24 units in from the frame's left; its top 5 under the frame's top with
+-- Buffs On Top, 74 under it without; 17 square (your own debuffs 21).)
+local AURA_LEFT, AURA_TOP_ONTOP, AURA_TOP_BELOW, AURA_SQUARE = 24, 5, 74, 17
+local function WorkedOutAura(frame, hl, ht, hw)
+	local fl, ft = ScreenRect(frame)
+	local scale = Plain(Call(frame, "GetEffectiveScale"))
+	if not (fl and type(scale) == "number") then return nil end
+	local onTop = Plain(frame.buffsOnTop) == true
+	local lift = onTop and ns.UnitAuraLiftNow and Plain((ns.UnitAuraLiftNow(frame))) or 0
+	if type(lift) ~= "number" then lift = 0 end
+	local top = ft - ((onTop and AURA_TOP_ONTOP or AURA_TOP_BELOW) - lift) * scale
+	local left, size = fl + AURA_LEFT * scale, AURA_SQUARE * scale
+	local w = Round(size / hw * 100) / 100
+	return { x = Round((left - hl) / hw * 100) / 100, y = Round((ht - top) / hw * 100) / 100, w = w, h = w,
+		up = onTop or nil, workedOut = true }
+end
+-- (Shown and not faded out: a slab theme fades the level and its circle to
+-- nothing (alpha 0), still "shown": the preview drew both, 2026-11-21. The same
+-- rule as the Preview Match test's.)
+local function Showing(region)
+	if not Plain(Call(region, "IsVisible")) then return false end
+	local alpha = Plain(Call(region, "GetEffectiveAlpha"))
+	if type(alpha) ~= "number" then alpha = Plain(Call(region, "GetAlpha")) end
+	return type(alpha) ~= "number" or alpha > 0.02
+end
+function ns.ReadUnitHangs(id)
+	local frame = Region(_G[HANG_FRAMES[id] or ""])
+	if not (frame and Plain(Call(frame, "IsVisible"))) then return nil end
+	local parts = GameRegions(frame, id)
+	local hl, ht, hw = ScreenRect(parts.health)
+	if not hl then return nil end
+	local got = {}
+	local function Spot(region, withFont)
+		local l, t, w, h = ScreenRect(region)
+		if not l then return nil end
+		local spot = { x = Round((l - hl) / hw * 100) / 100, y = Round((ht - t) / hw * 100) / 100,
+			w = Round(w / hw * 100) / 100, h = Round(h / hw * 100) / 100 }
+		if withFont then
+			local _, size = Call(region, "GetFont")
+			local scale = Plain(Call(region, "GetEffectiveScale"))
+			size = Plain(size)
+			if type(size) == "number" and type(scale) == "number" then spot.font = Round(size * scale / hw * 1000) / 1000 end
+			spot.justify = Plain(Call(region, "GetJustifyH"))
+		end
+		return spot
+	end
+	-- (The frame itself, as the look draws it: its bars' sizes, its portrait, its name.)
+	local _, _, _, hh = ScreenRect(parts.health)
+	if hh then got.healthSize = { h = Round(hh / hw * 1000) / 1000 } end
+	got.power = Spot(parts.power)
+	got.portrait = Spot(parts.portrait)
+	got.name = Spot(parts.name, true)
+	local tot = parts.totFrame or Region(frame.totFrame)
+	if tot and Plain(Call(tot, "IsVisible")) then
+		got.tot = Spot(Region(tot.HealthBar) or Region(tot.healthbar))
+	elseif tot and Plain(Call(frame, "IsVisible")) then
+		-- (Hidden (no target of target: out of a fight), its place still reads
+		-- (TOTPROBE, Forever 2026-11-21: its rect, its TOPRIGHT point): taken
+		-- off its health bar as laid out, so every look has one, no fight needed.)
+		local bar = Region(tot.HealthBar) or Region(tot.healthbar)
+		local l, b, w, h = Call(bar, "GetRect")
+		l, b, w, h = Plain(l), Plain(b), Plain(w), Plain(h)
+		local scale = Plain(Call(bar, "GetEffectiveScale"))
+		if type(l) == "number" and type(w) == "number" and type(scale) == "number" and w > 0 then
+			got.tot = { x = Round((l * scale - hl) / hw * 100) / 100, y = Round((ht - (b + h) * scale) / hw * 100) / 100,
+				w = Round(w * scale / hw * 100) / 100, h = Round(h * scale / hw * 100) / 100, workedOut = true }
+		end
+	end
+	got.aura = Spot(FirstAura(frame))
+	if not got.aura and not ns.isRetail and (id == "TARGET" or id == "FOCUS")
+		and type(frame.GetAuraContainer) == "function" then
+		got.aura = WorkedOutAura(frame, hl, ht, hw)
+	end
+	-- (The level as shown, and the circle round it: a theme moves and shrinks both.)
+	if parts.level and Showing(parts.level) then got.level = Spot(parts.level, true) end
+	if parts.circle and Showing(parts.circle) then got.levelBack = Spot(parts.circle) end
+	-- (And whether this look shows them at all: a slab theme hides both, the
+	-- preview drew its own, 2026-11-21. A skull for a boss is the unit's, not
+	-- the look's: the level then not said hidden.)
+	local skullShown = false
+	if id == "TARGET" or id == "FOCUS" then
+		local content = frame.TargetFrameContent
+		local skull = Region(type(content) == "table" and type(content.TargetFrameContentContextual) == "table"
+			and content.TargetFrameContentContextual.HighLevelTexture or nil)
+		skullShown = skull and Plain(Call(skull, "IsVisible")) and true or false
+	end
+	if parts.level and not skullShown then got.levelHidden = got.level == nil end
+	if parts.circle then got.levelBackHidden = got.levelBack == nil end
+	return next(got) and got or nil
+end
+-- What's known for a frame in a look: read now if it's up, else as read before.
+function ns.UnitHangs(id, look)
+	if not (HANG_FRAMES[id] and look) then return nil end
+	local kept = Kept("unitFrameHangs")
+	local client = ns.isRetail and "retail" or "classic"
+	local store = kept[client] or {}
+	kept[client] = store
+	-- (Only when the look on the live frames is the one asked: a theme being tried isn't on them.)
+	if ns.UnitLookKey and ns.UnitLookKey(id) == look then
+		local live = ns.ReadUnitHangs(id)
+		if live then
+			store[look] = store[look] or {}
+			local saved = store[look][id] or {}
+			for part, spot in pairs(live) do saved[part] = spot end
+			-- (A part read now, its "hidden" gone; and the other way.)
+			if live.level then saved.levelHidden = nil end
+			if live.levelBack then saved.levelBackHidden = nil end
+			if live.levelHidden then saved.level = nil end
+			if live.levelBackHidden then saved.levelBack = nil end
+			store[look][id] = saved
+		end
+	end
+	return store[look] and store[look][id]
 end

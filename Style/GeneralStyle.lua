@@ -461,6 +461,7 @@ function ns.CreateGeneralStylePanel(kit)
 		RefreshAll()
 		ns.ApplyMenuSkin() -- (Style off or on: the theme's menu colors go or come back)
 		if ns.generalStylePreview then ns.generalStylePreview:Refresh() end
+		if ns.themesStylePreview then ns.themesStylePreview:Refresh() end
 		for _, row in ipairs(pageRows) do row:Refresh() end
 	end
 
@@ -577,7 +578,8 @@ end
 
 -- The Themes tab (2026-11-18: once General's): the theme picker and Quick
 -- Settings, one page, each picked by the Themes row over the title (its
--- Interface Recolor and Overrides: pages of their own). The preview is General's.
+-- Interface Recolor and Overrides: pages of their own). Over both, General's
+-- rotating preview, one of its own (user 2026-11-20): a theme picked shows in it.
 function ns.CreateStyleThemesPanel(kit)
 	local canvas, content = kit.CreateScrollPage()
 	local title = kit.Label(content, "GameFontNormalLarge", L["Themes"])
@@ -585,19 +587,33 @@ function ns.CreateStyleThemesPanel(kit)
 	local intro = kit.PageIntro(content, title,
 		L["A whole look for the addon, and your changes to it."])
 
-	-- (General's preview drawn again as each setting changes; here too when popped out.)
+	-- (Both previews drawn again as each setting changes: this page's and General's.)
 	local function Changed()
 		RefreshAll()
 		ns.ApplyMenuSkin()
 		if ns.generalStylePreview then ns.generalStylePreview:Refresh() end
+		if ns.themesStylePreview then ns.themesStylePreview:Refresh() end
 	end
 
 	local stack = kit.Stack(intro, "label")
+	-- (The rotating preview, General's screens, under the intro: over the theme
+	-- picker and Quick Settings both.)
+	local preview = ns.MakeStyleJumbotron(kit, content, stack, 480)
+	ns.themesStylePreview = preview
+	-- (Its place under the Themes row as far down as the page's sections are:
+	-- under the title, which a page under tabs empties and pulls up to the tabs,
+	-- its name sat right on their line, user 2026-11-20. Its spot, kept when popped out.)
+	local spot = preview.stackSpot or preview
+	local tabLine = content.pageTabs and content.pageTabs.panel
+	if tabLine then
+		spot:ClearAllPoints()
+		spot:SetPoint("TOPLEFT", tabLine, "BOTTOMLEFT", 8, -14)
+	end
 	local rows = ns.StyleRows(kit, content, stack, Changed, "styleGeneral")
 
 	-- Two parts (ns.PageTabsBelow, its tabs not drawn: the Themes row over the
-	-- title picks them): Themes and Quick Settings, each at its top.
-	local hosts, PickPart, TabsShown, AdoptTab = ns.PageTabsBelow(content, intro, {
+	-- title picks them): Themes and Quick Settings, each at its top, under the preview.
+	local hosts, PickPart, TabsShown, AdoptTab = ns.PageTabsBelow(content, spot, {
 		{ L["Themes"], L["The theme."] },
 		{ L["Quick Settings"], L["Make a theme your own."] },
 	}, "Style General/page", nil, nil, 1, nil, true)
@@ -703,6 +719,5 @@ function ns.CreateStyleThemesPanel(kit)
 		TabsShown()
 	end, content))
 	canvas:Hide()
-	ns.SharePreview(canvas, function() return ns.generalStylePreview end) -- (General's preview, popped out, here too)
 	kit.RegisterSubpage(canvas, "Style Themes", L["Themes"])
 end

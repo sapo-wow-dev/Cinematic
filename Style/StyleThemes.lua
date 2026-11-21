@@ -722,6 +722,13 @@ function ns.ThemeMana()
 	return mana and Vivid(mana)
 end
 function ns.ThemeLayout() return Active().layout end
+-- (The unit frames': none while their Style page is off, as the real frames have
+-- none then. The preview drew Slate's slab with the page off, where the game
+-- showed its own frame, 2026-11-21.)
+function ns.UnitThemeLayout()
+	if not (ns.StyleOn and ns.StyleOn("ufStyle")) then return nil end
+	return Active().layout
+end
 
 -- Our menus' colors (Skin.lua's roles): nil for its own.
 function ns.MenuPalette() return Active().menu end

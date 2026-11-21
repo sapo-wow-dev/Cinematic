@@ -189,6 +189,7 @@ Style\CombatTextPage.lua
 Style\SelfTextStyle.lua
 Style\UnitFrameCopy.lua
 Style\UnitStyle.lua
+Style\UnitFrameParts.lua
 Style\UnitAuraLift.lua
 Style\UnitFrameWatch.lua
 Style\RaidStyle.lua
