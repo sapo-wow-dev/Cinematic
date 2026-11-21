@@ -7,6 +7,7 @@
 -- "travel-cards" in all three too, "story-cards" the rest in Cinema).
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 local DEFAULTS = ns.DEFAULTS
 
@@ -1249,3 +1250,4 @@ watcher:SetScript("OnEvent", function(_, event, ...)
 		end
 	end
 end)
+end) -- (ns.Module "visions")

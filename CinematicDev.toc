@@ -14,6 +14,7 @@ Dev\ErrorWindow.lua
 Dev\TestKit.lua
 Dev\TestKitWrap.lua
 Dev\CVarTraceTest.lua
+Modules.lua
 Checks.lua
 FrameGuess.lua
 FadeDetached.lua
@@ -102,6 +103,7 @@ Visions\QuestMarkIcons.lua
 QoL\WheelsPage.lua
 Visions\QuestMobs.lua
 Visions\QuestGlow.lua
+Style\StyleFonts.lua
 Visions\QuestItemButton.lua
 Plates\PlateSleep.lua
 Effects.lua
@@ -134,6 +136,7 @@ Visions\QuestTalk.lua
 Visions\TalkingHeads.lua
 Camera\CameraTests.lua
 Atmosphere\Tint.lua
+Atmosphere\DeathVision.lua
 Atmosphere\ScreenEffectsData.lua
 Atmosphere\ScreenEffects.lua
 Atmosphere\LowHealthThemes.lua
@@ -267,6 +270,7 @@ Dev\DetachedFadeTest.lua
 Dev\XpRelogTest.lua
 Dev\ListFoldTest.lua
 Dev\KitCheckTest.lua
+Dev\LoadVisionsTest.lua
 Dev\WholeManaTest.lua
 Dev\AuraPlateTest.lua
 Dev\FavLinesTest.lua

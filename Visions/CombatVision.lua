@@ -6,6 +6,7 @@
 -- the screen's edges, an icon. (Sounds: CombatSoundRules.lua.)
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 local DEFAULTS = ns.DEFAULTS
 
@@ -1395,3 +1396,4 @@ do
 		if mover then mover:Hide() end
 	end)
 end
+end) -- (ns.Module "visions")

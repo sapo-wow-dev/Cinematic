@@ -543,6 +543,26 @@ local SHELF_LINKS = {
 local DEMO_BY_KEY = {}
 for _, demo in ipairs(DEMO_ROW) do DEMO_BY_KEY[demo.key] = demo end
 for _, demo in ipairs(SHELF_MORE) do DEMO_BY_KEY[demo.key] = demo end
+-- (Visions left out, Modules.lua: none of them anywhere here: the Visions
+-- section, the shelf's Visions tiles and links (a group with none left goes
+-- too), the tour's stops.)
+ns.ModuleLeftOut("visions", function()
+	local gone = {}
+	for _, list in ipairs({ DEMO_ROW, SHELF_MORE, SHELF_LINKS }) do
+		for i = #list, 1, -1 do
+			if list[i].group == "vis" then
+				if list[i].key then gone[list[i].key], DEMO_BY_KEY[list[i].key] = true, nil end
+				table.remove(list, i)
+			end
+		end
+	end
+	for i = #TOUR, 1, -1 do
+		if gone[TOUR[i].key] then table.remove(TOUR, i) end
+	end
+	for i = #SECTIONS, 1, -1 do
+		if SECTIONS[i] == VISIONS then table.remove(SECTIONS, i) end
+	end
+end)
 -- The steps for keys (a tour), the Shoulder Cam left out until it's had its yes.
 local function TourSteps(steps)
 	local out = {}

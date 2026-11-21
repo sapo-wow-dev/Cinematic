@@ -775,50 +775,50 @@ ns.hasWorldMarkerWheel = CinematicWorldMarkerWheel ~= nil
 -- The visions: each one's switch, turned on and off by its keybind and the
 -- vision wheel. Apply() puts the change into effect, as the options pages do.
 local VISIONS = {
-	{ key = "heal", setting = "handleHealVision", label = "Heal Vision",
+	{ key = "heal", part = "visions", setting = "handleHealVision", label = "Heal Vision",
 		icon = "Interface\\Icons\\Spell_Holy_FlashHeal", trim = true, color = { 0.35, 1, 0.45 },
 		Apply = function()
 			if ns.ApplyHealVisionFrames then ns.ApplyHealVisionFrames() end
 		end },
-	{ key = "quest", setting = "questVision", label = "Quest Vision",
+	{ key = "quest", part = "visions", setting = "questVision", label = "Quest Vision",
 		icon = "Interface\\Icons\\INV_Misc_Head_Dragon_01", trim = true, color = { 1, 0.82, 0 },
 		Apply = function()
 			if ns.RefreshTargetQuestIcon then ns.RefreshTargetQuestIcon() end
 			if ns.UpdateQuestGlow then ns.UpdateQuestGlow() end
 		end },
-	{ key = "duel", setting = "duelPlates", label = "Duel Vision",
+	{ key = "duel", part = "visions", setting = "duelPlates", label = "Duel Vision",
 		icon = "Interface\\Icons\\Ability_DualWield", trim = true, color = { 1, 0.35, 0.3 } },
 }
 -- (Only where the game has a loot history.)
 if ns.hasRollWindow then
-	VISIONS[#VISIONS + 1] = { key = "roll", setting = "rollWindow", label = "Roll Vision",
+	VISIONS[#VISIONS + 1] = { key = "roll", part = "visions", setting = "rollWindow", label = "Roll Vision",
 		icon = "Interface\\Icons\\INV_Misc_Dice_01", trim = true, color = { 0.45, 0.7, 1 },
 		Apply = function()
 			if ns.RefreshRollWindow then ns.RefreshRollWindow() end
 		end }
 end
-VISIONS[#VISIONS + 1] = { key = "vitals", setting = "lowHealth", label = "Vitals Vision",
+VISIONS[#VISIONS + 1] = { key = "vitals", part = "visions", setting = "lowHealth", label = "Vitals Vision",
 	icon = "Interface\\Icons\\Spell_Shadow_LifeDrain02", trim = true, color = { 1, 0.25, 0.4 },
 	Apply = function()
 		if ns.RefreshLowHealth then ns.RefreshLowHealth() end
 	end }
 -- (Only in a game with the damage meter it reads.)
 if C_DamageMeter then
-	VISIONS[#VISIONS + 1] = { key = "damage", setting = "damageVision", label = "Damage Vision",
+	VISIONS[#VISIONS + 1] = { key = "damage", part = "visions", setting = "damageVision", label = "Damage Vision",
 		icon = "Interface\\Icons\\Ability_Warrior_Rampage", trim = true, color = { 1, 0.5, 0.2 },
 		Apply = function()
 			if ns.RefreshDamageVision then ns.RefreshDamageVision() end
 		end }
 end
-VISIONS[#VISIONS + 1] = { key = "tele", setting = "teleportVision", label = "Teleport Vision",
+VISIONS[#VISIONS + 1] = { key = "tele", part = "visions", setting = "teleportVision", label = "Teleport Vision",
 	icon = "Interface\\Icons\\Spell_Arcane_TeleportStormWind", trim = true, color = { 0.6, 0.45, 1 } }
-VISIONS[#VISIONS + 1] = { key = "emote", setting = "emoteVision", label = "Emote Vision",
+VISIONS[#VISIONS + 1] = { key = "emote", part = "visions", setting = "emoteVision", label = "Emote Vision",
 	icon = "Interface\\Icons\\Spell_Holy_PrayerOfFortitude", trim = true, color = { 1, 0.65, 0.8 },
 	Apply = function()
 		if ns.RefreshEmoteVision then ns.RefreshEmoteVision() end
 	end }
 -- (notWelcome: not one of the welcome window's rows.)
-VISIONS[#VISIONS + 1] = { key = "card", setting = "cards", label = "Card Vision", notWelcome = true,
+VISIONS[#VISIONS + 1] = { key = "card", part = "visions", setting = "cards", label = "Card Vision", notWelcome = true,
 	icon = "Interface\\Icons\\INV_Misc_Book_09", trim = true, color = { 0.9, 0.8, 0.55 } }
 local visionByKey = {}
 for _, vision in ipairs(VISIONS) do
@@ -858,7 +858,8 @@ ns.VISION_LIST, ns.VisionOn, ns.ToggleVision = VISIONS, VisionOn, ToggleVision
 function Cinematic_ToggleVision(key)
 	local vision = visionByKey[key]
 	if not vision then
-		ns.Print(L["this game doesn't have that vision"])
+		ns.Print(ns.VisionLeftOut and ns.VisionLeftOut(key) and L["Visions isn't loaded (Visions > General)"]
+			or L["this game doesn't have that vision"])
 		return
 	end
 	ToggleVision(vision)
@@ -884,11 +885,14 @@ ns.OnLanguage(SetVisionBindingNames)
 -- never seen) that does it, in a fight too.
 local visionSlots = {}
 local visionWheel
-for i, vision in ipairs(VISIONS) do
+for _, vision in ipairs(VISIONS) do
 	local toggler = CreateFrame("Button")
 	toggler:SetScript("OnClick", function()
 		ToggleVision(vision, true)
-		visionWheel.Linger(i)
+		-- (its place now: Visions left out takes slots off, below)
+		for i, slot in ipairs(visionWheel.GetSlots()) do
+			if slot.vision == vision then visionWheel.Linger(i) end
+		end
 	end)
 	visionSlots[#visionSlots + 1] = { icon = vision.icon, trim = vision.trim, color = vision.color,
 		label = vision.label, vision = vision, attributes = { type = "click", clickbutton = toggler } }
@@ -906,6 +910,31 @@ visionWheel = MakeWheel({
 	linger = 1, -- (up a second after a pick, showing it turn on or off)
 	Active = function(entry) return VisionOn(entry.vision) end,
 })
+
+-- (part = "visions": with Visions left out, Modules.lua, those come off the
+-- wheel, its keybinds and the welcome window's list. Secure slots: out of a
+-- fight, after one if the game starts in it.)
+local leftOut = {}
+ns.ModuleLeftOut("visions", function()
+	for i = #VISIONS, 1, -1 do
+		if VISIONS[i].part == "visions" then
+			leftOut[VISIONS[i].key] = true
+			visionByKey[VISIONS[i].key] = nil
+			table.remove(VISIONS, i)
+		end
+	end
+	for i = #visionSlots, 1, -1 do
+		if visionSlots[i].vision.part == "visions" then table.remove(visionSlots, i) end
+	end
+	if not visionWheel.SetSlots(visionSlots) then
+		local waiter = CreateFrame("Frame")
+		waiter:RegisterEvent("PLAYER_REGEN_ENABLED")
+		waiter:SetScript("OnEvent", function(self)
+			if visionWheel.SetSlots(visionSlots) then self:UnregisterAllEvents() end
+		end)
+	end
+end)
+ns.VisionLeftOut = function(key) return leftOut[key] == true end
 
 -- The master wheel: one icon for each of the other wheels. Picking one opens
 -- it round the cursor, waiting for a click. The camera wheel isn't secure:
@@ -931,6 +960,12 @@ if CinematicWorldMarkerWheel then
 		label = "Ground marker wheel", opens = CinematicWorldMarkerWheel, switch = "wheelWorldOn" }
 end
 ns.MASTER_WHEEL_CHOICES = MASTER_CHOICES
+-- (Visions left out, Modules.lua: no Vision wheel to open, so none on this one.)
+ns.ModuleLeftOut("visions", function()
+	for i = #MASTER_CHOICES, 1, -1 do
+		if MASTER_CHOICES[i].key == "vision" then table.remove(MASTER_CHOICES, i) end
+	end
+end)
 
 -- Every wheel the master wheel can have: the built-in ones, then the
 -- player's own (CustomWheels.lua; off it until ticked: offByDefault).

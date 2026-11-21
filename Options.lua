@@ -6696,7 +6696,7 @@ local function CreateDeathPanel()
 
 	local stack = Stack(subtitle, "label", true)
 	-- (The death banner, "YOU DIED" across the screen: the Cards page's Death now.)
-	stack:Add(ns.CardsLink(content, L["The death banner:"], "death"), "label")
+	if ns.CardsLink then stack:Add(ns.CardsLink(content, L["The death banner:"], "death"), "label") end -- (Visions left out: none)
 
 	stack:Header(content, L["Starting"])
 	local delay = stack:Add(Slider(content, "deathOrbitDelay", L["Start after"], 0, 10, 0.5, L["%.1f sec"]), "slider")
@@ -14796,11 +14796,16 @@ do
 		SetSection(chatPanel, L["Other"])
 		local otherBody = TabBody(5)
 		-- (Attacks shown on the screen: the Cards page's now.)
-		local attackAlert = ns.CardsLink(otherBody, L["Attacks shown on the screen:"], "attack")
-		attackAlert:SetPoint("TOPLEFT", otherBody, "TOPLEFT", 0, -6)
+		-- (Visions left out, Modules.lua: no Cards page to point to, the next line at the top.)
+		local attackAlert = ns.CardsLink and ns.CardsLink(otherBody, L["Attacks shown on the screen:"], "attack")
+		if attackAlert then attackAlert:SetPoint("TOPLEFT", otherBody, "TOPLEFT", 0, -6) end
 		local updateNotice = Check(otherBody, "updateNotice", L["Get notified of updates"],
 			L["Tells you in chat when Cinematic has updated."])
-		updateNotice:SetPoint("TOPLEFT", attackAlert, "BOTTOMLEFT", -2, -4)
+		if attackAlert then
+			updateNotice:SetPoint("TOPLEFT", attackAlert, "BOTTOMLEFT", -2, -4)
+		else
+			updateNotice:SetPoint("TOPLEFT", otherBody, "TOPLEFT", -2, -6)
+		end
 
 		for _, body in ipairs(bodies) do
 			ToPage(body)
@@ -15833,15 +15838,75 @@ function ns.CreateVisionsGeneralPanel()
 	local canvas, content = CreateScrollPage()
 	local title = Label(content, "GameFontNormalLarge", L["Visions"])
 	title:SetPoint("TOPLEFT", 16, -16)
-	local intro = PageIntro(content, title, L["Every Vision at a glance; click a card to open it."])
+	-- (Visions left out, Modules.lua: only the Load Visions box, no switch or cards.)
+	local loadedNow = ns.ModuleLoaded("visions")
+	local intro = PageIntro(content, title, loadedNow and L["Every Vision at a glance; click a card to open it."]
+		or L["Visions aren't loaded: none of them run, and their pages are gone."])
 	-- (Its switch, 2026-11-16: every Vision page off with it, and back on.)
-	PageSwitch(content, "visionsAll", L["Enable Page"], L["Turns all Visions on or off."], intro, function(value)
-		ns.CascadeHub("Visions", "visionsAll", value and true or false)
-		if content.RefillCards then content.RefillCards() end -- (its cards' dots as they are now)
+	if loadedNow then
+		PageSwitch(content, "visionsAll", L["Enable Page"], L["Turns all Visions on or off."], intro, function(value)
+			ns.CascadeHub("Visions", "visionsAll", value and true or false)
+			if content.RefillCards then content.RefillCards() end -- (its cards' dots as they are now)
+		end)
+	end
+	-- Load Visions (2026-11-21, Modules.lua): unticked, from the next reload
+	-- no Vision's code runs at all (Visions/, and Vitals, Death and Teleport
+	-- in Atmosphere/). The account's, as the game's AddOns list is: no
+	-- profile has it. (A plain box, not Check: no page Reset or settings
+	-- sweep flips it.)
+	local load = ns.SkinCheck(CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate"))
+	canvas.loadVisionsBox = load -- (/cine debug loadvisions clicks it)
+	load:SetSize(26, 26)
+	-- (Right of the title's On/Off switch, the user's pick 2026-11-21; that
+	-- switch is made as the page first shows, so placed again then. Left out:
+	-- no switch, right of the title's "?".)
+	local function PlaceLoad()
+		load:ClearAllPoints()
+		load:SetPoint("LEFT", content.pageSwitch or content.pageHelpLast or content.pageHelp or title, "RIGHT", 12, 0)
+	end
+	PlaceLoad()
+	content:HookScript("OnShow", PlaceLoad) -- (after the switch's own OnShow: hooked later)
+	local loadText = load.Text or load.text
+	if not loadText then
+		loadText = load:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		loadText:SetPoint("LEFT", load, "RIGHT", 2, 0)
+	end
+	loadText:SetFontObject("GameFontHighlight")
+	loadText:SetText(L["Load Visions"])
+	Tooltip(load, L["Unticked, Visions don't load at all (takes a reload)."])
+	local loadNote = Label(content, "GameFontHighlightSmall", "")
+	loadNote:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -10)
+	loadNote:SetWidth(580)
+	loadNote:SetJustifyH("LEFT")
+	local function LoadState()
+		local wanted, loaded = ns.ModuleWanted("visions"), ns.ModuleLoaded("visions")
+		load:SetChecked(wanted)
+		if wanted ~= loaded then
+			loadNote:SetText(L["Takes effect after a reload."])
+		elseif not loaded then
+			loadNote:SetText(L["Tick it and reload to bring every Vision back."])
+		else
+			loadNote:SetText(L["Turn off to keep Visions from loading at all."])
+		end
+	end
+	load:SetScript("OnClick", function(self)
+		local wanted = self:GetChecked() and true or false
+		ns.SetModuleWanted("visions", wanted)
+		LoadState()
+		if wanted == ns.ModuleLoaded("visions") then return end -- (put back as it is: nothing to reload)
+		StaticPopupDialogs.CINEMATIC_LOAD_VISIONS = {
+			text = "%s", button1 = RELOADUI or L["Reload"], button2 = L["Later"],
+			OnAccept = function() ns.Reload() end,
+			cineReload = 1, -- (Forever: a secure Reload over the button, QoL/Reload.lua)
+			timeout = 0, whileDead = true, hideOnEscape = true,
+		}
+		StaticPopup_Show("CINEMATIC_LOAD_VISIONS",
+			wanted and L["Reload now to load Visions?"] or L["Reload now to leave Visions out?"])
 	end)
 	local cards
 	local function Fill()
 		if cards then cards:Hide() end
+		if not loadedNow then return end
 		-- (In the hub's sections, each under its name, as its icons are
 		-- banded: Combat, World; any in none last, under Other. 2026-11-16.)
 		local groups, bySection, entries = {}, {}
@@ -15867,12 +15932,13 @@ function ns.CreateVisionsGeneralPanel()
 		end
 		table.sort(groups, function(a, b) return not a.last and b.last end)
 		cards = ns.MakeHubCardGroups(content, groups, 600)
-		cards:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -14)
+		cards:SetPoint("TOPLEFT", loadNote, "BOTTOMLEFT", -4, -12)
 		FitContentHeight(content)
 	end
 	content.RefillCards = Fill
 	canvas:SetScript("OnShow", PageShown(function()
 		Refresh()
+		LoadState()
 		Fill()
 	end, content))
 	canvas:Hide()
@@ -19771,29 +19837,29 @@ local KEYBINDS = {
 	{ action = "CLICK CinematicWorldMarkerWheelButton:LeftButton", label = L["Ground marker wheel"],
 		show = function() return ns.hasWorldMarkerWheel end,
 		tip = L["Hold to open a wheel of ground markers; only in a group."] },
-	{ action = "CLICK CinematicVisionWheelButton:LeftButton", label = L["Vision wheel"],
+	{ action = "CLICK CinematicVisionWheelButton:LeftButton", show = function() return ns.ModuleLoaded("visions") end, label = L["Vision wheel"],
 		tip = L["Hold to open a wheel that turns the visions on or off."] },
-	{ action = "CINEMATIC_VISION_HEAL", label = L["Toggle Heal Vision"], section = L["Visions"],
+	{ action = "CINEMATIC_VISION_HEAL", show = function() return ns.ModuleLoaded("visions") end, label = L["Toggle Heal Vision"], section = L["Visions"],
 		tip = L["Turns Heal Vision on or off."] },
-	{ action = "CINEMATIC_VISION_QUEST", label = L["Toggle Quest Vision"],
+	{ action = "CINEMATIC_VISION_QUEST", show = function() return ns.ModuleLoaded("visions") end, label = L["Toggle Quest Vision"],
 		tip = L["Turns Quest Vision on or off (its Enable Page switch)."] },
-	{ action = "CLICK CinematicQuestItemButton:LeftButton", label = L["Use the quest item"],
+	{ action = "CLICK CinematicQuestItemButton:LeftButton", show = function() return ns.ModuleLoaded("visions") end, label = L["Use the quest item"],
 		tip = L["Uses the item on Quest Vision's quest item button, while it shows."] },
-	{ action = "CINEMATIC_VISION_DUEL", label = L["Toggle Duel Vision"],
+	{ action = "CINEMATIC_VISION_DUEL", show = function() return ns.ModuleLoaded("visions") end, label = L["Toggle Duel Vision"],
 		tip = L["Turns Duel Vision on or off."] },
 	{ action = "CINEMATIC_VISION_ROLL", label = L["Toggle Roll Vision"],
-		show = function() return ns.hasRollWindow end,
+		show = function() return ns.hasRollWindow and ns.ModuleLoaded("visions") end,
 		tip = L["Turns Roll Vision on or off."] },
-	{ action = "CINEMATIC_VISION_VITALS", label = L["Toggle Vitals Vision"],
+	{ action = "CINEMATIC_VISION_VITALS", show = function() return ns.ModuleLoaded("visions") end, label = L["Toggle Vitals Vision"],
 		tip = L["Turns Vitals Vision on or off (its Enable Page switch)."] },
 	{ action = "CINEMATIC_VISION_DAMAGE", label = L["Toggle Damage Vision"],
-		show = function() return C_DamageMeter ~= nil end,
+		show = function() return C_DamageMeter ~= nil and ns.ModuleLoaded("visions") end,
 		tip = L["Turns Damage Vision on or off (its Enable Page switch)."] },
-	{ action = "CINEMATIC_VISION_TELE", label = L["Toggle Teleport Vision"],
+	{ action = "CINEMATIC_VISION_TELE", show = function() return ns.ModuleLoaded("visions") end, label = L["Toggle Teleport Vision"],
 		tip = L["Turns Teleport Vision on or off (its Enable Page switch)."] },
-	{ action = "CINEMATIC_VISION_EMOTE", label = L["Toggle Emote Vision"],
+	{ action = "CINEMATIC_VISION_EMOTE", show = function() return ns.ModuleLoaded("visions") end, label = L["Toggle Emote Vision"],
 		tip = L["Turns Emote Vision on or off (its Enable Page switch)."] },
-	{ action = "CINEMATIC_VISION_CARD", label = L["Toggle Card Vision"],
+	{ action = "CINEMATIC_VISION_CARD", show = function() return ns.ModuleLoaded("visions") end, label = L["Toggle Card Vision"],
 		tip = L["Turns Card Vision on or off (its Enable Page switch)."] },
 	{ action = "CINEMATIC_CAM_IDLE", label = L["AFK camera"], section = L["Cameras"],
 		tip = L["Starts the AFK camera now."] },
@@ -22190,8 +22256,10 @@ ns.OnLanguage(function()
 	CreateTooltipPanel()
 	Lap("CreateTooltipPanel")
 	-- (its hub listed after UI Manager's)
-	CreateVisionPanel()
-	Lap("CreateVisionPanel")
+	if ns.ModuleLoaded("visions") then -- (Quest, Roll, Duel, Heal Vision: none with Visions left out, Modules.lua)
+		CreateVisionPanel()
+		Lap("CreateVisionPanel")
+	end
 	if ns.CreateVitalsVisionPanel then -- (LowHealth.lua)
 		ns.CreateVitalsVisionPanel(ns.lowHealthKit)
 		Lap("CreateVitalsVisionPanel")
@@ -22210,7 +22278,7 @@ ns.OnLanguage(function()
 		ns.CreateCardSoundsPanel(ns.lowHealthKit)
 		Lap("CreateCardSoundsPanel")
 	end
-	if ns.CreateWindGuidePanel then -- (WindGuide.lua: the dev copy only, CinematicDev.toc)
+	if ns.CreateWindGuidePanel and ns.ModuleLoaded("visions") then -- (WindGuide.lua: the dev copy only, CinematicDev.toc; a Vision)
 		ns.CreateWindGuidePanel(ns.lowHealthKit)
 		Lap("CreateWindGuidePanel")
 	end
@@ -22261,11 +22329,11 @@ ns.OnLanguage(function()
 		ns.CreateLetterboxStylePanel(ns.lowHealthKit)
 		Lap("CreateLetterboxStylePanel")
 	end
-	if ns.CreateQuestItemStylePanel then -- (QuestItemStyle.lua)
+	if ns.CreateQuestItemStylePanel and ns.ModuleLoaded("visions") then -- (QuestItemStyle.lua; a Vision's look: none with Visions left out)
 		ns.CreateQuestItemStylePanel(ns.lowHealthKit)
 		Lap("CreateQuestItemStylePanel")
 	end
-	if ns.CreateRollStylePanel then -- (RollStyle.lua)
+	if ns.CreateRollStylePanel and ns.ModuleLoaded("visions") then -- (RollStyle.lua; a Vision's look: none with Visions left out)
 		ns.CreateRollStylePanel(ns.lowHealthKit)
 		Lap("CreateRollStylePanel")
 	end
@@ -22273,7 +22341,7 @@ ns.OnLanguage(function()
 		ns.CreateVitalsStylePanel(ns.lowHealthKit)
 		Lap("CreateVitalsStylePanel")
 	end
-	if ns.CreateQuestTalkStylePanel then -- (QuestTalkStyle.lua)
+	if ns.CreateQuestTalkStylePanel and ns.ModuleLoaded("visions") then -- (QuestTalkStyle.lua; a Vision's look: none with Visions left out)
 		ns.CreateQuestTalkStylePanel(ns.lowHealthKit)
 		Lap("CreateQuestTalkStylePanel")
 	end
@@ -22327,7 +22395,7 @@ ns.OnLanguage(function()
 	end
 	ns.CreateVisionsGeneralPanel() -- (the Visions hub's General: its cards)
 	Lap("CreateVisionsGeneralPanel")
-	if ns.CreateVisionsStylePanel then -- (VisionsStyle.lua)
+	if ns.CreateVisionsStylePanel and ns.ModuleLoaded("visions") then -- (VisionsStyle.lua: every look it sets is a Vision's in Visions/)
 		ns.CreateVisionsStylePanel(ns.lowHealthKit)
 		Lap("CreateVisionsStylePanel")
 	end

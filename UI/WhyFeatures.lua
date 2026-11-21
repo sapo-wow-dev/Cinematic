@@ -428,13 +428,33 @@ ns.WhyProvider("cards", "Cards", "The card on screen and the ones waiting. Below
 	end
 	return sections
 end)
+-- (Visions left out, Modules.lua: the cards are its code. The Cards tab stays
+-- where it is, with one row saying so, opening Visions General's Load Visions.)
+ns.ModuleLeftOut("visions", function()
+	for _, provider in ipairs(ns.WhyProviders()) do
+		if provider.id == "cards" then
+			provider.fn = function()
+				local why = R("block", L["Load Visions is off: no cards show"], "Visions General")
+				return { { label = L["Cards"], rows = { { key = "cards:loaded", title = L["Visions aren't loaded"],
+					status = "off", reasons = { why }, main = why, settingsPage = "Visions General" } } } }
+			end
+		end
+	end
+end)
 
 -- (After Cards, so the tabs go Cameras, Cards, Visions, Atmosphere.)
 ns.WhyProvider("visions", "Visions", "Each Vision page with its tabs: whether it's on now, ready for its moment, or " ..
 	"off, and which switch turned it off.", function()
+	-- (Visions left out, Modules.lua: no pages to list, one row saying so,
+	-- opening the page with its Load Visions box.)
+	if not ns.ModuleLoaded("visions") then
+		local why = R("block", L["Load Visions is off: none of them run"], "Visions General")
+		return { { label = L["Visions"], rows = { { key = "visions:loaded", title = L["Visions aren't loaded"],
+			status = "off", reasons = { why }, main = why, settingsPage = "Visions General" } } } }
+	end
 	return { HubSection("Visions", "Visions") }
 end)
--- (Atmosphere: a tab of its own.)
+-- (Atmosphere: a tab of its own, there with Visions left out too.)
 ns.WhyProvider("atmosphere", "Atmosphere", "Each Atmosphere page with its tabs: whether it's on now, ready for its " ..
 	"moment, or off, and which switch turned it off.", function()
 	return { HubSection("Atmosphere", "Atmosphere") }

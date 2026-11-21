@@ -49,6 +49,7 @@
 --            (its size, 1 as it comes), alpha }
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 
 local BLOOD = { 0.85, 0.05, 0.06 }
 local DARK_RED = { 0.35, 0, 0 }
@@ -608,3 +609,4 @@ for _, class in ipairs(ns.LOW_HEALTH_MENU) do
 		theme.who = theme.who and theme.who .. ", " .. who or who
 	end
 end
+end) -- (ns.Module "visions")

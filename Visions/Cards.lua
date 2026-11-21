@@ -17,6 +17,7 @@
 -- CardsPage.lua pages edit them.)
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 local DEFAULTS = ns.DEFAULTS
 
@@ -1150,3 +1151,4 @@ function ns.SpreadCardBase(t)
 	if zoneOutline == 0 and Get("cardBase_zone") == "third" then t.cardOutline_zone = nil end
 	for _, field in ipairs(FIELDS) do t[Key(field[1])] = nil end
 end
+end) -- (ns.Module "visions")

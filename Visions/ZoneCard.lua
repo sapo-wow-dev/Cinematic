@@ -8,6 +8,7 @@
 -- not secure, and their alpha is the game's to fade, so their text's is ours.
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local DEFAULTS = ns.DEFAULTS
 
 DEFAULTS.storyZoneCard = false        -- the Zone row (off: the game's own)
@@ -259,3 +260,4 @@ end
 ns.CardSamples = ns.CardSamples or {}
 ns.CardSamples.zone = function() return Sample(false) end
 ns.CardSamples.subzone = function() return Sample(true) end
+end) -- (ns.Module "visions")

@@ -10,6 +10,7 @@
 -- border). Its pages are at the bottom.
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -4384,3 +4385,4 @@ function ns.CreateEmoteVisionStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Emote Vision Style")
 end
+end) -- (ns.Module "visions")

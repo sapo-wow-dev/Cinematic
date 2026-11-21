@@ -11,13 +11,15 @@
 -- shows): the server tells the whole group everyone's choice and number.
 -- Clients without it get nothing here (the options hide).
 local _, ns = ...
+-- (Whether this client can have it: as the files load, for the vision wheel's slots.)
+local History = C_LootHistory
+ns.hasRollWindow = History and History.GetSortedInfoForDrop and History.GetSortedDropsForEncounter and true or nil
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
-local History = C_LootHistory
-if not (History and History.GetSortedInfoForDrop and History.GetSortedDropsForEncounter) then
+if not ns.hasRollWindow then
 	return
 end
-ns.hasRollWindow = true
 
 local WIDTH = 280
 local ICON = 34
@@ -1980,3 +1982,4 @@ function ns.MakeRollPreview(parent, width)
 	end)
 	return holder
 end
+end) -- (ns.Module "visions")

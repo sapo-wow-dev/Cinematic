@@ -15,6 +15,9 @@
 -- at the game's own volume.
 
 local _, ns = ...
+-- (Up to the volume guard below, loaded with Visions left out too, Modules.lua:
+-- the settings, and the sound player Vitals Vision plays through. The rest,
+-- the fights' and cards' rules and the page, only with Visions loaded.)
 local L = ns.L
 
 -- The rules, saved as text so profiles and shared strings carry them: rules
@@ -229,6 +232,18 @@ function ns.StopAmbienceFile()
 	fileSound = nil
 end
 
+-- A cue's Ambience volume left held by a crash or reload mid-cue: back now;
+-- and given back as you log out. (Visions left out too: yours never stays down.)
+local guard = CreateFrame("Frame")
+guard:RegisterEvent("PLAYER_ENTERING_WORLD")
+guard:RegisterEvent("PLAYER_LOGOUT")
+guard:SetScript("OnEvent", function(self, event)
+	if event == "PLAYER_ENTERING_WORLD" then self:UnregisterEvent(event) end
+	if ns.db then Restore(true) end
+end)
+
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
+
 -- A boss fight's rule: its condition has the word boss (the Boss event's).
 local function IsBossRule(rule)
 	return ((" " .. (rule.rule or "") .. " "):lower():find("[^%w_]boss[^%w_]")) ~= nil
@@ -329,16 +344,6 @@ end
 function ns.PlayCardCueSound(id, edge)
 	PlayList("cardSounds_" .. tostring(id), edge or "show")
 end
-
--- A cue's Ambience volume left held by a crash or reload mid-cue: back now;
--- and given back as you log out.
-local guard = CreateFrame("Frame")
-guard:RegisterEvent("PLAYER_ENTERING_WORLD")
-guard:RegisterEvent("PLAYER_LOGOUT")
-guard:SetScript("OnEvent", function(self, event)
-	if event == "PLAYER_ENTERING_WORLD" then self:UnregisterEvent(event) end
-	if ns.db then Restore(true) end
-end)
 
 -- The page's part: the cue volume, the rules (each its condition, its
 -- sounds with their volume, a play and remove button) and a window to pick
@@ -838,3 +843,4 @@ function picker.Open(rule, save)
 	frame:Show()
 	frame.Draw()
 end
+end) -- (ns.Module "visions")

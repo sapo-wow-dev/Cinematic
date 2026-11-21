@@ -12,6 +12,7 @@
 -- the game says of each stack's time; /cine debug sleepbag says all of it now.
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 ns.DEFAULTS.cardSleepBagOn = true
@@ -569,3 +570,4 @@ watcher:SetScript("OnEvent", ns.Profiled("UNIT_AURA (sleeping bag)", function(_,
 	end
 	Read()
 end))
+end) -- (ns.Module "visions")

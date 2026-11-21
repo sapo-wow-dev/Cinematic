@@ -865,7 +865,9 @@ function Fill(view)
 		banner.stripe:SetColorTexture(0.56, 0.89, 0.60)
 		banner.back:SetColorTexture(1, 1, 1, 0.05)
 		banner.title:SetText(L["CineMode is %s"]:format(GREEN .. L["ON"] .. "|r"))
-		banner.text:SetText(L["Cinematic is hiding parts of your interface and running its cameras and cards. " ..
+		-- (No cards with Visions left out, Modules.lua.)
+		banner.text:SetText(ns.ModuleLoaded("visions") and L["Cinematic is hiding parts of your interface and running its cameras and cards. " ..
+			"Each row says what it's doing right now, and why."] or L["Cinematic is hiding parts of your interface and running its cameras. " ..
 			"Each row says what it's doing right now, and why."])
 		banner.page = "CineMode"
 	else

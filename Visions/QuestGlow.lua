@@ -9,6 +9,7 @@
 -- related to a quest you're on, or its name is in an objective you haven't
 -- finished. Unreadable (secret) counts as no.
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 
 local SOFT = "softinteract"
 local CHECK_EVERY = 0.15
@@ -1392,3 +1393,4 @@ function ns.DescribeEQoLMarker(unit)
 	lines[3] = "eqol marker: frames over its middle: " .. (#covers > 0 and table.concat(covers, "; ") or "none")
 	return lines
 end
+end) -- (ns.Module "visions")

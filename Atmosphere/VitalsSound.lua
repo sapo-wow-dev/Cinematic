@@ -7,6 +7,7 @@
 -- soundtest vitals all walks through the lot.
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local SECONDS = 6 -- (some of these go on: faded out by then)
@@ -173,3 +174,4 @@ function ns.SpecDebug()
 		Say("C_SpecializationInfo has: " .. table.concat(names, ", ", first, math.min(first + 5, #names)))
 	end
 end
+end) -- (ns.Module "visions")

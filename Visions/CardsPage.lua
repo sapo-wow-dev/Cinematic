@@ -9,6 +9,7 @@
 -- given its own); Sounds.
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local NOTE_W = 440
@@ -1956,3 +1957,4 @@ function ns.CreateCardSoundsPanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Card Sounds", L["Card Vision"])
 end
+end) -- (ns.Module "visions")

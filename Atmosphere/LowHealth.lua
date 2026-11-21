@@ -8,6 +8,7 @@
 -- takes over as you die. This is Vitals Vision: its page is at the bottom.
 
 local ADDON_NAME, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -3664,3 +3665,4 @@ function ns.CreateVitalsVisionPanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Vitals Vision")
 end
+end) -- (ns.Module "visions")

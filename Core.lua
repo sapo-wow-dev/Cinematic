@@ -1733,15 +1733,28 @@ local function CamHeldToCine(cam)
 	end
 	return true
 end
+-- Visions left out (Visions General's Load Visions, Modules.lua): the switches
+-- of every Vision page read as off, so code outside Visions that goes by them
+-- (Heal Vision's plates, Quest Vision's icons, the death camera's screen...)
+-- stops too. Their saved values are
+-- kept: loaded again, it's all as it was.
+local LEFT_OUT = {}
+ns.LEFT_OUT_SWITCHES = LEFT_OUT
+ns.ModuleLeftOut("visions", function()
+	for _, key in ipairs({ "handleHealVision", "questVision", "rollWindow", "duelPlates", "damageVision",
+		"emoteVision", "cards", "lowHealth", "teleportVision", "deathScreen" }) do
+		LEFT_OUT[key] = true
+	end
+end)
 -- (A page's switch can be under another's: Duel Vision's ticks under its page's
 -- switch, under Enable Visions.)
 function ns.Setting(key)
 	local db = ns.db
 	if not db then return false end
-	if OutsideBlocked(db, key) then return false end
+	if LEFT_OUT[key] or OutsideBlocked(db, key) then return false end
 	local page = PAGE_SWITCH[key]
 	while page do
-		if db[page] == false or OutsideBlocked(db, page) then return false end
+		if db[page] == false or LEFT_OUT[page] or OutsideBlocked(db, page) then return false end
 		page = PAGE_SWITCH[page]
 	end
 	return db[key]
@@ -1751,9 +1764,10 @@ end
 function ns.PageSetting(key)
 	local db = ns.db
 	if not db then return false end
+	if LEFT_OUT[key] then return false end
 	local page = PAGE_SWITCH[key]
 	while page do
-		if db[page] == false then return false end
+		if db[page] == false or LEFT_OUT[page] then return false end
 		page = PAGE_SWITCH[page]
 	end
 	return db[key]
@@ -1780,7 +1794,7 @@ function ns.MasterOff(key, db)
 	db = db or ns.db
 	local master, steps = PAGE_SWITCH[key], 0
 	while master and steps < 10 do
-		if db and db[master] == false then return true end
+		if db and db[master] == false or LEFT_OUT[master] then return true end
 		master, steps = PAGE_SWITCH[master], steps + 1
 	end
 	return false

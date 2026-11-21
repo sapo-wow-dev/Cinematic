@@ -8,6 +8,7 @@
 -- theme's glow), or one of your own. Its page is at the bottom.
 
 local ADDON_NAME, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -615,3 +616,4 @@ function ns.CreateTeleportVisionPanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Teleport Vision")
 end
+end) -- (ns.Module "visions")

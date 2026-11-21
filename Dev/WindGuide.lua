@@ -10,6 +10,7 @@
 -- Sprites: Media/make_wind_guide.py. Its page is at the bottom.
 
 local ADDON_NAME, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -720,3 +721,4 @@ function ns.CreateWindGuidePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Wind Guide")
 end
+end) -- (ns.Module "visions")

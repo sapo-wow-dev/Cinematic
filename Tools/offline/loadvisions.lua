@@ -1,0 +1,139 @@
+-- /cine debug loadvisions (Dev/LoadVisionsTest.lua) offline, through its
+-- reloads: a load of the dev copy per reload (each a run of its own, the
+-- saved settings handed on as the game would), pretend time, the kit picking
+-- the run up after each. Started with Visions loaded (3 loads) and left out
+-- (4: its first step ticks the box). Every step PASS, the log ends DONE with
+-- 0 fail, the changed setting put back and Load Visions on at the end.
+--
+--   python -I Tools/offline/run.py Tools/offline/loadvisions.lua [forever|retail]
+-- Exit 1 on any problem.
+-- luacheck: ignore 111 112 113 121 122 212 431
+local LUA = os.getenv("CINE_LUA") or "lua5.1"
+local client, phase, tmp, start = ...
+client = client or "forever"
+
+local function Dump(value)
+	if type(value) == "table" then
+		local parts = {}
+		for k, v in pairs(value) do
+			if type(v) ~= "function" then parts[#parts + 1] = "[" .. Dump(k) .. "]=" .. Dump(v) end
+		end
+		return "{" .. table.concat(parts, ",") .. "}"
+	elseif type(value) == "string" then
+		return ("%q"):format(value)
+	end
+	return tostring(value)
+end
+
+if not phase then
+	local failed = false
+	for _, each in ipairs({ { "on", 3 }, { "off", 4 } }) do
+		local file = os.tmpname()
+		local f = assert(io.open(file, "w"))
+		f:write(each[1] == "off" and "return { loadVisions = false }" or "return nil")
+		f:close()
+		local done
+		for n = 1, 6 do
+			local pipe = io.popen(("%s Tools/offline/loadvisions.lua %s %d %s %s 2>&1"):format(LUA, client, n, file,
+				each[1]))
+			local out = pipe:read("*a")
+			pipe:close()
+			io.write(out)
+			if not out:find(("loadvisions %s %d: ok"):format(each[1], n), 1, true) then
+				failed = true
+				break
+			end
+			if out:find(", done", 1, true) then
+				done = n
+				break
+			end
+		end
+		if done ~= each[2] then
+			failed = true
+			print(("loadvisions %s: done after %s load(s), not %d"):format(each[1], tostring(done), each[2]))
+		end
+		os.remove(file)
+	end
+	print(failed and "loadvisions: FAILED" or "loadvisions: all ok")
+	os.exit(failed and 1 or 0)
+end
+
+-- (The first load: nil, or Visions left out to start; then the last load's.)
+local db = assert(loadfile(tmp))()
+local now = 100
+local timers = {}
+local ns, wow = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc", function()
+	rawset(_G, "CinematicDB", db)
+	rawset(_G, "GetTime", function() return now end)
+	rawset(_G, "C_Timer", {
+		After = function(delay, fn) timers[#timers + 1] = { at = now + delay, fn = fn } end,
+		NewTicker = function(every, fn)
+			local t = { every = every, at = now + every, fn = fn, Cancel = function(self) self.cancelled = true end }
+			timers[#timers + 1] = t
+			return t
+		end,
+	})
+end)
+local function Advance(seconds)
+	local stop = now + seconds
+	while now < stop do
+		now = now + 0.1
+		for i = #timers, 1, -1 do
+			local t = timers[i]
+			if not t.cancelled and t.at <= now then
+				if t.every then t.at = now + t.every else table.remove(timers, i) end
+				pcall(t.fn, t)
+			end
+		end
+	end
+end
+-- (The game's own, as the stand-in doesn't have them: memory less with
+-- Visions left out, every frame, a screenshot, the Reload box found.)
+UpdateAddOnMemoryUsage = function() end
+GetAddOnMemoryUsage = function() return ns.ModuleLoaded("visions") and 9000 or 7000 end
+EnumerateFrames = function(after)
+	local i = 0
+	for n, frame in ipairs(wow.frames) do if frame == after then i = n end end
+	return wow.frames[i + 1]
+end
+Screenshot = function() end
+local popup = wow.NewObject("Frame", "StaticPopup1")
+popup._shown = false
+rawset(_G, "StaticPopup1", popup)
+StaticPopup_Show = function() popup._shown = true end
+StaticPopup_FindVisible = function() return popup._shown and popup or nil end
+
+local problems = {}
+if phase == "1" then
+	ns.HandleSlash("debug loadvisions")
+	Advance(120)
+else
+	-- (The kit picks the run up 2 s after the reload's PLAYER_ENTERING_WORLD: isLogin false, isReload true.)
+	wow.Fire("PLAYER_ENTERING_WORLD", false, true)
+	Advance(120)
+end
+local log = CinematicDB.loadVisionsTestLog or {}
+local text = table.concat(log, "\n")
+for _, line in ipairs(log) do
+	if line:find("FAIL", 1, true) then problems[#problems + 1] = line end
+end
+local done = text:find("DONE", 1, true) ~= nil
+-- (The test's box under the game's Reload box while that's up: run 2 hid it.)
+if not done and not (ns.padTestBox and ns.padTestBox.placedUnder == popup) then
+	problems[#problems + 1] = "the test's box isn't under the game's Reload box"
+end
+if not done then
+	if not text:find("reload clicked", 1, true) then problems[#problems + 1] = "the run didn't wait for the reload" end
+	local file = assert(io.open(tmp, "w"))
+	file:write("return ", Dump(CinematicDB), "\n")
+	file:close()
+else
+	if not text:find("DONE", 1, true) then problems[#problems + 1] = "no DONE line" end
+	if not text:find(" 0 fail", 1, true) then problems[#problems + 1] = "the summary isn't 0 fail" end
+	if CinematicDB.loadVisions == false then problems[#problems + 1] = "Load Visions left off" end
+	if CinematicDB.loadVisionsTestUndo then problems[#problems + 1] = "the undo wasn't put back" end
+end
+if os.getenv("LOADVISIONS_LOG") then print(text) end
+local tag = ("loadvisions %s %s"):format(start or "on", phase)
+for _, p in ipairs(problems) do print(tag .. ": " .. p) end
+if #problems == 0 then print(tag .. ": ok" .. (done and ", done" or "")) end

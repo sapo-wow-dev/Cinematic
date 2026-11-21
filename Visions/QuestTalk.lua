@@ -27,6 +27,7 @@
 -- doesn't let addons hold keys back in one), and only keys that do
 -- something here: the rest go through to the game as usual.
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local TEXT_WIDTH = 360     -- the bubble's words, at most (its own units)
@@ -3106,3 +3107,4 @@ function ns.LogQuestRewards()
 	end
 	return logged
 end
+end) -- (ns.Module "visions")

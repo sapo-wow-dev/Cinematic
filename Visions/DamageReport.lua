@@ -8,6 +8,7 @@
 -- rest unnamed). Not bosses = Overall less the bosses, player by player.
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local PAD = 16
@@ -510,3 +511,4 @@ events:SetScript("OnEvent", function()
 		end
 	end)
 end)
+end) -- (ns.Module "visions")

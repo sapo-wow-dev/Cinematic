@@ -471,6 +471,8 @@ local CARDS = {
 	{ "quest", "Story quest", "4. Questing & combat" }, { "rare", "Rare spotted", "4. Questing & combat" },
 	{ "battleground", "Battleground", "4. Questing & combat" }, { "streak", "Kill streak", "4. Questing & combat" },
 }
+-- (Visions' cards: once its code has run, Modules.lua; none with Visions left out.)
+ns.Module("visions", function()
 for _, card in ipairs(CARDS) do
 	if ns.CARD_BY_ID[card[1]] then -- (each this client has)
 		Add(card[3], { key = "card-" .. card[1], name = "Card: " .. card[2],
@@ -533,6 +535,7 @@ Add("4. Questing & combat", { key = "card-shots", name = "Card shots: a screensh
 		end
 		ns.Print(("Card shots: %d taken. /reload to save their list."):format(#list))
 	end })
+end) -- (ns.Module "visions")
 Add("4. Questing & combat", { key = "damage", name = "Damage Vision: made-up fight",
 	tip = "Damage Vision's Test: a made-up 25-second race with four others, in the style picked on its page.",
 	needs = function() return ns.TestDamageVision ~= nil, "Damage Vision isn't loaded" end,

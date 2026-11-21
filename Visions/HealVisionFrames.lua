@@ -20,6 +20,7 @@
 -- frame's alpha (your target's outline) are skipped, and so is anything
 -- CineMode is fading right now (a row unticked), so nothing fights.
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 
 local RESCAN_EVERY = 5   -- seconds between finding each member's parts again
 local UPDATE_EVERY = 0.5 -- and between going over every member (health changes come by event)
@@ -1636,3 +1637,4 @@ function ns.PlateFontTest()
 		end
 	end)
 end
+end) -- (ns.Module "visions")

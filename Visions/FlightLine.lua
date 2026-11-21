@@ -10,6 +10,7 @@
 -- (read from the cursor, so nothing takes the mouse's clicks there).
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local FADE = 0.6       -- seconds a fade in or out takes
@@ -174,3 +175,4 @@ watcher:SetScript("OnEvent", function()
 		if Flying() then Start() end
 	end)
 end)
+end) -- (ns.Module "visions")

@@ -5191,6 +5191,11 @@ end
 
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
+-- (A new step that reads Visions code, ns.CARD_STYLES and the like: only
+-- if ns.ModuleLoaded("visions"), and not marked done otherwise, so it runs
+-- once Visions is loaded again. Left out, Modules.lua, that code isn't
+-- there, and "ns.X or {}" would do nothing and mark it done.
+-- Tools/offline/modules.lua fails on a step's error with Visions off.)
 function ns.RunMigrations()
 	for index, step in ipairs(STEPS) do
 		local ok, err = xpcall(step, function(message)

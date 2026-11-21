@@ -2523,6 +2523,24 @@ local function HandleSlash(msg)
 	return true
 end
 
+-- (Visions left out, Modules.lua: a command into its code finds nothing
+-- there. Said so, the game's error under it, in place of the error window.)
+local slashInner = HandleSlash
+local function LeftOutNote(err)
+	ns.Print(L["That needs Visions, which isn't loaded (Visions > General > Load Visions)."] ..
+		" |cff909090(" .. tostring(err):match("^[^\n]*") .. ")|r")
+end
+HandleSlash = function(msg)
+	if ns.ModuleLoaded("visions") then return slashInner(msg) end
+	local results = { pcall(slashInner, msg) }
+	if results[1] then return unpack(results, 2) end
+	if tostring(results[2]):find("a nil value", 1, true) then
+		LeftOutNote(results[2])
+	else
+		error(results[2], 0)
+	end
+end
+
 function ns.HandleSlash(msg)
 	local cmd, arg = msg:lower():match("^%s*(%S*)%s*(.-)%s*$")
 	if (cmd == "debug" and arg ~= "help") or cmd == "list" or cmd == "selftest" then

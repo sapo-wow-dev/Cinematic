@@ -837,7 +837,7 @@ end
 function ns.PageOn(switch)
 	local db = ns.db
 	while switch do
-		if db[switch] == false then return false end
+		if db[switch] == false or ns.LEFT_OUT_SWITCHES[switch] then return false end -- (Visions left out: Core.lua)
 		switch = ns.PageSwitchOf(switch)
 	end
 	return true
@@ -8578,10 +8578,31 @@ function ns.PadTestBox(text, sub, r, g, b)
 			local clock = self.clock:GetText() and self.clock:GetText() ~= "" and (self.clock:GetStringHeight() + 10) or 0
 			self:SetSize(700, self.text:GetStringHeight() + self.sub:GetStringHeight() + clock + 48)
 		end
+		-- (Under any of the game's popups that's up: they open where it sits, and
+		-- it hid them, loadvisions run 2's Reload box. Back up once they go.)
+		box.Place = function(self)
+			local under
+			for i = 1, (_G.STATICPOPUP_NUMDIALOGS or 4) do
+				local popup = _G["StaticPopup" .. i]
+				if popup and popup:IsShown() and (not under or (popup:GetBottom() or 0) < (under:GetBottom() or 0)) then
+					under = popup
+				end
+			end
+			if under == self.placedUnder and self.placed then return end
+			self.placed, self.placedUnder = true, under
+			self:ClearAllPoints()
+			if under then
+				self:SetPoint("TOP", under, "BOTTOM", 0, -16)
+			else
+				self:SetPoint("TOP", UIParent, "TOP", 0, -120)
+			end
+		end
 		box:SetScript("OnUpdate", function(self, elapsed)
 			self.clockWait = (self.clockWait or 0) - elapsed
-			if self.clockWait > 0 or not self.clockFn then return end
+			if self.clockWait > 0 then return end
 			self.clockWait = 0.25
+			self:Place()
+			if not self.clockFn then return end
 			local ok, line = pcall(self.clockFn)
 			local had = self.clock:GetText()
 			self.clock:SetText(ok and line or "")
@@ -8595,6 +8616,7 @@ function ns.PadTestBox(text, sub, r, g, b)
 	box.sub:SetText(sub or "")
 	box.sub:SetTextColor(r or 1, g or 1, b or 1)
 	box:Fit()
+	box:Place()
 	box:Show()
 end
 -- Timers on the test's box: fn gives its line (time on the step, the run,

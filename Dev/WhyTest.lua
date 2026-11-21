@@ -175,6 +175,12 @@ local STEPS = {
 			ns.WhyWindowTab("cards", "card:now")
 		end,
 		tick = function(s, t)
+			-- (Visions left out, Modules.lua: no cards to fire; the Cards tab's
+			-- one row says so, the verdict checks it.)
+			if not ns.ModuleLoaded("visions") then
+				if not s.fired then s.fired = true; Shot("4 card no visions") end
+				return
+			end
 			if not s.fired then
 				s.fired = true
 				local ok, shows = pcall(ns.Cards.Fire, "zone", ns.CardSample("zone"))
@@ -190,6 +196,11 @@ local STEPS = {
 			end
 		end,
 		verdict = function()
+			if not ns.ModuleLoaded("visions") then
+				local row = Find("cards", "cards:loaded")
+				if not row then return false, "Visions not loaded and the Cards tab doesn't say so" end
+				return nil, "Visions not loaded: no card to fire. Cards tab: " .. Line(row)
+			end
 			local moment = MomentSince("card:zone")
 			if not moment then return false, "nothing on Recent for the Zone card" end
 			return true, ("Recent: %s, %s"):format(moment.outcome, tostring(moment.text))

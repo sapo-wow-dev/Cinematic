@@ -10,6 +10,7 @@
 -- one there last session's, and starts a new one.
 
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 local DEFAULTS = ns.DEFAULTS
 
@@ -291,3 +292,4 @@ frame:SetScript("OnEvent", ns.Profiled("Last time", function(_, event, ...)
 		CountZone()
 	end
 end))
+end) -- (ns.Module "visions")

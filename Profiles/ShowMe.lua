@@ -491,6 +491,12 @@ local DEMOS = {
 	-- the welcome window keeps off; out of it every plate shows. Nothing to
 	-- see here, 2026-11-20: a page link in the shelf's "Also in" line.)
 }
+-- (Visions left out, Modules.lua: their demos gone, so nothing offers them.)
+ns.ModuleLeftOut("visions", function()
+	for _, key in ipairs({ "vitals", "tele", "emote", "roll", "damage", "timeTitle", "cards", "recap", "deathVision" }) do
+		DEMOS[key] = nil
+	end
+end)
 -- The cameras' Tests (CameraTests.lua), as the Camera Settings page's Test
 -- buttons run them, for CAM_TEST seconds (its 30 at most), the window faded.
 -- They're Cinematic's own cameras: not before a level's picked.

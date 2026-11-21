@@ -19,6 +19,7 @@
 ## SavedVariables: CinematicDB
 ## SavedVariablesPerCharacter: CinematicCharDB
 
+Modules.lua
 Checks.lua
 FrameGuess.lua
 FadeDetached.lua
@@ -107,6 +108,7 @@ Visions\QuestMarkIcons.lua
 QoL\WheelsPage.lua
 Visions\QuestMobs.lua
 Visions\QuestGlow.lua
+Style\StyleFonts.lua
 Visions\QuestItemButton.lua
 Plates\PlateSleep.lua
 Effects.lua
@@ -136,6 +138,7 @@ Visions\QuestTalk.lua
 Visions\TalkingHeads.lua
 Camera\CameraTests.lua
 Atmosphere\Tint.lua
+Atmosphere\DeathVision.lua
 Atmosphere\ScreenEffectsData.lua
 Atmosphere\ScreenEffects.lua
 Atmosphere\LowHealthThemes.lua

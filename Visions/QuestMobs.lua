@@ -6,6 +6,7 @@
 -- not yet done. Where the lines can't be read, C_QuestLog.UnitIsRelatedToActiveQuest
 -- (which can't tell a finished objective). Unreadable (secret) counts as no.
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 
 -- Answers by GUID: true/false and when they were read. A yes holds until the
 -- quest log changes; a no is read again after a while (a unit's tooltip lines
@@ -1064,3 +1065,4 @@ function ns.DescribeQuestSpent(unit)
 		tostring(guid and spent[guid] ~= nil), untilTime and ("%.0f more sec"):format(math.max(0, untilTime - GetTime()))
 		or "no", tostring(lastSpent and lastSpent.name), tostring(lastSpent and lastSpent.guid))
 end
+end) -- (ns.Module "visions")

@@ -10,6 +10,7 @@
 -- alt still hears the story. Only where the game has talking heads (not
 -- Classic Era).
 local _, ns = ...
+ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 
 local function Secret(value)
 	return issecretvalue and issecretvalue(value)
@@ -75,3 +76,4 @@ if C_TalkingHead then
 		end)
 	end
 end
+end) -- (ns.Module "visions")

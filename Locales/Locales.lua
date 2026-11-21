@@ -61,6 +61,9 @@ watcher:SetScript("OnEvent", function(self, _, name)
 		return
 	end
 	self:UnregisterEvent("ADDON_LOADED")
+	-- (The parts that can be left out first, Modules.lua: their files' code
+	-- in English as it was when they loaded, their ns.OnLanguage lists below.)
+	if ns.RunModules then ns.RunModules() end
 	ns.locale = ChosenLocale()
 	local strings = ns.LANGUAGES[SAME_AS[ns.locale] or ns.locale]
 	if strings then
