@@ -1,0 +1,625 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;padding:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Welcome Demo Shelf</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a fake game screen holding the welcome window mock on top, the build plan in a plain column below. One dark look on purpose: it is a WoW UI. */
+:root {
+  color-scheme: dark;
+  --page: #0b0d10;
+  --ink: #e9e4d6;
+  --soft: #c9c3b3;
+  --dim: #807a6e;
+  --gold: #ffd100;
+  --gold-soft: #d9b84a;
+  --win: #14161a;
+  --panel: #1b1e23;
+  --raised: #23272e;
+  --edge: #353a43;
+  --lit: #6f7786;
+  --c-atmo: #a673e6;
+  --c-cam: #5a99e6;
+  --c-vis: #d94d40;
+  --c-ui: #59b373;
+  --c-style: #d98c40;
+  --c-qol: #4db3a6;
+  --ok: #59b373;
+  --new: #e6a23c;
+  --page-only: #7f8aa3;
+  --f-display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+body { background: var(--page); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: .02em; }
+h1 { font-size: 30px; color: var(--gold); }
+.lede { color: var(--soft); max-width: 68ch; margin: 8px 0 22px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--soft); margin-bottom: 14px; align-items: center; }
+.legend .pill { margin-right: 6px; }
+.toggle { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--gold); }
+
+/* ---------- the fake game screen ---------- */
+.screen { position: relative; border-radius: 6px; overflow: hidden; border: 1px solid var(--edge); isolation: isolate; }
+.world { position: absolute; inset: 0; z-index: 0;
+  background:
+    radial-gradient(120% 70% at 70% 105%, #1f3a2c 0 38%, transparent 39%),
+    radial-gradient(90% 60% at 15% 110%, #18301f 0 40%, transparent 41%),
+    radial-gradient(60% 40% at 80% 20%, #e8b77066, transparent 70%),
+    linear-gradient(#3a4f6e, #8a7a6a 62%, #2a3a2a 63%, #13221a);
+}
+.fx { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.fx-bar { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height .9s ease; }
+.fx-bar.top { top: 0 } .fx-bar.bot { bottom: 0 }
+.screen.bars .fx-bar { height: 11%; }
+.fx-tint { background: linear-gradient(160deg, #ff9a4d55, #6a3cff33); opacity: 0; transition: opacity 1.2s; mix-blend-mode: overlay; }
+.fx-vig { background: radial-gradient(ellipse at center, transparent 45%, #000c 100%); opacity: 0; transition: opacity 1.2s; }
+.screen.tint .fx-tint, .screen.tint .fx-vig { opacity: 1; }
+.fx-red { background: radial-gradient(ellipse at center, transparent 40%, #b3000099 100%); opacity: 0; }
+.screen.vitals .fx-red { animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 1 } }
+.fx-portal { left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; inset: auto; box-shadow: 0 0 40px 18px #7fb6ff, inset 0 0 30px #c5e0ff; opacity: 0; transition: all 1.4s ease; }
+.screen.tele .fx-portal { width: 420px; height: 420px; margin: -210px 0 0 -210px; opacity: .8; }
+.fx-fade { background: #000; opacity: 0; transition: opacity 2s 1s; }
+.screen.tele .fx-fade { opacity: .85; }
+.screen.spin .world { animation: orbit 5s ease-in-out; }
+@keyframes orbit { 50% { background-position: 60px 0, -80px 0, -200px 0, 0 0; filter: hue-rotate(-8deg) } }
+.screen.fadeui .win { opacity: .18; transition: opacity .8s; }
+.win { transition: opacity .8s; }
+
+.toast { position: absolute; z-index: 6; left: 50%; top: 14px; transform: translateX(-50%) translateY(-8px); background: #000d; border: 1px solid var(--gold-soft); color: var(--ink); padding: 8px 14px; border-radius: 4px; font-size: 13px; display: flex; gap: 12px; align-items: center; opacity: 0; transition: all .25s; pointer-events: none; max-width: calc(100% - 32px); }
+.toast.on { opacity: 1; transform: translateX(-50%); pointer-events: auto; }
+.toast b { color: var(--gold); font-weight: 600; }
+.toast { max-width: min(480px, calc(100% - 32px)); }
+.toast .line { display: block; color: var(--soft); font-size: 12.5px; margin-top: 1px; }
+.toast button { background: none; border: 1px solid var(--edge); color: var(--soft); font: inherit; font-size: 12px; padding: 2px 8px; border-radius: 3px; cursor: pointer; }
+
+/* ---------- the welcome window ---------- */
+.stage { position: relative; z-index: 4; padding: 56px clamp(8px, 3vw, 40px) 40px; }
+.win { max-width: 920px; margin: 0 auto; background: var(--win); border: 1px solid var(--edge); box-shadow: 0 20px 60px #000a; padding: 22px; }
+.win-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.win h2 { font-size: 24px; color: var(--gold); }
+.win .sub { color: var(--soft); margin-top: 2px; font-size: 14px; }
+.x { width: 22px; height: 22px; border: 1px solid var(--edge); background: var(--panel); color: var(--dim); display: grid; place-items: center; font-size: 13px; flex: none; }
+
+.cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.card { background: var(--panel); border: 1px solid var(--edge); padding: 14px 12px; text-align: left; color: inherit; font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 8px; }
+.card:hover, .card:focus-visible { border-color: var(--lit); outline: none; }
+.card.active { border-color: var(--gold); }
+.card .ic { width: 40px; height: 40px; border-radius: 8px; }
+.card .t { font-weight: 700; color: var(--ink); font-size: 14px; }
+.card .l { color: var(--dim); font-size: 12px; line-height: 1.35; }
+
+.row { background: var(--panel); margin-top: 12px; padding: 10px 12px 12px; }
+.row-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; flex-wrap: wrap; }
+.row-head .h { color: var(--gold); font-weight: 600; }
+.row-head .hint { color: var(--dim); }
+.demos { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.demo { position: relative; background: var(--raised); border: 1px solid var(--edge); color: inherit; font: inherit; display: flex; gap: 7px; align-items: center; padding: 6px; min-height: 40px; cursor: pointer; text-align: left; min-width: 0; }
+.demo:hover, .demo:focus-visible { border-color: var(--lit); outline: none; }
+.demo.running { border-color: var(--gold); }
+.demo .ic { width: 26px; height: 26px; border-radius: 5px; flex: none; }
+.demo .nm { font-size: 12.5px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.demo.running .nm { color: var(--gold); }
+.demo .tag { font-size: 11px; color: var(--dim); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.demo .tag.has { color: var(--gold-soft); }
+.demo .txt { min-width: 0; }
+.more { border-style: dashed; border-color: var(--gold-soft); justify-content: center; }
+.more .nm { color: var(--gold); font-weight: 600; }
+.more .chev { display: inline-block; transition: transform .2s; color: var(--gold); }
+.more[aria-expanded="true"] { border-style: solid; background: #2a2716; }
+.more[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
+.row-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; font-size: 12.5px; color: var(--soft); flex-wrap: wrap; }
+.tick { display: inline-flex; gap: 8px; align-items: center; }
+.tick i { width: 14px; height: 14px; border: 1px solid var(--edge); display: grid; place-items: center; }
+.tick i::after { content: ""; width: 8px; height: 8px; background: var(--gold); }
+.slider { display: inline-flex; gap: 10px; align-items: center; }
+.slider span.track { width: 160px; height: 4px; background: var(--edge); position: relative; }
+.slider span.track::after { content: ""; position: absolute; left: 62%; top: -5px; width: 8px; height: 14px; background: var(--gold); }
+
+/* the shelf */
+.shelf { border-top: 1px solid var(--edge); margin-top: 12px; padding-top: 12px; display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px; }
+.shelf[hidden] { display: none !important; }
+.cats { display: flex; flex-direction: column; gap: 2px; }
+.cat { background: none; border: 1px solid transparent; color: var(--soft); font: inherit; font-size: 13px; text-align: left; padding: 6px 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.cat:hover { border-color: var(--edge); }
+.cat.on { background: var(--raised); border-color: var(--edge); color: var(--ink); }
+.cat .sw { width: 4px; align-self: stretch; border-radius: 2px; }
+.cat .n { margin-left: auto; color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.shelf-main { min-width: 0; }
+.shelf-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.search { flex: 1 1 180px; background: var(--win); border: 1px solid var(--edge); color: var(--ink); font: inherit; font-size: 13px; padding: 5px 9px; }
+.search:focus { outline: 1px solid var(--lit); }
+.btn { background: var(--raised); border: 1px solid var(--edge); color: var(--soft); font: inherit; font-size: 12.5px; padding: 5px 10px; cursor: pointer; }
+.btn:hover { border-color: var(--lit); color: var(--ink); }
+.btn.gold { color: var(--gold); border-color: var(--gold-soft); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 6px; max-height: 268px; overflow-y: auto; padding-right: 4px; scrollbar-color: var(--edge) transparent; }
+.grid .demo { min-height: 44px; }
+.grid .group-label { grid-column: 1 / -1; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); padding: 6px 2px 0; display: flex; gap: 6px; align-items: center; }
+.grid .group-label::before { content: ""; width: 10px; height: 2px; background: var(--swc, var(--dim)); }
+.dot { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; display: none; }
+.show-status .dot { display: block; }
+.dot.ok { background: var(--ok) } .dot.new { background: var(--new) } .dot.page { background: var(--page-only) }
+.empty { grid-column: 1 / -1; color: var(--dim); font-size: 13px; padding: 16px 4px; }
+.tilebox { position: relative; min-width: 0; display: flex; }
+.tilebox > .demo { flex: 1; }
+.on-btn { position: absolute; right: 5px; bottom: 5px; font: inherit; font-size: 11px; line-height: 1.3; padding: 1px 6px; background: var(--win); border: 1px solid var(--gold-soft); color: var(--gold); cursor: pointer; }
+.on-btn:hover, .on-btn:focus-visible { background: #2a2716; outline: none; }
+.demo:disabled { cursor: not-allowed; }
+.demo:disabled .ic { filter: grayscale(1); opacity: .5; }
+.demo:disabled .nm, .demo:disabled .tag { color: var(--dim) !important; }
+.banner { display: flex; gap: 8px; align-items: center; background: #3a1f1c; border: 1px solid #6b2f28; color: #f0c9c2; font-size: 12.5px; padding: 6px 10px; margin-bottom: 8px; }
+.banner[hidden], .on-btn[hidden] { display: none; }
+.banner::before { content: "⚔"; color: var(--c-vis); }
+.also { font-size: 12.5px; color: var(--dim); margin-top: 8px; line-height: 1.7; }
+.also b { color: var(--soft); font-weight: 600; margin-right: 4px; }
+.also button { background: none; border: 0; padding: 0; font: inherit; color: var(--gold-soft); cursor: pointer; text-decoration: underline; text-decoration-color: #d9b84a55; text-underline-offset: 3px; }
+.also button:hover { color: var(--gold); }
+.row-head .right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.btn.small { font-size: 12px; padding: 2px 9px; }
+
+.about { background: var(--panel); margin-top: 12px; padding: 10px 12px; font-size: 13px; color: var(--soft); min-height: 58px; }
+.about b { color: var(--gold); font-weight: 600; }
+.about .how { color: var(--dim); display: block; margin-top: 3px; }
+.win-foot { display: flex; justify-content: space-between; margin-top: 12px; font-size: 13px; gap: 10px; flex-wrap: wrap; align-items: center; }
+.win-foot .status { color: var(--soft); }
+.win-foot .btns { display: flex; gap: 8px; }
+
+/* icons: hue tiles with a monogram (stand-ins for the real spell icons) */
+.ic { display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; color: #fff; font-size: 12px; background: linear-gradient(145deg, color-mix(in srgb, var(--h) 85%, #fff 15%), color-mix(in srgb, var(--h) 60%, #000 40%)); box-shadow: inset 0 0 0 1px #0006; text-shadow: 0 1px 2px #0008; }
+.card .ic { font-size: 15px; }
+
+/* ---------- plan ---------- */
+.plan { margin-top: 40px; display: grid; gap: 34px; }
+.plan > section { min-width: 0; }
+.plan h2 { font-size: 21px; color: var(--ink); margin-bottom: 10px; }
+.plan p { color: var(--soft); max-width: 72ch; margin: 0 0 10px; }
+.plan ul, .plan ol { color: var(--soft); max-width: 76ch; padding-left: 20px; margin: 0; display: grid; gap: 6px; }
+.plan li b { color: var(--ink); }
+code { font-family: var(--f-mono); font-size: 12.5px; color: var(--gold-soft); background: #ffffff0d; padding: 1px 5px; border-radius: 3px; }
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.kind { background: var(--panel); border: 1px solid var(--edge); padding: 14px; min-width: 0; }
+.kind h3 { font-family: var(--f-body); font-size: 15px; display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.kind p { font-size: 14px; margin: 0; }
+.kind .count { margin-left: auto; font-family: var(--f-mono); font-size: 13px; color: var(--dim); font-weight: 400; }
+.pill { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--edge); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 720px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--edge); vertical-align: top; }
+th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); font-weight: 600; background: var(--panel); position: sticky; top: 0; }
+td { color: var(--soft); }
+td:first-child { color: var(--ink); white-space: nowrap; }
+td .st { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.phases { counter-reset: ph; display: grid; gap: 12px; }
+.phase { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; }
+.phase::before { counter-increment: ph; content: counter(ph); font-family: var(--f-display); font-weight: 700; color: var(--gold); border: 1px solid var(--gold-soft); width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; }
+.phase h3 { font-family: var(--f-body); font-size: 16px; margin-bottom: 4px; }
+.phase p { margin: 0; font-size: 14.5px; }
+
+@media (max-width: 860px) {
+  .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .demos { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .shelf { grid-template-columns: minmax(0, 1fr); }
+  .cats { flex-direction: row; flex-wrap: wrap; }
+  .cat .sw { width: 10px; height: 4px; align-self: center; }
+  .cols { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .demos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .slider span.track { width: 90px; }
+  .stage { padding-top: 64px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <h1>Welcome Demo Shelf</h1>
+  <p class="lede">A mock of the welcome window with every feature one click from a demo. The six demos that are there today stay put, with Fading UI added first. The last button, <b>See all <span id="nAll"></span></b>, opens a shelf under the row with every feature that has something to show, by hub. Hover anything to read about it, click to play it. Pick a level card to see which features it turns on; a feature that's off has a <b>Turn on</b> button right on its tile. <b>Watch the tour</b> plays the highlights one after another.</p>
+  <div class="legend">
+    <label class="toggle"><input type="checkbox" id="statusToggle"> Show build status</label>
+    <label class="toggle"><input type="checkbox" id="fightToggle"> Pretend you're in a fight</label>
+    <span><span class="pill" style="background:var(--ok)"></span>Test exists: wire it in</span>
+    <span><span class="pill" style="background:var(--new)"></span>Needs a new demo</span>
+    <span><span class="pill" style="background:var(--page-only)"></span>Link to its page, no tile</span>
+  </div>
+
+  <div class="screen" id="screen">
+    <div class="world"></div>
+    <div class="fx"><div class="fx-bar top"></div><div class="fx-bar bot"></div></div>
+    <div class="fx fx-tint"></div><div class="fx fx-vig"></div><div class="fx fx-red"></div>
+    <div class="fx fx-portal"></div><div class="fx fx-fade"></div>
+    <div class="toast" id="toast" role="status"><span id="toastText"></span><button type="button" id="toastStop">Stop</button></div>
+
+    <div class="stage">
+      <div class="win" id="win">
+        <div class="win-head">
+          <div><h2>Welcome to Cinematic</h2><div class="sub">Select a profile that suits you.</div></div>
+          <div class="x" aria-hidden="true">✕</div>
+        </div>
+        <div class="cards" id="cards"></div>
+
+        <div class="row">
+          <div class="row-head"><span class="h">See it first</span><span class="right"><span class="hint" id="rowHint">Click one to see it for a few seconds.</span><button class="btn gold small" type="button" id="rowTour">▶ Watch the tour · 1½ min</button></span></div>
+          <div class="demos" id="demos"></div>
+
+          <div class="shelf" id="shelf" hidden>
+            <div class="cats" id="cats" role="tablist" aria-label="Feature groups"></div>
+            <div class="shelf-main">
+              <div class="banner" id="banner" hidden>You're in a fight. The demos come back when it ends.</div>
+              <div class="shelf-bar">
+                <input class="search" id="search" type="search" placeholder="Find a feature: fishing, nameplates, duel…" aria-label="Find a feature">
+                <button class="btn gold" type="button" id="tour">▶ Play all in this group</button>
+              </div>
+              <div class="grid" id="grid"></div>
+              <div class="also" id="also"></div>
+            </div>
+          </div>
+
+          <div class="row-foot">
+            <span class="tick"><i></i>Start in CineMode</span>
+            <span class="slider">Tint strength <span class="track"></span> 62%</span>
+          </div>
+        </div>
+
+        <div class="about" id="about"></div>
+        <div class="win-foot">
+          <span class="status" id="status">Trying <b style="color:var(--gold)">Balanced</b>. Close this window to keep it.</span>
+          <span class="btns"><button class="btn" type="button">Customize ›</button><button class="btn gold" type="button">Done</button></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="plan">
+    <section>
+      <h2>How the shelf behaves</h2>
+      <ul>
+        <li><b>The row stays short.</b> Fading UI joins it first, then Letterbox, Tint, Camera, Vitals, Shoulder Cam and Teleport as today. The last slot becomes <code>See all ▾</code>, a dashed gold button that says how many more there are.</li>
+        <li><b>It opens in place.</b> The shelf drops in under the six buttons, inside the same row, above the Start in CineMode line. The grid has a fixed height and scrolls, so the window grows by one known amount and never runs off the screen at a small UI scale.</li>
+        <li><b>Groups follow the settings hubs.</b> Atmosphere, Cameras, Visions, Interface, Style and Quality of Life, each with its hub's band color. A player who liked something here finds it under the same name later.</li>
+        <li><b>Same button, same rules.</b> Every tile is the row's button: icon, name, the In CineMode / 4 scenes / Off tag for the level hovered, Stop while it runs, greyed with a tooltip when it can't run (in a fight, mounted). Hover fills the description box.</li>
+        <li><b>Turn on, right there.</b> A tile whose feature is off in the profile you're trying gets a small <code>Turn on</code> button. It adds that feature to the profile, and the tag changes to "On: you turned it on". Picking another level card resets it, since that's a different profile. Without this a player sees Duel Vision, likes it, and can't find it again.</li>
+        <li><b>Only things that play.</b> Every tile on the shelf shows something. Features with nothing to see (wheels, the keyboard map, talent links) are one line of links under the grid, "Also in Cinematic", each opening its page with a Back to the welcome window. Search finds those too.</li>
+        <li><b>The tour leads.</b> <code>▶ Watch the tour · 1½ min</code> sits in the row's header, so it is there before the shelf is opened: your UI fading, the letterbox and tint, a camera, Vitals, Emote and Card Visions, a teleport. The Shoulder Cam joins after the camera only once the player has said yes to its experimental camera setting (picking its level, or its own button); a tour shouldn't agree to that for them. Inside the shelf, the same button plays the open group.</li>
+        <li><b>One notice in a fight.</b> Rather than every tile explaining itself in a tooltip, the shelf shows one line at the top ("You're in a fight. The demos come back when it ends.") and the tiles grey out together. Tick "Pretend you're in a fight" above the mock to see it.</li>
+        <li><b>It remembers.</b> Open or closed and the last group are saved, so a player who came back from Customize lands where they were.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Three kinds of demo</h2>
+      <div class="cols">
+        <div class="kind"><h3><span class="pill" style="background:var(--ok)"></span>Test exists<span class="count" id="nOk"></span></h3><p>The feature already has a Test on its page or in the dev Demo Hub. It needs an entry in <code>DEMOS</code> in ShowMe.lua (start, stop, running, a tip) and nothing else.</p></div>
+        <div class="kind"><h3><span class="pill" style="background:var(--new)"></span>Needs a new demo<span class="count" id="nNew"></span></h3><p>It shows in the world but has no Test yet. Each needs a short fake moment, like the made-up race Damage Vision's Test uses.</p></div>
+        <div class="kind"><h3><span class="pill" style="background:var(--page-only)"></span>Link to its page<span class="count" id="nPage"></span></h3><p>It is a tool or a look picked from a list, with nothing to play. It gets no tile: it is a link in the "Also in Cinematic" line that opens its page over the welcome window.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Every feature on the shelf</h2>
+      <p>Where each demo would come from. Names are the settings pages' own.</p>
+      <div class="tbl-wrap"><table><thead><tr><th>Feature</th><th>Group</th><th>Status</th><th>Comes from</th></tr></thead><tbody id="tbody"></tbody></table></div>
+    </section>
+
+    <section>
+      <h2>Build order</h2>
+      <div class="phases">
+        <div class="phase"><div><h3>Fading UI demo</h3><p>The addon's main idea, and today it has no demo. Fade the UI out the way the level's CineMode would, hold it, bring it back, with the welcome window faded as the camera demos do. It goes in the row too, as its first button.</p></div></div>
+        <div class="phase"><div><h3>The shelf, with what already plays, and Turn on</h3><p>The See all button, the shelf, groups, search, the fight notice and the saved open state in Welcome.lua, reusing the row's button code for tiles. Fill it with the green tiles: they only need <code>DEMOS</code> entries, most of which the Demo Hub already calls (camera Tests, Cards, Damage Vision, Death Vision, Duel, Cooldown Flash, My Shots). Turn on writes the feature's switch into the profile being tried. Check the window's height in game at the smallest UI scale here, before going further: if the shelf doesn't fit, it becomes its own page of the window, as Customize is.</p></div></div>
+        <div class="phase"><div><h3>The tour and the page links</h3><p>Watch the tour in the row's header and Play all per group, run as the Demo Hub runs its reels. The "Also in Cinematic" links need one helper that opens a page by name from the welcome window and returns to it, which Customize partly has.</p></div></div>
+        <div class="phase"><div><h3>The other new demos, one commit each</h3><p>The amber tiles: Mouseover, Heal Vision, Nameplates, Chat Bubbles, Combat Text, Skyriding Cam. Each joins the shelf when it's done; until then it is in the link line. Tips stay one sentence each, for the eight languages.</p></div></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const CATS = [
+  { id: "atmo", name: "Atmosphere", c: "var(--c-atmo)" },
+  { id: "cam", name: "Cameras", c: "var(--c-cam)" },
+  { id: "vis", name: "Visions", c: "var(--c-vis)" },
+  { id: "ui", name: "Interface", c: "var(--c-ui)" },
+  { id: "style", name: "Style", c: "var(--c-style)" },
+  { id: "qol", name: "Quality of Life", c: "var(--c-qol)" },
+];
+const LEVELS = [
+  { name: "Subtle", line: "A light touch. Your UI fades only when you're along for the ride.", h: "#5a8a6a", m: "Su" },
+  { name: "Balanced", line: "Your UI fades away, and comes back when you need it.", h: "#4a7ab0", m: "Ba" },
+  { name: "Cinema", line: "Full immersion: just you and the world.", h: "#8a4ab0", m: "Ci" },
+  { name: "Shoulder Cam", line: "Cinema, with the camera over your shoulder.", h: "#b07a3a", m: "Sh" },
+  { name: "Blank Slate", line: "Everything off. Turn on only the parts you want.", h: "#555c66", m: "Bl" },
+];
+// on: the lowest level it is on in ("S" Subtle, "B" Balanced, "C" Cinema), or "" for off everywhere but its own page.
+// st: ok (a Test exists), new (needs a demo), page (opens its page). fx: what the mock plays.
+const F = [
+  // the row today
+  { k: "bars", n: "Letterbox", c: "atmo", st: "ok", row: 1, on: "B", fx: "bars", s: 6, src: "ShowMe.lua: bars", tip: "Black bars at the top and bottom of the screen, as in a film." },
+  { k: "tint", n: "Tint", c: "atmo", st: "ok", row: 1, on: "S", fx: "tint", s: 6, src: "ShowMe.lua: tint", tip: "A color wash over the world that follows the time of day and the zone, with soft dark edges and weather to match." },
+  { k: "camera", n: "Camera", c: "cam", st: "ok", row: 1, on: "B", fx: "spin", s: 5, src: "ShowMe.lua: camera orbit", tip: "The camera moves on its own at quiet moments: on flights, when you go AFK, by a campfire. This shows a half turn around you." },
+  { k: "vitals", n: "Vitals", c: "vis", st: "ok", row: 1, on: "C", fx: "vitals", s: 5, src: "ShowMe.lua: vitals", tip: "As your health drops, the screen's edges close in, so you feel a fight without watching your health bar." },
+  { k: "shoulder", n: "Shoulder Cam", c: "cam", st: "ok", row: 1, on: "", fx: "spin", s: 10, src: "ShowMe.lua: shoulder", tip: "The camera moves over your shoulder, with you to one side of the screen. This glides in, swaps shoulders once and glides back." },
+  { k: "tele", n: "Teleport", c: "vis", st: "ok", row: 1, on: "B", fx: "tele", s: 8, src: "ShowMe.lua: tele", tip: "As you cast your Hearthstone or a teleport, a portal opens around you and the world fades out as you leave." },
+  // Atmosphere
+  { k: "weather", n: "Weather", c: "atmo", st: "ok", on: "B", fx: "tint", s: 6, src: "Tint demo, weather only", tip: "Rain, snow and dust drifting across the screen to match the zone's weather." },
+  { k: "gfx", n: "Graphics Boost", c: "atmo", st: "page", on: "", src: "Graphics+ page", tip: "Raises the game's view distance, shadows and sharpening in quiet moments, then lowers them for a fight." },
+  { k: "audio", n: "Audio", c: "atmo", st: "ok", on: "C", s: 5, src: "ns.TestVitalsSound", tip: "Quieter music and ambience as your UI fades, and a heartbeat as your health runs low." },
+  { k: "timecard", n: "Time of day title", c: "atmo", st: "ok", on: "B", s: 5, src: "ns.TestTimeChangeTitle", tip: "A title card as dusk or dawn comes in." },
+  // Cameras
+  { k: "afk", n: "AFK Cam", c: "cam", st: "ok", on: "S", fx: "spin", s: 30, src: "CameraTests.lua (Demo Hub)", tip: "A slow sweep around you while you're away." },
+  { k: "quest", n: "Quest Cam", c: "cam", st: "ok", on: "B", fx: "spin", s: 20, src: "CameraTests.lua", tip: "Frames you and the quest giver as you talk, as in a cutscene." },
+  { k: "flight", n: "Flight Cam", c: "cam", st: "ok", on: "S", fx: "spin", s: 30, src: "CameraTests.lua", tip: "Wide, slow shots of the land on a flight path." },
+  { k: "cozy", n: "Cozy Cam", c: "cam", st: "ok", on: "B", fx: "spin", s: 20, src: "CameraTests.lua", tip: "Sit by a campfire or in an inn and the camera settles in close." },
+  { k: "vista", n: "Vista Cam", c: "cam", st: "ok", on: "B", fx: "spin", s: 20, src: "CameraTests.lua", tip: "/stare at a view and the camera pulls back to take it in." },
+  { k: "fish", n: "Fish Cam", c: "cam", st: "ok", on: "B", fx: "spin", s: 15, src: "CameraTests.lua", tip: "Moves in on your bobber while you fish." },
+  { k: "death", n: "Death Cam", c: "cam", st: "ok", on: "C", fx: "spin", s: 30, src: "CameraTests.lua", tip: "Pulls up and away from you when you die." },
+  { k: "rpwalk", n: "RP Walk Cam", c: "cam", st: "ok", on: "C", fx: "spin", s: 25, src: "CameraTests.lua", tip: "A walking shot while you auto-walk through a town." },
+  { k: "autorun", n: "Auto-run Cam", c: "cam", st: "ok", on: "C", fx: "spin", s: 25, src: "CameraTests.lua", tip: "A tracking shot that follows you as you auto-run." },
+  { k: "skyride", n: "Skyriding Cam", c: "cam", st: "new", on: "B", fx: "spin", s: 10, src: "SkyrideCam.lua: needs a pretend flight", tip: "Pulls the camera back and widens the view as you pick up speed skyriding." },
+  { k: "shots", n: "My Shots", c: "cam", st: "ok", on: "", fx: "spin", s: 10, src: "ns.TestShot", tip: "Your own saved camera shots, played from a key or a wheel." },
+  { k: "scripts", n: "Camera Scripts", c: "cam", st: "page", on: "", src: "Camera Scripts page", tip: "Chains of camera moves you write and play back." },
+  // Visions
+  { k: "damage", n: "Damage Vision", c: "vis", st: "ok", on: "B", s: 25, src: "ShowMe.lua: damage (already in DEMOS)", tip: "A live race of your group's damage during a fight, shown as a film would." },
+  { k: "recap", n: "Fight Recap", c: "vis", st: "ok", on: "B", s: 8, src: "ns.TestDamageRecap", tip: "After a fight, a short card of who did what." },
+  { k: "heal", n: "Heal Vision", c: "vis", st: "new", on: "B", s: 8, src: "HealVisionFrames.lua: needs a fake group", tip: "Your party's health as soft bars at the screen's edge when your UI is faded, so a healer can keep it hidden." },
+  { k: "deathv", n: "Death Vision", c: "vis", st: "ok", on: "B", s: 8, src: "ns.TestDeathVision", tip: "The world drains of color as you die, and comes back as you rise." },
+  { k: "duel", n: "Duel Vision", c: "vis", st: "ok", on: "B", fx: "bars", s: 10, src: "Duel Vision page's Test", tip: "A countdown and a title card when a duel starts." },
+  { k: "questv", n: "Quest Vision", c: "vis", st: "ok", on: "B", s: 10, src: "QuestTalk.lua preview", tip: "Quest text as film subtitles, with the quest giver's name and portrait, in place of the quest window." },
+  { k: "roll", n: "Roll Vision", c: "vis", st: "ok", on: "B", s: 20, src: "ShowMe.lua: roll (already in DEMOS)", tip: "Loot rolls as a short scene with each player's roll, in place of the roll frames." },
+  { k: "emote", n: "Emote Vision", c: "vis", st: "ok", on: "C", s: 20, src: "ShowMe.lua: emote (already in DEMOS)", tip: "Another player's emote shown as a line of film dialogue over their head." },
+  { k: "cards", n: "Card Vision", c: "vis", st: "ok", on: "B", s: 6, src: "ns.CardTest (Demo Hub)", tip: "Title cards for the moments of your day: a new zone, a level, entering combat." },
+  // Interface
+  { k: "fade", n: "Fading UI", c: "ui", st: "new", row: 1, on: "S", fx: "fadeui", s: 6, src: "ns.PreviewProfile + a fade-out and back", tip: "CineMode: your UI fades away between fights and comes back when you need it. This is the addon's heart, so it plays first." },
+  { k: "mouse", n: "Mouseover", c: "ui", st: "new", on: "B", fx: "fadeui", s: 6, src: "Mouseover groups: needs a pretend hover", tip: "Point at where a faded frame lives and it comes back, with its group." },
+  { k: "plates", n: "Nameplates", c: "ui", st: "new", on: "B", s: 8, src: "Nameplates page preview, in the world", tip: "Nameplates that show only for what matters: your target, a mob on you, a friend in need." },
+  { k: "bubbles", n: "Chat Bubbles", c: "ui", st: "new", on: "B", s: 8, src: "Bubbles.lua preview: needs a speaker", tip: "Chat bubbles restyled as subtitles, so talk stays readable with your UI gone." },
+  { k: "cdflash", n: "Cooldown Flash", c: "ui", st: "ok", on: "B", s: 3, src: "ns.TestCooldownFlash", tip: "A spell's icon flashes in the middle of the screen as it comes off cooldown." },
+  { k: "speech", n: "Speech", c: "ui", st: "ok", on: "C", s: 6, src: "ns.TestSpeechBehind", tip: "What NPCs say, shown as subtitles at the bottom of the screen." },
+  { k: "tooltips", n: "Tooltips", c: "ui", st: "page", on: "", src: "Tooltips page", tip: "Which parts of a tooltip show, and where it sits." },
+  { k: "cursor", n: "Cursor Hide", c: "ui", st: "page", on: "C", src: "Cursor Hide page", tip: "Hides the mouse cursor when you aren't using it." },
+  // Style
+  { k: "themes", n: "Themes", c: "style", st: "page", on: "", src: "Style Themes page", tip: "One look for your whole UI: fonts, borders, colors." },
+  { k: "units", n: "Unit Frames style", c: "style", st: "page", on: "", src: "Unit Style page preview", tip: "Restyles your player, target and focus frames." },
+  { k: "ctext", n: "Combat Text", c: "style", st: "new", on: "", s: 6, src: "CombatTextPage.lua: needs numbers on screen", tip: "Damage and heal numbers in a cleaner style, with yours told apart from others'." },
+  { k: "platestyle", n: "Nameplate style", c: "style", st: "page", on: "", src: "Nameplate Style page", tip: "Shapes, bars and cast bars for nameplates." },
+  // QoL
+  { k: "wheels", n: "Wheels", c: "qol", st: "page", on: "", src: "Wheels pages", tip: "Radial menus on a key: cameras, menus, raid markers, ground markers, Visions." },
+  { k: "keymap", n: "Keyboard Map", c: "qol", st: "page", on: "", src: "Keyboard Map page", tip: "Your keybinds drawn on a keyboard, to see what's free." },
+  { k: "fishing", n: "Fishing", c: "qol", st: "page", on: "", src: "Fishing page", tip: "Fish with one key, louder splashes, and your gear swapped in and out." },
+  { k: "hunter", n: "Hunter", c: "qol", st: "page", on: "", src: "Hunter page", tip: "Pet and ammo reminders for hunters." },
+  { k: "talents", n: "Talent links", c: "qol", st: "page", on: "", src: "TalentLink.lua / TalentCalc.lua", tip: "Talent builds shared as links, and a calculator to plan one." },
+  { k: "xp", n: "XP left", c: "qol", st: "page", on: "", src: "XpLeft.lua", tip: "How many kills or quests to your next level." },
+];
+const ORDER = { S: 0, B: 1, C: 2 };
+const catOf = id => CATS.find(c => c.id === id);
+const hueOf = f => catOf(f.c).c;
+const mono = n => n.replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+const PLAYS = F.filter(f => f.st !== "page");
+const PAGES = F.filter(f => f.st === "page");
+// (Shoulder Cam only once the player has said yes to its experimental camera setting: here, picking its level)
+const HIGHLIGHTS = ["fade", "bars", "tint", "afk", "shoulder", "vitals", "emote", "cards", "tele"];
+// The line under the name while a demo plays: one short sentence of what it does (else the tip's first).
+const SHORT = {
+  fade: "Your UI fades away between fights and comes back when you need it.",
+  bars: "Black bars at the top and bottom, as in a film.",
+  tint: "A color wash that follows the time of day, the zone and the weather.",
+  afk: "Go AFK and the camera sweeps slowly around you.",
+  shoulder: "The camera sits over your shoulder, with you to one side.",
+  vitals: "The screen's edges close in as your health drops.",
+  emote: "Other players' emotes show as film dialogue over their heads.",
+  cards: "Title cards for the moments of your day: a new zone, a level, a fight.",
+  tele: "A portal opens as you hearth or teleport, and the world fades out.",
+};
+const shortOf = f => SHORT[f.k] || f.tip.split(/(?<=\.)\s/)[0];
+
+const $ = s => document.querySelector(s);
+const state = { level: 1, hover: null, cat: "all", q: "", running: null, timer: null, tour: null, fight: false, turnedOn: new Set() };
+try { const s = JSON.parse(localStorage.getItem("shelf") || "{}"); if (s.cat && F.some(f => f.c === s.cat && f.st !== "page")) state.cat = s.cat; } catch (e) {}
+const save = () => { try { localStorage.setItem("shelf", JSON.stringify({ cat: state.cat, open: !$("#shelf").hidden })); } catch (e) {} };
+
+// [tag, lit, off]: off means the picked profile doesn't have it, so the tile offers Turn on.
+function tagFor(f, levelIdx) {
+  if (levelIdx == null) return ["", false, false];
+  const name = LEVELS[levelIdx].name;
+  if (levelIdx === state.level && state.turnedOn.has(f.k)) return ["On: you turned it on", true, false];
+  if (name === "Blank Slate" || !f.on) return ["Off", false, true];
+  if (f.k === "shoulder") return name === "Shoulder Cam" ? ["On", true, false] : ["Off", false, true];
+  const lv = levelIdx >= 2 ? 2 : levelIdx; // Shoulder Cam counts as Cinema
+  return lv >= ORDER[f.on] ? [f.k === "camera" ? "4 scenes" : "In CineMode", true, false] : ["Off", false, true];
+}
+
+function tile(f) {
+  const box = document.createElement("div");
+  box.className = "tilebox";
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "demo"; b.dataset.k = f.k;
+  b.innerHTML = `<span class="ic" style="--h:${hueOf(f)}">${mono(f.n)}</span><span class="txt"><span class="nm"></span><span class="tag"></span></span><span class="dot ${f.st}"></span>`;
+  b.addEventListener("click", () => play(f));
+  [["mouseenter", f], ["focus", f], ["mouseleave", null], ["blur", null]].forEach(([ev, x]) => b.addEventListener(ev, () => describe(x)));
+  const on = document.createElement("button");
+  on.type = "button"; on.className = "on-btn"; on.textContent = "Turn on"; on.hidden = true;
+  on.setAttribute("aria-label", `Turn on ${f.n} in ${LEVELS[state.level].name}`);
+  on.addEventListener("click", () => turnOn(f));
+  on.addEventListener("mouseenter", () => { $("#about").innerHTML = `<b>Turn on ${f.n}</b>&nbsp;&nbsp; Adds it to ${LEVELS[state.level].name}, the profile you're trying. You'll find it later under ${catOf(f.c).name} › ${f.n}.`; });
+  on.addEventListener("mouseleave", () => describe(null));
+  box.append(b, on);
+  return box;
+}
+
+function refreshTiles() {
+  document.querySelectorAll(".demo[data-k]").forEach(b => {
+    const f = F.find(x => x.k === b.dataset.k);
+    const run = state.running === f.k;
+    b.disabled = state.fight && !run;
+    b.classList.toggle("running", run);
+    b.querySelector(".nm").textContent = run ? "Stop" : f.n;
+    const [t, has, off] = tagFor(f, state.hover ?? state.level);
+    const tg = b.querySelector(".tag"); tg.textContent = t; tg.classList.toggle("has", has);
+    // (Turn on: only for the profile picked, not one hovered, and not mid-demo)
+    const on = b.parentElement.querySelector(".on-btn");
+    on.hidden = !(off && state.hover == null && !run && LEVELS[state.level].name !== "Blank Slate");
+  });
+}
+
+function turnOn(f) {
+  state.turnedOn.add(f.k);
+  refreshTiles();
+  toast(`<b>${f.n}</b> is on in ${LEVELS[state.level].name}.`, 2.6);
+}
+
+// cards
+LEVELS.forEach((lv, i) => {
+  const c = document.createElement("button");
+  c.type = "button"; c.className = "card"; c.innerHTML = `<span class="ic" style="--h:${lv.h}">${lv.m}</span><span class="t">${lv.name}</span><span class="l">${lv.line}</span>`;
+  c.addEventListener("click", () => { state.level = i; state.turnedOn.clear(); $("#status").innerHTML = `Trying <b style="color:var(--gold)">${lv.name}</b>. Close this window to keep it.`; drawCards(); refreshTiles(); describe(null); });
+  c.addEventListener("mouseenter", () => { state.hover = i; refreshTiles(); $("#about").innerHTML = `<b>${lv.name}</b>&nbsp;&nbsp; ${lv.line}<span class="how">The tags under each demo now say what ${lv.name} turns on.</span>`; });
+  c.addEventListener("mouseleave", () => { state.hover = null; refreshTiles(); describe(null); });
+  $("#cards").appendChild(c);
+});
+function drawCards() { [...$("#cards").children].forEach((c, i) => c.classList.toggle("active", i === state.level)); }
+
+// row
+const rowList = F.filter(f => f.row).sort((a, b) => (b.k === "fade") - (a.k === "fade"));
+rowList.forEach(f => $("#demos").appendChild(tile(f)));
+const more = document.createElement("button");
+more.type = "button"; more.className = "demo more"; more.setAttribute("aria-expanded", "false"); more.setAttribute("aria-controls", "shelf");
+const moreLabel = open => open
+  ? `<span class="txt"><span class="nm">Fewer <span class="chev">▾</span></span></span>`
+  : `<span class="txt"><span class="nm">See all ${PLAYS.length} <span class="chev">▾</span></span><span class="tag" style="text-align:center">${PLAYS.length - rowList.length} more</span></span>`;
+more.addEventListener("click", () => setOpen($("#shelf").hidden));
+more.addEventListener("mouseenter", () => { $("#about").innerHTML = `<b>See all</b>&nbsp;&nbsp; Everything Cinematic can show you, by the hub you'll find it in. Click any to see it, or play a whole group.`; });
+more.addEventListener("mouseleave", () => describe(null));
+$("#demos").appendChild(more);
+
+function rowHint() {
+  $("#rowHint").textContent = state.fight ? "In a fight: demos wait till it ends." : !$("#shelf").hidden ? "Click one to see it." : "Click one to see it for a few seconds.";
+}
+function setOpen(open) {
+  $("#shelf").hidden = !open;
+  more.setAttribute("aria-expanded", String(open));
+  more.innerHTML = moreLabel(open);
+  rowHint();
+  save();
+}
+
+// shelf
+function drawCats() {
+  const box = $("#cats"); box.innerHTML = "";
+  [{ id: "all", name: "All", c: "var(--gold)" }, ...CATS].forEach(c => {
+    const n = c.id === "all" ? PLAYS.length : PLAYS.filter(f => f.c === c.id).length;
+    if (!n) return; // (a group with nothing to play is only in the link line)
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "cat" + (state.cat === c.id ? " on" : ""); b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(state.cat === c.id));
+    b.innerHTML = `<span class="sw" style="background:${c.c}"></span>${c.name}<span class="n">${n}</span>`;
+    b.addEventListener("click", () => { state.cat = c.id; save(); drawCats(); drawGrid(); });
+    box.appendChild(b);
+  });
+  $("#tour").textContent = state.cat === "all" ? "▶ Watch the tour" : `▶ Play all in ${catOf(state.cat).name}`;
+}
+const matches = (f, q) => (q ? (f.n + " " + f.tip).toLowerCase().includes(q) : state.cat === "all" || f.c === state.cat);
+function drawGrid() {
+  const g = $("#grid"); g.innerHTML = "";
+  const q = state.q.trim().toLowerCase();
+  const list = PLAYS.filter(f => matches(f, q));
+  const pages = PAGES.filter(f => matches(f, q));
+  const groups = (state.cat === "all" || q) ? CATS : [catOf(state.cat)];
+  groups.forEach(c => {
+    const items = list.filter(f => f.c === c.id);
+    if (!items.length) return;
+    if (groups.length > 1) { const l = document.createElement("div"); l.className = "group-label"; l.style.setProperty("--swc", c.c); l.textContent = c.name; g.appendChild(l); }
+    items.forEach(f => g.appendChild(tile(f)));
+  });
+  if (!list.length) g.innerHTML = `<div class="empty">${pages.length ? "Nothing to play for that; it's a setting, below." : `Nothing called "${state.q}". Try a word from its page, like "duel" or "bobber".`}</div>`;
+  // (the features with nothing to play: a line of links to their pages)
+  const also = $("#also"); also.innerHTML = "";
+  if (pages.length) {
+    also.innerHTML = `<b>Also in Cinematic:</b>`;
+    pages.forEach((f, i) => {
+      const a = document.createElement("button");
+      a.type = "button"; a.textContent = f.n;
+      a.addEventListener("click", () => toast(`Opening <b>${f.n}</b> settings over this window. Back returns here.`, 2.4));
+      a.addEventListener("mouseenter", () => { $("#about").innerHTML = `<b>${f.n}</b>&nbsp;&nbsp; ${f.tip}<span class="how">Nothing to play: click to open its settings page. Back returns here.</span>`; });
+      a.addEventListener("mouseleave", () => describe(null));
+      also.append(a, document.createTextNode(i < pages.length - 1 ? ", " : ""));
+    });
+  }
+  refreshTiles();
+}
+$("#search").addEventListener("input", e => { state.q = e.target.value; drawGrid(); });
+
+// description box
+function describe(f) {
+  const a = $("#about");
+  if (!f) { const lv = LEVELS[state.level]; a.innerHTML = `<b>${lv.name}</b>&nbsp;&nbsp; ${lv.line}<span class="how">Hover a demo to read about it.</span>`; return; }
+  const lvIdx = state.hover ?? state.level;
+  const [t, , off] = tagFor(f, lvIdx);
+  const how = state.fight ? "It can play once the fight ends." : `Click to see it for ${f.s} seconds. Click again to stop.`;
+  const turn = off && state.hover == null && LEVELS[state.level].name !== "Blank Slate" ? " Like it? Turn on adds it to this profile." : "";
+  a.innerHTML = `<b>${f.n}</b>&nbsp;&nbsp; ${f.tip}<span class="how"><span style="color:var(--gold-soft)">In ${LEVELS[lvIdx].name}:</span> ${t}. ${how}${turn}</span>`;
+}
+
+// playing
+const screen = $("#screen");
+const FX = ["bars", "tint", "vitals", "tele", "spin", "fadeui"];
+function stop() {
+  clearTimeout(state.timer); state.running = null;
+  FX.forEach(c => screen.classList.remove(c));
+  $("#toast").classList.remove("on");
+  refreshTiles();
+}
+function play(f, fromTour) {
+  if (!fromTour) state.tour = null;
+  if (state.running === f.k) { stop(); return; }
+  stop();
+  state.running = f.k;
+  void screen.offsetWidth;
+  if (f.fx) screen.classList.add(f.fx);
+  const secs = Math.min(f.s || 5, 6);
+  const step = state.tour ? ` · ${state.tourTotal - state.tour.length} of ${state.tourTotal}` : "";
+  toast(`<span>Playing <b>${f.n}</b>${step}<span class="line">${shortOf(f)}</span></span>`, null);
+  state.timer = setTimeout(() => { stop(); if (state.tour) nextTour(); }, secs * 1000);
+  refreshTiles();
+}
+function toast(html, secs) {
+  clearTimeout(state.toastTimer);
+  $("#toastText").innerHTML = html; $("#toast").classList.add("on");
+  $("#toastStop").hidden = !!secs;
+  if (secs) state.toastTimer = setTimeout(() => $("#toast").classList.remove("on"), secs * 1000);
+}
+$("#toastStop").addEventListener("click", () => { state.tour = null; stop(); });
+function nextTour() {
+  const f = state.tour.shift();
+  if (!f) { state.tour = null; return; }
+  play(f, true);
+}
+function startTour(pool) {
+  if (state.fight) { toast("You're in a fight. The tour can play once it ends.", 2.4); return; }
+  state.tour = pool.slice(); state.tourTotal = pool.length; nextTour();
+}
+const highlights = () => HIGHLIGHTS.filter(k => k !== "shoulder" || LEVELS[state.level].name === "Shoulder Cam").map(k => F.find(f => f.k === k));
+$("#rowTour").addEventListener("click", () => startTour(highlights()));
+$("#tour").addEventListener("click", () => startTour(state.cat === "all" ? highlights() : PLAYS.filter(f => f.c === state.cat)));
+$("#rowTour").addEventListener("mouseenter", () => { $("#about").innerHTML = `<b>Watch the tour</b>&nbsp;&nbsp; The highlights one after another: your UI fading, the letterbox and tint, a camera, the Shoulder Cam if you've said yes to it, Vitals, Emote and Card Visions, a teleport. Stop any time.`; });
+$("#rowTour").addEventListener("mouseleave", () => describe(null));
+
+// toggles, table, counts
+$("#statusToggle").addEventListener("change", e => $("#win").classList.toggle("show-status", e.target.checked));
+$("#fightToggle").addEventListener("change", e => {
+  state.fight = e.target.checked;
+  if (state.fight) { state.tour = null; stop(); }
+  $("#banner").hidden = !state.fight;
+  $("#rowTour").disabled = state.fight;
+  rowHint(); refreshTiles();
+});
+const LABEL = { ok: ["var(--ok)", "Test exists"], new: ["var(--new)", "New demo"], page: ["var(--page-only)", "Link to page"] };
+$("#tbody").innerHTML = CATS.map(c => F.filter(f => f.c === c.id).map(f => `<tr><td>${f.n}${f.row ? ' <span style="color:var(--dim)">(row)</span>' : ""}</td><td>${c.name}</td><td><span class="st"><span class="pill" style="background:${LABEL[f.st][0]}"></span>${LABEL[f.st][1]}</span></td><td><code>${f.src}</code></td></tr>`).join("")).join("");
+["ok", "new", "page"].forEach(s => { $({ ok: "#nOk", new: "#nNew", page: "#nPage" }[s]).textContent = F.filter(f => f.st === s).length; });
+
+document.getElementById("nAll").textContent = PLAYS.length;
+drawCards(); drawCats(); drawGrid(); refreshTiles(); describe(null);
+setOpen(true);
+</script>
+</body></html>
