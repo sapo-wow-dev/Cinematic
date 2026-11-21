@@ -298,9 +298,12 @@ local MOMENTS = {
 			"battlegrounds (needs enemy nameplates on). Once they've looked away, it can happen again.",
 		sample = { name = "Kargash", class = "ROGUE", line = "is stalking you" } },
 	{ id = "YouLevel", on = "emoteVisionYouLevel", name = "You level up",
-		emotes = { "CHEER", "CONGRATULATE", "COMMEND" }, -- (was Cheer, Dance, Flex: Migrations youLevelEmotesV1)
-		tip = "You reach a new level: the emotes go to everyone, to celebrate.",
-		sample = { name = "You", line = "reached level %d", level = 42, group = true,
+		-- (Was Cheer, Dance, Flex, then Cheer, Congratulate, Commend: Migrations
+		-- youLevelEmotesV1/V2. Emotes whose line names no one: no emote can go
+		-- to yourself, rule forever.emote.doemote-player-unit.)
+		emotes = { "CHEER", "VICTORY", "FLEX" },
+		tip = "You reach a new level: the emotes are your own celebration, at no one.",
+		sample = { name = "You", line = "reached level %d", level = 42, group = true, atSelf = true,
 			icon = "Interface\\Icons\\Spell_Holy_SurgeOfLight" } },
 	{ id = "Campfire", on = "emoteVisionCampfire", name = "You hover a campfire", emotes = { "SIT", "KNEEL", "LAYDOWN" },
 		campfire = true, -- (its open section: the fire's reach and names, CampfireSettings)
@@ -836,7 +839,16 @@ local function Answer(token)
 	if not moment then return end
 	ArmEcho(token, moment.test)
 	if moment.test then
-		ns.Print(L["Emote Vision test: you'd %s %s."]:format(Command(token), moment.name))
+		ns.Print(moment.atSelf and L["Emote Vision test: you'd %s."]:format(Command(token))
+			or L["Emote Vision test: you'd %s %s."]:format(Command(token), moment.name))
+	elseif moment.atSelf then
+		-- (Your own level up: at no one, never your target. No emote can go to
+		-- yourself: "player", your name and you targeted all play the at-no-one
+		-- line (Forever, /cine debug levelemote 2026-11-21), so the card's
+		-- emotes are ones whose line names no one.)
+		local ok, err = pcall(DoEmote, token, "none")
+		ns.Log("emote", ("%s card %s: DoEmote(%s, none) %s"):format(moment.kind, token, token,
+			ok and "ok" or ("error " .. tostring(err))))
 	elseif moment.group then
 		pcall(DoEmote, token, "none")
 		-- (By a fire: the campfire card's own camera, not the emote's.)
@@ -2605,13 +2617,22 @@ function nameLink.Stalking(unit, event)
 	end)
 end
 
--- Your own level up: a card for everyone around, to celebrate.
+-- Your own level up: a card of your own celebration (its emotes at no one).
+-- (On ns, for /cine debug levelemote: the main chunk is at Lua's local cap.)
+function ns.EmoteVisionLevelMoment(level)
+	local _, class = UnitClass("player")
+	return { kind = "YouLevel", name = Short(Plain(UnitName("player"))) or L["You"], class = Plain(class),
+		unit = "player", line = L["reached level %d"]:format(level), group = true, atSelf = true }
+end
 local function LeveledUp(level)
 	level = Plain(level)
 	if type(level) ~= "number" then return end
-	local _, class = UnitClass("player")
-	Fire({ kind = "YouLevel", name = Short(Plain(UnitName("player"))) or L["You"], class = Plain(class),
-		unit = "player", line = L["reached level %d"]:format(level), group = true })
+	Fire(ns.EmoteVisionLevelMoment(level))
+end
+-- (/cine debug levelemote: a button press on the card.)
+function ns.EmoteVisionAnswerFor(moment, token)
+	showing = moment
+	Answer(token)
 end
 
 -- A campfire the cursor rests on (Campfire.lua's CAMPFIRE_REST, name its
@@ -2797,7 +2818,7 @@ function ns.TestEmoteVision(id)
 	local line = L[sample.line]
 	if sample.spell then line = line:format(L[sample.spell]) elseif sample.level then line = line:format(sample.level) end
 	local moment = { kind = kind.id, name = L[sample.name], class = sample.class, icon = sample.icon, test = true,
-		line = line, same = sample.same, group = sample.group }
+		line = line, same = sample.same, group = sample.group, atSelf = sample.atSelf }
 	-- (Someone targeted: the card's theirs, its face and name, and its buttons
 	-- really emote at them; a group's card stays the group's.)
 	local name = not sample.group and ns.Flag(UnitExists("target")) and not ns.Flag(UnitIsUnit("target", "player"))

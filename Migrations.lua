@@ -4971,6 +4971,27 @@ STEPS[#STEPS + 1] = function()
 		for _, point in pairs(ns.db.profileResetPoints or {}) do Update(point) end
 		ns.db.youLevelEmotesV1 = true
 	end
+	-- Then Cheer, Victory, Flex (2026-11-21): Congratulate and Commend said
+	-- "everyone around you", and no emote can go to yourself (rule
+	-- forever.emote.doemote-player-unit). Same: a list still at either old
+	-- default moves, one you changed stays. Once.
+	if not ns.db.youLevelEmotesV2 then
+		local OLD = { ["CHEER,DANCE,FLEX"] = true, ["CHEER,CONGRATULATE,COMMEND"] = true }
+		local function Update(t)
+			if type(t) == "table" and OLD[t.emoteVisionYouLevelEmotes] then
+				t.emoteVisionYouLevelEmotes = "CHEER,VICTORY,FLEX"
+			end
+		end
+		Update(ns.db)
+		for _, saved in pairs(ns.db.profiles or {}) do
+			if type(saved) == "table" then
+				Update(saved)
+				Update(saved.settings)
+			end
+		end
+		for _, point in pairs(ns.db.profileResetPoints or {}) do Update(point) end
+		ns.db.youLevelEmotesV2 = true
+	end
 end
 
 -- (Step: Cooldown Manager situations to lines, 2026-11-20.)
