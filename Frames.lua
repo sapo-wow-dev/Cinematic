@@ -8568,14 +8568,52 @@ function ns.PadTestBox(text, sub, r, g, b)
 		box.sub:SetFont((GameFontNormalLarge:GetFont()), 18, "")
 		box.sub:SetWidth(660)
 		box.sub:SetPoint("TOP", box.text, "BOTTOM", 0, -12)
+		-- (Its timers, under the rest: ns.PadTestBoxClock.)
+		box.clock = box:CreateFontString(nil, "OVERLAY")
+		box.clock:SetFont((GameFontNormalLarge:GetFont()), 16, "")
+		box.clock:SetWidth(660)
+		box.clock:SetPoint("TOP", box.sub, "BOTTOM", 0, -10)
+		box.clock:SetTextColor(0.75, 0.75, 0.75)
+		box.Fit = function(self)
+			local clock = self.clock:GetText() and self.clock:GetText() ~= "" and (self.clock:GetStringHeight() + 10) or 0
+			self:SetSize(700, self.text:GetStringHeight() + self.sub:GetStringHeight() + clock + 48)
+		end
+		box:SetScript("OnUpdate", function(self, elapsed)
+			self.clockWait = (self.clockWait or 0) - elapsed
+			if self.clockWait > 0 or not self.clockFn then return end
+			self.clockWait = 0.25
+			local ok, line = pcall(self.clockFn)
+			local had = self.clock:GetText()
+			self.clock:SetText(ok and line or "")
+			if (had or "") ~= (self.clock:GetText() or "") then self:Fit() end
+		end)
 		ns.padTestBox = box
 	end
 	box:SetScale(UIParent:GetEffectiveScale())
+	if box.clockFn ~= ns.padTestClockFn then box.clockFn, box.clockWait = ns.padTestClockFn, 0 end
 	box.text:SetText(text)
 	box.sub:SetText(sub or "")
 	box.sub:SetTextColor(r or 1, g or 1, b or 1)
-	box:SetSize(700, box.text:GetStringHeight() + box.sub:GetStringHeight() + 48)
+	box:Fit()
 	box:Show()
+end
+-- Timers on the test's box: fn gives its line (time on the step, the run,
+-- what's left), asked four times a second; nil takes them off. A minute and
+-- seconds as "1:05": ns.PadTestTime. (The user, 2026-11-21: "i want timers".)
+function ns.PadTestBoxClock(fn)
+	-- (Kept for the box till it's made: the first step's box shows it.)
+	ns.padTestClockFn = fn
+	local box = ns.padTestBox
+	if not box then return end
+	box.clockFn, box.clockWait = fn, 0
+	if not fn then
+		box.clock:SetText("")
+		box:Fit()
+	end
+end
+function ns.PadTestTime(seconds)
+	seconds = math.max(0, math.floor((seconds or 0) + 0.5))
+	return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
 end
 function ns.PadTestBoxHide(run)
 	if ns.padTestBox and (run == nil or run == ns.padTestRun) then ns.padTestBox:Hide() end
@@ -14474,6 +14512,19 @@ do
 		end
 	end
 
+	-- (An alpha the part's given while held (Style giving back a strip it had
+	-- cleared, the game fading a glow) is the one it goes back to once let
+	-- go. Kept at the one it had when hidden, a theme's cleared name strip
+	-- came back at 0 on the game's look: gone till a /reload, the
+	-- side-by-side run, 2026-11-21.)
+	-- (A field, not a local: this chunk is at Lua's cap of 200.)
+	function FRAMES.GivenAlpha(region, alpha)
+		if hidden[region] and not setting and type(alpha) == "number"
+			and not (issecretvalue and issecretvalue(alpha)) then
+			hidden[region] = alpha
+		end
+		KeepHidden(region)
+	end
 	local function SetHidden(region, hide)
 		if hide and not hidden[region] then
 			-- (WoW Forever can keep a cast bar's alpha secret: full put back then.)
@@ -14481,7 +14532,7 @@ do
 			hidden[region] = not (issecretvalue and issecretvalue(alpha)) and alpha or 1
 			if not hooked[region] then
 				hooked[region] = true
-				hooksecurefunc(region, "SetAlpha", KeepHidden)
+				hooksecurefunc(region, "SetAlpha", FRAMES.GivenAlpha)
 				-- (WoW Forever's frames also set it this way, which SetAlpha's hook misses.)
 				if type(region.SetAlphaFromBoolean) == "function" then
 					hooksecurefunc(region, "SetAlphaFromBoolean", KeepHidden)
@@ -14521,6 +14572,8 @@ do
 		FRAMES.goal[region] = not hide and 1 or 0
 		FRAMES.applied[region] = true
 	end
+	-- (For the offline test, Tools/offline/parthold.lua.)
+	ns.UnitPartSetHidden = SetHidden
 
 	-- Whether this client's frames have the parts (the Unit Frames page shows the grid then).
 	function ns.HasUnitFrameParts()
@@ -14848,8 +14901,13 @@ do
 	-- A frame's regions for a part (UnitStyle.lua: the level, lifted over a shape's ring).
 	function ns.UnitPartRegions(frame, part)
 		local list = {}
+		-- (The Shoulder Cam's target frame of you carries the target frame's part
+		-- names: its parts go by the target frame's. Without, a theme took it for
+		-- a frame with no level badge: its name moved left, its level ring left
+		-- at full size, Fel Pact, 2026-11-20.)
+		local stand = _G.CinematicShoulderSelfTarget
 		for _, entry in ipairs(FRAMES) do
-			if _G[entry[1]] == frame then
+			if _G[entry[1]] == frame or (stand and frame == stand and entry[1] == "TargetFrame") then
 				local paths = entry[2][part]
 				for _, path in ipairs(type(paths) == "table" and paths or NO_DEFAULTS) do
 					local region = Field(frame, path)

@@ -1119,6 +1119,17 @@ function ns.TestPrompt(msg, seconds)
 			promptFrame.text = promptFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
 			promptFrame.text:SetPoint("TOP", promptFrame, "TOP", 0, -WorldFrame:GetHeight() * 0.2)
 			promptFrame.text:SetWidth(WorldFrame:GetWidth() * 0.6)
+			-- (On a dark panel with a gold edge, as the test kit's box: bare, it
+			-- couldn't be read over rough ground, the user, 2026-11-21.)
+			local edge = promptFrame:CreateTexture(nil, "BACKGROUND", nil, -1)
+			edge:SetPoint("TOPLEFT", promptFrame.text, "TOPLEFT", -19, 15)
+			edge:SetPoint("BOTTOMRIGHT", promptFrame.text, "BOTTOMRIGHT", 19, -15)
+			edge:SetColorTexture(1, 0.82, 0, 1)
+			local fill = promptFrame:CreateTexture(nil, "BACKGROUND", nil, 0)
+			fill:SetPoint("TOPLEFT", promptFrame.text, "TOPLEFT", -16, 12)
+			fill:SetPoint("BOTTOMRIGHT", promptFrame.text, "BOTTOMRIGHT", 16, -12)
+			fill:SetColorTexture(0, 0, 0, 0.92)
+			promptFrame.panel = fill
 		end
 		promptFrame.text:SetText(msg)
 		promptFrame:Show()

@@ -1013,6 +1013,15 @@ end
 -- game's fit its own art, which ours doesn't have round them). Left alone in
 -- languages our fonts don't cover.
 local BAR_WORDS = { "LeftText", "RightText", "TextString", "HealthBarText", "ManaBarText" }
+-- (Its size on a bar this tall: a line drawn is about 1.15 its size, an
+-- outline adds about a point each side. As tall as the bar less one, the mana
+-- numbers stood over their bar's edges on the thin mana bar (9 on 10), the
+-- user's screenshot, 2026-11-21. Never under 6, to stay readable.)
+function ns.BarTextSize(size, height, flags)
+	-- (A point for its shadow even with no outline.)
+	local edge = type(flags) == "string" and (flags:find("THICK") and 3 or flags:find("OUTLINE") and 2) or 1
+	return math.min(size, math.max(6, math.floor((height - edge) / 1.15 + 0.5)))
+end
 local function DressBarText(bar, view)
 	if not (bar and ROMAN) or (bar.IsForbidden and bar:IsForbidden()) then return end
 	local height = bar:GetHeight()
@@ -1025,7 +1034,7 @@ local function DressBarText(bar, view)
 			if object then file, size, flags = object:GetFont() end
 			if view and file and size and Readable(height) and height > 4 then
 				local font = ns.StyleFontFile(view.ufFont) or file
-				pcall(text.SetFont, text, font, math.min(size, math.max(7, height - 1)), flags or "")
+				pcall(text.SetFont, text, font, ns.BarTextSize(size, height, flags), flags or "")
 				saved.fitted = true
 			elseif saved.fitted and object then
 				saved.fitted = nil
@@ -1133,6 +1142,8 @@ local function KeepClear(texture)
 	keeping = false
 end
 local keepHooked = setmetatable({}, { __mode = "k" })
+-- (For the dev copy's side-by-side test: whether we hold a region clear.)
+function ns.UnitStyleHeld(region) return region ~= nil and kept[region] == true end
 local function SetClear(texture, clear)
 	if not texture or not texture.SetAlpha then return end
 	if clear and not keepHooked[texture] then

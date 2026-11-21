@@ -4313,10 +4313,12 @@ do
 			run.verdicts[#run.verdicts + 1] = ("right-click %s (%s; stand-in was up %s; offset %.2f -> %.2f)"):format(
 				verdict, where, Text(r.standUp), r.offset, Offset())
 			Write(run.verdicts[#run.verdicts])
-			-- (Fight mode: then away again, mid-fight, by the game's secure code.)
+			-- (Fight mode: then selected again mid-fight: it stays up, as the
+			-- game keeps you targeted.)
 			if run.fight then
 				run.phase, run.clock = "wantAgain", 0
-				Box("Self where: in the fight", "CLOSE THE MENU (Esc), then SELECT YOURSELF AGAIN (key or click your frame)")
+				run.selectsAt = ns.ShoulderSelfTargetSelects and ns.ShoulderSelfTargetSelects() or 0
+				Box("Self where: in the fight", "CLOSE THE MENU (Esc), then SELECT YOURSELF TWICE MORE (key or click your frame)")
 				return
 			end
 			End("done")
@@ -4331,15 +4333,15 @@ do
 		elseif run.phase == "wantAgain" then
 			local stand = Stand()
 			local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
-			local standUp = stand and stand:IsShown() or false
-			if standUp and run.clock < 20 then return end
+			local selects = (ns.ShoulderSelfTargetSelects and ns.ShoulderSelfTargetSelects() or 0) - (run.selectsAt or 0)
+			if selects < 2 then return end
 			if not run.againAt then run.againAt = run.clock end
 			if run.clock - run.againAt < 1 then return end
+			local standUp = stand and stand:IsShown() or false
 			local menuUp = menu and menu:IsShown() or false
 			local fighting = InCombatLockdown() and true or false
-			run.verdicts[#run.verdicts + 1] = ("away again %s (stand-in %s, its menu button %s, still in the fight %s)"):format(
-				(not standUp and not menuUp and fighting) and "PASS" or (not fighting and "UNSURE: the fight ended") or "FAIL",
-				standUp and "still up" or "down", menuUp and "still up" or "away", Text(fighting))
+			run.verdicts[#run.verdicts + 1] = ("selected again %s (stand-in %s, its menu button %s, after %d selects; in the fight %s)"):format(
+				(standUp and menuUp) and "PASS" or "FAIL", standUp and "up" or "DOWN", menuUp and "up" or "AWAY", selects, Text(fighting))
 			Write(run.verdicts[#run.verdicts])
 			End("done")
 			ns.PadTestBox("Self where run done", "/reload, then say check log", 0.3, 1, 0.3)
@@ -4460,12 +4462,30 @@ do
 		local scale = region:GetEffectiveScale()
 		return region:GetLeft() * scale, region:GetTop() * scale, region:GetWidth() * scale, region:GetHeight() * scale
 	end
+	-- (Your theme back, where the run put one on: out of a fight only, a theme
+	-- can't move frames in one.)
+	local function ThemeBack(kept)
+		if not (kept and ns.RestoreStyleSnapshot) then return end
+		local function Put()
+			ns.RestoreStyleSnapshot(kept)
+			Log("selfframe: your theme back to " .. Text(kept.styleTheme))
+		end
+		if not InCombatLockdown() then return Put() end
+		local wait = CreateFrame("Frame")
+		wait:RegisterEvent("PLAYER_REGEN_ENABLED")
+		wait:SetScript("OnEvent", function(self)
+			self:UnregisterAllEvents()
+			Put()
+		end)
+	end
 	local function End(why)
 		if not run then return end
 		run.frame:SetScript("OnUpdate", nil)
 		run.frame:UnregisterAllEvents()
 		ns.db.shoulderCamFakeSelf = run.yours
-		Write(("end: %s, your option back to %s"):format(why, Text(run.yours)))
+		Write(("end: %s, your option back to %s%s"):format(why, Text(run.yours),
+			run.themeKept and (", your theme back to " .. Text(run.themeKept.styleTheme) .. " once out of the fight") or ""))
+		ThemeBack(run.themeKept)
 		Write("verdicts: " .. ns.ShoulderTestJoin(run.verdicts))
 		Log(("selfframe: %s, %d lines in db.shoulderSelfFrame"):format(why, #ns.db.shoulderSelfFrame))
 		run = nil
@@ -4579,8 +4599,121 @@ do
 		-- hides a buff's times, a buff gained in the fight.)
 		local swirls, texts, none = 0, 0, 0
 		if ns.ShoulderSelfTargetTimers then swirls, texts, none = ns.ShoulderSelfTargetTimers() end
-		Verdict(("%s %s: %d icons under it, %d shown by the game; time left: %s swirls, %s as text, %s with none"):format(
+		Verdict(("%s %s: %d icons under it, %d shown by the game; time left: %s swirls, %s plain (times hidden), %s with none"):format(
 			label, copies == game and "PASS" or "FAIL", copies, game, Text(swirls), Text(texts), Text(none)))
+	end
+	-- (Its icons as the game's target frame draws them: the sweep reversed,
+	-- a border on debuffs only, your auras' order, yours 21 and others' 17
+	-- (out of fights, where whose can be read), no blank one. The parts
+	-- probe's differences, fixed 2026-11-20.)
+	local function BuffLook(label)
+		if not ns.ShoulderSelfTargetAuraCopies then return Verdict(label .. " SKIPPED: no icon copies to read") end
+		local copies, count = ns.ShoulderSelfTargetAuraCopies()
+		local problems, sizes = {}, {}
+		local last = {}
+		local read = C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID
+		-- (Where it sorts by the game's rule: cast by you, could cast, then
+		-- the order you got them; out of fights only, where that can be read.)
+		local function Key(id)
+			if not (read and Num(id)) or InCombatLockdown() then return nil end
+			local ok, data = pcall(read, "player", id)
+			if not (ok and type(data) == "table") then return nil end
+			local source = data.sourceUnit
+			if source ~= nil and (issecretvalue and issecretvalue(source)) then return nil end
+			local byYou = source ~= nil and ns.Flag(UnitIsUnit("player", source)) or false
+			return { byYou = byYou, canApply = data.canApplyAura == true, id = id }
+		end
+		local function Before(a, b)
+			if a.byYou ~= b.byYou then return a.byYou end
+			if a.canApply ~= b.canApply then return a.canApply end
+			return a.id < b.id
+		end
+		for i = 1, count do
+			local c = copies[i]
+			local kind = c.harmful and "debuff" or "buff"
+			local info = c.source and type(c.source.buttonInfo) == "table" and c.source.buttonInfo or {}
+			if c.timer == "swirl" and c.Swirl.GetReverse and not c.Swirl:GetReverse() then
+				problems[#problems + 1] = ("icon %d's sweep forward"):format(i)
+			end
+			if kind == "buff" and c.Border:IsShown() then problems[#problems + 1] = ("buff %d has a border"):format(i) end
+			local okBlank, blank = pcall(function() return c.Icon:GetTexture() == nil end)
+			if okBlank and blank then problems[#problems + 1] = ("icon %d blank"):format(i) end
+			local key = Key(info.auraInstanceID)
+			if key then
+				if last[kind] and Before(key, last[kind]) then
+					problems[#problems + 1] = ("%s %d out of the game's order"):format(kind, i)
+				end
+				last[kind] = key
+			end
+			local w = c:GetWidth()
+			sizes[#sizes + 1] = Num(w) and ("%d"):format(math.floor(w + 0.5)) or "?"
+			if read and Num(info.auraInstanceID) and not InCombatLockdown() then
+				local ok, data = pcall(read, "player", info.auraInstanceID)
+				-- (Big when you or your pet cast it, as the game's: by its caster.)
+				local source = ok and type(data) == "table" and data.sourceUnit
+				local yours
+				if source == nil or source == false then
+					yours = ok and type(data) == "table" and false or nil
+				elseif not (issecretvalue and issecretvalue(source)) then
+					local owns = UnitIsOwnerOrControllerOfUnit
+					yours = ns.Flag(UnitIsUnit("player", source))
+						or ns.Flag((owns or UnitIsUnit)(owns and "player" or "pet", source)) or false
+				end
+				if type(yours) == "boolean" and Num(w) and math.abs(w - (yours and 21 or 17)) > 0.5 then
+					problems[#problems + 1] = ("icon %d is %s, not %d (%s)"):format(i, sizes[#sizes], yours and 21 or 17,
+						yours and "yours" or "someone else's")
+				end
+			end
+		end
+		Verdict(("%s %s: %d icons, sizes %s%s"):format(label, #problems == 0 and "PASS" or "FAIL", count,
+			table.concat(sizes, ","), #problems > 0 and (" | " .. table.concat(problems, "; ")) or ""))
+	end
+	-- (What a theme makes of the frame: its level ring's width and its bridge
+	-- from the bars to the portrait; ours unlike the game's in the parts probe.)
+	-- (Where its level ring sits on the portrait, and how far its level is
+	-- from the ring's middle: ours went on the other corner, the level beside
+	-- it, the 2026-11-21 run.)
+	local function Badge(frame)
+		local ok, side, off = pcall(function()
+			local main = frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
+			local ring, text = main and main.LevelBackgroundCircle, main and main.LevelText
+			if not (ring and text and ns.Flag(ring:IsVisible())) then return nil end
+			local rx, ry = ring:GetCenter()
+			local px = frame.portrait and frame.portrait:GetCenter()
+			local tx, ty = text:GetCenter()
+			local wide = text:GetStringWidth()
+			local justify = text:GetJustifyH()
+			local words = justify == "RIGHT" and text:GetRight() - wide / 2 or justify == "LEFT" and text:GetLeft() + wide / 2 or tx
+			if not (Num(rx) and Num(ry) and Num(px) and Num(words) and Num(ty)) then return nil end
+			return rx > px and "right" or "left", math.max(math.abs(words - rx), math.abs(ty - ry))
+		end)
+		if not ok then return nil, nil end
+		return side, off
+	end
+	local function ThemeParts(frame)
+		if type(frame) ~= "table" then return nil, nil end
+		local ok, ring, bridge = pcall(function()
+			local main = frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
+			local circle = main and main.LevelBackgroundCircle
+			local ringW = circle and ns.Flag(circle:IsVisible()) and circle:GetWidth() or nil
+			local wide
+			for _, child in ipairs({ frame:GetChildren() }) do
+				if child.braceTop and ns.Flag(child:IsShown()) then wide = child:GetWidth() end
+			end
+			return ringW, wide
+		end)
+		if not ok then return nil, nil end
+		return Num(ring) and ring or nil, Num(bridge) and bridge or nil
+	end
+	local function Width(v) return v and ("%.1f"):format(v) or "none" end
+	-- (The game's tooltip now: whose, and the unit it's of.)
+	local function TipNow()
+		local tip = _G.GameTooltip
+		local ok, shown, owner, unit, lines = pcall(function()
+			return tip:IsShown(), tip:GetOwner(), select(2, tip:GetUnit()), tip:NumLines()
+		end)
+		if not (ok and shown == true) then return nil end
+		return owner, unit, lines
 	end
 	-- (A right-click while the fight step waits for one: counted only on the
 	-- stand-in while it's up.)
@@ -4591,6 +4724,13 @@ do
 			return
 		end
 		local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+		-- (Only one on it: a right-click elsewhere, turning the camera, was
+		-- counted and judged before the real one came, Fel run 2026-11-20.)
+		local overMenu = menu and menu:IsVisible() and ns.Flag(menu:IsMouseOver()) or false
+		if not (overMenu or ns.Flag(stand:IsMouseOver())) then
+			Write(("right-click away from the stand-in (target %s): not counted"):format(TargetText()))
+			return
+		end
 		run.right = { at = run.clock, offset = Offset(),
 			overMenu = menu and menu:IsVisible() and ns.Flag(menu:IsMouseOver()) or false }
 		Write(("right-click: on its menu button %s, target %s, offset %.2f"):format(Text(run.right.overMenu),
@@ -4647,7 +4787,7 @@ do
 				copies, game = tonumber(copies) or 0, tonumber(game) or 0
 				local swirls, texts, none = 0, 0, 0
 				if ns.ShoulderSelfTargetTimers then swirls, texts, none = ns.ShoulderSelfTargetTimers() end
-				Verdict(("buffs %s: %d icons under it, %d shown by the game; time left: %s swirls, %s as text, %s with none"):format(
+				Verdict(("buffs %s: %d icons under it, %d shown by the game; time left: %s swirls, %s plain (times hidden), %s with none"):format(
 					copies == game and "PASS" or "FAIL", copies, game, Text(swirls), Text(texts), Text(none)))
 			end
 			Verdict(("up %s: target %s, stand-in %s"):format(not UnitExists("target") and (seen or 0) > 0.5 and "PASS" or "FAIL",
@@ -4658,6 +4798,55 @@ do
 				if run then Write(("after the screenshot: stand-in effective alpha %.2f"):format(
 					stand:IsVisible() and stand:GetEffectiveAlpha() or 0)) end
 			end)
+			BuffLook("buff look")
+			run.standTheme = { ThemeParts(stand) }
+			run.standBadge = { Badge(stand) }
+			Write(("stand-in theme parts: level ring %s, bridge %s"):format(Width(run.standTheme[1]), Width(run.standTheme[2])))
+			run.phase, run.clock, run.hoverAt = "wantTipBuff", 0, nil
+			C_Timer.After(0.6, function()
+				if run then Box("Self frame 1/6: a buff's tooltip", "HOVER A BUFF ICON UNDER IT for a second") end
+			end)
+		elseif run.phase == "wantTipBuff" or run.phase == "wantTipFrame" then
+			-- (Ours on hover, as the game's: a buff's tooltip, then yours on the
+			-- frame. Judged a second after the mouse is on it; a FAIL, not a wait,
+			-- when no tooltip came in 3 s with the mouse there.)
+			local buffStep = run.phase == "wantTipBuff"
+			local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+			local over
+			if buffStep then
+				local copies, count = ns.ShoulderSelfTargetAuraCopies()
+				for i = 1, count do
+					if copies[i] and ns.Flag(copies[i]:IsMouseOver()) then over = copies[i] end
+				end
+			elseif menu and ns.Flag(menu:IsMouseOver()) then
+				over = menu
+			end
+			if not over then run.hoverAt = nil return end
+			run.hoverAt = run.hoverAt or run.clock
+			local owner, unit, lines = TipNow()
+			local good = owner == over and (buffStep and Num(lines) and lines > 0
+				or not buffStep and unit ~= nil and ns.Flag(UnitIsUnit(unit, "player")))
+			if not good and run.clock - run.hoverAt < 3 then return end
+			if good and run.clock - run.hoverAt < 1 then return end
+			if buffStep then
+				local how, _, _, _, tries = ns.ShoulderSelfTargetTip()
+				Verdict(("buff tooltip %s: by %s, %s lines (%s)"):format(good and "PASS" or "FAIL: none in 3 s", Text(how),
+					Text(lines), Text(tries)))
+				Shot("1b a buff's tooltip")
+				run.phase, run.clock, run.hoverAt = "wantTipFrame", 0, nil
+				C_Timer.After(0.6, function()
+					if run then Box("Self frame 1/6: your tooltip", "HOVER ITS HEALTH BAR for a second") end
+				end)
+				return
+			end
+			Verdict(("your tooltip on it %s: %s"):format(good and "PASS" or "FAIL: none in 3 s",
+				owner == over and "on it, of you" or "not on it"))
+			-- (And the bars' numbers while the mouse is on it, as the game's.)
+			if ns.ShoulderSelfTargetNumbers then
+				local up, text = ns.ShoulderSelfTargetNumbers()
+				Verdict(("health numbers on hover %s: %s"):format(up and "PASS" or "FAIL", up and ((issecretvalue and issecretvalue(text)) and "its text hidden" or Text(text)) or "none shown"))
+			end
+			Shot("1c your tooltip")
 			run.phase, run.clock = "wantReal", 0
 			C_Timer.After(0.6, function()
 				if not run then return end
@@ -4717,6 +4906,19 @@ do
 				not (ri and si) and "UNSURE" or iconSame and "PASS" or "DIFFERS", ShowRect(ri), ShowRect(si),
 				ri and si and (" (off by %.1f,%.1f size %.1f)"):format(si[1] - ri[1], si[2] - ri[2], si[3] - ri[3]) or "",
 				realExtras.border, run.standExtras and run.standExtras.border or "?"))
+			-- (A theme's level ring and bridge: ours as the game's frame's.)
+			local ring, bridge = ThemeParts(_G.TargetFrame)
+			local mine = run.standTheme or {}
+			local ringSame = (ring == nil and mine[1] == nil) or (ring and mine[1] and math.abs(ring - mine[1]) <= 1.5)
+			local bridgeSame = (bridge == nil and mine[2] == nil) or (bridge and mine[2] and math.abs(bridge - mine[2]) <= 3)
+			Verdict(("theme parts %s (theme %s): level ring game %s, ours %s; bridge game %s, ours %s"):format(
+				(ringSame and bridgeSame) and "PASS" or "DIFFER", Text(ns.db.styleTheme), Width(ring), Width(mine[1]),
+				Width(bridge), Width(mine[2])))
+			local side, off = Badge(_G.TargetFrame)
+			local ourSide, ourOff = (run.standBadge or {})[1], (run.standBadge or {})[2]
+			Verdict(("level badge %s: ring on the portrait's %s corner (ours %s), level off its middle by %s (ours %s)"):format(
+				(side == ourSide and (ourOff == nil or ourOff <= 2)) and "PASS" or "DIFFER", Text(side), Text(ourSide),
+				off and ("%.1f"):format(off) or "none", ourOff and ("%.1f"):format(ourOff) or "none"))
 			Shot("2 the game's own target frame of you")
 			run.phase, run.clock = "wantDown", 0
 			C_Timer.After(0.6, function()
@@ -4748,6 +4950,7 @@ do
 				run.fightBuffs = true
 				Buffs("buffs in the fight")
 				Shot("3 the stand-in in the fight")
+				BuffLook("buff look in the fight")
 			end
 			run.phase, run.clock, run.right = "wantRight", 0, nil
 			C_Timer.After(0.3, function()
@@ -4771,20 +4974,25 @@ do
 					kept and "" or " the camera came off your shoulder"),
 				Text(run.right.overMenu), Text(InCombatLockdown())))
 			run.phase, run.clock = "wantAway", 0
-			Box("Self frame 5/6: away", "CLOSE THE MENU (Esc), then SELECT YOURSELF AGAIN (key or click your frame)")
+			run.selectsAt = ns.ShoulderSelfTargetSelects and ns.ShoulderSelfTargetSelects() or 0
+			Box("Self frame 5/6: again", "CLOSE THE MENU (Esc), then SELECT YOURSELF TWICE MORE (key or click your frame)")
 		elseif run.phase == "wantAway" then
+			-- (Selected again it stays up, both of it, as the game keeps you
+			-- targeted: it toggled out of step with its menu button, so it
+			-- blinked and came up with no Esc, user report 2026-11-21.)
 			local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
-			local standUp = stand and stand:IsShown() or false
-			if standUp and run.clock < 20 then return end
+			local selects = (ns.ShoulderSelfTargetSelects and ns.ShoulderSelfTargetSelects() or 0) - (run.selectsAt or 0)
+			if selects < 2 then return end
 			if not run.awayAt then run.awayAt = run.clock end
 			if run.clock - run.awayAt < 1 then return end
+			local standUp = stand and stand:IsShown() or false
 			local menuUp = menu and menu:IsShown() or false
 			local fighting = InCombatLockdown() and true or false
-			Verdict(("away again %s (stand-in %s, its menu button %s, still in the fight %s)"):format(
-				(not standUp and not menuUp and fighting) and "PASS" or (not fighting and "UNSURE: the fight ended") or "FAIL",
-				standUp and "still up" or "down", menuUp and "still up" or "away", Text(fighting)))
+			Verdict(("selected again %s (stand-in %s, its menu button %s, after %d selects; in the fight %s)"):format(
+				(standUp and menuUp) and "PASS" or "FAIL", standUp and "up" or "DOWN", menuUp and "up" or "AWAY", selects,
+				Text(fighting)))
 			run.phase, run.clock = "wantEscUp", 0
-			Box("Self frame 6/6: Esc", "SELECT YOURSELF (key or click your frame), then PRESS ESC")
+			Box("Self frame 6/6: Esc", "PRESS ESC (select yourself first if it's not up)")
 		elseif run.phase == "wantEscUp" then
 			if not (stand and stand:IsShown()) then run.clock = 0 return end
 			if run.clock < 0.5 then return end
@@ -4838,6 +5046,14 @@ do
 		Write(("start | %s | %s | your option %s | your Style: unit frames %s, theme %s"):format(
 			ns.isRetail and "retail" or "Forever", Who(), Text(run.yours),
 			Text(ns.StyleOn and ns.StyleOn("ufStyle")), Text(ns.db.styleTheme)))
+		-- (A theme on for the run: its level badge and bridge are half of what
+		-- it checks. Yours if you have one; else Fel Pact, put back at the end,
+		-- with no Undo entry.)
+		if (ns.db.styleTheme or "game") == "game" and ns.ApplyStyleTheme and ns.StyleSnapshot then
+			run.themeKept = ns.StyleSnapshot()
+			ns.ApplyStyleTheme("fel", true)
+			Write("theme for the run: fel (Fel Pact), yours put back at the end")
+		end
 		run.frame:SetScript("OnUpdate", Tick)
 		run.frame:RegisterEvent("GLOBAL_MOUSE_DOWN")
 		run.frame:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -6309,6 +6525,1230 @@ do
 	end
 end
 
+-- selfpair: the stand-in and the game's target frame of you side by side,
+-- in every theme, hands off once you've targeted yourself. For each theme a
+-- shot as drawn and one with the bars' numbers on (the game's status text,
+-- put back after). Each shot's two rects in screen pixels into
+-- db.shoulderSelfPair; Tools/selfpair.py crops and compares them, so every
+-- difference shows in one run, not one a run (the user, 2026-11-21: "a test
+-- that will not need to be ran 100 times"). The rule checks of selfframe
+-- check what I wrote down; this checks against the game itself.
+do
+	local run
+	local driver = CreateFrame("Frame")
+	local function Write(text)
+		local lines = ns.db.shoulderSelfPair
+		if issecretvalue and issecretvalue(text) then text = "(a line with a secret value in it)" end
+		if #lines < 8000 then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	-- (Each step in the test kit's lasting box on its dark panel, with its
+	-- timers: this step, the run, and a countdown on hands-off parts. It was
+	-- bare text over the world, gone in 4 s, hard to read on rough ground,
+	-- with no idea how long was left, the user, 2026-11-21.)
+	local function Prompt(text, seconds)
+		ns.Print("Self pair: " .. text)
+		-- (A step for you: a sound, so the change from hands-off is heard. Run
+		-- 10's clicks step waited 2.5 minutes with no press at all.)
+		if not seconds and PlaySound then pcall(PlaySound, type(SOUNDKIT) == "table" and SOUNDKIT.READY_CHECK or 8960) end
+		ns.debugNoCopyWindow = true
+		run.stepBegan, run.expectEnd = GetTime(), seconds and (GetTime() + seconds) or nil
+		if ns.PadTestBox then
+			ns.PadTestBox("Self pair: " .. text, seconds and "Hands off: the test does this part."
+				or "No time limit. /cine debug shoulder selfpair again stops it.", 1, 0.82, 0)
+		elseif ns.TestPrompt then
+			ns.TestPrompt("Self pair: " .. text, 3600)
+		end
+	end
+	local function Plain(...)
+		for i = 1, select("#", ...) do
+			local v = select(i, ...)
+			if type(v) ~= "number" or (issecretvalue and issecretvalue(v)) then return false end
+		end
+		return true
+	end
+	local function Art()
+		local frame = _G.TargetFrame
+		local container = frame and type(frame.TargetFrameContainer) == "table" and frame.TargetFrameContainer
+		return container and container.FrameTexture or frame
+	end
+	-- (A region's rect in screenshot pixels: left, top from the screen's top,
+	-- width, height; and pixels per unit of it.)
+	local function Pixels(region)
+		if not (region and region.GetLeft) then return nil end
+		local ok, l, t, w, h = pcall(function() return region:GetLeft(), region:GetTop(), region:GetWidth(), region:GetHeight() end)
+		if not (ok and Plain(l, t, w, h)) then return nil end
+		local _, high = GetPhysicalScreenSize()
+		local k = region:GetEffectiveScale() * high / 768
+		return ("%.0f,%.0f,%.0f,%.0f"):format(l * k, high - t * k, w * k, h * k), k
+	end
+	local function Targeted()
+		return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) == true
+	end
+	-- (No AFK camera mid-run: standing through the hands-off parts started it,
+	-- which paused Keep the shoulder, and the clicks step's first 36 s of
+	-- clicks just targeted you, run 8. Its still timer kept fresh, as
+	-- Camera.lua does before a cast, each frame of the run.)
+	local function Fresh() if ns.stillSince then ns.stillSince = GetTime() end end
+	local function Wait(seconds)
+		local untill = GetTime() + seconds
+		while GetTime() < untill do Fresh() coroutine.yield() end
+	end
+	-- (Probes: a region's place and size in its own units; a name strip's
+	-- state; a bar's numbers shown or not. The run of 2026-11-21 left these
+	-- to guess: ours a little higher, Codex's strip, the numbers late.)
+	local function Rect(region)
+		if not region then return "none" end
+		local ok, l, t, w, h = pcall(function() return region:GetLeft(), region:GetTop(), region:GetWidth(), region:GetHeight() end)
+		if not ok then return "error" end
+		if not Plain(l, t, w, h) then return "unreadable" end
+		return ("%.1f,%.1f %.1fx%.1f"):format(l, t, w, h)
+	end
+	local function Strip(frame)
+		if not (frame and ns.UnitNameStrip) then return "no reader" end
+		local ok, strip, kept, tint = pcall(ns.UnitNameStrip, frame)
+		if not (ok and strip) then return "none" end
+		local okColor, r, g, b = pcall(strip.GetVertexColor, strip)
+		local okAlpha, alpha = pcall(strip.GetAlpha, strip)
+		return ("shown %s alpha %s color %s held %s tint %s"):format(Text(ns.Flag(strip:IsShown())),
+			(okAlpha and Plain(alpha)) and ("%.2f"):format(alpha) or "unreadable",
+			(okColor and Plain(r, g, b)) and ("%.2f/%.2f/%.2f"):format(r, g, b) or "unreadable",
+			Text(kept), tint and "yes" or "no")
+	end
+	local function TextShown(bar)
+		local text = type(bar) == "table" and (bar.TextString or bar.cineNumbers)
+		if type(text) ~= "table" then return "none" end
+		local ok, shown = pcall(text.IsShown, text)
+		return ok and Text(ns.Flag(shown)) or "error"
+	end
+	local function Probe(theme)
+		local frame, ours = _G.TargetFrame, ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
+		local function Table(v) return type(v) == "table" and v or nil end
+		local content = frame and Table(frame.TargetFrameContent)
+		local context = content and Table(content.TargetFrameContentContextual)
+		local copies = ns.ShoulderSelfTargetAuraCopies and ns.ShoulderSelfTargetAuraCopies() or {}
+		Write(("geometry %s: art %s, target frame %s, its auras %s, ours %s, our first icon %s, strata game %s ours %s"):format(
+			theme, Rect(Art()), Rect(frame), Rect(context and Table(context.Auras)), Rect(ours), Rect(copies[1]),
+			Text(frame and frame:GetFrameStrata()), Text(ours and ours:GetFrameStrata())))
+		Write(("strip %s: game %s | ours %s"):format(theme, Strip(frame), Strip(ours)))
+		-- (Each bar's numbers from its bar's middle, and their alpha: ours sat 2
+		-- px low on the game's look, and went unseen with Codex, run 4.)
+		local function Off(bar)
+			local text = type(bar) == "table" and bar.TextString
+			if type(text) ~= "table" then return "none" end
+			local ok, tx, ty, bx, by, a = pcall(function()
+				local x, y = text:GetCenter()
+				local u, v = bar:GetCenter()
+				return x, y, u, v, text:GetAlpha()
+			end)
+			if not (ok and Plain(tx, ty, bx, by, a)) then return "unreadable" end
+			return ("%+.1f,%+.1f alpha %.2f"):format(tx - bx, ty - by, a)
+		end
+		Write(("numbers spot %s: game health %s, power %s | ours health %s, power %s | buffs on top %s, lift %s"):format(theme,
+			Off(frame and frame.healthbar), Off(frame and frame.manabar), Off(ours and ours.healthbar), Off(ours and ours.manabar),
+			Text(frame and frame.buffsOnTop), Text(ns.UnitAuraLiftNow and ns.UnitAuraLiftNow(frame))))
+		local db = ns.db
+		Write(("settings %s: layout %s, shape %s, border %s, name back %s, unit frames %s"):format(theme,
+			Text(ns.ThemeLayout and ns.ThemeLayout()), Text(db.ufShape), Text(db.ufBorder), Text(db.ufNameBack),
+			Text(ns.StyleOn and ns.StyleOn("ufStyle"))))
+	end
+	local function Numbers(theme)
+		local frame, ours = _G.TargetFrame, ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
+		local health = ours and ns.ShoulderSelfTargetNumbers and select(1, ns.ShoulderSelfTargetNumbers())
+		Write(("numbers %s: game health text %s, power text %s | ours %s (status text %s, shown as %s)"):format(theme,
+			TextShown(frame and frame.healthbar), TextShown(frame and frame.manabar), Text(health),
+			Text(GetCVar("statusText")), Text(GetCVar("statusTextDisplay"))))
+	end
+	-- (A plain backdrop behind both frames: the world behind them differed,
+	-- ours lower down, and buried the real differences in noise.)
+	local back -- (made once, the first run)
+	local function Backdrop(art, h)
+		if not back then
+			back = CreateFrame("Frame", nil, UIParent)
+			local fill = back:CreateTexture(nil, "BACKGROUND")
+			fill:SetAllPoints()
+			fill:SetColorTexture(0.32, 0.32, 0.34, 1)
+		end
+		run.backdrop = back
+		back:SetFrameStrata("BACKGROUND")
+		back:SetFrameLevel(0)
+		back:SetScale(art:GetEffectiveScale() / UIParent:GetEffectiveScale())
+		-- (Room over each for buffs on top: two rows, 21 + 3 + 21, and a bit.)
+		local low = run.down < 0 and (-run.down + h + 75) or (h + 75)
+		local high = run.down < 0 and 75 or (run.down + 75)
+		back:ClearAllPoints()
+		back:SetPoint("TOPLEFT", art, "TOPLEFT", -25, high)
+		back:SetSize(art:GetWidth() + 50, high + low)
+		back:Show()
+	end
+	-- Every part of both frames, at every shot: shown, alpha, place and size
+	-- from its frame art's top-left (art units), font, texture, color alpha,
+	-- and whether Style (st) or the Show-in rows (rw, the alpha they'd put
+	-- back) hold it. And every call that hides one, with where it came from,
+	-- all run long. Runs 3 and 4 each lacked the one probe their answer
+	-- needed (the user, 2026-11-21: "make it probe everything"); a difference
+	-- the compare finds now has its cause in the same log.
+	local PARTS = {
+		{ "art", { "TargetFrameContainer.FrameTexture" } },
+		{ "portrait", { "TargetFrameContainer.Portrait", "portrait" } },
+		{ "portrait mask", { "TargetFrameContainer.PortraitMask" } },
+		{ "strip", { "TargetFrameContent.TargetFrameContentMain.ReputationColor" } },
+		{ "name", { "TargetFrameContent.TargetFrameContentMain.Name", "name" } },
+		{ "level", { "TargetFrameContent.TargetFrameContentMain.LevelText" } },
+		{ "level ring", { "TargetFrameContent.TargetFrameContentMain.LevelBackgroundCircle" } },
+		{ "pvp", { "TargetFrameContent.TargetFrameContentContextual.PvpBackgroundIcon",
+			"TargetFrameContent.TargetFrameContentContextual.PvpIcon" } },
+		{ "health", { "healthbar" } },
+		{ "power", { "manabar" } },
+		{ "health text", { "healthbar.TextString" } },
+		{ "power text", { "manabar.TextString" } },
+	}
+	local function Field(root, path)
+		local at = root
+		for key in path:gmatch("[^%.]+") do
+			if type(at) ~= "table" then return nil end
+			at = rawget(at, key) or (type(at[key]) == "table" and at[key]) or nil
+		end
+		return type(at) == "table" and at or nil
+	end
+	local function Part(frame, paths)
+		if type(frame) ~= "table" then return nil end
+		for _, path in ipairs(paths) do
+			local region = Field(frame, path)
+			if region and region.GetObjectType then return region end
+		end
+	end
+	local function Num(v, f) return Plain(v) and (f or "%.2f"):format(v) or "?" end
+	local function Info(region, art)
+		if not region then return "none" end
+		local out = {}
+		-- (A secret value as "secret": one in the line broke the whole run, its
+		-- join errored, the side-by-side run 12: the health text's anchor.)
+		local function Put(k, v)
+			local text = (issecretvalue and issecretvalue(v)) and "secret" or tostring(v)
+			if issecretvalue and issecretvalue(text) then text = "secret" end
+			out[#out + 1] = k .. "=" .. text
+		end
+		local ok = pcall(function()
+			Put("shown", ns.Flag(region:IsShown()) and 1 or 0)
+			Put("vis", ns.Flag(region:IsVisible()) and 1 or 0)
+			Put("a", Num(region:GetAlpha()))
+			if region.GetEffectiveAlpha then Put("ea", Num(region:GetEffectiveAlpha())) end
+			local l, t, w, h = region:GetLeft(), region:GetTop(), region:GetWidth(), region:GetHeight()
+			local al, at = art and art:GetLeft(), art and art:GetTop()
+			if Plain(l, t, w, h) and al and Plain(al, at) then
+				local rs = region.GetEffectiveScale and region:GetEffectiveScale() or art:GetEffectiveScale()
+				local as = art:GetEffectiveScale()
+				Put("x", ("%.1f"):format((l * rs - al * as) / as))
+				Put("y", ("%.1f"):format((at * as - t * rs) / as))
+				Put("w", ("%.1f"):format(w * rs / as))
+				Put("h", ("%.1f"):format(h * rs / as))
+			end
+			-- (Where a text's words start, from the art's left: its box can be
+			-- any width, ours none at all, so the box's edge says nothing.)
+			local isText = region.GetObjectType and region:GetObjectType() == "FontString"
+			if isText and region.GetStringWidth and Plain(l, w) and art and Plain(art:GetLeft()) then
+				local sw, justify = region:GetStringWidth(), region:GetJustifyH()
+				if Plain(sw) then
+					local rs = region.GetEffectiveScale and region:GetEffectiveScale() or art:GetEffectiveScale()
+					local as = art:GetEffectiveScale()
+					local start = justify == "LEFT" and l or justify == "RIGHT" and (l + w - sw) or (l + (w - sw) / 2)
+					Put("tx", ("%.1f"):format((start * rs - art:GetLeft() * as) / as))
+					Put("tw", ("%.1f"):format(sw * rs / as))
+				end
+			end
+			-- (Its drawn height, for the tool's "looks right" check: the mana
+			-- numbers stood taller than their bar on both frames, so matching
+			-- the game passed them, the user, 2026-11-21. Read even where its
+			-- place is secret.)
+			if isText and region.GetStringHeight and art then
+				local okH, sh = pcall(region.GetStringHeight, region)
+				local rs = region.GetEffectiveScale and region:GetEffectiveScale() or art:GetEffectiveScale()
+				if okH and Plain(sh) then Put("th", ("%.1f"):format(sh * rs / art:GetEffectiveScale())) end
+			end
+			-- (A text's anchor: its place is secret with health on it, run 10.)
+			if isText and region.GetPoint then
+				local okP, point, to, relative, ax, ay = pcall(region.GetPoint, region, 1)
+				if okP and point then
+					local okN, toName = pcall(function() return type(to) == "table" and to.GetDebugName and to:GetDebugName() or tostring(to) end)
+					toName = okN and type(toName) == "string" and toName or "?"
+					local function Word(v) return (issecretvalue and issecretvalue(v)) and "secret" or tostring(v) end
+					local short = (issecretvalue and issecretvalue(toName)) and "secret" or (toName:match("([^%.]+)$") or "?")
+					Put("anchor", ("%s>%s:%s@%s,%s"):format(Word(point), short, Word(relative), Num(ax, "%.1f"), Num(ay, "%.1f")))
+				end
+			end
+			if region.GetFont then
+				local file, size = region:GetFont()
+				Put("size", Num(size, "%.1f"))
+				Put("font", type(file) == "string" and (file:match("([^\\/]+)$") or file) or "?")
+				local _, _, _, ca = region:GetTextColor()
+				Put("ca", Num(ca))
+			elseif region.GetVertexColor then
+				local _, _, _, ca = region:GetVertexColor()
+				Put("ca", Num(ca))
+				local atlas = region.GetAtlas and region:GetAtlas()
+				local tex = (type(atlas) == "string" and atlas ~= "" and atlas) or region:GetTexture()
+				if type(tex) == "string" then tex = tex:match("([^\\/]+)$") or tex end
+				Put("tex", (type(tex) == "string" or Plain(tex)) and tex or "?")
+			end
+			-- (Its stacking, against its frame art's: drawn under the art, ours
+			-- went dull, run 5.)
+			if region.GetDrawLayer then
+				local layer, sub = region:GetDrawLayer()
+				Put("layer", tostring(layer) .. (sub and (":" .. sub) or ""))
+			end
+			if region.GetBlendMode then Put("blend", tostring(region:GetBlendMode())) end
+			-- (A frame's own level, a texture's or text's frame's: a bar read
+			-- its parent's, and looked under the art when it wasn't, run 8.)
+			local own = region.IsObjectType and region:IsObjectType("Frame") and region
+			local parent = own or (region.GetParent and region:GetParent())
+			local artParent = art and art.GetParent and art:GetParent()
+			if parent and artParent and parent.GetFrameLevel then
+				Put("lvl", parent:GetFrameLevel() - artParent:GetFrameLevel())
+			end
+			Put("st", ns.UnitStyleHeld and ns.UnitStyleHeld(region) and 1 or 0)
+			local held = ns.unitPartsHidden and ns.unitPartsHidden[region]
+			Put("rw", held and Num(held) or "-")
+		end)
+		if not ok then Put("error", 1) end
+		return table.concat(out, " ")
+	end
+	local traceCounts, traced, traceTotal = {}, {}, 0
+	local function Trace(label, call, detail)
+		if not run or traceTotal >= 600 then return end
+		traceCounts[label] = (traceCounts[label] or 0) + 1
+		if traceCounts[label] > 4 then return end
+		traceTotal = traceTotal + 1
+		local stack = (debugstack and debugstack(3, 6, 0) or "?"):gsub("Interface/AddOns/", ""):gsub("\n", " < ")
+		Write(("trace %s %s %s(%s) from %s"):format(run.theme or "?", label, call, detail, stack))
+	end
+	local function HookParts()
+		local frames = { { "game", _G.TargetFrame }, { "ours", ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame() } }
+		for _, each in ipairs(frames) do
+			for _, part in ipairs(PARTS) do
+				local region = Part(each[2], part[2])
+				if region and not traced[region] then
+					traced[region] = true
+					local label = each[1] .. " " .. part[1]
+					hooksecurefunc(region, "SetAlpha", function(_, a) if Plain(a) and a < 0.05 then Trace(label, "SetAlpha", a) end end)
+					if region.Hide then hooksecurefunc(region, "Hide", function() Trace(label, "Hide", "") end) end
+					if region.SetShown then
+						hooksecurefunc(region, "SetShown", function(_, on) if on == false then Trace(label, "SetShown", "false") end end)
+					end
+					if region.SetVertexColor then
+						hooksecurefunc(region, "SetVertexColor", function(_, _, _, _, a) if Plain(a) and a < 0.05 then Trace(label, "SetVertexColor", "alpha " .. a) end end)
+					end
+					if region.SetTextColor then
+						hooksecurefunc(region, "SetTextColor", function(_, _, _, _, a) if Plain(a) and a < 0.05 then Trace(label, "SetTextColor", "alpha " .. a) end end)
+					end
+					-- (Who moves the level and the name: ours' level sat 2.5 units
+					-- off the game's in Codex only, run 9.)
+					if (part[1] == "level" or part[1] == "name") and region.SetPoint then
+						hooksecurefunc(region, "SetPoint", function(_, point, to, relative, x, y)
+							local toName = type(to) == "table" and (to.GetDebugName and to:GetDebugName() or "a frame") or tostring(to)
+							Trace(label, "SetPoint", ("%s %s %s %s,%s"):format(tostring(point), toName, tostring(relative), tostring(x), tostring(y)))
+						end)
+					end
+				end
+			end
+		end
+	end
+	-- (Every part in the target frame's contextual layer by its name, shown
+	-- ones only: the game's PvP flag wasn't its PvpIcon, run 14; once a theme.)
+	local function Contextual(shot, label, frame, art)
+		local content = type(frame) == "table" and type(frame.TargetFrameContent) == "table" and frame.TargetFrameContent
+		local context = content and type(content.TargetFrameContentContextual) == "table" and content.TargetFrameContentContextual
+		if not context then return end
+		local names = {}
+		for key, value in pairs(context) do
+			if type(key) == "string" and type(value) == "table" and value.GetObjectType and value.IsShown then names[#names + 1] = key end
+		end
+		table.sort(names)
+		for _, key in ipairs(names) do
+			local region = context[key]
+			local okS, shown = pcall(region.IsVisible, region)
+			if okS and ns.Flag(shown) then
+				Write(("context %s %s %s | %s"):format(shot, label, key, Info(region, art)))
+			end
+		end
+	end
+	local function ProbeAll(shot)
+		local game, ours = _G.TargetFrame, ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
+		local gameArt, oursArt = Part(game, PARTS[1][2]), Part(ours, PARTS[1][2])
+		if run.contextFor ~= run.theme then
+			run.contextFor = run.theme
+			-- (Guarded: a probe must never stop the run, run 12.)
+			pcall(Contextual, shot, "game", game, gameArt)
+			pcall(Contextual, shot, "ours", ours, oursArt)
+		end
+		for _, part in ipairs(PARTS) do
+			Write(("part %s %s | game %s | ours %s"):format(shot, part[1], Info(Part(game, part[2]), gameArt),
+				Info(Part(ours, part[2]), oursArt)))
+		end
+		-- (Each theme's trace count starts again with its first shot.)
+		wipe(traceCounts)
+	end
+	local function OnTop() return _G.TargetFrame and _G.TargetFrame.buffsOnTop == true end
+	local function Shot(theme, kind)
+		-- (Its buffs over the frame or under it: Tools/selfpair.py crops by it.)
+		if OnTop() then kind = "ontop-" .. kind end
+		local game = Pixels(Art())
+		local ours, k = Pixels(ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame())
+		local name = date("%m%d%y_%H%M%S")
+		HookParts()
+		ProbeAll(name)
+		local ok = pcall(function() Screenshot() end)
+		run.shots = run.shots + 1
+		Write(("shot %s theme %s kind %s game %s ours %s px %.4f%s"):format(name, theme, kind, game or "none",
+			ours or "none", k or 0, ok and "" or " (screenshot failed)"))
+	end
+	local function Body()
+		if not Targeted() then
+			Prompt("target yourself (your Target Self key, F1)")
+			Write("waiting for you to target yourself")
+			while not Targeted() do coroutine.yield() end
+		end
+		Wait(0.6)
+		-- (Ours under the game's, or over it with no room under: clear of its
+		-- buff rows either way.)
+		local art = Art()
+		local h, bottom = art:GetHeight(), art:GetBottom()
+		run.down = (Plain(h, bottom) and bottom > h + 160) and -(h + 80) or (h + 80)
+		-- (A whole number of screen pixels apart: 148 units were 177.6 px, half
+		-- a pixel off in every compare, the run of 2026-11-21.)
+		local _, high = GetPhysicalScreenSize()
+		local k = art:GetEffectiveScale() * high / 768
+		run.down = (run.down < 0 and -1 or 1) * math.floor(math.abs(run.down) * k + 0.5) / k
+		Backdrop(art, h)
+		local themes = ns.StyleThemeList()
+		-- ("selfpair quick": the game's own look and one themed look only, no
+		-- Codex passes: a check of one fix in seconds, not the whole sweep.)
+		if run.quick then
+			local keep = {}
+			for _, theme in ipairs(themes) do
+				if theme.key == "game" or theme.key == "fel" then keep[#keep + 1] = theme end
+			end
+			themes = keep
+		end
+		Write(("themes %d, ours %s the game's by %.0f"):format(#themes, run.down < 0 and "under" or "over", math.abs(run.down)))
+		Prompt(("hands off: %d themes"):format(#themes), #themes * 5.6 + 4.5)
+		Wait(4.5)
+		for _, theme in ipairs(themes) do
+			if InCombatLockdown() then return "a fight started (themes can't change in one)" end
+			if not Targeted() then
+				Prompt("target yourself again")
+				while not Targeted() do coroutine.yield() end
+				Wait(0.6)
+			end
+			run.theme = theme.key
+			ns.ApplyStyleTheme(theme.key, true)
+			SetCVar("statusText", "0")
+			Wait(0.8)
+			if not ns.ShoulderSelfTargetBeside(run.down) then Write("theme " .. theme.key .. ": ours didn't come up") end
+			Wait(0.8)
+			Probe(theme.key)
+			Shot(theme.key, "plain")
+			Wait(1.0)
+			SetCVar("statusText", "1")
+			Wait(1.0)
+			ns.ShoulderSelfTargetBeside(run.down)
+			Wait(0.8)
+			Numbers(theme.key)
+			Shot(theme.key, "numbers")
+			Wait(1.0)
+		end
+		-- (Codex again, straight after the game's own look: its name strip and
+		-- numbers were hidden on the game's frame after Reel. Left over from the
+		-- theme before, or Codex's own? What holds each part, both times.)
+		if InCombatLockdown() then return "a fight started (themes can't change in one)" end
+		-- (Buffs on Top the other way, three themes, then back: you flip it in
+		-- Edit Mode. The user asked, 2026-11-21: "have you considered buffs on
+		-- top?" The test flipping it itself (the frame's buffsOnTop, then its
+		-- aura layout) tainted the target frame: the game's layout then
+		-- compared its secret row count and errored (TargetFrame.lua:577, run
+		-- 6, rule forever.targetframe.buffsontop-addon-taint). Edit Mode only.)
+		local function Settled(want)
+			local edit = _G.EditModeManagerFrame
+			return OnTop() == want and not (edit and edit:IsShown()) and Targeted()
+		end
+		local start = OnTop()
+		local function Ask(want)
+			Prompt(("Press Open Edit Mode (or Esc > Edit Mode), click your Target Frame, %s Buffs on Top, close Edit Mode (target yourself again if it's gone)"):format(
+				want and "tick" or "untick"))
+			-- (A button opens Edit Mode with your click: nothing tainted, rule
+			-- forever.targetframe.buffsontop-addon-taint.)
+			if ns.TestKit and ns.TestKit.ShowButtons then ns.TestKit.ShowButtons({ { kind = "editmode" } }) end
+			Write(("asked: Buffs on Top %s"):format(want and "on" or "off"))
+			while not Settled(want) do
+				if InCombatLockdown() then return false end
+				coroutine.yield()
+			end
+			if ns.TestKit and ns.TestKit.HideButtons then ns.TestKit.HideButtons() end
+			Write(("Buffs on Top %s now"):format(want and "on" or "off"))
+			Wait(1.0)
+			return true
+		end
+		-- (Opt-in, "selfpair ontop": two trips to Edit Mode each run, for a
+		-- layout measured in runs 4-6; only needed when that code changes.
+		-- The user, 2026-11-21.)
+		if not run.ontop then
+			Write(("Buffs on Top the other way: skipped (as you have it: %s; /cine debug shoulder selfpair ontop checks both)"):format(
+				start and "on" or "off"))
+		end
+		if run.ontop and not Ask(not start) then return "a fight started (themes can't change in one)" end
+		if run.ontop then Prompt("hands off: three themes the other way", 3 * 2.8) end
+		for _, key in ipairs(run.ontop and { "game", "fel", "slate" } or {}) do
+			run.theme = key .. "-flipped"
+			ns.ApplyStyleTheme(key, true)
+			SetCVar("statusText", "0")
+			Wait(0.8)
+			ns.ShoulderSelfTargetBeside(run.down)
+			Wait(0.8)
+			Probe(key .. "-flipped")
+			Shot(key, "plain")
+			Wait(1.0)
+		end
+		if run.ontop and not Ask(start) then return "a fight started (themes can't change in one)" end
+		if run.quick then
+			Write("codex passes: skipped (quick)")
+			if not run.clicks then
+				Write("clicks: skipped (/cine debug shoulder selfpair clicks checks them)")
+				return "done"
+			end
+		end
+		if not run.quick then Prompt("hands off: Codex twice", 2 * 4.5) end
+		for _, pass in ipairs(run.quick and {} or { { "reel", "codex", "afterreel" }, { "game", "codex", "aftergame" } }) do
+			ns.ApplyStyleTheme(pass[1], true)
+			SetCVar("statusText", "1")
+			Wait(1.0)
+			run.theme = "codex-" .. pass[3]
+			ns.ApplyStyleTheme(pass[2], true)
+			Wait(1.0)
+			ns.ShoulderSelfTargetBeside(run.down)
+			Wait(0.8)
+			Probe("codex-" .. pass[3])
+			Numbers("codex-" .. pass[3])
+			for _, part in ipairs({ "NameBack", "Numbers" }) do
+				local ok, lines = pcall(ns.UnitPartDebug or function() return {} end, part)
+				for _, line in ipairs(ok and lines or { "error: " .. tostring(lines) }) do
+					if line:find("^TargetFrame") or line:find("^apply") then Write(("parts codex-%s %s: %s"):format(pass[3], part, line)) end
+				end
+			end
+			Shot("codex", pass[3])
+			Wait(1.0)
+		end
+		-- (Opt-in, "selfpair clicks": passed in runs 7-10 and 15; the user,
+		-- 2026-11-21: "we dont need to test all the time".)
+		if not run.clicks then
+			Write("clicks: skipped (/cine debug shoulder selfpair clicks checks them)")
+			return "done"
+		end
+		-- (Clicking yourself on and on, the option on: it and its menu button
+		-- stay up, as the game keeps you targeted; Esc puts both away. They
+		-- toggled out of step: it blinked, and came up with no Esc, the
+		-- user's report, 2026-11-21.)
+		pcall(ns.ShoulderSelfTargetBeside, nil)
+		if run.backdrop then run.backdrop:Hide() end
+		ns.ApplyStyleTheme(run.kept and run.kept.styleTheme or "game", true)
+		ns.db.shoulderCamFakeSelf = true
+		-- (Shoulder Cam everywhere for the step, put back at the end: indoors
+		-- it was off, so the option paused and the step couldn't start, run 13.)
+		if run.alwaysWas == nil then run.alwaysWas = ns.db.shoulderCamAlways == true end
+		ns.db.shoulderCamAlways = true
+		-- (And on through every event camera: the cozy camera at a fire paused
+		-- it, run 14, as the AFK camera had, run 8. Each put back at the end.)
+		run.allowWas = run.allowWas or {}
+		for _, key in ipairs({ "shoulderCamAllowVista", "shoulderCamAllowFish", "shoulderCamAllowCozy", "shoulderCamAllowAFK",
+			"shoulderCamAllowTele", "shoulderCamAllowYours", "shoulderCamAllowWalk", "shoulderCamAllowRun",
+			"shoulderCamAllowQuest", "shoulderCamAllowChat" }) do
+			if run.allowWas[key] == nil then run.allowWas[key] = ns.db[key] == true end
+			ns.db[key] = true
+		end
+		Wait(1.5)
+		if InCombatLockdown() then return "a fight started" end
+		-- (Waits till the option's on; still paused after a moment: why, in the box.)
+		local function OptionOn()
+			local state = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState() or {}
+			return state.want, state.why
+		end
+		local on, why = OptionOn()
+		if not on then
+			Write("clicks: the option's paused (" .. Text(why) .. "), waiting")
+			Prompt(("Keep the shoulder is paused (%s): stand up, dismount or step outside till this goes on"):format(Text(why)))
+			while not OptionOn() do
+				if InCombatLockdown() then return "a fight started" end
+				coroutine.yield()
+			end
+			Wait(0.5)
+		end
+		local menu = ns.ShoulderSelfTargetMenu and ns.ShoulderSelfTargetMenu()
+		local stand = ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
+		local from = ns.ShoulderSelfTargetSelects and ns.ShoulderSelfTargetSelects() or 0
+		Prompt("LEFT-CLICK YOUR PLAYER FRAME 5 TIMES (slowly)")
+		local option = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState() or {}
+		Write(("clicks: asked for 5 selects (the option %s: %s)"):format(option.want and "on" or "NOT ON", Text(option.why)))
+		-- (Every press in this step: what's under the mouse, our button's state,
+		-- your target. Run 9's first counted select came 2 minutes after the
+		-- ask, the option on, with no trace of the clicks before: you were
+		-- already targeted, so one on the game's frame changes nothing.)
+		local presses = CreateFrame("Frame")
+		local pressCount = 0
+		presses:RegisterEvent("GLOBAL_MOUSE_DOWN")
+		presses:SetScript("OnEvent", function(_, _, button)
+			if not run or pressCount >= 30 then return end
+			pressCount = pressCount + 1
+			local state = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState() or {}
+			local fake = state.button
+			local focus = ns.MouseFocus and ns.MouseFocus()
+			local name = focus and (focus.GetDebugName and focus:GetDebugName() or focus.GetName and focus:GetName())
+			Write(("clicks: press %d %s on %s | our button %s, under the mouse %s, at %s | option %s (%s) | target %s"):format(
+				pressCount, tostring(button), Text(name or "the world"), fake and (fake:IsShown() and "shown" or "hidden") or "none",
+				Text(fake and ns.Flag(fake:IsMouseOver())), Text(state.rect), Text(state.want), Text(state.why),
+				UnitExists("target") and (ns.Flag(UnitIsUnit("target", "player")) and "you" or "someone") or "none"))
+		end)
+		local blinks, seen = 0, from
+		while (ns.ShoulderSelfTargetSelects() - from) < 5 do
+			if InCombatLockdown() then return "a fight started" end
+			local now = ns.ShoulderSelfTargetSelects()
+			if now ~= seen then
+				seen = now
+				Wait(0.4)
+				local up = stand and stand:IsShown() or false
+				local menuUp = menu and menu:IsShown() or false
+				Write(("clicks: select %d: ours %s, its menu button %s"):format(now - from, up and "up" or "DOWN",
+					menuUp and "up" or "AWAY"))
+				if not (up and menuUp) then blinks = blinks + 1 end
+			end
+			coroutine.yield()
+		end
+		Wait(0.6)
+		presses:UnregisterAllEvents()
+		stand = ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
+		Write(("clicks %s: 5 selects, %d with it or its menu button away; %d presses in the step"):format(
+			blinks == 0 and "PASS" or "FAIL", blinks, pressCount))
+		Prompt("PRESS ESC")
+		while stand and stand:IsShown() and menu and menu:IsShown() do
+			if InCombatLockdown() then return "a fight started" end
+			coroutine.yield()
+		end
+		Wait(0.6)
+		local up = stand and stand:IsShown() or false
+		local menuUp = menu and menu:IsShown() or false
+		local gameMenu = type(_G.GameMenuFrame) == "table" and _G.GameMenuFrame:IsShown() or false
+		Write(("esc %s: ours %s, its menu button %s, the game's Esc menu %s"):format((not up and not menuUp) and "PASS" or "FAIL",
+			up and "STILL UP" or "away", menuUp and "STILL UP" or "away", gameMenu and "opened too" or "not opened"))
+		return "done"
+	end
+	local function End(why)
+		if not run then return end
+		local ended = run
+		pcall(ns.ShoulderSelfTargetBeside, nil)
+		if ended.alwaysWas ~= nil then ns.db.shoulderCamAlways = ended.alwaysWas end
+		for key, was in pairs(ended.allowWas or {}) do ns.db[key] = was end
+		if ns.ShoulderSelfTargetIconCrop then ns.ShoulderSelfTargetIconCrop(nil) end
+		if ended.backdrop then ended.backdrop:Hide() end
+		SetCVar("statusText", ended.statusText or "0")
+		ns.db.shoulderCamFakeSelf = ended.option
+		local function Back()
+			if ns.RestoreStyleSnapshot and ended.kept then ns.RestoreStyleSnapshot(ended.kept) end
+		end
+		if InCombatLockdown() then
+			local wait = CreateFrame("Frame")
+			wait:RegisterEvent("PLAYER_REGEN_ENABLED")
+			wait:SetScript("OnEvent", function(self) self:UnregisterAllEvents() Back() end)
+		else
+			Back()
+		end
+		Write(("end: %s, %d shots; your option back to %s, status text back to %s, your theme back to %s"):format(
+			why, ended.shots, Text(ended.option), Text(ended.statusText), Text(ended.kept and ended.kept.styleTheme)))
+		ns.SetOnUpdate(driver, nil)
+		run = nil
+		Log(("selfpair: %s, %d lines in db.shoulderSelfPair"):format(why, #ns.db.shoulderSelfPair))
+		local took = type(ns.PadTestTime) == "function" and ns.PadTestTime(GetTime() - ended.began) or "?"
+		if ns.PadTestBoxClock then ns.PadTestBoxClock(function() return "took " .. took end) end
+		local good = why == "done"
+		if ns.PadTestBox then
+			ns.PadTestBox(("Self pair %s (%s)"):format(good and "DONE" or "stopped", why), "/reload, then say \"check log\".",
+				good and 0.3 or 1, good and 1 or 0.6, 0.3)
+			C_Timer.After(60, function() if not run and ns.PadTestBoxHide then ns.PadTestBoxHide() end end)
+		else
+			ns.Print(("Self pair: done (%s). /reload, then tell Claude 'check log'"):format(why))
+		end
+	end
+	function ns.ShoulderSelfPair(rest)
+		if run then return End("stopped") end
+		if InCombatLockdown() then
+			ns.Print("shoulder selfpair: out of a fight only (themes can't change in one)")
+			return
+		end
+		if not (ns.ShoulderSelfTargetBeside and ns.StyleThemeList and ns.ApplyStyleTheme and ns.StyleSnapshot) then
+			ns.Print("shoulder selfpair: this copy has no side-by-side mode or no themes")
+			return
+		end
+		ns.db.shoulderSelfPair = {}
+		run = { began = GetTime(), option = ns.db.shoulderCamFakeSelf, statusText = GetCVar("statusText"),
+			kept = ns.StyleSnapshot(), shots = 0, ontop = type(rest) == "string" and rest:lower():find("ontop") ~= nil,
+			clicks = type(rest) == "string" and rest:lower():find("clicks") ~= nil,
+			quick = type(rest) == "string" and rest:lower():find("quick") ~= nil }
+		local timed = run
+		if ns.PadTestBoxClock and type(ns.TestKit) == "table" and ns.TestKit.Clock then
+			ns.PadTestBoxClock(function() return ns.TestKit.Clock(timed) end)
+		end
+		-- (The option off: your Target Self key targets you, the game's frame up.)
+		ns.db.shoulderCamFakeSelf = false
+		local wide, high = GetPhysicalScreenSize()
+		Write(("start | %s | screen %dx%d | your theme %s | status text %s, shown as %s | your option %s | Buffs on Top %s, both ways %s"):format(
+			ns.isRetail and "retail" or "Forever", wide, high, Text(ns.db.styleTheme), Text(GetCVar("statusText")),
+			Text(GetCVar("statusTextDisplay")), Text(run.option), Text(OnTop()), run.ontop and "yes" or "no (add ontop)") .. (run.clicks and " | clicks yes" or " | clicks no (add clicks)"))
+		local co = coroutine.create(Body)
+		ns.SetOnUpdate(driver, function()
+			if not run then return end
+			Fresh()
+			local ok, result = coroutine.resume(co)
+			if not ok then
+				Write("error: " .. tostring(result))
+				return End("error")
+			end
+			if coroutine.status(co) == "dead" then End(result or "done") end
+		end)
+	end
+end
+
+-- selfdump: every part of the game's target frame of you, and of ours (Keep
+-- the shoulder when selecting yourself), read the same way, for a diff
+-- offline ("think of all possible parts of the unit frame. plan it out", user
+-- 2026-11-20). Read only. Nothing is picked from a list of parts: each frame
+-- is walked, every child frame and region, shown or not, each a line: its
+-- path, type, shown, alpha, layer, place in the frame's own units, points, and
+-- what its type has (art, color, font, bar, swirl settings, mouse, scripts,
+-- plain fields). Plus your auras in the game's order, the settings that
+-- change the frame (CVars), and what a hover shows (a buff, the frame). The
+-- game's frame out of a fight (the option can't be turned off in one); ours
+-- out of a fight and in one. Into db.shoulderSelfDump.
+do
+	local MOST_LINES, MOST_PER_DUMP, MOST_DEPTH = 9000, 1800, 12
+	local run
+	local function Secret(v) return issecretvalue and issecretvalue(v) or false end
+	local function Write(text)
+		local lines = ns.db.shoulderSelfDump
+		if Secret(text) then text = "(a line with a secret value in it)" end
+		if #lines < MOST_LINES then lines[#lines + 1] = ("%.2f %s"):format(GetTime() - run.began, text) end
+	end
+	local function Box(head, line) ns.PadTestBox(head, line, 1, 0.82, 0) end
+	-- (Any value as text: a secret one says so, numbers to two places.)
+	local function V(v)
+		if Secret(v) then return "secret" end
+		if type(v) == "number" then
+			if v == math.floor(v) then return tostring(v) end
+			return ("%.2f"):format(v)
+		end
+		if type(v) == "table" or type(v) == "userdata" then
+			local ok, name = pcall(function() return v.GetName and v:GetName() end)
+			return ok and type(name) == "string" and not Secret(name) and name or type(v)
+		end
+		return Text(v)
+	end
+	-- (A method's results, nil where it's missing or errors.)
+	local function Ask(obj, method, ...)
+		local ok, fn = pcall(function() return obj[method] end)
+		if not (ok and type(fn) == "function") then return nil end
+		local out = { pcall(fn, obj, ...) }
+		if not out[1] then return nil end
+		return unpack(out, 2, table.maxn(out))
+	end
+	local function List(...)
+		local out = {}
+		for i = 1, select("#", ...) do out[#out + 1] = V((select(i, ...))) end
+		return table.concat(out, "/")
+	end
+	local function Plain(v) return type(v) == "number" and not Secret(v) end
+	-- Its place in the walked frame's own units, from its top-left.
+	local function Rect(obj, root)
+		local l, t, w, h = Ask(obj, "GetLeft"), Ask(obj, "GetTop"), Ask(obj, "GetWidth"), Ask(obj, "GetHeight")
+		local s = Ask(obj, "GetEffectiveScale") or (Ask(obj, "GetParent") and Ask(Ask(obj, "GetParent"), "GetEffectiveScale"))
+		if not (Plain(l) and Plain(t) and Plain(w) and Plain(h) and Plain(s) and root.s) then
+			return ("rect ?(%s)"):format(List(l, t, w, h))
+		end
+		return ("rect %.1f,%.1f %.1fx%.1f"):format((l * s - root.l) / root.s, (root.t - t * s) / root.s, w * s / root.s,
+			h * s / root.s)
+	end
+	local function Points(obj)
+		local out = {}
+		-- (How many can be secret: the game's frame on Forever, the first run.)
+		local count = Ask(obj, "GetNumPoints")
+		if not Plain(count) then return "points " .. V(count) end
+		for i = 1, count do
+			local point, to, toPoint, x, y = Ask(obj, "GetPoint", i)
+			local name = to and (run.pathOf[to] or V(to)) or "screen"
+			out[#out + 1] = ("%s>%s:%s %s,%s"):format(V(point), name, V(toPoint), V(x), V(y))
+		end
+		return #out > 0 and ("points " .. table.concat(out, "; ")) or "no points"
+	end
+	-- (Its own plain fields: a button's aura id, its unit, the frame's Edit Mode
+	-- choices. A small table of plain fields too, one level: buttonInfo.)
+	local function Fields(obj)
+		local out, tables = {}, 0
+		local ok = pcall(function()
+			for key, value in pairs(obj) do
+				if type(key) == "string" and #out < 30 then
+					local kind = type(value)
+					if kind == "number" or kind == "string" or kind == "boolean" then
+						out[#out + 1] = key .. "=" .. V(value)
+					elseif kind == "table" and tables < 6 and not (value.GetObjectType) then
+						local inner, n = {}, 0
+						for k2, v2 in pairs(value) do
+							n = n + 1
+							if n > 20 then inner = nil break end
+							local k2t = type(v2)
+							if type(k2) == "string" and (k2t == "number" or k2t == "string" or k2t == "boolean") then
+								inner[#inner + 1] = k2 .. "=" .. V(v2)
+							end
+						end
+						if inner and #inner > 0 then
+							table.sort(inner)
+							tables = tables + 1
+							out[#out + 1] = key .. "={" .. table.concat(inner, ",") .. "}"
+						end
+					end
+				end
+			end
+		end)
+		if not ok or #out == 0 then return nil end
+		table.sort(out)
+		return "fields " .. table.concat(out, " ")
+	end
+	local function Art(texture)
+		if not texture then return "none" end
+		local atlas, file = Ask(texture, "GetAtlas"), Ask(texture, "GetTexture")
+		return ("atlas %s file %s coords %s color %s desat %s blend %s masks %s"):format(V(atlas), V(file),
+			List(Ask(texture, "GetTexCoord")), List(Ask(texture, "GetVertexColor")), V(Ask(texture, "IsDesaturated")),
+			V(Ask(texture, "GetBlendMode")), V(Ask(texture, "GetNumMaskTextures")))
+	end
+	local function Line(obj, path, root, depth)
+		local kind = Ask(obj, "GetObjectType") or "?"
+		local parts = { ("%s %s %s"):format(path, kind, depth > 0 and "" or "(root)"),
+			("shown %s visible %s alpha %s"):format(V(Ask(obj, "IsShown")), V(Ask(obj, "IsVisible")), V(Ask(obj, "GetAlpha"))) }
+		if Ask(obj, "GetDrawLayer") then
+			parts[#parts + 1] = "layer " .. List(Ask(obj, "GetDrawLayer"))
+		else
+			parts[#parts + 1] = ("strata %s level %s scale %s"):format(V(Ask(obj, "GetFrameStrata")),
+				V(Ask(obj, "GetFrameLevel")), V(Ask(obj, "GetScale")))
+		end
+		parts[#parts + 1] = Rect(obj, root)
+		parts[#parts + 1] = Points(obj)
+		if kind == "Texture" or kind == "MaskTexture" or kind == "Line" then
+			parts[#parts + 1] = Art(obj)
+		elseif kind == "FontString" then
+			local file, size, flags = Ask(obj, "GetFont")
+			parts[#parts + 1] = ("text %s font %s %s %s justify %s/%s color %s shadow %s %s scale %s wrap %s"):format(
+				V(Ask(obj, "GetText")), V(file), V(size), V(flags), V(Ask(obj, "GetJustifyH")), V(Ask(obj, "GetJustifyV")),
+				List(Ask(obj, "GetTextColor")), List(Ask(obj, "GetShadowOffset")), List(Ask(obj, "GetShadowColor")),
+				V(Ask(obj, "GetTextScale")), V(Ask(obj, "CanWordWrap")))
+		end
+		if kind == "StatusBar" then
+			parts[#parts + 1] = ("bar %s color %s range %s value %s orient %s reverse %s"):format(
+				Art(Ask(obj, "GetStatusBarTexture")), List(Ask(obj, "GetStatusBarColor")), List(Ask(obj, "GetMinMaxValues")),
+				V(Ask(obj, "GetValue")), V(Ask(obj, "GetOrientation")), V(Ask(obj, "GetReverseFill")))
+		elseif kind == "Cooldown" then
+			parts[#parts + 1] = ("swirl reverse %s edge %s swipe %s bling %s times %s numbers hidden %s edge scale %s rotation %s aura time %s"):format(
+				V(Ask(obj, "GetReverse")), V(Ask(obj, "GetDrawEdge")), V(Ask(obj, "GetDrawSwipe")), V(Ask(obj, "GetDrawBling")),
+				List(Ask(obj, "GetCooldownTimes")), V(Ask(obj, "GetHideCountdownNumbers")), V(Ask(obj, "GetEdgeScale")),
+				V(Ask(obj, "GetRotation")), V(Ask(obj, "GetUseAuraDisplayTime")))
+		end
+		if kind ~= "Texture" and kind ~= "MaskTexture" and kind ~= "FontString" and kind ~= "Line" then
+			local scripts = {}
+			for _, name in ipairs({ "OnEnter", "OnLeave", "OnClick", "OnMouseDown", "OnMouseUp", "OnUpdate", "OnShow" }) do
+				if Ask(obj, "HasScript", name) and Ask(obj, "GetScript", name) then scripts[#scripts + 1] = name end
+			end
+			parts[#parts + 1] = ("mouse %s click %s motion %s scripts %s"):format(V(Ask(obj, "IsMouseEnabled")),
+				V(Ask(obj, "IsMouseClickEnabled")), V(Ask(obj, "IsMouseMotionEnabled")),
+				#scripts > 0 and table.concat(scripts, ",") or "none")
+			local unit, kindAttr = Ask(obj, "GetAttribute", "unit"), Ask(obj, "GetAttribute", "type")
+			if unit or kindAttr then parts[#parts + 1] = ("attributes unit %s type %s"):format(V(unit), V(kindAttr)) end
+		end
+		parts[#parts + 1] = Fields(obj)
+		return table.concat(parts, " | ")
+	end
+	-- (A child's name in its parent: its key there, else its global name less
+	-- the parent's, else its type and place.)
+	local function KeyIn(parent, child)
+		local found
+		pcall(function()
+			for key, value in pairs(parent) do
+				if value == child and type(key) == "string" then found = key return end
+			end
+		end)
+		return found
+	end
+	local function Walk(obj, path, root, depth, count)
+		if run.seen[obj] or count.n >= MOST_PER_DUMP then return end
+		run.seen[obj] = true
+		run.pathOf[obj] = path
+		count.n = count.n + 1
+		-- (One part's read failing is a line of its own, not the end of the run.)
+		local ok, line = pcall(Line, obj, path, root, depth)
+		Write(ok and line or (path .. " | read error: " .. V(line)))
+		if depth >= MOST_DEPTH then return end
+		-- (A container that won't list its parts says so: Forever's target
+		-- frame's buff icons sit in one, the first run 2026-11-20.)
+		local regions, children = {}, {}
+		for _, pair in ipairs({ { "GetRegions", regions }, { "GetChildren", children } }) do
+			local okFn, fn = pcall(function() return obj[pair[1]] end)
+			if okFn and type(fn) == "function" then
+				local got = { pcall(fn, obj) }
+				if not got[1] then
+					Write(("%s %s: error %s"):format(path, pair[1], V(got[2])))
+				else
+					for i = 2, table.maxn(got) do
+						if Secret(got[i]) then Write(("%s %s: a secret one"):format(path, pair[1]))
+						elseif got[i] ~= nil then pair[2][#pair[2] + 1] = got[i] end
+					end
+				end
+			end
+		end
+		for i, child in ipairs(regions) do
+			local name = KeyIn(obj, child) or V(child)
+			if name == "userdata" or name == "table" then name = (Ask(child, "GetObjectType") or "region") .. i end
+			Walk(child, path .. "." .. name, root, depth + 1, count)
+		end
+		for i, child in ipairs(children) do
+			local name = KeyIn(obj, child) or V(child)
+			if name == "userdata" or name == "table" then name = (Ask(child, "GetObjectType") or "frame") .. "#" .. i end
+			Walk(child, path .. "." .. name, root, depth + 1, count)
+		end
+	end
+	-- One whole frame and the ones beside it, the first one's top-left the 0,0.
+	local function Dump(label, names)
+		run.seen, run.pathOf = {}, {}
+		Write(("== dump %s: in a fight %s, target %s"):format(label, V(InCombatLockdown()),
+			UnitExists("target") and (ns.Flag(UnitIsUnit("target", "player")) and "you" or "another") or "none"))
+		local first = _G[names[1]]
+		local l, t, s = first and Ask(first, "GetLeft"), first and Ask(first, "GetTop"), first and Ask(first, "GetEffectiveScale")
+		local w, h = first and Ask(first, "GetWidth"), first and Ask(first, "GetHeight")
+		local root = (Plain(l) and Plain(t) and Plain(s)) and { l = l * s, t = t * s, s = s } or { l = 0, t = 0, s = 1 }
+		root.w, root.h = Plain(w) and w * s or nil, Plain(h) and h * s or nil
+		run.root = root
+		Write(("%s's top-left on screen %s,%s, scale %s"):format(names[1], V(l), V(t), V(s)))
+		for _, name in ipairs(names) do
+			local frame = _G[name]
+			if frame then
+				local count = { n = 0 }
+				Walk(frame, name, root, 0, count)
+				Write(("-- %s: %d parts%s"):format(name, count.n, count.n >= MOST_PER_DUMP and " (cut at the most)" or ""))
+			else
+				Write(("-- %s: none"):format(name))
+			end
+		end
+	end
+	-- Your auras as the game lists them (the target frame's order).
+	local function Auras(label)
+		local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
+		if not get then return Write(label .. " auras: no GetAuraDataByIndex") end
+		for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
+			for i = 1, 40 do
+				local ok, a = pcall(get, "player", i, filter)
+				if not ok then Write(("%s %s %d: error %s"):format(label, filter, i, V(a))) break end
+				if type(a) ~= "table" then break end
+				Write(("%s %s %d: id %s spell %s icon %s stacks %s length %s ends %s from %s yours %s dispel %s steal %s boss %s"):format(
+					label, filter, i, V(a.auraInstanceID), V(a.spellId), V(a.icon), V(a.applications), V(a.duration),
+					V(a.expirationTime), V(a.sourceUnit), V(a.isFromPlayerOrPlayerPet), V(a.dispelName), V(a.isStealable),
+					V(a.isBossAura)))
+			end
+		end
+	end
+	local CVARS = { "statusText", "statusTextDisplay", "showTargetOfTarget", "showTargetCastbar", "showVKeyCastbar",
+		"buffDurations", "noBuffDebuffFilterOnTarget", "showDispelDebuffs", "showCastableBuffs", "threatShowNumeric",
+		"threatWarning", "autoSelfCast", "UnitNamePlayerPVPTitle", "showAllEnemyDebuffs" }
+	local function Settings()
+		local out = {}
+		for _, name in ipairs(CVARS) do
+			local ok, value = pcall(GetCVar, name)
+			out[#out + 1] = name .. "=" .. (ok and V(value) or "none")
+		end
+		Write("settings: " .. table.concat(out, " "))
+		local frame = _G.TargetFrame
+		Write(("target frame: buffs on top %s, scale %s, Edit Mode frame size %s"):format(V(frame and frame.buffsOnTop),
+			V(frame and Ask(frame, "GetScale")),
+			V(frame and frame.GetSettingValue and Ask(frame, "GetSettingValue", 3))))
+	end
+	-- What a hover shows: the tooltip now, its owner, its place by the owner.
+	local function TipLine()
+		local tip = _G.GameTooltip
+		if not (tip and tip:IsShown()) then return "no tooltip" end
+		local owner = Ask(tip, "GetOwner")
+		local _, unit = Ask(tip, "GetUnit")
+		local left = _G.GameTooltipTextLeft1
+		return ("tooltip: owner %s, lines %s, unit %s, first line %s, anchor %s, its %s"):format(
+			owner and (run.pathOf[owner] or V(owner)) or "none", V(Ask(tip, "NumLines")),
+			unit and (ns.Flag(UnitIsUnit(unit, "player")) and "you" or "another") or "none",
+			left and V(Ask(left, "GetText")) or "?", V(Ask(tip, "GetAnchorType")), Points(tip))
+	end
+	-- (A buff icon of the frame: a small frame with an Icon, walked in the dump.)
+	local function AuraLike(f)
+		if not (run.pathOf[f] and type(f) == "table") then return false end
+		local ok, like = pcall(function()
+			local w, seen = Ask(f, "GetWidth"), Ask(f, "IsVisible")
+			return type(f.Icon) == "table" and Plain(w) and w < 40 and not Secret(seen) and seen == true
+		end)
+		return ok and like == true
+	end
+	-- (The cursor over the frame or the buff rows under it, in the frame's own
+	-- units from its top-left; nil where it can't be told. The last run took
+	-- your buff bar's tooltip, top right of the screen, for the frame's.)
+	local BUFF_ROOM = 150
+	local function Cursor()
+		local r = run.root
+		if not (r and r.w and r.h and GetCursorPosition) then return nil end
+		local x, y = GetCursorPosition()
+		if not (Plain(x) and Plain(y)) then return nil end
+		x, y = (x - r.l) / r.s, (r.t - y) / r.s
+		return x, y, x >= -10 and x <= r.w / r.s + 10 and y >= -10 and y <= r.h / r.s + BUFF_ROOM
+	end
+	-- (The buff rows: under the bars, from this far down the frame. The
+	-- cursor alone counts there: the game's buff tooltip isn't GameTooltip,
+	-- which still held your own, the 18:50 run, user's screenshot.)
+	local BUFF_TOP = 80
+	local function Hovered(root)
+		local _, cy, near = Cursor()
+		if near == false then return nil end
+		for f in pairs(run.pathOf) do
+			if AuraLike(f) and ns.Flag(Ask(f, "IsMouseOver")) then return f end
+		end
+		if near and cy >= BUFF_TOP then return "cursor" end
+		-- (Or the game's tooltip up for something that isn't the frame's unit:
+		-- a buff in a container that won't list its icons.)
+		-- (Any tooltip up that isn't a unit's counts: its owner may not be
+		-- readable at all. "tooltip" stands in for an owner that isn't.)
+		local tip = _G.GameTooltip
+		local okShown, shown = pcall(function() return tip and tip:IsShown() end)
+		if not (okShown and shown == true) then return nil end
+		local okUnit, unit = pcall(function() return select(2, tip:GetUnit()) end)
+		if okUnit and unit ~= nil then return nil end
+		local okOwner, who = pcall(function()
+			local owner = tip:GetOwner()
+			if owner == nil or Secret(owner) or owner == root then return nil end
+			return owner
+		end)
+		return okOwner and who or "tooltip"
+	end
+	-- (The hovered icon read whole, through its tooltip's owner, and what the
+	-- mouse is over.)
+	-- (Every tooltip shown now, whichever the game used: its name, owner, first line.)
+	local function Tooltips(label)
+		local out = {}
+		pcall(function()
+			local f = EnumerateFrames()
+			while f do
+				local ok, kind, shown = pcall(function() return f:GetObjectType(), f:IsShown() end)
+				if ok and kind == "GameTooltip" and shown == true then
+					local okName, name = pcall(f.GetName, f)
+					local okOwner, owner = pcall(f.GetOwner, f)
+					local region = okName and type(name) == "string" and _G[name .. "TextLeft1"]
+					local okText, first = pcall(function() return region and region:GetText() end)
+					out[#out + 1] = ("%s (owner %s, first line %s)"):format(okName and V(name) or "?",
+						not okOwner and "error" or Secret(owner) and "secret" or owner and (run.pathOf[owner] or V(owner)) or "none",
+						okText and V(first) or "?")
+				end
+				f = EnumerateFrames(f)
+			end
+		end)
+		Write(("%s: tooltips shown: %s"):format(label, #out > 0 and table.concat(out, "; ") or "none"))
+	end
+	local function ReadHovered(label, buff)
+		Tooltips(label)
+		if buff == "cursor" then return Write(label .. ": the buff under the cursor (its icon can't be listed)") end
+		if buff == "tooltip" then return Write(label .. ": the tooltip's owner can't be read") end
+		if run.pathOf[buff] and not run.readHovered then return end
+		Write(("== %s: the hovered buff, read through its tooltip"):format(label))
+		run.pathOf[buff] = run.pathOf[buff] or "hovered"
+		run.seen[buff] = nil
+		local count = { n = 0 }
+		Walk(buff, run.pathOf[buff], run.root or { l = 0, t = 0, s = 1 }, 1, count)
+		local foci = {}
+		local okFoci = pcall(function()
+			local list = _G.GetMouseFoci and { _G.GetMouseFoci() } or { _G.GetMouseFocus and _G.GetMouseFocus() }
+			for _, f in ipairs(type(list[1]) == "table" and list[1].GetObjectType == nil and list[1] or list) do
+				foci[#foci + 1] = run.pathOf[f] or V(f)
+			end
+		end)
+		Write(("%s: the mouse is over %s"):format(label, okFoci and table.concat(foci, ", ") or "unreadable"))
+	end
+	local STEPS = 7
+	local function Next(phase, step, head, line)
+		run.phase, run.clock, run.hover = phase, 0, nil
+		run.hoverHead = ("%d/%d: %s"):format(step, STEPS, line)
+		C_Timer.After(0.4, function() if run then Box(("Self frame parts %d/%d: %s"):format(step, STEPS, head), line) end end)
+	end
+	local function End(why)
+		if not run then return end
+		run.frame:SetScript("OnUpdate", nil)
+		ns.db.shoulderCamFakeSelf = run.yours
+		Write(("end: %s, your option back to %s"):format(why, V(run.yours)))
+		Log(("selfdump: %s, %d lines in db.shoulderSelfDump"):format(why, #ns.db.shoulderSelfDump))
+		run = nil
+	end
+	local function Shot(what)
+		ns.PadTestBoxHide()
+		C_Timer.After(0.1, function()
+			local ok = pcall(function() Screenshot() end)
+			if run then Write(("screenshot %s at %s: %s"):format(what, date("%m%d%y_%H%M%S"), ok and "taken" or "failed")) end
+		end)
+	end
+	local function Self() return UnitExists("target") and ns.Flag(UnitIsUnit("target", "player")) end
+	local GAME = { "TargetFrame", "TargetFrameToT", "TargetFrameSpellBar", "TargetFrameNumericalThreat" }
+	local OURS = { "CinematicShoulderSelfTarget", "CinematicShoulderSelfTargetMenu" }
+	-- (What the hover step sees, on screen and in the log each second: the
+	-- step waited on a hover it never saw, twice, and nothing said why.)
+	local function Seen(label, root, h)
+		local cx, cy, near = Cursor()
+		local tip = _G.GameTooltip
+		local okShown, shown = pcall(function() return tip:IsShown() end)
+		local what = "none"
+		if okShown and shown == true then
+			local okUnit, unit = pcall(function() return select(2, tip:GetUnit()) end)
+			local okOwner, owner = pcall(function() return tip:GetOwner() end)
+			local left = _G.GameTooltipTextLeft1
+			local okText, first = pcall(function() return left:GetText() end)
+			what = ("%s, owner %s, unit %s"):format(okText and V(first) or "?",
+				not okOwner and "error" or Secret(owner) and "secret" or owner == root and "the frame"
+				or owner and (run.pathOf[owner] or V(owner)) or "none",
+				not okUnit and "error" or Secret(unit) and "secret" or V(unit))
+		end
+		local line = ("cursor %s,%s (under the frame %s) | tooltip %s | buff %s"):format(V(cx and math.floor(cx)),
+			V(cy and math.floor(cy)), V(near), what, h.buffDone and "done" or "waiting")
+		if run.clock - (h.shownAt or -1) >= 1 then
+			h.shownAt = run.clock
+			Write(label .. " hover: " .. line)
+		end
+		ns.PadTestBox(run.hoverHead or "hover", line, 1, 0.82, 0)
+	end
+	-- A hover step: one of its buffs a second, then the frame itself a second.
+	local function Hover(label, root, after)
+		run.hover = run.hover or { buffAt = nil, frameAt = nil }
+		local h = run.hover
+		pcall(Seen, label, root, h)
+		local buff = Hovered(root)
+		if buff and not h.buffDone then
+			h.buffAt = h.buffAt or run.clock
+			if run.clock - h.buffAt >= 1 then
+				h.buffDone = true
+				local ok, tip = pcall(TipLine)
+				local cx, cy = Cursor()
+				Write(("%s hover a buff (%s), the cursor at %s,%s of the frame: %s"):format(label,
+					buff == "cursor" and "by the cursor" or buff == "tooltip" and "its owner unreadable" or run.pathOf[buff]
+					or "not in the dump", V(cx), V(cy),
+					ok and tip or ("tooltip read error " .. V(tip))))
+				if ns.ShoulderSelfTargetTip and root == ns.ShoulderSelfTargetFrame() then
+					local how, _, _, _, tries = ns.ShoulderSelfTargetTip()
+					Write(("%s: our tooltip shown by %s (%s)"):format(label, V(how), V(tries)))
+				end
+				run.readHovered = type(buff) ~= "string" and not run.pathOf[buff]
+				pcall(ReadHovered, label, buff)
+				run.readHovered = nil
+				Shot(label .. " buff tooltip")
+			end
+		elseif not buff then
+			h.buffAt = nil
+		end
+		local onFrame = not buff and root and ns.Flag(Ask(root, "IsMouseOver"))
+		if onFrame and h.buffDone and not h.frameDone then
+			h.frameAt = h.frameAt or run.clock
+			if run.clock - h.frameAt >= 1 then
+				h.frameDone = true
+				local ok, tip = pcall(TipLine)
+				Write(("%s hover the frame: %s"):format(label, ok and tip or ("tooltip read error " .. V(tip))))
+				Shot(label .. " frame tooltip")
+			end
+		elseif not onFrame then
+			h.frameAt = nil
+		end
+		-- (The buff alone: the frame's own tooltip was read in the 18:42 run,
+		-- and asking for both confused the step, user 2026-11-20.)
+		if h.buffDone then after() end
+	end
+	local Step
+	-- (An error ends the run with a line, not again every frame: the first
+	-- run errored 82 times.)
+	local function Tick(_, elapsed)
+		run.clock = run.clock + elapsed
+		local ok, err = pcall(Step)
+		if not ok and run then
+			Write("error: " .. V(err))
+			End("error")
+			ns.PadTestBox("Self frame parts stopped", "an error: say check log", 1, 0.3, 0.3)
+		end
+	end
+	function Step()
+		local stand = ns.ShoulderSelfTargetFrame and ns.ShoulderSelfTargetFrame()
+		if run.phase == "wantGame" then
+			if not Self() then run.clock = 0 return end
+			if run.clock < 1.5 then return end
+			Settings()
+			Auras("your auras")
+			Dump("the game's, out of a fight", GAME)
+			Shot("1 the game's target frame of you")
+			Next("hoverGame", 2, "hover", "HOVER A BUFF ICON UNDER THE FRAME for a second")
+		elseif run.phase == "hoverGame" then
+			Hover("the game's", _G.TargetFrame, function()
+				ns.db.shoulderCamFakeSelf = true
+				Write("option on for ours")
+				Next("wantOurs", 3, "ours", "TARGET ANY NPC (Tab), then SELECT YOURSELF (key or click your frame)")
+			end)
+		elseif run.phase == "wantOurs" then
+			if not (stand and stand:IsShown()) then run.clock = 0 return end
+			if run.clock < 1.5 then return end
+			Dump("ours, out of a fight", OURS)
+			Shot("2 ours")
+			Next("hoverOurs", 4, "hover", "HOVER A BUFF ICON UNDER THE FRAME for a second")
+		elseif run.phase == "hoverOurs" then
+			Hover("ours", stand, function()
+				Next("wantFight", 5, "a fight", "START A FIGHT and let your pet tank it (a mob hitting you targets it)")
+			end)
+		elseif run.phase == "wantFight" then
+			if not InCombatLockdown() then run.clock = 0 return end
+			if run.clock < 1 then return end
+			Write("in the fight")
+			Next("wantFightOurs", 6, "ours in the fight", "SELECT YOURSELF (key or click your frame)")
+		elseif run.phase == "wantFightOurs" then
+			if not (stand and stand:IsShown()) then run.clock = 0 return end
+			if run.clock < 1.5 then return end
+			Auras("your auras in the fight")
+			Dump("ours, in a fight", OURS)
+			Shot("3 ours in the fight")
+			Next("hoverFight", 7, "hover in the fight", "HOVER A BUFF ICON UNDER THE FRAME for a second")
+		elseif run.phase == "hoverFight" then
+			if not (stand and stand:IsShown()) then
+				Write("ours went down before the hover (a target?)")
+				return Next("wantFightOurs", 6, "ours in the fight", "SELECT YOURSELF AGAIN")
+			end
+			Hover("ours in the fight", stand, function()
+				End("done")
+				ns.PadTestBox("Self frame parts done", "/reload, then say check log", 0.3, 1, 0.3)
+				C_Timer.After(15, function() if not run then ns.PadTestBoxHide() end end)
+			end)
+		end
+	end
+	function ns.ShoulderSelfDump()
+		if run then
+			End("stopped")
+			ns.PadTestBoxHide()
+			return ns.Print("shoulder selfdump: stopped")
+		end
+		if InCombatLockdown() then return ns.Print("shoulder selfdump: out of combat, please") end
+		if not ns.Setting("shoulderCam") then return ns.Print("shoulder selfdump: turn on the Shoulder Cam first") end
+		ns.db.shoulderSelfDump = {}
+		run = { frame = CreateFrame("Frame"), began = GetTime(), clock = 0, yours = ns.db.shoulderCamFakeSelf,
+			seen = {}, pathOf = {} }
+		Write(("start | %s | %s | your option %s | Style unit frames %s, theme %s | CineMode %s"):format(
+			ns.isRetail and "retail" or "Forever", Who(), V(run.yours), V(ns.StyleOn and ns.StyleOn("ufStyle")),
+			V(ns.db.styleTheme), V(ns.lastCinematic and true or false)))
+		ns.db.shoulderCamFakeSelf = false
+		Write("option off for the game's")
+		run.frame:SetScript("OnUpdate", Tick)
+		Next("wantGame", 1, "the game's", "TARGET YOURSELF (key or click your frame)")
+		ns.Print("shoulder selfdump: read only; follow the box, a fight at the end; type it again to stop")
+	end
+end
+
 local function Set(key, value)
 	ns.db[key] = value
 	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
@@ -6360,6 +7800,8 @@ function ns.ShoulderTest(arg)
 	elseif what == "selfclicks" then ns.ShoulderSelfClicks()
 	elseif what == "standin" then ns.ShoulderStandIn()
 	elseif what == "selfframe" then ns.ShoulderSelfFrame()
+	elseif what == "selfdump" then ns.ShoulderSelfDump()
+	elseif what == "selfpair" then ns.ShoulderSelfPair(rest)
 	elseif what == "selfwhere" then ns.ShoulderSelfWhere(rest)
 	elseif what == "partyself" then ns.ShoulderPartySelf()
 	elseif what == "durations" then ns.ShoulderDurations()
@@ -6373,7 +7815,7 @@ function ns.ShoulderTest(arg)
 	-- (The Shoulder Cam layout, Layouts.lua: made, or made again from the code, and switched to; offers the reload.)
 	elseif what == "layout" then ns.RegenerateLayout("Shoulder Cam")
 	else
-		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, selfframe, selfwhere, partyself, durations, today, profiletest, " ..
+		ns.Print("shoulder: scan, frames, watch, quiet, sweep offsets|zoom|ease|next|stop, try pitch|head|enemy|interact|walls|off, walls, forms, shift [n|move], cams, map still|talk|ramp|back|walk|enemy, zoomcurve, mounts, aimclick, drag, follow [trial], angles, padscan, prdcheck, calibrate, lock, selftarget, selfdodge, fakeself, fakeselftest, selfclicks, standin, selfframe, selfdump, selfwhere, partyself, durations, today, profiletest, " ..
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end

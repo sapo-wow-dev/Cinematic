@@ -1544,9 +1544,9 @@ do
 	end
 	-- (A bar's fill only once the bar has its texture: masking none errored and
 	-- left the stand-in half built, no name or level, the first game run.)
-	local function Mask(f, region, entry)
+	local function Mask(f, region, entry, owner)
 		if not (region and Placed(entry) and entry.atlas) then return end
-		local mask = f:CreateMaskTexture()
+		local mask = (owner or f):CreateMaskTexture()
 		Spot(f, mask, entry)
 		if SetAtlas(mask, entry.atlas) then pcall(region.AddMaskTexture, region, mask) end
 		return mask
@@ -1558,11 +1558,46 @@ do
 	-- TargetFrameContent.TargetFrameContentMain.ReputationColor): Style's unit
 	-- frames dress it as your target frame (UnitStyle.lua's TARGET list), so
 	-- it wears your theme, as the real one of you would.
+	-- (Each part's place in the recipe as a key: a part is put in its place
+	-- again only when its key changes. Put back each time it came up, it undid
+	-- what a theme had made of it, the level badge (made once, as the frame's
+	-- first dressed), the parts probe, 2026-11-20.)
+	local SPOT_ROLES = { "art", "reaction", "portrait", "portraitMask", "health", "healthMask", "power", "powerMask",
+		"circle", "name", "level" }
+	local function SpotKey(e)
+		if type(e) ~= "table" then return "-" end
+		if e.hidden then return "h" end
+		local anchor = type(e.anchor) == "table" and e.anchor or {}
+		return ("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s"):format(tostring(e.x), tostring(e.y), tostring(e.w), tostring(e.h),
+			tostring(e.justify), tostring(e.onBar), tostring(e.atlas), tostring(e.size), tostring(anchor[1]),
+			tostring(anchor[2]), tostring(anchor[3]))
+	end
+	-- (The level by the side of the game's box it's justified to, as wide as
+	-- its words: in the game's box, 11 wide, "10" read "..."; in a box widened
+	-- to 36 the words sat at its edge, so a theme's badge, centering the box
+	-- on its ring, put the level beside the ring, the 2026-11-21 run.)
+	local function PlaceLevel(f, recipe)
+		local level = Placed(recipe.level) and recipe.level
+			or (not ns.isRetail and ns.UNIT_FRAME_RECIPES and Placed(ns.UNIT_FRAME_RECIPES.TARGET.level)
+				and ns.UNIT_FRAME_RECIPES.TARGET.level)
+		if not level then return end
+		local justify = level.justify or "RIGHT"
+		local x = justify == "RIGHT" and level.x + level.w or justify == "CENTER" and level.x + level.w / 2 or level.x
+		stand.level:ClearAllPoints()
+		stand.level:SetSize(0, 0)
+		stand.level:SetPoint(justify == "CENTER" and "CENTER" or justify, f, "TOPLEFT", x, -(level.y + level.h / 2))
+		stand.level:SetJustifyH(justify)
+	end
 	local function Build()
 		if stand.frame then return stand.frame end
 		local recipe = ns.UnitFrameRecipe and ns.UnitFrameRecipe("TARGET")
 		if not (recipe and recipe.art and recipe.health and recipe.power) then return nil end
 		local f = CreateFrame("Frame", "CinematicShoulderSelfTarget", UIParent)
+		-- (A place from the start, moved to your target frame's as it comes up: a
+		-- theme dresses it as it's made, and with no place its sides can't be
+		-- told, so its level badge went on the portrait's other corner, for
+		-- good, the 2026-11-21 run.)
+		f:SetPoint("CENTER", UIParent, "CENTER")
 		stand.recipe = recipe
 		f:SetSize(recipe.art.w, recipe.art.h)
 		f:EnableMouse(false)
@@ -1579,33 +1614,65 @@ do
 		local main = {}
 		f.TargetFrameContent = { TargetFrameContentMain = main }
 		if recipe.reaction then
-			stand.reaction = f:CreateTexture(nil, "BACKGROUND", nil, 0)
+			-- (Over the frame art, as the game's strip is (its content over its
+			-- container): under it, the art's dark band dulled ours, the
+			-- side-by-side run, 2026-11-21.)
+			local over = CreateFrame("Frame", nil, f)
+			over:SetAllPoints()
+			over:SetFrameLevel(holder:GetFrameLevel() + 1)
+			stand.reaction = over:CreateTexture(nil, "BACKGROUND", nil, 0)
 			Spot(f, stand.reaction, recipe.reaction, "reaction")
 			SetAtlas(stand.reaction, recipe.reaction.atlas)
 			main.ReputationColor = stand.reaction
 		end
-		stand.portrait = f:CreateTexture(nil, "BACKGROUND", nil, 1)
+		-- (On the holder, as the game's portrait is on its container: a theme's
+		-- bridge from the bars runs in under a portrait that isn't the frame's
+		-- own, to its middle; on the frame it stopped at its edge, 1 wide, the
+		-- parts probe, 2026-11-20. Under the frame art, as the game's.)
+		stand.portrait = holder:CreateTexture(nil, "BACKGROUND", nil, 1)
 		Spot(f, stand.portrait, recipe.portrait, "portrait")
-		holder.PortraitMask = Mask(f, stand.portrait, recipe.portraitMask)
+		holder.PortraitMask = Mask(f, stand.portrait, recipe.portraitMask, holder)
 		f.portrait = stand.portrait
 		stand.health = CreateFrame("StatusBar", nil, f)
+		-- (Its numbers, in the game's bar text font, over its middle: Numbers.)
+		stand.health.cineNumbers = stand.health:CreateFontString(nil, "OVERLAY", "TextStatusBarText")
+		stand.health.cineNumbers:SetPoint("CENTER", stand.health, "CENTER", 0, 0)
+		stand.health.cineNumbers:Hide()
+		-- (By the game's name for a bar's numbers too: Style sizes them to fit
+		-- the bar, and a slab theme moves them to its end or hides them, as on
+		-- the game's frame. As cineNumbers alone it didn't, the side-by-side
+		-- run, 2026-11-21: ours centered and one size on every bar.)
+		stand.health.TextString = stand.health.cineNumbers
 		Spot(f, stand.health, recipe.health, "health")
 		pcall(stand.health.SetStatusBarTexture, stand.health, recipe.health.atlas)
 		stand.healthMask = Mask(f, stand.health:GetStatusBarTexture(), recipe.healthMask)
 		f.healthbar = stand.health
 		stand.power = CreateFrame("StatusBar", nil, f)
+		stand.power.cineNumbers = stand.power:CreateFontString(nil, "OVERLAY", "TextStatusBarText")
+		stand.power.cineNumbers:SetPoint("CENTER", stand.power, "CENTER", 0, 0)
+		stand.power.cineNumbers:Hide()
+		stand.power.TextString = stand.power.cineNumbers
 		Spot(f, stand.power, recipe.power, "power")
 		pcall(stand.power.SetStatusBarTexture, stand.power, recipe.power.atlas)
 		-- (Masked only by a mask the recipe read: a guessed one showed a strip in
 		-- the bar's middle, the first themed run 2026-11-20.)
 		stand.powerMask = Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask)
 		f.manabar = stand.power
+		-- (Both bars over the frame art, as the game's are (its bars above its
+		-- container): at the art's own level ours could draw under it, the
+		-- side-by-side probe, 2026-11-21.)
+		stand.health:SetFrameLevel(holder:GetFrameLevel() + 1)
+		-- (The power bar one over the health bar, as the game's: its top edge's
+		-- line draws over the health bar's bottom; level with it, ours lost
+		-- that line, the probe, 2026-11-21.)
+		stand.power:SetFrameLevel(holder:GetFrameLevel() + 2)
 		local top = CreateFrame("Frame", nil, f)
 		top:SetAllPoints()
 		top:SetFrameLevel(stand.health:GetFrameLevel() + 2)
 		local circle
 		if recipe.circle then
-			circle = top:CreateTexture(nil, "ARTWORK")
+			-- (In the game's layer for it, OVERLAY: the probe, 2026-11-21.)
+			circle = top:CreateTexture(nil, "OVERLAY", nil, 0)
 			Spot(f, circle, recipe.circle, "circle")
 			SetAtlas(circle, recipe.circle.atlas)
 			main.LevelBackgroundCircle = circle
@@ -1620,6 +1687,17 @@ do
 		local file, _, flags = stand.level:GetFont()
 		if file and recipe.level.size then pcall(stand.level.SetFont, stand.level, file, recipe.level.size, flags) end
 		main.LevelText = stand.level
+		-- (Your PvP flag by the portrait, as the game's target frame of you shows
+		-- it: missing on ours, the side-by-side run 13 (a flagged character).
+		-- Under the game's names, so the Show in rows reach it: Looks.)
+		-- (The game draws it as PvpBackgroundIcon, a small circle in your
+		-- faction's art, OVERLAY: its PvpIcon stays hidden, run 15's listing.)
+		stand.pvp = top:CreateTexture(nil, "OVERLAY", nil, 0)
+		stand.pvp:Hide()
+		f.TargetFrameContent.TargetFrameContentContextual = { PvpBackgroundIcon = stand.pvp }
+		PlaceLevel(f, recipe)
+		stand.spotKeys = {}
+		for _, role in ipairs(SPOT_ROLES) do stand.spotKeys[role] = SpotKey(recipe[role]) end
 		stand.frame = f
 		return f
 	end
@@ -1633,36 +1711,30 @@ do
 		local recipe = ns.UnitFrameRecipe and ns.UnitFrameRecipe("TARGET")
 		if not (f and recipe and recipe.art and recipe.health and recipe.power) then return end
 		stand.recipe = recipe
-		f:SetSize(recipe.art.w, recipe.art.h)
+		-- (Only the parts whose place changed: SpotKey.)
+		local keys, done = stand.spotKeys or {}, {}
+		local function Changed(role)
+			local key = SpotKey(recipe[role])
+			if keys[role] == key then return false end
+			keys[role], done[#done + 1] = key, role
+			return true
+		end
+		stand.spotKeys = keys
+		if Changed("art") then f:SetSize(recipe.art.w, recipe.art.h) end
 		for _, pair in ipairs({ { stand.art, "art" }, { stand.reaction, "reaction" }, { stand.portrait, "portrait" },
 			{ stand.holder and stand.holder.PortraitMask, "portraitMask" }, { stand.health, "health" },
 			{ stand.healthMask, "healthMask" }, { stand.power, "power" }, { stand.powerMask, "powerMask" },
 			{ stand.circle, "circle" }, { stand.name, "name" } }) do
 			local region = pair[1]
-			if region then Spot(f, region, recipe[pair[2]], pair[2]) end
+			if (pair[2] == "art" and done[1] == "art") or (pair[2] ~= "art" and Changed(pair[2])) then
+				if region then Spot(f, region, recipe[pair[2]], pair[2]) end
+			end
 		end
 		if not stand.powerMask and recipe.powerMask then
 			stand.powerMask = Mask(f, stand.power:GetStatusBarTexture(), recipe.powerMask)
 		end
-		-- (The level in the game's box, right-justified as the game's, the box
-		-- widened leftward: 11 wide, "10" in this font read "...", the first
-		-- themed run; centered in the circle, Preview Match found it unlike the
-		-- game's, 2026-11-20.)
-		-- (Widened round its middle when centered, retail's on the left of the
-		-- name strip: widened leftward it'd sit off the frame.)
-		local level = Placed(recipe.level) and recipe.level
-			or (not ns.isRetail and ns.UNIT_FRAME_RECIPES and Placed(ns.UNIT_FRAME_RECIPES.TARGET.level)
-				and ns.UNIT_FRAME_RECIPES.TARGET.level)
-		if level then
-			local wide = math.max(level.w, 36)
-			local justify = level.justify or "RIGHT"
-			local x = justify == "RIGHT" and level.x + level.w - wide
-				or justify == "CENTER" and level.x + level.w / 2 - wide / 2 or level.x
-			stand.level:ClearAllPoints()
-			stand.level:SetPoint("TOPLEFT", f, "TOPLEFT", x, -level.y)
-			stand.level:SetSize(wide, level.h)
-			stand.level:SetJustifyH(justify)
-		end
+		if Changed("level") then PlaceLevel(f, recipe) end
+		if #done > 0 then ns.LogDetail("shoulder", "selecting yourself: parts put in place again: " .. table.concat(done, ", ")) end
 	end
 	-- (The target's power bar still the recipe's guess: after a target change,
 	-- out of a fight, the recipe's read asked for once the game's frame has
@@ -1686,21 +1758,148 @@ do
 	stand.AskPowerRead = AskPowerRead
 	-- Your health and power on it, as they change (secret ones too: only the
 	-- bars take them). Nothing of its look: that's Looks' and your theme's.
+	-- Each bar's numbers, "now / most", as the game's target frame shows
+	-- them: always with your status text on, else while the mouse is on it
+	-- (the 2026-11-21 run's screenshot: "593 / 593" on the game's, nothing on
+	-- ours). Set by the game's own text call, which takes values hidden in
+	-- fights; where even that won't, no numbers, and the log says so.
+	local function Numbers(bar, now, most)
+		local text = bar and bar.cineNumbers
+		if not text then return end
+		local always = GetCVar and GetCVar("statusText") == "1"
+		if not (always or stand.hover) then text:Hide() return end
+		-- (With the game's thousands separators: "1,318", as its numbers; ours
+		-- read "1318", the side-by-side run 13. Its own formatter, which takes
+		-- a hidden value too; where it won't, the plain number.)
+		local function Grouped(v)
+			local okG, out = pcall(BreakUpLargeNumbers or tostring, v)
+			if okG and out ~= nil then return out end
+			return v
+		end
+		local ok = pcall(text.SetFormattedText, text, "%s / %s", Grouped(now), Grouped(most))
+		text:SetShown(ok)
+		if not ok and not stand.numbersLogged then
+			stand.numbersLogged = true
+			ns.Log("shoulder", "selecting yourself: the bars' numbers can't be shown (their values hidden)")
+		end
+		stand.numbersShown = ok
+	end
+	-- (Each bar's numbers where the game centers its own, off its bar's middle:
+	-- its health text hangs on the bar holder, higher than the bar's middle,
+	-- so ours sat 2.5 units low, the side-by-side run 10. Read off the game's
+	-- anchor once, only while both sit at the game's own centered spot: a slab
+	-- theme puts them at the bar's end. With health on it the anchor is
+	-- secret too (comparing it errored, the side-by-side run 11): then the
+	-- bar's holder's middle, where the game hangs it.)
+	local function Secret(v) return issecretvalue and issecretvalue(v) end
+	local function PlainNumbers(...)
+		for i = 1, select("#", ...) do
+			local v = select(i, ...)
+			if type(v) ~= "number" or Secret(v) then return false end
+		end
+		return true
+	end
+	local function TextSpot(bar, gameBar)
+		stand.textSpots = stand.textSpots or {}
+		if stand.textSpots[bar] or InCombatLockdown() then return end
+		local text, game = bar and bar.cineNumbers, type(gameBar) == "table" and gameBar.TextString
+		if not (text and type(game) == "table" and game.GetPoint) then return end
+		local okMine, mine = pcall(text.GetPoint, text, 1)
+		if not (okMine and type(mine) == "string" and not Secret(mine) and mine == "CENTER") then return end
+		local okB, bx, by = pcall(gameBar.GetCenter, gameBar)
+		if not (okB and PlainNumbers(bx, by)) then return end
+		local ok, point, to, relative, x, y = pcall(game.GetPoint, game, 1)
+		local dx, dy, from
+		if ok and not (Secret(point) or Secret(relative) or Secret(to) or Secret(x) or Secret(y)) then
+			if not (point == "CENTER" and relative == "CENTER" and type(to) == "table" and to.GetCenter) then return end
+			local okC, tx, ty = pcall(to.GetCenter, to)
+			if not (okC and PlainNumbers(tx, ty, x, y)) then return end
+			dx, dy, from = tx + x - bx, ty + y - by, "its anchor"
+		else
+			local holder = gameBar.GetParent and gameBar:GetParent()
+			local okH, hx, hy = pcall(function() return holder:GetCenter() end)
+			if not (okH and PlainNumbers(hx, hy)) then return end
+			dx, dy, from = hx - bx, hy - by, "its bar holder (the anchor's secret)"
+			if math.abs(dx) > 6 or math.abs(dy) > 6 then return end
+		end
+		stand.textSpots[bar] = { dx, dy }
+		text:ClearAllPoints()
+		text:SetPoint("CENTER", bar, "CENTER", dx, dy)
+		ns.LogDetail("shoulder", ("selecting yourself: numbers placed as the game's, %+.1f,%+.1f off the bar's middle, from %s"):format(
+			dx, dy, from))
+	end
+	stand.TextSpot = TextSpot
 	local function Values()
 		local f = stand.frame
 		if not (f and f:IsShown()) then return end
-		pcall(stand.health.SetMinMaxValues, stand.health, 0, UnitHealthMax("player"))
-		pcall(stand.health.SetValue, stand.health, UnitHealth("player"))
-		pcall(stand.power.SetMinMaxValues, stand.power, 0, UnitPowerMax("player"))
-		pcall(stand.power.SetValue, stand.power, UnitPower("player"))
+		local real = _G.TargetFrame
+		-- (Guarded: a value of the game's turning out secret must never stop the frame's bars.)
+		pcall(TextSpot, stand.health, real and real.healthbar)
+		pcall(TextSpot, stand.power, real and real.manabar)
+		local health, healthMost = UnitHealth("player"), UnitHealthMax("player")
+		local power, powerMost = UnitPower("player"), UnitPowerMax("player")
+		pcall(stand.health.SetMinMaxValues, stand.health, 0, healthMost)
+		pcall(stand.health.SetValue, stand.health, health)
+		pcall(stand.power.SetMinMaxValues, stand.power, 0, powerMost)
+		pcall(stand.power.SetValue, stand.power, power)
+		Numbers(stand.health, health, healthMost)
+		Numbers(stand.power, power, powerMost)
 	end
+	stand.Values = Values
 	-- Its look in the game's way (portrait, name, level, the name strip's color,
 	-- the power bar's art), then your theme over it, as the game sets your
 	-- target frame's and Style dresses it after. As it comes up, and when one of
 	-- those changes; not with each health change (that'd undo the theme's colors).
+	-- (Your PvP flag: the game's art for it (free-for-all, or your faction's),
+	-- where the game's target frame has its own, read off it while it can be
+	-- (its place, from its frame art's top-left), kept for when it can't.)
+	local function Pvp()
+		local icon = stand.pvp
+		if not icon then return end
+		local function Yes(v) return v == true and not (issecretvalue and issecretvalue(v)) end
+		local atlas
+		local okF, ffa = pcall(UnitIsPVPFreeForAll, "player")
+		local okP, flagged = pcall(UnitIsPVP, "player")
+		local okG, faction = pcall(UnitFactionGroup, "player")
+		if okF and Yes(ffa) then
+			atlas = "UI-HUD-UnitFrame-SmallCircle-FFA"
+		elseif okP and Yes(flagged) and okG and (faction == "Alliance" or faction == "Horde") then
+			atlas = "UI-HUD-UnitFrame-SmallCircle-" .. faction
+		end
+		local game = _G.TargetFrame
+		local content = game and type(game.TargetFrameContent) == "table" and game.TargetFrameContent
+		local context = content and type(content.TargetFrameContentContextual) == "table" and content.TargetFrameContentContextual
+		local theirs = context and type(context.PvpBackgroundIcon) == "table" and context.PvpBackgroundIcon
+		local holder = game and type(game.TargetFrameContainer) == "table" and game.TargetFrameContainer
+		local art = holder and holder.FrameTexture
+		if theirs and art and not InCombatLockdown() then
+			-- (In the art's own units: the icon has a scale of its own. Taken
+			-- as it was, ours stood 1.25 times too big and off the frame, the
+			-- side-by-side run 16.)
+			local ok, l, t, w, h, al, at, ps, as = pcall(function()
+				return theirs:GetLeft(), theirs:GetTop(), theirs:GetWidth(), theirs:GetHeight(), art:GetLeft(), art:GetTop(),
+					theirs:GetEffectiveScale(), art:GetEffectiveScale()
+			end)
+			local plain = ok
+			for _, v in ipairs(ok and { l, t, w, h, al, at, ps, as } or {}) do
+				if type(v) ~= "number" or (issecretvalue and issecretvalue(v)) then plain = false end
+			end
+			if plain and w > 1 and h > 1 and as > 0 then
+				stand.pvpSpot = { (l * ps - al * as) / as, (at * as - t * ps) / as, w * ps / as, h * ps / as }
+			end
+		end
+		local spot = stand.pvpSpot
+		if not (atlas and spot and AtlasOK(atlas)) then icon:Hide() return end
+		icon:SetAtlas(atlas)
+		icon:ClearAllPoints()
+		icon:SetPoint("TOPLEFT", stand.frame, "TOPLEFT", spot[1], -spot[2])
+		icon:SetSize(spot[3], spot[4])
+		icon:Show()
+	end
 	local function Looks()
 		local f = stand.frame
 		if not (f and f:IsShown()) then return end
+		pcall(Pvp)
 		pcall(SetPortraitTexture, stand.portrait, "player")
 		stand.name:SetText(UnitName("player"))
 		stand.level:SetText(UnitLevel("player"))
@@ -1731,7 +1930,7 @@ do
 		Values()
 		if ns.RefreshUnitStyle then ns.RefreshUnitStyle() end
 	end
-	local LOOK_EVENTS = { UNIT_DISPLAYPOWER = true, UNIT_PORTRAIT_UPDATE = true, UNIT_LEVEL = true }
+	local LOOK_EVENTS = { UNIT_DISPLAYPOWER = true, UNIT_PORTRAIT_UPDATE = true, UNIT_LEVEL = true, UNIT_FACTION = true }
 	-- Where the game's target frame art is (its top-left, in its own units) and
 	-- its effective scale; from the art when the frame has a place, else the
 	-- frame's top-left plus the offset last seen.
@@ -1753,6 +1952,8 @@ do
 	local function PlaceStand()
 		local left, top, scale = TargetSpot()
 		if not left then return false end
+		-- (The side-by-side test's: under or over the game's frame of you.)
+		top = top + (stand.beside or 0)
 		local key = ("%.1f %.1f %.3f"):format(left, top, scale)
 		if key ~= stand.at then
 			stand.at = key
@@ -1776,7 +1977,7 @@ do
 		end
 		stand.frame:Show()
 		for _, event in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER",
-			"UNIT_DISPLAYPOWER", "UNIT_PORTRAIT_UPDATE", "UNIT_LEVEL" }) do
+			"UNIT_DISPLAYPOWER", "UNIT_PORTRAIT_UPDATE", "UNIT_LEVEL", "UNIT_FACTION" }) do
 			stand.events:RegisterUnitEvent(event, "player")
 		end
 		stand.alpha = nil
@@ -1791,11 +1992,15 @@ do
 	-- (Your Target Self key or a left-click: our button's click, after it ran.)
 	-- (A select-yourself click, after it cleared your target: our button's, or
 	-- a party or raid frame of you that's set up the same way, below.)
+	-- (Selected again while it's up: it stays up, as the game keeps you
+	-- targeted when you click yourself again. It toggled till 2026-11-21:
+	-- the menu button's secure toggle and this one went out of step, so
+	-- clicking on made it blink on and off, up with no menu button, so Esc
+	-- couldn't put it away (user report).)
 	local function SelectedYourself(_, mouse)
 		if mouse ~= "LeftButton" or not state.want then return end
-		if stand.frame and stand.frame:IsShown() then
-			StandDown("selected yourself again")
-		elseif not UnitExists("target") then
+		stand.selects = (stand.selects or 0) + 1
+		if not (stand.frame and stand.frame:IsShown()) and not UnitExists("target") then
 			ns.Guard(StandUp)
 		end
 	end
@@ -1827,134 +2032,296 @@ do
 	-- the art's lower part is clear), 2 in; debuffs on a row of their own
 	-- after. (27, 6 and under the whole art till then, read off a themed one:
 	-- too big, too low.)
-	local AURA_SIZE, AURA_GAP, AURA_ROW, AURA_MOST, AURA_TOP, AURA_LEFT = 20, 4, 5, 20, 56, 2
+	-- (AURA_TOP: the first row's top under the art's, measured on the game's
+	-- target frame of you, the same in all 17 themes: 58.7; at 56 ours touched
+	-- the frame's edge, at 59.5 it sat a pixel low, the side-by-side runs,
+	-- 2026-11-21.)
+	local AURA_BIG, AURA_SMALL, AURA_GAP, AURA_ROW_WIDE, AURA_MOST, AURA_TOP, AURA_LEFT = 21, 17, 3, 122, 20, 58.7, 5
+	-- (With the target frame's Buffs on Top (Edit Mode; frame.buffsOnTop), the
+	-- first row's bottom this far under the art's top, the rows going up from
+	-- it, the icons sharing their bottom edge: measured off the game's in the
+	-- side-by-side runs' shots, 2026-11-21 (4.8 sat a pixel high; its row's
+	-- place can't be read on Forever, rule
+	-- forever.targetframe.aura-container-place-secret). Lifted more over a
+	-- theme's name plate, as Style lifts the game's (UnitAuraLift.lua): in Fel
+	-- ours sat 3 units under it.)
+	local AURA_ON_TOP = 5.6
+	-- (Sizes since the parts probe, 2026-11-20, measured off the game's target
+	-- frame of you in its screenshot: your own auras 21 square, others' 17, 3
+	-- apart, from 5 in, a row as wide as 122 (Blizzard's own numbers); 20, 4
+	-- and 2 till then.)
+	-- What the game says of an aura, read out of fights by its aura id and
+	-- kept for fights, where it won't say: whether it's yours or your pet's
+	-- (its size), whether you cast it yourself and could cast it (its place:
+	-- Order). Not known: yours, cast by you.
+	local facts = {}
+	local function Plain(v) return type(v) == "number" and not (issecretvalue and issecretvalue(v)) end
+	local function Facts(info)
+		local id = info and info.auraInstanceID
+		if not Plain(id) then return nil, nil end
+		local read = C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID
+		if facts[id] == nil and read and not InCombatLockdown() then
+			local ok, data = pcall(read, "player", id)
+			if ok and type(data) == "table" then
+				local function Flag(v) if type(v) == "boolean" and not (issecretvalue and issecretvalue(v)) then return v end end
+				local source = data.sourceUnit
+				local byYou, mine
+				if type(source) == "string" and not (issecretvalue and issecretvalue(source)) then
+					local okUnit, same = pcall(UnitIsUnit, "player", source)
+					byYou = okUnit and same == true
+					-- (Big when you or your pet cast it, as the game's: "from a
+					-- player" is any player's, so a mage's Arcane Intellect on
+					-- you drew big on ours, small on the game's, 2026-11-21.)
+					local owns = UnitIsOwnerOrControllerOfUnit
+					local okPet, pet = pcall(owns or UnitIsUnit, owns and "player" or "pet", source)
+					mine = byYou or (okPet and pet == true)
+				elseif source == nil then
+					byYou, mine = false, false
+				end
+				facts[id] = { yours = mine, byYou = byYou, canApply = Flag(data.canApplyAura) }
+			end
+		end
+		return facts[id], id
+	end
+	local function Yours(info)
+		local fact = Facts(info)
+		return not (fact and fact.yours == false)
+	end
+	-- (The game's target frame's order, Blizzard's own for auras: the ones you
+	-- cast first, then ones you could cast, then the order you got them in.
+	-- Your aura list's order put your pet's Blood Pact before your own, the
+	-- 2026-11-21 run's screenshots. Where it can't be told of each: the list.)
+	local function Order(list, first)
+		local keyed = {}
+		for i = first, #list do
+			local fact, id = Facts(list[i].buttonInfo)
+			if not (fact and fact.byYou ~= nil and id) then return false end
+			keyed[#keyed + 1] = { button = list[i], byYou = fact.byYou, canApply = fact.canApply == true, id = id }
+		end
+		table.sort(keyed, function(a, b)
+			if a.byYou ~= b.byYou then return a.byYou end
+			if a.canApply ~= b.canApply then return a.canApply end
+			return a.id < b.id
+		end)
+		for k, each in ipairs(keyed) do list[first + k - 1] = each.button end
+		return true
+	end
+	-- The game's buff or debuff icons with an aura on them, in the target
+	-- frame's order (Order; the buff bar sorts its own way: the parts probe). Not a weapon enchant's (the target frame shows none);
+	-- not an empty slot (the probe found six on the debuff bar, copied as
+	-- blank squares you could hover).
 	local function ShownIcons(frame, list)
 		local icons = type(frame) == "table" and frame.auraFrames
 		if type(icons) ~= "table" then return end
+		local first = #list + 1
 		for i = 1, #icons do
 			local button = icons[i]
 			local ok, shown = pcall(button.IsShown, button)
-			if ok and (shown == true or (issecretvalue and issecretvalue(shown))) and type(button.Icon) == "table" then
+			local info = type(button.buttonInfo) == "table" and button.buttonInfo or nil
+			if ok and (shown == true or (issecretvalue and issecretvalue(shown))) and type(button.Icon) == "table"
+				and info and button.hasValidInfo ~= false and info.auraType ~= "TempEnchant"
+				and (info.texture ~= nil or info.index ~= nil or info.auraInstanceID ~= nil) then
 				list[#list + 1] = button
 			end
 		end
+		if Order(list, first) then return end
+		-- (Else by index where every one says it, plainly; else as the bar has them.)
+		local ordered = true
+		for i = first, #list do
+			if not Plain(list[i].buttonInfo.index) then ordered = false break end
+		end
+		if ordered then
+			local part = {}
+			for i = first, #list do part[#part + 1] = list[i] end
+			table.sort(part, function(a, b) return a.buttonInfo.index < b.buttonInfo.index end)
+			for k, button in ipairs(part) do list[first + k - 1] = button end
+		end
 	end
 	-- Its time left, as the game's target frame of you shows it: a swirl, set
-	-- from the game's icon's own end time and length (SetCooldownFromExpiration
-	-- Time takes the game's values as they are: the durations probe, both
-	-- clients, 2026-11-20, drew it in fights). Where the game won't let it (a
-	-- buff's times hidden: one gained in a fight), the icon's countdown text
-	-- instead, copied as it is. The game's duration object can't be had in a
-	-- fight ("Auras cannot be accessed when secret while tainted"). A buff with
-	-- no time (its length 0) has neither. Set again only when its icon or its
-	-- times change: set each look, the swirl would start over.
-	local TIME_TEXT_SCALE = 0.75
+	-- from the game's icon's own end time and length, the dark part the time
+	-- gone (reversed, as the game's: the parts probe; forward, a long buff
+	-- came out nearly all dark). Where its times are hidden (in fights on
+	-- Forever, after an aura changes, every buff's), the icon plain: the game
+	-- still draws its swirl there, which an addon can't; no countdown text, the
+	-- game shows none on a target frame (user 2026-11-20). A buff with no time
+	-- has none. Set again only when its icon or its times change: set each
+	-- look, the swirl would start over.
 	local function Timer(copy, button)
 		local info = type(button.buttonInfo) == "table" and button.buttonInfo or nil
 		local ends, length = info and info.expirationTime, info and info.duration
 		local hidden = issecretvalue and (issecretvalue(ends) or issecretvalue(length)) or false
-		local timed = hidden or (type(ends) == "number" and ends > 0 and type(length) == "number" and length > 0)
+		local timed = not hidden and type(ends) == "number" and ends > 0 and type(length) == "number" and length > 0
 		local key = hidden and "hidden" or (timed and (ends .. "/" .. length) or "none")
-		if copy.timerOf == button and copy.timerKey == key then
-			if copy.timeText:IsShown() then pcall(function() copy.timeText:SetText(button.Duration:GetText()) end) end
-			return
-		end
+		if copy.timerOf == button and copy.timerKey == key then return end
 		copy.timerOf, copy.timerKey = button, key
-		copy.timeText:Hide()
-		if not timed then
-			copy.Swirl:Hide()
-			copy.timer = "none"
-			return
-		end
-		local ok = copy.Swirl.SetCooldownFromExpirationTime
-			and pcall(copy.Swirl.SetCooldownFromExpirationTime, copy.Swirl, ends, length)
-		if ok then
+		if timed and copy.Swirl.SetCooldownFromExpirationTime
+			and pcall(copy.Swirl.SetCooldownFromExpirationTime, copy.Swirl, ends, length) then
 			copy.Swirl:Show()
 			copy.timer = "swirl"
 			return
 		end
 		copy.Swirl:Hide()
-		local text = type(button.Duration) == "table" and button.Duration
-		if text then
-			copy.timeText:Show()
-			pcall(function() copy.timeText:SetText(text:GetText()) end)
-			copy.timer = "text"
-		else
-			copy.timer = "none"
-		end
+		copy.timer = hidden and "hidden" or "none"
 	end
 	local function CopyIcon(copy, button)
 		pcall(function() copy.Icon:SetTexture(button.Icon:GetTexture()) end)
-		pcall(function() copy.Icon:SetTexCoord(button.Icon:GetTexCoord()) end)
+		-- (The whole icon, its own edge too, as the target frame shows it: the
+		-- buff bar's crop it was copied from cut the edge off, the side-by-side
+		-- run, 2026-11-21. "bar": the buff bar's, for that run's A/B shot.)
+		if stand.iconCrop == "bar" then
+			pcall(function() copy.Icon:SetTexCoord(button.Icon:GetTexCoord()) end)
+		else
+			copy.Icon:SetTexCoord(0, 1, 0, 1)
+		end
 		local count = type(button.Count) == "table" and button.Count
 		copy.Count:SetShown(count and true or false)
 		if count then pcall(function() copy.Count:SetText(count:GetText()) end) end
-		local border = type(button.DebuffBorder) == "table" and button.DebuffBorder
+		-- (A border on debuffs only, and only where the game shows one: every
+		-- buff had one, the parts probe.)
+		local border = copy.harmful and type(button.DebuffBorder) == "table" and button.DebuffBorder
+		if border then
+			local ok, up = pcall(border.IsShown, border)
+			if not (ok and up == true) then border = nil end
+		end
 		copy.Border:SetShown(border and true or false)
 		if border then
 			pcall(function() copy.Border:SetTexture(border:GetTexture()) end)
 			pcall(function() copy.Border:SetTexCoord(border:GetTexCoord()) end)
 			pcall(function() copy.Border:SetVertexColor(border:GetVertexColor()) end)
 		end
-		pcall(function() copy:SetAlpha(button:GetAlpha()) end)
+		-- (Full: the buff bar pulses one about to end, the target frame's don't;
+		-- copied, ours went dim, the side-by-side run, 2026-11-21.)
+		copy:SetAlpha(1)
 		Timer(copy, button)
+	end
+	-- Its tooltip on hover, as the game's target frame's buffs have: the game's
+	-- own for that buff, by its aura id, else by its place in your auras (the
+	-- icon's index, plain in fights on Forever); a weapon enchant has neither:
+	-- no tooltip. How it was shown, left on
+	-- the copy for the tests: "aura id", "index" or "none". Never the game's
+	-- buff icon's own hover script: that puts the tooltip by your buff bar.
+	local function ShowTip(copy)
+		local tip, button = _G.GameTooltip, copy.source
+		if not (tip and button) then return end
+		local info = type(button.buttonInfo) == "table" and button.buttonInfo or {}
+		local filter = copy.harmful and "HARMFUL" or "HELPFUL"
+		local id, index = info.auraInstanceID, info.index
+		-- (Each way tried in turn, and what it did, for the tests and the log:
+		-- the first run fell through all of them, unlogged, 2026-11-20.)
+		local tries = {}
+		local function Try(name, ...)
+			local fn = tip[name]
+			if type(fn) ~= "function" then tries[#tries + 1] = name .. " missing" return false end
+			tip:SetOwner(copy, "ANCHOR_BOTTOMRIGHT", 15, -25)
+			local ok, err = pcall(fn, tip, ...)
+			local lines = ok and tip:NumLines() or 0
+			tries[#tries + 1] = ("%s %s"):format(name, ok and (tostring(lines) .. " lines") or ("error " .. tostring(err)))
+			return ok and type(lines) == "number" and lines > 0
+		end
+		local how = "none"
+		if id ~= nil and Try(copy.harmful and "SetUnitDebuffByAuraInstanceID" or "SetUnitBuffByAuraInstanceID", "player", id, filter) then
+			how = "aura id"
+		elseif id ~= nil and Try("SetUnitAuraByAuraInstanceID", "player", id, filter) then
+			how = "aura id"
+		elseif index ~= nil and Try(copy.harmful and "SetUnitDebuff" or "SetUnitBuff", "player", index, filter) then
+			how = "index"
+		elseif index ~= nil and Try("SetUnitAura", "player", index, filter) then
+			how = "index"
+		end
+		if how == "none" then
+			tip:Hide()
+			tries[#tries + 1] = ("its info: aura id %s, index %s"):format(tostring(id ~= nil), tostring(index ~= nil))
+		else
+			tip:Show()
+		end
+		copy.tipHow, copy.tipAt = how, GetTime()
+		stand.tipHow, stand.tipShownAt = how, GetTime()
+		stand.tipTries = table.concat(tries, "; ")
+		if how == "none" or not copy.tipLogged then
+			copy.tipLogged = true
+			ns.Log("shoulder", ("selecting yourself: buff tooltip %s (%s)"):format(how, stand.tipTries))
+		end
+	end
+	local function HideTip(copy)
+		local tip = _G.GameTooltip
+		if tip and tip:GetOwner() == copy then tip:Hide() end
+		copy.tipAt = nil
 	end
 	local function AuraCopy(i)
 		stand.auras = stand.auras or {}
 		local copy = stand.auras[i]
 		if not copy then
 			copy = CreateFrame("Frame", nil, stand.frame)
-			copy:SetSize(AURA_SIZE, AURA_SIZE)
+			copy:SetSize(AURA_BIG, AURA_BIG)
 			copy.Icon = copy:CreateTexture(nil, "ARTWORK")
 			copy.Icon:SetAllPoints()
 			copy.Border = copy:CreateTexture(nil, "OVERLAY")
 			copy.Border:SetPoint("TOPLEFT", -1, 1)
 			copy.Border:SetPoint("BOTTOMRIGHT", 1, -1)
-			copy.Count = copy:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+			-- (A size up from the small one: the game's "3" stood a quarter
+			-- taller, the side-by-side run 13; its aura buttons can't be read.)
+			copy.Count = copy:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
 			copy.Count:SetPoint("BOTTOMRIGHT", 2, -1)
 			-- (The swirl without its own numbers, as the game's target frame's.)
 			copy.Swirl = CreateFrame("Cooldown", nil, copy, "CooldownFrameTemplate")
 			copy.Swirl:SetAllPoints()
 			if copy.Swirl.SetHideCountdownNumbers then copy.Swirl:SetHideCountdownNumbers(true) end
+			if copy.Swirl.SetReverse then copy.Swirl:SetReverse(true) end
 			copy.Swirl:Hide()
-			copy.timeText = copy:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-			copy.timeText:SetPoint("BOTTOM", copy, "BOTTOM", 0, 1)
-			-- (Scaled down, not a new size: SetFont would lose the Cyrillic font.
-			-- Full size, "55 m" ran into the next icon's text, 2026-11-20.)
-			if copy.timeText.SetTextScale then copy.timeText:SetTextScale(TIME_TEXT_SCALE) end
-			copy.timeText:Hide()
+			-- (Hover only: a click goes on through, to the world under it.)
+			if copy.SetMouseMotionEnabled then
+				copy:SetMouseMotionEnabled(true)
+				if copy.SetMouseClickEnabled then copy:SetMouseClickEnabled(false) end
+			else
+				copy:EnableMouse(true)
+			end
+			copy:SetScript("OnEnter", function(self) ns.Guard(function() ShowTip(self) end) end)
+			copy:SetScript("OnLeave", function(self) ns.Guard(function() HideTip(self) end) end)
 			stand.auras[i] = copy
 		end
 		return copy
 	end
-	-- (n-th icon on row, col: under the bars, a row down per five.)
-	local function PlaceAura(copy, row, col)
-		local art = stand.recipe.art
-		copy:ClearAllPoints()
-		copy:SetPoint("TOPLEFT", stand.frame, "TOPLEFT", art.x + AURA_LEFT + col * (AURA_SIZE + AURA_GAP),
-			-(art.y + AURA_TOP + row * (AURA_SIZE + AURA_GAP)))
-	end
+	-- Its icons in rows under the bars, as the game lays them: each its size,
+	-- a row as wide as AURA_ROW_WIDE, the next row under the row's biggest;
+	-- debuffs on a row of their own after the buffs.
 	function Auras()
 		local f = stand.frame
 		if not (f and f:IsShown()) then return end
 		local buffs, debuffs = {}, {}
 		ShownIcons(_G.BuffFrame, buffs)
 		ShownIcons(_G.DebuffFrame, debuffs)
-		-- (Buffs from the first row; debuffs from the row after the buffs' last.)
-		local n, row = 0, 0
+		local art = stand.recipe.art
+		local frame = _G.TargetFrame
+		local onTop = frame and frame.buffsOnTop == true
+		stand.buffsOnTop = onTop
+		-- (top: the row's edge nearest the frame, from the art's top: its top
+		-- under the frame, its bottom over it.)
+		local lift = onTop and ns.UnitAuraLiftNow and ns.UnitAuraLiftNow(frame) or 0
+		if type(lift) ~= "number" or (issecretvalue and issecretvalue(lift)) then lift = 0 end
+		stand.auraLift = lift
+		local n, top = 0, onTop and AURA_ON_TOP - lift or AURA_TOP
+		local step = onTop and -1 or 1
 		for _, list in ipairs({ buffs, debuffs }) do
-			local col = 0
+			local x, tallest = 0, 0
 			for _, button in ipairs(list) do
 				if n >= AURA_MOST then break end
+				local size = Yours(button.buttonInfo) and AURA_BIG or AURA_SMALL
+				if x > 0 and x + size > AURA_ROW_WIDE then
+					top, x, tallest = top + step * (tallest + AURA_GAP), 0, 0
+				end
 				n = n + 1
 				local copy = AuraCopy(n)
-				PlaceAura(copy, row, col)
+				copy.source, copy.harmful, copy.size = button, list == debuffs, size
+				copy:SetSize(size, size)
+				copy:ClearAllPoints()
+				copy:SetPoint(onTop and "BOTTOMLEFT" or "TOPLEFT", f, "TOPLEFT", art.x + AURA_LEFT + x, -(art.y + top))
 				CopyIcon(copy, button)
 				copy:Show()
-				col = col + 1
-				if col == AURA_ROW then col, row = 0, row + 1 end
+				-- (Its tooltip, while up, set again once a second: the time left.)
+				if type(copy.tipAt) == "number" and GetTime() - copy.tipAt >= 1 and copy:IsMouseOver() then ShowTip(copy) end
+				x, tallest = x + size + AURA_GAP, math.max(tallest, size)
 			end
-			if col > 0 then row = row + 1 end
+			if x > 0 then top = top + step * (tallest + AURA_GAP) end
 		end
 		for i = n + 1, #(stand.auras or {}) do stand.auras[i]:Hide() end
 		stand.auraCount = n
@@ -1963,8 +2330,10 @@ do
 	local function StandTick()
 		local f = stand.frame
 		if not (f and f:IsShown()) then return end
-		if not state.want then return StandDown("option not on: " .. tostring(state.why)) end
-		if UnitExists("target") then return StandDown("you targeted something") end
+		if not stand.beside then
+			if not state.want then return StandDown("option not on: " .. tostring(state.why)) end
+			if UnitExists("target") then return StandDown("you targeted something") end
+		end
 		PlaceStand()
 		local alpha = TargetAlpha()
 		if alpha ~= stand.alpha then
@@ -1977,7 +2346,33 @@ do
 		Auras()
 	end
 	function ns.ShoulderSelfTargetUp() return stand.frame ~= nil and stand.frame:IsShown() end
+	-- (The tests: how many times you've selected yourself with the option on.)
+	function ns.ShoulderSelfTargetSelects() return stand.selects or 0 end
 	stand.Tick = StandTick
+	-- (The side-by-side test, /cine debug shoulder selfpair: up with you
+	-- targeted, the game's frame of you on screen too, moved by down (in the
+	-- target frame's units, minus = lower), redressed each call (a theme
+	-- just put on). nil: down. Gives whether it's up.)
+	-- (The side-by-side test's A/B: its icons cut as the buff bar's ("bar") or
+	-- whole (nil); copied again on its next check.)
+	function ns.ShoulderSelfTargetIconCrop(mode) stand.iconCrop = mode end
+	function ns.ShoulderSelfTargetBeside(down)
+		stand.beside = down
+		stand.at = nil
+		if down == nil then
+			StandDown("the side-by-side test ended")
+			return false
+		end
+		if stand.frame and stand.frame:IsShown() then
+			PlaceStand()
+			Respot()
+			Looks()
+			Auras()
+		else
+			StandUp()
+		end
+		return stand.frame ~= nil and stand.frame:IsShown()
+	end
 	function ns.ShoulderSelfTargetFrame() return stand.frame end
 	-- (The tests: how many icon copies it shows, and how many of the game's
 	-- buff and debuff icons are shown, capped as it caps them.)
@@ -1987,14 +2382,32 @@ do
 		ShownIcons(_G.DebuffFrame, debuffs)
 		return stand.auraCount or 0, math.min(AURA_MOST, #buffs + #debuffs)
 	end
-	-- (The tests: how many of its icons show their time as a swirl, as text, or not at all.)
+	-- (The tests: how its last buff tooltip was shown, and whether one of its
+	-- icons owns the game's tooltip now.)
+	function ns.ShoulderSelfTargetTip()
+		local tip, owned = _G.GameTooltip, false
+		for i = 1, stand.auraCount or 0 do
+			if tip and tip:IsShown() and tip:GetOwner() == stand.auras[i] then owned = true end
+		end
+		return stand.tipHow or "none", owned, tip and tip:IsShown() and tip:NumLines() or 0, stand.tipShownAt or 0,
+			stand.tipTries or "none"
+	end
+	-- (The tests: whether its bars' numbers show now, and the health one's text.)
+	function ns.ShoulderSelfTargetNumbers()
+		local text = stand.health and stand.health.cineNumbers
+		return text ~= nil and text:IsShown(), text and text:GetText()
+	end
+	-- (The tests: its icon copies now, and how many are up.)
+	function ns.ShoulderSelfTargetAuraCopies() return stand.auras or {}, stand.auraCount or 0 end
+	-- (The tests: how many of its icons show their time as a swirl, how many
+	-- are plain with their times hidden (a fight), and how many have none.)
 	function ns.ShoulderSelfTargetTimers()
-		local count = { swirl = 0, text = 0, none = 0 }
+		local count = { swirl = 0, hidden = 0, none = 0 }
 		for i = 1, stand.auraCount or 0 do
 			local kind = stand.auras[i] and stand.auras[i].timer or "none"
 			count[kind] = (count[kind] or 0) + 1
 		end
-		return count.swirl, count.text, count.none
+		return count.swirl, count.hidden, count.none
 	end
 	-- Your menu on a right-click of it, as the game's target frame of you has
 	-- ("what right click is supposed to look like", user 2026-11-20). The
@@ -2027,15 +2440,39 @@ do
 			return false
 		end
 	]])
+	-- (Your tooltip on hovering it, where the game puts a unit's, as hovering
+	-- the game's target frame of you shows it: the parts probe, 2026-11-20,
+	-- found ours showed none.)
+	menu:HookScript("OnEnter", function(self)
+		ns.Guard(function()
+			local tip = _G.GameTooltip
+			if not tip then return end
+			if _G.GameTooltip_SetDefaultAnchor then
+				_G.GameTooltip_SetDefaultAnchor(tip, self)
+			else
+				tip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+			end
+			tip:SetUnit("player")
+			tip:Show()
+			-- (And the bars' numbers while the mouse is on it.)
+			stand.hover = true
+			if stand.Values then stand.Values() end
+		end)
+	end)
+	menu:HookScript("OnLeave", function(self)
+		local tip = _G.GameTooltip
+		if tip and tip:GetOwner() == self then tip:Hide() end
+		stand.hover = false
+		if stand.Values then ns.Guard(stand.Values) end
+	end)
 	menu:HookScript("OnHide", function()
 		-- (Esc, a real target, or a select again: the stand-in goes with it.)
 		if stand.frame and stand.frame:IsShown() then StandDown("its menu button put away (Esc or a target)") end
 	end)
+	-- (Up on each select, never put away by one: as the frame, above.)
 	local MENU_ON_SELECT = [[
 		if button ~= "LeftButton" then return end
-		if owner:IsShown() then
-			owner:Hide()
-		elseif owner:GetAttribute("cineon") then
+		if owner:GetAttribute("cineon") then
 			owner:Show()
 		end
 	]]
@@ -2149,7 +2586,7 @@ do
 	watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
 	watcher:SetScript("OnEvent", function(_, event)
 		if event == "PLAYER_TARGET_CHANGED" then
-			if UnitExists("target") then StandDown("you targeted something") end
+			if UnitExists("target") and not stand.beside then StandDown("you targeted something") end
 			ns.Guard(stand.AskPowerRead)
 			return ns.Guard(SelfTargeted)
 		elseif event == "PLAYER_LOGIN" then

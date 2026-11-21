@@ -130,6 +130,7 @@ read_globals = {
 	"GetBonusBarOffset", "GetMacroSpell", "FindBaseSpellByID",
 	"GetBindingText",
 	"GetBuildInfo",
+	"GetPhysicalScreenSize",
 	"GetCVar",
 	"GetRaidTargetIndex", "SetRaidTarget", "CanBeRaidTarget",
 	"UnitIsGroupLeader", "UnitIsGroupAssistant", "IsEveryoneAssistant", "NONE",
