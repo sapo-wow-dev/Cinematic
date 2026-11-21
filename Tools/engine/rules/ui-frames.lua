@@ -1105,4 +1105,17 @@ return {
     proof = "/cine debug rulewords (2026-11-21, Forever, Westfall; CinematicDB.ruleWordsLog)",
     source = "Dev/RuleWordsTest.lua",
   },
+  {
+    id = "forever.fontstring.settext-before-font",
+    area = "fonts",
+    clients = { "forever" },
+    api = { "FontString:SetText", "FontString:SetFont", "Frame:CreateFontString" },
+    when = "always",
+    rule = "A FontString made with CreateFontString(nil, layer) and no template has no font: SetText on it (even SetText(\"\")) errors \"FontString:SetText(): Font not set\" until SetFont or SetFontObject is called.",
+    works = { "SetFont (or SetFontObject, or a template) before the first SetText" },
+    status = "tested",
+    tested = "2026-11-21",
+    proof = "Text on You page's Test (Style/SelfTextStyle.lua Show blanked a new text before its font), CinematicDB.log deverror x10",
+    source = "Style/SelfTextStyle.lua",
+  },
 }

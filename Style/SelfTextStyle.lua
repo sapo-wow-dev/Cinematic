@@ -151,11 +151,13 @@ end
 local function Show(words, group, crit, r, g, b)
 	if #live >= MAX_LIVE then Retire(1) end
 	local text = table.remove(pool) or layer:CreateFontString(nil, "OVERLAY")
-	-- (Blanked first: a text that held secret words stays secret till then,
-	-- MSBT Forever's finding, read 2026-11-21.)
-	text:SetText("")
 	local size = BASE_SIZE * (DB().selfTextSize or 1) * (crit and (DB().selfTextCrit or 1.5) or 1)
 	Edge(text, math.min(120, size)) -- (SetFont's top, Forever)
+	-- (Blanked before its words: a text that held secret words stays secret
+	-- till then, MSBT Forever's finding, read 2026-11-21. After its font: a
+	-- new text has none, and SetText with no font errors "Font not set",
+	-- Forever 2026-11-21, the page's Test.)
+	text:SetText("")
 	text:SetTextColor(r, g, b)
 	text:SetText(words)
 	text.group, text.crit, text.side = group, crit, SideOf(group)

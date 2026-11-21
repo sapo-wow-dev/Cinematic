@@ -59,6 +59,8 @@ layer.CreateFontString = function()
 	fs.SetFont = function(self, file, size, flags) self.file, self.size, self.flags = file, size, flags end
 	fs.SetTextColor = function(self, r, g, b) self.color = { r, g, b } end
 	fs.SetText = function(self, words)
+		-- (As the game: no font yet, an error. Forever 2026-11-21.)
+		if not self.file then error("FontString:SetText(): Font not set") end
 		self.words = words
 		self.history = self.history or {}
 		self.history[#self.history + 1] = words
