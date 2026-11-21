@@ -43,7 +43,7 @@ wow.Warn = function(text)
 	warned[#warned + 1] = text
 	return warn(text)
 end
-C_Timer.After = function(_, fn) fn() end
+rawset(C_Timer, "After", function(_, fn) fn() end) -- (the recolor pass at once)
 local tab = _G.ChatFrame1Tab
 local ok, err = pcall(ns.RefreshInterfaceRecolor)
 Check("recolor pass with Glass's HookScript on a chat tab: no error", ok and aceErrors == 0,
