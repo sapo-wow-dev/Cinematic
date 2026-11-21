@@ -41,11 +41,19 @@ local function Source(message, stack)
 	local where = message:match("AddOns[/\\]([^/\\]+)[/\\]") or message:match("^([%w_!%-]+)[/\\][^:]+%.lua:")
 		or (type(stack) == "string" and (stack:match("AddOns[/\\]([^/\\]+)[/\\]") or stack:match("([%w_!%-]+)[/\\][^:]+%.lua:")))
 	local tainted = message:match("tainted by '([^']+)'")
+	-- (No folder found, as when the game cuts the path short, "...ortestPathForever/...",
+	-- and another addon tainted it: that addon's, not "?". ShortestPathForever's error
+	-- handler, 2026-11-21.)
+	if not where and tainted and tainted ~= "Cinematic" and tainted ~= "CinematicDev" then
+		return tainted .. ", another addon's"
+	end
 	if tainted and tainted ~= where then
 		return (where or "?") .. ", tainted by " .. tainted
 	end
 	return where or "?"
 end
+
+ns.DevErrorSource = Source -- (for Tools/offline/errorsource.lua)
 
 local Render
 
