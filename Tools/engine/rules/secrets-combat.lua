@@ -762,7 +762,7 @@ return {
     clients = { "forever" },
     api = { "ReloadUI", "C_UI.Reload", "SecureActionButtonTemplate", "ADDON_ACTION_BLOCKED" },
     when = "always",
-    rule = "ReloadUI() from addon code is blocked (ADDON_ACTION_BLOCKED UNKNOWN() via C_UI.Reload), from a C_Timer and from a plain Button's OnClick. A SecureActionButtonTemplate button with type \"macro\", macrotext \"/reload\", clicked by the player, works. Retail is assumed to allow plain ReloadUI (not recorded as tested).",
+    rule = "ReloadUI() from addon code is blocked (ADDON_ACTION_BLOCKED UNKNOWN() via C_UI.Reload), from a C_Timer and from a plain Button's OnClick. A SecureActionButtonTemplate button with type \"macro\", macrotext \"/reload\", clicked by the player, works. Retail is assumed to allow plain ReloadUI (not recorded as tested); the Warcraft Wiki tags C_UI.Reload #hwevent (retail, 12.1.5), so there it would need a real key press or click and a C_Timer reload would fail. On Forever even a plain click is not enough.",
     works = { "secure button type=macro macrotext=/reload clicked by the player", "player types /reload" },
     fails = { "ReloadUI() from C_Timer", "ReloadUI() from a plain Button OnClick" },
     status = "tested",

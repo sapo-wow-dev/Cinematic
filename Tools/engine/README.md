@@ -18,6 +18,23 @@ Not packaged (`.pkgmeta` leaves `Tools` out).
   disagree or never named the client; its RESULT lines (CinematicDB.ruleCheckLog) are keyed by rule id. Offline
   check: `Tools/offline/rulecheck.lua`.
 
+## Wiki tags (generated)
+
+`python -I Tools/engine/wikiapi.py` reads the Warcraft Wiki's
+[World of Warcraft API](https://warcraft.wiki.gg/wiki/World_of_Warcraft_API) page (or a saved `?action=raw` copy given
+as its argument) and:
+
+- writes `wiki-api-tags.lua`: every function the wiki tags (protected, nocombat, hwevent, noinstance, noscript,
+  grouponly, deprecated) with its tags. Look a call up there before asking "would this work?";
+- writes `rules/wiki-tags.lua`: one `inferred`, retail-only rule per tagged call Cinematic's code makes that no
+  hand-written rule names in its `api`. Never edit it: when a test shows one, write the rule by hand in its area file
+  and the next run drops the generated one;
+- prints CHECK lines: hand-written rules naming a tagged call, to compare with the tag.
+
+Run it after a client patch (the wiki's page says which patch it's up to date for). Names and tags only: the wiki's
+text is CC BY-SA and none is copied. The tags are retail's; Forever and Classic Era can differ (Forever's ReloadUI is
+blocked even from a click). Self-test: `python -I Tools/engine/wikiapi.py --selftest`.
+
 ## A rule
 
 ```lua
