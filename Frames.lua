@@ -3620,6 +3620,13 @@ ns.RULE_WORDS = {
 	dungeon = "dungeon", raid = "raid", city = "city", inn = "inn",
 	flagged = "flagged", mounted = "mounted", taxi = "taxi", flightpath = "taxi", ontaxi = "taxi",
 	indoors = "indoors", inside = "indoors", -- (inside a building or cave: IsIndoors)
+	-- (Moving at all, not on a flight path; auto-run, at a run or walking; RP
+	-- walk, auto-run walking only: from the first step, where cam_run and
+	-- cam_walk wait for their camera.)
+	moving = "moving", autorun = "autorun", autorunning = "autorun", rpwalk = "rpwalk", walking = "rpwalk",
+	afk = "afk", away = "afk", -- (flagged AFK, where cam_idle waits for the AFK camera)
+	swimming = "swimming", swim = "swimming", flying = "flying", fly = "flying", outdoors = "outdoors", outside = "outdoors",
+	resting = "resting", stealthed = "stealthed", stealth = "stealthed", -- (the game's own: IsResting...)
 	dead = "dead", ghost = "dead", casting = "casting", cast = "casting", channeling = "casting",
 	-- (A fight starting or ending: only the Cards page's fight rows are read then.)
 	entering = "entering", enter = "entering", leaving = "leaving", leave = "leaving",
@@ -4630,6 +4637,17 @@ do
 		-- (You dead, or a ghost after releasing. A secret answer counts as alive.)
 		facts.dead = ns.Flag(UnitIsDeadOrGhost("player")) and true or false
 		facts.indoors = IsIndoors and ns.Flag(IsIndoors()) and true or false
+		-- (Moving, auto-run and RP walk: as Core.lua follows them, the game has no API for them.)
+		local moving = ns.playerMoving and not facts.taxi and true or false
+		local rpWalk = moving and ns.IsRPWalking ~= nil and ns.IsRPWalking() and true or false
+		facts.moving, facts.rpwalk = moving, rpWalk
+		facts.autorun = rpWalk or (moving and ns.IsAutoRunning ~= nil and ns.IsAutoRunning()) and true or false
+		facts.afk = ns.Flag(UnitIsAFK("player")) and true or false
+		facts.swimming = IsSwimming and ns.Flag(IsSwimming()) and true or false
+		facts.flying = IsFlying and ns.Flag(IsFlying()) and true or false
+		facts.outdoors = IsOutdoors and ns.Flag(IsOutdoors()) and true or false
+		facts.resting = IsResting and ns.Flag(IsResting()) and true or false
+		facts.stealthed = IsStealthed and ns.Flag(IsStealthed()) and true or false
 		-- (Casting or channeling. Secret in a fight on some clients, so false there.)
 		facts.casting = ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player"))
 		-- (A boss fight: an encounter on, the game's boss frames up, or a boss
