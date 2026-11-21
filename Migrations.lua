@@ -5107,23 +5107,34 @@ STEPS[#STEPS + 1] = function()
 end
 
 -- (Heal Vision's Nameplates tab its own on switch, 2026-11-20.)
-STEPS[#STEPS + 1] = function()
-	-- Heal Vision's Nameplates went on by its picker's Off/Names/Nameplates
-	-- (healVisionPlates the on switch, written with it). Now the tab's own
-	-- switch is (right-click, ns.HEAL_VISION_TABS.PLATES), the picker only
-	-- Names or Nameplates. Off before: the tab off now (it started on, written
-	-- into every profile); on: left on, the pick kept. Saved profiles and
-	-- reset points too. Once.
-	if ns.db.healVisionPlatesTabV1 then return end
-	local TAB = ns.HEAL_VISION_TABS.PLATES
-	local function Move(t)
-		if type(t) ~= "table" then return end
-		-- (Only a settings table: one with either key; a profile's wrapper has neither.)
-		if t.healVisionPlates == nil and t[TAB] == nil and t.healVisionPlatesShow == nil then return end
-		if not t.healVisionPlates then t[TAB] = false end
-		if t.healVisionPlatesShow == "off" then t.healVisionPlatesShow = "plates" end -- (the pick's start)
-		t.healVisionPlates = nil
+-- Heal Vision's Nameplates went on by its picker's Off/Names/Nameplates
+-- (healVisionPlates the on switch, written with it). Now the tab's own
+-- switch is (right-click, ns.HEAL_VISION_TABS.PLATES), the picker only Names
+-- or Nameplates. Off before: the tab off now; on: the tab on, the pick kept;
+-- a tab the player had switched off stays off. On one settings table: the
+-- live one (every key), or a saved profile's, a reset point's, a backup's or
+-- a share string's (only what differs from the defaults: there a tab with no
+-- value was on, the old default, and is off now, the new one, so a profile
+-- with Nameplates on gets the tab on written in; the 2026-11-21 audit, it
+-- came back off). Safe on new settings: with no old switch, nothing moves.
+-- (A field, for Share.lua's import and Backups.lua's restore too.)
+function ns.MoveHealVisionPlates(t)
+	if type(t) ~= "table" then return end
+	local TAB, old = ns.HEAL_VISION_TABS.PLATES, t.healVisionPlates
+	if t.healVisionPlatesShow == "off" then t.healVisionPlatesShow = "plates" end -- (the pick's start)
+	if old == nil then return end -- (none: it was off, as the tab's start is now)
+	if not old then
+		t[TAB] = false
+	elseif t[TAB] == nil then
+		t[TAB] = true
 	end
+	t.healVisionPlates = nil
+end
+
+STEPS[#STEPS + 1] = function()
+	-- (Once: the live settings, saved profiles and reset points.)
+	if ns.db.healVisionPlatesTabV1 then return end
+	local Move = ns.MoveHealVisionPlates
 	Move(ns.db)
 	for _, saved in pairs(ns.db.profiles or {}) do
 		if type(saved) == "table" then
@@ -5133,6 +5144,28 @@ STEPS[#STEPS + 1] = function()
 	end
 	for _, point in pairs(ns.db.profileResetPoints or {}) do Move(point) end
 	ns.db.healVisionPlatesTabV1 = true
+end
+
+-- (The same move on profile backups, kept and deleted ones: a step of its
+-- own, for saves the first one ran on before it covered them, 2026-11-21.)
+STEPS[#STEPS + 1] = function()
+	if ns.db.healVisionPlatesBackupsV1 then return end
+	local Move = ns.MoveHealVisionPlates
+	for _, list in pairs(ns.db.profileBackups or {}) do
+		if type(list) == "table" then
+			for _, backup in ipairs(list) do
+				if type(backup) == "table" then Move(backup.settings) end
+			end
+		end
+	end
+	for _, deleted in ipairs(ns.db.deletedProfiles or {}) do
+		if type(deleted) == "table" and type(deleted.backups) == "table" then
+			for _, backup in ipairs(deleted.backups) do
+				if type(backup) == "table" then Move(backup.settings) end
+			end
+		end
+	end
+	ns.db.healVisionPlatesBackupsV1 = true
 end
 
 -- Runs them all, each on its own: an error is logged and reported (the

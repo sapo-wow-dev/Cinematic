@@ -158,6 +158,45 @@ db.healVisionPlates, db[TAB] = false, true
 ns.RunMigrations()
 Check("move: once only", db[TAB] == true)
 db[TAB], db.healVisionPlates, db.healVisionPlatesShow = false, nil, "plates"
+-- (A saved profile, reset point or backup holds only what differs from the
+-- defaults: one with Nameplates on had the old switch and no tab, the tab's
+-- old default being on. It came back off, the 2026-11-21 audit.)
+local Move = ns.MoveHealVisionPlates
+local diff = { healVisionPlates = true, healVisionPlatesShow = "names" }
+Move(diff)
+Check("diff: on, no tab -> tab on written in", diff[TAB] == true and diff.healVisionPlates == nil, tostring(diff[TAB]))
+Check("diff: ... the pick kept", diff.healVisionPlatesShow == "names")
+diff = { healVisionPlatesShow = "names" }
+Move(diff)
+Check("diff: no old switch -> nothing moves (off, as the tab's start)", diff[TAB] == nil)
+local fresh = { [TAB] = true }
+Move(fresh)
+Check("new settings: a tab on stays on (safe to run again)", fresh[TAB] == true)
+db.healVisionPlatesTabV1 = nil
+db.profiles = db.profiles or {}
+db.profiles.diffTest = { settings = { healVisionPlates = true } }
+db.profileResetPoints = db.profileResetPoints or {}
+db.profileResetPoints.diffTest = { healVisionPlates = true }
+db.profileBackups = { diffTest = { { settings = { healVisionPlates = true } }, { settings = { healVisionPlates = false } } } }
+db.deletedProfiles = { { name = "gone", backups = { { settings = { healVisionPlates = true } } } } }
+db.healVisionPlatesBackupsV1 = nil
+ns.RunMigrations()
+Check("migrate: saved profile with Nameplates on keeps the tab on", db.profiles.diffTest.settings[TAB] == true)
+Check("migrate: reset point too", db.profileResetPoints.diffTest[TAB] == true)
+Check("migrate: backups too (on and off)", db.profileBackups.diffTest[1].settings[TAB] == true
+	and db.profileBackups.diffTest[2].settings[TAB] == false)
+Check("migrate: a deleted profile's backups too", db.deletedProfiles[1].backups[1].settings[TAB] == true)
+db.profiles.diffTest, db.profileResetPoints.diffTest, db.profileBackups, db.deletedProfiles = nil, nil, {}, {}
+-- An old share string: its old switch onto the tab, not skipped.
+do
+	local wasSettings = ns.ProfileForSharing
+	ns.ProfileForSharing = function() return { healVisionPlates = true } end
+	local ok, text = pcall(ns.ExportProfile, ns.ActiveProfile())
+	ns.ProfileForSharing = wasSettings
+	local read = ok and text and ns.ReadSharedProfile(text)
+	Check("share: an old string's Nameplates on comes in as the tab on", read and read.settings[TAB] == true
+		and read.skipped == 0, read and (tostring(read.settings[TAB]) .. ", skipped " .. read.skipped) or tostring(text))
+end
 
 -- 4. The page: both rows on it, and its Reset puts both rules back.
 local settings = ns.PageSettings and ns.PageSettings()

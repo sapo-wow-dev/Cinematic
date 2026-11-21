@@ -214,6 +214,9 @@ function ns.ReadSharedProfile(text)
 	-- (Its icon: any of the game's, as a file path or ID: ns.CleanSharedIcon, below.)
 	local icon = ns.CleanSharedIcon(data.icon)
 	local settings, count, skipped = {}, 0, 0
+	-- (One from before Heal Vision's Nameplates tab had its own switch: its old
+	-- switch onto the tab, not skipped as unknown. Migrations.lua.)
+	if ns.MoveHealVisionPlates then ns.MoveHealVisionPlates(data.settings) end
 	for key, value in pairs(data.settings) do
 		if ns.KnownProfileSetting(key, value) then
 			settings[key] = value

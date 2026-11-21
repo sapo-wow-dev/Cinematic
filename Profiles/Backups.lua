@@ -112,6 +112,9 @@ end
 -- A backup's settings this version has, of the right kind (as import keeps).
 local function Known(settings)
 	local known = {}
+	-- (A backup from before Heal Vision's Nameplates tab had its own switch: its
+	-- old switch onto the tab. Migrations.lua.)
+	if ns.MoveHealVisionPlates then ns.MoveHealVisionPlates(settings) end
 	for k, v in pairs(settings or {}) do
 		if ns.KnownProfileSetting(k, v) then known[k] = CopyTable(v) end
 	end
