@@ -152,6 +152,18 @@ if arg[1] and not update then
 			if Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("a line in a tab not selected showed chat") end
 			selected = frame
 			if not Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("a line in the selected tab didn't show chat") end
+			-- (Glass: the game's windows hidden, each drawn on a linked panel,
+			-- the unselected tab's panel saying shown too.)
+			local shown = function() return true end
+			local hidden = function() return false end
+			local keptShown, keptPanel = frame.IsShown, ns.chatPeekPanels[frame]
+			selected = { IsShown = hidden, isDocked = 1 }
+			ns.chatPeekPanels[selected] = { IsShown = shown }
+			frame.IsShown, ns.chatPeekPanels[frame] = hidden, { IsShown = shown }
+			if Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("Glass: a line in a tab not selected showed chat") end
+			selected = frame
+			if not Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("Glass: a line in the selected tab didn't show chat") end
+			frame.IsShown, ns.chatPeekPanels[frame] = keptShown, keptPanel
 			db.chatHideOwn = true
 			frame.isDocked = nil
 			_G.GENERAL_CHAT_DOCK, _G.FCFDock_GetSelectedWindow = keptDock, keptGet
@@ -479,7 +491,8 @@ if arg[1] and not update then
 			print("problem\tAuto-Hide UI: no such profile")
 		else
 			local hide, balanced = Settings("Auto-Hide UI"), Settings("Balanced")
-			for _, key in ipairs({ "handleFrames", "mouseover", "handleMinimap", "handleChat", "handlePlates",
+			-- (Mouseover off, the user's ask 2026-11-20: below.)
+			for _, key in ipairs({ "handleFrames", "handleMinimap", "handleChat", "handlePlates",
 				"handleTooltips", "handleBubbles", "chatPeekChannelList", "hoverGroups", "editModeLayout" }) do
 				if ns.SerialValue(hide[key]) ~= ns.SerialValue(balanced[key]) then
 					print("problem\tAuto-Hide UI: " .. key .. " isn't as Balanced has it")
@@ -487,9 +500,17 @@ if arg[1] and not update then
 			end
 			for _, key in ipairs({ "cameraModes", "visualEffects", "letterboxPage", "tintPage", "styleGeneral",
 				"cards", "emoteVision", "teleportVision", "handleFishing", "musicInCinematic", "handleQuality",
-				"handleHealVision", "rollWindow", "cardDuelOn", "cardLevelUpOn", "storyZoneCard" }) do
+				"handleHealVision", "rollWindow", "cardDuelOn", "cardLevelUpOn", "storyZoneCard", "mouseover",
+				"shoulderCam", "skyrideCam" }) do
 				if ns.DEFAULTS[key] ~= nil and hide[key] ~= false then
 					print("problem\tAuto-Hide UI: " .. key .. " is on")
+				end
+			end
+			-- (Every camera scene off too: no camera at all. A scene with no
+			-- camera picked plays nothing, as the welcome window's tags count.)
+			for _, trigger in ipairs(ns.CAMERA_TRIGGERS or {}) do
+				if trigger.sceneOff and hide[trigger.sceneOff] ~= true and hide[trigger.camera] ~= trigger.off then
+					print("problem\tAuto-Hide UI: the " .. tostring(trigger.key) .. " camera scene is on")
 				end
 			end
 		end

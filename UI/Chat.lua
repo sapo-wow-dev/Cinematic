@@ -466,8 +466,14 @@ ns.chatPeekPanels = {}
 -- A docked tab that isn't the selected one doesn't count, whatever its
 -- IsShown says: a line landing only there (the Combat Log tab's crafting
 -- lines) brought up the dock on the selected tab, with nothing new in it
--- (player report, 2026-11-21). Only while the selected tab itself shows: an
--- addon that hides the game's windows (Glass) keeps its panel's own rule.
+-- (player report, 2026-11-21, with Glass). Only while the selected tab itself
+-- shows, in its window or its linked panel: Glass keeps the game's windows
+-- hidden, and its frame for an unselected tab can say shown.
+local function TabShows(chatFrame)
+	if ns.Flag(chatFrame:IsShown()) then return true end
+	local panel = ns.chatPeekPanels[chatFrame]
+	return panel ~= nil and ns.Flag(panel:IsShown())
+end
 local function OtherDockTabSelected(chatFrame)
 	if not chatFrame.isDocked then return false end
 	local dock = rawget(_G, "GENERAL_CHAT_DOCK")
@@ -475,13 +481,11 @@ local function OtherDockTabSelected(chatFrame)
 	if not (dock and GetSelected) then return false end
 	local ok, selected = pcall(GetSelected, dock)
 	return ok and type(selected) == "table" and selected ~= chatFrame and selected.IsShown ~= nil
-		and ns.Flag(selected:IsShown()) or false
+		and TabShows(selected) or false
 end
 function ns.ChatWindowShown(chatFrame)
 	if OtherDockTabSelected(chatFrame) then return false end
-	if ns.Flag(chatFrame:IsShown()) then return true end
-	local panel = ns.chatPeekPanels[chatFrame]
-	return panel ~= nil and ns.Flag(panel:IsShown())
+	return TabShows(chatFrame)
 end
 function ns.MarkChatHolders(frame)
 	local panel = ns.chatPeekPanels[frame]
@@ -826,6 +830,8 @@ end
 function ns.ChatTestPeek(chatFrame, line)
 	PeekWindow(chatFrame, line, true)
 end
+-- For /cine debug chattab (dev copy): a window's alpha as the peek reads it.
+function ns.ChatTestAlpha(chatFrame) return WindowAlpha(chatFrame) end
 function ns.ChatCopyState(chatFrame)
 	local copy = lineCopies[chatFrame]
 	if not copy then return nil end
@@ -1113,6 +1119,10 @@ local function ChatPeekFilter(chatFrame, event, text, author, _, channelString, 
 	end
 	return false
 end
+
+-- For /cine debug chattab (dev copy): a line run through the peek filter as
+-- the game runs it for that window.
+function ns.ChatTestFilter(...) return ChatPeekFilter(...) end
 
 -- Server announcements don't arrive as a chat event addons can filter, so
 -- look at the newest lines in each chat window for ones starting with the

@@ -157,6 +157,7 @@ local function PrintDebugHelp()
 	print("  /cine debug mirror - the breath, fatigue and Feign Death bars: their parts and settings")
 	print("  /cine debug themecheck - every theme after every other: the frames' parts must come back where the game had them")
 	print("  /cine debug bubbleshot | off - a real chat bubble in each style theme: run it four times, outdoors, it says a line each go")
+	print("  /cine debug chattab - dev copy: a line in a chat tab you haven't selected (Combat Log crafting) must not bring chat up; one run, four rounds (a real whisper too), logs every window's state (again to stop)")
 	print("  /cine debug chatreveal | off - dev copy: a revealed chat line, then you mouse over chat; logs the handoff (with and without a newer line under it)")
 	print("  /cine debug chatdefault | off - dev copy: Show just those messages only with the game's own chat; runs itself, two test lines (your chat, then the other way round)")
 	print("  /cine debug tintlayer | off - dev copy: a red wash in each place a frame can sit, a screenshot of each, to find one under the nameplates")
@@ -821,6 +822,9 @@ local function HandleSlash(msg)
 		else
 			ns.Print("/cine debug chatreveal is in the dev copy only.")
 		end
+	elseif cmd == "debug" and arg == "chattab" then
+		if ns.ChatTabTest then ns.ChatTabTest()
+		else ns.Print("/cine debug chattab is in the dev copy only.") end
 	elseif cmd == "debug" and (arg == "chatdefault" or arg:match("^chatdefault ")) then
 		if ns.ChatDefaultTest then
 			ns.ChatDefaultTest(arg:match("^chatdefault%s*(.-)$"))
