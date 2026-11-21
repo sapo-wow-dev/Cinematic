@@ -90,6 +90,7 @@ OFFLINE_TESTS = [
     ("a part the Show-in rows let go comes back at the alpha it was given (theme's name strip)", "Tools/offline/parthold.lua"),
     ("the side-by-side test's probe finds every part on both target frames of you", "Tools/offline/selfpairprobe.lua"),
     ("a bar's numbers sized to fit their bar (the thin mana bar's)", "Tools/offline/bartextsize.lua"),
+    ("the test box's timers: step, run, time left, took", "Tools/offline/testboxclock.lua"),
     ("mana words are whole numbers, never 338.00003051758 (secret mana after a cast)", "Tools/offline/wholemana.lua"),
 ]
 

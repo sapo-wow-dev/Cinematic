@@ -136,8 +136,10 @@ Inside a step (each `run = function(r)`, in a coroutine):
 | `r:Verdict(ok, text)`, `r:Pass`, `r:Fail`, `r:Skip(why)` | PASS / FAIL / SKIP lines; make them unable to pass by accident |
 | `r:Set(key, v)`, `r:Keep(k, v)` | change a setting / keep own state, undo first |
 | `r:WaitFor(text, { events = {...}, filter = fn } or { check = fn })` | asks the user (box), waits for ONE event or a check, no time limit; returns what woke it |
-| `r:Prompt(text)` | the box without waiting |
-| `r:Sleep(s)`, `r:Shot(label)` | wait; a paced screenshot (1.5 s before, 1.2 s after) |
+| `r:Prompt(text, sub, seconds, buttons)` | the box without waiting |
+| `r:Click(text, fn, label)` | a call the game takes only from your click (SendChatMessage...): a button, `fn(r)` runs **in the click**, returns `ok, ...`. Made straight from a step it runs in a timer's `resume()` and is blocked ("blocked: resume()"; the kit then says so) |
+| `buttons = {...}` (WaitFor opts, Prompt, a step's `buttons`) | **buttons, never "type /cine ..."**: answers (`"Yes"`: the wait returns `"button", "Yes"`), `{ label, fn }`, `{ kind = "editmode" }` (opens Edit Mode by a secure click, no taint), `{ kind = "reload" }` (secure /reload; the run picks up at the next step after it). Skip step and Stop are on every step by themselves. A step that needs the player to change a game setting gives the button that opens it. Old tests: `ns.TestKit.ShowButtons(entries)` / `HideButtons()` |
+| `r:Sleep(s)`, `r:Shot(label, { behind = frame or {frames} })` | wait; a paced screenshot (1.5 s before, 1.2 s after); `behind` puts a solid background behind the frame(s) the shot is about, for that shot only (`pad`, `color` optional). **Give every shot of a frame or text a `behind`**: it reads far better than against the world |
 | `r:Log(text)` | anything else worth having |
 
 Never call `Sleep` / `Shot` / `WaitFor` inside a pcall (Lua 5.1 can't yield

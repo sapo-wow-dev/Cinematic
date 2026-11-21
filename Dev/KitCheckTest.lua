@@ -8,7 +8,8 @@
 --   3 cinemode  CineMode off while the test runs (PASS/FAIL)
 --   4 wait      WaitFor with a check that comes true in 2 s, no time limit:
 --               it resumes, with the value (PASS/FAIL)
---   5 shots     two paced screenshots, two seconds apart, in the log (PASS/FAIL)
+--   5 shots     two paced screenshots, two seconds apart, in the log, the
+--               second with a background behind a small frame (PASS/FAIL)
 --   6 skip      a SKIP verdict with why
 --   7 old       the old tests wrapped (Dev/TestKitWrap.lua): how many, none
 --               missing; a stand-in with its own log and one writing into the
@@ -58,12 +59,19 @@ ns.TestKit.Define({
 		{ key = "shots", title = "two paced screenshots", run = function(r)
 			local before = CinematicDB.kitCheckTestLog and #CinematicDB.kitCheckTestLog or 0
 			r:Shot("first")
-			r:Shot("second")
-			local found = 0
+			local spot = CreateFrame("Frame", nil, UIParent)
+			spot:SetSize(200, 60)
+			spot:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+			r:Shot("second, a background behind a 200x60 frame", { behind = spot })
+			spot:Hide()
+			local found, backed = 0, false
 			for i = before + 1, #CinematicDB.kitCheckTestLog do
-				if CinematicDB.kitCheckTestLog[i]:find("screenshot", 1, true) then found = found + 1 end
+				local line = CinematicDB.kitCheckTestLog[i]
+				if line:find("screenshot", 1, true) then found = found + 1 end
+				if line:find("background behind 1 of 1 frame", 1, true) then backed = true end
 			end
 			r:Verdict(found == 2, found .. " screenshot lines (the files: check log opens them)")
+			r:Verdict(backed, "the second shot had its background: " .. tostring(backed))
 		end },
 		{ key = "skip", title = "a skip", run = function(r)
 			r:Skip("nothing to check here, on purpose")

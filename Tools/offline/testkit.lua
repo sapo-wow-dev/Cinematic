@@ -65,13 +65,17 @@ local function RunClient(client)
 
 	CinematicDB.kitCheckStandInLog = nil -- (another client's run, no reload between)
 	-- A whole run.
+	ns.stillSince = now - 500 -- (standing still a long while: the AFK camera's due)
 	ns.HandleSlash("debug kitcheck")
 	Check("CineMode off at once", cine == false)
-	Advance(30)
+	Advance(5)
+	Check("no AFK camera mid-run: its still timer kept fresh", ns.stillSince >= now - 1.5,
+		("still since %.1f, now %.1f"):format(ns.stillSince, now))
+	Advance(25)
 	local log = CinematicDB.kitCheckTestLog
 	local done = Has(log, "DONE: ")
 	Check("finished DONE", done ~= nil, done)
-	Check("first run: 9 pass, 0 fail, 2 skip (no last run yet)", done and done:find("9 pass, 0 fail, 2 skip", 1, true) ~= nil, done)
+	Check("first run: 10 pass, 0 fail, 2 skip (no last run yet)", done and done:find("10 pass, 0 fail, 2 skip", 1, true) ~= nil, done)
 	Check("context line", Has(log, "context: Cinematic .*" .. client) ~= nil, Has(log, "context:"))
 	Check("settings and cvars in the context", Has(log, "settings kitCheckProbe=") ~= nil and Has(log, "cvars ") ~= nil)
 	Check("a state line per step", Has(log, "step 1 probe: .*| combat") ~= nil, Has(log, "step 1"))
@@ -115,8 +119,100 @@ local function RunClient(client)
 	ns.HandleSlash("debug kitcheck")
 	Advance(30)
 	local again = Has(CinematicDB.kitCheckTestLog, "DONE: ")
-	Check("after a reload: 10 pass, 0 fail, 1 skip", again and again:find("10 pass, 0 fail, 1 skip", 1, true) ~= nil, again)
+	Check("after a reload: 11 pass, 0 fail, 1 skip", again and again:find("11 pass, 0 fail, 1 skip", 1, true) ~= nil, again)
 	Check("closing line verdict", Has(CinematicDB.kitCheckTestLog, "PASS old: the last run's closing line") ~= nil)
+
+	-- The buttons: an answer wakes the wait, Skip step drops a step, Stop
+	-- stops, the Reload button's click picks the run up at the next login.
+	local got
+	-- (The stand-in keeps no attributes: these do, for the secure buttons.)
+	local M = wow.Methods
+	M.SetAttribute = function(self, k, v) self._attr = self._attr or {} self._attr[k] = v end
+	M.GetAttribute = function(self, k) return self._attr and self._attr[k] end
+	local function Click(button) button:GetScript("OnClick")(button, "LeftButton") end
+	ns.TestKit.Define({ name = "kitbuttons", key = "kitButtonsTest", title = "Kit buttons", settings = { "kitCheckProbe" },
+		steps = {
+			{ key = "ask", title = "an answer", run = function(r)
+				local _, label = r:WaitFor("Pick one", { buttons = { "Yes", "No", { kind = "editmode" } } })
+				got = label
+				r:Verdict(label == "Yes", "answered " .. tostring(label))
+			end },
+			{ key = "wait", title = "a wait to skip", run = function(r)
+				r:WaitFor("Never comes", { check = function() return false end })
+				r:Fail("should have been skipped")
+			end },
+			{ key = "reload", title = "a reload", run = function(r)
+				r:Set("kitCheckProbe", "before reload")
+				r:WaitFor("Reload", { buttons = { { kind = "reload" } } })
+			end },
+			{ key = "after", title = "after the reload", run = function(r)
+				r:Verdict(ns.db.kitCheckProbe == "before reload", "the undo kept: " .. tostring(ns.db.kitCheckProbe))
+			end },
+		} })
+	ns.HandleSlash("debug kitbuttons")
+	Advance(0.5)
+	local run = ns.TestKit.Running()
+	local labels = {}
+	for label in pairs(run.buttons or {}) do labels[#labels + 1] = label end
+	table.sort(labels)
+	Check("row: answers, Edit Mode, Skip step, Stop", table.concat(labels, ",") == "No,Open Edit Mode,Skip step,Stop,Yes",
+		table.concat(labels, ","))
+	Click(run.buttons.Yes)
+	Advance(0.5)
+	Check("Yes clicked: the wait returned it", got == "Yes", got)
+	Click(run.buttons["Skip step"])
+	Advance(0.5)
+	Check("Skip step: a SKIP, on to step 3", Has(CinematicDB.kitButtonsTestLog, "SKIP wait: skipped by you") ~= nil
+		and run.step and run.step.key == "reload", run.step and run.step.key)
+	Advance(20)
+	Check("the skipped step's code never ran on", Has(CinematicDB.kitButtonsTestLog, "should have been skipped") == nil)
+	local reload = run.buttons.Reload
+	Check("Reload is a secure /reload button", reload and reload:GetAttribute("macrotext") == "/reload",
+		reload and reload:GetAttribute("macrotext"))
+	reload:GetScript("PreClick")(reload)
+	Check("Reload click: the rest saved", CinematicDB.kitButtonsTestResume and CinematicDB.kitButtonsTestResume.steps == "4",
+		CinematicDB.kitButtonsTestResume and CinematicDB.kitButtonsTestResume.steps)
+	run.stopped = true -- (the reload)
+	ns.TestKit.ResetLogin()
+	wow.Fire("PLAYER_ENTERING_WORLD", false, true)
+	Advance(3)
+	local after = Has(CinematicDB.kitButtonsTestLog, "DONE: ")
+	Check("picked up after the reload: step 4 passes, the totals carried", after and after:find("2 pass, 0 fail, 1 skip", 1, true) ~= nil,
+		after)
+	Check("then put back", ns.db.kitCheckProbe == nil and CinematicDB.kitButtonsTestUndo == nil, ns.db.kitCheckProbe)
+	Check("same log, not a new one", Has(CinematicDB.kitButtonsTestLog, "SKIP wait") ~= nil)
+	ns.HandleSlash("debug kitbuttons")
+	Advance(0.5)
+	Click(ns.TestKit.Running().buttons.Stop)
+	Check("Stop button: STOPPED", Has(CinematicDB.kitButtonsTestLog, "STOPPED: ") ~= nil and ns.TestKit.Running() == nil)
+
+	-- r:Click: its call runs in the click (a hardware event), not before,
+	-- and the wait gets what it returned; a step's own blocked resume()
+	-- (levelemote run 2: an /e line from a timer) gets the hint.
+	local inClick, ranIn, back
+	ns.TestKit.Define({ name = "kitclick", key = "kitClickTest", title = "Kit click", steps = {
+		{ key = "click", title = "a call in the click", run = function(r)
+			local ok, value = r:Click("Send it", function() ranIn = inClick; return "sent" end, "Send")
+			back = tostring(ok) .. " " .. tostring(value)
+		end },
+		{ key = "blocked", title = "a blocked resume()", run = function()
+			wow.Fire("ADDON_ACTION_BLOCKED", "CinematicDev", "resume()")
+		end },
+	} })
+	ns.HandleSlash("debug kitclick")
+	Advance(0.5)
+	Check("Click: nothing ran before the click", ranIn == nil and back == nil)
+	local send = ns.TestKit.Running() and ns.TestKit.Running().buttons.Send
+	Check("Click: its button on the row", send ~= nil)
+	inClick = true
+	if send then Click(send) end
+	inClick = false
+	Advance(0.5)
+	Check("Click: ran inside the click", ranIn == true, tostring(ranIn))
+	Check("Click: the wait got its results", back == "true sent", back)
+	Advance(3)
+	Check("blocked resume(): the hint", Has(CinematicDB.kitClickTestLog, "give it r:Click") ~= nil
+		and Has(CinematicDB.kitClickTestLog, "FAIL blocked: 1 blocked") ~= nil)
 
 	-- The list.
 	local printed = {}
