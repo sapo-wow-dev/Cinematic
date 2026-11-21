@@ -2210,6 +2210,8 @@ local function DressShape(frame, portrait, view, artOver)
 	SetClear(portrait, shape == "none")
 	LiftLevel(frame, state, own)
 	FramePlate(frame, state, portrait, own, artOver, shape)
+	-- (Buffs on top kept off the plate: UnitAuraLift.lua.)
+	if ns.UnitAuraLift then ns.UnitAuraLift(frame, state.plate) end
 	local slab = ns.ThemeLayout() == "slab"
 	PlaceBadge(frame, state, shape == "none" and not slab)
 	ShrinkBadge(frame, state, own and not slab and shape ~= "none", portrait, shape)
