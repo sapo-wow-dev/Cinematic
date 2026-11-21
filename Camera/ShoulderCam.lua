@@ -3684,8 +3684,15 @@ function ns.CreateShoulderCamPanel(kit)
 	kit.Tooltip(strength, L["How far the frames slide; adjust it if they land short of you or past you."])
 	kit.GreyUnless(strength, IfFollow)
 	local OWN_TIP = L["This frame's own height, added to Height (all)."]
+	-- (Floating combat text: not on WoW Forever, where it can never move: the
+	-- game's text has a secret place there, even out of a fight (engine rule
+	-- forever.combattext.copy-secret-words). Your text beside you is the Style
+	-- hub's Text on You page now. Retail keeps the row, untested there.)
+	local function RowShown(key) return ns.isRetail or key ~= "shoulderCamFollowCombatText" end
+	ns.ShoulderFollowRowShown = RowShown -- (Tools/offline/selftextpage.lua)
 	for _, group in ipairs(FOLLOW_GROUPS) do
 		local key = group.key
+		if RowShown(key) then
 		local check = fstack:Add(kit.Check(frames, key, labels[key], FRAME_TIP,
 			SaveThen(key, function()
 				UpdateFollow()
@@ -3700,6 +3707,7 @@ function ns.CreateShoulderCamPanel(kit)
 		own.title:SetPoint("LEFT", own, "RIGHT", 8, 0)
 		kit.Tooltip(own, OWN_TIP)
 		kit.GreyUnless(own, function() return IfFollow() and ns.GetDB()[key] end)
+		end
 	end
 
 	-- Beside each camera's tick: the seconds it takes to go back behind you as

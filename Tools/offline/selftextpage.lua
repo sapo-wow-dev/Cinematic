@@ -325,6 +325,25 @@ resetFn()
 Check("reset: kinds cleared, nothing picked", not page.KindChanged("heal") and not page.KindChanged("combo")
 	and page.picked == nil and db.selfTextLook == "game")
 
+-- The page off: the off card fades it to 0 and the model (which draws on
+-- through a faded parent) hides with it; on again, it's back.
+do
+	local model, watch = page.model, page.modelWatch
+	local above = page.preview:GetParent()
+	local tick = watch and watch._scripts.OnUpdate
+	Check("model: watched", tick ~= nil)
+	if tick then
+		tick(watch, 0.1)
+		Check("model: shown on a page that shows", model:IsShown())
+		rawset(above, "GetAlpha", function() return 0 end)
+		tick(watch, 0.1)
+		Check("model: hidden on a faded page", not model:IsShown())
+		rawset(above, "GetAlpha", nil)
+		tick(watch, 0.1)
+		Check("model: back when the page shows", model:IsShown())
+	end
+end
+
 for _, warning in ipairs(wow.warnings) do
 	if warning:find("SelfText", 1, true) then Check("load: " .. warning, false) end
 end

@@ -3031,6 +3031,14 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf, panel)
 		local name = kit.Label(head, "GameFontNormal", (tostring(label):gsub(":%s*$", "")))
 		name:SetPoint("LEFT", 0, 0)
 		name.searchTip = tip
+		-- (Its id for /cine find: its setting's key, as a toggle's. The sliders,
+		-- tiles and segments under a heading had none, 2026-11-21.)
+		local id = key and K(key)
+		if type(id) == "string" then
+			head.settingKey = id
+			head.searchLabel = (tostring(label):gsub(":%s*$", ""))
+			head.searchTip = tip
+		end
 		local reset = CreateFrame("Button", nil, head)
 		reset:SetSize(58, 16)
 		reset:SetPoint("RIGHT", 0, 0)

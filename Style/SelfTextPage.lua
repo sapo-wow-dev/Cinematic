@@ -164,6 +164,9 @@ function page.ApplyLook(id)
 end
 
 function ns.CreateSelfTextStylePanel(kit)
+	-- (WoW Forever only for now: every test ran there; on retail the game's
+	-- combat text may be made differently. No page, no icon there.)
+	if ns.isRetail then return end
 	local canvas, content = kit.CreateScrollPage()
 	local function Changed() ns.RefreshSelfTextStyle() end
 	local title = kit.Label(content, "GameFontNormalLarge", L["Text on You Style"])
@@ -286,6 +289,26 @@ function ns.CreateSelfTextStylePanel(kit)
 	pcall(model.SetUnit, model, "player")
 	pcall(model.SetFacing, model, math.pi)
 	page.model = model
+	-- (A model draws on through its page faded to 0: the off card fades the
+	-- page, and you stood under it, 2026-11-21. Hidden while anything over it
+	-- is faded out; a frame of its own watches, the model's own OnUpdate stops
+	-- once it's hidden.)
+	local function Faded()
+		local frame = preview
+		while frame do
+			local ok, alpha = pcall(frame.GetAlpha, frame)
+			if ok and type(alpha) == "number" and alpha <= 0.01 then return true end
+			frame = frame:GetParent()
+		end
+		return false
+	end
+	page.ModelFaded = Faded
+	local modelWatch = CreateFrame("Frame", nil, preview)
+	ns.SetOnUpdate(modelWatch, function()
+		local hide = Faded()
+		if model:IsShown() == hide then model:SetShown(not hide) end
+	end)
+	page.modelWatch = modelWatch
 	local function YouX() -- (UI units across from the preview's middle, as the board takes it)
 		return view.over and (OVER_X * PREVIEW_W) / SCALE or 0
 	end

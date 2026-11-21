@@ -129,3 +129,6 @@ real code; each kind's parts; merge repeats, at most, crits stay, across, shadow
 (nothing to do, 8 steps). Ledger: Tools/tests/self-text-page.md.
 Not done (phase 6, after the in-game check): dev = false, What's new, /cine find ids, docs, the Follow HUD's
 Floating combat text row's migration (ShoulderCam.lua), translations at release.
+
+
+Phase 6 done 2026-11-21 (uncommitted): out of dev (no dev flag in HUBS); no page on retail (untested there); the Follow HUD's Floating combat text row hidden on Forever (ns.ShoulderFollowRowShown); every Style row heading gives /cine find its key (StylePages.lua Heading); docs (style.html#text-on-you, settings, forever-vs-retail); What's new entry; the preview's model hides on a faded (off) page; no migration (shoulderCamFollowCombatText defaults on, migrating it would turn the page on for everyone). Checks: Tools/offline/selftextrelease.lua (forever, retail), selftextpage model checks.

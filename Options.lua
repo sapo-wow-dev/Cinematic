@@ -3024,9 +3024,10 @@ do
 			-- (Combat Text in Combat, the fight's numbers, 2026-11-19, user.)
 			{ "Combat Text Style", "Interface\\Icons\\Ability_Warrior_Riposte", label = "Combat Text",
 				section = "Interface", sub = "Combat" },
-			-- (Text on You: your own combat text, beside you; dev only till tested in game, 2026-11-20.)
+			-- (Text on You: your own combat text, beside you; tested in game 2026-11-21. WoW Forever
+			-- only: SelfTextPage.lua makes no page on retail, untested there.)
 			{ "Self Text Style", "Interface\\Icons\\Spell_Holy_PowerWordShield", label = "Text on You",
-				section = "Interface", sub = "Combat", dev = true },
+				section = "Interface", sub = "Combat" },
 			-- (Nameplate Style: its Smart tab a second icon of its page's, hidden under it: canvas.hubTabs.)
 			{ "Nameplate Style", "Interface\\Icons\\Ability_Marksmanship", label = "Nameplates", section = "Interface",
 				sub = "Nameplates" },
