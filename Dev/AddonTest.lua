@@ -7,12 +7,15 @@
 -- as it was and reloads. While solo is on, each login says so on screen and
 -- names any other addon that still loaded.
 --
--- /cine debug addontest <Addon> [quick]: one run that tests itself, logged
--- into CinematicDB.addonTestLog (/reload, then "check log"). CineMode off for
--- the run, back as it was at the end.
+-- /cine debug addontest <Addon> [quick|full]: one run that tests itself,
+-- logged into CinematicDB.addonTestLog (/reload, then "check log"). CineMode
+-- off for the run, back as it was at the end (3 seconds to settle first, so
+-- frames fading in as CineMode goes off count as already up).
 --   1 target: you target anything (frames that only show with a target);
 --   2 fight: you fight something, a dummy will do; it goes on once the
---     fight ends (quick skips 1 and 2);
+--     fight ends (quick skips 1 and 2). A step that showed no new kind of
+--     frame is skipped the next time, on the same version of the addon
+--     (CinematicDB.addonTestSteps); full asks both again;
 --   3 rows: hands off. Each row the addon's frames fade with (its own rows on
 --     the Addons page, and the game's rows its frames stand in for) is hidden
 --     by its key, then shown, then handed back. Per row: did every frame go to
@@ -23,7 +26,10 @@
 -- taint record: whose code made it) that draws something on screen is
 -- checked: faded by us (itself or a frame it sits in), left alone on
 -- purpose, or NOT COVERED. Every NOT COVERED frame is a frame the support
--- missed. Verdicts at the end.
+-- missed. Verdicts at the end. Frames our support names for it that it never
+-- made (its tracker off in its own options, say) make "its frames were made"
+-- a can't tell, and so does a run with no row to test: never a PASS on a run
+-- that tested nothing.
 local addonName, ns = ...
 
 local GetNum = C_AddOns and C_AddOns.GetNumAddOns or _G.GetNumAddOns
@@ -94,6 +100,60 @@ end
 -- EllesmereUIResourceBars, Questie's Questie_*).
 local function Belongs(name, target)
 	return type(name) == "string" and name:lower():sub(1, #target) == target:lower()
+end
+
+-- A frame's kind: its name with numbers and table ids as # (QuestieFrame20
+-- and QuestieFrame582 are one kind, Questie_BaseFrame.2383c32b310 too). A
+-- step that only shows more of a kind seen before found nothing new.
+function ns.AddonTestKind(name)
+	local kind = tostring(name or "?"):gsub("%.%x%x%x%x%x%x+", ".#")
+	return (kind:gsub("%d+", "#"))
+end
+
+-- The target and fight steps to skip: the ones the last run on this version
+-- of the addon ran and saw no new kind of frame in. record is
+-- CinematicDB.addonTestSteps[addon]: { version, target = bool, fight = bool }.
+function ns.AddonTestSkips(record, version, full)
+	local skip = {}
+	if full or type(record) ~= "table" or record.version ~= version then return skip end
+	for _, tag in ipairs({ "target", "fight" }) do
+		if record[tag] == false then skip[tag] = true end
+	end
+	return skip
+end
+
+-- The frames our support names for the target (its frames on the game's rows,
+-- every name on its Addons page rows) that don't exist: never made, so the
+-- rows they're on can't be tested.
+-- Second list: the ones it made that we haven't taken over yet (no
+-- ns.managed entry): their row would test without them.
+function ns.AddonTestMissing(target)
+	local missing, untaken, seen, managed = {}, {}, {}, {}
+	for _, entry in ipairs(ns.managed or {}) do
+		if entry.frame then managed[entry.frame] = true end
+	end
+	local function Check(name, its)
+		if type(name) == "string" and not seen[name] and (its or Belongs(name, target)) then
+			seen[name] = true
+			local frame = rawget(_G, name)
+			if type(frame) ~= "table" then
+				missing[#missing + 1] = name
+			elseif not managed[frame] then
+				untaken[#untaken + 1] = name
+			end
+		end
+	end
+	for _, item in ipairs(ns.COMBAT_SHOW or {}) do
+		for _, name in ipairs(item.frames or {}) do Check(name) end
+	end
+	for _, known in ipairs(ns.ADDON_FRAMES or {}) do
+		if Belongs(known.addon, target) then
+			for _, name in ipairs(known.names or {}) do Check(name, true) end
+		end
+	end
+	table.sort(missing)
+	table.sort(untaken)
+	return missing, untaken
 end
 
 -------------------------------------------------------------------- solo
@@ -227,6 +287,8 @@ end
 local MAX_LINES = 6000
 local SETTLE = 4 -- seconds a row gets to reach its alpha
 local HOLD = 1.5 -- seconds it must stay there (an addon setting its own back)
+local MADE_WAIT = 20 -- seconds given to frames it makes late (Questie's tracker, seconds after a /reload)
+local MADE_SETTLE = 3 -- then seconds for them to settle (Questie hides and shows its tracker once more)
 local run
 
 local function Log(text)
@@ -388,6 +450,8 @@ local function Inventory()
 			local left, bottom, width, height = Rect(frame)
 			if onScreen and left and width > 1 and height > 1 and left < screenW and left + width > 0
 				and bottom < screenH and bottom + height > 0 and Draws(frame) then
+				local kind = ns.AddonTestKind(Name(frame))
+				if not run.kinds[kind] then run.kinds[kind] = run.stage end
 				local cover = Coverage(frame, managedBy)
 				local seen = run.frames[frame]
 				if not seen or seen.cover ~= cover then
@@ -475,7 +539,11 @@ local function Settle(entries, want, done)
 		for _, entry in ipairs(entries) do
 			local reading = Read(entry)
 			local ok = want(reading, entry)
-			if heldSince and ok == false then broke[entry] = reading end
+			-- (The first reading that left it, and when: what set it back.)
+			if heldSince and ok == false and not broke[entry] then
+				reading.at, reading.heldFor = GetTime() - started, GetTime() - heldSince
+				broke[entry] = reading
+			end
 			if ok == false then all = false end
 		end
 		local now = GetTime()
@@ -547,7 +615,12 @@ local function TestRow(index)
 		for _, result in ipairs(hiddenResults) do
 			Log("hidden " .. ReadingLine(result))
 			local name = result.entry.name or Name(result.entry.frame)
-			if result.broke then fought[#fought + 1] = name end
+			if result.broke then
+				fought[#fought + 1] = name
+				local b = result.broke
+				Log(("set back %s: %.1fs after the hide (held %.1fs), visible %s, alpha %s, ours %s, its base %s"):format(
+					name, b.at or 0, b.heldFor or 0, Num(b.visible), Num(b.alpha), Num(b.ours), Num(b.base)))
+			end
 			if Hidden(result.reading) == false then notHidden[#notHidden + 1] = name end
 			if before[result.entry].mouse == true and result.reading.mouse == false
 				and not (ns.HOVER_BY_RECT and result.entry.name and ns.HOVER_BY_RECT[result.entry.name]) then
@@ -587,12 +660,79 @@ local STEPS = {
 
 local events = CreateFrame("Frame")
 
-local function StartRows()
+-- What the target and fight steps found this run, kept for the next one.
+local function KeepSteps()
+	if run.quick then return end
+	CinematicDB.addonTestSteps = CinematicDB.addonTestSteps or {}
+	local old = CinematicDB.addonTestSteps[run.target]
+	local record = { version = run.version }
+	for _, step in ipairs(STEPS) do
+		if run.ran[step.tag] then
+			local found = {}
+			for kind, stage in pairs(run.kinds) do
+				if stage == step.tag then found[#found + 1] = kind end
+			end
+			table.sort(found)
+			record[step.tag] = #found > 0
+			Log(("%s step showed %d new kind(s) of frame%s"):format(step.tag, #found,
+				#found > 0 and (": " .. table.concat(found, ", ")) or ": skipped next run on this version (full asks it again)"))
+		elseif type(old) == "table" and old.version == run.version then
+			record[step.tag] = old[step.tag]
+		end
+	end
+	CinematicDB.addonTestSteps[run.target] = record
+end
+
+local StartRows
+-- Frames our support names that it hasn't made yet, or that we haven't
+-- taken over yet, are waited for (up to MADE_WAIT), then given MADE_SETTLE:
+-- rows tested before then read a frame coming up as "set its alpha back"
+-- (Questie's tracker after a /reload, 2026-11-21: first not made yet, then
+-- made but 40 of its 41 frames not ours yet, our fade still bringing it in).
+-- True while waiting.
+local function WaitForMade(missing, untaken)
+	local waiting = {}
+	for _, name in ipairs(missing) do waiting[#waiting + 1] = name end
+	for _, name in ipairs(untaken) do waiting[#waiting + 1] = name end
+	if #waiting > 0 then
+		if not run.madeWaitUntil then
+			run.madeWaitUntil = GetTime() + MADE_WAIT
+			run.stage = "waiting" -- (what it makes now isn't the last step's find)
+			Log(("waiting for %d of its frames (up to %ds): %d not made yet, %d not taken over by us yet: %s%s"):format(
+				#waiting, MADE_WAIT, #missing, #untaken,
+				table.concat(waiting, ", ", 1, math.min(#waiting, 4)), #waiting > 4 and ", ..." or ""))
+			ns.TestPrompt(("Addon test: waiting for %s to make its frames (hands off)"):format(run.target), MADE_WAIT + 2)
+		end
+		if GetTime() < run.madeWaitUntil then
+			C_Timer.After(0.5, StartRows)
+			return true
+		end
+		Log(("after the wait: %d still not made, %d still not taken over by us%s"):format(#missing, #untaken,
+			#untaken > 0 and (": " .. table.concat(untaken, ", ", 1, math.min(#untaken, 8))) or ""))
+	elseif run.madeWaitUntil and not run.madeSettled then
+		run.madeSettled = true
+		Log(("all made and ours, %.1fs into the wait; %ds to settle"):format(GetTime() - (run.madeWaitUntil - MADE_WAIT), MADE_SETTLE))
+		C_Timer.After(MADE_SETTLE, StartRows)
+		return true
+	end
+	return false
+end
+
+StartRows = function()
 	if not run then return end
 	events:UnregisterAllEvents()
-	run.stage = "rows"
+	local missing, untaken = ns.AddonTestMissing(run.target)
+	if WaitForMade(missing, untaken) then return end
 	Inventory()
+	KeepSteps()
+	run.stage = "rows"
 	run.rows = Rows()
+	for _, name in ipairs(missing) do Log("not made: " .. name) end
+	Verdict("its frames were made", #missing == 0 or nil, #missing > 0 and ("%d our support names never made (off in its own options, or made later): %s%s"):format(
+		#missing, table.concat(missing, ", ", 1, math.min(#missing, 8)), #missing > 8 and ", ..." or "") or nil)
+	if #run.rows == 0 then
+		Verdict("rows tested", nil, "no row to test: none of its frames is on a row now (made yet? its page or row off?)")
+	end
 	run.forceBefore = {}
 	for _, item in ipairs(run.rows) do run.forceBefore[item.key] = ns.db.frameForce[item.key] end
 	Log(("%d rows to test: %s"):format(#run.rows, (function()
@@ -610,6 +750,12 @@ local function Step(index)
 		StartRows()
 		return
 	end
+	if run.skips[step.tag] then
+		Log(("%s step skipped: the last run on %s %s showed no new frame in it (full asks it again)"):format(
+			step.tag, run.target, run.version))
+		Step(index + 1)
+		return
+	end
 	run.step, run.stage = index, step.tag
 	events:UnregisterAllEvents()
 	if step.tag == "target" then
@@ -625,6 +771,7 @@ events:SetScript("OnEvent", function(_, event)
 	if not run then return end
 	if event == "PLAYER_TARGET_CHANGED" and UnitExists("target") and run.step == 1 then
 		run.step = "target seen"
+		run.ran.target = true
 		Log("target: " .. tostring(UnitName("target")))
 		C_Timer.After(1.5, function()
 			Inventory()
@@ -637,6 +784,7 @@ events:SetScript("OnEvent", function(_, event)
 		C_Timer.After(2, function() Shot("fight") end)
 	elseif event == "PLAYER_REGEN_ENABLED" and run.fought and run.step == 2 then
 		run.step = "fight over"
+		run.ran.fight = true
 		Log("fight over")
 		C_Timer.After(1, function() Step(3) end)
 	end
@@ -677,10 +825,10 @@ function ns.AddonTest(words)
 		Finish(false)
 		return
 	end
-	local typed, quick = words:match("^(%S+)%s*(%S*)")
+	local typed, mode = words:match("^(%S+)%s*(%S*)")
 	local target = typed and Resolve(typed)
 	if not target then
-		ns.Print("addontest: /cine debug addontest <Addon> [quick] (its folder name: " .. tostring(typed) .. " isn't installed)")
+		ns.Print("addontest: /cine debug addontest <Addon> [quick|full] (its folder name: " .. tostring(typed) .. " isn't installed)")
 		return
 	end
 	if not IsLoaded(target) then
@@ -690,8 +838,9 @@ function ns.AddonTest(words)
 	CinematicDB.addonTestLog = {}
 	local solo = CinematicDB.soloAddons
 	run = {
-		target = target, quick = quick == "quick", frames = {}, tally = { pass = 0, fail = 0, unclear = 0 },
+		target = target, quick = mode == "quick", frames = {}, tally = { pass = 0, fail = 0, unclear = 0 },
 		cineWasOn = ns.IsCineModeOn and ns.IsCineModeOn() or false, stage = "start",
+		kinds = {}, ran = {},
 	}
 	run.others = Others(type(solo) == "table" and solo.keep or { addonName, target })
 	-- (Its own parts and what it needs count as alone without solo too.)
@@ -707,6 +856,8 @@ function ns.AddonTest(words)
 	for _, each in ipairs(AddOns()) do
 		if each.loaded and Belongs(each.name, target) then parts[#parts + 1] = each.name .. " " .. Version(each.name) end
 	end
+	run.version = Version(target)
+	run.skips = ns.AddonTestSkips((CinematicDB.addonTestSteps or {})[target], run.version, mode == "full")
 	Log(("start %s: Cinematic %s, game %s, %s; support %s; solo %s; also loaded: %s; CineMode was %s"):format(
 		date("%Y-%m-%d %H:%M"), Version(addonName), tostring((GetBuildInfo())), table.concat(parts, ", "),
 		ns.AddonSupportOn and tostring(ns.AddonSupportOn(target)) or "?",
@@ -737,6 +888,11 @@ function ns.AddonTest(words)
 	-- (Its frames as they come and go, every 2 seconds.)
 	run.ticker = C_Timer.NewTicker(2, Inventory)
 	Inventory()
-	Shot("start")
-	Step(1)
+	ns.TestPrompt("Addon test: getting ready (hands off)", 5)
+	C_Timer.After(3, function()
+		if not run then return end
+		Inventory()
+		Shot("start")
+		Step(1)
+	end)
 end

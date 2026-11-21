@@ -82,8 +82,13 @@ function ns.QuestieTargetIcon(yield)
 	end
 end
 
--- Its item buttons, one per quest you can hold (made up front).
-local ITEM_BUTTONS = 35
+-- Its item buttons, one per quest you can hold (made up front): as many as
+-- the game says you can take (40 on Forever; 35 before, so 36-40 never faded).
+local function ItemButtons()
+	local max = C_QuestLog and C_QuestLog.GetMaxNumQuestsCanAccept
+	local ok, count = pcall(max or error)
+	return (ok and type(count) == "number" and count > 0) and count or 40
+end
 
 -- Whether Questie's tracker has a button up for the item. Read off its buttons,
 -- so a quest it doesn't track, or has collapsed, keeps ours. Never with
@@ -92,7 +97,7 @@ function ns.QuestieItemButton(itemID)
 	if not (_G.Questie and ns.QuestVisionSetting("questItemFade")) then
 		return false
 	end
-	for i = 1, ITEM_BUTTONS do
+	for i = 1, ItemButtons() do
 		local button = _G["Questie_ItemButton" .. i]
 		if button and button.itemId == itemID and ns.Flag(button:IsVisible()) then
 			return true
@@ -104,7 +109,7 @@ end
 ns.WhenAddonLoads("Questie", function()
 	ns.FadeWithRow("quests", "quests", { "Questie_BaseFrame" })
 	local buttons = {}
-	for i = 1, ITEM_BUTTONS do
+	for i = 1, ItemButtons() do
 		buttons[i] = "Questie_ItemButton" .. i
 	end
 	ns.FadeWithRow("quests", "quests", buttons, true, true)

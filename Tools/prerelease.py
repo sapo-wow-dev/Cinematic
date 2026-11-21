@@ -82,6 +82,8 @@ OFFLINE_TESTS = [
     ("Allow offscreen nameplates: the old tick moved, Auto / Always / Never, retail", "Tools/offline/offscreenallow.lua", "retail"),
     ("hover through a stand-in (Shoulder Cam's button over your player frame)", "Tools/offline/hoverstandin.lua"),
     ("Interface Recolor with Glass's HookScript on the chat tabs", "Tools/offline/glasshook.lua"),
+    ("Questie's 40 quest item buttons fade with the Quest tracker row", "Tools/offline/questieitembuttons.lua"),
+    ("addon test: steps that showed nothing skipped, frames never made can't pass", "Tools/offline/addontestsmarts.lua"),
     ("test kit (/cine debug kitcheck): steps, undo, stop, login put back", "Tools/offline/testkit.lua"),
     ("old tests on the kit's logs (Dev/TestKitWrap.lua): context, run before kept, totals", "Tools/offline/testkitwrap.lua"),
 ]
