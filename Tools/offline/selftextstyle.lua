@@ -66,7 +66,12 @@ layer.CreateFontString = function()
 		self.history[#self.history + 1] = words
 		lastSet = self
 	end
-	fs.SetShadowColor = function() end
+	fs.SetShadowColor = function(self, _, _, _, a) self.shadowAlpha = a end
+	fs.SetFormattedText = function(self, fmt, ...)
+		if not self.file then error("FontString:SetText(): Font not set") end
+		self.formatted = { fmt, ... }
+		lastSet = self
+	end
 	fs.SetShadowOffset = function(self, x) self.shadow = x end
 	fs.ClearAllPoints = function() end
 	fs.SetPoint = function(self, _, _, _, x, y) self.x, self.y = x, y end
@@ -108,6 +113,7 @@ end
 
 local db = ns.db
 db.styleGeneral, db.selfTextStyle = true, true
+db.selfTextMerge = false -- (sections 1-12 count texts one by one; 13 checks merging)
 ns.RefreshSelfTextStyle()
 local state = ns.SelfTextState()
 Check("page on: on", state.on == true and state.by == "ours")
@@ -274,6 +280,217 @@ do
 	_G.MikSBT = { IsModDisabled = function() return true end }
 	ns.RefreshSelfTextStyle()
 end
+
+-- 13. The look's new parts (2026-11-21, the page's redesign).
+local NewText = layer.CreateFontString
+local function Fresh()
+	for _, key in ipairs({ "selfTextMerge", "selfTextMost", "selfTextSticky", "selfTextShadow", "selfTextFade",
+		"selfTextAcross", "selfTextSide", "selfTextMotion", "selfTextSize", "selfTextCrit", "selfTextFont", "selfTextEdge",
+		"selfTextLife", "selfTextHeight", "selfTextFollow", "selfTextAlways", "selfTextBy" }) do
+		db[key] = ns.DEFAULTS[key]
+	end
+	for _, group in ipairs(ns.SELF_TEXT_GROUPS) do
+		for _, part in ipairs(ns.SELF_TEXT_PARTS) do
+			local key = "selfText_" .. group.id .. part
+			db[key] = ns.DEFAULTS[key]
+		end
+	end
+	shift = 0
+	Frame(3)
+end
+db.styleGeneral, db.selfTextStyle = true, true
+ns.RefreshSelfTextStyle()
+Fresh()
+
+-- Merge repeats: the same kind within half a second, one text "x2"; a crit,
+-- another kind, or after the window: its own.
+local first = ns.SelfTextSample("-5", "damage")
+now = now + 0.1
+local merged = ns.SelfTextSample("-6", "damage")
+Check("merge: the second merged into the first", merged == nil and first.formatted ~= nil
+	and first.formatted[1] == "%s x%d" and first.formatted[2] == "-6" and first.formatted[3] == 2)
+local critText = ns.SelfTextSample("-50", "damage", true)
+Check("merge: a crit has its own", critText ~= nil)
+Check("merge: another kind has its own", ns.SelfTextSample("+5", "heal") ~= nil)
+now = now + 0.6
+Check("merge: after the window its own", ns.SelfTextSample("-7", "damage") ~= nil)
+db.selfTextMerge = false
+Check("merge off: each its own", ns.SelfTextSample("-8", "damage") ~= nil and ns.SelfTextSample("-9", "damage") ~= nil)
+Fresh()
+
+-- At most: the oldest go.
+db.selfTextMost, db.selfTextMerge = 3, false
+for i = 1, 5 do ns.SelfTextSample("-" .. i, "damage") end
+Check("at most 3 at once", #Live() == 3, #Live())
+Fresh()
+
+-- A kind's own parts.
+db.selfTextMerge = false
+db.selfText_damageSize = 2
+Check("kind size 2", ns.SelfTextSample("-1", "damage").size == 48)
+db.selfText_damageSize = 1
+db.selfText_healCrit = 3
+Check("kind crit size", ns.SelfTextSample("+1", "heal", true).size == 72)
+db.selfText_damageFont = "bebas"
+local fontText = ns.SelfTextSample("-2", "damage")
+Check("kind font", tostring(fontText.file):find("Bebas", 1, true) ~= nil, fontText.file)
+db.selfText_damageFont = "general"
+db.selfText_missSide = "left"
+local leftText = ns.SelfTextSample("Dodge", "miss")
+Frame(0.04)
+Check("kind side left", leftText.x < -80, leftText.x)
+db.selfText_missMotion = "down"
+local downText = ns.SelfTextSample("Parry", "miss")
+Frame(0.04)
+local y1 = downText.y
+Frame(0.3)
+Check("kind motion down", downText.y < y1, ("%s -> %s"):format(tostring(y1), tostring(downText.y)))
+db.selfText_shieldShow = false
+Check("kind switched off: not drawn", ns.SelfTextSample("Absorb", "shield") == nil)
+db.selfText_shieldShow, db.selfText_shieldColor = true, "off"
+Check("kind's old Hidden color: not drawn", ns.SelfTextSample("Absorb", "shield") == nil)
+db.selfText_shieldColor = "custom"
+db.selfText_shieldR, db.selfText_shieldG, db.selfText_shieldB = 0.1, 0.2, 0.3
+local ownText = ns.SelfTextSample("Absorb", "shield")
+Check("kind's own color", ownText.color[1] == 0.1 and ownText.color[3] == 0.3)
+Fresh()
+
+-- Crits stay: a crit lasts its time and STICK more, and barely moves.
+db.selfTextSticky, db.selfTextLife, db.selfTextMerge = true, 1, false
+local stay = ns.SelfTextSample("-90", "damage", true)
+local plain = ns.SelfTextSample("-9", "damage")
+Frame(0.04)
+local stayY = stay.y
+Frame(0.4)
+Check("a staying crit barely moves", math.abs(stay.y - stayY) < 5, ("%s -> %s"):format(tostring(stayY), tostring(stay.y)))
+Frame(0.8)
+Check("past its time: the hit gone, the crit still up", not plain.shown and stay.shown)
+Frame(1.2)
+Check("then the crit goes too", not stay.shown)
+Fresh()
+
+-- Shadow strength, fade, across.
+db.selfTextShadow = 0.5
+Check("shadow strength", ns.SelfTextSample("-1", "damage").shadowAlpha == 0.5)
+Fresh()
+db.selfTextFade, db.selfTextLife = 0.3, 1
+local fading = ns.SelfTextSample("-1", "damage")
+Frame(0.5)
+Check("fades from 30%", fading.alpha < 1 and fading.alpha > 0, fading.alpha)
+Fresh()
+db.selfTextAcross, db.selfTextSide = 100, "over"
+local acrossText = ns.SelfTextSample("-1", "damage")
+Frame(0.04)
+Check("across 100", math.abs(acrossText.x - 100) < 1, acrossText.x)
+Fresh()
+
+-- The Show in row: not Always, and the row says no here: the game's text.
+db.selfTextAlways = false
+local rowSays = false
+ns.RowOnNow = function(key) return key == ns.SELF_TEXT_ROW and rowSays end
+now = now + 1
+ns.RefreshSelfTextStyle()
+Check("Show in off here: the game's", ns.SelfTextState().by == "game" and ct._alpha == 1)
+rowSays = true
+now = now + 1
+ns.RefreshSelfTextStyle()
+Check("Show in on here: ours", ns.SelfTextState().by == "ours" and ct._alpha == 0)
+db.selfTextAlways = true
+Fresh()
+
+-- Sounds: a kind's, once per 0.3 s, the screen's only.
+local played = {}
+SOUNDKIT = { MAP_PING = 101, RAID_WARNING = 102, IG_MAINMENU_OPTION_CHECKBOX_ON = 103 } -- luacheck: ignore 121
+PlaySound = function(kit) played[#played + 1] = kit end -- luacheck: ignore 121
+db.selfText_lowSound, db.selfTextMerge = "alarm", false
+ns.SelfTextSample("Mana Low", "low")
+ns.SelfTextSample("Mana Low", "low")
+Check("a kind's sound, once in 0.3 s", #played == 1 and played[1] == 102, #played)
+now = now + 0.4
+ns.SelfTextSample("Mana Low", "low")
+Check("and again after", #played == 2)
+Fresh()
+
+-- The game's Text on Me ticks, read only.
+local cvars = { floatingCombatTextComboPoints_v2 = "0", floatingCombatTextAuras_v2 = "1",
+	floatingCombatTextRepChanges_v2 = "0", floatingCombatTextHonorGains_v2 = "1" }
+local setAny = false
+local realGet, realSet = GetCVar, SetCVar
+GetCVar = function(name) return cvars[name] end -- luacheck: ignore 121
+SetCVar = function(...) setAny = true return realSet(...) end -- luacheck: ignore 121
+Check("tick off", ns.SelfTextGameTick("combo") == "off")
+Check("tick on", ns.SelfTextGameTick("aura") == "on")
+Check("either of two ticks on", ns.SelfTextGameTick("reward") == "on")
+Check("no tick: nil", ns.SelfTextGameTick("damage") == nil)
+Check("ticks never set", not setAny)
+GetCVar, SetCVar = realGet, realSet -- luacheck: ignore 121
+
+-- This fight's counts: a new fight starts them over.
+ns.SelfTextStats.fight.copied = 9
+wow.Fire("PLAYER_REGEN_DISABLED")
+Check("a new fight's counts", ns.SelfTextStats.fight.copied == 0)
+
+-- The preview's board: its own texts, scaled, placed from its anchor, no
+-- sounds or counts.
+do
+	local previewLayer = CreateFrame("Frame")
+	previewLayer.CreateFontString = NewText
+	local anchor = CreateFrame("Frame")
+	local board = ns.SelfTextNewBoard(previewLayer, anchor, 0.5, function() return -200 end)
+	local shownBefore = ns.SelfTextStats.shown
+	played = {}
+	db.selfText_lowSound, db.selfTextMerge = "alarm", false
+	local t = ns.SelfTextSample("Mana Low", "low", false, board)
+	Check("preview: drawn on its board", t ~= nil and #board.live == 1 and #ns.SelfTextScreenBoard.live == 0)
+	Check("preview: scaled", t and t.size == 12, t and t.size)
+	Check("preview: no counts, no sound", ns.SelfTextStats.shown == shownBefore and #played == 0)
+	local update = previewLayer._scripts.OnUpdate
+	update(previewLayer, 5) -- (eased straight to you)
+	update(previewLayer, 0.02)
+	Check("preview: from its anchor, your spot scaled", t and math.abs(t.x - (-200 - 90) * 0.5) < 2, t and t.x)
+	local g = ns.SelfTextGameSample("-26", "damage", board)
+	Check("preview: the game's look, over you, its size", g and g.side == 0 and g.size == 12 and db.selfTextSize == 1)
+	board:Clear()
+	Check("preview: cleared", #board.live == 0)
+end
+Fresh()
+
+-- 14. From the in-game run 2 (2026-11-21): Pop's texts kept a line apart;
+-- the game's look in the middle, not over you; a board's lift.
+db.selfTextMotion, db.selfTextMerge, db.selfTextSide = "pop", false, "over"
+local p1 = ns.SelfTextSample("-1", "damage")
+local p2 = ns.SelfTextSample("-2", "damage")
+Frame(0.1)
+Check("pop: texts on a side a line apart", math.abs(p1.y - p2.y) >= p2.line * 0.95,
+	("%.1f apart, a line %.1f"):format(math.abs(p1.y - p2.y), p2.line))
+Fresh()
+do
+	local previewLayer = CreateFrame("Frame")
+	previewLayer.CreateFontString = NewText
+	local board = ns.SelfTextNewBoard(previewLayer, previewLayer, 0.5, function() return -200 end, -40)
+	db.selfTextAcross, db.selfTextHeight = 60, 30
+	local mine = ns.SelfTextSample("-3", "damage", false, board)
+	local game = ns.SelfTextGameSample("-26", "damage", board)
+	local update = previewLayer._scripts.OnUpdate
+	update(previewLayer, 5)
+	update(previewLayer, 0.01)
+	Check("the game's look: in the middle, not over you", math.abs(game.x) < 1, game.x)
+	-- (The game's look at the board's middle spot, no lift: MIDDLE_Y, 50, here.)
+	Check("the game's look: no Across, Height or lift", math.abs(game.y - 50 * 0.5) < 3, game.y)
+	Check("ours: your spot, Across, Height and the lift", math.abs(mine.x - (-200 + 60 + 90 * -1) * 0.5) < 2
+		and mine.y > (30 - 40) * 0.5 - 1, ("%s %s"):format(tostring(mine.x), tostring(mine.y)))
+	board:Clear()
+end
+Fresh()
+
+-- 15. From run 3: a staying crit in a lane of its own, so a hit climbs past it.
+db.selfTextSticky, db.selfTextMerge, db.selfTextSide = true, false, "over"
+local held = ns.SelfTextSample("-74", "damage", true)
+local passing = ns.SelfTextSample("-20", "damage")
+Frame(0.1)
+Check("a staying crit sits out of the hits' way", math.abs(held.x - passing.x) >= 40,
+	("%s vs %s"):format(tostring(held.x), tostring(passing.x)))
+Fresh()
 
 -- 12. The page builds, its controls refresh.
 do

@@ -186,6 +186,7 @@ Style\CombatTextTexts.lua
 Style\CombatTextStyle.lua
 Style\CombatTextPage.lua
 Style\SelfTextStyle.lua
+Style\SelfTextPage.lua
 Style\UnitFrameCopy.lua
 Style\UnitStyle.lua
 Style\UnitFrameParts.lua
