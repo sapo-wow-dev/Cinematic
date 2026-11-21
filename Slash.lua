@@ -1887,6 +1887,9 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "deadmob" then
 		-- (Dev copy: what addons can read about a dead mob, its name above all, CorpseTest.lua.)
 		if ns.CorpseTest then ns.CorpseTest() else ns.Print("/cine debug deadmob is in the dev copy only.") end
+	elseif cmd == "debug" and arg == "pace" then
+		-- (Dev copy: the lighter update loops, idle tick, hover, fights, PaceTest.lua.)
+		if ns.PaceTest then ns.PaceTest() else ns.Print("/cine debug pace is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "rulecheck" then
 		-- (Dev copy: settles the engine rules whose findings disagree, Tools/engine, RuleCheckTest.lua.)
 		if ns.RuleCheckTest then ns.RuleCheckTest() else ns.Print("/cine debug rulecheck is in the dev copy only.") end
