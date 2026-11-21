@@ -221,6 +221,7 @@ read_globals = {
 	"EJ_GetEncounterInfoByIndex", "EJ_GetEncounterInfo", "UnitIsTapDenied", "UnitIsOwnerOrControllerOfUnit", "EJ_GetInstanceForMap", "EJ_SelectInstance", "UnitEffectiveLevel",
 	"IsInRaid",
 	"IsIndoors",
+	"IsOutdoors",
 	"IsMounted",
 	"IsMouseButtonDown",
 	"IsMouselooking",
