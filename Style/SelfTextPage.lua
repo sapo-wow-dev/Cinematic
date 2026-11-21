@@ -620,13 +620,7 @@ function ns.CreateSelfTextStylePanel(kit)
 	local kindsTop = stack:Header(content, L["Kinds"])
 	stack:Note(content, L["Each kind starts with General's look. Click one to give it its own; the preview plays it alone."], 520)
 	page.kindRows = {}
-	local function Pick(id)
-		picked = (picked ~= id) and id or nil
-		page.picked = picked
-		Changed()
-		kit.Refresh()
-	end
-	page.Pick = Pick
+	local Pick -- (made under the list: it opens the kind's Look panel)
 	for _, group in ipairs(Groups()) do
 		local row = CreateFrame("Button", nil, content)
 		row:SetSize(520, 24)
@@ -678,62 +672,105 @@ function ns.CreateSelfTextStylePanel(kit)
 		kit.AddControl(row)
 		page.kindRows[group.id] = row
 	end
-	-- The picked kind's own look: one editor, its settings the picked one's
-	-- (fieldOf), each its group's till changed. In a fold: there only with
-	-- one picked.
-	local function Field(key)
-		local part = key:gsub("^kind", "")
-		return "selfText_" .. (picked or "other") .. part
+	-- The picked kind's own look: its own Look panel, docked beside the
+	-- settings as Combat Text's texts' are (an editor folded open under the
+	-- list read as lost, the user 2026-11-21). Its settings the kind's own
+	-- (selfText_<kind><part>), each its group's till changed. Made the first
+	-- time it's opened.
+	local looks = {}
+	page.kindLooks = looks
+	local offPage = { Add = function(_, control) control:Hide() return control end }
+	local function KindLook(id)
+		if looks[id] then return looks[id] end
+		local group = GroupOf(id)
+		local function Key(part) return "selfText_" .. id .. part end
+		local function IsOwn(db) return Ours(db) and ns.SelfTextPart(id, "Color") == "custom" end
+		local styleRows = ns.StyleRows(kit, content, offPage, Changed, "selfTextStyle", Key)
+		local button, pop = styleRows.Look("", group.label, {
+			tabs = {
+				default = function(part) return ns.DEFAULTS[Key(part)] end,
+				copyKind = "selfText", copyName = group.label,
+				resetLabel = L["Clear (as General's)"],
+			},
+			groups = {
+				{ "Color", { { "color", "Color" } } },
+				{ "Text", { { "text", "Text" } } },
+				{ "Motion", { { "motion", "Motion" } } },
+				{ "Sound", { { "sound", "Sound" } } },
+			},
+			color = function(look)
+				look.Section(L["Color"])
+				look.Segments(L["Color"], "Color", {
+					{ "game", L["The game's"], L["The color the game gives it."] },
+					{ "custom", L["Its own"], L["A color of its own."] },
+				}, nil, Ours)
+				look.Chips(L["Its color"], { "R", "G", "B" }, L["Its own color."], IsOwn)
+				-- (A kind the game makes only with its own tick on: said here too.)
+				if ns.SelfTextGameTick(id) ~= nil then
+					look.Section(L["The game makes this kind only with its Text on Me tick on (Options > Combat). Cinematic never changes it for you."])
+				end
+			end,
+			text = function(look)
+				look.Section(L["Text"])
+				look.Font("Font", L["Its font."], Ours, { "general", L["General's"] })
+				look.Slider("Size", L["Size"], 50, 250, 5, "%d%%", 100, L["Its size, times General's."], Ours)
+				if group.crit then
+					look.Slider("Crit", L["Crit size"], 0, 300, 10, "%d%%", 100, L["Its crits' size, times a hit's (0: General's)."], Ours)
+				end
+			end,
+			motion = function(look)
+				look.Section(L["Motion"])
+				look.Segments(L["Side"], "Side", {
+					{ "general", L["General's"], L["As General's Side."] },
+					{ "over", L["Over you"], L["Right over you."] },
+					{ "left", L["Left"], L["On your left."] },
+					{ "right", L["Right"], L["On your right."] },
+				}, nil, Ours)
+				look.Segments(L["Motion"], "Motion", {
+					{ "general", L["General's"], L["As General's Motion."] },
+					{ "up", L["Up"], L["Rises."] }, { "down", L["Down"], L["Falls."] },
+					{ "arc", L["Arc"], L["Curves out."] }, { "pop", L["Pop"], L["Crits start big."] },
+				}, nil, Ours)
+			end,
+			sound = function(look)
+				look.Section(L["Sound"])
+				look.Segments(L["Sound"], "Sound", {
+					{ "none", L["None"], L["No sound."] },
+					{ "tick", L["Tick"], L["A soft tick."] },
+					{ "ping", L["Ping"], L["The map's ping."] },
+					{ "alarm", L["Alarm"], L["The raid warning sound."] },
+				}, nil, Ours)
+			end,
+		})
+		if button then button:Hide() end
+		-- (Closed, by its X or another panel opening: the preview plays the mix again.)
+		pop:HookScript("OnHide", function()
+			if picked == id then
+				picked, page.picked = nil, nil
+				Changed()
+				kit.Refresh()
+			end
+		end)
+		looks[id] = { pop = pop, key = Key }
+		return looks[id]
 	end
-	page.Field = Field
-	local editor = ns.StyleRows(kit, content, stack, Changed, "selfTextStyle", Field,
-		{ pictures = true, default = function(key) return ns.DEFAULTS[Field(key)] end })
-	local own = editor.Fold(function() return picked ~= nil end)
-	page.editorFold = own
-	local headWords = own.Section(L["Its own look"])
-	local clear = ns.PanelButton(headWords)
-	clear:SetSize(150, 18)
-	clear:SetPoint("RIGHT", headWords, "RIGHT", 0, 4)
-	clear:SetText(L["Clear (as General's)"])
-	kit.Tooltip(clear, L["Puts this kind back to General's look."])
-	clear:SetScript("OnClick", function()
-		if picked then page.ClearKind(picked) end
+	page.KindLook = KindLook
+	-- (Click a kind: its panel opens and the preview plays it alone; again:
+	-- closed. Another kind's: that one's in its place.)
+	function Pick(id)
+		if picked == id then
+			picked, page.picked = nil, nil
+			if looks[id] then looks[id].pop:Hide() end
+		else
+			local was = picked and looks[picked]
+			picked, page.picked = id, id
+			if was then was.pop:Hide() end
+			KindLook(id).pop:Show()
+		end
 		Changed()
 		kit.Refresh()
-	end)
-	clear.Refresh = function(self) self:SetEnabled((picked and KindChanged(picked)) and true or false) end
-	clear.pageSwitch = false
-	kit.AddControl(clear)
-	page.clearButton = clear
-	own.Choices(L["Color"], "kindColor", {
-		{ "game", L["The game's"], L["The color the game gives it."] },
-		{ "custom", L["Its own"], L["A color of its own."] },
-	}, Ours)
-	local swatchFold = own.Fold(function() return picked ~= nil and ns.SelfTextPart(picked, "Color") == "custom" end)
-	swatchFold.Color(L["Its color"], { "kindR", "kindG", "kindB" }, L["Its own color."], Ours)
-	own.Slider("kindSize", L["Size"], 0.5, 2.5, 0.05, "%.2f", nil, L["Its size, times General's."], Ours)
-	local critFold = own.Fold(function() local group = picked and GroupOf(picked) return group and group.crit end)
-	critFold.Slider("kindCrit", L["Crit size"], 0, 3, 0.1, "%.1f", nil, L["Its crits' size, times a hit's (0: General's)."], Ours)
-	own.Font("kindFont", L["Its font."], Ours, { "general", L["General's"] })
-	own.Choices(L["Side"], "kindSide", {
-		{ "general", L["General's"], L["As General's Side."] },
-		{ "over", L["Over you"], L["Right over you."] },
-		{ "left", L["Left"], L["On your left."] },
-		{ "right", L["Right"], L["On your right."] },
-	}, Ours)
-	own.Choices(L["Motion"], "kindMotion", {
-		{ "general", L["General's"], L["As General's Motion."] },
-		{ "up", L["Up"], L["Rises."] }, { "down", L["Down"], L["Falls."] },
-		{ "arc", L["Arc"], L["Curves out."] }, { "pop", L["Pop"], L["Crits start big."] },
-	}, Ours)
-	own.Choices(L["Sound"], "kindSound", {
-		{ "none", L["None"], L["No sound."] },
-		{ "tick", L["Tick"], L["A soft tick."] },
-		{ "ping", L["Ping"], L["The map's ping."] },
-		{ "alarm", L["Alarm"], L["The raid warning sound."] },
-	}, Ours)
-	local tickFold = own.Fold(function() return picked ~= nil and ns.SelfTextGameTick(picked) == "off" end)
-	tickFold.Section(L["The game makes this kind only with its Text on Me tick on (Options > Combat). Cinematic never changes it for you."])
+	end
+	page.Pick = Pick
 	Into(3, kindsTop)
 
 	-- Reset page: every kind's parts too (the editor's keys aren't the page's).
@@ -742,7 +779,9 @@ function ns.CreateSelfTextStylePanel(kit)
 			for _, group in ipairs(Groups()) do page.ClearKind(group.id) end
 			local db = DB()
 			db.selfTextLook = ns.DEFAULTS.selfTextLook
+			local open = picked and looks[picked]
 			picked, page.picked = nil, nil
+			if open then open.pop:Hide() end
 			Changed()
 		end)
 	end

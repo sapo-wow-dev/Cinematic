@@ -84,6 +84,23 @@ ns.StyleRows = function(...)
 		fontFirsts[#fontFirsts + 1] = { key = key, first = first }
 		return font(key, tip, test, first, label)
 	end
+	-- (A Look panel's rows too: a kind's own panel, made when it opens.)
+	local look = rows.Look
+	rows.Look = function(label, title, spec)
+		for name, made in pairs(spec) do
+			if type(made) == "function" then
+				spec[name] = function(inner, ...)
+					local innerFont = inner.Font
+					inner.Font = function(key, tip, t, first, words)
+						fontFirsts[#fontFirsts + 1] = { key = key, first = first }
+						return innerFont(key, tip, t, first, words)
+					end
+					return made(inner, ...)
+				end
+			end
+		end
+		return look(label, title, spec)
+	end
 	local fold = rows.Fold
 	rows.Fold = function(test)
 		local inner = fold(test)
@@ -123,6 +140,8 @@ local pageKit = setmetatable({
 	end,
 }, { __index = kit })
 local ok, err = pcall(ns.CreateSelfTextStylePanel, pageKit)
+-- (A kind's Look panel is made on first open: damage's made here, its rows noted.)
+if ok and ns.selfTextPage and ns.selfTextPage.KindLook then ok, err = pcall(ns.selfTextPage.KindLook, "damage") end
 ns.StyleRows = realRows
 CreateFrame = realCreateFrame -- luacheck: ignore 121
 Check("page builds", ok, err)
@@ -142,9 +161,6 @@ Check("font row found", mainFont ~= nil)
 Check("font row: no first choice of its own", mainFont and mainFont.first == nil)
 Check("the font list starts with The game's, once", ns.StyleFontChoices()[1].value == "game"
 	and ns.StyleFontChoices()[2].value ~= "game")
-local kindFont
-for _, f in ipairs(fontFirsts) do if f.key == "kindFont" then kindFont = f end end
-Check("a kind's font row: General's first", kindFont and kindFont.first and kindFont.first[1] == "general")
 
 -- Chips.
 local chips = page.chips
@@ -207,20 +223,43 @@ Check("Bold sets its parts", db.selfTextFont == "lilita" and db.selfTextEdge == 
 Check("an unknown look: nothing", page.ApplyLook("nope") == false)
 page.ApplyLook("game")
 
--- Kinds: pick one, the editor is its; its row follows it; Clear.
+-- Kinds: click one, its own Look panel opens (docked, as Combat Text's
+-- texts'), its settings the kind's; its row follows it; Clear in the panel.
+local function FindButton(frame, text)
+	for _, child in ipairs({ frame:GetChildren() }) do
+		if child.GetText and child:GetText() == text then return child end
+		local found = FindButton(child, text)
+		if found then return found end
+	end
+end
 page.Pick("damage")
-Check("picked damage", page.picked == "damage")
-Check("the editor is damage's", page.Field("kindSize") == "selfText_damageSize" and page.Field("kindR") == "selfText_damageR")
+local look = page.kindLooks.damage
+Check("picked damage: its panel open", page.picked == "damage" and look and look.pop:IsShown())
+Check("the panel is damage's", look and look.key("Size") == "selfText_damageSize" and look.key("R") == "selfText_damageR")
+local kindFont
+for _, f in ipairs(fontFirsts) do if f.key == "Font" then kindFont = f end end
+Check("a kind's font row: General's first", kindFont and kindFont.first and kindFont.first[1] == "general")
+Check("the panel isn't under the list (no editor on the page)", page.editorFold == nil and page.clearButton == nil)
 db.selfText_damageColor, db.selfText_damageR, db.selfText_damageG, db.selfText_damageB = "custom", 0, 0, 1
 pageKit.Refresh()
 local damageRow = page.kindRows.damage
 Check("its row marked changed and picked", page.KindChanged("damage") and damageRow.picked)
-page.clearButton:Refresh()
-Check("Clear usable", page.clearButton:IsEnabled())
-page.clearButton:GetScript("OnClick")(page.clearButton)
+local clear = look and FindButton(look.pop, "Clear (as General's)")
+Check("the panel's Clear", clear ~= nil)
+if clear then clear:GetScript("OnClick")(clear) end
 Check("Clear: back to General's", not page.KindChanged("damage") and db.selfText_damageColor == "game")
+page.Pick("heal")
+Check("another kind: its panel in place of the last", page.picked == "heal" and page.kindLooks.heal.pop:IsShown()
+	and not look.pop:IsShown())
+do -- (the stand-in fires no OnHide: as the game does)
+	local heal = page.kindLooks.heal.pop
+	heal:Hide()
+	heal:GetScript("OnHide")(heal)
+end
+Check("its panel closed: nothing picked", page.picked == nil)
 page.Pick("damage")
-Check("picked again: unpicked", page.picked == nil and page.Field("kindSize") == "selfText_otherSize")
+page.Pick("damage")
+Check("clicked again: closed, unpicked", page.picked == nil and not look.pop:IsShown())
 page.kindRows.combo:Refresh()
 Check("a kind the game's tick turns off: its badge", page.kindRows.combo.badgeText == "off in the game's options",
 	page.kindRows.combo.badgeText)
@@ -323,7 +362,8 @@ db.selfText_healSize, db.selfText_comboSound, db.selfTextLook = 2, "alarm", "bol
 page.Pick("heal")
 resetFn()
 Check("reset: kinds cleared, nothing picked", not page.KindChanged("heal") and not page.KindChanged("combo")
-	and page.picked == nil and db.selfTextLook == "game")
+	and page.picked == nil and db.selfTextLook == "game"
+	and not page.kindLooks.heal.pop:IsShown())
 
 -- The page off: the off card fades it to 0 and the model (which draws on
 -- through a faded parent) hides with it; on again, it's back.
