@@ -141,8 +141,17 @@ Inside a step (each `run = function(r)`, in a coroutine):
 | `r:Log(text)` | anything else worth having |
 
 Never call `Sleep` / `Shot` / `WaitFor` inside a pcall (Lua 5.1 can't yield
-across it). An old test that doesn't use the kit: fine to keep; when it needs
-real work, move it onto the kit.
+across it).
+
+**Old tests** (written before the kit) are wrapped by `Dev/TestKitWrap.lua`:
+their steps stay as tested, but each run gets the kit's context lines, the run
+before kept in `<x>PrevLog`, and a closing errors / blocked line at /reload;
+tests that write into the main log (`ns.Log("<category>", ...)`) are copied
+whole into `CinematicDB.<cmd>KitLog` (read_log.py `<cmd>KitLog`). When an old
+test needs real work, rewrite it onto the kit and take its line out of the
+`OLD` list. Renaming an old test's start function: change its line too
+(`/cine debug kitcheck` step 7 and `Tools/offline/testkitwrap.lua` catch a
+missing one).
 
 Before handing it over: luacheck, compile, an offline run through the kit on
 the stand-in where it can reach the code (`Tools/offline/testkit.lua` shows

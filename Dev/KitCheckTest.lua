@@ -10,6 +10,9 @@
 --               it resumes, with the value (PASS/FAIL)
 --   5 shots     two paced screenshots, two seconds apart, in the log (PASS/FAIL)
 --   6 skip      a SKIP verdict with why
+--   7 old       the old tests wrapped (Dev/TestKitWrap.lua): how many, none
+--               missing; a stand-in with its own log and one writing into the
+--               main log, through the real wrapper (PASS/FAIL)
 -- At the end the setting is put back (checked in the log's put back line).
 -- Into CinematicDB.kitCheckTestLog. Dev copy only.
 local _, ns = ...
@@ -64,6 +67,48 @@ ns.TestKit.Define({
 		end },
 		{ key = "skip", title = "a skip", run = function(r)
 			r:Skip("nothing to check here, on purpose")
+		end },
+		{ key = "old", title = "the old tests wrapped (Dev/TestKitWrap.lua)", run = function(r)
+			-- The last run's stand-in log, as the /reload since saved it: its
+			-- closing line is the wrapper's at PLAYER_LOGOUT.
+			local last = CinematicDB.kitCheckStandInLog
+			if type(last) == "table" then
+				local closing
+				for _, line in ipairs(last) do if line:find("kit at /reload:", 1, true) then closing = line end end
+				r:Verdict(closing ~= nil, "the last run's closing line at /reload: " .. tostring(closing))
+			else
+				r:Skip("no last run's stand-in log yet: the next kitcheck after a /reload checks its closing line")
+			end
+			local count, missing = ns.TestKit.WrapState()
+			r:Verdict(count > 50 and #missing == 0, ("%d old tests wrapped at login, start function missing: %s"):format(
+				count, #missing > 0 and table.concat(missing, ", ") or "none"))
+			-- A stand-in with its own log, through the real wrapper.
+			ns.KitCheckOwnStandIn = function(stop)
+				if stop then table.insert(CinematicDB.kitCheckStandInLog, "stopped")
+				else CinematicDB.kitCheckStandInLog = { "stand-in start" } end
+			end
+			ns.TestKit.WrapOld({ cmd = "kitcheck-own", fn = "KitCheckOwnStandIn", file = "KitCheckTest.lua",
+				log = "kitCheckStandInLog" })
+			ns.KitCheckOwnStandIn()
+			ns.KitCheckOwnStandIn(true)
+			ns.KitCheckOwnStandIn()
+			local log, prev = CinematicDB.kitCheckStandInLog, CinematicDB.kitCheckStandInPrevLog
+			local context = 0
+			for _, line in ipairs(log) do if line:find("kit context: ", 1, true) then context = context + 1 end end
+			r:Verdict(context > 0 and prev and prev[#prev] == "stopped",
+				("own log: %d context line(s) on the new run, the run before kept (%s)"):format(context,
+				prev and #prev .. " lines, last " .. tostring(prev[#prev]) or "NOT kept"))
+			-- One writing into the main log, with the game's real ns.Log.
+			ns.KitCheckMainStandIn = function() ns.Log("kitcheckmain", "a line from the stand-in") end
+			ns.TestKit.WrapOld({ cmd = "kitcheckmain", fn = "KitCheckMainStandIn", file = "KitCheckTest.lua",
+				category = "kitcheckmain" })
+			ns.KitCheckMainStandIn()
+			local copy, copied = CinematicDB.kitcheckmainKitLog, false
+			for _, line in ipairs(copy or {}) do if line:find("a line from the stand-in", 1, true) then copied = true end end
+			r:Verdict(copied, "main log line copied into kitcheckmainKitLog: " .. tostring(copied))
+			-- (The own-log stand-in's log stays for the next run's closing-line
+			-- check; the rest go.)
+			CinematicDB.kitCheckStandInPrevLog, CinematicDB.kitcheckmainKitLog = nil, nil
 		end },
 	},
 })

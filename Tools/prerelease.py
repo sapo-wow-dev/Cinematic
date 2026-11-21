@@ -79,6 +79,7 @@ OFFLINE_TESTS = [
     ("hover through a stand-in (Shoulder Cam's button over your player frame)", "Tools/offline/hoverstandin.lua"),
     ("Interface Recolor with Glass's HookScript on the chat tabs", "Tools/offline/glasshook.lua"),
     ("test kit (/cine debug kitcheck): steps, undo, stop, login put back", "Tools/offline/testkit.lua"),
+    ("old tests on the kit's logs (Dev/TestKitWrap.lua): context, run before kept, totals", "Tools/offline/testkitwrap.lua"),
 ]
 
 

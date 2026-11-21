@@ -323,8 +323,9 @@ local function KeepCineOff(run)
 	end
 end
 
-local function ContextLine(run)
-	local def = run.def
+-- The context lines (def: settings, cvars, context; run: for its context
+-- function). Dev/TestKitWrap.lua puts them on the old tests' logs too.
+function Kit.ContextLines(def, run)
 	local version, build, _, toc = "?", "?", nil, "?"
 	pcall(function() version, build, _, toc = GetBuildInfo() end)
 	local parts = { ("context: Cinematic %s, %s, game %s (%s) toc %s, %s, level %s %s"):format(
@@ -349,7 +350,12 @@ local function ContextLine(run)
 		local ok, text = pcall(def.context, run)
 		parts[#parts + 1] = ok and tostring(text) or ("own context failed: " .. tostring(text))
 	end
-	for _, part in ipairs(parts) do Say(run, part) end
+	return parts
+end
+Kit.Counts = Counts
+
+local function ContextLine(run)
+	for _, part in ipairs(Kit.ContextLines(run.def, run)) do Say(run, part) end
 end
 
 function Kit.Finish(run, done)
@@ -394,6 +400,7 @@ end
 function Kit.Start(name, arg)
 	local def = defs[name]
 	if not (def and CinematicDB and ns.db) then return end
+	if current and current.stopped then current = nil end -- (one that ended without Finish)
 	if current then
 		local same = current.def == def
 		Kit.Finish(current, false)
@@ -465,6 +472,7 @@ function ns.TestKitRun(arg)
 			local def = defs[each]
 			print(("  %s - %s (%d steps)"):format(each, def.about or def.title, #def.steps))
 		end
+		if Kit.ListWrapped then Kit.ListWrapped() end
 		return true
 	end
 	if not (name and defs[name]) then return false end

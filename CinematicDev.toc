@@ -12,6 +12,7 @@
 
 Dev\ErrorWindow.lua
 Dev\TestKit.lua
+Dev\TestKitWrap.lua
 Dev\CVarTraceTest.lua
 Checks.lua
 FrameGuess.lua
