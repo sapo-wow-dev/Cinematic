@@ -64,7 +64,7 @@ local function Screenshot(what)
 end
 
 -- The run's settings: [key] = value, and the game settings: [cvar] = value.
-local SETTINGS = { healVisionPlates = true, healVisionPlatesShow = "plates", healVisionPlateOthersBelow = 0,
+local SETTINGS = { [ns.HEAL_VISION_TABS.PLATES] = true, healVisionPlatesShow = "plates", healVisionPlateOthersBelow = 0,
 	plateIconAlwaysClassFriendly = true }
 -- (No game settings of its own: CineMode holds the plates. Outside it, every
 -- friendly plate setting on still gave none on Forever, 2026-11-20.)

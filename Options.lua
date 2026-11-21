@@ -15596,7 +15596,7 @@ function ns.TabContainer(tab, host, key, pageKey)
 	if not (tab and host and key and tab.SetFlip) or tab.flipKey or tab.canFlip or pageSwitches[host] then return end
 	if ns.DEFAULTS[key] == nil then ns.DEFAULTS[key] = true end
 	local db = ns.GetDB()
-	if db and db[key] == nil then db[key] = true end
+	if db and db[key] == nil then db[key] = ns.DEFAULTS[key] end -- (a tab starting off: Heal Vision's Nameplates)
 	PageSwitch(host, key, L["Enable Page"], L["Turns everything on this tab on or off."], host)
 	if pageKey then ns.SetPageMaster({ key }, pageKey) end
 	ns.tabContainers[#ns.tabContainers + 1] = { host = host, key = key, pageKey = pageKey }
@@ -17903,7 +17903,9 @@ local function CreateVisionPanel()
 			local line = CreateFrame("Frame", nil, holder)
 			line:SetSize(holder:GetWidth(), 24)
 			line:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, -FRAME_HEADING_HEIGHT - 4)
-			Label(line, "GameFontHighlight", L["Show in"]):SetPoint("LEFT", line, "LEFT", 0, 0)
+			-- ("Works in", not "Show in" (2026-11-20, the user's call): Heal
+			-- Vision shows nothing itself, the row says where it works.)
+			Label(line, "GameFontHighlight", L["Works in"]):SetPoint("LEFT", line, "LEFT", 0, 0)
 			return holder, line
 		end
 		local framesShow, row = ShowInRow()
@@ -18022,8 +18024,17 @@ local function CreateVisionPanel()
 		local ShowSection -- (below, once both sets are made)
 		local TAB_H = ns.FOLDER_TAB_HEIGHT
 		local NOTE_H = 20 -- (Current role, over the tabs)
+		local tabsKept = {} -- (the role tabs and their line: not dimmed, they name their own state)
 		local function Gate()
-			ns.SetPageGate(content, plates and ns.HEAL_VISION_TABS.PLATES or ns.HEAL_VISION_TABS[editing or "DEFAULT"])
+			local key = plates and ns.HEAL_VISION_TABS.PLATES or ns.HEAL_VISION_TABS[editing or "DEFAULT"]
+			ns.SetPageGate(content, key)
+			-- (Its tab off: all of it dimmed, the Works in row, headings and row
+			-- names too, not only its controls greyed: it didn't read as off,
+			-- the user's report 2026-11-20.)
+			local alpha = ns.PageOn(key) and 1 or 0.45
+			for _, widget in ipairs(plates and plateWidgets or roleWidgets) do
+				if not tabsKept[widget] then widget:SetAlpha(alpha) end
+			end
 		end
 		local panel, topTabs, ShowTop, base = ns.FolderTabs(content, {
 			{ L["Unit Frames"], L["Heal Vision on your party and raid frames."] },
@@ -18054,6 +18065,10 @@ local function CreateVisionPanel()
 			end
 			ns.TabContainer(topTabs[1], Holder(), ns.HEAL_VISION_TABS.FRAMES, "handleHealVision")
 			ns.TabContainer(topTabs[2], Holder(), ns.HEAL_VISION_TABS.PLATES, "handleHealVision")
+			-- (Its switch is the plates' on switch: their events and loop on or off at once.)
+			topTabs[2]:HookScript("OnClick", function(_, button)
+				if button == "RightButton" and ns.ApplyHealVisionPlates then ns.Guard(ns.ApplyHealVisionPlates) end
+			end)
 			for i, role in ipairs(ROLE_TABS) do
 				ns.TabContainer(roleTabs[i], Holder(), ns.HEAL_VISION_TABS[role or "DEFAULT"], ns.HEAL_VISION_TABS.FRAMES)
 			end
@@ -18063,8 +18078,9 @@ local function CreateVisionPanel()
 		base:SetPoint("TOPLEFT", healSwitch, "BOTTOMLEFT", 2, -10 - NOTE_H - TAB_H - 4)
 		-- (Each tab's Show in row at its top, up into its headings' empty top as
 		-- ShowTable's underHeader.)
-		framesShow:SetPoint("TOPLEFT", base, "TOPLEFT", 8, 2)
-		platesShow:SetPoint("TOPLEFT", base, "TOPLEFT", 8, 2)
+		-- (14 in: at 8 "Works in" sat against the panel's edge, the user's report 2026-11-20.)
+		framesShow:SetPoint("TOPLEFT", base, "TOPLEFT", 14, 2)
+		platesShow:SetPoint("TOPLEFT", base, "TOPLEFT", 14, 2)
 		roleWidgets[#roleWidgets + 1] = framesShow
 		plateWidgets[#plateWidgets + 1] = platesShow
 		-- (The role tabs under it, a line under them, as the Cards page's.)
@@ -18073,7 +18089,11 @@ local function CreateVisionPanel()
 		sub:SetPoint("RIGHT", panel, "RIGHT", -8, 0)
 		sub:SetHeight(1)
 		roleWidgets[#roleWidgets + 1] = sub
-		for _, tab in ipairs(roleTabs) do roleWidgets[#roleWidgets + 1] = tab end
+		tabsKept[sub] = true
+		for _, tab in ipairs(roleTabs) do
+			roleWidgets[#roleWidgets + 1] = tab
+			tabsKept[tab] = true
+		end
 		local function ShowTabs()
 			local db = ns.GetDB()
 			if not db then return end
@@ -18266,8 +18286,8 @@ local function CreateVisionPanel()
 		local barsHead = Label(content, "GameFontNormal", L["Nameplates"])
 		barsHead:SetPoint("TOPLEFT", platesTop, "TOPLEFT", 2, 0)
 		-- Show only while hurt (2026-11-19: one picker in place of the tick):
-		-- Off, Names or Nameplates (the plate as Nameplate Style has it). It
-		-- writes the on switch (healVisionPlates) with its pick (healVisionPlatesShow).
+		-- Names or Nameplates (the plate as Nameplate Style has it). Its Off is
+		-- the tab's own switch since 2026-11-20 (right-click the tab, the user's call).
 		local SHOW_TIP = L["Friendly players' names or nameplates stay faded until they need healing, where Heal Vision is on "
 			.. "(not dungeons or raids)."]
 		local barsCheck = CreateFrame("Frame", nil, content)
@@ -18277,13 +18297,11 @@ local function CreateVisionPanel()
 		showLabel:SetPoint("LEFT")
 		showLabel.searchSkip = true
 		local showPicker = Dropdown(content, "healVisionPlatesShow", {
-			{ value = "off", text = L["Off"], tip = L["Heal Vision leaves friendly plates and names alone."] },
 			{ value = "names", text = L["Names"],
 				tip = L["A friendly player's name shows once they're hurt; the rest of their plate stays as it is."] },
 			{ value = "plates", text = L["Nameplates"],
 				tip = L["The whole plate shows once they're hurt, as your nameplate style has it."] },
-		}, 160, function(value)
-			ns.GetDB().healVisionPlates = value ~= "off"
+		}, 160, function()
 			if ns.ApplyHealVisionPlates then ns.ApplyHealVisionPlates() end
 		end)
 		if showPicker then
@@ -18291,27 +18309,29 @@ local function CreateVisionPanel()
 			showPicker.inlineName, showPicker.searchLabel = L["Show only while hurt"], L["Show only while hurt"]
 			showPicker.searchSkip = nil -- (found by its name, not the pick it shows)
 			Tooltip(showPicker, SHOW_TIP)
-			GreyUnless(showPicker, function() return ns.PageSetting("handleHealVision") end)
+			GreyUnless(showPicker, function() return ns.PageSetting(ns.HEAL_VISION_TABS.PLATES) end)
 			plateWidgets[#plateWidgets + 1] = showPicker
 		else
-			-- (A client without the game's dropdown: the old on/off tick, Nameplates.)
-			local tick = Check(content, "healVisionPlates", L["Show only while hurt"], SHOW_TIP, function(value)
-				ns.GetDB().healVisionPlates = value
-				ns.GetDB().healVisionPlatesShow = value and "plates" or "off"
+			-- (A client without the game's dropdown: no pick, Nameplates; the tab's switch alone.)
+			showLabel:Hide()
+		end
+		-- Health fill (2026-11-20, the user's call, unticked to start): names
+		-- grey past the unit's missing health, like a bar (PlateParts.lua's Fill).
+		local fillCheck = Check(content, "healVisionNameFill", L["Show health on names"],
+			L["Names grey out as health is lost, like a health bar."], function(value)
+				KeyPut("healVisionNameFill", value)
 				if ns.ApplyHealVisionPlates then ns.ApplyHealVisionPlates() end
 			end)
-			tick:SetPoint("LEFT", barsCheck, "LEFT", -2, 0)
-			GreyUnless(tick, function() return ns.PageSetting("handleHealVision") end)
-			showLabel:Hide()
-			plateWidgets[#plateWidgets + 1] = tick
-		end
+		fillCheck:SetPoint("TOPLEFT", barsCheck, "BOTTOMLEFT", -2, -4)
+		GreyUnless(fillCheck, function() return ns.PageSetting(ns.HEAL_VISION_TABS.PLATES) end)
+		plateWidgets[#plateWidgets + 1] = fillCheck
 		-- The plates' own table (always: plates are mostly strangers, who have
 		-- no role, so by who they are, not the role tabs; HealVisionFrames.lua's
 		-- PLATE_KINDS). Which parts show: the nameplate style's, nothing here.
 		local plateLast
 		do
 			local function ApplyPlates() if ns.ApplyHealVisionPlates then ns.ApplyHealVisionPlates() end end
-			local function PlatesOn(db) return ns.PageSetting("handleHealVision") and db.healVisionPlates end
+			local function PlatesOn() return ns.PageSetting(ns.HEAL_VISION_TABS.PLATES) end
 			local function PlateField(key)
 				RecordKey(content, key)
 				return { key = key, get = function() return ns.GetDB()[key] end,
@@ -18319,7 +18339,7 @@ local function CreateVisionPanel()
 			end
 			local plateHeads = CreateFrame("Frame", nil, content)
 			plateHeads:SetSize(NAME_W + 2 * COLUMN_W, 16)
-			plateHeads:SetPoint("TOPLEFT", barsCheck, "BOTTOMLEFT", 0, -10)
+			plateHeads:SetPoint("TOPLEFT", fillCheck, "BOTTOMLEFT", 2, -10)
 			for column, text in ipairs({ L["Show below health"], L["Opacity while hidden"] }) do
 				local head = Label(plateHeads, "GameFontNormal", text)
 				head:SetPoint("LEFT", plateHeads, "LEFT", NAME_W + (column - 1) * COLUMN_W, 0)

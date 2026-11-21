@@ -1409,6 +1409,15 @@ ns.HEAL_VISION_ROLES = { "TANK", "HEALER", "DAMAGER" }
 ns.HEAL_VISION_TABS = { DEFAULT = "tabOn:Heal Vision:1", TANK = "tabOn:Heal Vision:2", HEALER = "tabOn:Heal Vision:3",
 	DAMAGER = "tabOn:Heal Vision:4", PLATES = "tabOn:Heal Vision:5", FRAMES = "tabOn:Heal Vision:frames" }
 for _, key in pairs(ns.HEAL_VISION_TABS) do DEFAULTS[key] = true end
+-- (The Nameplates tab's switch is its on switch since 2026-11-20, the user's
+-- call: off to start with, as its picker's Off was. Migrations.lua's
+-- healVisionPlatesTabV1.)
+DEFAULTS[ns.HEAL_VISION_TABS.PLATES] = false
+-- Health fill (the Nameplates tab's tick, 2026-11-20, the user's call:
+-- unticked to start, for everyone): names drawn grey past the unit's missing
+-- health (PlateParts.lua's Fill). A new key: the old plateNameHealthFill is
+-- still ticked in profiles from before 2026-11-19.
+DEFAULTS.healVisionNameFill = false
 local HEAL_VISION_ROLE_STARTS = {
 	TANK = { healVisionTankBelow = 1, healVisionHealerBelow = 0.95, healVisionShowBelow = 0.95 },
 	HEALER = { healVisionTankBelow = 1, healVisionHealerBelow = 0.95, healVisionShowBelow = 0.95 },
@@ -1643,7 +1652,6 @@ for page, keys in pairs({
 	handleHunter = { "hunterRightClickShot", "hunterAmmoSort", "hunterQuiverFill", "petUnhappyShow" },
 	handleAddonSupport = { "questieMoveIcons", "eqolMoveIcons" },
 	duelPlates = { "duelCC", "duelInstants", "duelInstantNames", "duelHideOthers" }, -- Duel Vision's page
-	handleHealVision = { "healVisionPlates" }, -- Heal Vision's page: its Nameplates switch
 	-- The Cards page's rows (Cards.lua) and the time of day at login.
 	cards = { "combatOnEnter", "combatOnLeave", "cardBossOn", "storyZoneCard", "storyZoneSubzones", "storyRecap",
 		"timeOfDayMessage", "timeOfDayChange", "chatAttackAlert", "cardDuelOn", "cardDeathOn", "cardLevelUpOn",
@@ -1665,11 +1673,11 @@ function ns.SetPageMaster(keys, master)
 end
 -- (Heal Vision's tabs under its page's switch; its Nameplates tab's settings under that tab.)
 for _, key in pairs(ns.HEAL_VISION_TABS) do PAGE_SWITCH[key] = "handleHealVision" end
+PAGE_SWITCH.healVisionNameFill = ns.HEAL_VISION_TABS.PLATES -- (off with the tab, and the page)
 -- (The role tabs inside Unit Frames: under its switch.)
 for _, role in ipairs({ "DEFAULT", "TANK", "HEALER", "DAMAGER" }) do
 	PAGE_SWITCH[ns.HEAL_VISION_TABS[role]] = ns.HEAL_VISION_TABS.FRAMES
 end
-PAGE_SWITCH.healVisionPlates = ns.HEAL_VISION_TABS.PLATES
 -- (No Timers master switch, 2026-11-16: Cooldown Manager and Swing Timer are
 -- tabs of the Timers icon, each with its own; Migrations.lua's step 16.)
 -- Allow outside CineMode (CineMode page): a vision's switch -> its tick there.
@@ -1952,7 +1960,7 @@ ns.RULE_DEFAULTS["name:ServiceNPCs"] = "not camera"
 -- aim). Out in the world it faded healthy party members' frames, which
 -- players took for a bug (v2.1.17 to v2.1.20, Migrations.lua's
 -- healVisionTwoRulesV1). Nameplates: everywhere but cities (crowds: every
--- friendly player's plate), and its Show only while hurt picker starts Off.
+-- friendly player's plate), and its tab starts switched off.
 ns.HEAL_VISION_PLATE_ROW = "healVisionNameplates"
 ns.RULE_DEFAULTS.healVision = "(dungeon or raid) and not dead"
 ns.RULE_DEFAULTS[ns.HEAL_VISION_PLATE_ROW] = "not city and not dead"

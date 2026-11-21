@@ -49,7 +49,7 @@ local function AlphaKey() return RoleKey("healVisionMinAlpha") end
 local function PutBack()
 	local saved = CinematicDB and CinematicDB.healPlatesRestore
 	if not (saved and ns.db) then return end
-	ns.db.healVisionPlates = saved.plates
+	ns.db[ns.HEAL_VISION_TABS.PLATES] = saved.plates
 	-- (Keys as saved at the start; a run from before they were saved wrote
 	-- the shared ones.)
 	local keys = saved.keys or { healVisionShowBelow = "healVisionShowBelow", healVisionMinAlpha = "healVisionMinAlpha" }
@@ -320,7 +320,7 @@ local function Finish(done)
 	if run.ticker then run.ticker:Cancel() end
 	PutBack()
 	Say(("done: %d PASS, %d FAIL%s; tick %s and Damage's line %s put back"):format(run.pass, run.fail,
-		done and "" or " (stopped early)", tostring(ns.db.healVisionPlates), tostring(ns.db[BelowKey()])))
+		done and "" or " (stopped early)", tostring(ns.db[ns.HEAL_VISION_TABS.PLATES]), tostring(ns.db[BelowKey()])))
 	run = nil
 	ns.PadTestBox(done and "Test done. /reload, then say \"check log\"." or "Test stopped. /reload, then say \"check log\".",
 		"", 1, 0.82, 0)
@@ -387,12 +387,12 @@ function ns.HealPlatesTest()
 		return
 	end
 	CinematicDB.healPlatesLog = {}
-	CinematicDB.healPlatesRestore = { plates = ns.db.healVisionPlates }
+	CinematicDB.healPlatesRestore = { plates = ns.db[ns.HEAL_VISION_TABS.PLATES] }
 	local keys = { healVisionShowBelow = BelowKey(), healVisionMinAlpha = AlphaKey() }
 	CinematicDB.healPlatesRestore.keys = keys
 	CinematicDB.healPlatesRestore.below = ns.db[keys.healVisionShowBelow]
 	run = { at = GetTime(), index = 0, pass = 0, fail = 0 }
-	ns.db.healVisionPlates = true
+	ns.db[ns.HEAL_VISION_TABS.PLATES] = true -- (the Nameplates tab's switch)
 	-- (Show only while hurt on Nameplates for the run: the whole plate.)
 	CinematicDB.healPlatesRestore.show = ns.db.healVisionPlatesShow
 	ns.db.healVisionPlatesShow = "plates"

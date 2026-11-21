@@ -981,7 +981,12 @@ end
 -- In CineMode or not: it's for healing. In CineMode it keeps every friendly
 -- plate on and up (Effects.lua's FriendWants and PlateAlpha), where Heal
 -- Vision's row says (PlatesOn).
-ns.DEFAULTS.healVisionPlates = false
+-- Its on switch: the Nameplates tab's own (right-click, off to start with,
+-- 2026-11-20, the user's call; before, the picker's Off, healVisionPlates,
+-- gone: Migrations.lua's healVisionPlatesTabV1).
+local function PlatesSwitch()
+	return ns.Setting(ns.HEAL_VISION_TABS.PLATES) and true or false
+end
 -- The parts it can fade (as the Plate parts grid names them). Which stay up:
 -- KeptPart, by the picker (no menu of its own since 2026-11-19).
 -- (Icons: Cinematic's own class and role icons, PlateParts.lua's: their
@@ -989,14 +994,13 @@ ns.DEFAULTS.healVisionPlates = false
 -- hidden plates, a player's report, tested 2026-11-20.)
 ns.HEAL_PLATE_PARTS = { "Health", "Name", "CastBar", "Buffs", "Debuffs", "RaidMarker", "Level", "Highlight",
 	"Widgets", "Icons" }
--- Show only while hurt (2026-11-19: one picker in place of the tick): "off",
+-- Show only while hurt (2026-11-19: one picker in place of the tick):
 -- "names" (the name alone comes and goes, the rest as CineMode has it) or
 -- "plates" (the whole plate comes and goes, as the nameplate style has it).
--- healVisionPlates stays the on switch, written with it (the picker's; old
--- profiles with it on and no pick: plates).
-ns.DEFAULTS.healVisionPlatesShow = "off"
+-- Off is the tab's switch since 2026-11-20 (PlatesSwitch): "off" gives "off".
+ns.DEFAULTS.healVisionPlatesShow = "plates"
 local function PlatesShow()
-	if not ns.Setting("healVisionPlates") then return "off" end
+	if not PlatesSwitch() then return "off" end
 	local show = ns.Setting("healVisionPlatesShow")
 	return show == "names" and "names" or "plates"
 end
@@ -1018,7 +1022,7 @@ local function PlatesOn()
 	local now = GetTime()
 	if platesOnAt ~= now then
 		platesOnAt = now
-		platesOnNow = ns.Setting("healVisionPlates") and ns.HealVisionHere and ns.HealVisionHere(nil, true) and true or false
+		platesOnNow = PlatesSwitch() and ns.HealVisionHere and ns.HealVisionHere(nil, true) and true or false
 	end
 	return platesOnNow
 end
@@ -1273,7 +1277,15 @@ local plateTicker
 -- After the tick or a Heal Vision setting changes: listened to only while
 -- it's on (UNIT_HEALTH comes for every unit), every plate faded let go when off.
 function ns.ApplyHealVisionPlates()
-	local on = ns.Setting("healVisionPlates") and true or false
+	local on = PlatesSwitch()
+	-- (Names drawn again when their health fill comes or goes: its tick, under
+	-- the tab, PlateParts.lua's Fill.On. Off, the grey name took its color back
+	-- only at its next look change.)
+	local fill = ns.Setting("healVisionNameFill") and true or false
+	if fill ~= ns.healVisionFillWas then
+		ns.healVisionFillWas = fill
+		if ns.RefreshPlateNameStyle then ns.Guard(ns.RefreshPlateNameStyle) end
+	end
 	for _, event in ipairs(PLATE_EVENTS) do
 		if on then
 			pcall(plateWatch.RegisterEvent, plateWatch, event)
@@ -1415,9 +1427,9 @@ function ns.HealVisionPlatesDebug()
 	for _, part in ipairs(ns.HEAL_PLATE_PARTS) do
 		if KeptPart(part) then kept[#kept + 1] = part end
 	end
-	ns.Print(("heal vision plates: on %s, show only while hurt %s, their own settings %s, page %s, don't fade: %s, "
+	ns.Print(("heal vision plates: Nameplates tab on %s, show only while hurt %s, their own settings %s, page %s, don't fade: %s, "
 		.. "fade range %s (Linear curve type %s)"):format(
-		tostring(ns.db and ns.db.healVisionPlates), PlatesShow(), "always",
+		tostring(PlatesSwitch()), PlatesShow(), "always",
 		tostring(ns.Setting("handleHealVision")),
 		#kept > 0 and table.concat(kept, ", ") or "nothing", tostring(FadeRange()),
 		tostring(Enum.LuaCurveType and Enum.LuaCurveType.Linear)))

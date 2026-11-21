@@ -3969,7 +3969,7 @@ function ns.PlatesReport()
 		Flag(IsInRaid and IsInRaid()), Flag(InCombatLockdown()), Flag(InPvPFight())))
 	Add(("Nameplates page on=%s, all plates kept on=%s, fade=%s, duel plates=%s (watching %s), heal vision plates=%s")
 		:format(Flag(ns.db.handlePlates), Flag(platesForced), Level(ns.plates.level), Flag(ns.db.duelPlates),
-		Flag(duels.watching), Flag(ns.db.healVisionPlates)))
+		Flag(duels.watching), Flag(ns.Setting(ns.HEAL_VISION_TABS.PLATES))))
 	local PREFIXES = { "plateAlways", "plateGroup", "plateCombat", "plateCombatPvP", "plateCinematic", "plateInCities",
 		"plateInInstances", "plateInPvP", "plateInBGs", "plateTargetEnemy", "plateTargetFriendly" }
 	for _, row in ipairs({ "Friends", "FriendlyMinions", "MyPet", "GroupMembers", "GroupMinions" }) do

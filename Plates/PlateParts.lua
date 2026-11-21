@@ -472,9 +472,12 @@ end
 local Fill = { texts = {}, GREY = { 0.45, 0.45, 0.45 } } -- (GREY: the missing health's part of the name)
 
 function Fill.On()
-	-- (Heal Vision page's tick: off with its page switched off, ns.Setting.)
-	return true -- (always on since 2026-11-19, the user's call: no tick)
+	-- (Heal Vision's Nameplates tab's Health fill tick, 2026-11-20, the user's
+	-- call; ns.Setting: off with that tab or its page off. Always on
+	-- 2026-11-19 to 20.)
+	return ns.Setting("healVisionNameFill") and true or false
 end
+ns.PlateNameFillOn = Fill.On -- (Tools/offline/healtworules.lua)
 
 -- A text's fill, made the first time it's needed.
 function Fill.Of(text)

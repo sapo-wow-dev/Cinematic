@@ -25,7 +25,11 @@ Check("fresh: Unit Frames rule starts in dungeons and raids", db.frameRules.heal
 	db.frameRules.healVision)
 Check("fresh: Nameplates rule starts everywhere but cities", PLATES and db.frameRules[PLATES] == PLATES_START,
 	PLATES and db.frameRules[PLATES])
-Check("fresh: Show only while hurt still Off", not db.healVisionPlates and db.healVisionPlatesShow == "off")
+local TAB = ns.HEAL_VISION_TABS.PLATES
+Check("fresh: Nameplates tab starts switched off", db[TAB] == false, tostring(db[TAB]))
+Check("fresh: plates off with it", ns.HealVisionPlatesShow() == "off", ns.HealVisionPlatesShow())
+Check("fresh: the old on switch is gone", db.healVisionPlates == nil and ns.DEFAULTS.healVisionPlates == nil)
+Check("fresh: picker starts on Nameplates", db.healVisionPlatesShow == "plates", db.healVisionPlatesShow)
 
 -- 2. Where each is on: the facts as the rules read them, one place at a time.
 -- (Its page on: the stand-in's fresh install starts on a profile with it off.)
@@ -88,6 +92,72 @@ ns.RunMigrations()
 db.frameRules.healVision = PLATES_START
 ns.RunMigrations()
 Check("update: once only", db.frameRules.healVision == PLATES_START)
+
+-- 3b. The Nameplates tab's switch is the plates' on switch (2026-11-20).
+db[TAB] = true
+Check("tab on: the pick decides (Nameplates)", ns.HealVisionPlatesShow() == "plates", ns.HealVisionPlatesShow())
+db.healVisionPlatesShow = "names"
+Check("tab on: the pick decides (Names)", ns.HealVisionPlatesShow() == "names", ns.HealVisionPlatesShow())
+Check("fresh: Health fill tick starts unticked", db.healVisionNameFill == false, tostring(db.healVisionNameFill))
+Check("tab on, Health fill unticked: names one color", ns.PlateNameFillOn() == false)
+db.plateNameHealthFill = true -- (the old key, still in profiles from before 2026-11-19: no say now)
+Check("the old Health fill key doesn't turn it on", ns.PlateNameFillOn() == false)
+db.plateNameHealthFill = nil
+db.healVisionNameFill = true
+Check("tab on, Health fill ticked: names get their health fill", ns.PlateNameFillOn() == true)
+local healPage = (ns.PageSettings and ns.PageSettings() or {})["Heal Vision"]
+Check("Health fill tick on the Heal Vision page (its Reset)", healPage and healPage.keys.healVisionNameFill ~= nil)
+db.handleHealVision = false
+Check("tab on, page off: plates off", ns.HealVisionPlatesShow() == "off", ns.HealVisionPlatesShow())
+Check("tab on, page off: no health fill", ns.PlateNameFillOn() == false)
+db.handleHealVision = true
+db[TAB] = false
+Check("tab off: plates off whatever the pick", ns.HealVisionPlatesShow() == "off", ns.HealVisionPlatesShow())
+Check("tab off: no health fill on names", ns.PlateNameFillOn() == false)
+-- (Flipped: the names drawn again once, not on every Apply.)
+local redraws, realRefresh = 0, ns.RefreshPlateNameStyle
+ns.RefreshPlateNameStyle = function() redraws = redraws + 1 end
+ns.healVisionFillWas = nil
+ns.ApplyHealVisionPlates()
+ns.ApplyHealVisionPlates()
+db[TAB] = true
+ns.ApplyHealVisionPlates()
+ns.ApplyHealVisionPlates()
+db[TAB] = false
+ns.ApplyHealVisionPlates()
+ns.RefreshPlateNameStyle = realRefresh
+Check("flip: names redrawn only when the fill comes or goes", redraws == 3, redraws)
+db.healVisionNameFill = false
+db.healVisionPlatesShow = "plates"
+-- The once-only move from the picker's Off to the tab, here and in a saved profile.
+local function MoveTab(on, show, tab)
+	db.healVisionPlatesTabV1 = nil
+	db.healVisionPlates, db.healVisionPlatesShow, db[TAB] = on, show, tab
+	db.profiles = db.profiles or {}
+	db.profiles.tabTest = { settings = { healVisionPlates = on, healVisionPlatesShow = show, [TAB] = tab } }
+	ns.RunMigrations()
+	local saved = db.profiles.tabTest
+	db.profiles.tabTest = nil
+	return db[TAB], db.healVisionPlatesShow, db.healVisionPlates, saved
+end
+local tab, show, old, saved = MoveTab(false, "off", true)
+Check("move: picker Off -> tab off", tab == false, tostring(tab))
+Check("move: Off pick cleared to the start (Nameplates)", show == "plates", tostring(show))
+Check("move: old switch removed", old == nil)
+Check("move: ... in a saved profile too", saved.settings[TAB] == false and saved.settings.healVisionPlates == nil
+	and saved.settings.healVisionPlatesShow == "plates")
+Check("move: a profile's wrapper left alone", saved[TAB] == nil)
+tab, show = MoveTab(true, "names", true)
+Check("move: on with Names -> tab on, Names kept", tab == true and show == "names", tostring(tab) .. ", " .. tostring(show))
+tab = MoveTab(true, "plates", false)
+Check("move: tab turned off by the player stays off", tab == false)
+db.healVisionPlatesTabV1 = nil
+db.healVisionPlates, db[TAB] = nil, true
+ns.RunMigrations()
+db.healVisionPlates, db[TAB] = false, true
+ns.RunMigrations()
+Check("move: once only", db[TAB] == true)
+db[TAB], db.healVisionPlates, db.healVisionPlatesShow = false, nil, "plates"
 
 -- 4. The page: both rows on it, and its Reset puts both rules back.
 local settings = ns.PageSettings and ns.PageSettings()

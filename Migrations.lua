@@ -5106,6 +5106,35 @@ STEPS[#STEPS + 1] = function()
 	ns.db.healVisionTwoRulesV1 = true
 end
 
+-- (Heal Vision's Nameplates tab its own on switch, 2026-11-20.)
+STEPS[#STEPS + 1] = function()
+	-- Heal Vision's Nameplates went on by its picker's Off/Names/Nameplates
+	-- (healVisionPlates the on switch, written with it). Now the tab's own
+	-- switch is (right-click, ns.HEAL_VISION_TABS.PLATES), the picker only
+	-- Names or Nameplates. Off before: the tab off now (it started on, written
+	-- into every profile); on: left on, the pick kept. Saved profiles and
+	-- reset points too. Once.
+	if ns.db.healVisionPlatesTabV1 then return end
+	local TAB = ns.HEAL_VISION_TABS.PLATES
+	local function Move(t)
+		if type(t) ~= "table" then return end
+		-- (Only a settings table: one with either key; a profile's wrapper has neither.)
+		if t.healVisionPlates == nil and t[TAB] == nil and t.healVisionPlatesShow == nil then return end
+		if not t.healVisionPlates then t[TAB] = false end
+		if t.healVisionPlatesShow == "off" then t.healVisionPlatesShow = "plates" end -- (the pick's start)
+		t.healVisionPlates = nil
+	end
+	Move(ns.db)
+	for _, saved in pairs(ns.db.profiles or {}) do
+		if type(saved) == "table" then
+			Move(saved)
+			Move(saved.settings)
+		end
+	end
+	for _, point in pairs(ns.db.profileResetPoints or {}) do Move(point) end
+	ns.db.healVisionPlatesTabV1 = true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 function ns.RunMigrations()

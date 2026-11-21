@@ -130,7 +130,7 @@ local function CineCell(kind, place)
 		end
 		local cards = EmoteCardsAt(place)
 		if cards then return ON .. "on*", { "On for Emote Vision's cards: " .. cards .. ".", noEnemy } end
-		if ns.Setting("healVisionPlates") then
+		if ns.Setting(ns.HEAL_VISION_TABS.PLATES) then
 			return OFF .. "off*", { off[1], "Only while: Heal Vision's Nameplates tick, where its row's rule says." }
 		end
 		return OFF .. "off", off
@@ -149,7 +149,7 @@ local function CineCell(kind, place)
 	if not (p and rows and p.FriendRowWanted) then return GREY .. "?", { "Effects.lua's plate code isn't loaded." } end
 	local always, only = {}, {}
 	-- (Heal Vision's tick goes by its own row's rule: known only where you are.)
-	local healTick = ns.Setting("healVisionPlates") and true or false
+	local healTick = ns.Setting(ns.HEAL_VISION_TABS.PLATES) and true or false
 	local isHere = place.suffix == (ns.PlateSuffix and ns.PlateSuffix())
 	local heal = healTick and isHere and ns.HealVisionPlatesOn and ns.HealVisionPlatesOn()
 	local healMaybe = healTick and not isHere
