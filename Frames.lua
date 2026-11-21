@@ -3627,6 +3627,10 @@ ns.RULE_WORDS = {
 	afk = "afk", away = "afk", -- (flagged AFK, where cam_idle waits for the AFK camera)
 	swimming = "swimming", swim = "swimming", flying = "flying", fly = "flying", outdoors = "outdoors", outside = "outdoors",
 	resting = "resting", stealthed = "stealthed", stealth = "stealthed", -- (the game's own: IsResting...)
+	-- (Sitting or lying down, by an emote, the sit key or a seat, as Camera.lua
+	-- follows it; gliding, retail's skyriding in the air; npc, at an NPC's or a
+	-- mailbox's window, or talking to one.)
+	sitting = "sitting", sit = "sitting", gliding = "gliding", skyriding = "gliding", npc = "npc",
 	dead = "dead", ghost = "dead", casting = "casting", cast = "casting", channeling = "casting",
 	-- (A fight starting or ending: only the Cards page's fight rows are read then.)
 	entering = "entering", enter = "entering", leaving = "leaving", leave = "leaving",
@@ -4648,6 +4652,9 @@ do
 		facts.outdoors = IsOutdoors and ns.Flag(IsOutdoors()) and true or false
 		facts.resting = IsResting and ns.Flag(IsResting()) and true or false
 		facts.stealthed = IsStealthed and ns.Flag(IsStealthed()) and true or false
+		facts.sitting = ns.IsSitting ~= nil and ns.IsSitting() and true or false
+		facts.gliding = ns.isRetail and ns.GlidingSpeed() ~= nil or false
+		facts.npc = ns.NPCWindowOpen() or ns.Flag(UnitExists("npc")) and true or false
 		-- (Casting or channeling. Secret in a fight on some clients, so false there.)
 		facts.casting = ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player"))
 		-- (A boss fight: an encounter on, the game's boss frames up, or a boss

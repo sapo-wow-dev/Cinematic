@@ -68,6 +68,10 @@ function ns.RulePieces()
 	for _, band in ipairs(ns.RANGE_BANDS) do
 		ranges[#ranges + 1] = { band.field, (L["Within %s*"]):format(band.label) }
 	end
+	-- (Gliding: retail's skyriding only.)
+	local travel = { { "moving", L["Moving"] }, { "autorun", L["Auto-run"] }, { "rpwalk", L["RP Walk"] },
+		{ "swimming", L["Swimming"] }, { "flying", L["Flying"] } }
+	if ns.isRetail then travel[#travel + 1] = { "gliding", L["Gliding"] } end
 	-- (The classes this client has, by the game's names for them.)
 	local classes = {}
 	for id = 1, (GetNumClasses and GetNumClasses() or 0) do
@@ -93,9 +97,9 @@ function ns.RulePieces()
 		{ L["Location"], { 0.45, 0.75, 1 }, location },
 		{ L["You"], { 0.8, 0.6, 1 }, { { "mounted", L["Mounted"] }, { "indoors", L["Indoors"] }, { "taxi", L["On a flight path"] }, { "dead", L["Dead"] }, { "casting", L["Casting"] }, { "flagged", L["PvP flagged"] },
 			{ "group", L["Grouped"] }, { "afk", L["AFK"] }, { "outdoors", L["Outdoors"] },
-			{ "resting", L["Resting (an inn or a city)"] }, { "stealthed", L["Stealthed"] } } },
-		{ L["Travel"], { 0.6, 0.85, 1 }, { { "moving", L["Moving"] }, { "autorun", L["Auto-run"] }, { "rpwalk", L["RP Walk"] },
-			{ "swimming", L["Swimming"] }, { "flying", L["Flying"] } } },
+			{ "resting", L["Resting (an inn or a city)"] }, { "stealthed", L["Stealthed"] }, { "sitting", L["Sit"] },
+			{ "npc", L["At an NPC"] } } },
+		{ L["Travel"], { 0.6, 0.85, 1 }, travel },
 		{ L["Role"], { 0.4, 0.85, 0.5 }, { { "tank", L["Tank"] }, { "healer", L["Healer"] }, { "damage", L["Damage"] } } },
 		{ L["Class"], { 0.85, 0.75, 0.6 }, classes },
 		-- (Last: the editor shows it only for the Tooltips row, tooltip:All.)

@@ -9528,3 +9528,7 @@ L["Right-click: options"] = "Clic derecho: opciones"
 
 -- Diagnostics.lua
 L["hit a Lua error. Type /cine log to copy the details for a bug report."] = "ha tenido un error de Lua. Escribe /cine log para copiar los detalles para un informe de error."
+
+-- UI/GridRows.lua (rule words)
+L["Gliding"] = "Planeando"
+L["At an NPC"] = "Con un PNJ"
