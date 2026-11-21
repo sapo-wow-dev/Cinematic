@@ -141,6 +141,21 @@ if arg[1] and not update then
 			if Peeks(event) then Problem(event .. " showed chat with the exception off") end
 		end
 		if Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("a sent whisper showed chat with it off") end
+		-- (A docked tab that isn't the selected one: its lines don't show chat.)
+		do
+			local keptDock, keptGet = rawget(_G, "GENERAL_CHAT_DOCK"), rawget(_G, "FCFDock_GetSelectedWindow")
+			local selected = { IsShown = function() return true end, isDocked = 1 }
+			_G.GENERAL_CHAT_DOCK = {}
+			_G.FCFDock_GetSelectedWindow = function() return selected end
+			frame.isDocked = 1
+			db.chatHideOwn = false
+			if Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("a line in a tab not selected showed chat") end
+			selected = frame
+			if not Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("a line in the selected tab didn't show chat") end
+			db.chatHideOwn = true
+			frame.isDocked = nil
+			_G.GENERAL_CHAT_DOCK, _G.FCFDock_GetSelectedWindow = keptDock, keptGet
+		end
 		db.chatHideOwn = false
 		if not Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("a sent whisper hid with Hide your messages off") end
 		db.chatPeek, db.handleChat, db.chatHideOwn, db.chatOwnNoBubble = kept[1], kept[2], kept[3], kept[4]

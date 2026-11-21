@@ -463,7 +463,22 @@ ns.chatPeekPanels = {}
 -- Whether a chat window's lines show: the window, or its linked panel (Glass
 -- keeps the game's windows hidden and draws the selected tab's lines on its
 -- own frame: Support/Glass.lua).
+-- A docked tab that isn't the selected one doesn't count, whatever its
+-- IsShown says: a line landing only there (the Combat Log tab's crafting
+-- lines) brought up the dock on the selected tab, with nothing new in it
+-- (player report, 2026-11-21). Only while the selected tab itself shows: an
+-- addon that hides the game's windows (Glass) keeps its panel's own rule.
+local function OtherDockTabSelected(chatFrame)
+	if not chatFrame.isDocked then return false end
+	local dock = rawget(_G, "GENERAL_CHAT_DOCK")
+	local GetSelected = rawget(_G, "FCFDock_GetSelectedWindow")
+	if not (dock and GetSelected) then return false end
+	local ok, selected = pcall(GetSelected, dock)
+	return ok and type(selected) == "table" and selected ~= chatFrame and selected.IsShown ~= nil
+		and ns.Flag(selected:IsShown()) or false
+end
 function ns.ChatWindowShown(chatFrame)
+	if OtherDockTabSelected(chatFrame) then return false end
 	if ns.Flag(chatFrame:IsShown()) then return true end
 	local panel = ns.chatPeekPanels[chatFrame]
 	return panel ~= nil and ns.Flag(panel:IsShown())
