@@ -9,7 +9,7 @@
 --   1 you target yourself and cast (Hearthstone is best): your bar, the
 --     target's and our samples read and shot, as your settings are;
 --   2 a nameplate shows a cast (a caster mob, players in a city; or
---     "/cine debug previewmatch skip"): its bar and our plate sample;
+--     the Skip step button, or "/cine debug previewmatch skip"): its bar and our plate sample;
 --   3 the test picks the other kind's game look for You, Target & focus and
 --     Nameplates itself; you cast again: the same read, and checked;
 --   4 a nameplate casts again (or skip): checked the same;
@@ -627,6 +627,7 @@ local function Verdict(ok, text)
 end
 
 local function Finish()
+	if ns.TestKit and ns.TestKit.HideButtons then ns.TestKit.HideButtons() end
 	local store = Store()
 	store.reads, store.shots, store.verdicts = run.reads, run.shots, verdicts
 	store.pairs = {}
@@ -735,7 +736,11 @@ local function PlateStep(step)
 	run.step, run.tag = step, step == 2 and "game" or "other"
 	PlatesOn()
 	ns.TestPrompt(("Preview match %d/5: nameplates are on. Get a CAST on one: fight something with your PET out "
-		.. "(its spells count), or a caster mob. Or type /cine debug previewmatch skip"):format(step), 600)
+		.. "(its spells count), or a caster mob. Or press Skip step"):format(step), 600)
+	if ns.TestKit and ns.TestKit.ShowButtons then
+		ns.TestKit.ShowButtons({ { label = "Skip step", fn = function() ns.PreviewMatch("skip") end },
+			{ label = "Stop", fn = function() ns.PreviewMatch("stop") end } })
+	end
 end
 local function CastStep(step)
 	run.step, run.tag = step, step == 1 and "game" or "other"
@@ -743,6 +748,7 @@ local function CastStep(step)
 		:format(step, step == 3 and ". Your bars are in the other kind's game look now" or ""), 600)
 end
 local function AfterPlate()
+	if ns.TestKit and ns.TestKit.HideButtons then ns.TestKit.HideButtons() end
 	PlatesBack()
 	if run.step < 3 then
 		SetOther()
@@ -830,6 +836,7 @@ end
 
 local function Stop()
 	if not run then return end
+	if ns.TestKit and ns.TestKit.HideButtons then ns.TestKit.HideButtons() end
 	run.events:UnregisterAllEvents()
 	PutBack()
 	SetCine(run.cineWasOn)

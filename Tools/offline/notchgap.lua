@@ -84,13 +84,14 @@ if ns.letterbox then
 end
 
 -- Every full-screen effect uses it (they build late, so read the source).
-for _, file in ipairs({ "Atmosphere/Tint.lua", "Atmosphere/Focus.lua", "Atmosphere/LowHealth.lua",
-	"Atmosphere/TeleportVision.lua", "Effects.lua" }) do
+-- (Death Vision's cover moved to its own file with Load Visions, 2026-11-21.)
+for _, file in ipairs({ "Atmosphere/Tint.lua", "Atmosphere/DeathVision.lua", "Atmosphere/Focus.lua",
+	"Atmosphere/LowHealth.lua", "Atmosphere/TeleportVision.lua", "Effects.lua" }) do
 	local f = io.open(file, "rb")
 	local text = f:read("*a")
 	f:close()
 	local covers = select(2, text:gsub("ns%.CoverWorld%(", ""))
-	local want = file == "Atmosphere/Tint.lua" and 2 or 1
+	local want = 1
 	Check(file .. " covers the notch", covers >= want, covers)
 end
 

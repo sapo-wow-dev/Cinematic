@@ -44,10 +44,6 @@ PY = sys.executable
 HOME = os.path.expanduser("~")
 # Offline tests of one fixed bug each, PASS/FAIL per check (any FAIL line fails it).
 OFFLINE_TESTS = [
-    ("Themes page has its own rotating preview, forever", "Tools/offline/themespreview.lua", "forever"),
-    ("Themes page has its own rotating preview, retail", "Tools/offline/themespreview.lua", "retail"),
-    ("Cast Bars pages show the unit frame over their cast bars, forever", "Tools/offline/castframe.lua", "forever"),
-    ("Cast Bars pages show the unit frame over their cast bars, retail", "Tools/offline/castframe.lua", "retail"),
     ("left list: a line with lines under it opens on every click", "Tools/offline/listclick.lua"),
     ("party flicker (DaylightUI range fade)", "Tools/offline/partyflicker.lua"),
     ("map pin: its own Reveal box, Shortest Path's journey pin left out", "Tools/offline/mappin.lua"),
@@ -61,6 +57,10 @@ OFFLINE_TESTS = [
     ("cast bar other kind's look, retail", "Tools/offline/castlook.lua", "retail"),
     ("preview match unit frames run, forever", "Tools/offline/unitmatch.lua", "forever"),
     ("preview match unit frames run, retail", "Tools/offline/unitmatch.lua", "retail"),
+    ("Themes page has its own rotating preview, forever", "Tools/offline/themespreview.lua", "forever"),
+    ("Themes page has its own rotating preview, retail", "Tools/offline/themespreview.lua", "retail"),
+    ("Cast Bars pages show the unit frame over their cast bars, forever", "Tools/offline/castframe.lua", "forever"),
+    ("Cast Bars pages show the unit frame over their cast bars, retail", "Tools/offline/castframe.lua", "retail"),
     ("Mac notch covers, forever", "Tools/offline/notchgap.lua", "forever"),
     ("Mac notch covers, retail", "Tools/offline/notchgap.lua", "retail"),
     ("XP text font per character at login", "Tools/offline/xpfont.lua"),
@@ -89,8 +89,8 @@ OFFLINE_TESTS = [
     ("old tests on the kit's logs (Dev/TestKitWrap.lua): context, run before kept, totals", "Tools/offline/testkitwrap.lua"),
     ("a part the Show-in rows let go comes back at the alpha it was given (theme's name strip)", "Tools/offline/parthold.lua"),
     ("the side-by-side test's probe finds every part on both target frames of you", "Tools/offline/selfpairprobe.lua"),
-    ("a bar's numbers sized to fit their bar (the thin mana bar's)", "Tools/offline/bartextsize.lua"),
     ("the test box's timers: step, run, time left, took", "Tools/offline/testboxclock.lua"),
+    ("a bar's numbers sized to fit their bar (the thin mana bar's)", "Tools/offline/bartextsize.lua"),
     ("mana words are whole numbers, never 338.00003051758 (secret mana after a cast)", "Tools/offline/wholemana.lua"),
 ]
 

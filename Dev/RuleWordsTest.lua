@@ -1,7 +1,7 @@
 -- /cine debug rulewords: one run on the Show in rule words for travel and you
 -- (moving, autorun, rpwalk, swimming, flying, gliding, afk, outdoors,
 -- resting, stealthed, sitting, npc). Steps on screen, each waiting as long as
--- it takes; "/cine debug rulewords skip" passes a step you can't do, the
+-- it takes; the Skip step button ("/cine debug rulewords skip") passes a step you can't do, the
 -- command alone again stops the run.
 --   Part A, the player's case: the Minimap row's rule set to "not combat and
 --   not autorun", and the Minimap page's own ways up (Keep open, the Reveal
@@ -85,6 +85,11 @@ end
 
 local function Prompt(text, sub)
 	ns.PadTestBox(text, sub or "", 1, 0.82, 0)
+	-- (Buttons for the typed commands: the test kit's row.)
+	if ns.TestKit and ns.TestKit.ShowButtons then
+		ns.TestKit.ShowButtons({ { label = "Skip step", fn = function() ns.RuleWordsTest("skip") end },
+			{ label = "Stop", fn = function() ns.RuleWordsTest() end } })
+	end
 	Say("BOX " .. text .. (sub and sub ~= "" and (" / " .. sub) or ""))
 end
 
@@ -327,7 +332,7 @@ Go = function(step)
 	if step.start then step.start(step) end
 	local n = ("Rule words %d/%d: "):format(run.index, #STEPS)
 	if step.word then
-		Prompt(n .. step.onText, step.sub or "Or type /cine debug rulewords skip")
+		Prompt(n .. step.onText, step.sub or "Or press Skip step")
 	elseif step.prompt then
 		Prompt(n .. step.prompt, step.sub or "")
 	end
@@ -468,7 +473,7 @@ local function BuildSteps(only)
 			end
 		end })
 	Add({ key = "city", part = "A", prompt = "Go to a city and stand still there",
-		sub = "Or type /cine debug rulewords skip",
+		sub = "Or press Skip step",
 		run = function(step, words, now)
 			if (words.city or words.resting) and not words.moving then
 				step.t.from = step.t.from or now
@@ -570,8 +575,8 @@ local function BuildSteps(only)
 		more = function(step) return step.ok == false and "autorun was off while rpwalk was on" or "autorun on with it" end }))
 	Add(Cycle("swimming", "swimming", "Get into deep water and swim", "Get out of the water"))
 	Add(Cycle("flying", "flying", "Fly on a flying mount, in the air", "Land",
-		{ sub = "Or type /cine debug rulewords skip" }))
-	Add({ key = "flightpath", part = "B", prompt = "Take a flight path", sub = "Or type /cine debug rulewords skip",
+		{ sub = "Or press Skip step" }))
+	Add({ key = "flightpath", part = "B", prompt = "Take a flight path", sub = "Or press Skip step",
 		run = function(step, words, now)
 			if words.taxi then
 				step.t.on = true
@@ -604,9 +609,9 @@ local function BuildSteps(only)
 		extra = function(step, words) if words.outdoors == words.indoors then step.t.both = true end end,
 		more = function(step) return step.t.both and "indoors and outdoors were the same at some point" or nil end }))
 	Add(Cycle("resting", "resting", "Go into an inn (or a city) till you're resting", "Leave it",
-		{ sub = "Or type /cine debug rulewords skip" }))
+		{ sub = "Or press Skip step" }))
 	Add(Cycle("stealthed", "stealthed", "Stealth (rogue Stealth or druid Prowl)", "Leave stealth",
-		{ sub = "Or type /cine debug rulewords skip" }))
+		{ sub = "Or press Skip step" }))
 	Add(Cycle("sit-emote", "sitting", "Type /sit", "Stand up (jump or move)"))
 	Add(Cycle("sit-key", "sitting", "Press the sit key (X by default)", "Press it again, or jump"))
 	local function NpcMore()
@@ -694,6 +699,7 @@ do
 end
 
 local function Finish(done)
+	if ns.TestKit and ns.TestKit.HideButtons then ns.TestKit.HideButtons() end
 	if run.ticker then run.ticker:Cancel() end
 	if run.origOpen then ns.OpenRuleEditor = run.origOpen end
 	-- (The editor first: closing, it writes its text back to the row.)

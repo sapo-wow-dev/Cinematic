@@ -265,8 +265,11 @@ ns.TestKit.Define({
 			if not setting then
 				return r:Skip("this client's Edit Mode has no Buffs on Top: measured with the buffs under the frame")
 			end
-			r:WaitFor("Turn on Buffs on Top: Esc > Edit Mode, click your Target Frame, tick Buffs on Top, then close Edit Mode."
-				.. " (Untick it after the test if you don't want it.)", { check = function() return frame.buffsOnTop == true end })
+			-- (Only Edit Mode can flip it: rule forever.targetframe.buffsontop-addon-taint.
+			-- The button opens it with your click, nothing tainted.)
+			r:WaitFor("Turn on Buffs on Top: press Open Edit Mode, click your Target Frame, tick Buffs on Top, then close"
+				.. " Edit Mode. (Untick it after the test if you don't want it.)",
+				{ check = function() return frame.buffsOnTop == true end, buttons = { { kind = "editmode" } } })
 			if EditModeOpen() then
 				r:WaitFor("Now close Edit Mode.", { check = function() return not EditModeOpen() end })
 			end
