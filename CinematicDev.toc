@@ -299,6 +299,7 @@ Dev\ChecksProbe.lua
 Dev\WhoseHitTest.lua
 Dev\CorpseTest.lua
 Dev\PaceTest.lua
+Dev\RuleWordsTest.lua
 Dev\RuleCheckTest.lua
 Dev\TotemHitTest.lua
 Dev\PageStateDebug.lua

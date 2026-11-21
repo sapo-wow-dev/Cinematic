@@ -1065,4 +1065,16 @@ return {
     proof = "v1.5.29 ns.PadMovementHeld, not confirmed in game (2026-10-12)",
     source = "memory: forever-gamepad",
   },
+  {
+    id = "forever.npc-windows.frames",
+    area = "frames",
+    clients = { "forever" },
+    api = { "MerchantFrame", "GossipFrame", "MailFrame", "QuestFrame", "UnitExists" },
+    when = "out of combat",
+    rule = "A vendor with gossip opens GossipFrame first, then MerchantFrame; a mailbox opens MailFrame with no npc unit; a quest giver opens QuestFrame with UnitExists(npc) true. Each closes with its window.",
+    status = "tested",
+    tested = "2026-11-21",
+    proof = "/cine debug rulewords (2026-11-21, Forever, Westfall; CinematicDB.ruleWordsLog)",
+    source = "Dev/RuleWordsTest.lua",
+  },
 }

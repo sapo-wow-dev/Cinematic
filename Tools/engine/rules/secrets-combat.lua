@@ -784,4 +784,16 @@ return {
     proof = "user saw the shot captured with the wrapped call",
     source = "memory: timer-game-function-callback",
   },
+  {
+    id = "forever.player-state.plain-in-fights",
+    area = "secrets",
+    clients = { "forever" },
+    api = { "IsFlying", "IsSwimming", "UnitIsAFK", "IsResting", "IsStealthed", "IsOutdoors", "IsIndoors", "UnitOnTaxi", "IsPlayerMoving", "UnitExists" },
+    when = "in combat",
+    rule = "In a fight (a mob in open world) IsFlying, IsSwimming, UnitIsAFK(player), IsResting, IsStealthed, IsOutdoors, IsIndoors, UnitOnTaxi(player), IsPlayerMoving and UnitExists(npc) all read plain, none secret.",
+    status = "tested",
+    tested = "2026-11-21",
+    proof = "/cine debug rulewords (2026-11-21, Forever, Westfall; CinematicDB.ruleWordsLog), fight step: secret in the fight: none",
+    source = "Dev/RuleWordsTest.lua",
+  },
 }
