@@ -9772,6 +9772,9 @@ local function CreateQualityPanel()
 		L["A button at the top of the screen that reloads the UI in one click."]), "check")
 	stack:Add(Check(content, "reloadKeepWindows", L["Keep windows open across a reload"],
 		L["Reopens the windows you had open after a reload."]), "check")
+	-- (AddonListAll.lua.)
+	stack:Add(Check(content, "addonListAll", L["Default Addon list opening to All"],
+		L["The game's AddOns list starts on All instead of just this character."]), "check")
 	-- (On the CineMode page until 2026-11-13.)
 	stack:Header(content, L["Combat text"])
 

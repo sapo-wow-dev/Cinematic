@@ -316,6 +316,8 @@ ProfilerPage.lua
 GameSettingsPage.lua
 MinimapButton.lua
 QoL\Reload.lua
+QoL\AddonListAll.lua
 Dev\ReloadPathsTest.lua
 Dev\ReloadCoverTest.lua
+Dev\AddonListAllTest.lua
 Dev\LoosePartsSurvey.lua

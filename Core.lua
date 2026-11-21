@@ -393,6 +393,7 @@ local DEFAULTS = {
 	loginZoomDistance = 15,    -- ...yards
 	reloadButton = false,      -- a Reload button on the screen (Reload.lua)
 	reloadKeepWindows = true,  -- after a reload, the windows that were open open again (Reload.lua)
+	addonListAll = ADDON_NAME == "CinematicDev", -- the game's AddOns list opens on All, not just this character (AddonListAll.lua; off for players, on in the dev copy)
 	rollWindow = true,         -- a window of the group's loot rolls, instead of reading them in chat (RollWindow.lua)
 	rollFade = true,           -- ...stays away while another addon has the rolls (RollWindow.lua's Competitor)
 	-- ...rules per group (Party: a party or dungeon; Raid) and item quality, the Roll Vision
@@ -1636,7 +1637,7 @@ local PAGE_SWITCH = {}
 for page, keys in pairs({
 	handleQuality = { "dragEquipCharacter", "talentLink", "talentCalc",
 		"centerPanels", "dragPanels", "chatCopyButton", "chatHistory", "chatHistoryTime", "loginZoom",
-		"reloadButton", "reloadKeepWindows", "xpLeft", "hideCombatText", "hideErrorsInCombat", "hideErrorsOutOfCombat" },
+		"reloadButton", "reloadKeepWindows", "addonListAll", "xpLeft", "hideCombatText", "hideErrorsInCombat", "hideErrorsOutOfCombat" },
 	handleHunter = { "hunterRightClickShot", "hunterAmmoSort", "hunterQuiverFill", "petUnhappyShow" },
 	handleAddonSupport = { "questieMoveIcons", "eqolMoveIcons" },
 	duelPlates = { "duelCC", "duelInstants", "duelInstantNames", "duelHideOthers" }, -- Duel Vision's page

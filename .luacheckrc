@@ -257,7 +257,7 @@ read_globals = {
 	"SOUNDKIT", "GameMenuFrame", "ShowUIPanel", "CloseMenus", "CloseAllWindows", "ToggleFriendsFrame", "FriendsFrame", "FRIENDS",
 	"AreAllPanelsDisallowed", "SettingsPanel",
 	"CHAT_SAY_GET", -- (DemoHub.lua)
-	"RELOADUI",
+	"RELOADUI", "ALL", "AddonList_ClearCharacterDropdown", "AddonList_Update", "AddonList_Hide",
 	"ReloadUI",
 	"EXIT_GAME",
 	"Quit",

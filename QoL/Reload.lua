@@ -169,6 +169,10 @@ local function SecureReload(name, parent, template, upOnly)
 	end
 	return button
 end
+-- (AddonListAll.lua's cover over the AddOns window's Reload UI: the button,
+-- and what's saved before a reload.)
+ns.SecureReloadButton = SecureReload
+ns.ReloadSave = Save
 
 -- The key (Bindings.xml). (On Forever its keys click CinematicReloadKey
 -- instead, below; this is left for when that can't be set up.)

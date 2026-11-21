@@ -228,3 +228,4 @@ ProfilerPage.lua
 GameSettingsPage.lua
 MinimapButton.lua
 QoL\Reload.lua
+QoL\AddonListAll.lua
