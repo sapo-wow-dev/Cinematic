@@ -1378,11 +1378,18 @@ local function ResetPage(content, only)
 	-- if the player saved one.)
 	local base = ns.ResetBase()
 	local point = db.profileResetPoints and db.profileResetPoints[ns.ActiveProfile()]
+	-- (A page's on/off switches stay as they are, its tabs' and its hub's
+	-- master too: a reset is for its settings. The user's call, 2026-11-21.)
+	local switches = {}
+	for _, switch in pairs(pageSwitches) do
+		if switch.key then switches[switch.key] = true end
+	end
+	for key in pairs(ns.resetKeepsSwitches or {}) do switches[key] = true end
 	for key in pairs(pageKeys[content] or {}) do
 		local default = base[key]
 		local rows = pageRows[content] and pageRows[content][key]
 		local mine = RESET_KEEPS_MINE[key]
-		if only and not only[key] then -- luacheck: ignore 542 (not this part's)
+		if (only and not only[key]) or switches[key] then -- luacheck: ignore 542 (not this part's, or a switch)
 		elseif mine and type(db[key]) == "table" then
 			-- Back to the profile's own entries, but for yours.
 			local from = type(default) == "table" and default or {}
@@ -3594,6 +3601,11 @@ do
 		frame.name = L[hub.label or hub.name]
 		frame.parent = parentHub and L[parentHub.label or parentHub.name] or "Cinematic"
 		hub.frame, hub.tiles = frame, {}
+		-- (its master, Enable Cameras: kept by Reset page as a page switch is)
+		if hub.master then
+			ns.resetKeepsSwitches = ns.resetKeepsSwitches or {}
+			ns.resetKeepsSwitches[hub.master] = true
+		end
 		hub.host = CreateFrame("Frame", nil, frame)
 		hub.host:SetPoint("TOPLEFT", 0, -EDGE)
 		hub.host:SetPoint("BOTTOMRIGHT")

@@ -204,6 +204,11 @@ local page = settings and settings["Heal Vision"]
 local rows = page and page.rows and page.rows.frameRules
 Check("page: both rows recorded for its Reset", rows and rows.healVision ~= nil and rows[PLATES] ~= nil)
 db.frameRules.healVision, db.frameRules[PLATES] = "combat", "world"
+-- (Its switches, the page's and the Nameplates tab's, flipped from the
+-- profile's: Reset page leaves them as they are, 2026-11-21.)
+local base = ns.ResetBase()
+local pageWas, tabWas = not base.handleHealVision, not base[TAB]
+db.handleHealVision, db[TAB] = pageWas, tabWas
 -- (Its Reset page button's popup, on the page's content: canvas.content.)
 local accept = StaticPopupDialogs.CINEMATIC_RESET_PAGE and StaticPopupDialogs.CINEMATIC_RESET_PAGE.OnAccept
 for _, frame in ipairs(accept and wow.frames or {}) do
@@ -215,6 +220,8 @@ end
 Check("page: Reset puts both rules back", db.frameRules.healVision == FRAMES_START
 	and db.frameRules[PLATES] == PLATES_START,
 	tostring(db.frameRules.healVision) .. ", " .. tostring(db.frameRules[PLATES]))
+Check("page: Reset keeps the page's on/off switch", db.handleHealVision == pageWas, tostring(db.handleHealVision))
+Check("page: Reset keeps the tab's on/off switch", db[TAB] == tabWas, tostring(db[TAB]))
 
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
