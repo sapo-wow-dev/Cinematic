@@ -11,6 +11,9 @@ Release/
 # The dev copy's commit list (Tools/commits.sh)
 ChangelogCommits.dev.lua
 
+# The game's own API docs per client (Tools/engine/apidocs.py): Blizzard's data, kept on this PC
+Tools/engine/api/
+
 # Python bytecode
 __pycache__/
 ~$*

@@ -35,6 +35,21 @@ Run it after a client patch (the wiki's page says which patch it's up to date fo
 text is CC BY-SA and none is copied. The tags are retail's; Forever and Classic Era can differ (Forever's ReloadUI is
 blocked even from a click). Self-test: `python -I Tools/engine/wikiapi.py --selftest`.
 
+## The game's own API docs (per client)
+
+`/cine debug apidocs` (Dev/ApiDocsDump.lua, dev copy) saves the docs behind the game's `/api` command for the
+client you're on into `CinematicDB.apiDocs`, one line per function, event and table, every extra field Blizzard puts
+on an entry kept (secret flags and the like), then asks for a reload. Run it once per client. Then
+`python -I Tools/engine/apidocs.py` reads every client's saved copy and:
+
+- writes `api/<client>.txt` (git-ignored: Blizzard's data stays on this PC). Look a call up there for its exact
+  arguments and returns on that client;
+- prints FLAG lines (each extra field, how many entries carry it), MISSING lines (a rule lists a client whose docs
+  lack a call another client has) and RULEFLAGS lines (extra fields on the calls rules name).
+
+`/cine debug apidocs clear` drops the saved copy (it's big). Checks: `python -I Tools/engine/apidocs.py --selftest`
+and `python -I Tools/offline/run.py Tools/offline/apidocs.lua`.
+
 ## A rule
 
 ```lua

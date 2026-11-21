@@ -302,6 +302,7 @@ Dev\MapPinTest.lua
 Dev\PaceTest.lua
 Dev\RuleWordsTest.lua
 Dev\RuleCheckTest.lua
+Dev\ApiDocsDump.lua
 Dev\TotemHitTest.lua
 Dev\PageStateDebug.lua
 Camera\CameraScriptsPage.lua

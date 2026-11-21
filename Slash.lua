@@ -1908,6 +1908,9 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "rulecheck" then
 		-- (Dev copy: settles the engine rules whose findings disagree, Tools/engine, RuleCheckTest.lua.)
 		if ns.RuleCheckTest then ns.RuleCheckTest() else ns.Print("/cine debug rulecheck is in the dev copy only.") end
+	elseif cmd == "debug" and (arg == "apidocs" or arg == "apidocs clear") then
+		-- (Dev copy: saves the game's own API docs for Tools/engine/apidocs.py, ApiDocsDump.lua.)
+		if ns.ApiDocsDump then ns.ApiDocsDump(arg:match("clear")) else ns.Print("/cine debug apidocs is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "totemhit" then
 		-- (Dev copy: what a shaman's totem hits bring our combat numbers, TotemHitTest.lua.)
 		if ns.TotemHitTest then ns.TotemHitTest() else ns.Print("/cine debug totemhit is in the dev copy only.") end
