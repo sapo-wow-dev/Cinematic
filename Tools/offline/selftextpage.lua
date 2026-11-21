@@ -275,6 +275,14 @@ Check("drag: height and across", db.selfTextHeight == Snap(61 / page.SCALE) and 
 	("%s %s"):format(db.selfTextHeight, db.selfTextAcross))
 page.DragTo(0, 9000)
 Check("drag: kept in range", db.selfTextHeight == 300)
+-- Right-click the mark: back where it starts (Height and Across only).
+db.selfTextAcross, db.selfTextSize = 40, 1.5
+page.handle:GetScript("OnClick")(page.handle, "LeftButton")
+Check("left-click: the mark stays", db.selfTextHeight == 300 and db.selfTextAcross == 40)
+page.handle:GetScript("OnClick")(page.handle, "RightButton")
+Check("right-click: back to the start", db.selfTextHeight == ns.DEFAULTS.selfTextHeight
+	and db.selfTextAcross == ns.DEFAULTS.selfTextAcross and db.selfTextSize == 1.5)
+db.selfTextSize = ns.DEFAULTS.selfTextSize
 db.selfTextHeight, db.selfTextAcross = 0, 0
 
 -- The preview: what it plays.

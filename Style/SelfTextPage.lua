@@ -456,8 +456,21 @@ function ns.CreateSelfTextStylePanel(kit)
 	hole:SetPoint("TOPLEFT", 3, -3)
 	hole:SetPoint("BOTTOMRIGHT", -3, 3)
 	hole:SetColorTexture(0.05, 0.05, 0.05, 0.9)
-	kit.Tooltip(handle, L["Drag to place: up and down is Height, sideways is Across."])
+	-- (Right-click: back where it starts, Height and Across only; before, only
+	-- their sliders' Reset did it and the mark never said so, the user 2026-11-21.)
+	kit.Tooltip(handle, L["Drag to move the texts; right-click to put them back."])
 	handle:RegisterForDrag("LeftButton")
+	handle:RegisterForClicks("RightButtonUp")
+	function page.PlaceReset()
+		local db = DB()
+		db.selfTextHeight, db.selfTextAcross = ns.DEFAULTS.selfTextHeight, ns.DEFAULTS.selfTextAcross
+	end
+	handle:SetScript("OnClick", function(_, button)
+		if button ~= "RightButton" then return end
+		page.PlaceReset()
+		Changed()
+		kit.Refresh()
+	end)
 	local drag
 	local function Snap(v, low, high) return math.max(low, math.min(high, math.floor(v / 5 + 0.5) * 5)) end
 	function page.DragTo(dxPixels, dyPixels, from)
