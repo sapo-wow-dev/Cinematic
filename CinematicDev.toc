@@ -261,6 +261,7 @@ Dev\SelfTextProbe.lua
 Dev\SelfTextCatalog.lua
 Dev\SelfTextStyleTest.lua
 Dev\SelfTextPageTest.lua
+Dev\SelfTextMergeTest.lua
 Dev\LineColorProbe.lua
 Dev\DetachedFadeTest.lua
 Dev\XpRelogTest.lua

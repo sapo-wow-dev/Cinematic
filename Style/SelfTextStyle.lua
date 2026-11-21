@@ -260,14 +260,21 @@ local function Show(board, words, group, crit, r, g, b)
 	-- it, "x3". The words can't be added up (secret), so it shows the latest.)
 	if db.selfTextMerge ~= false and not crit then
 		local now = GetTime()
+		-- (ns.selfTextMergeWindow: the fight test's own, a run only: real hits
+		-- come seconds apart, /cine debug selftextmerge.)
+		local window = ns.selfTextMergeWindow or MERGE_WINDOW
 		for index = #board.live, 1, -1 do
 			local text = board.live[index]
-			if text.group == group and not text.crit and text.born and now - text.born <= MERGE_WINDOW then
+			if text.group == group and not text.crit and text.born and now - text.born <= window then
 				local count = (text.count or 1) + 1
 				local ok = pcall(text.SetFormattedText, text, "%s x%d", words, count)
 				if ok then
 					text.count, text.words = count, words
-					if not board.preview then stats.merged = stats.merged + 1 end
+					if not board.preview then
+						stats.merged = stats.merged + 1
+						if Secret(words) then stats.mergedSecret = (stats.mergedSecret or 0) + 1 end
+						stats.lastMerged = text
+					end
 					return nil
 				end
 				break

@@ -853,4 +853,16 @@ return {
     proof = "/cine debug selftext mirror: Diagnostics.lua LoopLabel error on the first copy",
     source = "Tools/self-combat-text-plan.md",
   },
+  {
+    id = "forever.fontstring.formatted-secret-words",
+    area = "secrets",
+    clients = { "forever" },
+    api = { "FontString:SetFormattedText" },
+    when = "out of combat",
+    rule = "SetFormattedText(\"%s x%d\", words, n) on our own FontString, words the game's secret combat text copied off its CombatText, works and shows (\"+32 x2\"); the text's GetText is then secret.",
+    status = "tested",
+    tested = "2026-11-21",
+    proof = "/cine debug selftextmerge (Dev/SelfTextMergeTest.lua, druid 25, a heal merged; screenshot WoWScrnShot_112126_114523)",
+    source = "Tools/tests/self-text-page.md",
+  },
 }
