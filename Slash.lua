@@ -1946,6 +1946,22 @@ local function HandleSlash(msg)
 		-- (Dev copy: parts that ignore their frame's alpha follow our fade, DetachedFadeTest.lua.)
 		if ns.DetachedFadeTest then ns.DetachedFadeTest()
 		else ns.Print("/cine debug detached is in the dev copy only.") end
+	elseif cmd == "debug" and arg == "linecolors" then
+		-- (Dev copy: whether combat log line colors tell kinds apart, one fight, LineColorProbe.lua.)
+		if ns.LineColorProbe then ns.LineColorProbe()
+		else ns.Print("/cine debug linecolors is in the dev copy only.") end
+	elseif cmd == "debug" and arg == "selftextstyle" then
+		-- (Dev copy: the Text on You page in game, one run, SelfTextStyleTest.lua.)
+		if ns.SelfTextStyleTest then ns.SelfTextStyleTest()
+		else ns.Print("/cine debug selftextstyle is in the dev copy only.") end
+	elseif cmd == "debug" and arg == "selftextall" then
+		-- (Dev copy: every kind of combat text message about you, collected as you play, SelfTextCatalog.lua.)
+		if ns.SelfTextCatalog then ns.SelfTextCatalog()
+		else ns.Print("/cine debug selftextall is in the dev copy only.") end
+	elseif cmd == "debug" and (arg == "selftext" or arg:find("^selftext ")) then
+		-- (Dev copy: what a Shoulder Cam text on you can use, SelfTextProbe.lua; step names after it: only those.)
+		if ns.SelfTextProbe then ns.SelfTextProbe(arg:match("^selftext%s*(.*)$"))
+		else ns.Print("/cine debug selftext is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "ctkeep" then
 		-- (Dev copy: Combat Text Style keeps the game's damage numbers through a reset, CombatTextKeepTest.lua.)
 		if ns.CombatTextKeepTest then ns.CombatTextKeepTest()

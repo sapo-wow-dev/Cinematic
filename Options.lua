@@ -3024,6 +3024,9 @@ do
 			-- (Combat Text in Combat, the fight's numbers, 2026-11-19, user.)
 			{ "Combat Text Style", "Interface\\Icons\\Ability_Warrior_Riposte", label = "Combat Text",
 				section = "Interface", sub = "Combat" },
+			-- (Text on You: your own combat text, beside you; dev only till tested in game, 2026-11-20.)
+			{ "Self Text Style", "Interface\\Icons\\Spell_Holy_PowerWordShield", label = "Text on You",
+				section = "Interface", sub = "Combat", dev = true },
 			-- (Nameplate Style: its Smart tab a second icon of its page's, hidden under it: canvas.hubTabs.)
 			{ "Nameplate Style", "Interface\\Icons\\Ability_Marksmanship", label = "Nameplates", section = "Interface",
 				sub = "Nameplates" },
@@ -22211,6 +22214,10 @@ ns.OnLanguage(function()
 	if ns.CreateCombatTextStylePanel then -- (CombatTextStyle.lua)
 		ns.CreateCombatTextStylePanel(ns.lowHealthKit)
 		Lap("CreateCombatTextStylePanel")
+	end
+	if ns.CreateSelfTextStylePanel then -- (SelfTextStyle.lua)
+		ns.CreateSelfTextStylePanel(ns.lowHealthKit)
+		Lap("CreateSelfTextStylePanel")
 	end
 	if ns.CreateTooltipStylePanel then -- (TooltipStyle.lua)
 		ns.CreateTooltipStylePanel(ns.lowHealthKit)

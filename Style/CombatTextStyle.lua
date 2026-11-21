@@ -708,15 +708,105 @@ local function Fresh(list, now, keep)
 	while list[1] and now - list[1] > (keep or HOLD) do table.remove(list, 1) end
 end
 
--- A line waiting for this hit, taken: a swing's is the oldest kept, any
--- other's the newest if it came within HOLD.
-local function TakeLine(now, melee)
+-- A line's kind, by its color (Tools/combat-log-color-plan.md, 2026-11-21).
+-- The color is the Combat Log window's current filter's coloring of its
+-- event, and that filter (Blizzard_CombatLog_Filters, a plain table in game)
+-- says which events get which color. MSBT Forever's filter gives each event
+-- its own; Blizzard's My actions colors every line one grey, which maps to
+-- no event: kind unknown, paired as before. /cine debug linecolors (warlock
+-- and imp, 2026-11-21): 12 of 12 lines were the filter's event colors.
+--   "swing"  a white swing's (SWING_*): only a swing takes it
+--   "spell"  a spell's or ability's hit or miss, a wand's shot
+--   "tick"   a DoT's tick (pairs as a spell's; never your pet's)
+--   "heal"   a heal's
+--   "skip"   no hit at all (a kill, an aura, a cast, power): not a hit's line
+-- A color several kinds share: unknown.
+local SWING_LINES = {} -- times of swing-kind lines, waiting for their swing
+local lineColors = { at = -10, map = nil, kinds = false }
+local function EventKind(event)
+	if event:find("^SWING_") then return "swing" end
+	if event == "SPELL_HEAL" or event == "SPELL_PERIODIC_HEAL" or event == "SPELL_BUILDING_HEAL" then return "heal" end
+	-- (A tick's own kind: your DoT's tick is never your pet's, 1b below.)
+	if event:find("^SPELL_PERIODIC_DAMAGE") or event:find("^SPELL_PERIODIC_MISSED") or event == "SPELL_PERIODIC_LEECH"
+		or event == "SPELL_PERIODIC_DRAIN" then
+		return "tick"
+	end
+	if event:find("^SPELL_DAMAGE") or event:find("^SPELL_MISSED") or event:find("^RANGE_") or event:find("^DAMAGE_SHIELD")
+		or event == "SPELL_BUILDING_DAMAGE" or event == "DAMAGE_SPLIT" or event:find("LEECH$") or event:find("DRAIN$") then
+		return "spell"
+	end
+	return "skip"
+end
+local function ColorKey(r, g, b)
+	return ("%d/%d/%d"):format(math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
+end
+-- (Read again every few seconds: the player can pick another filter.)
+local function LineColorMap()
+	local now = GetTime()
+	if lineColors.map and now - lineColors.at < 5 then return lineColors.map end
+	lineColors.at = now
+	local map, kinds = {}, false
+	pcall(function()
+		local filters = _G.Blizzard_CombatLog_Filters
+		if not Plain(filters) or type(filters) ~= "table" or type(filters.filters) ~= "table" then return end
+		local current = filters.filters[filters.currentFilter]
+		local colors = type(current) == "table" and type(current.colors) == "table" and current.colors.eventColoring
+		if type(colors) ~= "table" then return end
+		for event, color in pairs(colors) do
+			if type(event) == "string" and type(color) == "table" and type(color.r) == "number"
+				and type(color.g) == "number" and type(color.b) == "number" then
+				local key, kind = ColorKey(color.r, color.g, color.b), EventKind(event)
+				map[key] = (map[key] == nil or map[key] == kind) and kind or "mixed"
+				if kind == "swing" then kinds = true end
+			end
+		end
+	end)
+	lineColors.map, lineColors.kinds = map, kinds
+	return map
+end
+local function LineKind(r, g, b)
+	if not (Plain(r) and Plain(g) and Plain(b)) or type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then
+		return nil
+	end
+	local kind = LineColorMap()[ColorKey(r, g, b)]
+	if kind == "mixed" then return nil end
+	return kind
+end
+-- Whether a waiting hit fits a line of this kind (nil: any does).
+local function SwingVia(via) return via == "swing" or via == "swingGlance" end
+local function Fits(hit, kind)
+	if kind == "swing" then return SwingVia(hit.via) end
+	if kind == "heal" then return hit.via == "heal" end
+	if kind == "spell" or kind == "tick" then return not SwingVia(hit.via) and hit.via ~= "heal" end
+	return true
+end
+ns.combatTextLineKinds = { swing = 0, spell = 0, tick = 0, heal = 0, skip = 0, unknown = 0 }
+-- The kind of each waiting line, by its time (a hit that takes a line asks
+-- what it was: 1b). Two lines of different kinds in one instant: "mixed".
+local lineKindAt = {}
+local function NoteLineKind(at, kind)
+	if not kind then return end
+	local had = lineKindAt[at]
+	lineKindAt[at] = (had == nil or had == kind) and kind or "mixed"
+	for t in pairs(lineKindAt) do
+		if at - t > 2 then lineKindAt[t] = nil end
+	end
+end
+
+-- A line waiting for this hit, taken (its time; false: none): a swing's is
+-- the oldest kept, any other's the newest if it came within HOLD. (via: a white swing takes its
+-- own kind of line first; with a filter that tells kinds apart, only that.)
+local function TakeLine(now, melee, via)
 	Fresh(lines, now, MELEE_HOLD)
+	Fresh(SWING_LINES, now, MELEE_HOLD)
+	if melee and SwingVia(via) and SWING_LINES[1] then
+		return table.remove(SWING_LINES, 1)
+	end
+	if melee and SwingVia(via) and lineColors.kinds then return false end
 	if melee then
-		if lines[1] then table.remove(lines, 1) return true end
+		if lines[1] then return table.remove(lines, 1) end
 	elseif lines[1] and now - lines[#lines] <= HOLD then
-		table.remove(lines)
-		return true
+		return table.remove(lines)
 	end
 	return false
 end
@@ -772,7 +862,22 @@ local function StillThere(hit)
 	return now == hit.guid
 end
 
-local function Mine(hit)
+local PetCastJustDone -- (below: your pet's cast finished just before, taken)
+local function Mine(hit, lineKind)
+	-- (1b, 2026-11-21: under a filter listing your pet (MSBT's) its hits come
+	-- with lines in your colors, so an imp's Firebolt took a line and drew as
+	-- yours. /cine debug linecolors run 2: each landed 0.13-0.39 s after the
+	-- imp's cast finished, with no cast of yours waiting for its school. So a
+	-- spell hit with no cast of yours for it, just after your pet's cast, and
+	-- not a tick's line (your DoTs), is your pet's.)
+	if not hit.melee and hit.school and lineKind ~= "tick" and lineKind ~= "heal" and CT.Kind(hit.id) ~= "heal"
+		and not PeekCast(hit.school, hit.at or GetTime()) and PetCastJustDone(hit.at or GetTime()) then
+		if ns.combatTextRecord then Trace("PET'S: a line came, but no cast of yours waits for it and your pet's just finished") end
+		if ns.CombatTextBy and ns.CombatTextBy("pet") ~= "ours" then return end
+		if not (hit[1] and StillThere(hit)) then return end
+		local crit = NODE[hit.id] and NODE[hit.id].crit
+		return Spawn(hit[1], hit[2], hit[3], crit and "petCrit" or "pet", hit.via, nil, hit.tag)
+	end
 	if hit.melee then swingAt, swingPlate = hit.at or GetTime(), hit[1] end
 	ns.combatTextWhose.mine = ns.combatTextWhose.mine + 1
 	-- (Your swing on this plate: an off-class weapon proc on it is yours.)
@@ -932,9 +1037,10 @@ local function Claim(plate, unit, amount, id, via, melee, tag, school)
 		Trace(("hit %s (swing) goes with the swing before it"):format(TraceUnit(unit, color, crit)))
 		return Mine(hit)
 	end
-	if TakeLine(now, melee) then
+	local took = TakeLine(now, melee, via)
+	if took then
 		Trace(("hit %s%s took a waiting line"):format(TraceUnit(unit, color, crit), melee and " (swing)" or ""))
-		return Mine(hit)
+		return Mine(hit, lineKindAt[took])
 	end
 	Trace(("hit %s%s waits"):format(TraceUnit(unit, color, crit), melee and " (swing)" or ""))
 	hit.at = now
@@ -943,25 +1049,43 @@ local function Claim(plate, unit, amount, id, via, melee, tag, school)
 end
 
 local Unclaimed -- (below: a hit no line came for, your pet's or someone else's)
-local function OnLine()
+local function OnLine(r, g, b)
 	local now = GetTime()
+	local kind = LineKind(r, g, b)
+	local counts = ns.combatTextLineKinds
+	counts[kind or "unknown"] = counts[kind or "unknown"] + 1
+	-- (Not a hit's line at all: a kill's took the hit of a teammate before.)
+	if kind == "skip" then Trace("line skipped: not a hit's (its color)") return end
 	Fresh(owed, now)
-	if owed[1] then Trace("line for a heal on you") table.remove(owed, 1) return end -- (a heal on you, already here)
+	if owed[1] and kind ~= "swing" and kind ~= "spell" then -- (a heal on you, already here)
+		Trace("line for a heal on you")
+		table.remove(owed, 1)
+		return
+	end
 	while pending[1] and now - pending[1].at > HOLD do Unclaimed(table.remove(pending, 1), now) end
-	if pending[1] then
-		Trace("line for a waiting hit")
-		local first = table.remove(pending, 1)
-		Mine(first)
-		while first.melee and pending[1] and pending[1].melee and pending[1].at == first.at
-			and pending[1][1] == first[1] do
+	-- (The first waiting hit this kind of line fits.)
+	local index
+	for i, hit in ipairs(pending) do
+		if Fits(hit, kind) then index = i break end
+	end
+	if index then
+		Trace("line for a waiting hit" .. (kind and (" (" .. kind .. ")") or ""))
+		local first = table.remove(pending, index)
+		Mine(first, kind)
+		while first.melee and pending[index] and pending[index].melee and pending[index].at == first.at
+			and pending[index][1] == first[1] do
 			Trace("and the swing with it")
-			Mine(table.remove(pending, 1))
+			Mine(table.remove(pending, index))
 		end
 		return
 	end
-	Trace("line waits")
-	lines[#lines + 1] = now
+	Trace("line waits" .. (kind and (" (" .. kind .. ")") or ""))
+	if kind == "swing" then SWING_LINES[#SWING_LINES + 1] = now else lines[#lines + 1] = now end
+	NoteLineKind(now, kind)
 end
+-- (Tools/offline/linekinds.lua.)
+ns.CombatTextLines = { Kind = LineKind, EventKind = EventKind, Fits = Fits, OnLine = OnLine, TakeLine = TakeLine,
+	lines = lines, swingLines = SWING_LINES, pending = pending, owed = owed, colors = lineColors, kindAt = lineKindAt }
 
 -- A heal on you or your pet: its line isn't for a plate's hit. Heals alone:
 -- hits and misses on you come with no line (above).
@@ -983,7 +1107,7 @@ local function OnOwnHit(unit, action, school)
 	end
 	if action ~= "HEAL" then return end
 	local now = GetTime()
-	local took = TakeLine(now, false)
+	local took = TakeLine(now, false, "heal")
 	Trace("heal on you" .. (took and " took a waiting line" or " waits"))
 	if not took then owed[#owed + 1] = now end
 end
@@ -1003,6 +1127,19 @@ petWatch:SetScript("OnEvent", function()
 	while petCasts[1] and now - petCasts[1] > PET_WAIT do table.remove(petCasts, 1) end
 	if #petCasts < 6 then petCasts[#petCasts + 1] = now end
 end)
+-- (Tools/offline/linekinds.lua: a pet cast as the event would note it.)
+ns.CombatTextLines.NotePetCast = function() petCasts[#petCasts + 1] = GetTime() end
+-- (1b: a cast of your pet's finished at most PET_FLIGHT before now: taken.)
+local PET_FLIGHT = 0.6
+PetCastJustDone = function(now)
+	for i, at in ipairs(petCasts) do
+		if now - at >= 0 and now - at <= PET_FLIGHT then
+			table.remove(petCasts, i)
+			return true
+		end
+	end
+	return false
+end
 local function PetHit(hit, now)
 	local node = NODE[hit.id]
 	if not node or node.word then return false end
@@ -1710,12 +1847,21 @@ driver:SetScript("OnEvent", ns.Profiled("Combat text plates", function(_, event,
 		-- Whose hit: the log's lines, and the hits on you and your pet that own theirs.
 		local log = CreateFrame("Frame")
 		logListening = pcall(log.RegisterEvent, log, "COMBAT_LOG_MESSAGE")
-		log:SetScript("OnEvent", ns.Profiled("Combat text log", function()
+		log:SetScript("OnEvent", ns.Profiled("Combat text log", function(_, _, _, r, g, b, order)
+			-- (Old lines the log sends again as its window refills, "Oldest"
+			-- order: not hits of now. /cine debug linecolors run 3, 2026-11-21:
+			-- the page counted 133 lines in a fight of 44, and they could
+			-- pair with anyone's hit; BattleText and MSBT skip them too.)
+			local oldest = Enum and Enum.CombatLogMessageOrder and Enum.CombatLogMessageOrder.Oldest
+			if oldest ~= nil and Plain(order) and order == oldest then
+				ns.combatTextLineKinds.old = (ns.combatTextLineKinds.old or 0) + 1
+				return
+			end
 			if not logLines then
 				logLines = true
 				ns.Log("combattext", "first combat log line: hits are matched to lines from now on")
 			end
-			if On() then OnLine() end
+			if On() then OnLine(r, g, b) end
 		end))
 		local own = CreateFrame("Frame")
 		pcall(own.RegisterUnitEvent, own, "UNIT_COMBAT", "player", "pet")

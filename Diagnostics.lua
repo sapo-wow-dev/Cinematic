@@ -308,6 +308,9 @@ end
 -- when it's set). ns.loopAudit is nil except while measuring.
 local function LoopLabel()
 	local stack = debugstack and debugstack(3, 1, 0) or ""
+	-- (Secret when set from inside a hook on the game's own secret work, its
+	-- combat text's SetText: reading it errored, Forever 2026-11-20.)
+	if type(stack) ~= "string" or (issecretvalue and issecretvalue(stack)) then return "?" end
 	local file, line = stack:match("([%w_]+%.lua)\"?%]?:(%d+)")
 	return file and (file .. ":" .. line) or "?"
 end
