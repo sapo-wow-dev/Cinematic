@@ -15062,8 +15062,9 @@ local function CreateMinimapPanel()
 		if not questsOnly then return list end
 		local kept = {}
 		for _, kind in ipairs(list) do
+			-- (Map pin: the cursor sweep's dots leave it out unless it's ticked.)
 			if kind[1] == "minimapRevealTurnIns" or kind[1] == "minimapRevealAreas"
-				or (byCursor and kind[1] == "minimapRevealNodes") then
+				or (byCursor and (kind[1] == "minimapRevealNodes" or kind[1] == "minimapRevealMapPin")) then
 				kept[#kept + 1] = kind
 			end
 		end
@@ -15080,6 +15081,8 @@ local function CreateMinimapPanel()
 			L["Shows the minimap while one of your quest areas is on it."] },
 		{ "minimapRevealIcons", L["Other icons"],
 			L["Shows the minimap while another named icon is on it."] },
+		{ "minimapRevealMapPin", L["Map pin"],
+			L["Shows the minimap while your map pin is on it."] },
 	})) do
 		local cursorNodes = byCursor and kind[1] == "minimapRevealNodes"
 		local key = cursorNodes and "minimapNodesByCursor" or kind[1]
@@ -15100,6 +15103,16 @@ local function CreateMinimapPanel()
 		previousReveal = check
 		-- (Under it: how each node is marked, minimapNodeMark.)
 		-- (The cursor sweep: a ping where it heard its find, just a box.)
+		-- (Under Map pin, only with Shortest Path Forever loaded: its journeys
+		-- move the pin hop by hop, NodeSweep.lua ns.MapPinIsSPF.)
+		if kind[1] == "minimapRevealMapPin" and ns.SPFLoaded and ns.SPFLoaded() then
+			local spf = Check(content, "minimapRevealMapPinSkipSPF", L["Not for Shortest Path"],
+				L["Shortest Path Forever's journey pin doesn't show the minimap."])
+			spf:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 20, -2)
+			GreyUnless(spf, function(db) return db.minimapRevealMapPin end)
+			spf.revealIndent = 20
+			previousReveal = spf
+		end
 		if cursorNodes then
 			local ping = Check(content, "minimapNodePing", L["Ping where it is"],
 				L["Pings the minimap where a dot shows up; your group sees it."])

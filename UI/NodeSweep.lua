@@ -26,7 +26,7 @@ end
 -- What a name on the minimap is (ns.NodeKind): "group" (you, someone in
 -- your group, or a pet), "turnin" (a quest of yours that's done), "objective" (one of yours
 -- that isn't: its area), "line" (one of that area's objectives), "herb", "ore",
--- "treasure", or "other" (quest givers among
+-- "treasure", "mappin" (the game's map pin), or "other" (quest givers among
 -- them: their mark's name is just the NPC's, tested). A herb's dot has the name of
 -- the herb it gives, so the client names them (item IDs, Classic's herbs); a
 -- vein's or chest's name has a word for vein, deposit or chest in the client's
@@ -198,6 +198,10 @@ function ns.NodeKind(name)
 	if name:sub(1, 2) == "- " then return "line" end
 	local done = questTitles[name]
 	if done ~= nil then return done and "turnin" or "objective" end
+	-- (The game's own map pin, the one you put on the world map, by its
+	-- name in the client's language: Shortest Path Forever's journeys put it
+	-- on each hop too. Reveal's Map pin box, not Other icons.)
+	if name == _G.MAP_PIN then return "mappin" end
 	if herbNames[name] then return "herb" end
 	if HasWord(name, words.ore) then return "ore" end
 	if HasWord(name, words.treasure) then return "treasure" end
@@ -282,10 +286,12 @@ local cursor = {}
 -- (A dot whose name the game keeps secret: Probe, below.)
 cursor.DOT = "a dot on the minimap"
 -- (A secret dot on a spot known not to be a node: cursor.Known.)
-cursor.KNOWN = "a known dot (quest giver, town icon or your group)"
+cursor.KNOWN = "a known dot (quest giver, town icon, your group or the map pin)"
 -- Minimap units around a grid point a dot answers from (12 measured), and
 -- a little more for where the known spot's dot really sits.
 cursor.KNOWN_REACH = 15
+-- (The names those two get, for /cine debug mappin's verdicts.)
+ns.CURSOR_DOT_NAMES = { dot = cursor.DOT, known = cursor.KNOWN }
 -- Where it looks: Nearby Dots' Show in row (Minimap page: Combat and
 -- Location), Open world ticked to start with (not in cities, instances or
 -- BGs, as its old Except in had it).
@@ -596,7 +602,51 @@ local REVEAL = {
 	herb = "minimapRevealNodes", ore = "minimapRevealNodes", treasure = "minimapRevealNodes",
 	turnin = "minimapRevealTurnIns",
 	objective = "minimapRevealAreas", other = "minimapRevealIcons",
+	mappin = "minimapRevealMapPin",
 }
+-- Shortest Path Forever (SPF) puts the map pin on each hop of a journey it
+-- guides, the whole way: its public API says when (ShortestPathForever.API
+-- .Active, true while a journey is guided, the player's own included). With
+-- Not for Shortest Path ticked, the pin counts as SPF's then, not yours.
+function ns.SPFLoaded()
+	local loaded = C_AddOns and C_AddOns.IsAddOnLoaded or _G.IsAddOnLoaded
+	return loaded ~= nil and ns.Flag(loaded("ShortestPathForever")) == true
+end
+function ns.MapPinIsSPF()
+	local api = type(_G.ShortestPathForever) == "table" and _G.ShortestPathForever.API
+	if type(api) ~= "table" or type(api.Active) ~= "function" then return false end
+	local ok, active = pcall(api.Active)
+	return ok and active == true
+end
+local function MapPinSkipped()
+	return ns.db.minimapRevealMapPinSkipSPF ~= false and ns.SPFLoaded() and ns.MapPinIsSPF()
+end
+-- Whether the cursor sweep leaves the map pin's dot out (cursor.Known).
+function ns.MapPinIsKnownDot()
+	return ns.db ~= nil and (not ns.db.minimapRevealMapPin or MapPinSkipped())
+end
+-- Where the game's map pin is from you, in yards north and west (the cursor
+-- sweep's known spots: its name is secret there, cursor.Known), or nil when
+-- there's none or it's on another continent. Both places go through the same
+-- world position function (C_Map.GetWorldPosFromMapPos: x north, y west).
+function ns.MapPinSpot()
+	if not (C_Map and C_Map.GetUserWaypoint and C_Map.GetWorldPosFromMapPos and C_Map.GetBestMapForUnit
+		and C_Map.GetPlayerMapPosition) then return nil end
+	local okPin, pin = pcall(C_Map.GetUserWaypoint)
+	if not okPin or type(pin) ~= "table" or Secret(pin) or type(pin.uiMapID) ~= "number" or Secret(pin.uiMapID)
+		or not pin.position then return nil end
+	local okThere, continent, there = pcall(C_Map.GetWorldPosFromMapPos, pin.uiMapID, pin.position)
+	local mapID = C_Map.GetBestMapForUnit("player")
+	if not okThere or not there or type(mapID) ~= "number" or Secret(mapID) then return nil end
+	local pos = C_Map.GetPlayerMapPosition(mapID, "player")
+	if not pos then return nil end
+	local okHere, hereContinent, here = pcall(C_Map.GetWorldPosFromMapPos, mapID, pos)
+	if not (okHere and here and hereContinent == continent) then return nil end
+	local tx, ty, hx, hy = there.x, there.y, here.x, here.y
+	local function Number(value) return type(value) == "number" and not Secret(value) end
+	if not (Number(tx) and Number(ty) and Number(hx) and Number(hy)) then return nil end
+	return { north = tx - hx, west = ty - hy, kind = "map pin" }
+end
 -- (A quest's area off the minimap has an arrow on its rim pointing to it,
 -- named like the quest, there the whole time (Track Quest POIs): a quest name
 -- heard only near the rim is that arrow, and counts as nothing. The area
@@ -625,14 +675,19 @@ local function Wanted(name, entry)
 	local kind = ns.NodeKind(name)
 	local option = REVEAL[kind]
 	if not (option ~= nil and ns.db[option] == true) then return false end
+	if kind == "mappin" and MapPinSkipped() then return false end
 	return not (QUEST_KINDS[kind] and OnlyAtRim(entry))
 end
+-- (Whether a name heard brings the minimap up: /cine debug mappin and the
+-- offline check, Tools/offline/mappin.lua.)
+ns.NameRevealsMinimap = Wanted
 
 local function AnyReveal()
 	if cursor.On and cursor.On() then return true end
 	local db = ns.db
 	return db and db.handleMinimap ~= false and ns.CanSweepMinimap() and (db.minimapRevealNodes
-		or db.minimapRevealTurnIns or db.minimapRevealAreas or db.minimapRevealIcons) or false
+		or db.minimapRevealTurnIns or db.minimapRevealAreas or db.minimapRevealIcons
+		or db.minimapRevealMapPin) or false
 end
 
 -- While a reveal is ticked, the faded minimap isn't shrunk and moved off the
@@ -1880,6 +1935,12 @@ function cursor.Known(half)
 	local reach = half * perUnit * 1.5
 	local spots = {}
 	if ns.QuestieKnownSpots then pcall(ns.QuestieKnownSpots, reach, spots) end
+	-- (The game's map pin, unless it's to bring the minimap up: Map pin box,
+	-- and Not for Shortest Path while SPF guides a journey with it.)
+	if ns.MapPinIsKnownDot() then
+		local pin = ns.MapPinSpot()
+		if pin then spots[#spots + 1] = pin end
+	end
 	local group = IsInRaid() and "raid" or "party"
 	for i = 1, IsInRaid() and 40 or 4 do
 		local unit = group .. i
@@ -2188,18 +2249,27 @@ function ns.CursorSweepTest(arg)
 	local size = tonumber((arg or ""):match("test%s+([%d%.]+)"))
 	-- (questie: /cine debug questnodes, its lines kept in questNodesLog too.)
 	local questie = (arg or ""):find("questie") ~= nil
+	-- (mappin: /cine debug mappin, Dev/MapPinTest.lua: the dots in yards from
+	-- you like questnodes, handed to ns.MapPinSweepDone; its lines go to
+	-- mapPinLog, kept by the test.)
+	local mappin = not questie and (arg or ""):find("mappin") ~= nil
+	local detail = questie or mappin
 	if questie then ns.db.questNodesLog = {} end
 	local tab = CinematicTab()
 	local function Say(text)
 		tab:AddMessage("|cffe0b050Cinematic cursorsweep:|r " .. text)
 		ns.Log("nodes", "cursorsweep: " .. text)
 		if questie and #ns.db.questNodesLog < 300 then ns.db.questNodesLog[#ns.db.questNodesLog + 1] = text end
+		if mappin and type(ns.db.mapPinLog) == "table" and #ns.db.mapPinLog < 600 then
+			ns.db.mapPinLog[#ns.db.mapPinLog + 1] = "cursorsweep: " .. text
+		end
 	end
 	-- (The end of a questnodes run: its verdict, for the box.)
-	local function Finish(verdict)
-		if not questie then return end
+	local function Finish(verdict, dots)
+		if not detail then return end
 		cursor.testing = nil
-		if ns.QuestNodesDone then ns.QuestNodesDone(verdict) end
+		if questie and ns.QuestNodesDone then ns.QuestNodesDone(verdict) end
+		if mappin and ns.MapPinSweepDone then ns.MapPinSweepDone(verdict, dots) end
 	end
 	local function Stop(text)
 		Say(text)
@@ -2212,7 +2282,7 @@ function ns.CursorSweepTest(arg)
 	-- (questnodes: standing by a node, Nearby Dots holds the minimap up. Its
 	-- find let go and every reveal paused (ns.IsMinimapRevealed) till the
 	-- test ends; the waiter below gives it time to fade.)
-	if questie then
+	if detail then
 		cursor.testing = true
 		cursor.spot = nil
 		seenAt = -math.huge
@@ -2237,7 +2307,7 @@ function ns.CursorSweepTest(arg)
 	ns.SetOnUpdate(waiter, function(self)
 		if not swept then
 			-- (questnodes: up to 10 s for the minimap to fade, reveals paused.)
-			if questie and Minimap:GetEffectiveAlpha() > 0.01 then
+			if detail and Minimap:GetEffectiveAlpha() > 0.01 then
 				if GetTime() - startedAt > 10 then
 					Done(self)
 					return Stop("the minimap stayed up 10 s with every reveal paused (hovered? Keep open?): "
@@ -2316,7 +2386,7 @@ function ns.CursorSweepTest(arg)
 		end
 		-- (questnodes: each dot apart (every secret one shares a name), placed
 		-- in yards from you, next to Questie's icons.)
-		if not questie then return end
+		if not detail then return end
 		local dots = {}
 		local perUnit, facing = View()
 		for _, name in ipairs(names) do
@@ -2339,6 +2409,23 @@ function ns.CursorSweepTest(arg)
 		table.sort(list)
 		Say(("known spots left out (not nodes): %s%s"):format(#list > 0 and table.concat(list, ", ") or "none",
 			cursor.known and "" or " (where you are isn't known)"))
+		-- (mappin: each point's own name too, in yards from you, and how far a
+		-- point hears a dot: secret dots near each other share a name and merge.)
+		if mappin then
+			local points = { reach = perUnit and cursor.KNOWN_REACH * perUnit }
+			if perUnit then
+				local cos, sin = math.cos(facing), math.sin(facing)
+				for _, name in ipairs(names) do
+					local list = found[name].list or {}
+					for i = 1, #list, 2 do
+						local x, y = list[i], list[i + 1]
+						points[#points + 1] = { name = name,
+							north = (sin * x + cos * y) * perUnit, west = (-cos * x + sin * y) * perUnit }
+					end
+				end
+			end
+			return Finish(("%d dots heard"):format(#dots), points)
+		end
 		if not ns.QuestieNodeCompare then return Stop("QUESTIE: its support file isn't loaded") end
 		local n0, w0 = Here()
 		local ok, lines, matched = pcall(ns.QuestieNodeCompare, dots, n0, w0)

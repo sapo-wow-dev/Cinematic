@@ -1819,6 +1819,9 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg:find("^cursorsweep") then
 		-- (One cursor sweep, the faded minimap under your mouse: NodeSweep.lua.)
 		ns.CursorSweepTest(arg:match("^cursorsweep%s*(.*)$"))
+	elseif cmd == "debug" and arg == "mappin" then
+		-- (Dev copy: the map pin follows the Minimap page's Map pin boxes in the cursor sweep, MapPinTest.lua.)
+		if ns.MapPinTest then ns.MapPinTest() else ns.Print("/cine debug mappin is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "peekdebuffs" then
 		-- (Dev copy: a buff peek leaves the debuffs faded, a debuff peek brings them, BuffPeekDebuffTest.lua.)
 		if ns.BuffPeekDebuffTest then ns.BuffPeekDebuffTest() else

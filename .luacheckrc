@@ -181,7 +181,7 @@ read_globals = {
 	"IsQuestWatched",
 	"GetQuestLogIndexByID",
 	"C_SuperTrack",
-	"C_Navigation", "CreateVector2D",
+	"C_Navigation", "CreateVector2D", "UiMapPoint",
 	"GetInventoryAlertStatus",
 	"GetPetHappiness",
 	"GetRealZoneText",

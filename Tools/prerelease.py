@@ -45,6 +45,7 @@ HOME = os.path.expanduser("~")
 # Offline tests of one fixed bug each, PASS/FAIL per check (any FAIL line fails it).
 OFFLINE_TESTS = [
     ("party flicker (DaylightUI range fade)", "Tools/offline/partyflicker.lua"),
+    ("map pin: its own Reveal box, Shortest Path's journey pin left out", "Tools/offline/mappin.lua"),
     ("card wait (Rested card behind DaylightUI's zone title)", "Tools/offline/cardwait.lua"),
     ("loops off with their page off; page building waits for /cine debug loops", "Tools/offline/loopsoff.lua"),
     ("Heal Vision: its own Show in for unit frames and for nameplates", "Tools/offline/healtworules.lua"),

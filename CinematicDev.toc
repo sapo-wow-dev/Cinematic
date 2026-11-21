@@ -298,6 +298,7 @@ Dev\ChatTabTest.lua
 Dev\ChecksProbe.lua
 Dev\WhoseHitTest.lua
 Dev\CorpseTest.lua
+Dev\MapPinTest.lua
 Dev\PaceTest.lua
 Dev\RuleWordsTest.lua
 Dev\RuleCheckTest.lua
