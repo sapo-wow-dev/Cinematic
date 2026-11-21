@@ -3,20 +3,19 @@
 -- tab open in every row of tabs on it, however deep, so a favorite opens
 -- right there again. Kept for the whole account (CinematicDB.favorites, in
 -- the order starred: { page = English name, tabs = { { key, index, label } },
--- label }; an old plain name: that page alone). At login a Favorites line
--- goes on top of Cinematic's left list, one line under it a favorite, only
--- while you have one; its page has a tile a favorite, changed as you star.
--- The lines are made at login only: the game's left list can't take lines
--- changed after that on Forever (/cine debug favlines 2026-11-20: Escape >
--- Options in a fight then blocked 1831 lines), so a star changed asks for a
--- reload. (The star by each page's title, placed by reading the page, broke
--- on page after page; the user picked this fixed spot, 2026-11-20.)
+-- label, name = your own name }; an old plain name: that page alone). One
+-- Favorites line on top of Cinematic's left list, always there, opens a page
+-- with a tile a favorite, changed the moment you star, rename or remove one:
+-- no reload. (A line a favorite was tried: the game's left list can't take
+-- lines changed after login on Forever, /cine debug favlines 2026-11-20:
+-- Escape > Options in a fight then blocked 1831 lines, so each change needed
+-- a reload; the user picked one line and no reloads, 2026-11-21. The star by
+-- each page's title broke on page after page; the user picked this fixed
+-- spot, 2026-11-20.)
 -- Tests: /cine debug favorites, /cine debug favstars (dev copy).
 local _, ns = ...
 local L = ns.L
 
-local atLogin = {} -- (the favorites the left list was made from)
-local made = {} -- (the lines made: favorite's place in the list -> "hub", "page" or "jump")
 local starArt -- ("atlas" or "texture": which star this client draws)
 local stars, tiles, page = {}, {}, nil
 
@@ -39,8 +38,6 @@ local function List()
 	return list
 end
 function ns.Favorites() return List() end
-function ns.FavoritesAtLogin() return atLogin end
-function ns.FavoriteLineKind(i) return made[i] end
 function ns.FavoriteStarArt() return starArt end
 
 -- (A page's name as shown, and where it is: its hub, for a tile.)
@@ -134,11 +131,12 @@ function ns.FavoriteLabel(place)
 	return table.concat(parts, " \226\128\186 ")
 end
 
-local function SameAsLogin()
-	local now = List()
-	if #now ~= #atLogin then return false end
-	for i, each in ipairs(now) do if not Same(atLogin[i], each) then return false end end
-	return true
+-- A favorite's name as shown: the one you gave it (right-click its tile,
+-- Rename), else the one it got when starred.
+function ns.FavoriteName(place)
+	local name = type(place) == "table" and type(place.name) == "string" and place.name:match("^%s*(.-)%s*$")
+	if name and name ~= "" then return name end
+	return type(place) == "table" and (place.label or ns.FavoriteLabel(place)) or ""
 end
 
 -- Each row's tab opened as kept, top row first, a frame apart (a tab's own
@@ -169,6 +167,18 @@ local function PaintStar(star)
 	local here = star:IsVisible() and ns.FavoriteHere()
 	local on = here and IndexOf(here) ~= nil or false
 	star.on, star.here = on, here or nil -- (the test's)
+	-- (nowhere to star, the Favorites page itself: no star drawn there. Known
+	-- by its own box: as a page shows, the one left can still read as shown,
+	-- and its star painted as that page's, 2026-11-21 in game)
+	local own = page and page.searchBox and star.box == page.searchBox
+	local none = own or (star:IsVisible() and not here)
+	if own then star.on, star.here = false, nil end
+	star.none = none or nil
+	star:EnableMouse(not none)
+	if none then
+		star.icon:SetAlpha(0)
+		return
+	end
 	local over = star:IsMouseOver()
 	if star.offAtlas then
 		-- (the game's hollow star while off, the gold one while on)
@@ -190,26 +200,6 @@ function ns.FavoriteStarsPaint()
 end
 local PaintTiles
 
--- Asks for the reload that brings the left list in line, or takes the ask
--- away when your favorites are back to what it shows.
-local POPUP = "CINEMATIC_FAVORITES_RELOAD"
-local function AskReload()
-	if not StaticPopupDialogs then return end
-	if SameAsLogin() then
-		if StaticPopup_Hide then StaticPopup_Hide(POPUP) end
-		return
-	end
-	StaticPopupDialogs[POPUP] = StaticPopupDialogs[POPUP] or {
-		text = L["Your favorites changed. Reload to update the Favorites lines on the left?"],
-		button1 = RELOADUI or L["Reload"], button2 = L["Later"],
-		OnAccept = function() ns.Reload() end,
-		cineReload = 1, -- (Forever: the secure Reload laid over it, Reload.lua)
-		timeout = 0, whileDead = true, hideOnEscape = true,
-	}
-	if StaticPopup_Show then StaticPopup_Show(POPUP) end
-end
-function ns.FavoritesReloadPopup() return POPUP end
-
 -- Adds a place to your favorites (at the end) or takes it off; a page's
 -- name: that page with no tabs (off: every favorite of it). True if changed.
 function ns.SetFavorite(place, on)
@@ -226,7 +216,6 @@ function ns.SetFavorite(place, on)
 			if changed then
 				ns.FavoriteStarsPaint()
 				if PaintTiles then PaintTiles() end
-				AskReload()
 			end
 			return changed
 		end
@@ -244,8 +233,136 @@ function ns.SetFavorite(place, on)
 	end
 	ns.FavoriteStarsPaint()
 	if PaintTiles then PaintTiles() end
-	AskReload()
 	return true
+end
+
+-- Gives a favorite your own name; an empty one (or its own) puts back the
+-- name it got when starred. True if changed.
+function ns.RenameFavorite(place, text)
+	local at = IndexOf(place)
+	if not at then return false end
+	local entry = List()[at]
+	text = type(text) == "string" and text:match("^%s*(.-)%s*$") or ""
+	local auto = entry.label or ns.FavoriteLabel(entry)
+	local name = (text ~= "" and text ~= auto) and text or nil
+	if name == entry.name then return false end
+	entry.name = name
+	if PaintTiles then PaintTiles() end
+	return true
+end
+
+-- The rename popup: the name in a box, Enter or Accept keeps it.
+local RENAME = "CINEMATIC_FAVORITE_RENAME"
+local function RenameText(popup)
+	local box = popup and (popup.editBox or popup.EditBox or (popup.GetEditBox and popup:GetEditBox()))
+	return box and box:GetText() or "", box
+end
+local function RenamePopupOf(box)
+	local frame = box
+	while frame and not frame.which do frame = frame:GetParent() end
+	return frame
+end
+function ns.FavoriteRenameAsk(place)
+	if not (StaticPopupDialogs and StaticPopup_Show) then return end
+	StaticPopupDialogs[RENAME] = StaticPopupDialogs[RENAME] or {
+		text = L["Name this favorite (empty: its own name):"],
+		button1 = ACCEPT, button2 = CANCEL,
+		hasEditBox = true, maxLetters = 48,
+		OnShow = function(self, data)
+			local _, box = RenameText(self)
+			if box then
+				box:SetText(ns.FavoriteName(data))
+				box:HighlightText()
+				box:SetFocus()
+			end
+		end,
+		OnAccept = function(self, data) ns.RenameFavorite(data, (RenameText(self))) end,
+		EditBoxOnEnterPressed = function(box)
+			local popup = RenamePopupOf(box)
+			if popup then
+				ns.RenameFavorite(popup.data, (RenameText(popup)))
+				popup:Hide()
+			end
+		end,
+		EditBoxOnEscapePressed = function(box)
+			local popup = RenamePopupOf(box)
+			if popup then popup:Hide() end
+		end,
+		timeout = 0, whileDead = true, hideOnEscape = true,
+	}
+	return StaticPopup_Show(RENAME, nil, nil, place)
+end
+function ns.FavoriteRenamePopup() return RENAME end
+
+-- Moves a favorite to place to in the list (the tiles' order, saved). True
+-- if moved.
+function ns.MoveFavorite(place, to)
+	local list, at = List(), IndexOf(place)
+	if not at or type(to) ~= "number" then return false end
+	to = math.max(1, math.min(#list, math.floor(to)))
+	if to == at then return false end
+	table.insert(list, to, table.remove(list, at))
+	if PaintTiles then PaintTiles() end
+	return true
+end
+
+-- A favorite's icon: the one you picked (right-click its tile, Change icon),
+-- else its page's own (the hubs' pages have one), else Cinematic's.
+local DEFAULT_ICON = "Interface\\Icons\\INV_Misc_Spyglass_03"
+function ns.FavoriteIcon(place)
+	if type(place) ~= "table" then return DEFAULT_ICON end
+	if place.icon ~= nil then return place.icon end
+	return ns.PageIcon and ns.PageIcon(place.page) or DEFAULT_ICON
+end
+-- (An icon on a texture: an atlas name, or a file (path or file ID) cropped
+-- to its picture's edge as the game's icon buttons are.)
+local function PaintIcon(texture, icon)
+	if type(icon) == "string" and not icon:find("[\\/]") and C_Texture and C_Texture.GetAtlasInfo
+		and C_Texture.GetAtlasInfo(icon) then
+		texture:SetAtlas(icon)
+		texture:SetTexCoord(0, 1, 0, 1)
+	else
+		texture:SetTexture(icon)
+		texture:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+	end
+end
+-- Gives a favorite an icon; nil puts back its page's. True if changed.
+function ns.FavoriteSetIcon(place, icon)
+	local at = IndexOf(place)
+	if not at then return false end
+	local entry = List()[at]
+	if entry.icon == icon then return false end
+	entry.icon = icon
+	if PaintTiles then PaintTiles() end
+	return true
+end
+local picker -- (the icon picker, made with the Favorites page: IconBrowser.lua)
+function ns.FavoriteIconPicker() return picker end
+local function PickIcon(place, owner)
+	if not (picker and owner) then return end
+	picker:Open(owner, place, ns.FavoriteIcon(place))
+end
+
+-- A tile's right-click menu: what it holds (the test's too). A move that
+-- can't happen (the first one left, the last one right) isn't there, nor
+-- Default icon while it has its page's. Change icon's function takes the
+-- tile the picker opens under.
+function ns.FavoriteMenuItems(place)
+	local at, count = IndexOf(place), #List()
+	local items = {
+		{ L["Open"], function() ns.OpenFavorite(place) end },
+		{ L["Rename"], function() ns.FavoriteRenameAsk(place) end },
+	}
+	if picker then
+		items[#items + 1] = { L["Change icon"], function(owner) PickIcon(place, owner) end, icon = true }
+	end
+	if type(place) == "table" and place.icon ~= nil then
+		items[#items + 1] = { L["Default icon"], function() ns.FavoriteSetIcon(place, nil) end }
+	end
+	if at and at > 1 then items[#items + 1] = { L["Move left"], function() ns.MoveFavorite(place, at - 1) end } end
+	if at and at < count then items[#items + 1] = { L["Move right"], function() ns.MoveFavorite(place, at + 1) end } end
+	items[#items + 1] = { L["Remove"], function() ns.SetFavorite(place, false) end, red = true }
+	return items
 end
 
 -- The star left of a page's "Search this page" box (a hub's, or a plain
@@ -300,55 +417,12 @@ function ns.FavoriteStarShown()
 	for _, star in ipairs(stars) do if star:IsVisible() then return star end end
 end
 
--- A favorite's line showing a page that has a line of its own (Profiles,
--- Keybinds...): its frame borrowed while this line shows, given back after,
--- as the hubs' band lines do theirs (Options.lua menu.HubLine); then its tabs.
-local function PageLine(key, label, place, i)
-	local name = place.page
-	local canvas = ns.settingsCanvases and ns.settingsCanvases[name]
-	local frame = CreateFrame("Frame")
-	frame.name, frame.parent = label, "Cinematic"
-	local kept
-	-- (Not a hub's own frame: its band lines hand that round among themselves.)
-	local hub = false
-	for _, each in ipairs(ns.HubNames and ns.HubNames() or {}) do if each == name then hub = true end end
-	if canvas and not hub and ns.MenuCategory and ns.MenuCategory(name) then
-		frame:SetScript("OnShow", function(self)
-			kept = { parent = canvas:GetParent(), points = {} }
-			for n = 1, canvas:GetNumPoints() do kept.points[n] = { canvas:GetPoint(n) } end
-			canvas:SetParent(self)
-			canvas:ClearAllPoints()
-			canvas:SetAllPoints(self)
-			canvas:Show()
-			C_Timer.After(0, function() OpenTabs(place) end)
-		end)
-		frame:SetScript("OnHide", function(self)
-			if not kept or canvas:GetParent() ~= self then return end
-			canvas:SetParent(kept.parent)
-			canvas:ClearAllPoints()
-			for _, point in ipairs(kept.points) do canvas:SetPoint(unpack(point)) end
-			if not kept.parent then canvas:Hide() end
-			kept = nil
-		end)
-		made[i] = "page"
-	else
-		-- (Anything else: the page opened where it is, its own line lit.)
-		frame:SetScript("OnShow", function()
-			C_Timer.After(0, function() ns.OpenFavorite(place) end)
-		end)
-		made[i] = "jump"
-	end
-	frame:Hide() -- (made shown, its OnShow would never come as the list shows it)
-	ns.AddMenuLine(key, frame, label, "Favorites")
-end
-
--- The Favorites page: a tile a favorite (click: open it; right-click: take
--- it off). Made at login only when you have one (the line is made then too).
-local TILE_W, TILE_H, GAP = 190, 40, 8
+-- The Favorites page: a tile a favorite (click: open it; right-click: Open,
+-- Rename, Remove). Its line is always there, your favorites or none.
+-- (One column: two side by side read badly, the user's call 2026-11-21;
+-- wide enough for a long name, Gamepad Frames › Settings.)
+local TILE_W, TILE_H, GAP, ICON = 300, 40, 8, 28
 function ns.CreateFavoritesPage(kit)
-	atLogin, made = {}, {}
-	for _, each in ipairs(List()) do atLogin[#atLogin + 1] = each end
-	if #atLogin == 0 then return end
 	local canvas, content = kit.CreateScrollPage(true)
 	local title = kit.Label(content, "GameFontNormalLarge", L["Favorites"])
 	title:SetPoint("TOPLEFT", 16, -16)
@@ -361,12 +435,38 @@ function ns.CreateFavoritesPage(kit)
 	grid:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -10)
 	grid:SetPoint("RIGHT", content, "RIGHT", -16, 0)
 	grid:SetHeight(1)
+	local perRow = 1 -- (a tile a row)
+	-- Dragging a tile: it follows the cursor, the cell it would land in lit,
+	-- and it's moved there as you let go.
+	local slot = CreateFrame("Frame", nil, grid)
+	slot:SetSize(TILE_W, TILE_H)
+	local slotLine = slot:CreateTexture(nil, "OVERLAY")
+	slotLine:SetAllPoints()
+	slotLine:SetColorTexture(1, 0.82, 0, 0.25)
+	slot:Hide()
+	-- (the place in the list under the cursor: by the grid's cells)
+	local function DropAt()
+		local x, y = GetCursorPosition()
+		local scale = grid:GetEffectiveScale()
+		local left, top = grid:GetLeft(), grid:GetTop()
+		if not (left and top and scale and scale > 0) then return end
+		x, y = x / scale, y / scale
+		local col = math.max(0, math.min(perRow - 1, math.floor((x - left) / (TILE_W + GAP))))
+		local row = math.max(0, math.floor((top - y) / (TILE_H + GAP)))
+		return math.max(1, math.min(#List(), row * perRow + col + 1))
+	end
+	ns.FavoriteDropAt = DropAt -- (the test's)
+	local function Cell(i)
+		local row, col = math.floor((i - 1) / perRow), (i - 1) % perRow
+		return col * (TILE_W + GAP), -row * (TILE_H + GAP)
+	end
 	local function Tile(i)
 		local tile = tiles[i]
 		if tile then return tile end
 		tile = CreateFrame("Button", nil, grid)
 		tile:SetSize(TILE_W, TILE_H)
 		tile:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		tile:RegisterForDrag("LeftButton")
 		local edge = tile:CreateTexture(nil, "BACKGROUND")
 		edge:SetAllPoints()
 		edge:SetColorTexture(0.45, 0.38, 0.2, 0.8)
@@ -379,7 +479,10 @@ function ns.CreateFavoritesPage(kit)
 		glow:SetPoint("BOTTOMRIGHT", -1, 1)
 		glow:SetColorTexture(1, 0.82, 0, 0.12)
 		tile.name = kit.Label(tile, "GameFontNormal", "")
-		tile.name:SetPoint("TOPLEFT", 10, -7)
+		tile.icon = tile:CreateTexture(nil, "ARTWORK")
+		tile.icon:SetSize(ICON, ICON)
+		tile.icon:SetPoint("LEFT", 6, 0)
+		tile.name:SetPoint("TOPLEFT", tile.icon, "TOPRIGHT", 8, 0)
 		tile.name:SetPoint("RIGHT", -8, 0)
 		tile.name:SetWordWrap(false)
 		tile.name.searchSkip = true
@@ -387,13 +490,59 @@ function ns.CreateFavoritesPage(kit)
 		tile.where:SetPoint("TOPLEFT", tile.name, "BOTTOMLEFT", 0, -3)
 		tile.where:SetTextColor(0.6, 0.57, 0.5)
 		tile.where.searchSkip = true
+		tile:SetScript("OnDragStart", function(self)
+			if #List() < 2 then return end
+			self.dragging = true
+			GameTooltip:Hide()
+			self:SetFrameLevel(grid:GetFrameLevel() + 10)
+			self:SetAlpha(0.8)
+			local scale = self:GetEffectiveScale()
+			local x, y = GetCursorPosition()
+			local dx, dy = x / scale - (self:GetLeft() or 0), y / scale - (self:GetTop() or 0)
+			slot:Show()
+			self:SetScript("OnUpdate", function()
+				local cx, cy = GetCursorPosition()
+				self:ClearAllPoints()
+				self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", cx / scale - dx, cy / scale - dy)
+				local to = DropAt()
+				if to then
+					slot:ClearAllPoints()
+					slot:SetPoint("TOPLEFT", grid, "TOPLEFT", Cell(to))
+				end
+			end)
+		end)
+		tile:SetScript("OnDragStop", function(self)
+			if not self.dragging then return end
+			self:SetScript("OnUpdate", nil)
+			slot:Hide()
+			self:SetAlpha(1)
+			self:SetFrameLevel(grid:GetFrameLevel() + 1)
+			self.dropped = GetTime() -- (the click that ends a drag doesn't open it)
+			self.dragging = nil
+			local to = DropAt()
+			if not (to and ns.MoveFavorite(self.place, to)) then PaintTiles() end
+		end)
 		tile:SetScript("OnClick", function(self, button)
-			if button == "RightButton" then ns.SetFavorite(self.place, false)
-			else ns.OpenFavorite(self.place) end
+			if self.dropped and GetTime() - self.dropped < 0.3 then return end
+			if button ~= "RightButton" then return ns.OpenFavorite(self.place) end
+			-- (a menu: Open, Rename, Remove; no menus on this client: off at once)
+			if not (MenuUtil and MenuUtil.CreateContextMenu and ns.ContextMenu) then
+				return ns.SetFavorite(self.place, false)
+			end
+			local place = self.place
+			self.menu = ns.ContextMenu(self, function(_, root)
+				root:CreateTitle(ns.FavoriteName(place))
+				for _, item in ipairs(ns.FavoriteMenuItems(place)) do -- (Move left/right where it can)
+					if item.red then root:CreateDivider() end
+					local run, owner = item[2], self
+					root:CreateButton(item.red and ("|cffff4040" .. item[1] .. "|r") or item[1], function() run(owner) end)
+				end
+			end)
 		end)
 		tile:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetText(L["Click to open. Right-click to remove."], 1, 1, 1, 1, true)
+			GameTooltip:SetText(MenuUtil and MenuUtil.CreateContextMenu and L["Click to open, drag to move. Right-click for more."]
+				or L["Click to open. Right-click to remove."], 1, 1, 1, 1, true)
 			GameTooltip:Show()
 		end)
 		tile:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -402,47 +551,47 @@ function ns.CreateFavoritesPage(kit)
 	end
 	function PaintTiles()
 		local list = List()
-		local perRow = math.max(1, math.floor(((grid:GetWidth() or 0) + GAP) / (TILE_W + GAP)))
 		for i, place in ipairs(list) do
 			local tile = Tile(i)
 			tile.place, tile.page = place, place.page
-			tile.name:SetText(place.label or ns.FavoriteLabel(place))
+			tile.name:SetText(ns.FavoriteName(place))
+			PaintIcon(tile.icon, ns.FavoriteIcon(place))
 			tile.where:SetText(WhereOf(place.page))
-			tile:ClearAllPoints()
-			local row, col = math.floor((i - 1) / perRow), (i - 1) % perRow
-			tile:SetPoint("TOPLEFT", grid, "TOPLEFT", col * (TILE_W + GAP), -row * (TILE_H + GAP))
+			if not tile.dragging then
+				tile:ClearAllPoints()
+				tile:SetPoint("TOPLEFT", grid, "TOPLEFT", Cell(i))
+			end
 			tile:Show()
 		end
 		for i = #list + 1, #tiles do tiles[i]:Hide() end
-		if #list == 0 then
-			note:SetText(L["No favorites left. Click the star left of a page's search box to add one."])
-		else
-			note:SetText(SameAsLogin() and "" or L["The lines on the left change after a reload."])
-		end
+		note:SetText(#list == 0 and L["No favorites yet. Click the star left of a page's search box to add one."] or "")
 		content:SetHeight(120 + math.ceil(math.max(#list, 1) / perRow) * (TILE_H + GAP))
 	end
 	grid:SetScript("OnSizeChanged", function() PaintTiles() end)
-	canvas:HookScript("OnShow", function() PaintTiles() end)
+	-- (and again a frame later, the page's sizes settled by then: the grid
+	-- has no place on its first show)
+	canvas:HookScript("OnShow", function()
+		PaintTiles()
+		C_Timer.After(0, function() if canvas:IsVisible() then PaintTiles() end end)
+	end)
+	-- (every icon the game has, as wheels and cameras pick theirs: a pick
+	-- sets the icon of the favorite it was opened for)
+	if ns.IconBrowser then
+		picker = ns.IconBrowser(canvas, function(place, icon) ns.FavoriteSetIcon(place, icon) end)
+	end
 	kit.RegisterSubpage(canvas, "Favorites", L["Favorites"])
 	page = canvas
-	-- A line a favorite under it, in the order starred.
-	for i, place in ipairs(atLogin) do
-		local key, label = "Favorites/" .. i, place.label or ns.FavoriteLabel(place)
-		local function Tabs() C_Timer.After(0, function() OpenTabs(place) end) end
-		if ns.AddFavoriteHubLine and ns.AddFavoriteHubLine(key, label, "Favorites", place.page, Tabs) then
-			made[i] = "hub"
-		else
-			PageLine(key, label, place, i)
-		end
-	end
 end
 function ns.FavoritesPage() return page end
 function ns.FavoriteTiles() return tiles end -- (the test's)
-
--- After the left list is handed to the game: Favorites open (a new line
--- comes folded, its lines hidden; our own category, set before the game
--- draws the list, as the fold does).
-function ns.FavoritesAfterFlush()
-	local category = ns.MenuCategory and ns.MenuCategory("Favorites")
-	if type(category) == "table" and category.SetExpanded then pcall(category.SetExpanded, category, true) end
+function ns.FavoritePaintTiles() if PaintTiles then PaintTiles() end end -- (the test's)
+-- (the test's: tiles a row as laid out now)
+function ns.FavoriteTilesPerRow()
+	local first = tiles[1]
+	if not (first and first:IsShown()) then return 0 end
+	local top, n = first:GetTop(), 0
+	for _, tile in ipairs(tiles) do
+		if tile:IsShown() and tile:GetTop() and top and math.abs(tile:GetTop() - top) < 1 then n = n + 1 end
+	end
+	return n
 end

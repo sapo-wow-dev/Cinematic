@@ -2554,14 +2554,6 @@ do
 		local entry = { key = key, frame = frame, shown = shown, parent = parent }
 		if menu.flushed then Register(entry) else menu.queue[#menu.queue + 1] = entry end
 	end
-	-- (Favorites.lua: its lines under its own, made before menu.Flush only;
-	-- lines changed after login break Forever's settings in fights, 1831
-	-- blocked lines, /cine debug favlines 2026-11-20. And a line's category.)
-	function ns.AddMenuLine(key, frame, shown, parent)
-		if menu.flushed then return end
-		menu.Add(key, frame, shown, parent)
-	end
-	function ns.MenuCategory(key) return subpages[key] end
 	function menu.Flush()
 		local done = {}
 		local function Put(entry)
@@ -4059,7 +4051,7 @@ do
 
 	-- A line in the left list showing a hub's frame at target's icon. (A field
 	-- on menu, not a local: this block's locals are near Lua's cap.)
-	function menu.HubLine(hub, key, label, parentKey, target, exact, onShown)
+	function menu.HubLine(hub, key, label, parentKey, target)
 		local frame = CreateFrame("Frame")
 		frame.name, frame.parent = label, L[hub.label or hub.name]
 		-- (Put back as it was as this one hides, before the next shows:
@@ -4084,12 +4076,9 @@ do
 			local was = menu.selecting
 			menu.selecting = true
 			-- (At the tab last open under that icon: ns.LastHubTab.)
-			-- (exact: that page itself, a favorite's line, Favorites.lua)
 			local tile = byName[target]
-			if tile then Select(exact and tile or ns.LastHubTab(tile)) end
+			if tile then Select(ns.LastHubTab(tile)) end
 			menu.selecting = was
-			-- (onShown: a favorite's line, its tabs opened again: Favorites.lua)
-			if onShown then onShown() end
 		end)
 		frame:SetScript("OnHide", function(self)
 			local hubFrame = hub.frame
@@ -4103,14 +4092,6 @@ do
 		end)
 		frame:Hide() -- (made shown, its OnShow would never come as the list shows it)
 		menu.Add(key, frame, label, parentKey)
-	end
-	-- A favorite's line (Favorites.lua), made before menu.Flush: true when
-	-- target is a hub's icon or tab, shown there as its band lines are.
-	function ns.AddFavoriteHubLine(key, label, parentKey, target, onShown)
-		local tile = byName[target]
-		if menu.flushed or not (tile and tile.hub and tile.hub.frame) then return false end
-		menu.HubLine(tile.hub, key, label, parentKey, target, true, onShown)
-		return true
 	end
 	-- Lines in the left list under a hub (2026-11-16): one for each of its
 	-- bands (Combat..., Nameplates...), each icon's line under its band's, and
@@ -22353,7 +22334,7 @@ ns.OnLanguage(function()
 		ns.CreateMinimapCopyPage(ns.lowHealthKit)
 		Lap("CreateMinimapCopyPage")
 	end
-	if ns.CreateFavoritesPage then -- (Favorites.lua: its line on top, one under it a favorite)
+	if ns.CreateFavoritesPage then -- (Favorites.lua: its line on top, always there)
 		ns.CreateFavoritesPage(ns.lowHealthKit)
 		Lap("CreateFavoritesPage")
 	end
@@ -22361,7 +22342,6 @@ ns.OnLanguage(function()
 	ns.AddBandShortcuts("Visions") -- (and the Visions hub's: Combat, World, each Vision under its band)
 	ns.AddBandShortcuts("Style") -- (and the Style hub's: Interface, Visions, Atmosphere, each look under its band)
 	menu.Flush() -- (the left list, in menu.order)
-	if ns.FavoritesAfterFlush then ns.FavoritesAfterFlush() end
 	menu.AutoFold()
 	Lap("(the left list)")
 	local buildEnded = type(buildStarted) == "number" and debugprofilestop()

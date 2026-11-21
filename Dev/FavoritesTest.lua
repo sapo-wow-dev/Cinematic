@@ -1,27 +1,33 @@
 -- /cine debug favorites: the Favorites feature (UI/Favorites.lua) in game,
--- one run over a reload. It sets itself up (your favorites put aside, CineMode
--- off) and says each step on screen; you only click Reload when asked, then
--- start a fight and open Escape > Options in it. Steps:
---   1 star      Keybinds opened: one star, left of its search box, off (PASS/FAIL)
---   2 add       its star clicked: Keybinds in your favorites, the star on,
---               the reload popup up (PASS/FAIL)
+-- one run, no reload. It sets itself up (your favorites put aside, CineMode
+-- off) and says each step on screen; you drag one tile when asked. (No fight
+-- step since 2026-11-21: Escape > Options in a fight was 0 blocked three runs
+-- running, and nothing since touches the left list.) Steps:
+--   1 star      Keybinds opened: one star, left of its search box's border,
+--               off (PASS/FAIL)
+--   2 add       its star clicked: Keybinds in your favorites, the star on, no
+--               popup (no reload) (PASS/FAIL)
 --   3 deep      Style General opened, its inner row's Visions tab clicked,
 --               starred: the favorite keeps that tab (PASS/FAIL); Interface
 --               clicked: the star off, another place (PASS/FAIL); Keybinds
 --               opened, then the favorite: Style General back at Visions (PASS/FAIL)
---   4 reload    you click Reload in the popup (Forever: its secure Reload)
---   5 lines     after it: Favorites first under Cinematic, open, a line a
---               favorite, the tab in its name (PASS/FAIL)
---   6 open      each favorite's line picked: its page at its tabs, the star
---               on, blocked +0 (PASS/FAIL)
---   7 page      the Favorites line picked: a tile a favorite; a tile's
---               right-click takes Keybinds off and asks for a reload, the
---               lines left as they are (PASS/FAIL)
---   8 fight     you start a fight and open Escape > Options: blocked +0
---               (PASS/FAIL; lines changed live gave 1831 on Forever)
--- Then your own favorites are put back (the left list shows them after your
--- next reload). Into CinematicDB.favoritesTestLog, a screenshot a step.
--- Run again to stop. Dev copy only.
+--   4 rename    Style General's favorite renamed "Test Visions" in its rename
+--               popup (typed, Enter) (PASS/FAIL)
+--   5 line      the Favorites line: first under Cinematic, no lines under it;
+--               picked: its page, its own star not drawn (PASS/FAIL), a tile a
+--               favorite, the new name on its tile, no popup, blocked +0 (PASS/FAIL)
+--   6 open      each tile clicked: its page at its tabs, the star on,
+--               blocked +0 (PASS/FAIL)
+--   7 menu      Keybinds' tile (the first) right-clicked: its menu (Open,
+--               Rename, Change icon, Move right, Remove) opens (PASS/FAIL); its
+--               Move right: the tiles swap at once (PASS/FAIL); you drag
+--               Keybinds' tile back to the front (the test waits): first again,
+--               nothing opened (PASS/FAIL); Change icon: the picker opens
+--               (PASS/FAIL); an icon picked: on its tile (PASS/FAIL); Default
+--               icon: the page's back (PASS/FAIL); its Remove: the tile gone at
+--               once, no popup (PASS/FAIL)
+-- Then your own favorites are put back. Into CinematicDB.favoritesTestLog, a
+-- screenshot a step. Run again to stop. Dev copy only.
 local _, ns = ...
 
 local HOOK, CHAT = "blocked (no event)", "blocked (chat line only)"
@@ -51,7 +57,7 @@ local function Verdict(ok, text)
 end
 local function Favs()
 	local names = {}
-	for _, place in ipairs(ns.Favorites()) do names[#names + 1] = place.label or ns.FavoriteLabel(place) end
+	for _, place in ipairs(ns.Favorites()) do names[#names + 1] = ns.FavoriteName(place) end
 	return table.concat(names, ", ")
 end
 -- Same place: page and each row's tab.
@@ -69,16 +75,27 @@ local function Where(place)
 	return ("%s [%s]"):format(place.page, table.concat(tabs, ", "))
 end
 local function OnText(star) return star and (star.on and "on" or "off") or "NONE" end
-local function PopupUp()
-	local which = ns.FavoritesReloadPopup()
-	if StaticPopup_FindVisible then return StaticPopup_FindVisible(which) ~= nil end
-	for i = 1, (_G.STATICPOPUP_NUMDIALOGS or 4) do
-		local dialog = _G["StaticPopup" .. i]
-		if dialog and dialog:IsShown() and dialog.which == which then return true end
+-- A popup shown now (any: Favorites asks for nothing but a rename), by its name.
+local function PopupShown()
+	for n = 1, (_G.STATICPOPUP_NUMDIALOGS or 4) do
+		local dialog = _G["StaticPopup" .. n]
+		if dialog and dialog:IsShown() then return tostring(dialog.which) end
 	end
-	return false
 end
-local function PopupDown() if StaticPopup_Hide then StaticPopup_Hide(ns.FavoritesReloadPopup()) end end
+-- The tiles shown now, by name.
+local function TileNames()
+	local out = {}
+	for _, tile in ipairs(ns.FavoriteTiles()) do
+		if tile:IsVisible() then out[#out + 1] = tile.name:GetText() end
+	end
+	return out
+end
+-- The Favorites line: Cinematic's first.
+local function FavLine()
+	local root = ns.settingsCategory
+	local kids = root and root.GetSubcategories and root:GetSubcategories() or {}
+	return kids[1]
+end
 -- The star shown now, and whether it sits left of its search box.
 local function Star()
 	local star = ns.FavoriteStarShown()
@@ -107,6 +124,7 @@ local function RowWith(label)
 end
 
 -- Polls (no time limit) till check() is true.
+local state5 -- (tiles a row as the Favorites page showed: later paints keep it)
 local waitToken
 local function WaitFor(prompt, check, after)
 	if prompt then ns.TestPrompt(prompt, 3600) end
@@ -127,9 +145,9 @@ local function Finish(text)
 	local state = State()
 	if not state then return end
 	waitToken = nil
-	PopupDown()
-	-- (your own favorites back; the left list shows them after your next reload)
+	-- (your own favorites back)
 	CinematicDB.favorites = state.saved or {}
+	if ns.FavoriteStarsPaint then ns.FavoriteStarsPaint() end
 	Say(("  your favorites put back: %s"):format(Favs()))
 	local line = ("%s: %d pass, %d fail"):format(text, state.pass, state.fail)
 	Say(line)
@@ -137,112 +155,216 @@ local function Finish(text)
 	ns.TestPrompt(("Favorites test %s. Say \"check log\"."):format(line), 12)
 end
 
--- 8: Escape > Options in a fight you start.
-local function Fight()
-	Close()
-	Say("--- 8 of 8: Escape > Options in a fight ---")
-	WaitFor("Favorites test: 8 of 8. Start a fight (a training dummy or any enemy). The test waits.",
-		InCombatLockdown, function()
-			local b8 = Blocked()
-			WaitFor("Favorites test: in the fight press Escape, then click Options. The test waits.", PanelShown, function()
-				local inFight = InCombatLockdown()
-				ns.TestPrompt("Favorites test: got it, keep fighting a moment.", 3)
-				Later(3, function()
-					Shot("8")
-					local new = Blocked() - b8
-					if new > 0 then
-						local _, stack = ns.DevErrorCount(HOOK)
-						if stack then Say("  newest blocked stack:\n" .. stack) end
-					end
-					Verdict(inFight and new == 0, ("Escape > Options in a fight: blocked +%d (0 wanted), %s"):format(
-						new, inFight and "in the fight" or "NOT in a fight"))
-					WaitFor("Favorites test: close the settings and end the fight. The test waits.",
-						function() return not InCombatLockdown() and not PanelShown() end, function() Finish("DONE") end)
-				end)
-			end)
-		end)
+-- The tile showing a favorite of page, shown now.
+local function TileOf(name)
+	for _, each in ipairs(ns.FavoriteTiles()) do
+		if each:IsVisible() and each.page == name then return each end
+	end
 end
+local function Order() return table.concat(TileNames(), " | ") end
 
--- 7: the Favorites page, a tile's right-click.
-local function FavoritesPage(fav)
-	Say("--- 7 of 8: the Favorites page ---")
-	local b7 = Blocked()
-	pcall(ns.PickSettingsCategory, _G.SettingsPanel, fav)
+-- Keybinds' icon: Change icon opens the picker under its tile; an icon set
+-- (as a pick in it does); Default icon puts its page's back.
+local PICKED = 134400 -- (the question mark icon's file)
+local function Icons(after)
+	local L = ns.L
+	local tile = TileOf("Keybinds")
+	local place = tile and tile.place
+	local before = tile and tile.icon:GetTexture()
+	local change
+	for _, item in ipairs(place and ns.FavoriteMenuItems(place) or {}) do
+		if item[1] == L["Change icon"] then change = item[2] end
+	end
+	if change then change(tile) end
 	Later(1, function()
-		local page = ns.FavoritesPage()
-		Shot("7")
-		local shown = page and page:IsVisible()
-		Verdict(shown and Blocked() == b7, ("Favorites page %s, blocked +%d"):format(
-			shown and "shows" or "NOT SHOWN", Blocked() - b7))
-		local tile
-		for _, each in ipairs(ns.FavoriteTiles()) do
-			if each.page == "Keybinds" and each:IsShown() then tile = each end
-		end
-		Say(("  Keybinds' tile %s"):format(tile and "found" or "NOT FOUND"))
-		-- (a second between screenshots: two in one second save one file)
+		Shot("7 picker")
+		local picker = ns.FavoriteIconPicker()
+		Verdict(change and picker and picker:IsShown() and before ~= nil,
+			("Change icon: picker %s, the tile's icon %s before"):format(picker and picker:IsShown() and "open" or "NOT OPEN",
+				tostring(before)))
 		Later(1, function()
-			if tile then tile:GetScript("OnClick")(tile, "RightButton") end
+			ns.FavoriteSetIcon(place, PICKED)
+			if picker then picker:Hide() end
 			Later(1, function()
-				Shot("7 removed")
-				local after = fav:GetSubcategories()
-				Verdict(tile ~= nil and not ns.IsFavorite("Keybinds") and PopupUp() and #after == 2,
-					("Keybinds tile right-clicked: favorites %q, reload popup %s, lines still %d (2 wanted, they change after a reload)")
-						:format(Favs(), PopupUp() and "up" or "NOT UP", #after))
-				PopupDown()
-				Fight()
+				Shot("7 icon")
+				local now = TileOf("Keybinds")
+				local got = now and now.icon:GetTexture()
+				Verdict(place.icon == PICKED and got == PICKED, ("an icon picked: saved %s, tile shows %s (%d wanted)"):format(
+					tostring(place.icon), tostring(got), PICKED))
+				local default
+				for _, item in ipairs(ns.FavoriteMenuItems(place)) do
+					if item[1] == L["Default icon"] then default = item[2] end
+				end
+				-- (a second after the shot, which takes the frame's end state)
+				Later(1, function() if default then default() end end)
+				Later(2, function()
+					local back = TileOf("Keybinds")
+					local again = back and back.icon:GetTexture()
+					local still = false
+					for _, item in ipairs(ns.FavoriteMenuItems(place)) do
+						if item[1] == L["Default icon"] then still = true end
+					end
+					Verdict(default and place.icon == nil and again == before and not still,
+						("Default icon: tile shows %s (%s wanted), Default icon %s"):format(tostring(again), tostring(before),
+							still and "STILL OFFERED" or "gone from the menu"))
+					after()
+				end)
 			end)
 		end)
 	end)
 end
 
--- 5 and 6: the lines after the reload, each one picked.
-local function AfterReload()
-	local state = State()
-	local root = ns.settingsCategory
-	Say("--- 5 of 8: the lines after the reload ---")
-	ns.TestPrompt("Favorites test: 5 of 8, after the reload. Just watch.", 3)
+-- 7: Keybinds' tile right-clicked: its menu, Move right, your drag back, Remove.
+local function Menu()
+	Say("--- 7 of 7: a tile's menu, moves and Remove ---")
+	ns.TestPrompt("Favorites test: 7 of 7, a tile's menu. Just watch.", 3)
+	pcall(ns.PickSettingsCategory, _G.SettingsPanel, FavLine())
+	Later(1, function()
+		local tile = TileOf("Keybinds")
+		Say(("  Keybinds' tile %s, tiles %q"):format(tile and "found" or "NOT FOUND", Order()))
+		if tile then tile:GetScript("OnClick")(tile, "RightButton") end
+		Later(1, function()
+			Shot("7 menu")
+			local menu = tile and tile.menu
+			local open = menu and menu.IsShown and menu:IsShown()
+			local items = {}
+			for _, item in ipairs(tile and ns.FavoriteMenuItems(tile.place) or {}) do items[#items + 1] = item[1] end
+			local L = ns.L
+			Verdict(open and table.concat(items, ",") == table.concat({ L["Open"], L["Rename"], L["Change icon"], L["Move right"],
+				L["Remove"] }, ","),
+				("Keybinds tile (first) right-clicked: menu %s, items %s (Open, Rename, Change icon, Move right, Remove wanted)"):format(
+					open and "open" or "NOT OPEN", table.concat(items, ", ")))
+			-- (its Move right a second after the shot: the function the menu's button runs)
+			Later(1, function()
+				if menu and menu.Close then pcall(menu.Close, menu) elseif menu and menu.Hide then menu:Hide() end
+				local keys = tile and tile.place
+				for _, item in ipairs(keys and ns.FavoriteMenuItems(keys) or {}) do
+					if item[1] == L["Move right"] then item[2]() end
+				end
+				Later(1, function()
+					Shot("7 moved")
+					local list = ns.Favorites()
+					Verdict(list[2] and list[2].page == "Keybinds" and Order():find("^Test Visions") ~= nil
+						and ns.FavoriteTilesPerRow() == state5,
+						("Move right: tiles %q (Test Visions first wanted), %d a row (%s wanted: as when the page showed)"):format(
+							Order(), ns.FavoriteTilesPerRow(), tostring(state5)))
+					-- Your drag: Keybinds' tile back to the front.
+					local shown = ns.FavoritesPage()
+					WaitFor("Favorites test: 7 of 7. Drag the Keybinds tile in front of Test Visions. The test waits.",
+						function() local l = ns.Favorites() return l[1] and l[1].page == "Keybinds" end, function()
+							ns.TestPrompt("Favorites test: got it. Just watch.", 3)
+							Later(1, function()
+								Shot("7 dragged")
+								Verdict(Order():find("^Keybinds") ~= nil and shown:IsVisible() and ns.FavoriteTilesPerRow() == state5,
+									("dragged: tiles %q (Keybinds first wanted), Favorites page %s (nothing opened), %d a row (%s wanted)"):format(
+										Order(), shown:IsVisible() and "still shown" or "GONE", ns.FavoriteTilesPerRow(), tostring(state5)))
+								local first = TileOf("Keybinds")
+								Later(1, function() Icons(function()
+									if first then ns.FavoriteMenuItems(first.place)[#ns.FavoriteMenuItems(first.place)][2]() end
+									Later(1, function()
+										Shot("7 removed")
+										local names = TileNames()
+										Verdict(first ~= nil and not ns.IsFavorite("Keybinds") and #names == 1
+											and names[1] == "Test Visions" and not PopupShown(),
+											("Remove picked: favorites %q, tiles %q (Test Visions alone wanted), popup %s"):format(
+												Favs(), table.concat(names, " | "), PopupShown() or "none"))
+										Finish("DONE")
+									end)
+								end) end)
+							end)
+						end)
+				end)
+			end)
+		end)
+	end)
+end
+
+-- 5 and 6: the Favorites line and its page, then each tile clicked.
+local function Line()
+	Say("--- 5 of 7: the Favorites line ---")
+	ns.TestPrompt("Favorites test: 5 of 7, the Favorites line. Just watch.", 3)
+	local fav = FavLine()
+	local under = fav and fav.GetSubcategories and fav:GetSubcategories() or {}
 	local blocked0 = Blocked()
-	pcall(ns.OpenOptions, "Profiles")
+	if fav then pcall(ns.PickSettingsCategory, _G.SettingsPanel, fav) end
 	Later(1, function()
 		Shot("5")
-		local kids = root and root.GetSubcategories and root:GetSubcategories() or {}
-		local fav = kids[1]
-		local lines = fav and fav.GetSubcategories and fav:GetSubcategories() or {}
-		local names = {}
-		for _, c in ipairs(lines) do names[#names + 1] = c:GetName() end
-		local open = fav and fav.IsExpanded and fav:IsExpanded()
+		-- (the page's own star: nothing to star there, none drawn)
+		local own = ns.FavoriteStarShown()
+		Verdict(own and own.none and own.icon:GetAlpha() == 0 and not own:IsMouseEnabled(),
+			("Favorites page's star: %s"):format(not own and "NONE (its box's star missing)"
+				or (own.none and own.icon:GetAlpha() == 0) and "not drawn, not clickable" or "DRAWN"))
+		local page = ns.FavoritesPage()
+		-- (one column: a tile a row, the user's call 2026-11-21)
+		local perRow = ns.FavoriteTilesPerRow()
+		state5 = perRow
+		Verdict(perRow == 1, ("tiles a row: %d (1 wanted: one column)"):format(perRow))
+		local names = TileNames()
 		local saved = ns.Favorites()
-		Verdict(fav and fav:GetName() == ns.L["Favorites"] and open and #saved == 2 and #names == 2
-			and names[2] == saved[2].label and Blocked() == blocked0,
-			("first line %q (Favorites wanted), open %s, under it %q (%d favorites), blocked +%d"):format(
-				tostring(fav and fav:GetName()), tostring(open), table.concat(names, " | "), #saved, Blocked() - blocked0))
-		Say("--- 6 of 8: each favorite's line picked ---")
+		Verdict(fav and fav:GetName() == ns.L["Favorites"] and #under == 0 and page and page:IsVisible()
+			and #names == 2 and names[1] == ns.FavoriteName(saved[1]) and names[2] == "Test Visions"
+			and not PopupShown() and Blocked() == blocked0,
+			("first line %q (Favorites wanted), %d lines under it (0 wanted), page %s, tiles %q, popup %s, blocked +%d"):format(
+				tostring(fav and fav:GetName()), #under, page and page:IsVisible() and "shown" or "NOT SHOWN",
+				table.concat(names, " | "), PopupShown() or "none", Blocked() - blocked0))
+		Say("--- 6 of 7: each tile clicked ---")
 		local i = 0
-		local function NextLine()
+		local function NextTile()
 			i = i + 1
-			local line, want = lines[i], saved[i]
-			if not (line and want) then return FavoritesPage(fav) end
-			local b6 = Blocked()
-			pcall(ns.PickSettingsCategory, _G.SettingsPanel, line)
-			Later(1.5, function()
-				Shot("6." .. i)
-				local here = ns.FavoriteHere()
-				local star = ns.FavoriteStarShown()
-				Verdict(Same(here, want) and star and star.on and Blocked() == b6,
-					("line %q picked: at %s (%s wanted), star %s, blocked +%d"):format(tostring(line:GetName()),
-						Where(here), Where(want), OnText(star), Blocked() - b6))
-				Later(0.5, NextLine)
+			local want = saved[i]
+			if not want then return Menu() end
+			pcall(ns.PickSettingsCategory, _G.SettingsPanel, fav)
+			Later(1, function()
+				local tile
+				for _, each in ipairs(ns.FavoriteTiles()) do
+					if each:IsVisible() and each.place == want then tile = each end
+				end
+				local b6 = Blocked()
+				if tile then tile:Click("LeftButton") end
+				Later(1.5, function()
+					Shot("6." .. i)
+					local here = ns.FavoriteHere()
+					local star = ns.FavoriteStarShown()
+					Verdict(tile and Same(here, want) and star and star.on and Blocked() == b6,
+						("tile %q clicked: at %s (%s wanted), star %s, blocked +%d"):format(ns.FavoriteName(want),
+							Where(here), Where(want), OnText(star), Blocked() - b6))
+					Later(0.5, NextTile)
+				end)
 			end)
 		end
-		Later(0.5, NextLine)
-		state.stage = 3
+		Later(0.5, NextTile)
+	end)
+end
+
+-- 4: the deep favorite renamed in its own popup (the text typed, Enter pressed).
+local function Rename()
+	Say("--- 4 of 7: renamed ---")
+	ns.TestPrompt("Favorites test: 4 of 7, a favorite renamed. Just watch.", 3)
+	local deep = ns.Favorites()[2]
+	local which = ns.FavoriteRenamePopup()
+	if deep then ns.FavoriteRenameAsk(deep) end
+	local popup = StaticPopup_FindVisible and StaticPopup_FindVisible(which)
+	local box = popup and (popup.editBox or popup.EditBox or (popup.GetEditBox and popup:GetEditBox()))
+	local had = box and box:GetText()
+	Later(1, function()
+		Shot("4")
+		if box then
+			box:SetText("Test Visions")
+			local enter = box:GetScript("OnEnterPressed")
+			if enter then pcall(enter, box) end
+		end
+		local closed = not PopupShown()
+		Verdict(deep and box and had == deep.label and ns.FavoriteName(deep) == "Test Visions" and closed,
+			("renamed in its popup: box had %q, name now %q (Test Visions wanted), popups %s"):format(
+				tostring(had), deep and ns.FavoriteName(deep) or "?", closed and "none left" or PopupShown()))
+		Later(1, Line)
 	end)
 end
 
 -- 3: a place two rows of tabs deep: Style General's inner row at Visions.
 local function Deep(after)
-	Say("--- 3 of 8: a place two rows of tabs deep ---")
-	ns.TestPrompt("Favorites test: 3 of 8, Style General at its Visions tab. Just watch.", 3)
+	Say("--- 3 of 7: a place two rows of tabs deep ---")
+	ns.TestPrompt("Favorites test: 3 of 7, Style General at its Visions tab. Just watch.", 3)
 	pcall(ns.OpenOptions, "Style General")
 	Later(1, function()
 		local row, visions = RowWith(ns.L["Visions"])
@@ -266,9 +388,8 @@ local function Deep(after)
 				local saved = list[#list]
 				local deep = saved and saved.page ~= "Keybinds" and #saved.tabs >= 2
 					and saved.tabs[#saved.tabs].label == ns.L["Visions"]
-				Verdict(deep and PopupUp(), ("starred: %s (2 rows or more, the last at Visions), popup %s"):format(
-					Where(saved), PopupUp() and "up" or "NOT UP"))
-				PopupDown()
+				Verdict(deep and not PopupShown(), ("starred: %s (2 rows or more, the last at Visions), popup %s"):format(
+					Where(saved), PopupShown() or "none"))
 				pcall(row.click, interface)
 				Later(1, function()
 					local now = ns.FavoriteStarShown()
@@ -293,10 +414,10 @@ local function Deep(after)
 	end)
 end
 
--- 1 and 2: Keybinds' star, then starred; then 3; then 4, the reload.
-local function BeforeReload()
-	Say("--- 1 of 8: Keybinds' star ---")
-	ns.TestPrompt("Favorites test: 1 of 8, Keybinds. Just watch.", 3)
+-- 1 and 2: Keybinds' star, then starred; then 3 on.
+local function Start()
+	Say("--- 1 of 7: Keybinds' star ---")
+	ns.TestPrompt("Favorites test: 1 of 7, Keybinds. Just watch.", 3)
 	pcall(ns.OpenOptions, "Keybinds")
 	Later(1, function()
 		Shot("1")
@@ -306,32 +427,15 @@ local function BeforeReload()
 			("star %s, %s, %s (off wanted)"):format(star and "shown" or "NONE", where, OnText(star)))
 		-- (the click a second after the shot: a shot takes the frame's end state)
 		Later(1, function()
-			Say("--- 2 of 8: Keybinds starred ---")
+			Say("--- 2 of 7: Keybinds starred ---")
 			if star then star:Click() end
 		end)
 		Later(2, function()
 			Shot("2")
 			local list = ns.Favorites()
-			Verdict(star and star.on and #list == 1 and list[1].page == "Keybinds" and PopupUp(),
-				("clicked: favorites %q, star %s, reload popup %s"):format(Favs(), OnText(star),
-					PopupUp() and "up" or "NOT UP"))
-			PopupDown()
-			Later(1, function()
-				Deep(function()
-					Say("--- 4 of 8: reload from the popup ---")
-					State().stage = 2
-					Close()
-					-- (the popup again, as a star changed asks: the last favorite off and on)
-					local last = ns.Favorites()[#ns.Favorites()]
-					if last then
-						ns.SetFavorite(last, false)
-						ns.SetFavorite(last, true)
-					end
-					Say(("  favorites %q, reload popup %s"):format(Favs(), PopupUp() and "up" or "NOT UP"))
-					Shot("4")
-					ns.TestPrompt("Favorites test: 4 of 8. Click Reload in the popup.", 3600)
-				end)
-			end)
+			Verdict(star and star.on and #list == 1 and list[1].page == "Keybinds" and not PopupShown(),
+				("clicked: favorites %q, star %s, popup %s"):format(Favs(), OnText(star), PopupShown() or "none"))
+			Later(1, function() Deep(Rename) end)
 		end)
 	end)
 end
@@ -349,28 +453,23 @@ function ns.FavoritesTest()
 	CinematicDB.favoritesTestLog = {}
 	local saved = {}
 	for _, place in ipairs(ns.Favorites()) do saved[#saved + 1] = place end
-	CinematicDB.favoritesTest = { stage = 1, saved = saved, pass = 0, fail = 0 }
+	CinematicDB.favoritesTest = { saved = saved, pass = 0, fail = 0 }
 	Say(("start: %s (game %s), gamepad UI %s, your favorites put aside: %s"):format(ns.isRetail and "retail" or "Forever",
 		tostring((select(4, GetBuildInfo()))), _G.SmartNavigation and "there" or "not there",
 		#saved > 0 and Favs() or "none"))
 	CinematicDB.favorites = {}
 	if ns.IsCineModeOn and ns.IsCineModeOn() and Cinematic_ToggleCineMode then pcall(Cinematic_ToggleCineMode) end
 	Close()
-	C_Timer.After(0.5, BeforeReload)
+	C_Timer.After(0.5, Start)
 end
 
--- After the reload the test asked for: the rest, once the game has settled.
+-- A reload mid-run: stopped, your favorites back.
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:SetScript("OnEvent", function(self)
 	self:UnregisterAllEvents()
-	local state = State()
-	if not state then return end
-	if state.stage ~= 2 then
-		-- (stopped by a reload mid-run: your favorites back)
-		Say("  reloaded before the test asked: stopped")
-		return Finish("stopped")
+	if State() then
+		Say("  reloaded mid-run: stopped")
+		Finish("stopped")
 	end
-	Say(("  reloaded; favorites %q"):format(Favs()))
-	C_Timer.After(4, AfterReload)
 end)
