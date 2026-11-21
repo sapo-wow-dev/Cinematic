@@ -234,7 +234,7 @@ local function PrintDebugHelp()
 	print("  /cine debug blockedline - one run checking the error box catches the yellow \"Interface action failed\" line, with or without the game's event (dev copy; again to stop)")
 	print("  /cine debug taintopen [ways] - which way of opening the settings leaves its lists written by us: 6 ways (or the numbers given), each after a /reload (click its Reload button); some ask for Escape > Options, way 6 in a fight (dev copy; again to stop)")
 	print("  /cine debug reloadpaths - one run checking each of our reloads (Reload button and key, the popups that reload) reloads rather than being blocked: you click each, one /reload a step (dev copy; again to stop)")
-	print("  /cine debug addonlist - runs itself: the AddOns list opens on All, and on Forever the secure Reload UI lies over its button once a tick changes (dev copy; again to stop)")
+	print("  /cine debug addonlist - the AddOns list opens on All and a tick changed there survives its Reload UI; the test flips one addon, you click Reload UI twice (dev copy; again to stop)")
 	print("  /cine debug reloadcover - runs itself: each popup that reloads shows, and the secure Reload over it is checked on its button with no error (dev copy; again to stop)")
 	print("  /cine debug listfold - one run checking our settings' left list is never made again in a fight (no yellow \"Interface action failed\" lines); you start and end a fight (dev copy; again to stop)")
 	print("  /cine debug favstars [words] - opens every settings page and icon (or those whose names have a word given) by itself and checks its Favorites star: shown, for that page, overlapping nothing; a screenshot per failing page (dev copy; again to stop)")
@@ -1960,7 +1960,7 @@ local function HandleSlash(msg)
 		if ns.ReloadPathsTest then ns.ReloadPathsTest()
 		else ns.Print("/cine debug reloadpaths is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "addonlist" then
-		-- (Dev copy: the AddOns list opens on All, the secure Reload UI over it on Forever, AddonListAllTest.lua.)
+		-- (Dev copy: the AddOns list opens on All and its Reload UI keeps your ticks, AddonListAllTest.lua.)
 		if ns.AddonListAllTest then ns.AddonListAllTest()
 		else ns.Print("/cine debug addonlist is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "reloadcover" then
