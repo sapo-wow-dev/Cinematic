@@ -1183,4 +1183,18 @@ return {
     proof = "/cine debug shoulder selfpair run 6: flip at ~10:51:01, the error at 10:51:07 (CinematicDB.log deverror)",
     source = "Dev/ShoulderCamTest.lua",
   },
+  {
+    id = "settings.categorylist.pick-redraws-only-if-open",
+    area = "frames",
+    clients = { "forever" },
+    api = { "SettingsCategoryListMixin:SetCurrentCategory", "SettingsPanelMixin:SelectCategory", "Settings.CategoryChanged", "SettingsCategoryMixin:SetExpanded" },
+    when = "a left list line is clicked",
+    rule = "A line's click (OnCategorySelected > SelectCategory > SetCurrentCategory) makes the list again only if a line above the picked one was folded or the picked one is already open; Settings.CategoryChanged fires after that. A line opened from CategoryChanged shows its arrow open and no lines under it till the list is made again.",
+    works = { "open/fold our lines on the line's PreClick (before the game's OnClick), so the game's own pick makes the list (Options.lua menu.FoldBeforeClick); a page line that changed others' folds is set open too, which also makes the game redraw" },
+    fails = { "SetExpanded from the Settings.CategoryChanged callback (arrow open, no lines)", "CreateCategories from our code (taints the list: forever.settings.addon-categoryset-taints-list)" },
+    status = "tested",
+    tested = "2026-11-21",
+    proof = "/cine debug listfold 1-4 run 1 (Forever, 8 PASS: control with the PreClick off shows Style open with no lines, screenshot WoWScrnShot_112126_124024; with it, 3 rounds Style + Interface drawn, list made once per click, 0 blocked, WoWScrnShot_112126_124028); Tools/offline/listclick.lua (the game's SetCurrentCategory from its source; control shows the bug); read from Blizzard_CategoryList.lua / Blizzard_SettingsPanel.lua source",
+    source = "user screenshot 2026-11-21: Style > Interface arrow open, no lines",
+  },
 }

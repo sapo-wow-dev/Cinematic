@@ -236,7 +236,7 @@ local function PrintDebugHelp()
 	print("  /cine debug reloadpaths - one run checking each of our reloads (Reload button and key, the popups that reload) reloads rather than being blocked: you click each, one /reload a step (dev copy; again to stop)")
 	print("  /cine debug addonlist - the AddOns list opens on All and a tick changed there survives its Reload UI; the test flips one addon, you click Reload UI twice (dev copy; again to stop)")
 	print("  /cine debug reloadcover - runs itself: each popup that reloads shows, and the secure Reload over it is checked on its button with no error (dev copy; again to stop)")
-	print("  /cine debug listfold - one run checking our settings' left list is never made again in a fight (no yellow \"Interface action failed\" lines); you start and end a fight (dev copy; again to stop)")
+	print("  /cine debug listfold [steps] - our settings' left list: group lines open on every click (steps 1-4, nothing to do), never made again in a fight (5-9, you start and end one) (dev copy; again to stop)")
 	print("  /cine debug favstars [words] - opens every settings page and icon (or those whose names have a word given) by itself and checks its Favorites star: shown, for that page, overlapping nothing; a screenshot per failing page (dev copy; again to stop)")
 	print("  /cine debug kit - lists the tests made with the test kit (Dev/TestKit.lua); /cine debug kitcheck runs the kit's own check, nothing to do (dev copy; again to stop)")
 	print("  /cine debug favorites - one run testing Favorites, no reload: stars on two pages, a favorite renamed, the Favorites line and its tiles, a tile's menu, then Escape > Options in a fight you start; your favorites put back after (dev copy; again to stop)")
@@ -1990,10 +1990,6 @@ local function HandleSlash(msg)
 		-- (Dev copy: the secure Reload laid over each reload popup, no error, ReloadCoverTest.lua.)
 		if ns.ReloadCoverTest then ns.ReloadCoverTest()
 		else ns.Print("/cine debug reloadcover is in the dev copy only.") end
-	elseif cmd == "debug" and arg == "listfold" then
-		-- (Dev copy: our settings' left list never made again in a fight, ListFoldTest.lua.)
-		if ns.ListFoldTest then ns.ListFoldTest()
-		else ns.Print("/cine debug listfold is in the dev copy only.") end
 	elseif cmd == "debug" and (arg == "favstars" or arg:find("^favstars ")) then
 		-- (Dev copy: every page's Favorites star looked at as drawn, FavStarsTest.lua;
 		-- words after it: only the pages whose names have one of them.)

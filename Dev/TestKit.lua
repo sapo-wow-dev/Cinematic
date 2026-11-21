@@ -443,7 +443,10 @@ function Kit.Start(name, arg)
 			step.run(run)
 			local e1, b1 = Counts()
 			Say(run, ("  step %s end: errors +%d, blocked +%d"):format(step.key, e1 - e0, b1 - b0))
-			if b1 > b0 then run:Fail(("%d blocked action(s) in this step"):format(b1 - b0)) end
+			if b1 > b0 and step.blockedOk then
+				-- (A step that blocks on purpose, a control: said, not failed.)
+				Say(run, ("  %d blocked action(s), on purpose in this step (blockedOk)"):format(b1 - b0))
+			elseif b1 > b0 then run:Fail(("%d blocked action(s) in this step"):format(b1 - b0)) end
 		end
 		run.step = nil
 	end)

@@ -48,6 +48,7 @@ OFFLINE_TESTS = [
     ("Themes page has its own rotating preview, retail", "Tools/offline/themespreview.lua", "retail"),
     ("Cast Bars pages show the unit frame over their cast bars, forever", "Tools/offline/castframe.lua", "forever"),
     ("Cast Bars pages show the unit frame over their cast bars, retail", "Tools/offline/castframe.lua", "retail"),
+    ("left list: a line with lines under it opens on every click", "Tools/offline/listclick.lua"),
     ("party flicker (DaylightUI range fade)", "Tools/offline/partyflicker.lua"),
     ("map pin: its own Reveal box, Shortest Path's journey pin left out", "Tools/offline/mappin.lua"),
     ("card wait (Rested card behind DaylightUI's zone title)", "Tools/offline/cardwait.lua"),

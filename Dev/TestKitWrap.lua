@@ -85,7 +85,6 @@ local OLD = {
 	{ cmd = "reloadpaths", fn = "ReloadPathsTest", file = "ReloadPathsTest.lua", log = "reloadPathsLog" },
 	{ cmd = "addonlist", fn = "AddonListAllTest", file = "AddonListAllTest.lua", log = "addonListLog" },
 	{ cmd = "reloadcover", fn = "ReloadCoverTest", file = "ReloadCoverTest.lua", log = "reloadCoverLog" },
-	{ cmd = "listfold", fn = "ListFoldTest", file = "ListFoldTest.lua", log = "listFoldTestLog" },
 	{ cmd = "favstars", fn = "FavStarsTest", file = "FavStarsTest.lua", log = "favStarsTestLog" },
 	{ cmd = "favorites", fn = "FavoritesTest", file = "FavoritesTest.lua", log = "favoritesTestLog" },
 	{ cmd = "favlines", fn = "FavLinesTest", file = "FavLinesTest.lua", log = "favLinesTestLog" },

@@ -2607,10 +2607,23 @@ do
 	end
 	-- (For ListFoldTest.lua: the page waiting for the fight's end, if any.)
 	function ns.LeftListFoldWaiting() return foldAfterFight end
-	function Fold(current)
-		if InCombatLockdown() then return FoldAfterFight(current) end
-		local list = SettingsPanel and SettingsPanel.GetCategoryList and SettingsPanel:GetCategoryList()
-		-- (The page shown's line and every line it's under, by key.)
+	-- (The lines opened and folded for current; true if any changed.)
+	local function FoldTo(open)
+		local changed = false
+		for key in pairs(menu.fold) do
+			local category = subpages[key]
+			if type(category) == "table" and category.SetExpanded then
+				local inside = open[key] or false
+				local now = category.IsExpanded and category:IsExpanded() or category.expanded or false
+				if (now and true or false) ~= inside then
+					category:SetExpanded(inside)
+					changed = true
+				end
+			end
+		end
+		return changed
+	end
+	local function OpenPath(current)
 		local open = {}
 		for key, category in pairs(subpages) do
 			if category == current then
@@ -2621,16 +2634,31 @@ do
 				break
 			end
 		end
-		for key in pairs(menu.fold) do
-			local category = subpages[key]
-			if type(category) == "table" and category.SetExpanded then
-				local inside = open[key] or false
-				local now = category.IsExpanded and category:IsExpanded() or category.expanded or false
-				if (now and true or false) ~= inside then
-					category:SetExpanded(inside)
-				end
-			end
+		return open
+	end
+	-- A line clicked (2026-11-21): folded before the game's own click runs.
+	-- The game makes its list again on a pick only if the line picked is open
+	-- (or a line it's under was folded); Fold runs after that
+	-- (Settings.CategoryChanged), so a group line clicked showed its arrow
+	-- open and no lines under it. Folded here first, the game's own pick makes
+	-- the list (no list made from our code); a page line that changed others'
+	-- folds says open too, so the list is made then as well. Not in a fight.
+	function menu.FoldBeforeClick(current)
+		if InCombatLockdown() or type(current) ~= "table" then return false end
+		-- (/cine debug listfold's control step: the game's click alone.)
+		if ns.testNoFoldBeforeClick then return false end
+		local changed = FoldTo(OpenPath(current))
+		if changed and current.SetExpanded and not (current.IsExpanded and current:IsExpanded()) then
+			current:SetExpanded(true)
 		end
+		return changed
+	end
+	function Fold(current)
+		if InCombatLockdown() then return FoldAfterFight(current) end
+		local list = SettingsPanel and SettingsPanel.GetCategoryList and SettingsPanel:GetCategoryList()
+		-- (The page shown's line and every line it's under, by key.)
+		local open = OpenPath(current)
+		FoldTo(open)
 		-- (Not made again from here, 2026-11-20: the list made by our code stays
 		-- written by us all session (/cine debug taintopen: its view and data
 		-- provider, 76 fields), and Escape > Options in a fight read it, so every
@@ -2755,6 +2783,19 @@ do
 			local toggle = ToggleOf(button)
 			local isOurs = category ~= nil
 			if toggle then toggles = toggles + 1 end
+			-- (The line itself: folded before the game's click, menu.FoldBeforeClick.
+			-- The list's lines are shared, so whose line it is is looked up per click.)
+			if isOurs and not button.cineFoldHooked then
+				button.cineFoldHooked = true
+				button:HookScript("PreClick", function(self)
+					local live = {}
+					for _, each in pairs(subpages) do
+						if type(each) == "table" then live[each] = true end
+					end
+					local picked = CategoryOf(self, live)
+					if picked then pcall(menu.FoldBeforeClick, picked) end
+				end)
+			end
 			if isOurs and toggle and toggle:IsShown() then
 				mine = mine + 1
 				if not button.cineArrow then
