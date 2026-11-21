@@ -1,4 +1,4 @@
--- /cine debug whytest [steps]: one run checking the Why window (/cine why)
+-- /cine debug whytest [steps, by number or name]: one run checking the Why window (/cine why)
 -- against the real game, step by step in the big test box (ns.PadTestBox):
 -- what to do, a GET READY countdown, then RECORDING. Each step opens the
 -- window at the tab it checks, logs what that tab's rows say whenever they
@@ -70,11 +70,39 @@ local function MomentSince(key)
 	return moment and moment.at >= run.stepAt - READY and moment or nil
 end
 
+-- The window's tabs, each sized to its text (WhyPanel.lua): a word that
+-- doesn't fit its tab, or tabs overlapping, as a line; nil if they all fit.
+local function TabFit()
+	local window = _G.CinematicWhyWindow
+	if not window then return "no Why window" end
+	local found, bad = {}, {}
+	local function Walk(frame)
+		for _, child in ipairs({ frame:GetChildren() }) do
+			if child.id and child.text and child.line and child:IsShown() then found[#found + 1] = child end
+			Walk(child)
+		end
+	end
+	Walk(window)
+	table.sort(found, function(a, b) return (a:GetLeft() or 0) < (b:GetLeft() or 0) end)
+	for i, tab in ipairs(found) do
+		local need = tab.text:GetStringWidth()
+		if tab:GetWidth() < need + 4 then
+			bad[#bad + 1] = ("%s %.0f wide for %.0f of text"):format(tab.id, tab:GetWidth(), need)
+		end
+		local nextTab = found[i + 1]
+		if nextTab and (tab:GetRight() or 0) > (nextTab:GetLeft() or 0) + 0.5 then
+			bad[#bad + 1] = tab.id .. " overlaps " .. nextTab.id
+		end
+	end
+	if #found < 7 then bad[#bad + 1] = ("%d tabs, not 7"):format(#found) end
+	return #bad > 0 and table.concat(bad, "; ") or nil
+end
+
 local STEPS = {
-	{ name = "tabs", say = "Just watch: the Why window opens on each of its tabs in turn.", length = 14,
+	{ name = "tabs", say = "Just watch: the Why window opens on each of its tabs in turn.", length = 17,
 		prep = function() ns.WhyWindowTab("interface") end,
 		tick = function(s, t)
-			local tabs = { "interface", "cameras", "cards", "visions", "addons", "recent" }
+			local tabs = { "interface", "cameras", "cards", "visions", "atmosphere", "addons", "recent" }
 			local at = math.min(#tabs, math.floor(t / 2.2) + 1)
 			if s.at ~= at then
 				s.at = at
@@ -82,15 +110,17 @@ local STEPS = {
 				s.counts = s.counts or {}
 				s.counts[tabs[at]] = Snapshot(tabs[at]) or "ERROR"
 				Shot("1 tab " .. tabs[at])
+				s.fit = s.fit or TabFit()
 			end
 		end,
 		verdict = function(s)
-			local out, bad = {}, false
-			for _, tab in ipairs({ "interface", "cameras", "cards", "visions", "addons", "recent" }) do
+			local out, bad = {}, s.fit ~= nil
+			out[1] = "tabs fit: " .. (s.fit or "yes")
+			for _, tab in ipairs({ "interface", "cameras", "cards", "visions", "atmosphere", "addons", "recent" }) do
 				local count = s.counts and s.counts[tab]
 				out[#out + 1] = ("%s %s"):format(tab, tostring(count or "not reached"))
 				if count == "ERROR" or count == nil or (count == 0 and (tab == "interface" or tab == "cameras"
-					or tab == "cards" or tab == "visions")) then bad = true end
+					or tab == "cards" or tab == "visions" or tab == "atmosphere")) then bad = true end
 			end
 			return not bad, table.concat(out, ", ")
 		end },
@@ -324,8 +354,15 @@ end
 function ns.WhyTest(args)
 	if run then return Finish(true) end
 	local order = {}
-	for number in tostring(args or ""):gmatch("%d+") do
-		if STEPS[tonumber(number)] then order[#order + 1] = tonumber(number) end
+	-- (Steps by number or by name: "1 3" or "tabs card".)
+	for word in tostring(args or ""):gmatch("%S+") do
+		local n = tonumber(word)
+		if not n then
+			for i, step in ipairs(STEPS) do
+				if step.name == word:lower() then n = i end
+			end
+		end
+		if n and STEPS[n] then order[#order + 1] = n end
 	end
 	if #order == 0 then
 		for i = 1, #STEPS do order[i] = i end

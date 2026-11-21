@@ -883,16 +883,28 @@ function Fill(view)
 		+ banner.now:GetStringHeight() + 10))
 
 	-- The tabs, and this tab's filters and line under the list.
+	-- (Each as wide as its text and some room, the room left shared out, so a
+	-- long word (Atmosphere, in German...) doesn't run into the next.)
 	local tabs = Tabs()
-	local tabWidth = view.width / #tabs
-	local tabInfo
+	local TAB_PAD = 16
+	local textWidths, total = {}, 0
 	for i, tab in ipairs(tabs) do
 		local button = view.tabs[i] or MakeTab(view, i)
+		button.text:SetText(L[tab.label])
+		textWidths[i] = math.ceil(button.text:GetStringWidth() or 0) + TAB_PAD
+		total = total + textWidths[i]
+	end
+	local extra = (view.width - total) / #tabs
+	local tabInfo
+	local x = 0
+	for i, tab in ipairs(tabs) do
+		local button = view.tabs[i]
+		local tabWidth = math.max(1, textWidths[i] + extra)
 		button.id = tab.id
 		button:ClearAllPoints()
-		button:SetPoint("BOTTOMLEFT", view.tabsAnchor, "BOTTOMLEFT", (i - 1) * tabWidth, 0)
+		button:SetPoint("BOTTOMLEFT", view.tabsAnchor, "BOTTOMLEFT", x, 0)
 		button:SetWidth(tabWidth)
-		button.text:SetText(L[tab.label])
+		x = x + tabWidth
 		local chosen = tab.id == view.tab
 		if chosen then tabInfo = tab end
 		button.line:SetShown(chosen)

@@ -429,10 +429,15 @@ ns.WhyProvider("cards", "Cards", "The card on screen and the ones waiting. Below
 	return sections
 end)
 
--- (After Cards, so the tabs go Cameras, Cards, Visions.)
-ns.WhyProvider("visions", "Visions", "Each Vision and Atmosphere page with its tabs: whether it's on now, ready for its moment, or " ..
+-- (After Cards, so the tabs go Cameras, Cards, Visions, Atmosphere.)
+ns.WhyProvider("visions", "Visions", "Each Vision page with its tabs: whether it's on now, ready for its moment, or " ..
 	"off, and which switch turned it off.", function()
-	return { HubSection("Visions", "Visions"), HubSection("Atmosphere", "Atmosphere") }
+	return { HubSection("Visions", "Visions") }
+end)
+-- (Atmosphere: a tab of its own.)
+ns.WhyProvider("atmosphere", "Atmosphere", "Each Atmosphere page with its tabs: whether it's on now, ready for its " ..
+	"moment, or off, and which switch turned it off.", function()
+	return { HubSection("Atmosphere", "Atmosphere") }
 end)
 
 -- Quality of Life and the Wheels: at the end of the Interface tab, by their switches.
