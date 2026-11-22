@@ -186,7 +186,7 @@ local castMoved -- { own = its points, ours = the points we gave it }, while mov
 
 local function CastPoints(cast)
 	local points = {}
-	for i = 1, cast:GetNumPoints() do points[i] = { cast:GetPoint(i) } end
+	for i = 1, ns.NumPoints(cast) do points[i] = { cast:GetPoint(i) } end
 	return points
 end
 

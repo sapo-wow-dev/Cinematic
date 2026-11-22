@@ -39,10 +39,19 @@ local function Plain(value)
 	if value == nil or (issecretvalue and issecretvalue(value)) then return nil end
 	return value
 end
+-- (A part can say it isn't forbidden and still refuse tainted code in a fight
+-- on WoW Forever: "calling '?' on bad self (Attempt to access forbidden object
+-- from code tainted by an AddOn)" on GetParent, under EllesmereUI's chat dock,
+-- 2026-11-22. One it refuses is left alone: Tools/errors/known.lua,
+-- region-refuses-tainted-code.)
+local function Reachable(region)
+	return not (region.IsForbidden and region:IsForbidden())
+		and type(region.GetParent) == "function" and (pcall(region.GetParent, region))
+end
 local function Usable(region)
 	return type(region) == "table" and type(region.SetAlpha) == "function"
 		and type(region.IsIgnoringParentAlpha) == "function"
-		and not (region.IsForbidden and region:IsForbidden())
+		and Reachable(region)
 end
 -- Whether it ignores its parent's alpha. A secret answer (1246 parts under
 -- FlareUI's frames on Forever) goes by what the hook saw set: nil when it saw
@@ -172,7 +181,7 @@ local function Walk(frame, depth, list, count)
 		for _, child in ipairs({ frame:GetChildren() }) do
 			count[1] = count[1] + 1
 			if Detached(child) then list[#list + 1] = child end
-			if not (child.IsForbidden and child:IsForbidden()) then Walk(child, depth + 1, list, count) end
+			if Reachable(child) then Walk(child, depth + 1, list, count) end
 		end
 	end
 end

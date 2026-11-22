@@ -798,7 +798,7 @@ local function Repoint(parent, from, to, only)
 	local function Swap(object)
 		if object == from or object == to or not object.GetNumPoints then return end
 		local moved = {}
-		for i = 1, object:GetNumPoints() do
+		for i = 1, ns.NumPoints(object) do
 			local point, relative, relPoint, x, y = object:GetPoint(i)
 			if relative == from then moved[#moved + 1] = { point, relPoint, x, y } end
 		end
@@ -838,7 +838,7 @@ local function SlideSettings(settings, by) -- (by: in UIParent's units)
 	local left, top = settings:GetLeft(), settings:GetTop()
 	if not (left and top) then return end
 	local points = {}
-	for i = 1, settings:GetNumPoints() do points[i] = { settings:GetPoint(i) } end
+	for i = 1, ns.NumPoints(settings) do points[i] = { settings:GetPoint(i) } end
 	local k = settings:GetEffectiveScale() / UIParent:GetEffectiveScale()
 	local width, height = settings:GetSize()
 	settings:ClearAllPoints()
@@ -1190,7 +1190,7 @@ local function PopOut(preview)
 		preview:HookScript("OnSizeChanged", FitWindow)
 	end
 	slot.points = {}
-	for i = 1, preview:GetNumPoints() do slot.points[i] = { preview:GetPoint(i) } end
+	for i = 1, ns.NumPoints(preview) do slot.points[i] = { preview:GetPoint(i) } end
 	slot:ClearAllPoints()
 	for _, each in ipairs(slot.points) do slot:SetPoint(unpack(each)) end
 	-- (No room kept for it on the page, nor a note: the window shows it.)
@@ -1211,7 +1211,7 @@ local function PopOut(preview)
 	button:SetIcon("back")
 	button.tip = ns.L["Put the preview back on its page."]
 	button.homePoints = {}
-	for i = 1, button:GetNumPoints() do button.homePoints[i] = { button:GetPoint(i) } end
+	for i = 1, ns.NumPoints(button) do button.homePoints[i] = { button:GetPoint(i) } end
 	button:SetParent(window)
 	button:ClearAllPoints()
 	button:SetPoint("RIGHT", window.dock, "LEFT", -4, 0)
@@ -1803,7 +1803,7 @@ ns.FitStylePreview = FitPreview
 local function WidePreview(preview)
 	local parent = preview:GetParent()
 	local spot = CreateFrame("Frame", nil, parent)
-	for i = 1, preview:GetNumPoints() do spot:SetPoint(preview:GetPoint(i)) end
+	for i = 1, ns.NumPoints(preview) do spot:SetPoint(preview:GetPoint(i)) end
 	spot:SetSize(preview:GetWidth(), preview:GetHeight())
 	preview.stackSpot = spot
 	preview:ClearAllPoints()
@@ -2309,7 +2309,7 @@ function ns.ReportPlateTextures(which)
 	local function Pins(region)
 		local ok, text = pcall(function()
 			local list = {}
-			for i = 1, region:GetNumPoints() do
+			for i = 1, ns.NumPoints(region) do
 				local point, relativeTo, relativePoint, x, y = region:GetPoint(i)
 				local on = relativeTo == health and "bar" or relativeTo == nil and "parent"
 					or (Plain(relativeTo) and relativeTo.GetDebugName and Name(relativeTo)) or "?"

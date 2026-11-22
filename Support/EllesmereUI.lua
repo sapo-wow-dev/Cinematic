@@ -695,13 +695,17 @@ end)
 -- frames on UIParent, so they don't fade with the chat frames. The panel and
 -- sidebar are found through its per-chat-frame data; the rest by what
 -- they're anchored to (those parts, or the tab dock).
+-- (In a fight on WoW Forever a frame can say it isn't forbidden and still
+-- refuse tainted code: one GetName refuses is left alone. Its anchors are
+-- counted with ns.NumPoints, which can be secret then.)
 local function IsUsable(frame)
 	return type(frame) == "table" and type(frame.GetObjectType) == "function"
 		and type(frame.SetAlpha) == "function" and not (frame.IsForbidden and frame:IsForbidden())
+		and type(frame.GetName) == "function" and (pcall(frame.GetName, frame))
 end
 
 local function IsAnchoredTo(frame, targets)
-	for i = 1, frame:GetNumPoints() do
+	for i = 1, ns.NumPoints(frame) do
 		local ok, _, relativeTo = pcall(frame.GetPoint, frame, i)
 		if ok and relativeTo and targets[relativeTo] then
 			return true

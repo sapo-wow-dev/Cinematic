@@ -4222,7 +4222,7 @@ do
 			end
 			hub.heldBy = self
 			kept = { parent = hubFrame:GetParent(), points = {} }
-			for i = 1, hubFrame:GetNumPoints() do kept.points[i] = { hubFrame:GetPoint(i) } end
+			for i = 1, ns.NumPoints(hubFrame) do kept.points[i] = { hubFrame:GetPoint(i) } end
 			hubFrame:SetParent(self)
 			hubFrame:ClearAllPoints()
 			hubFrame:SetAllPoints(self)
@@ -16314,7 +16314,7 @@ local function CreateCooldownPanel()
 		local window = OptionsWindow()
 		if window and window ~= frame then
 			local saved = {}
-			for i = 1, frame:GetNumPoints() do
+			for i = 1, ns.NumPoints(frame) do
 				local ok, point, relativeTo, relativePoint, x, y = pcall(frame.GetPoint, frame, i)
 				if ok and point then saved[#saved + 1] = { point, relativeTo, relativePoint, x, y } end
 			end

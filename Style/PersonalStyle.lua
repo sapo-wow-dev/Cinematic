@@ -161,7 +161,7 @@ local function CopyTrim(from, to)
 				pcall(function() copy:SetVertexColor(piece:GetVertexColor()) end)
 				-- (Its points, on ours; placed by any other frame or unreadable: our size.)
 				local placed = pcall(function()
-					for i = 1, piece:GetNumPoints() do
+					for i = 1, ns.NumPoints(piece) do
 						local point, relativeTo, relPoint, x, y = piece:GetPoint(i)
 						if relativeTo ~= from then error("placed by another frame") end
 						copy:SetPoint(point, to, relPoint, x, y)
@@ -239,7 +239,7 @@ local placed = setmetatable({}, { __mode = "k" })
 
 local function Points(frame)
 	local points = {}
-	for i = 1, frame:GetNumPoints() do points[i] = { frame:GetPoint(i) } end
+	for i = 1, ns.NumPoints(frame) do points[i] = { frame:GetPoint(i) } end
 	return points
 end
 

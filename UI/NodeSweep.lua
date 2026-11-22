@@ -223,7 +223,7 @@ local function Grow()
 	local entry = MinimapEntry()
 	if not (entry and (entry.shrunk or entry.parkedFullSize)) then return nil end
 	local scale, points = Minimap:GetScale(), {}
-	for i = 1, Minimap:GetNumPoints() do points[i] = { Minimap:GetPoint(i) } end
+	for i = 1, ns.NumPoints(Minimap) do points[i] = { Minimap:GetPoint(i) } end
 	if entry.shrunk then ns.FrameCall(Minimap, "SetScale", entry.savedScale or 1) end
 	if entry.savedPoints then
 		ns.FrameCall(Minimap, "ClearAllPoints")
@@ -1719,7 +1719,7 @@ end
 -- its children's), the game's icons at ICONS.
 function cursor.Begin()
 	local s = { points = {}, muted = {}, ox = 0, oy = 0, frames = 0, again = 0, heard = 0 }
-	for i = 1, Minimap:GetNumPoints() do s.points[i] = { Minimap:GetPoint(i) } end
+	for i = 1, ns.NumPoints(Minimap) do s.points[i] = { Minimap:GetPoint(i) } end
 	s.left, s.bottom = Minimap:GetLeft(), Minimap:GetBottom()
 	s.scale, s.width = Minimap:GetEffectiveScale(), Minimap:GetWidth()
 	if not (s.left and s.bottom and s.scale and s.width and s.width > 0 and #s.points > 0) then
@@ -2911,7 +2911,7 @@ do
 	-- The minimap as it is (grown to full size if faded), to put back after.
 	local function Save()
 		local saved = { scale = Minimap:GetScale(), points = {} }
-		for i = 1, Minimap:GetNumPoints() do saved.points[i] = { Minimap:GetPoint(i) } end
+		for i = 1, ns.NumPoints(Minimap) do saved.points[i] = { Minimap:GetPoint(i) } end
 		local ok, putBack = pcall(Grow)
 		saved.putBack = ok and putBack or nil
 		saved.grownScale = Minimap:GetScale()

@@ -471,7 +471,7 @@ local function Snapshot(i)
 		pcall(function() line.justify = left:GetJustifyH() end)
 		pcall(function()
 			local points = {}
-			for p = 1, left:GetNumPoints() do
+			for p = 1, ns.NumPoints(left) do
 				local point, relativeTo, relative, x, y = left:GetPoint(p)
 				if relativeTo == GameTooltip then
 					points[#points + 1] = { point, relative, x, y }
@@ -552,7 +552,7 @@ local function CheckIndent(n, line)
 		end
 		indentNotes = indentNotes + 1
 		local held = {}
-		for p = 1, left:GetNumPoints() do
+		for p = 1, ns.NumPoints(left) do
 			local point, relativeTo, relative, x, y = left:GetPoint(p)
 			held[#held + 1] = ("%s of %s %s %.1f,%.1f"):format(point,
 				relativeTo and relativeTo:GetDebugName() or "-", relative, x, y)

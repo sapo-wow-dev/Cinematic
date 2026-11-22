@@ -6082,7 +6082,7 @@ local function LiftFramerate(height)
 			return -- (where the game put it, untouched)
 		end
 		framerate.points = {}
-		for i = 1, counter:GetNumPoints() do
+		for i = 1, ns.NumPoints(counter) do
 			framerate.points[i] = { counter:GetPoint(i) }
 		end
 	end

@@ -507,7 +507,7 @@ local function DumpAnchors(inside)
 		local label, frame = part[1], part[2]
 		if frame then
 			local points = {}
-			for i = 1, frame:GetNumPoints() do
+			for i = 1, ns.NumPoints(frame) do
 				local point, relative, relativePoint, x, y = frame:GetPoint(i)
 				points[#points + 1] = ("%s to %s %s %s,%s"):format(tostring(point), Name(relative),
 					tostring(relativePoint), Num(x), Num(y))
@@ -737,7 +737,7 @@ local function Lift(inside)
 	if not state.points then
 		if inside:GetNumPoints() == 0 then return end
 		state.points = {}
-		for i = 1, inside:GetNumPoints() do
+		for i = 1, ns.NumPoints(inside) do
 			state.points[i] = { inside:GetPoint(i) }
 		end
 	end

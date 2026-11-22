@@ -2419,6 +2419,18 @@ local function Flag(value)
 	return value and true or false
 end
 
+-- How many anchors a frame has, 0 when that can't be read. In a fight on WoW
+-- Forever another addon's frame can give a secret count (a for loop over it
+-- errors: "'for' limit must be a number", EllesmereUI's chat, 2026-11-22) or
+-- refuse tainted code outright ("bad self"). Loop with this, never with
+-- frame:GetNumPoints() (Tools/errors/known.lua: points-count-secret).
+function ns.NumPoints(frame)
+	if type(frame) ~= "table" or type(frame.GetNumPoints) ~= "function" then return 0 end
+	local ok, count = pcall(frame.GetNumPoints, frame)
+	if not ok or (issecretvalue and issecretvalue(count)) or type(count) ~= "number" then return 0 end
+	return count
+end
+
 -- A function's results as a table with their count in n, so a nil in the
 -- middle or at the end isn't lost: unpack(t, 1, t.n) gives them all back
 -- (a plain { ... } with unpack(t) stops at Lua 5.1's idea of # instead).

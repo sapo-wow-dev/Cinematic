@@ -318,6 +318,47 @@ return {
     source = "memory: settexture-filter-crash",
   },
   {
+    id = "points-count-secret",
+    status = "fixed",
+    title = "'for' limit must be a number: a loop over another addon's GetNumPoints in a fight (Forever)",
+    match = { all = { "'for' limit must be a number" } },
+    why = {
+      call = "for i = 1, frame:GetNumPoints() do, with a secret count",
+      caller = "Support/EllesmereUI.lua's IsAnchoredTo, from the chat scanner FindChat (each scan tick)",
+      path = "it reads the anchors of every unnamed UIParent child to find EllesmereUI's chat parts, in fights too",
+      rule = "on WoW Forever another addon's frame can give a secret GetNumPoints in a fight; a for loop can't take a secret limit",
+      pattern = "looping over a raw GetNumPoints() count; it errored every tick, so the safety check stopped Cinematic for the session",
+    },
+    dont = "Never loop over frame:GetNumPoints(): loop over ns.NumPoints(frame) (0 when the count is secret or refused).",
+    check = { pattern = [[for \w+ = 1, [\w.]+:GetNumPoints\(\)]], allow = { "Dev/" } },
+    fix = "2026-11-22: ns.NumPoints (Core.lua) in every such loop (issue #7)",
+    seen = { "2026-11-22" },
+    example = [[Interface/AddOns/Cinematic/Support/EllesmereUI.lua:704: 'for' limit must be a number
+[Cinematic/Support/EllesmereUI.lua]:704: in function <Cinematic/Support/EllesmereUI.lua:703>
+[Cinematic/Support/EllesmereUI.lua]:758: in function '?']],
+    source = "GitHub issue #7 (EllesmereUI 9.9.1, Forever)",
+  },
+  {
+    id = "region-refuses-tainted-code",
+    status = "fixed",
+    title = "calling '?' on bad self (forbidden object from tainted code) on a part that isn't IsForbidden (Forever fight)",
+    match = { all = { "on bad self", "Attempt to access forbidden object" } },
+    why = {
+      call = "region:GetParent() (and IsShown, GetText before d88eb23)",
+      caller = "FadeDetached.lua's Detached, from Walk / ns.SyncDetached while fading a root",
+      path = "fading the UI walks every part under a faded frame (EllesmereUI's chat dock here) to find the detached ones",
+      rule = "in a fight on WoW Forever a region can say IsForbidden() false and still refuse tainted code",
+      pattern = "trusting IsForbidden() alone before calling methods on other addons' or the game's parts",
+    },
+    dont = "On parts we don't own, check IsForbidden and also pcall a cheap read (GetParent) before using them; skip any that refuse.",
+    fix = "2026-11-22: FadeDetached's Reachable (pcall GetParent) in Usable and Walk; EllesmereUI's IsUsable pcalls GetName (issue #7). Earlier: d88eb23 for IsShown/GetText in Frames.lua",
+    seen = { "2026-11-11", "2026-11-22" },
+    example = [[Interface/AddOns/Cinematic/FadeDetached.lua:155: calling '?' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())
+[C]: in function '?'
+[Cinematic/FadeDetached.lua]:155: in function <Cinematic/FadeDetached.lua:154>]],
+    source = "GitHub issue #7 (EllesmereUI 9.9.1, Forever)",
+  },
+  {
     id = "taintlog-hook-nil-call",
     status = "accepted",
     title = "\"attempt to call a nil value\" at [C] in a function we hook, while taintLog is on",

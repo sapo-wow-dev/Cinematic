@@ -843,11 +843,20 @@ function ns.PageOn(switch)
 	return true
 end
 
+-- (Also true for one that says it isn't forbidden and still refuses tainted
+-- code, as some do in a fight on WoW Forever: "calling '?' on bad self
+-- (Attempt to access forbidden object...)", issue #7 and d88eb23.
+-- Tools/errors/known.lua: region-refuses-tainted-code.)
+local function IsForbidden(frame)
+	if frame.IsForbidden and frame:IsForbidden() then return true end
+	return type(frame.GetParent) == "function" and not pcall(frame.GetParent, frame)
+end
+
 local function AddFrame(frame, group)
 	if not frame or seen[frame] or not frame.SetAlpha or frame == ns.letterbox then
 		return false
 	end
-	if frame.IsForbidden and frame:IsForbidden() then
+	if IsForbidden(frame) then
 		return false
 	end
 	local name = frame:GetName()
@@ -1019,7 +1028,7 @@ function ns.ParkShrunk(entry)
 	-- of the screen, seen 2026-11-10 when a quest area parked it mid-sweep.)
 	if frame == Minimap and ns.EndCursorSweep then ns.EndCursorSweep("it was moved off the screen") end
 	local points = {}
-	for i = 1, frame:GetNumPoints() do
+	for i = 1, ns.NumPoints(frame) do
 		local ok, point, relativeTo, relativePoint, x, y = pcall(frame.GetPoint, frame, i)
 		if not ok or type(point) ~= "string" then
 			return -- (can't read them back: leave it where it is)
@@ -1262,10 +1271,6 @@ end
 -- can't be added by name. Find it through its global table, or failing that
 -- by an unnamed top-level frame showing the text "Issue Reporter".
 -- Forbidden frames error on almost any method call, so check this first.
-local function IsForbidden(frame)
-	return frame.IsForbidden and frame:IsForbidden()
-end
-
 local function IsFrame(value)
 	return type(value) == "table" and type(value.GetObjectType) == "function"
 		and type(value.SetAlpha) == "function"
@@ -11708,7 +11713,7 @@ function ns.ReportMinimap()
 	end
 	for _, child in ipairs({ UIParent:GetChildren() }) do
 		if not IsForbidden(child) then
-			for i = 1, child:GetNumPoints() do
+			for i = 1, ns.NumPoints(child) do
 				local ok, _, relativeTo = pcall(child.GetPoint, child, i)
 				if ok and relativeTo and (roots[relativeTo] or checked[relativeTo]) then
 					Walk(child, 1)
@@ -12231,7 +12236,7 @@ do
 	-- (/cine debug swing: a bar's anchors and where it is, as text.)
 	function order.Describe(frame)
 		local parts = {}
-		for i = 1, frame:GetNumPoints() do
+		for i = 1, ns.NumPoints(frame) do
 			local point, to, toPoint, x, y = frame:GetPoint(i)
 			to = type(to) == "table" and to.GetName and to:GetName() or tostring(to)
 			parts[#parts + 1] = ("%s %s %s %s %s"):format(tostring(point), tostring(to), tostring(toPoint), tostring(x), tostring(y))
@@ -12243,7 +12248,7 @@ do
 
 	local function ReadPoints(frame)
 		local points = {}
-		for i = 1, frame:GetNumPoints() do
+		for i = 1, ns.NumPoints(frame) do
 			local point, relativeTo, relativePoint, x, y = frame:GetPoint(i)
 			if not (Number(x) and Number(y)) then
 				return nil -- (secret: leave it alone)
