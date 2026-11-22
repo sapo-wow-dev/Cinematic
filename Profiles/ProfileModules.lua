@@ -47,7 +47,7 @@ local ROW_RULE_LISTS = { frameRules = true, rowFollow = true }
 local function CamsOff(set, cams)
 	local off = {}
 	for _, cam in ipairs(cams) do off[cam] = true end
-	for _, trigger in ipairs(ns.CAMERA_TRIGGERS) do
+	for _, trigger in ipairs(ns.CAMERA_TRIGGERS or {}) do -- (none with Cameras left out, Modules.lua)
 		local mode = trigger.sceneOff and ns.CameraValueMode(ns.DEFAULTS[trigger.camera])
 		if mode and off[mode] then set(trigger.sceneOff, true) end
 	end

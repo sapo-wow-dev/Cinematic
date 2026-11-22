@@ -23,6 +23,7 @@
 -- (Moved here from the dev copy's ShoulderCamTest.lua, 2026-11-14; its
 -- /cine debug shoulder calibrate runs this.)
 local ADDON_NAME, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 local SHOULDER, CENTERED = "test_cameraOverShoulder", "CameraKeepCharacterCentered"
@@ -533,3 +534,4 @@ function ns.BuildShoulderCalibrateTab(host, kit)
 	watch:SetScript("OnEvent", function() if host:IsVisible() then C_Timer.After(0.3, Refresh) end end)
 	host:HookScript("OnShow", Refresh)
 end
+end) -- (ns.Module "cameras")

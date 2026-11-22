@@ -1,6 +1,7 @@
 -- Cinematic: camera rotation. The orbit (flights and standing still), camera
 -- input detection, the takeoff swing, flight timing and settling before landing.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 -- Flight path orbit: while on a taxi the camera moves in sweeps, holding still
@@ -5587,3 +5588,4 @@ function ns.LoginZoom()
 	-- (a moment in: the camera's distance can still be settling as the world shows)
 	C_Timer.After(1, function() ns.ZoomToSet("login") end)
 end
+end) -- (ns.Module "cameras")

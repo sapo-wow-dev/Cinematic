@@ -7637,6 +7637,21 @@ local function CreateCamerasPanel()
 
 	local title = Label(content, "GameFontNormalLarge", L["General"]) -- (the Camera hub's first page)
 	title:SetPoint("TOPLEFT", 16, -16)
+	-- Load Cameras (2026-11-21, Modules.lua): unticked, from the next reload
+	-- no camera's code runs at all (Camera/: the cameras, scenes, triggers,
+	-- scripts, shots, Shoulder and Skyriding Cam). Left out: this page has
+	-- only its box, and the hub's other pages aren't made.
+	local CAMERA_LOAD = { label = L["Load Cameras"], tip = L["Unticked, Cinematic's cameras don't load at all (takes a reload)."],
+		off = L["Tick it and reload to bring every camera back."],
+		on = L["Turn off to keep the cameras from loading at all."] }
+	if not ns.ModuleLoaded("cameras") then
+		local intro = PageIntro(content, title, L["Cameras aren't loaded: none of them run, and their pages are gone."])
+		canvas.loadCamerasBox = ns.LoadPartBox(content, title, intro, "cameras", CAMERA_LOAD)
+		canvas:SetScript("OnShow", PageShown(Refresh, content))
+		canvas:Hide()
+		RegisterSubpage(canvas, "Cameras")
+		return
+	end
 	local subtitle = PageIntro(content, title,
 		L["In CineMode, the camera moves on its own when things happen, like emotes, flights or going AFK."] .. "\n\n" ..
 		L["In the camera modes, the minimap and quest tracker hover times and the buff and chat pop-up " ..
@@ -7644,6 +7659,8 @@ local function CreateCamerasPanel()
 	local switch = CameraModesSwitch(content, subtitle)
 	-- (Every camera as an icon, each opening a tab of its own: CameraManager.lua.)
 	ns.CameraManager(ns.lowHealthKit, canvas, content, title, subtitle, switch)
+	CAMERA_LOAD.beside = true -- (the cameras' icons under the intro)
+	canvas.loadCamerasBox = ns.LoadPartBox(content, title, subtitle, "cameras", CAMERA_LOAD)
 	canvas:SetScript("OnShow", PageShown(Refresh, content))
 	canvas:Hide()
 	RegisterSubpage(canvas, "Cameras")
@@ -15828,6 +15845,66 @@ function ns.PageTabsBelow(content, anchor, list, id, linksTab, groupKey, adoptTa
 	return hosts, Pick, Shown, Adopt, links, panel, tabFrames
 end
 
+-- A part's Load box (Modules.lua: Visions, Cameras), right of the page
+-- title's On/Off switch (the user's pick 2026-11-21): unticked, from the next
+-- reload that part's code doesn't run at all. The account's, as the game's
+-- AddOns list is: no profile has it. (A plain box, not Check: no page Reset or
+-- settings sweep flips it.) Its note under the intro says where it stands;
+-- a change asks to reload (Forever: a secure Reload over the popup's button),
+-- one popup for every part changed (the user, 2026-11-22: not one each).
+-- texts: label, tip, off, on (the note), load, leave (the popup's words for
+-- this part: "load Visions", "leave Visions out"); beside:
+-- the note right of the box, not under the intro (a page with things there).
+-- Returns the box, the note and its refresh (for the page's OnShow).
+function ns.LoadPartBox(content, title, intro, part, texts)
+	local load = ns.SkinCheck(CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate"))
+	load:SetSize(26, 26)
+	-- (That switch is made as the page first shows, so placed again then. Left
+	-- out: no switch, right of the title's "?".)
+	local function PlaceLoad()
+		load:ClearAllPoints()
+		load:SetPoint("LEFT", content.pageSwitch or content.pageHelpLast or content.pageHelp or title, "RIGHT", 12, 0)
+	end
+	PlaceLoad()
+	content:HookScript("OnShow", PlaceLoad) -- (after the switch's own OnShow: hooked later)
+	local loadText = load.Text or load.text
+	if not loadText then
+		loadText = load:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		loadText:SetPoint("LEFT", load, "RIGHT", 2, 0)
+	end
+	loadText:SetFontObject("GameFontHighlight")
+	loadText:SetText(texts.label)
+	Tooltip(load, texts.tip)
+	local loadNote = Label(content, "GameFontHighlightSmall", "")
+	if texts.beside then
+		loadNote:SetPoint("LEFT", loadText, "RIGHT", 12, 0)
+		loadNote:SetWidth(320)
+	else
+		loadNote:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -10)
+		loadNote:SetWidth(580)
+	end
+	loadNote:SetJustifyH("LEFT")
+	local function LoadState()
+		local wanted, loaded = ns.ModuleWanted(part), ns.ModuleLoaded(part)
+		load:SetChecked(wanted)
+		if wanted ~= loaded then
+			loadNote:SetText(L["Takes effect after a reload."])
+		else
+			loadNote:SetText(loaded and texts.on or texts.off)
+		end
+	end
+	load:SetScript("OnClick", function(self)
+		local wanted = self:GetChecked() and true or false
+		ns.SetModuleWanted(part, wanted)
+		LoadState()
+		-- (Every part whose box differs from what's loaded now, in one question:
+		-- the same box a profile pick shows, Modules.lua.)
+		ns.AskModulesReload()
+	end)
+	content:HookScript("OnShow", LoadState)
+	return load, loadNote, LoadState
+end
+
 -- Sub-page: the Visions hub's General (2026-11-16): every Vision as a card,
 -- on or off, what it does (its page's intro, the first line) and its
 -- pages as chips; the card opens it. Made again as it shows, the switches
@@ -15851,58 +15928,12 @@ function ns.CreateVisionsGeneralPanel()
 	end
 	-- Load Visions (2026-11-21, Modules.lua): unticked, from the next reload
 	-- no Vision's code runs at all (Visions/, and Vitals, Death and Teleport
-	-- in Atmosphere/). The account's, as the game's AddOns list is: no
-	-- profile has it. (A plain box, not Check: no page Reset or settings
-	-- sweep flips it.)
-	local load = ns.SkinCheck(CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate"))
-	canvas.loadVisionsBox = load -- (/cine debug loadvisions clicks it)
-	load:SetSize(26, 26)
-	-- (Right of the title's On/Off switch, the user's pick 2026-11-21; that
-	-- switch is made as the page first shows, so placed again then. Left out:
-	-- no switch, right of the title's "?".)
-	local function PlaceLoad()
-		load:ClearAllPoints()
-		load:SetPoint("LEFT", content.pageSwitch or content.pageHelpLast or content.pageHelp or title, "RIGHT", 12, 0)
-	end
-	PlaceLoad()
-	content:HookScript("OnShow", PlaceLoad) -- (after the switch's own OnShow: hooked later)
-	local loadText = load.Text or load.text
-	if not loadText then
-		loadText = load:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		loadText:SetPoint("LEFT", load, "RIGHT", 2, 0)
-	end
-	loadText:SetFontObject("GameFontHighlight")
-	loadText:SetText(L["Load Visions"])
-	Tooltip(load, L["Unticked, Visions don't load at all (takes a reload)."])
-	local loadNote = Label(content, "GameFontHighlightSmall", "")
-	loadNote:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -10)
-	loadNote:SetWidth(580)
-	loadNote:SetJustifyH("LEFT")
-	local function LoadState()
-		local wanted, loaded = ns.ModuleWanted("visions"), ns.ModuleLoaded("visions")
-		load:SetChecked(wanted)
-		if wanted ~= loaded then
-			loadNote:SetText(L["Takes effect after a reload."])
-		elseif not loaded then
-			loadNote:SetText(L["Tick it and reload to bring every Vision back."])
-		else
-			loadNote:SetText(L["Turn off to keep Visions from loading at all."])
-		end
-	end
-	load:SetScript("OnClick", function(self)
-		local wanted = self:GetChecked() and true or false
-		ns.SetModuleWanted("visions", wanted)
-		LoadState()
-		if wanted == ns.ModuleLoaded("visions") then return end -- (put back as it is: nothing to reload)
-		StaticPopupDialogs.CINEMATIC_LOAD_VISIONS = {
-			text = "%s", button1 = RELOADUI or L["Reload"], button2 = L["Later"],
-			OnAccept = function() ns.Reload() end,
-			cineReload = 1, -- (Forever: a secure Reload over the button, QoL/Reload.lua)
-			timeout = 0, whileDead = true, hideOnEscape = true,
-		}
-		StaticPopup_Show("CINEMATIC_LOAD_VISIONS",
-			wanted and L["Reload now to load Visions?"] or L["Reload now to leave Visions out?"])
-	end)
+	-- in Atmosphere/).
+	local load, loadNote, LoadState = ns.LoadPartBox(content, title, intro, "visions", {
+		label = L["Load Visions"], tip = L["Unticked, Visions don't load at all (takes a reload)."],
+		off = L["Tick it and reload to bring every Vision back."],
+		on = L["Turn off to keep Visions from loading at all."] })
+	canvas.loadVisionsBox = load -- (/cine debug loadparts clicks it)
 	local cards
 	local function Fill()
 		if cards then cards:Hide() end
@@ -19828,7 +19859,7 @@ local KEYBINDS = {
 		tip = L["Hold or tap to see what each key on your keyboard does."] },
 	{ action = "CLICK CinematicMasterWheelButton:LeftButton", label = L["Master wheel"], section = L["Wheels"],
 		tip = L["Hold to open a wheel of all your wheels."] },
-	{ action = "CINEMATIC_CAMWHEEL", label = L["Camera wheel"],
+	{ action = "CINEMATIC_CAMWHEEL", show = function() return ns.ModuleLoaded("cameras") end, label = L["Camera wheel"],
 		tip = L["Hold to open a wheel of your cameras."] },
 	{ action = "CLICK CinematicMenuWheelButton:LeftButton", label = L["Menu wheel"],
 		tip = L["Hold to open a wheel of the game's menu buttons."] },
@@ -19861,36 +19892,36 @@ local KEYBINDS = {
 		tip = L["Turns Emote Vision on or off (its Enable Page switch)."] },
 	{ action = "CINEMATIC_VISION_CARD", show = function() return ns.ModuleLoaded("visions") end, label = L["Toggle Card Vision"],
 		tip = L["Turns Card Vision on or off (its Enable Page switch)."] },
-	{ action = "CINEMATIC_CAM_IDLE", label = L["AFK camera"], section = L["Cameras"],
+	{ action = "CINEMATIC_CAM_IDLE", show = function() return ns.ModuleLoaded("cameras") end, label = L["AFK camera"], section = L["Cameras"],
 		tip = L["Starts the AFK camera now."] },
-	{ action = "CINEMATIC_CAM_COZY", label = L["Cozy camera"],
+	{ action = "CINEMATIC_CAM_COZY", show = function() return ns.ModuleLoaded("cameras") end, label = L["Cozy camera"],
 		tip = L["Starts the cozy camera now."] },
-	{ action = "CINEMATIC_CAM_VISTA", label = L["Vista camera"],
+	{ action = "CINEMATIC_CAM_VISTA", show = function() return ns.ModuleLoaded("cameras") end, label = L["Vista camera"],
 		tip = L["Starts the vista camera now."] },
-	{ action = "CINEMATIC_CAM_FISH", label = L["Fish camera"],
+	{ action = "CINEMATIC_CAM_FISH", show = function() return ns.ModuleLoaded("cameras") end, label = L["Fish camera"],
 		tip = L["Starts the fish camera now."] },
-	{ action = "CINEMATIC_CAM_TELE", label = L["Tele camera"],
+	{ action = "CINEMATIC_CAM_TELE", show = function() return ns.ModuleLoaded("cameras") end, label = L["Tele camera"],
 		tip = L["Starts the tele camera now."] },
-	{ action = "CINEMATIC_CAM_WALK", label = L["RP walk camera"],
+	{ action = "CINEMATIC_CAM_WALK", show = function() return ns.ModuleLoaded("cameras") end, label = L["RP walk camera"],
 		tip = L["Starts or stops the RP walk camera."] },
-	{ action = "CINEMATIC_CAM_RUN", label = L["Auto-run camera"],
+	{ action = "CINEMATIC_CAM_RUN", show = function() return ns.ModuleLoaded("cameras") end, label = L["Auto-run camera"],
 		tip = L["Starts or stops the auto-run camera."] },
-	{ action = "CINEMATIC_CAM_DEATH", label = L["Death camera test"],
+	{ action = "CINEMATIC_CAM_DEATH", show = function() return ns.ModuleLoaded("cameras") end, label = L["Death camera test"],
 		tip = L["Pretends you're dead for 30 seconds to test the death camera."] },
-	{ action = "CINEMATIC_SHOULDERCAM", label = L["Toggle Shoulder Cam"],
+	{ action = "CINEMATIC_SHOULDERCAM", show = function() return ns.ModuleLoaded("cameras") end, label = L["Toggle Shoulder Cam"],
 		tip = L["Turns the Shoulder Cam on or off (its Enable Page switch)."] },
-	{ action = "CINEMATIC_STOPCAM", label = L["Stop the camera"],
+	{ action = "CINEMATIC_STOPCAM", show = function() return ns.ModuleLoaded("cameras") end, label = L["Stop the camera"],
 		tip = L["Stops whichever of Cinematic's cameras is running now, however it started."] },
 }
-if ns.ChatCamCommand then -- (ChatCam.lua; on the Cameras tab, before Stop the camera)
-	table.insert(KEYBINDS, #KEYBINDS, { action = "CLICK CinematicChatTargetButton:LeftButton",
-		label = L["Target the last speaker"],
-		tip = L["Targets the last NPC who spoke near you."] })
-end
+-- (ChatCam.lua; on the Cameras tab, before Stop the camera. Its code runs
+-- after this file loads, Modules.lua: asked as the page shows.)
+table.insert(KEYBINDS, #KEYBINDS, { action = "CLICK CinematicChatTargetButton:LeftButton",
+	show = function() return ns.ChatCamCommand ~= nil end, label = L["Target the last speaker"],
+	tip = L["Targets the last NPC who spoke near you."] })
 -- Your own scenes' keys (a trigger on the Triggers page set to Scene key N).
 -- (number: put in the label as the page is built, once it's translated.)
 for n = 1, 5 do
-	KEYBINDS[#KEYBINDS + 1] = { action = "CINEMATIC_CUSTOMTRIGGER" .. n, label = "Scene key %d", number = n,
+	KEYBINDS[#KEYBINDS + 1] = { action = "CINEMATIC_CUSTOMTRIGGER" .. n, show = function() return ns.ModuleLoaded("cameras") end, label = "Scene key %d", number = n,
 		section = n == 1 and L["Scene keys"] or nil,
 		tip = L["Plays your scenes that use this key."] }
 end
@@ -20330,12 +20361,22 @@ local function CreateKeybindsPanel()
 		return box
 	end
 
-	local section, pendingHeading
+	local section, pendingHeading, pendingSection
+	local sectionIndex = 0 -- (every section's, shown or not: ns.KeybindTabKey's numbers)
 	for _, bind in ipairs(KEYBINDS) do
+		-- (A section made by its first row that shows: none for one whose rows
+		-- are all hidden, Visions' or Cameras' left out, Modules.lua. Its tab's
+		-- switch keeps the number it has with them all: tabOn:Keybinds:<n>.)
 		if bind.section then
-			SetSection(content, bind.section)
+			sectionIndex = sectionIndex + 1
+			pendingSection = { name = bind.section, index = sectionIndex }
+		end
+		if pendingSection and (not bind.show or bind.show()) then
+			local name, index = pendingSection.name, pendingSection.index
+			pendingSection = nil
+			SetSection(content, name)
 			local number = #sections + 1
-			section = { tab = bind.section, body = CreateFrame("Frame", nil, content) }
+			section = { tab = name, index = index, body = CreateFrame("Frame", nil, content) }
 			section.body:SetPoint("TOPLEFT", panelTop, "TOPLEFT", 12, -12)
 			section.body:SetSize(1, 1)
 			section.body.searchAlways = true
@@ -20401,7 +20442,7 @@ local function CreateKeybindsPanel()
 	for i, each in ipairs(sections) do list[i] = { each.tab } end
 	panel, keyTabs, ShowTab, base, height = ns.FolderTabs(content, list, Pick, nil, SECTION_WIDTH + 8)
 	-- (Each tab a container: off, its keys do nothing, Cinematic_KeyOn.)
-	for i, each in ipairs(sections) do ns.TabContainer(keyTabs[i], each.body, ("tabOn:Keybinds:%d"):format(i)) end
+	for i, each in ipairs(sections) do ns.TabContainer(keyTabs[i], each.body, ("tabOn:Keybinds:%d"):format(each.index)) end
 	panelTop:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -16 - height)
 	panel:SetPoint("TOPLEFT", panelTop, "TOPLEFT")
 	-- (On panelTop, not the panel: the panel's bottom hangs on the rows under them.)
@@ -22424,8 +22465,10 @@ ns.OnLanguage(function()
 		Lap("CreateTriggersPanels")
 	end
 	-- Each camera's own settings, in a section apiece.
-	CreateCameraSettingsPanel()
-	Lap("CreateCameraSettingsPanel")
+	if ns.ModuleLoaded("cameras") then -- (a camera page: none with Cameras left out, Modules.lua)
+		CreateCameraSettingsPanel()
+		Lap("CreateCameraSettingsPanel")
+	end
 	if ns.CreateMyShotsPanel and not ns.SHOTS_RETIRED then -- (ShotsPage.lua; retired in the dev copy)
 		ns.CreateMyShotsPanel(ns.lowHealthKit)
 		Lap("CreateMyShotsPanel")

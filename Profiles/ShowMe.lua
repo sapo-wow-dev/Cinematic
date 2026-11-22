@@ -526,6 +526,11 @@ local NEEDS = { vitals = "FlashVitals", tele = "TestTeleportVision", emote = "Te
 	timeTitle = "TestTimeChangeTitle", cards = "CardTest", recap = "TestDamageRecap", cdflash = "TestCooldownFlash",
 	speech = "TestSpeechBehind", audio = "SaveCVar", bubbles = "ShowBubbleDemo", combatText = "ShowCombatTextDemo", deathVision = "TestDeathVision" }
 for key in pairs(CAM_DEMOS) do NEEDS[key] = "CameraTestStart" end
+-- (Cameras left out, Modules.lua: no camera demo at all, the half turn too.)
+ns.ModuleLeftOut("cameras", function()
+	for _, key in ipairs({ "camera", "cameraLook", "shoulder" }) do DEMOS[key] = nil end
+	for key in pairs(CAM_DEMOS) do DEMOS[key] = nil end
+end)
 function ns.ShowMeAvailable(key)
 	return DEMOS[key] ~= nil and not (NEEDS[key] and not ns[NEEDS[key]])
 end

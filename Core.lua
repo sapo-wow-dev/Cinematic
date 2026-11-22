@@ -1746,6 +1746,12 @@ ns.ModuleLeftOut("visions", function()
 		LEFT_OUT[key] = true
 	end
 end)
+-- (Cameras left out: Enable Cameras, the Scenes page and the Special Cams.)
+ns.ModuleLeftOut("cameras", function()
+	for _, key in ipairs({ "cameraModes", "cameraScenes", "shoulderCam", "skyrideCam" }) do
+		LEFT_OUT[key] = true
+	end
+end)
 -- (A page's switch can be under another's: Duel Vision's ticks under its page's
 -- switch, under Enable Visions.)
 function ns.Setting(key)
@@ -2805,6 +2811,7 @@ function ns.UpdateStoppedCam(dead, onTaxi, walking, autoRunning, atNPC)
 end
 
 function Cinematic_StopCamera()
+	if not ns.ModuleLoaded("cameras") then return ns.Print(ns.ModuleLeftOutLine("cameras")) end -- (Modules.lua)
 	if ns.db and not ns.StopCamera() then
 		ns.Print(L["no camera running"])
 	end
@@ -4343,8 +4350,10 @@ local function RestoreEverything()
 	Try(ns.StopCombatMusicNow)
 	Try(ns.ShowPlatesNow)
 	Try(ns.plates and ns.plates.Release)
-	Try(ns.ApplyCVarSet, ns.FLIGHT_CVARS, false)
-	Try(ns.ApplyCVarSet, ns.RECENTER_CVARS, false)
+	if ns.FLIGHT_CVARS then -- (none with Cameras left out, Modules.lua)
+		Try(ns.ApplyCVarSet, ns.FLIGHT_CVARS, false)
+		Try(ns.ApplyCVarSet, ns.RECENTER_CVARS, false)
+	end
 	-- The UI: every faded frame back, the bars and tint off (hidden outright
 	-- if their own update is what's failing).
 	for _, entry in ipairs(ns.managed or {}) do
@@ -4576,6 +4585,10 @@ local CAM_NAMES = { idle = "AFK camera", cozy = "cozy camera", vista = "vista ca
 	tele = "tele camera", walk = "RP walk camera", run = "auto-run camera" }
 function Cinematic_StartCam(camera, quiet, via)
 	if not ns.db then
+		return
+	end
+	if not ns.ModuleLoaded("cameras") then -- (Cameras left out, Modules.lua)
+		if not quiet then ns.Print(ns.ModuleLeftOutLine("cameras")) end
 		return
 	end
 	local Print = quiet and function() end or ns.Print
@@ -5436,8 +5449,10 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		Guard(ns.StopCombatMusicNow)
 		Guard(ns.ShowPlatesNow)
 		Guard(ns.StopOrbitNow)
-		Guard(ns.ApplyCVarSet, ns.FLIGHT_CVARS, false)
-		Guard(ns.ApplyCVarSet, ns.RECENTER_CVARS, false)
+		if ns.FLIGHT_CVARS then -- (none with Cameras left out, Modules.lua)
+			Guard(ns.ApplyCVarSet, ns.FLIGHT_CVARS, false)
+			Guard(ns.ApplyCVarSet, ns.RECENTER_CVARS, false)
+		end
 		-- (The game's damage numbers back as yours were, saved so: with Cinematic
 		-- turned off before the next login they stay; on, it turns them off again.)
 		Guard(ns.ApplyCVarSet, ns.COMBAT_TEXT_GAME_NUMBERS, false)

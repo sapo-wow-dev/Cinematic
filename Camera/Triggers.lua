@@ -5,6 +5,7 @@
 -- come from two sources at different places (a campfire buff while sitting
 -- by the fire comes before the emotes; standing by it, after them).
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 
 -- The sources in order: { id, order, Key(state) -> trigger key or nil }.
 ns.TRIGGER_SOURCES = {}
@@ -227,3 +228,4 @@ function ns.ApplyBuiltInOrders()
 		end
 	end
 end
+end) -- (ns.Module "cameras")

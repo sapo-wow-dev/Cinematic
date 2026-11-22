@@ -1,6 +1,7 @@
 -- Parts of the addon that can be left out, so their code never runs (no
 -- frames, events, hooks or update loops): Visions, from its General page's
--- Load Visions switch (2026-11-21). One addon in the game's AddOns list, not
+-- Load Visions switch (2026-11-21), and Cameras, from Camera > General's
+-- Load Cameras. One addon in the game's AddOns list, not
 -- one per part.
 --
 -- A part's files load as every file does, but only their settings and data
@@ -18,7 +19,7 @@
 local _, ns = ...
 
 -- name -> the CinematicDB key that leaves it out (false)
-local PARTS = { visions = "loadVisions" }
+local PARTS = { visions = "loadVisions", cameras = "loadCameras" }
 ns.MODULE_KEYS = PARTS
 
 -- What the rest of the addon asks a part as it plays, with that part left
@@ -29,7 +30,75 @@ local function No() return false end
 local function Nothing() end
 ns.MODULE_STAND_INS = {
 	visions = { IsQuestMob = No, SoftPlateHidden = No, CardOn = No, SetQuestMark = Nothing, NoteTalkSpot = Nothing },
+	-- (Every camera off and why; no scene, script or camera running; the
+	-- calls that move or stop one doing nothing.)
+	cameras = {
+		TriggerSetting = No, TriggerStartsCine = No, TriggerHasCamera = No, StillRunsAFK = No, CameraRowsScripted = No,
+		CameraCall = No, TriggerRowNow = Nothing, PlayingCameraScript = Nothing, PlayingCameraKey = Nothing,
+		FlightDuration = Nothing, ActiveEvent = Nothing, FindCameraScript = Nothing,
+		CameraRowsOff = function() return true end,
+		CameraRowsOffWhy = function() return "Cameras aren't loaded (Load Cameras is off)" end,
+		CameraWheelCant = function() return ns.L["Cameras aren't loaded"] end,
+		PlayCameraScript = function() return false, ns.L["Cameras aren't loaded"] end,
+		ToggleFlyBy = function() return false, ns.L["Cameras aren't loaded"] end,
+		StopOrbitNow = Nothing, StopIdleZoomNow = Nothing, CancelDeathZoom = Nothing, UpdateOrbit = Nothing,
+		UpdateTaxi = Nothing, HookCameraInput = Nothing, HookTaxiRoutes = Nothing, LoginZoom = Nothing,
+		StandUpFromDeathTest = Nothing, LieDownForDeathTest = Nothing, CloseCameraWheel = Nothing,
+		StopCameraScript = Nothing, CallCameraFunction = Nothing, OpenCameraWheel = Nothing, OnPlayerZoom = Nothing,
+	},
 }
+
+-- The game's key bindings (Bindings.xml) call some of a part's functions by
+-- name, and no addon can take a binding away: left out, each says so.
+local KEY_STAND_INS = {
+	cameras = { "Cinematic_CameraWheel", "Cinematic_CustomTrigger", "Cinematic_ToggleShoulderCam" },
+}
+-- (The line a left-out part's key or command prints.)
+local LEFT_OUT_LINE = {
+	visions = "Visions isn't loaded (Visions > General)",
+	cameras = "Cameras aren't loaded (Camera > General > Load Cameras)",
+}
+function ns.ModuleLeftOutLine(name)
+	local line = LEFT_OUT_LINE[name] or name
+	return ns.L and ns.L[line] or line
+end
+
+-- The one Reload box for every part whose Load box differs from what's
+-- loaded now: from a Load box (Options.lua ns.LoadPartBox) and from picking a
+-- profile that leaves parts out (Profiles.lua ns.ProfilePartsPicked), the
+-- same box and words either way (the user, 2026-11-22: "keep everything in
+-- sync"). Where the game puts its boxes, as every Reload box of ours.
+-- lead: what comes before "reload now..." (a profile's name), or nil.
+-- Nothing to reload: the box goes. True: it's up.
+local ASK_ORDER = { "visions", "cameras" }
+local ASK_WORDS = {
+	visions = { load = "load Visions", leave = "leave Visions out" },
+	cameras = { load = "load the cameras", leave = "leave the cameras out" },
+}
+ns.MODULES_RELOAD_POPUP = "CINEMATIC_LOAD_PARTS"
+function ns.AskModulesReload(lead)
+	local L = ns.L
+	local which = ns.MODULES_RELOAD_POPUP
+	local changes = {}
+	for _, part in ipairs(ASK_ORDER) do
+		local words = ASK_WORDS[part]
+		if words and ns.ModuleWanted(part) ~= ns.ModuleLoaded(part) then
+			changes[#changes + 1] = L[ns.ModuleWanted(part) and words.load or words.leave]
+		end
+	end
+	if StaticPopup_Hide then StaticPopup_Hide(which) end -- (its text anew, or gone)
+	if #changes == 0 then return false end
+	StaticPopupDialogs[which] = {
+		text = "%s", button1 = RELOADUI or L["Reload"], button2 = L["Later"],
+		OnAccept = function() ns.Reload() end,
+		cineReload = 1, -- (Forever: a secure Reload over the button, QoL/Reload.lua)
+		timeout = 0, whileDead = true, hideOnEscape = true,
+	}
+	local ask = table.concat(changes, L[" and "])
+	local text = lead and L["%s: reload now to %s?"]:format(lead, ask) or L["Reload now to %s?"]:format(ask)
+	StaticPopup_Show(which, text)
+	return true
+end
 
 local queue = {}
 local ran = false
@@ -93,11 +162,12 @@ local function Copy(value)
 	return out
 end
 local added = {} -- name -> { key = default } this load, from its code
+local base = {} -- key -> true: in DEFAULTS as the files had loaded (before any part ran)
 
 function ns.RunModules()
 	if ran then return end
 	ran = true
-	-- (How things stood as they started, for /cine debug loadvisions: before
+	-- (How things stood as they started, for /cine debug loadparts: before
 	-- Core.lua's ns.db and the language, as the files saw it when loading.)
 	ns.moduleStart = { db = ns.db ~= nil, locale = ns.locale, combat = InCombatLockdown and InCombatLockdown() or false,
 		saved = type(_G.CinematicDB) == "table" }
@@ -105,6 +175,7 @@ function ns.RunModules()
 	local list = queue
 	queue = nil
 	local DEFAULTS = ns.DEFAULTS
+	for k in pairs(DEFAULTS) do base[k] = true end
 	for _, each in ipairs(list) do
 		if loaded[each.name] then
 			local before = {}
@@ -137,15 +208,16 @@ function ns.RunModules()
 			end
 		end
 	end
+	for name, list in pairs(KEY_STAND_INS) do
+		if not loaded[name] then
+			for _, global in ipairs(list) do
+				if rawget(_G, global) == nil then
+					_G[global] = function() if ns.Print then ns.Print(ns.ModuleLeftOutLine(name)) end end
+				end
+			end
+		end
+	end
 end
-
--- The settings pages each part has (their tabs' switches, tabOn:<page>:<n>,
--- are made as Options.lua builds them: kept with the part's own).
-local PAGES = {
-	visions = { "Heal Vision", "Damage Vision", "Quest Vision", "Roll Vision", "Duel Vision", "Emote Vision",
-		"Card Vision", "Card Styles", "Damage Vision Look", "Quest Talk Style", "Quest Item Style", "Roll Style",
-		"Visions Style" },
-}
 
 -- Leaves a part out from the next /reload (wanted false), or brings it back.
 -- Its defaults are written down only now, while its code has run (2,000
@@ -164,11 +236,15 @@ function ns.SetModuleWanted(name, wanted)
 	if wanted or not loaded[name] or not added[name] then return end
 	local kept = {}
 	for k, v in pairs(added[name]) do kept[k] = v end
-	local page = {}
-	for _, each in ipairs(PAGES[name] or {}) do page[each] = true end
+	-- (And every default made since the files loaded that isn't another
+	-- part's: its pages' as they were built (a tab's switch, tabOn:<page>:<n>;
+	-- a camera's row), the Keybinds tabs'... Put back only where missing.)
+	local others = {}
+	for other, list in pairs(added) do
+		if other ~= name then for k in pairs(list) do others[k] = true end end
+	end
 	for k, v in pairs(ns.DEFAULTS) do
-		local of = type(k) == "string" and k:match("^tabOn:(.-):[^:]*$")
-		if of and page[of] and kept[k] == nil then kept[k] = Copy(v) end
+		if not base[k] and not others[k] and kept[k] == nil and type(v) ~= "function" then kept[k] = Copy(v) end
 	end
 	if type(db.moduleDefaults) ~= "table" then db.moduleDefaults = {} end
 	db.moduleDefaults[name] = kept

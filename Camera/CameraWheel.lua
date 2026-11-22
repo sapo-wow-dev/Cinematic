@@ -5,6 +5,7 @@
 -- click one; clicking the middle, Escape or the key again puts it away.
 -- Picking the camera that's running stops it (like pressing its key again).
 local ADDON_NAME, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 local CAMERAS = {
@@ -357,3 +358,4 @@ function ns.OpenCameraWheel()
 end
 tinsert(UISpecialFrames, "CinematicCameraWheel") -- Escape closes it
 ns.AddOverlay(wheel) -- (stays with the UI hidden, like the bars)
+end) -- (ns.Module "cameras")

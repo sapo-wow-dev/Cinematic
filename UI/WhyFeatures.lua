@@ -186,6 +186,12 @@ end
 
 ns.WhyProvider("cameras", "Cameras", "The camera playing now, and every trigger that's on, in order: the first one with a camera " ..
 	"wins. Below that, each camera says whether it's playing, ready, or why it's off.", function()
+	-- (Cameras left out, Modules.lua: one row saying so, opening Camera > General's Load Cameras.)
+	if not ns.ModuleLoaded("cameras") then
+		local why = R("block", L["Load Cameras is off: none of them run"], "Cameras")
+		return { { label = L["Cameras"], rows = { { key = "cameras:loaded", title = L["Cameras aren't loaded"],
+			status = "off", reasons = { why }, main = why, settingsPage = "Cameras" } } } }
+	end
 	local rows = {}
 	for _, each in ipairs(ns.CAMERA_OFF_CAMS) do
 		local ok, row = pcall(CameraRow, each[1], each[2])

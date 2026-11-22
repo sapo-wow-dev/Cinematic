@@ -89,6 +89,7 @@ UI\ChatCopy.lua
 UI\Bubbles.lua
 UI\Speech.lua
 UI\SpeakerWatch.lua
+UI\ShareWindow.lua
 Camera\ChatCam.lua
 Camera\ChatCamSubtitles.lua
 QoL\Campfire.lua

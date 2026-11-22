@@ -386,7 +386,8 @@ STEPS[#STEPS + 1] = function()
 	ns.db.namePlateLinkV1 = nil
 	-- The cozy, vista and fish cameras' "Play music" switches became a Music
 	-- column per event: each starts from the switch for the camera it's set to.
-	if ns.db.musicCamCozy ~= nil or ns.db.musicCamVista ~= nil or ns.db.musicCamFish ~= nil then
+	-- (Cameras left out, Modules.lua: waits for their events, kept till then.)
+	if ns.EVENTS and (ns.db.musicCamCozy ~= nil or ns.db.musicCamVista ~= nil or ns.db.musicCamFish ~= nil) then
 		local old = { cozy = ns.db.musicCamCozy, tele = ns.db.musicCamCozy, vista = ns.db.musicCamVista,
 			fish = ns.db.musicCamFish }
 		for _, event in ipairs(ns.EVENTS) do
@@ -882,7 +883,8 @@ end
 STEPS[#STEPS + 1] = function()
 	-- Events had "Start right away", then a delay ("Wait") and a "Stop on
 	-- move" switch each; they now start right away and always stop on moving.
-	for _, event in ipairs(ns.EVENTS) do
+	-- (Each load: none with Cameras left out, Modules.lua.)
+	for _, event in ipairs(ns.EVENTS or {}) do
 		local key = "event" .. event.key
 		ns.db[key .. "Instant"], ns.db[key .. "Delay"], ns.db[key .. "StopOnMove"] = nil, nil, nil
 	end
@@ -2375,7 +2377,7 @@ STEPS[#STEPS + 1] = function()
 		ns.db.subtleCineTravelV1 = true
 	end
 	-- Scenes a profile had off keep their cameras, ticked off: ns.ScenesOffKeepCameras. Once.
-	if not ns.db.scenesOffKeepCamerasV1 then
+	if not ns.db.scenesOffKeepCamerasV1 and ns.ModuleLoaded("cameras") then -- (waits for Cameras, Modules.lua)
 		if not ns.newInstall then
 			ns.ScenesOffKeepCameras(ns.db)
 			for _, saved in pairs(ns.db.profiles or {}) do ns.ScenesOffKeepCameras(saved) end
@@ -3743,7 +3745,7 @@ STEPS[#STEPS + 1] = function()
 	-- into its rows' ticks, their Show in rows onto its rows', each look
 	-- setting you'd changed onto its event (Cards.lua), saved profiles
 	-- too (only what they have). Once.
-	if not ns.db.cardsV1 then
+	if not ns.db.cardsV1 and ns.ModuleLoaded("visions") then -- (waits for Visions, Modules.lua)
 		ns.MigrateCards(ns.db, true)
 		for _, saved in pairs(ns.db.profiles or {}) do
 			if type(saved) == "table" then ns.MigrateCards(saved, false) end
@@ -3752,16 +3754,16 @@ STEPS[#STEPS + 1] = function()
 	end
 	-- Entering and Leaving combat, one Combat card in 1.9.12 (cardsV2), are
 	-- two again (Cards.lua), saved profiles too. Once.
-	if ns.db.cardsV2 and not ns.db.cardsV3 then
+	if ns.db.cardsV2 and not ns.db.cardsV3 and ns.ModuleLoaded("visions") then -- (waits for Visions, Modules.lua)
 		ns.SplitCombatCard(ns.db)
 		for _, saved in pairs(ns.db.profiles or {}) do
 			if type(saved) == "table" then ns.SplitCombatCard(saved) end
 		end
 	end
-	ns.db.cardsV2, ns.db.cardsV3 = nil, true
+	if ns.ModuleLoaded("visions") then ns.db.cardsV2, ns.db.cardsV3 = nil, true end
 	-- The Default style went from the Cards page: what you'd changed on it
 	-- onto each card that showed it (Cards.lua), saved profiles too. Once.
-	if not ns.db.cardsV5 then
+	if not ns.db.cardsV5 and ns.ModuleLoaded("visions") then -- (waits for Visions, Modules.lua)
 		ns.SpreadCardBase(ns.db)
 		for _, saved in pairs(ns.db.profiles or {}) do
 			if type(saved) == "table" then ns.SpreadCardBase(saved) end
@@ -3782,7 +3784,7 @@ STEPS[#STEPS + 1] = function()
 	-- Ticker and Danger): each card still starting from the style it
 	-- came with, onto its family's; the story cards' own alignments as
 	-- they came, back to following it. Saved profiles too. Once.
-	if not ns.db.cardsV7 then
+	if not ns.db.cardsV7 and ns.ModuleLoaded("visions") then -- (waits for Visions, Modules.lua)
 		local function Families(t)
 			for id, old in pairs(ns.CARD_OLD_BASES) do
 				if t["cardBase_" .. id] == old then t["cardBase_" .. id] = DEFAULTS["cardBase_" .. id] end
@@ -4408,7 +4410,7 @@ STEPS[#STEPS + 1] = function()
 	-- each card type has its own Size on the Events tab. Yours folded into
 	-- each type's size and each card's own, so they show as big as before.
 	-- Saved profiles too. Once.
-	if not ns.db.cardScaleV1 then
+	if not ns.db.cardScaleV1 and ns.ModuleLoaded("visions") then -- (waits for Visions, Modules.lua)
 		local function Fold(t)
 			if type(t) ~= "table" then return end
 			local scale = tonumber(t.cardScale)

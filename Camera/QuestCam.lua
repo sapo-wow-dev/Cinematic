@@ -52,6 +52,7 @@
 -- conversation carries on from it, until you've walked ZOOM_OUT_DISTANCE off
 -- or it stops some other way. Nobody near, or you left (Escape, Goodbye): over.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 
 local CLOSE_GRACE = 3 -- seconds held after the window closes (going from gossip to a quest closes one window before opening the next)
 local WINDOW_EXTRA = 1 -- seconds each window after the first adds to the wait before starting (questCamDelay)
@@ -1870,3 +1871,4 @@ do
 		return true
 	end
 end
+end) -- (ns.Module "cameras")

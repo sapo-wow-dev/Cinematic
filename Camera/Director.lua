@@ -1,4 +1,5 @@
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 
 -- The camera director: the one place that works out the scene the cameras
 -- go by (ns.DecideScene, Camera.lua: standing still, an event, travel,
@@ -295,3 +296,4 @@ function ns.DirectorDebug()
 	ns.Print(("director: the orbit is %s (woken %d times)"):format(ns.OrbitAsleep() and "asleep" or "awake",
 		ns.orbitSleeps or 0))
 end
+end) -- (ns.Module "cameras")

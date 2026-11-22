@@ -417,7 +417,9 @@ function Run:Prompt(text, sub, seconds, buttons)
 	-- side-by-side run 10 waited 2.5 minutes for a click nobody knew was due.)
 	if not seconds and PlaySound then pcall(PlaySound, type(SOUNDKIT) == "table" and SOUNDKIT.READY_CHECK or 8960) end
 	local n = self.step and self.stepNumber or 0
-	Box(self, ("%s, step %d/%d: %s"):format(self.def.title, n, #self.steps, text), sub or "No time limit.", 1, 0.82, 0)
+	-- (Out of all the test's steps, not the ones left: after a reload it's
+	-- picked up with those only, and showed "step 4/2", loadparts 2026-11-22.)
+	Box(self, ("%s, step %d/%d: %s"):format(self.def.title, n, #self.def.steps, text), sub or "No time limit.", 1, 0.82, 0)
 	local labels = self:Buttons(buttons)
 	Say(self, "  asked: " .. text .. (buttons and (" [buttons: " .. table.concat(labels, ", ") .. "]") or ""))
 end
@@ -586,7 +588,7 @@ function Run:Next()
 		local e0, b0 = Counts()
 		Say(run, ("step %d %s: %s | %s"):format(picked.number, step.key, step.title or step.say or "", StateLine()))
 		if step.say then run:Prompt(step.say, nil, step.seconds, step.buttons) else
-			Box(run, ("%s, step %d/%d: %s"):format(run.def.title, picked.number, #run.steps, step.title or step.key),
+			Box(run, ("%s, step %d/%d: %s"):format(run.def.title, picked.number, #run.def.steps, step.title or step.key),
 				"Nothing to do: the test does this one.", 0.6, 0.9, 1)
 			run:Buttons(step.buttons)
 		end

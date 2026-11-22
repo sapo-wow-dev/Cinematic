@@ -1,11 +1,11 @@
--- /cine debug loadvisions (Dev/LoadVisionsTest.lua) offline, through its
+-- /cine debug loadparts (Dev/LoadPartsTest.lua) offline, through its
 -- reloads: a load of the dev copy per reload (each a run of its own, the
 -- saved settings handed on as the game would), pretend time, the kit picking
--- the run up after each. Started with Visions loaded (3 loads) and left out
--- (4: its first step ticks the box). Every step PASS, the log ends DONE with
--- 0 fail, the changed setting put back and Load Visions on at the end.
+-- the run up after each. Started with both loaded (3 loads) and with Visions
+-- left out (4: its first step ticks the box). Every step PASS, the log ends
+-- DONE with 0 fail, the changed settings put back and both Load boxes on.
 --
---   python -I Tools/offline/run.py Tools/offline/loadvisions.lua [forever|retail]
+--   python -I Tools/offline/run.py Tools/offline/loadparts.lua [forever|retail]
 -- Exit 1 on any problem.
 -- luacheck: ignore 111 112 113 121 122 212 431
 local LUA = os.getenv("CINE_LUA") or "lua5.1"
@@ -34,12 +34,12 @@ if not phase then
 		f:close()
 		local done
 		for n = 1, 6 do
-			local pipe = io.popen(("%s Tools/offline/loadvisions.lua %s %d %s %s 2>&1"):format(LUA, client, n, file,
+			local pipe = io.popen(("%s Tools/offline/loadparts.lua %s %d %s %s 2>&1"):format(LUA, client, n, file,
 				each[1]))
 			local out = pipe:read("*a")
 			pipe:close()
 			io.write(out)
-			if not out:find(("loadvisions %s %d: ok"):format(each[1], n), 1, true) then
+			if not out:find(("loadparts %s %d: ok"):format(each[1], n), 1, true) then
 				failed = true
 				break
 			end
@@ -50,11 +50,11 @@ if not phase then
 		end
 		if done ~= each[2] then
 			failed = true
-			print(("loadvisions %s: done after %s load(s), not %d"):format(each[1], tostring(done), each[2]))
+			print(("loadparts %s: done after %s load(s), not %d"):format(each[1], tostring(done), each[2]))
 		end
 		os.remove(file)
 	end
-	print(failed and "loadvisions: FAILED" or "loadvisions: all ok")
+	print(failed and "loadparts: FAILED" or "loadparts: all ok")
 	os.exit(failed and 1 or 0)
 end
 
@@ -100,25 +100,33 @@ Screenshot = function() end
 local popup = wow.NewObject("Frame", "StaticPopup1")
 popup._shown = false
 rawset(_G, "StaticPopup1", popup)
-StaticPopup_Show = function() popup._shown = true end
+-- (Its words as given: the test checks one box names every change.)
+popup.text = wow.NewObject("FontString", nil, popup)
+StaticPopup_Show = function(_, text) popup._shown = true popup.text:SetText(text) end
+StaticPopup_Hide = function() popup._shown = false end
 StaticPopup_FindVisible = function() return popup._shown and popup or nil end
 
 local problems = {}
 if phase == "1" then
-	ns.HandleSlash("debug loadvisions")
+	ns.HandleSlash("debug loadparts")
 	Advance(120)
 else
 	-- (The kit picks the run up 2 s after the reload's PLAYER_ENTERING_WORLD: isLogin false, isReload true.)
 	wow.Fire("PLAYER_ENTERING_WORLD", false, true)
 	Advance(120)
 end
-local log = CinematicDB.loadVisionsTestLog or {}
+local log = CinematicDB.loadPartsTestLog or {}
 local text = table.concat(log, "\n")
 for _, line in ipairs(log) do
 	if line:find("FAIL", 1, true) then problems[#problems + 1] = line end
 end
 local done = text:find("DONE", 1, true) ~= nil
 -- (The test's box under the game's Reload box while that's up: run 2 hid it.)
+-- (The box's step out of all five, after a reload too: it said "step 4/2".)
+local boxText = ns.padTestBox and ns.padTestBox.text and ns.padTestBox.text:GetText()
+if not done and not (type(boxText) == "string" and boxText:find("step %d/5:")) then
+	problems[#problems + 1] = "the test's box doesn't count out of all 5 steps: " .. tostring(boxText)
+end
 if not done and not (ns.padTestBox and ns.padTestBox.placedUnder == popup) then
 	problems[#problems + 1] = "the test's box isn't under the game's Reload box"
 end
@@ -130,10 +138,10 @@ if not done then
 else
 	if not text:find("DONE", 1, true) then problems[#problems + 1] = "no DONE line" end
 	if not text:find(" 0 fail", 1, true) then problems[#problems + 1] = "the summary isn't 0 fail" end
-	if CinematicDB.loadVisions == false then problems[#problems + 1] = "Load Visions left off" end
-	if CinematicDB.loadVisionsTestUndo then problems[#problems + 1] = "the undo wasn't put back" end
+	if CinematicDB.loadVisions == false or CinematicDB.loadCameras == false then problems[#problems + 1] = "a Load box left off" end
+	if CinematicDB.loadPartsTestUndo then problems[#problems + 1] = "the undo wasn't put back" end
 end
-if os.getenv("LOADVISIONS_LOG") then print(text) end
-local tag = ("loadvisions %s %s"):format(start or "on", phase)
+if os.getenv("LOADPARTS_LOG") then print(text) end
+local tag = ("loadparts %s %s"):format(start or "on", phase)
 for _, p in ipairs(problems) do print(tag .. ": " .. p) end
 if #problems == 0 then print(tag .. ": ok" .. (done and ", done" or "")) end

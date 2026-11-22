@@ -1,4 +1,5 @@
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 
 -- Zoom guard: a safety net for our cameras' zooms. Every zoom of ours goes
 -- through ns.CameraCall / ns.CallCameraFunction (Camera.lua); this watches the
@@ -247,3 +248,4 @@ function ns.ZoomGuardDebug()
 			guard.lastWho ~= "" and guard.lastWho or "?") or "",
 		#guard.turns, tostring(guard.lastSent or "none"))
 end
+end) -- (ns.Module "cameras")

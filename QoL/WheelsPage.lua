@@ -98,12 +98,14 @@ local WHEELS = {
 		switch = "wheelVisionOn", switchTip = ON_TIP,
 		Entries = function() return SlotsOf("vision") end },
 }
--- (Visions left out, Modules.lua: no Vision wheel tab.)
-ns.ModuleLeftOut("visions", function()
-	for i = #WHEELS, 1, -1 do
-		if WHEELS[i].key == "vision" then table.remove(WHEELS, i) end
-	end
-end)
+-- (Visions or Cameras left out, Modules.lua: no Vision or camera wheel tab.)
+for part, key in pairs({ visions = "vision", cameras = "camera" }) do
+	ns.ModuleLeftOut(part, function()
+		for i = #WHEELS, 1, -1 do
+			if WHEELS[i].key == key then table.remove(WHEELS, i) end
+		end
+	end)
+end
 
 local function IsOnMaster(key)
 	for _, item in ipairs(ns.MasterWheelOrder()) do

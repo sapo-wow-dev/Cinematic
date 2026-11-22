@@ -960,12 +960,15 @@ if CinematicWorldMarkerWheel then
 		label = "Ground marker wheel", opens = CinematicWorldMarkerWheel, switch = "wheelWorldOn" }
 end
 ns.MASTER_WHEEL_CHOICES = MASTER_CHOICES
--- (Visions left out, Modules.lua: no Vision wheel to open, so none on this one.)
-ns.ModuleLeftOut("visions", function()
-	for i = #MASTER_CHOICES, 1, -1 do
-		if MASTER_CHOICES[i].key == "vision" then table.remove(MASTER_CHOICES, i) end
-	end
-end)
+-- (Visions or Cameras left out, Modules.lua: no Vision or camera wheel to
+-- open, so none on this one.)
+for part, key in pairs({ visions = "vision", cameras = "camera" }) do
+	ns.ModuleLeftOut(part, function()
+		for i = #MASTER_CHOICES, 1, -1 do
+			if MASTER_CHOICES[i].key == key then table.remove(MASTER_CHOICES, i) end
+		end
+	end)
+end
 
 -- Every wheel the master wheel can have: the built-in ones, then the
 -- player's own (CustomWheels.lua; off it until ticked: offByDefault).
@@ -1226,15 +1229,18 @@ switchPending:SetScript("OnEvent", function(self)
 	ns.ApplyWheelSwitches()
 end)
 -- (The camera wheel's key, CameraWheel.lua: not opened with its page off;
--- put away as usual if it's up.)
-local cameraWheelKey = Cinematic_CameraWheel
-function Cinematic_CameraWheel(keystate)
-	local cameraWheel = _G.CinematicCameraWheel
-	if keystate == "down" and not WheelOn("wheelCameraOn") and not (cameraWheel and cameraWheel:IsShown()) then
-		return
+-- put away as usual if it's up. Wrapped once its code has run: it's the
+-- cameras part's, Modules.lua; left out, its key says so.)
+ns.Module("cameras", function()
+	local cameraWheelKey = Cinematic_CameraWheel
+	function Cinematic_CameraWheel(keystate)
+		local cameraWheel = _G.CinematicCameraWheel
+		if keystate == "down" and not WheelOn("wheelCameraOn") and not (cameraWheel and cameraWheel:IsShown()) then
+			return
+		end
+		return cameraWheelKey(keystate)
 	end
-	return cameraWheelKey(keystate)
-end
+end)
 
 -- Scaled like the UI (they aren't in UIParent) out of a fight; and the
 -- marker wheel back to the target as a fight starts (just before the

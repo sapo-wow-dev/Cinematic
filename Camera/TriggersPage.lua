@@ -7,6 +7,7 @@
 -- scenes using it. Our own triggers show their place and their scene; the
 -- rest of them is still in their cameras' code.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 local WIDTH = 560
@@ -1217,3 +1218,4 @@ function ns.CreateTriggerSettingsPanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Trigger Settings", L["Trigger"])
 end
+end) -- (ns.Module "cameras")

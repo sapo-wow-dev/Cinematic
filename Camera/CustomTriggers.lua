@@ -31,6 +31,7 @@
 -- A state still true after its episode ended doesn't start another until
 -- it's been false (unless its "rearm" is off).
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 ns.CUSTOM_TRIGGER_MAX = 20 -- (scenes of your own)
@@ -1023,3 +1024,4 @@ loader:SetScript("OnEvent", function()
 	ns.SyncCustomTriggers()
 	if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(1, ns.SyncCustomTriggers) end
 end)
+end) -- (ns.Module "cameras")

@@ -2524,19 +2524,29 @@ local function HandleSlash(msg)
 	return true
 end
 
--- (Visions left out, Modules.lua: a command into its code finds nothing
--- there. Said so, the game's error under it, in place of the error window.)
+-- (Visions or Cameras left out, Modules.lua: a command into their code finds
+-- nothing there. Said so, the game's error under it, in place of the error window.)
 local slashInner = HandleSlash
-local function LeftOutNote(err)
-	ns.Print(L["That needs Visions, which isn't loaded (Visions > General > Load Visions)."] ..
+local PART_NAMES = { visions = "Visions", cameras = "Cameras" }
+local function LeftOut()
+	local names = {}
+	for part in pairs(ns.MODULE_KEYS or {}) do
+		if not ns.ModuleLoaded(part) then names[#names + 1] = L[PART_NAMES[part] or part] end
+	end
+	table.sort(names)
+	return #names > 0 and table.concat(names, L[" or "]) or nil
+end
+local function LeftOutNote(names, err)
+	ns.Print(L["That needs %s, which you've left out (its General page's Load box)."]:format(names) ..
 		" |cff909090(" .. tostring(err):match("^[^\n]*") .. ")|r")
 end
 HandleSlash = function(msg)
-	if ns.ModuleLoaded("visions") then return slashInner(msg) end
+	local names = LeftOut()
+	if not names then return slashInner(msg) end
 	local results = { pcall(slashInner, msg) }
 	if results[1] then return unpack(results, 2) end
 	if tostring(results[2]):find("a nil value", 1, true) then
-		LeftOutNote(results[2])
+		LeftOutNote(names, results[2])
 	else
 		error(results[2], 0)
 	end

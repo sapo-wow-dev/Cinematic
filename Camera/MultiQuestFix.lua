@@ -24,6 +24,7 @@
 -- Accept is) and the window fades, then the game's AcceptQuest is called:
 -- only called, never replaced. A PvP quest (the game asks first) isn't covered.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 
 local REOPEN_WAIT = 0.8 -- seconds after Accept before saying "press Interact"
 
@@ -258,3 +259,4 @@ events:SetScript("OnEvent", function(_, event)
 		ns.Log("multiquest", "no cover: in a fight, or no game Accept button")
 	end
 end)
+end) -- (ns.Module "cameras")

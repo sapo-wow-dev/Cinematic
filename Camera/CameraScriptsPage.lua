@@ -17,6 +17,7 @@
 -- beside the settings (docked) or anywhere you drag it (Pop out), and stays
 -- up when they close; its corner grip sizes it (the drawing grows with it).
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 -- (The page: the camera picked, full width. The list of every camera drops
@@ -1992,3 +1993,4 @@ function ns.CameraScriptSummary(script)
 	end
 	return Names(script.steps)
 end
+end) -- (ns.Module "cameras")

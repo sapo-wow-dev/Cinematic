@@ -11,6 +11,7 @@
 -- Where: its Show in row (Always ticked to start with: everywhere).
 -- /cine debug skyride logs what the game says while you fly.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 -- (Only where there's skyriding: retail's gliding info.)
@@ -1144,3 +1145,4 @@ do
 		ToggleLog()
 	end
 end
+end) -- (ns.Module "cameras")

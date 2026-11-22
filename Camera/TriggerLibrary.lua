@@ -22,6 +22,7 @@
 --   pri     its place in the priority list (lower first; nil: 510)
 -- And "prio.<source>": a built-in source's place, moved (Triggers.lua).
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 -- The Triggers page's switch (TriggersPage.lua: the same key on its Priority,
@@ -443,3 +444,4 @@ function ns.ClearTriggerLog()
 	for i = #log, 1, -1 do log[i] = nil end
 	log.version = log.version + 1
 end
+end) -- (ns.Module "cameras")

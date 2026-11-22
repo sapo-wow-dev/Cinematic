@@ -12,6 +12,7 @@
 --
 -- Also the share strings for a trigger or a shot (CINECAM1:...).
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 -- The My Shots page's switch (ShotsPage.lua, under Enable Cameras). Off, a
@@ -506,3 +507,4 @@ function ns.AddCameraShare(info)
 	ns.CustomTriggersChanged()
 	return id
 end
+end) -- (ns.Module "cameras")

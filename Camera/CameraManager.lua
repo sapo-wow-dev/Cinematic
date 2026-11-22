@@ -4,6 +4,7 @@
 -- each a link to its place on the Scripts or Scenes page. The General tab
 -- again closes the camera's tab. (Built from Options.lua's CreateCamerasPanel.)
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 local WIDTH = 568
@@ -495,3 +496,4 @@ function ns.CameraManager(kit, canvas, content, title, intro, switch, helper)
 	end)
 
 end
+end) -- (ns.Module "cameras")

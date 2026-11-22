@@ -26,6 +26,7 @@
 -- follows its camera's until it's given a When of its own, so nothing
 -- changes for settings and profiles from before.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 -- The Scenes page's switch (Options.lua): off, no scene plays from a trigger
@@ -1021,3 +1022,4 @@ if ns.isDev then
 		if ns.CameraRowsChanged then ns.CameraRowsChanged() end
 	end)
 end
+end) -- (ns.Module "cameras")

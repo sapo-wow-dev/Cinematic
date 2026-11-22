@@ -38,6 +38,7 @@
 -- offset follows those. A flight's mount scales the offset as a mount does,
 -- not measured yet: the "cams" sim session.)
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 -- Soft release 2026-11-13 to 2026-11-15: locked in the player copy, page and
@@ -4276,3 +4277,4 @@ function ns.CreateShoulderCamPanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Shoulder Cam")
 end
+end) -- (ns.Module "cameras")

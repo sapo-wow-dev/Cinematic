@@ -2,6 +2,7 @@
 -- one, give it a name and a camera, and set its sway and zoom; test it, share
 -- it, or add one a friend shared. Triggers pick shots on the Cameras page.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 
 function ns.CreateMyShotsPanel(kit)
 	local L = ns.L
@@ -239,3 +240,4 @@ function ns.CreateMyShotsPanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "My Shots")
 end
+end) -- (ns.Module "cameras")

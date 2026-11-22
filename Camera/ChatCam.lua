@@ -39,6 +39,7 @@
 -- (and so the log), prefixed "chat cam"; /cine chatcam log saves
 -- every frame of the next conversations too.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 
 local EVENTS = { "CHAT_MSG_MONSTER_SAY", "CHAT_MSG_MONSTER_YELL", "CHAT_MSG_MONSTER_PARTY" }
 -- The camera turns round you, not on the spot, so a speaker near you moves
@@ -1810,3 +1811,4 @@ loader:SetScript("OnEvent", function()
 		ns.db.dialogueCam, ns.db.dialogueCamFlip, ns.db.dialogueCamSwap, ns.db.dialogueCamLog = nil, nil, nil, nil
 	end
 end)
+end) -- (ns.Module "cameras")

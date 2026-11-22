@@ -17,6 +17,7 @@
 -- While one runs, ns.cameraTesting lets the cameras start with the game's
 -- Settings window open (they wait for menus otherwise).
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 
 local TEST_TIME = 30 -- seconds
 local CHECK_EVERY = 0.2
@@ -214,3 +215,4 @@ function ns.CameraTestLeft(key)
 	end
 	return nil
 end
+end) -- (ns.Module "cameras")

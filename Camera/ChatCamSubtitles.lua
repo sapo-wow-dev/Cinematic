@@ -5,6 +5,7 @@
 -- line stays up as long as speech from behind you would (ns.SpeechLife); a
 -- new one takes its place.
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 local FADE_IN, FADE_OUT = 0.25, 0.4 -- seconds
@@ -135,3 +136,4 @@ watcher:SetScript("OnEvent", function(_, event, text, author)
 		ns.ShowSubtitle(event, author, text)
 	end
 end)
+end) -- (ns.Module "cameras")

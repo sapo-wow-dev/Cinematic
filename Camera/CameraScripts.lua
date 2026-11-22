@@ -26,6 +26,7 @@
 -- nextId, preview (the preview window's place). A row's camera value for a
 -- script is "script:<id>".
 local _, ns = ...
+ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
 local WHO = "script"
@@ -3785,3 +3786,4 @@ function ns.CameraScriptCommand(arg)
 		ns.Print("/cine script list | play <name> | stop" .. (ns.isDev and " | builtins" or ""))
 	end
 end
+end) -- (ns.Module "cameras")
