@@ -56,8 +56,28 @@ local SPECS = {
 		master = "camera",
 		slash = { "flyby", "Cameras aren't loaded" },
 	},
+	style = {
+		label = "Style",
+		-- (Its files bar the toolkit loaded either way: StyleFonts, StylePages,
+		-- ColorPalette, and the plates' name looks, NameRowLook.)
+		files = { "@Style/", "Plates/PlateThemes.lua", "Plates/NameThemes.lua", "Plates/PlateRowLook.lua" },
+		loadedFiles = { "Style/StyleFonts.lua", "Style/StylePages.lua", "Style/ColorPalette.lua" },
+		-- (Loaded either way, in Style files: the Atmosphere effect pages and
+		-- their tabs (LetterboxStyle.lua), Roll Vision's tabs (RollStyle.lua).)
+		allowed = { "frame from @Style/LetterboxStyle.lua", "frame from @Style/RollStyle.lua",
+			"frame from @Style/StylePages.lua", "frame from @Style/ColorPalette.lua", "frame from @Style/StyleFonts.lua",
+			"hook from @Style/StylePages.lua", "timer from @Style/StylePages.lua", "hook from @Style/LetterboxStyle.lua" },
+		pages = { "Style Themes", "Style Overrides", "Interface Recolor", "Unit Style", "Personal Style", "Raid Style",
+			"Action Style", "Combat Text Style", "Nameplate Style", "Name Style", "Bubble Style", "Tooltip Style",
+			"Tint Style", "Letterbox Style", "Visions Style", "Vitals Style", "Card Styles", "Damage Vision Look",
+			"Emote Vision Style" },
+		general = "Style General", box = "Load Style", ask = "leave Style out",
+		setting = { "tooltipFont", "friz" },
+		demos = { "combatText" }, -- (the bubbles demo is Chat Bubbles', an Interface page)
+		switch = "styleGeneral",
+	},
 }
-local ORDER = { "visions", "cameras", "both" }
+local ORDER = { "visions", "cameras", "style", "both", "all" }
 
 -- Values as Lua source (the settings handed from one run to the next).
 local function Dump(value)
@@ -144,7 +164,8 @@ if not phase then
 	os.exit(failed and 1 or 0)
 end
 
-local parts = partArg == "both" and { "visions", "cameras" } or { partArg }
+local parts = partArg == "both" and { "visions", "cameras" } or partArg == "all" and { "visions", "cameras", "style" }
+	or { partArg }
 
 local problems = {}
 local function Problem(text) problems[#problems + 1] = text end
@@ -407,28 +428,40 @@ elseif phase == "off" then
 		end
 		if not canvases[spec.general] then Problem(spec.general .. " gone while left out") end
 		if not Box(spec) then Problem(("no %s box on %s while left out"):format(spec.box, spec.general)) end
+		-- (What the menu shows there: the page with its box, not the off card
+		-- over it. Camera > General showed "General is off", 2026-11-22.)
+		local card = ns.PageOffCardWanted and ns.PageOffCardWanted(spec.general)
+		if card ~= false then
+			Problem(("%s shows %s while left out, not its Load box"):format(spec.general,
+				card and "its off card" or "nothing (no such page in the menu)"))
+		end
 		for _, choice in ipairs(ns.MASTER_WHEEL_CHOICES or {}) do
 			if choice.key == spec.master then Problem("the master wheel still has the " .. spec.master .. " wheel") end
 		end
 		for _, demo in ipairs(spec.demos) do
 			if ns.ShowMeAvailable and ns.ShowMeAvailable(demo) then Problem("the Welcome window still offers " .. demo) end
 		end
-		-- (Its Why tab: one row saying it isn't loaded.)
-		local tab = whyTabs[spec.why.tab]
+		-- (Its Why tab: one row saying it isn't loaded. Style has none.)
+		local tab = spec.why and whyTabs[spec.why.tab]
 		local row = tab and tab[1] and tab[1].rows and tab[1].rows[1]
-		if not (row and row.key == spec.why.row and row.status == "off") then
+		if spec.why and not (row and row.key == spec.why.row and row.status == "off") then
 			Problem(("the Why window's %s tab doesn't say %s aren't loaded"):format(spec.why.tab, spec.label))
 		end
 		-- A command into its code: a line saying so, no error.
-		local said
-		local print0 = ns.Print
-		ns.Print = function(text) said = tostring(text) end
-		local ok, err = pcall(ns.HandleSlash, spec.slash[1])
-		ns.Print = print0
-		if not ok then Problem(("/cine %s errored while left out: %s"):format(spec.slash[1], tostring(err))) end
-		if not (said and said:find(spec.slash[2], 1, true)) then
-			Problem(("/cine %s while left out didn't say so: %s"):format(spec.slash[1], tostring(said)))
+		if spec.slash then
+			local said
+			local print0 = ns.Print
+			ns.Print = function(text) said = tostring(text) end
+			local ok, err = pcall(ns.HandleSlash, spec.slash[1])
+			ns.Print = print0
+			if not ok then Problem(("/cine %s errored while left out: %s"):format(spec.slash[1], tostring(err))) end
+			if not (said and said:find(spec.slash[2], 1, true)) then
+				Problem(("/cine %s while left out didn't say so: %s"):format(spec.slash[1], tostring(said)))
+			end
 		end
+		-- (Its switches read off: the master's, so every page under it.)
+		if spec.switch and ns.Setting(spec.switch) ~= false then Problem(spec.switch .. " doesn't read off while left out") end
+		if part == "style" and ns.StyleOn(nil) then Problem("ns.StyleOn says Style is on while left out") end
 	end
 	if partArg == "visions" then
 		for _, vision in ipairs(ns.VISION_LIST or {}) do Problem("vision wheel still has " .. vision.key) end

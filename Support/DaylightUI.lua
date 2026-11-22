@@ -480,7 +480,7 @@ do
 	local BLANK = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Fonts\\Blank.ttf"
 	local function OursOn()
 		local db = ns.db
-		return db and db.hideWorldText and db.combatTextStyle and db.styleGeneral ~= false and true or false
+		return db and db.hideWorldText and db.combatTextStyle and db.styleGeneral ~= false and ns.ModuleLoaded("style") and true or false
 	end
 	local row
 	local function Apply()

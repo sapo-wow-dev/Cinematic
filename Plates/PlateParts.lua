@@ -635,7 +635,7 @@ local function DrawName(text, name, unit)
 		local db = ns.db
 		local font = NameStyle(row, "Font")
 		if font == "usual" then
-			file = db and db.styleGeneral and ns.StyleFontFile(db.styleFont) or file
+			file = db and ns.StyleOn(nil, db) and ns.StyleFontFile(db.styleFont) or file -- (StyleOn: Style left out too)
 		elseif font ~= "game" then
 			file = ns.StyleFontFile(font) or file
 		end

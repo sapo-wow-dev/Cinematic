@@ -7,6 +7,7 @@
 -- changed. The game's text: its own numbers and XP text off.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 local CT = ns.CombatTexts
 
@@ -1127,3 +1128,4 @@ function ns.CombatTextDemoState()
 	end
 	return demo ~= nil and demo:IsShown(), demo and demo.played or 0, pieces
 end
+end) -- (ns.Module "style")

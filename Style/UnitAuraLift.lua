@@ -13,6 +13,7 @@
 --     hung on another aura of the frame (the start of each row).
 -- Called from UnitStyle.lua each time it lays out a frame's plate.
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local GAP = 1 -- (room between the plate's top and the row, in the frame's units)
 local MAX_LIFT = 20 -- (the plate's 16 high name row and its edges: more is a misread)
@@ -137,3 +138,4 @@ end
 function ns.UnitAuraLiftNow(frame)
 	return lifts[frame] or 0, frame and Need(frame)
 end
+end) -- (ns.Module "style")

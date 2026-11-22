@@ -13,6 +13,7 @@
 -- quest item buttons (secure) are left alone.
 
 local ADDON_NAME, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local DEFAULTS = ns.DEFAULTS
 DEFAULTS.qtHeaders = true -- the header bars as the theme's panel
@@ -502,3 +503,4 @@ function ns.ReportQuestTrackerStyle()
 		end, {})
 	end
 end
+end) -- (ns.Module "style")

@@ -10,6 +10,7 @@
 -- another addon made square or skins itself is left be.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local DEFAULTS = ns.DEFAULTS
 DEFAULTS.mmShade = true -- the dark just inside the ring
@@ -491,3 +492,4 @@ function ns.ReportMinimapStyle()
 	end
 	if cluster then Others(cluster, "Cluster", 0) end
 end
+end) -- (ns.Module "style")

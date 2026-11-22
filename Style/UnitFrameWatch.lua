@@ -14,6 +14,7 @@
 -- what happened in the fight; chat says so once per session.
 -- (The dev copy's /cine debug ufdrift records much more, every region.)
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local FRAMES = { "PlayerFrame", "TargetFrame", "FocusFrame" }
 local SLACK = 1.5 -- pixels a part may differ by and still count as in place
@@ -262,3 +263,4 @@ function ns.UnitWatchReset()
 	wipe(reports)
 	cleanCount, told, fight, fights = 0, false, nil, 0
 end
+end) -- (ns.Module "style")

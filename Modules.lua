@@ -19,7 +19,7 @@
 local _, ns = ...
 
 -- name -> the CinematicDB key that leaves it out (false)
-local PARTS = { visions = "loadVisions", cameras = "loadCameras" }
+local PARTS = { visions = "loadVisions", cameras = "loadCameras", style = "loadStyle" }
 ns.MODULE_KEYS = PARTS
 
 -- What the rest of the addon asks a part as it plays, with that part left
@@ -46,6 +46,17 @@ ns.MODULE_STAND_INS = {
 		StandUpFromDeathTest = Nothing, LieDownForDeathTest = Nothing, CloseCameraWheel = Nothing,
 		StopCameraScript = Nothing, CallCameraFunction = Nothing, OpenCameraWheel = Nothing, OnPlayerZoom = Nothing,
 	},
+	-- (No theme, override or row look: the game's look, as with every Style
+	-- page off. The swipe texture the cooldown text uses either way.)
+	style = {
+		StyleOverride = Nothing, ThemePanel = Nothing, ThemeRing = Nothing, ThemeOrnament = Nothing,
+		ThemeTailArt = Nothing, HideThemeSlice = Nothing, ThemeNoSnap = Nothing, DressThemeGrain = Nothing,
+		DressThemeCorners = Nothing, RefreshQuestTrackerStyle = Nothing, RestoreStyleThemeBackup = Nothing,
+		RestoreDeletedStyleTheme = Nothing, DressThemeSlice = No, PlateLooksOn = No, PlateLookNow = No,
+		ActiveStyleTheme = function() return {} end, StyleThemeBackups = function() return {}, {} end,
+		AddProfileStyleTheme = function() return nil, ns.ModuleLeftOutLine("style") end,
+		SQUARE_SWIPE = "Interface\\Buttons\\WHITE8X8",
+	},
 }
 
 -- The game's key bindings (Bindings.xml) call some of a part's functions by
@@ -57,6 +68,7 @@ local KEY_STAND_INS = {
 local LEFT_OUT_LINE = {
 	visions = "Visions isn't loaded (Visions > General)",
 	cameras = "Cameras aren't loaded (Camera > General > Load Cameras)",
+	style = "Style isn't loaded (Style > General > Load Style)",
 }
 function ns.ModuleLeftOutLine(name)
 	local line = LEFT_OUT_LINE[name] or name
@@ -70,10 +82,11 @@ end
 -- sync"). Where the game puts its boxes, as every Reload box of ours.
 -- lead: what comes before "reload now..." (a profile's name), or nil.
 -- Nothing to reload: the box goes. True: it's up.
-local ASK_ORDER = { "visions", "cameras" }
+local ASK_ORDER = { "visions", "cameras", "style" }
 local ASK_WORDS = {
 	visions = { load = "load Visions", leave = "leave Visions out" },
 	cameras = { load = "load the cameras", leave = "leave the cameras out" },
+	style = { load = "load Style", leave = "leave Style out" },
 }
 ns.MODULES_RELOAD_POPUP = "CINEMATIC_LOAD_PARTS"
 function ns.AskModulesReload(lead)

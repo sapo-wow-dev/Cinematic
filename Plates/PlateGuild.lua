@@ -620,7 +620,7 @@ local function Refresh(plate)
 		local font = look.font
 		local db = ns.db
 		if font == "usual" then
-			baseFile = db and db.styleGeneral and ns.StyleFontFile(db.styleFont) or baseFile
+			baseFile = db and ns.StyleOn(nil, db) and ns.StyleFontFile(db.styleFont) or baseFile -- (StyleOn: Style left out too)
 		elseif font ~= "game" and ns.StyleFontFile then
 			baseFile = ns.StyleFontFile(font) or baseFile
 		end

@@ -23,6 +23,7 @@
 -- group: white under Swings, yellow under Spells and abilities.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local DEFAULTS = ns.DEFAULTS
 local L = ns.L
 
@@ -437,3 +438,4 @@ function CT.Field(id, setting)
 		end,
 	}
 end
+end) -- (ns.Module "style")

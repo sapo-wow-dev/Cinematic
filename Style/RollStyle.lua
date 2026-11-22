@@ -6,13 +6,17 @@
 -- it on: the Vision tab (Options.lua). Both in the Visions hub under one icon.
 
 local _, ns = ...
-local L = ns.L
 
--- The two pages' tabs (picked: 1 Vision, 2 Style).
+-- The two pages' tabs (picked: 1 Vision, 2 Style). (Loaded with Style left
+-- out too, Modules.lua: Roll Vision's page has them; its Style tab then goes.)
 function ns.RollTabs(content, title, picked)
+	local L = ns.L
 	ns.VisionTabs(content, title, "Roll Vision", "Roll Style", picked,
 		L["Turning it on, and which rolls it shows."], L["How the roll window looks."])
 end
+
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
+local L = ns.L
 
 function ns.CreateRollStylePanel(kit)
 	if not ns.hasRollWindow then -- (no loot history on this client: no window to style)
@@ -128,3 +132,4 @@ function ns.CreateRollStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Roll Style", L["Roll Vision"])
 end
+end) -- (ns.Module "style")

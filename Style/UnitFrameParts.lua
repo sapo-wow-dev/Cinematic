@@ -3,6 +3,7 @@
 -- health and power texts, the level as the game writes it, the boss dragon.
 -- Its own file: UnitStyle.lua is at Lua's 200 locals.
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local function Readable(value)
 	return value ~= nil and not (issecretvalue and issecretvalue(value))
@@ -346,3 +347,4 @@ function ns.WrapUnitAuras(unit, tot)
 		end
 	end
 end
+end) -- (ns.Module "style")

@@ -8,6 +8,7 @@
 -- clients); /cine debug plates lists them.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -888,3 +889,4 @@ function ns.CreatePersonalStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Personal Style", L["Personal Resource Style"])
 end
+end) -- (ns.Module "style")

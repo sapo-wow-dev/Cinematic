@@ -11,6 +11,7 @@
 -- the next login if a reload cuts it short (db.themeShotsKept, themeShotsCVars).
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local SETTLE, AFTER = 1.8, 0.7 -- (seconds: a card plays in; the shot's written)
 local QUICK_SETTLE, QUICK_AFTER = 0.5, 0.5 -- (the same with no card to wait for)
@@ -440,3 +441,4 @@ end
 local watch = CreateFrame("Frame")
 watch:RegisterEvent("PLAYER_LOGIN")
 watch:SetScript("OnEvent", Restore)
+end) -- (ns.Module "style")

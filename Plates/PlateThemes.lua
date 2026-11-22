@@ -9,6 +9,7 @@
 -- picks it (ns.MakePartThemeStrip, below, shared with Name Style).
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 ns.DEFAULTS.plateTheme = "main"
@@ -297,3 +298,4 @@ function ns.MakePartThemeStrip(kit, parent, kind, changed)
 	kit.AddControl(strip)
 	return strip
 end
+end) -- (ns.Module "style")

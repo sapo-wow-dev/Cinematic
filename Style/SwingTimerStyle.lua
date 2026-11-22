@@ -8,6 +8,7 @@
 -- or a row says so. (When the bars show: the Swing timer page, Frames.lua.)
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local DEFAULTS = ns.DEFAULTS
 DEFAULTS.swFrame = true -- the bars' frames in the theme's color (InterfaceRecolor.lua)
@@ -161,3 +162,4 @@ if not ns.isRetail then
 		C_Timer.After(1, ns.RefreshSwingTimerStyle)
 	end)
 end
+end) -- (ns.Module "style")

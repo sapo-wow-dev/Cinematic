@@ -7,6 +7,7 @@
 -- Manager's Tooltips page (TooltipParts.lua).
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -647,3 +648,4 @@ function ns.CreateTooltipStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Tooltip Style", L["Tooltip Style"])
 end
+end) -- (ns.Module "style")

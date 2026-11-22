@@ -10,6 +10,7 @@
 -- by alpha, not removed: it comes back as soon as the page says so.
 
 local ADDON_NAME, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -1112,3 +1113,4 @@ function ns.CreateActionBarStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Action Style", L["Action Bar Style"])
 end
+end) -- (ns.Module "style")

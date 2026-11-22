@@ -23,6 +23,7 @@
 -- all of it, XP too (the blank font, Core.lua, from the next game start).
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local DEFAULTS = ns.DEFAULTS
 DEFAULTS.combatTextStyle = false      -- the page's Enable Page
@@ -1991,3 +1992,4 @@ function ns.CombatTextSample(frame, id, layer, via, cast)
 			nil, cast)
 	end
 end
+end) -- (ns.Module "style")

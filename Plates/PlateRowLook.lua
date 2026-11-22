@@ -12,6 +12,7 @@
 -- PlateParts' own names and ApplyPlate read the name and level here.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 -- The settings, by their part of a key, and what each holds while it's the
 -- Default row's (nil, or these).
@@ -776,3 +777,4 @@ function ns.PlateRowSource(kind, key)
 	local own = Own(key, kind) ~= nil
 	return { text = own and L["This row"] or parent, own = own, parent = parent, short = short }
 end
+end) -- (ns.Module "style")

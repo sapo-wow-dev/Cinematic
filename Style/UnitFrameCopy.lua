@@ -11,6 +11,7 @@
 -- run of 2026-11-20, /cine debug previewmatch units). Nothing of the game's
 -- art is kept: atlas names only, drawn by the game at runtime.
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 -- The built-in recipes (Forever 1.60.1, 2026-11-20). x, y: from the frame
 -- art's top-left, right and down; w, h: size.
@@ -707,3 +708,4 @@ function ns.UnitHangs(id, look)
 	end
 	return store[look] and store[look][id]
 end
+end) -- (ns.Module "style")

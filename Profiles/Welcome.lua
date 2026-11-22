@@ -544,10 +544,10 @@ local SHELF_LINKS = {
 local DEMO_BY_KEY = {}
 for _, demo in ipairs(DEMO_ROW) do DEMO_BY_KEY[demo.key] = demo end
 for _, demo in ipairs(SHELF_MORE) do DEMO_BY_KEY[demo.key] = demo end
--- (Visions or Cameras left out, Modules.lua: none of them anywhere here:
--- their section (Visions, the Camera slot), the shelf's tiles and links of
+-- (Visions, Cameras or Style left out, Modules.lua: none of them anywhere here:
+-- their section (Visions, the Camera slot, Themes), the shelf's tiles and links of
 -- their group (a group with none left goes too), the tour's stops.)
-for part, group in pairs({ visions = "vis", cameras = "cam" }) do
+for part, group in pairs({ visions = "vis", cameras = "cam", style = "style" }) do
 	ns.ModuleLeftOut(part, function()
 		local gone = {}
 		for _, list in ipairs({ DEMO_ROW, SHELF_MORE, SHELF_LINKS }) do
@@ -562,7 +562,8 @@ for part, group in pairs({ visions = "vis", cameras = "cam" }) do
 			if gone[TOUR[i].key] then table.remove(TOUR, i) end
 		end
 		for i = #SECTIONS, 1, -1 do
-			if (part == "visions" and SECTIONS[i] == VISIONS) or (part == "cameras" and SECTIONS[i].slot == "camera") then
+			if (part == "visions" and SECTIONS[i] == VISIONS) or (part == "cameras" and SECTIONS[i].slot == "camera")
+				or (part == "style" and SECTIONS[i] == THEMES) then
 				table.remove(SECTIONS, i)
 			end
 		end

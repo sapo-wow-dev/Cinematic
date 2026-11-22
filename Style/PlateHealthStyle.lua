@@ -9,6 +9,7 @@
 -- plates are reused. Plates the game keeps from addons are skipped.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 ns.DEFAULTS.stylePlate = "game" -- the game's nameplate Style: "game" (left alone) or its number, 0 up
 
@@ -418,3 +419,4 @@ watcher:SetScript("OnEvent", function(_, event, unit)
 	if not ns.PlateAsleep(plate) then TryPlate(plate) end
 end)
 ns.plateSleep.OnWake(function(plate) if ns.db then TryPlate(plate) end end)
+end) -- (ns.Module "style")

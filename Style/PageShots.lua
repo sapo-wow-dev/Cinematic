@@ -12,6 +12,7 @@
 -- back) and its scroll. A fight stops it. Closed sections stay closed.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local OPEN_WAIT, TAB_WAIT, SCROLL_WAIT, AFTER_SHOT = 1.0, 0.6, 0.5, 0.8 -- (seconds; shots 1 s+ apart, files named by the second)
 local MAX_PARTS, MAX_FINDINGS, MAX_STATES = 8, 15, 30
@@ -549,3 +550,4 @@ function ns.PageShots(arg)
 		last - first + 1, math.ceil((last - first + 1) * 6 / 60)))
 	Shots(pages, first, last, token, out)
 end
+end) -- (ns.Module "style")

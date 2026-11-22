@@ -8,6 +8,8 @@
 -- under them; the Name Style page edits it (Options.lua).
 
 local _, ns = ...
+-- (Loaded with Style left out too, Modules.lua: plates draw names by it; with
+-- Style out its switches read off and a name is the game's.)
 local L = ns.L
 
 -- The rows, in the page's order: key (NAME_GROUPS' key; "all": All names),

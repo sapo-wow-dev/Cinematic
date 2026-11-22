@@ -138,7 +138,7 @@ if not done then
 else
 	if not text:find("DONE", 1, true) then problems[#problems + 1] = "no DONE line" end
 	if not text:find(" 0 fail", 1, true) then problems[#problems + 1] = "the summary isn't 0 fail" end
-	if CinematicDB.loadVisions == false or CinematicDB.loadCameras == false then problems[#problems + 1] = "a Load box left off" end
+	if CinematicDB.loadVisions == false or CinematicDB.loadCameras == false or CinematicDB.loadStyle == false then problems[#problems + 1] = "a Load box left off" end
 	if CinematicDB.loadPartsTestUndo then problems[#problems + 1] = "the undo wasn't put back" end
 end
 if os.getenv("LOADPARTS_LOG") then print(text) end

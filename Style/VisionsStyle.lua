@@ -5,6 +5,7 @@
 -- follows General), and which Visions follow it.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 ns.DEFAULTS.visionsStyle = true -- this page at all (its switch)
@@ -182,3 +183,4 @@ function ns.CreateVisionsStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Visions Style", L["Visions Style"])
 end
+end) -- (ns.Module "style")

@@ -3814,6 +3814,26 @@ do
 		hub.offCard = card
 		return card
 	end
+	-- A page's switch, and whether it's on as its off card goes by.
+	-- (Off only as its part's left out, Modules.lua: that part's General page,
+	-- the one left, with its Load box. No card over it: Camera > General
+	-- showed "General is off" and hid the box, 2026-11-22.)
+	local function PageOnForCard(tile)
+		local switch = tile and TileSwitch(tile)
+		local pageOn = not switch or SwitchState(switch)
+		if not pageOn and switch and switch.key and ns.LEFT_OUT_SWITCHES and ns.LEFT_OUT_SWITCHES[switch.key] then
+			pageOn = true
+		end
+		return switch, pageOn
+	end
+	-- (Whether a page shows its off card in place of itself, by its English
+	-- name; nil: no such page. Tools/offline/modules.lua, /cine debug loadparts.)
+	function ns.PageOffCardWanted(name)
+		local tile = byName[name]
+		if not tile then return nil end
+		local _, on = PageOnForCard(tile)
+		return not on
+	end
 	local function PaintOffCard(hub)
 		local card, tile = hub.offCard, hub.current
 		-- (the page it faded last time back, whichever shows now, its tabs too)
@@ -3827,8 +3847,7 @@ do
 			KeepTabs(card.faded.content and card.faded.content.pageTabs, false)
 			card.faded = nil
 		end
-		local switch = tile and TileSwitch(tile)
-		local pageOn = not switch or SwitchState(switch)
+		local switch, pageOn = PageOnForCard(tile)
 		-- (The page on, but the game's own option it needs off: ns.GAME_OPTION_PAGES.)
 		local game = pageOn and tile and ns.GAME_OPTION_PAGES[tile.english]
 		if game and GetCVar(game.cvar) ~= "0" then game = nil end
@@ -15905,6 +15924,15 @@ function ns.LoadPartBox(content, title, intro, part, texts)
 	return load, loadNote, LoadState
 end
 
+-- Load Style's box words (Style > General: GeneralStyle.lua's page, or with
+-- Style left out the one made here).
+function ns.STYLE_LOAD_TEXTS()
+	return { label = L["Load Style"], tip = L["Unticked, Style doesn't load at all (takes a reload)."],
+		off = L["Tick it and reload to bring every Style page back."],
+		on = L["Turn off to keep Style from loading at all."],
+		load = L["load Style"], leave = L["leave Style out"], beside = true }
+end
+
 -- Sub-page: the Visions hub's General (2026-11-16): every Vision as a card,
 -- on or off, what it does (its page's intro, the first line) and its
 -- pages as chips; the card opens it. Made again as it shows, the switches
@@ -22311,7 +22339,7 @@ ns.OnLanguage(function()
 		Lap("CreateCardsPanel")
 		ns.CreateCardGeneralPanel(ns.lowHealthKit)
 		Lap("CreateCardGeneralPanel")
-		ns.CreateCardStylesPanel(ns.lowHealthKit)
+		if ns.ModuleLoaded("style") then ns.CreateCardStylesPanel(ns.lowHealthKit) end -- (a Style hub page: none with Style left out)
 		Lap("CreateCardStylesPanel")
 		ns.CreateCardSettingsPanel(ns.lowHealthKit)
 		Lap("CreateCardSettingsPanel")
@@ -22327,7 +22355,7 @@ ns.OnLanguage(function()
 	if ns.CreateDamageVisionPanel then -- (DamageVision.lua)
 		ns.CreateDamageVisionPanel(ns.lowHealthKit)
 		Lap("CreateDamageVisionPanel")
-		ns.CreateDamageVisionLookPanel(ns.lowHealthKit)
+		if ns.ModuleLoaded("style") then ns.CreateDamageVisionLookPanel(ns.lowHealthKit) end -- (a Style hub page: none with Style left out)
 		Lap("CreateDamageVisionLookPanel")
 	end
 	if ns.CreateDeathVisionPanel then -- (Tint.lua)
@@ -22345,7 +22373,7 @@ ns.OnLanguage(function()
 		Lap("CreateEmoteVisionSettingsPanel")
 		ns.CreateEmoteVisionPlatesPanel(ns.lowHealthKit)
 		Lap("CreateEmoteVisionPlatesPanel")
-		ns.CreateEmoteVisionStylePanel(ns.lowHealthKit)
+		if ns.ModuleLoaded("style") then ns.CreateEmoteVisionStylePanel(ns.lowHealthKit) end -- (a Style hub page: none with Style left out)
 		Lap("CreateEmoteVisionStylePanel")
 	end
 	CreateBuffsPanel()
@@ -22361,13 +22389,18 @@ ns.OnLanguage(function()
 	CreateBubblesPanel()
 	Lap("CreateBubblesPanel")
 	-- (their hub, Style, listed after Visions)
-	CreateNameStylePanel()
-	Lap("CreateNameStylePanel")
-	CreateTargetArrowPanel()
-	Lap("CreateTargetArrowPanel")
-	if ns.CreateLetterboxStylePanel then -- (LetterboxStyle.lua)
+	if ns.ModuleLoaded("style") then -- (Name Style, Nameplate Style: Style pages, none with it left out, Modules.lua)
+		CreateNameStylePanel()
+		Lap("CreateNameStylePanel")
+		CreateTargetArrowPanel()
+		Lap("CreateTargetArrowPanel")
+	end
+	-- (The Atmosphere hub's Letterbox page either way; its Style tab's page only with Style loaded.)
+	if ns.CreateEffectPanel then -- (LetterboxStyle.lua)
 		ns.CreateEffectPanel(ns.lowHealthKit, "letterbox")
 		Lap("CreateEffectPanel")
+	end
+	if ns.CreateLetterboxStylePanel then
 		ns.CreateLetterboxStylePanel(ns.lowHealthKit)
 		Lap("CreateLetterboxStylePanel")
 	end
@@ -22380,7 +22413,7 @@ ns.OnLanguage(function()
 		Lap("CreateRollStylePanel")
 	end
 	if ns.CreateVitalsStylePanel then -- (LowHealth.lua)
-		ns.CreateVitalsStylePanel(ns.lowHealthKit)
+		if ns.ModuleLoaded("style") then ns.CreateVitalsStylePanel(ns.lowHealthKit) end -- (a Style hub page: none with Style left out)
 		Lap("CreateVitalsStylePanel")
 	end
 	if ns.CreateQuestTalkStylePanel and ns.ModuleLoaded("visions") then -- (QuestTalkStyle.lua; a Vision's look: none with Visions left out)
@@ -22427,6 +22460,19 @@ ns.OnLanguage(function()
 		ns.CreateRaidStylePanel(ns.lowHealthKit)
 		Lap("CreateRaidStylePanel")
 	end
+	if not ns.ModuleLoaded("style") then
+		-- (Style left out, Modules.lua: its General page with only its Load box.)
+		local canvas, content = CreateScrollPage()
+		local title = Label(content, "GameFontNormalLarge", L["General"])
+		title:SetPoint("TOPLEFT", 16, -16)
+		local intro = PageIntro(content, title, L["Style isn't loaded: no Style page or look runs, and their pages are gone."])
+		local texts = ns.STYLE_LOAD_TEXTS()
+		texts.beside = nil
+		canvas.loadStyleBox = ns.LoadPartBox(content, title, intro, "style", texts)
+		canvas:SetScript("OnShow", PageShown(Refresh, content))
+		canvas:Hide()
+		RegisterSubpage(canvas, "Style General", L["General"])
+	end
 	if ns.CreateGeneralStylePanel then -- (GeneralStyle.lua)
 		ns.CreateGeneralStylePanel(ns.lowHealthKit)
 		Lap("CreateGeneralStylePanel")
@@ -22453,8 +22499,10 @@ ns.OnLanguage(function()
 	Lap("CreateEffectsPanel")
 	ns.CreateEffectPanel(ns.lowHealthKit, "tint") -- (LetterboxStyle.lua: its Show in row)
 	Lap("CreateEffectPanel")
-	ns.CreateTintStylePanel(ns.lowHealthKit) -- (TintStyle.lua)
-	Lap("CreateTintStylePanel")
+	if ns.CreateTintStylePanel then -- (TintStyle.lua; a Style page: none with Style left out, Modules.lua)
+		ns.CreateTintStylePanel(ns.lowHealthKit)
+		Lap("CreateTintStylePanel")
+	end
 	CreateGraphicsPanel()
 	Lap("CreateGraphicsPanel")
 	CreateAudioPanel()

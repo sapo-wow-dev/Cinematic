@@ -4,6 +4,7 @@
 -- and the place you're standing in. (The tint itself: Tint.lua. Where and
 -- when it shows: the Tint tab, LetterboxStyle.lua.)
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 ns.DEFAULTS.tintStyle = true -- this page at all (its switch; off: the tint's plain look, Tint.lua's Look)
@@ -1459,3 +1460,4 @@ function ns.CreateTintStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Tint Style", L["Tint"])
 end
+end) -- (ns.Module "style")

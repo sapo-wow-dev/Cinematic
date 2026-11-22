@@ -8,6 +8,7 @@
 -- a name theme picked by hand stays), only in its Undo.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 ns.DEFAULTS.nameTheme = "main"
 
@@ -129,3 +130,4 @@ function ns.MigrateNameTheme(fresh)
 	end
 	db.nameThemeGameV1 = true
 end
+end) -- (ns.Module "style")

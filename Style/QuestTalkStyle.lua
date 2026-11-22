@@ -8,6 +8,7 @@
 -- game's windows do, with it off): the Vision tab (Options.lua).
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 
@@ -128,3 +129,4 @@ function ns.CreateQuestTalkStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Quest Talk Style", L["Dialogue"])
 end
+end) -- (ns.Module "style")

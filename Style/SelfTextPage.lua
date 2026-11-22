@@ -9,6 +9,7 @@
 -- list, each part its General one's till changed).
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 local PREVIEW_W, PREVIEW_H = 520, 210
@@ -842,3 +843,4 @@ function ns.CreateSelfTextStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Self Text Style", L["Text on You Style"])
 end
+end) -- (ns.Module "style")

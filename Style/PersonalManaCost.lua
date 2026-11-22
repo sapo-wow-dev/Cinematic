@@ -23,6 +23,7 @@
 -- for it reads 0 if the game counts it, and nothing changes.)
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local display = _G.PersonalResourceDisplayFrame
 local MANA = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
@@ -269,3 +270,4 @@ watcher:SetScript("OnEvent", function(_, event, _, arg2, spellID)
 		end
 	end
 end)
+end) -- (ns.Module "style")

@@ -6,6 +6,7 @@
 -- row then says it's overridden, and its own ticks wait underneath, untouched.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 local PREFIX = "styleOver_"
@@ -248,3 +249,4 @@ function ns.CreateStyleOverridesPanel(kit)
 	ns.SharePreview(canvas, function() return ns.generalStylePreview end) -- (General's preview here too)
 	kit.RegisterSubpage(canvas, "Style Overrides", L["Overrides"])
 end
+end) -- (ns.Module "style")

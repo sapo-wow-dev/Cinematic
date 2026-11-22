@@ -7,6 +7,7 @@
 -- (Options.lua).
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 local SAMPLE_ICON = "Interface\\Icons\\INV_Misc_Bag_07"
@@ -163,3 +164,4 @@ function ns.CreateQuestItemStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Quest Item Style", L["Quest Item Button"])
 end
+end) -- (ns.Module "style")

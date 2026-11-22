@@ -15,6 +15,7 @@
 -- they do. Everything goes back to the game's own when the page says so.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -851,3 +852,4 @@ function ns.CreateInterfaceRecolorPanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Interface Recolor", L["Interface Recolor"])
 end
+end) -- (ns.Module "style")

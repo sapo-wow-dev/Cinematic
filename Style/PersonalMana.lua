@@ -15,6 +15,7 @@
 -- own functions, which take secrets.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local display = _G.PersonalResourceDisplayFrame
 if not (ns.isRetail and display) then return end
@@ -446,3 +447,4 @@ watcher:SetScript("OnEvent", function(_, event, _, arg2, arg3)
 	end
 	Update()
 end)
+end) -- (ns.Module "style")

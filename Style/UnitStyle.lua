@@ -8,7 +8,8 @@
 -- frame has its own copy of each setting (<key>_<FRAME>). Which parts show:
 -- the UI Manager's Unit Frames page (Frames.lua).
 
-local _, ns = ...
+local ADDON_NAME, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 -- (Dev copy: whether a preview unit's portrait hangs, through its anchors, on
@@ -1131,7 +1132,7 @@ end
 -- hides that art and draws its own: a thin ring, or a square with the round
 -- mask off. None hides the portrait too, leaving just the bars. Everything
 -- goes back on the game's shape; nothing's touched until one's picked.
-local RING = "Interface\\AddOns\\" .. (...) .. "\\Textures\\ActionRing2"
+local RING = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\ActionRing2" -- (ADDON_NAME: "..." is the file's, not ns.Module's function's)
 local shapes = setmetatable({}, { __mode = "k" }) -- frame -> what's ours on it
 local kept = setmetatable({}, { __mode = "k" }) -- texture -> true, while we hold it clear
 local keeping = false
@@ -4290,3 +4291,4 @@ function ns.ReportHealForecast()
 	end
 	ns.Print("Heal measurements written to the log.")
 end
+end) -- (ns.Module "style")

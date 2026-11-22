@@ -30,6 +30,7 @@
 -- Page off, or its Show in row off here: the game's text as it was.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 local DEFAULTS = ns.DEFAULTS
 
@@ -664,3 +665,4 @@ function ns.SelfTextState()
 end
 ns.selfTextFrames = { layer, settler } -- (the offline test runs just these)
 ns.SelfTextScreenBoard = screen
+end) -- (ns.Module "style")

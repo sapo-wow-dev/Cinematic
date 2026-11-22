@@ -1746,6 +1746,8 @@ ns.ModuleLeftOut("visions", function()
 		LEFT_OUT[key] = true
 	end
 end)
+-- (Style left out: Enable Style, so every Style page under it.)
+ns.ModuleLeftOut("style", function() LEFT_OUT.styleGeneral = true end)
 -- (Cameras left out: Enable Cameras, the Scenes page and the Special Cams.)
 ns.ModuleLeftOut("cameras", function()
 	for _, key in ipairs({ "cameraModes", "cameraScenes", "shoulderCam", "skyrideCam" }) do
@@ -5196,7 +5198,7 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		-- (The blank font from the settings this character logs in with: after
 		-- its own profile is loaded over the last character's. Picked before,
 		-- one character's XP choice went to the next: Tools/offline/xpfont.lua.)
-		if ns.db.hideWorldText and ns.db.combatTextStyle and ns.db.styleGeneral ~= false then
+		if ns.db.hideWorldText and ns.db.combatTextStyle and ns.db.styleGeneral ~= false and ns.ModuleLoaded("style") then
 			ns.blankWorldFont = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Fonts\\Blank.ttf"
 			DAMAGE_TEXT_FONT = ns.blankWorldFont
 		end
@@ -5455,7 +5457,7 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		end
 		-- (The game's damage numbers back as yours were, saved so: with Cinematic
 		-- turned off before the next login they stay; on, it turns them off again.)
-		Guard(ns.ApplyCVarSet, ns.COMBAT_TEXT_GAME_NUMBERS, false)
+		if ns.COMBAT_TEXT_GAME_NUMBERS then Guard(ns.ApplyCVarSet, ns.COMBAT_TEXT_GAME_NUMBERS, false) end -- (none with Style left out)
 		Guard(ns.ReleaseAllSpeeds, "logging out")
 		-- (The Nameplates page's rows' plate and name settings, and the switches a
 		-- profile turned on, back to yours as the game saves them; on again at

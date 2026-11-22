@@ -7,6 +7,7 @@
 -- its words), not by name, so a client that names them otherwise still works.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 -- [timer] = { bar, fill, texture, atlas, grey, texts = { { text, fontObject, file, size, flags } } }:
 -- the game's own look, read once, to put back.
@@ -191,3 +192,4 @@ events:SetScript("OnEvent", function()
 	-- (A moment later: retail makes the timer as it handles the same event.)
 	C_Timer.After(0, function() ns.Guard(ns.ApplyMirrorTimers) end)
 end)
+end) -- (ns.Module "style")

@@ -5,6 +5,7 @@
 -- font, outline: StylePages.lua's ns.StyleLook).
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 -- The list on the Pages tab, in the hubs' order: name, the page to open
@@ -467,6 +468,10 @@ function ns.CreateGeneralStylePanel(kit)
 
 	local switch = kit.PageSwitch(content, "styleGeneral", L["Enable Style"],
 		L["Turns all Style pages on or off."], intro, Changed)
+	-- Load Style (2026-11-22, Modules.lua): right of Enable Style, its note
+	-- beside it (the preview's under the intro). Left out: Options.lua makes
+	-- this page with only the box.
+	canvas.loadStyleBox = ns.LoadPartBox(content, title, intro, "style", ns.STYLE_LOAD_TEXTS())
 
 	-- (Only the pages this client has: one it lacks, like Roll Vision with no
 	-- loot history, never set its defaults. Each band (group) a tab.)
@@ -721,3 +726,4 @@ function ns.CreateStyleThemesPanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Style Themes", L["Themes"])
 end
+end) -- (ns.Module "style")

@@ -18,6 +18,7 @@
 -- max secret too, the game's words stay.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local DEFAULTS = ns.DEFAULTS
 DEFAULTS.manaAfterCast = false      -- your mana's numbers (under your character, on your player frame) show what's left after the cast
@@ -272,3 +273,4 @@ function ns.DescribeManaText()
 		.. "mana now %s"):format(On(KEYS.display), ok and tostring(mode) or "?", last, lastPlaced,
 		Readable(mana) and tostring(mana) or "secret")
 end
+end) -- (ns.Module "style")

@@ -7,6 +7,8 @@
 -- Atmosphere hub under one icon.
 
 local _, ns = ...
+-- (Up to the Letterbox Style page, loaded with Style left out too, Modules.lua:
+-- the Atmosphere hub's effect pages, their first tab. Then the Style tab's page.)
 local L = ns.L
 
 -- The Atmosphere hub's effects with a page of their own: a Show in row on
@@ -151,6 +153,7 @@ function ns.CreateEffectPanel(kit, effect)
 	kit.RegisterSubpage(canvas, info.page)
 end
 
+ns.Module("style", function() -- (the Letterbox Style page: only with Style loaded, Modules.lua)
 function ns.CreateLetterboxStylePanel(kit)
 	local canvas, content = kit.CreateScrollPage()
 	local title = kit.Label(content, "GameFontNormalLarge", L["Letterbox"])
@@ -271,3 +274,4 @@ function ns.CreateLetterboxStylePanel(kit)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Letterbox Style", L["Letterbox"])
 end
+end) -- (ns.Module "style")

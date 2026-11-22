@@ -8,6 +8,7 @@
 -- Everything goes back to the game's own when the page or a row says so.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local DEFAULTS = ns.DEFAULTS
 DEFAULTS.dmFrame = true -- the meter's chrome in the theme's color (InterfaceRecolor.lua)
@@ -223,3 +224,4 @@ watcher:SetScript("OnEvent", function(_, event)
 	end
 	if ns.db then ns.RefreshDamageMeterStyle() end
 end)
+end) -- (ns.Module "style")

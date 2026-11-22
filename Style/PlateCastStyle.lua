@@ -15,6 +15,7 @@
 -- the top, drawn by the same code as the real ones.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
@@ -2446,3 +2447,4 @@ function ns.MakePlateCastSample(parent)
 	end)
 	return bar
 end
+end) -- (ns.Module "style")

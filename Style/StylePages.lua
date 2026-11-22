@@ -109,7 +109,7 @@ end })
 local VISION_SIZES = { damageVisionTextSize = true, questTalkTextSize = true, rollTextSize = true }
 function ns.VisionTextScale()
 	local db = ns.db
-	return db and db.styleGeneral and db.visionsStyle ~= false and tonumber(db.visionStyleTextSize) or 1
+	return db and ns.StyleOn(nil, db) and db.visionsStyle ~= false and tonumber(db.visionStyleTextSize) or 1
 end
 ns.SHARED_STYLE = shared -- (the General page's list of who follows it)
 
@@ -131,7 +131,7 @@ end
 -- now (gameOnly: General off, or the page: its own default).
 local function FromGeneral(entry, gameOnly)
 	local db = ns.db
-	if gameOnly or not (db and db.styleGeneral) then return entry.own end
+	if gameOnly or not (db and ns.StyleOn(nil, db)) then return entry.own end
 	local value = entry.visions and db.visionsStyle ~= false and db[VISION_KEYS[entry.kind]] or nil
 	if value == nil or IsGeneral(value) then value = db[GENERAL_KEYS[entry.kind]] end
 	if value == nil or value == "game" or value == -1 then
@@ -148,6 +148,8 @@ function ns.StyleOn(switchKey, db)
 	db = db or ns.db
 	-- (And every switch it's under, 2026-11-17: an icon's other tabs under its
 	-- first, the Nameplates icon's Smart and Cast Bars under Default.)
+	-- (Style left out, Modules.lua: off whatever's saved, Core.lua's LEFT_OUT_SWITCHES.)
+	if ns.LEFT_OUT_SWITCHES and ns.LEFT_OUT_SWITCHES.styleGeneral then return false end
 	return db and db.styleGeneral and (not switchKey or (db[switchKey] and not ns.MasterOff(switchKey, db))) and true
 		or false
 end
@@ -168,7 +170,7 @@ function ns.StyleLook(switchKey, off)
 					-- (A border's thickness or color: General's while that border's on
 					-- General, or Visions Style's while a Vision's is on one of its own.)
 					local db = ns.db
-					if on and db and db.styleGeneral and IsGeneral(source[entry.follows]) then
+					if on and db and ns.StyleOn(nil, db) and IsGeneral(source[entry.follows]) then
 						local from = (entry.visions and db.visionsStyle ~= false and not IsGeneral(db.visionStyleBorder)) and VISION_KEYS or GENERAL_KEYS
 						if db[from.border] == "custom" then return db[from[entry.kind]] end
 					end
@@ -397,7 +399,7 @@ function ns.PageTabs(content, list, picked, noPalette)
 			if not other or other == hub then
 				kept[#kept + 1] = each
 				at[i] = #kept
-			elseif other == "Style" and not stylePage then
+			elseif other == "Style" and not stylePage and ns.ModuleLoaded("style") then -- (no link: Style left out, Modules.lua)
 				stylePage = each[2]
 			end
 		end

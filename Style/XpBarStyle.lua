@@ -7,6 +7,7 @@
 -- Everything goes back to the game's own when the page or a row says so.
 
 local _, ns = ...
+ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local DEFAULTS = ns.DEFAULTS
 DEFAULTS.xpBars = true -- the XP bar's fill in the theme's mana color
@@ -354,3 +355,4 @@ function ns.ReportXpBarStyle()
 	end
 	ns.Print("XP bars written to the log.")
 end
+end) -- (ns.Module "style")
