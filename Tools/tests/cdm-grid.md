@@ -29,7 +29,11 @@ Tests: Tools/offline/cooldowngrid.lua (retail stand-in, prerelease), Dev/CdmGrid
 
 | Q13 | A bar's tab warns (amber "!", tooltip naming each) when a cell on it never takes effect (its scene never applies or has no places) | forever | yes ("Essential !" in the shot, its line right) | run 15 gallery |
 
-Proven: all 10 steps. Left: one `full` run before the commit. Any step sets up its own test group (Setup) when the steps before are left out.
+| Q14 | No scenes: the last column headed "Shows", not "Otherwise" (the user); a tab's "!" left over after a test put settings back with the page open: now recalculated on every page refresh | forever | yes offline; open in game | run 17 gallery |
+
+| Q15 | The bar's row reads as the spells' parent (the user: "looks kind of like the other rows"): tried a tree (indent, line): no. Now mockup J: the bar on a raised card of its own, room around it, a SPELLS label over the spells | forever | yes offline; open in game | run 17 gallery |
+
+Proven: all but the gallery. Any step sets up its own test group (Setup) when the steps before are left out.
 
 ## Runs
 | Run | Date | Command | Answered | Still open, and why this run couldn't |
@@ -50,3 +54,8 @@ Proven: all 10 steps. Left: one `full` run before the commit. Any step sets up i
 | 14 | 2026-11-22 | /cine debug cdmgrid full | Q11, Q12 yes: 18 PASS, 0 errors; no town chips with the Rule note, Town keeps its chips lit; committed | none |
 | 15 | 2026-11-22 | /cine debug cdmgrid | Q13 yes: 3 PASS, 0 errors | none |
 | 16 | 2026-11-22 | /cine debug cdmgrid full | all: 19 PASS, 0 errors; committed | none |
+| 17 | 2026-11-22 | /cine debug cdmgrid | Q14 yes ("Shows", no stale "!"); the card in; 3 PASS | the user: "lot of visual issues". From the shots: a double rule (heading line + card top) with a gap; SPELLS pressed against the card and first row; tall empty heading row. Fixed spacing |
+| 18 | 2026-11-22 | /cine debug cdmgrid | (pending) the user kept finding look issues: every run-17 shot read up close (crops), fixed: gold "2 ticked", "Same as bar" not a chip, bar icon out of line with the spells, five-scene notes cut short; with the user's: no SPELLS, no cities note, Delete too wide. The gallery now audits each shot (cut-short text, gold, overlapping buttons) | audit all PASS; up close: pop-up title cut (audit missed it: now also width vs room), pop-up see-through, Show early box tall. Fixed |
+| 19 | 2026-11-22 | /cine debug cdmgrid | 12 PASS, audit clean | the user's shot: Scene 1 editor (never in the gallery): "pick places" twice, black name box |
+| lab | 2026-11-22 | CDM lab (Tools/style-lab, --cdm), 13 states, no game | found and fixed offline: headings 10 px over the bar's cells (clicks), "Scene 1"/"pick places" on each other (from that fix), the in-use dot against the next heading when a name wraps, Buffs bar "for every spell", Copy row bare text; plus the user's two. Lab fixed too: frame levels drew the card over the bar row | |
+| 20 | 2026-11-22 | /cine debug cdmgrid | the lab's fixes confirmed: 16 PASS, audit clean, the game matches the lab; committed | none |

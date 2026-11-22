@@ -754,7 +754,11 @@ function F.Dump(root)
 	local function Walk(frame, clip, strata, level)
 		if rawget(frame, "_shown") == false or rawget(frame, "_alpha") == 0 then return end
 		strata = STRATA[rawget(frame, "_strata") or ""] or strata
-		level = rawget(frame, "_level") or level + 1
+		-- (The frame's own level, as the game works it out: one set by
+		-- SetFrameLevel(parent:GetFrameLevel()) was compared with levels
+		-- counted from the dump's root, and drew over its siblings' children.
+		-- CDM lab, 2026-11-22.)
+		level = frame.GetFrameLevel and frame:GetFrameLevel() or rawget(frame, "_level") or level + 1
 		local inner = Clip(frame, clip)
 		local info = rawget(frame, "backdropInfo")
 		if info then

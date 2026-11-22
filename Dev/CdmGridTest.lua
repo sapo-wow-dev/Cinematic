@@ -147,6 +147,52 @@ local function Setup(r)
 	return true
 end
 
+-- The look, read off the frames (the user, 2026-11-22: "really check on
+-- visuals, im finding stuff each time"): every shown text cut short, every
+-- gold text (none of ours should be), and shown buttons that overlap each
+-- other. One line each, a PASS when clean.
+local function Audit(r, label, root)
+	local cut, gold, boxes = {}, {}, {}
+	local function Shown(region) return region.IsVisible and region:IsVisible() end
+	local function Walk(frame, depth)
+		if depth > 12 or not Shown(frame) then return end
+		for _, region in ipairs({ frame:GetRegions() }) do
+			if region.GetText and region:GetObjectType() == "FontString" and Shown(region) then
+				local text = region:GetText()
+				if type(text) == "string" and text ~= "" then
+					-- (Its flag, and its width against its room: the flag alone missed a cut title, run 18.)
+					local sw, w = region:GetStringWidth(), region:GetWidth()
+					local wide = type(sw) == "number" and type(w) == "number" and w > 0 and not region:CanWordWrap() and sw > w + 1
+					if (region.IsTruncated and region:IsTruncated()) or wide then cut[#cut + 1] = text end
+					local cr, cg, cb = region:GetTextColor()
+					if cr and cr > 0.95 and cg > 0.75 and cg < 0.88 and cb < 0.15 then gold[#gold + 1] = text end
+				end
+			end
+		end
+		if frame:GetObjectType() == "Button" and frame ~= root and frame:GetWidth() > 4 then
+			local left, bottom, width, height = frame:GetRect()
+			if left then boxes[#boxes + 1] = { frame, left, bottom, width, height } end
+		end
+		for _, child in ipairs({ frame:GetChildren() }) do Walk(child, depth + 1) end
+	end
+	Walk(root, 0)
+	local overlaps = {}
+	for i = 1, #boxes do
+		for j = i + 1, #boxes do
+			local a, c = boxes[i], boxes[j]
+			-- (A pop-up and what's under it is meant: its own children only count with each other.)
+			local sameLayer = a[1]:GetParent() == c[1]:GetParent()
+			if sameLayer and a[2] < c[2] + c[4] - 1 and c[2] < a[2] + a[4] - 1 and a[3] < c[3] + c[5] - 1 and c[3] < a[3] + a[5] - 1 then
+				local ta = a[1].text and a[1].text:GetText() or "?"
+				local tc = c[1].text and c[1].text:GetText() or "?"
+				overlaps[#overlaps + 1] = ("%s / %s"):format(tostring(ta), tostring(tc))
+			end
+		end
+	end
+	r:Verdict(#cut == 0 and #gold == 0 and #overlaps == 0, ("%s look: cut short [%s]; gold [%s]; overlapping [%s]"):format(label,
+		table.concat(cut, " | "), table.concat(gold, " | "), table.concat(overlaps, " | ")))
+end
+
 ns.TestKit.Define({
 	name = "cdmgrid",
 	key = "cdmGridTest",
@@ -189,7 +235,7 @@ ns.TestKit.Define({
 				("here's group never used %s, Otherwise never used %s"):format(tostring(trouble[2] and trouble[2].kind),
 				tostring(otherDead)))
 		end },
-		{ key = "page", proven = "cdmgrid run 13 (2026-11-22): PASS, neutral look in the shot", title = "the page: the grid on the spell's bar", run = function(r)
+		{ key = "page", proven = "cdmgrid run 20 (2026-11-22): PASS, after the CDM lab fixes", title = "the page: the grid on the spell's bar", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -288,7 +334,7 @@ ns.TestKit.Define({
 			r:Verdict(not grid.extras:IsShown(), "back to When it shows: the bar's looks line gone")
 			r:Shot("back from Look", { behind = panel })
 		end },
-		{ key = "gallery", proven = "cdmgrid run 15 (2026-11-22): PASS, the tab's ! in the shot", title = "the look, setup by setup (screenshots)", run = function(r)
+		{ key = "gallery", proven = "cdmgrid run 20 (2026-11-22): PASS, after the CDM lab fixes, audit clean", title = "the look, setup by setup (screenshots)", run = function(r)
 			-- (The user, 2026-11-22: "evaluate the look for all possible combinations,
 			-- generate a few rows with different options". Each setup on your own bar,
 			-- a screenshot each; everything's put back after.)
@@ -321,6 +367,7 @@ ns.TestKit.Define({
 				r:Log(("%s: columns %s wide, icons only %s, card %s, + Add scene %s, height %d"):format(label,
 					tostring(L2.colW), tostring(L2.compact), tostring(L2.cardShown), tostring(L2.plusShown),
 					math.floor(grid:GetHeight() + 0.5)))
+				Audit(r, label, panel)
 				r:Shot(label, { behind = panel })
 			end
 			local DUNGEON = { id = 1, name = "Dungeon fights", places = { dungeon = true, raid = true }, combat = "in" }
@@ -381,10 +428,12 @@ ns.TestKit.Define({
 				Click(rowA.cells[1])
 				r:Sleep(0.4)
 				r:Verdict(grid.chooser:IsVisible(), "pop-up open under the first column's cell")
+				Audit(r, "5 pop-up, When ready parts", panel)
 				r:Shot("5 pop-up, When ready parts", { behind = panel })
 				Click(rowA.cells[1])
 				Click(rowA.cells[4])
 				r:Sleep(0.4)
+				Audit(r, "5b pop-up at the right edge (Otherwise)", panel)
 				r:Shot("5b pop-up at the right edge (Otherwise)", { behind = panel })
 				Click(rowA.cells[4])
 			end

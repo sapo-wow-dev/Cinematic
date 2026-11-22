@@ -281,5 +281,21 @@ function render() {
 }
 const families = ['16px "Marcellus"', '16px "Archivo Narrow"', '16px "Metamorphous"', '16px "Federo"', '700 16px "Almendra"', '16px "Philosopher"',
 	'16px "Cinzel Decorative"', '16px "Germania One"', '500 16px "Barlow Condensed"', '16px "Bebas Neue"', '600 16px "Rajdhani"', '500 16px "Outfit"', '700 16px "Outfit"', '16px "Lilita One"', '16px "Titan One"', '16px "Archivo Black"', '16px "Damion"'];
-Promise.all([loadAssets(), ...families.map(f => document.fonts.load(f).catch(() => {}))]).then(render);
+// #big=<frame id>: that one frame alone, as wide as the window, for a close
+// look (the CDM lab's review, 2026-11-22). Follows the hash as it changes.
+function big() {
+	const m = location.hash.match(/big=([\w-]+)/);
+	if (!m) return false;
+	const f = DATA.frames.find(x => x.id === m[1]);
+	const shot = f && DATA.shots[state.theme][f.id];
+	if (!shot) return false;
+	document.body.textContent = "";
+	document.body.style.margin = "0";
+	const fig = figure(shot, f.name, f.page);
+	fig.style.cssText = "margin:0;width:100vw;max-width:none";
+	document.body.append(fig);
+	return true;
+}
+addEventListener("hashchange", () => { if (!big()) location.reload(); });
+Promise.all([loadAssets(), ...families.map(f => document.fonts.load(f).catch(() => {}))]).then(() => { if (!big()) render(); });
 </script>

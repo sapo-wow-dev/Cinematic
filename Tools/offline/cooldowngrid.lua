@@ -250,7 +250,8 @@ do
 		end)())
 		Check("a following cell: blank (no band, no icon, no word)", not im.cells[1].band.mid:IsShown()
 			and not im.cells[1].icon:IsShown() and not im.cells[1].text:IsShown())
-		Check("the bar's row: its gold band and what it is", bar.band:IsShown() and bar.sub:IsShown() and not im.sub:IsShown())
+		Check("the bar on a card of its own, no SPELLS label", grid.barCard:IsShown() and not grid.spellsLabel:IsShown())
+		Check("the bar's row: what it is under its name", bar.sub:IsShown() and not im.sub:IsShown())
 		Check("bar's row: Essential bar", bar.label:GetText() == ns.L["%s bar"]:format(ns.L["Essential"]), bar.label:GetText())
 		local function NotOver(row)
 			for _, frame in ipairs({ row.name, row.check, unpack(row.cells) }) do
@@ -271,11 +272,21 @@ do
 			grid.Layout()
 			local otherHead
 			for _, child in ipairs({ grid:GetChildren() }) do
-				if child.col and child.col.other and child.sub then otherHead = child end
+				if child.col and child.col.other and child.sub and child:IsShown() then otherHead = child end
 			end
 			Check("no groups: the card saying what a group is, no pill", grid.addCard:IsShown() and not grid.plus:IsShown()
 				and grid.addCard.title:GetText() == ns.L["Icons show the same in every scene"])
 			Check("no groups: no in-use dot on Otherwise", otherHead and not otherHead.dot:IsShown())
+			Check("no scenes: the column is headed Shows, not Otherwise", otherHead and otherHead.text:GetText() == ns.L["Shows"],
+				otherHead and otherHead.text:GetText())
+			-- (A leftover tab warning goes on the page's next refresh.)
+			local tab = select(4, ns.CdmPageGrid())[1]
+			if tab and tab.warnMark then
+				tab.warnMark:Show()
+				tab.warnLines = { "stale" }
+				grid.Refresh()
+				Check("a stale tab warning cleared on refresh", not tab.warnMark:IsShown())
+			end
 			db.cooldownPlaceGroups = kept
 			ns.CooldownRuleFactsStale()
 			grid.Layout()
@@ -338,7 +349,7 @@ do
 			if line:IsShown() then lines = lines + 1 end
 		end
 		Check("five scenes: icons alone", grid.layout.compact and im.cells[1].compact and not im.cells[1].text:IsShown())
-		Check("five scenes: only the three with no places say so under their names", subs == 3, subs)
+		Check("five scenes: no notes under names (cut short; the lines under say it)", subs == 0, subs)
 		Check("three with no places: one line for them", lines == 1 and grid.troubleLines[1]:GetText():find(more[3].name, 1, true) ~= nil,
 			lines)
 		Check("+ Add scene gone at five", not grid.plus:IsShown())
@@ -403,7 +414,12 @@ do
 		Click(grid.plus)
 		local added = ns.CooldownPlaceGroups()[3]
 		Check("+ adds a group with its editor open", added and grid.state.editing == added.id and grid.editor:IsShown())
-		Check("a new group with no place is flagged", grid.troubleLines[1] and grid.troubleLines[1]:IsShown())
+		local flagged = false
+		for _, child in ipairs({ grid:GetChildren() }) do
+			if child.col and child.col.id == added.id and child.sub and child.sub:GetText() == ns.L["pick places"] then flagged = true end
+		end
+		Check("a new scene with no place says pick places under its name (no second line)", flagged
+			and not (grid.troubleLines[1] and grid.troubleLines[1]:IsShown()))
 		Click(grid.deleteButton)
 		Check("Delete asks first", ns.CooldownPlaceGroup(added.id) ~= nil and grid.deleteButton.text:GetText() == ns.L["Sure?"])
 		Click(grid.deleteButton)

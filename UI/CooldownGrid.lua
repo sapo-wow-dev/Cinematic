@@ -9,7 +9,7 @@
 -- them all at once, or to copy one row onto others. A Look switch turns the
 -- grid to each row's looks (countdown numbers, keybinds...), each cell
 -- stepping through its values as it's clicked.
--- ns.CooldownGrid(parent, opts) gives the grid; grid.Show(tab, ids) lists a
+-- ns.CooldownGrid(parent, opts) gives the grid; grid.ShowBar(tab, ids) lists a
 -- bar's rows and gives the height. opts: { width, Tooltip(frame, text),
 -- Enabled(), Changed() (after a change: the page lists again and fits),
 -- KeyGet(key), KeyPut(key, value) }.
@@ -683,14 +683,27 @@ function ns.CooldownGrid(parent, opts)
 	local nameLabel = editor:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	nameLabel:SetPoint("TOPLEFT", editor, "TOPLEFT", 8, -10)
 	nameLabel:SetText(L["Name"])
-	local nameBox = CreateFrame("EditBox", nil, editor, "InputBoxTemplate")
-	if ns.SkinEditBox then ns.SkinEditBox(nameBox) end
-	nameBox:SetSize(170, 20)
+	-- (A plain box like the chips: the game's input box was the one black,
+	-- square thing on the page, 2026-11-22.)
+	local nameBox = CreateFrame("EditBox", nil, editor)
+	nameBox:SetFontObject("GameFontHighlight")
+	nameBox:SetTextInsets(8, 8, 0, 0)
+	nameBox:SetSize(170, 22)
+	do
+		local fill = nameBox:CreateTexture(nil, "BACKGROUND")
+		fill:SetAllPoints()
+		fill:SetColorTexture(1, 1, 1, 0.06)
+		local under = nameBox:CreateTexture(nil, "BORDER")
+		under:SetPoint("BOTTOMLEFT")
+		under:SetPoint("BOTTOMRIGHT")
+		under:SetHeight(1)
+		under:SetColorTexture(1, 1, 1, 0.28)
+	end
 	nameBox:SetAutoFocus(false)
 	nameBox:SetMaxLetters(24)
 	nameBox:SetPoint("LEFT", nameLabel, "LEFT", 46, 0)
 	local namePlace = nameBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	namePlace:SetPoint("LEFT", nameBox, "LEFT", 2, 0)
+	namePlace:SetPoint("LEFT", nameBox, "LEFT", 8, 0)
 	namePlace:SetPoint("RIGHT", nameBox, "RIGHT", -2, 0)
 	namePlace:SetJustifyH("LEFT")
 	namePlace:SetWordWrap(false)
@@ -851,8 +864,19 @@ function ns.CooldownGrid(parent, opts)
 		later:SetAlpha(index < #ns.CooldownPlaceGroups() and 1 or 0.35)
 		local sure = state.sure == group.id
 		delete:SetWidth(200)
-		delete:SetWidth(SetPill(delete, "never", sure and L["Sure?"] or L["Delete"], sure and "chosen" or "chip"))
-		delete.icon:Hide()
+		-- (No icon's room: with "never" for its red it kept the icon's space and
+		-- came out too wide, 2026-11-22. A plain chip, its words red.)
+		local function Red()
+			SetPill(delete, nil, sure and L["Sure?"] or L["Delete"], sure and "chosen" or "chip")
+			delete.text:SetTextColor(1, 0.48, 0.42)
+			for _, t in pairs(delete.band) do
+				if t:IsShown() then t:SetVertexColor(1, 0.48, 0.42, (sure and 0.3 or 0.1) + (delete.hovered and 0.15 or 0)) end
+			end
+			delete.repaint = Red -- (hovered: red still)
+			return delete.pillWidth
+		end
+		delete:SetWidth(200)
+		delete:SetWidth(Red())
 		local own = group.cql ~= nil
 		-- (Laid out each time: a town chip only on a scene that has it.)
 		local px = 50
@@ -875,7 +899,8 @@ function ns.CooldownGrid(parent, opts)
 		whenLabel:SetShown(not own)
 		townNote:ClearAllPoints()
 		townNote:SetPoint("LEFT", editor, "TOPLEFT", px + 10, -42)
-		townNote:SetShown(not own and not (group.places and (group.places.city or group.places.inn)))
+		-- (Not shown: the user, 2026-11-22, "dont need this text". Rule... still takes city and inn.)
+		townNote:Hide()
 		cqlText:SetShown(own)
 		usePlaces:SetShown(own)
 		if own then cqlText:SetText(ns.ColoredRule and ns.ColoredRule(group.cql) or group.cql) end
@@ -1006,7 +1031,8 @@ function ns.CooldownGrid(parent, opts)
 			-- On every cell they covered what you meant to click, 2026-11-22.)
 			if not (self.compact or self.text:IsTruncated()) then return nil end
 			local text, style = CellLook(row.key, self.col)
-			local where = self.col.look and LOOK[self.col.look].label or self.col.other and L["Otherwise"]
+			local where = self.col.look and LOOK[self.col.look].label
+				or self.col.other and (ns.CooldownPlaceGroups()[1] and L["Otherwise"] or L["everywhere"])
 				or ns.CooldownGroupName(self.col.group)
 			local value = self.col.look and text or FULL[self.mode] or text
 			local tip = ("%s, %s: %s"):format(NameOf(row.key), where, value)
@@ -1030,6 +1056,7 @@ function ns.CooldownGrid(parent, opts)
 	-- closes it (When ready stays, for its parts); a click anywhere else too.
 	local POP_W = 184
 	local catcher = CreateFrame("Button", nil, grid)
+	catcher.cdmCatcher = true -- (the lab's overlap audit leaves it out)
 	catcher:SetAllPoints(grid)
 	catcher:Hide()
 	catcher:SetScript("OnClick", function()
@@ -1042,7 +1069,7 @@ function ns.CooldownGrid(parent, opts)
 	do
 		local back = chooser:CreateTexture(nil, "BACKGROUND")
 		back:SetAllPoints()
-		back:SetColorTexture(0.07, 0.06, 0.05, 0.97)
+		back:SetColorTexture(0.07, 0.065, 0.06, 1) -- (solid: a pill showed through, 2026-11-22)
 		for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", false }, { "BOTTOMLEFT", "BOTTOMRIGHT", false },
 			{ "TOPLEFT", "BOTTOMLEFT", true }, { "TOPRIGHT", "BOTTOMRIGHT", true } }) do
 			local edge = chooser:CreateTexture(nil, "BORDER")
@@ -1056,7 +1083,9 @@ function ns.CooldownGrid(parent, opts)
 	chooserTitle:SetPoint("TOPLEFT", chooser, "TOPLEFT", 8, -6)
 	chooserTitle:SetPoint("RIGHT", chooser, "RIGHT", -24, 0)
 	chooserTitle:SetJustifyH("LEFT")
-	chooserTitle:SetWordWrap(false)
+	-- (Two lines: "Serpent Sting in Dungeon fi..." was cut short, 2026-11-22.)
+	chooserTitle:SetWordWrap(true)
+	if chooserTitle.SetMaxLines then pcall(chooserTitle.SetMaxLines, chooserTitle, 2) end
 	local chooserClose = PillButton(chooser, 22, 18)
 	chooserClose:SetPoint("TOPRIGHT", chooser, "TOPRIGHT", -2, -2)
 	SetPill(chooserClose, nil, "x", "choice")
@@ -1105,7 +1134,7 @@ function ns.CooldownGrid(parent, opts)
 	earlyLabel:SetText(L["Show early (sec)"])
 	local earlyBox = CreateFrame("EditBox", nil, chooser, "InputBoxTemplate")
 	if ns.SkinEditBox then ns.SkinEditBox(earlyBox) end
-	earlyBox:SetSize(36, 20)
+	earlyBox:SetSize(36, 16) -- (as tall as its label: 20 stood out, 2026-11-22)
 	earlyBox:SetAutoFocus(false)
 	earlyBox:SetNumeric(true)
 	earlyBox:SetMaxLetters(4)
@@ -1157,10 +1186,14 @@ function ns.CooldownGrid(parent, opts)
 		end
 		for _, mode in ipairs(ModesFor()) do list[#list + 1] = { mode[1], mode[2] } end
 		local _, _, own = CellLook(key, col)
-		local where = col.other and L["Otherwise"] or ns.CooldownGroupName(col.group)
-		chooserTitle:SetText(L["%s in %s"]:format(NameOf(key), where))
+		local where = col.other and (ns.CooldownPlaceGroups()[1] and L["Otherwise"] or L["everywhere"])
+			or ns.CooldownGroupName(col.group)
+		-- (No scenes: the spell's name alone, not "in everywhere".)
+		chooserTitle:SetText(ns.CooldownPlaceGroups()[1] and L["%s in %s"]:format(NameOf(key), where) or NameOf(key))
 		-- (One under another, a pill each in its choice's color; the one set has its band.)
-		local y = -22
+		-- (Under the title, one line or two.)
+		local titleH = chooserTitle:GetStringHeight()
+		local y = -10 - (type(titleH) == "number" and titleH or 12) - 4
 		for i, item in ipairs(list) do
 			local box = Choice(i)
 			box.value = item[1]
@@ -1221,6 +1254,7 @@ function ns.CooldownGrid(parent, opts)
 	end
 	local bulkCount = bulk:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	bulkCount:SetPoint("LEFT", bulk, "LEFT", 8, 0)
+	bulkCount:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) -- (no gold: the last of it, 2026-11-22)
 	local function BulkButton(width, tip, onClick)
 		local box = PillButton(bulk, width, 22)
 		Tip(box, tip)
@@ -1329,12 +1363,13 @@ function ns.CooldownGrid(parent, opts)
 		end
 		local value = list[state.bulkValue] or list[1]
 		Put(bulkCol, name, "own")
-		Put(bulkValue, value[2], value[1] and "own" or "follow", not col.look and value[1] or nil)
+		-- (A chip even for Same as bar: faint words alone didn't read as a button.)
+		Put(bulkValue, value[2], value[1] and "own" or "chip", not col.look and value[1] or nil)
 		Put(bulkSet, L["Set"], "picked")
 		bulkCopy:SetShown(count == 1)
-		Put(bulkCopy, L["Copy row"], "choice")
+		Put(bulkCopy, L["Copy row"], "chip") -- (a button like its neighbors: bare words read as text, the CDM lab)
 		bulkPaste:SetShown(state.clip ~= nil)
-		Put(bulkPaste, L["Paste row"], "choice")
+		Put(bulkPaste, L["Paste row"], "chip")
 		return bulk:GetHeight()
 	end
 
@@ -1427,14 +1462,27 @@ function ns.CooldownGrid(parent, opts)
 			y = y - addCard:GetHeight() - 8
 		end
 		-- Headings, then the gold line under them.
+		-- (The heading row has no Spell word: SPELLS is over the spells, under the bar's card.)
+		spellHead:Hide()
 		spellHead:ClearAllPoints()
 		spellHead:SetPoint("BOTTOMLEFT", grid, "TOPLEFT", CHECK_W + GAP, y - HEAD_H + 5)
+		-- (Full height when a heading has a note under its name, or names may
+		-- wrap; one line's room else. At one line's, "Scene 1" and "pick
+		-- places" lay on each other: the CDM lab, 2026-11-22.)
+		local noted = false
+		if not compact and not state.look then
+			local tr = ns.CooldownGroupTrouble()
+			for i in ipairs(groups) do noted = noted or tr[i] ~= nil end
+		end
+		local headH = (compact or noted) and HEAD_H or HEAD_H - 10
 		local _, nowIndex = ns.CooldownGroupNow()
 		local trouble, otherDead = ns.CooldownGroupTrouble()
 		for j, col in ipairs(cols) do
 			local head = Head(j)
 			head.col = col
-			head:SetSize(colW, HEAD_H)
+			-- (As tall as the room the row takes: at HEAD_H over a shorter row
+			-- they lay over the bar's cells and took their clicks. CDM lab, 2026-11-22.)
+			head:SetSize(colW, headH)
 			head:ClearAllPoints()
 			head:SetPoint("TOPLEFT", grid, "TOPLEFT", ColX(j), y)
 			local name
@@ -1443,7 +1491,8 @@ function ns.CooldownGrid(parent, opts)
 			if col.look then
 				name = LOOK[col.look].label
 			elseif col.other then
-				name = L["Otherwise"]
+				-- (No scenes: nothing to be "otherwise" to; just what it shows. The user, 2026-11-22.)
+				name = groups[1] and L["Otherwise"] or L["Shows"]
 				r, g, b = GREY[1], GREY[2], GREY[3]
 				-- (In use: said only once there's a group it could be told from.)
 				dot = groups[1] ~= nil and nowIndex == nil and not otherDead
@@ -1455,7 +1504,9 @@ function ns.CooldownGrid(parent, opts)
 				local t = trouble[col.index]
 				if t then
 					r, g, b = AMBER[1], AMBER[2], AMBER[3]
-					sub = t.kind == "todo" and L["pick places"] or L["never applies"]
+					-- (Narrow columns: no note under it, both were cut short; the
+					-- amber name and the warning lines under the headings say it.)
+					sub = compact and "" or (t.kind == "todo" and L["pick places"] or L["never applies"])
 				end
 			end
 			-- (Icons alone: the places line is hidden, so the name may take two lines.)
@@ -1470,10 +1521,21 @@ function ns.CooldownGrid(parent, opts)
 			head.sub:SetShown(sub ~= "")
 			-- (The in-use dot right after the name: at the heading's far edge it
 			-- floated away from it, 2026-11-22.)
+			-- (After the name when it fits on a line; a wrapped name's would sit
+			-- at the column's edge, against the next heading: then before it,
+			-- the name moved over. The CDM lab, 2026-11-22.)
 			local nameW = head.text:GetStringWidth()
-			nameW = type(nameW) == "number" and math.min(nameW, colW - 14) or 0
+			nameW = type(nameW) == "number" and nameW or 0
+			local before = dot and nameW > colW - 16
+			head.text:ClearAllPoints()
+			head.text:SetPoint("TOPLEFT", head, "TOPLEFT", before and 12 or 2, -6)
+			head.text:SetPoint("TOPRIGHT", head, "TOPRIGHT", before and -2 or -10, -6)
 			head.dot:ClearAllPoints()
-			head.dot:SetPoint("LEFT", head, "TOPLEFT", 2 + nameW + 5, -11)
+			if before then
+				head.dot:SetPoint("LEFT", head, "TOPLEFT", 2, -11)
+			else
+				head.dot:SetPoint("LEFT", head, "TOPLEFT", 2 + math.min(nameW, colW - 14) + 5, -11)
+			end
 			head.dot:SetShown(dot and true or false)
 			head.back:SetShown(col.id ~= nil and state.editing == col.id)
 			head.under:SetShown(col.id ~= nil and state.editing == col.id)
@@ -1488,11 +1550,11 @@ function ns.CooldownGrid(parent, opts)
 			plus:SetPoint("RIGHT", showsSwitch, "LEFT", -14, 0)
 			plus:SetWidth(SetPill(plus, "add", L["Add scene"], "own"))
 		end
-		y = y - HEAD_H
-		headLine:ClearAllPoints()
-		headLine:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, y)
-		headLine:SetWidth(WIDTH)
-		y = y - 1 - GAP
+		-- (No line under the headings: the bar's card under them is the edge;
+		-- a line and the card's top made a double rule with a gap, 2026-11-22.
+		-- One-line names: the room for a second line taken back.)
+		y = y - headH
+		headLine:Hide()
 		-- The editor.
 		local edited = EditorShow()
 		if edited > 0 then
@@ -1515,7 +1577,9 @@ function ns.CooldownGrid(parent, opts)
 					todo[#todo + 1] = ns.CooldownGroupName(group)
 				end
 			end
-			if todo[1] then
+			-- (Scenes with no places: said under their names when there's room;
+			-- the line only for narrow columns, where it isn't. Twice was too much.)
+			if todo[1] and compact then
 				count = count + 1
 				TroubleLine(count):SetText((#todo == 1 and L["%s has no places yet: click its heading to pick some."]
 					or L["%s have no places yet: click a heading to pick some."]):format(table.concat(todo, ", ")))
@@ -1540,6 +1604,26 @@ function ns.CooldownGrid(parent, opts)
 		for _, id in ipairs(state.ids) do keys[#keys + 1] = id end
 		local openShown = false
 		local openCell, openX, openBottom
+		-- (The bar's row on a raised card of its own, then a SPELLS label and
+		-- the spells: as one more row it looked like a spell, and a tree under
+		-- it didn't do, 2026-11-22. Mockup J.)
+		if not grid.barCard then
+			grid.barCard = CreateFrame("Frame", nil, grid)
+			local fill = grid.barCard:CreateTexture(nil, "BACKGROUND")
+			fill:SetAllPoints()
+			fill:SetColorTexture(0.135, 0.13, 0.115, 1)
+			for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", false }, { "BOTTOMLEFT", "BOTTOMRIGHT", false },
+				{ "TOPLEFT", "BOTTOMLEFT", true }, { "TOPRIGHT", "BOTTOMRIGHT", true } }) do
+				local edge = grid.barCard:CreateTexture(nil, "BORDER")
+				edge:SetPoint(side[1])
+				edge:SetPoint(side[2])
+				if side[3] then edge:SetWidth(1) else edge:SetHeight(1) end
+				edge:SetColorTexture(1, 1, 1, 0.16)
+			end
+			grid.barCard:SetFrameLevel(grid:GetFrameLevel())
+			grid.spellsLabel = grid:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+			grid.spellsLabel:SetText(L["Spells"]:upper())
+		end
 		for i, key in ipairs(keys) do
 			local row = Row(i)
 			row.key = key
@@ -1549,13 +1633,20 @@ function ns.CooldownGrid(parent, opts)
 			row.band:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, y)
 			row.band:SetSize(WIDTH, rowH)
 			if isBar then
-				row.band:SetColorTexture(1, 1, 1, 0.035)
-				row.band:Show()
+				-- (The card right under the headings, the editor or the warnings.)
+				y = y - 2
+				row.band:ClearAllPoints()
+				row.band:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, y)
+				row.band:Hide()
+				grid.barCard:ClearAllPoints()
+				grid.barCard:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, y)
+				grid.barCard:SetSize(WIDTH, rowH)
+				grid.barCard:Show()
 			end
 			row.sep:ClearAllPoints()
 			row.sep:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, y - rowH)
 			row.sep:SetWidth(WIDTH)
-			row.sep:Show()
+			row.sep:SetShown(not isBar)
 			row.check:SetShown(not isBar)
 			row.check:ClearAllPoints()
 			row.check:SetPoint("LEFT", grid, "TOPLEFT", 1, y - rowH / 2)
@@ -1563,6 +1654,7 @@ function ns.CooldownGrid(parent, opts)
 			row.tick:SetShown(state.selected[key] and true or false)
 			row.ShowTick()
 			row.name:ClearAllPoints()
+			-- (Every icon in one column, the bar's too: its card has room for it.)
 			row.name:SetPoint("TOPLEFT", grid, "TOPLEFT", CHECK_W + GAP, y)
 			row.name:SetSize(NAME_W, rowH)
 			row.name:Show()
@@ -1575,6 +1667,8 @@ function ns.CooldownGrid(parent, opts)
 			row.sub:ClearAllPoints()
 			row.sub:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -1)
 			row.sub:SetShown(isBar)
+			-- (A buffs bar's row is for its buffs: "spell" read wrong there, the CDM lab.)
+			if isBar then row.sub:SetText(BUFF_TAB[state.tab] and L["for every buff"] or L["for every spell"]) end
 			if isBar then
 				row.icon:SetTexture("Interface\\Icons\\Spell_Nature_TimeStop")
 			else
@@ -1599,7 +1693,12 @@ function ns.CooldownGrid(parent, opts)
 				cell:Show()
 			end
 			for j = n + 1, #row.cells do row.cells[j]:Hide() end
-			y = y - rowH - (isBar and 2 or 0)
+			y = y - rowH
+			if isBar then
+				-- (A gap under the card, no label: SPELLS said nothing, the user, 2026-11-22.)
+				grid.spellsLabel:Hide()
+				y = y - 8
+			end
 		end
 		-- (The open cell's choices: a pop-up under it, turned left at the right edge.)
 		local lowest = y
@@ -1650,7 +1749,8 @@ function ns.CooldownGrid(parent, opts)
 	grid.Layout = Layout
 
 	-- A bar's rows (tab: its group; ids its spells, in order): lays out, gives the height.
-	function grid.Show(tab, ids)
+	-- (Not grid.Show: that hid the frame's own Show, 2026-11-22.)
+	function grid.ShowBar(tab, ids)
 		if tab ~= state.tab then
 			state.open, state.editing, state.bulkCol, state.bulkValue = nil, nil, 1, 1
 			wipe(state.selected)

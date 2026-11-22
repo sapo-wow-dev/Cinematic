@@ -127,10 +127,14 @@ def standin(name):
 
 
 def main():
-    client = sys.argv[1] if len(sys.argv) > 1 else "retail"
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    # (--cdm: the Cooldown Manager grid's states, cdm_dump.lua, into cdm-lab.html.)
+    cdm = "--cdm" in sys.argv
+    client = args[0] if args else "retail"
     os.makedirs(OUT, exist_ok=True)
-    dump = os.path.join(OUT, "dump.json")
-    run = subprocess.run([sys.executable, "-I", "Tools/offline/run.py", "Tools/style-lab/dump.lua", client,
+    dump = os.path.join(OUT, "cdm.json" if cdm else "dump.json")
+    script = "Tools/style-lab/cdm_dump.lua" if cdm else "Tools/style-lab/dump.lua"
+    run = subprocess.run([sys.executable, "-I", "Tools/offline/run.py", script, client,
                           dump.replace("\\", "/")], cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
                          stdin=subprocess.DEVNULL)
     print(run.stdout.strip())
@@ -160,7 +164,7 @@ def main():
     template = open(os.path.join(HERE, "lab_template.html"), encoding="utf-8").read()
     blob = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     html = template.replace("/*DATA*/null", blob)
-    path = os.path.join(OUT, "style-lab.html")
+    path = os.path.join(OUT, "cdm-lab.html" if cdm else "style-lab.html")
     open(path, "w", encoding="utf-8").write(html)
     print("%s, %.1f MB" % (path, len(html) / 1e6))
 

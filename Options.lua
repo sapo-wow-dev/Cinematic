@@ -16539,6 +16539,13 @@ local function CreateCooldownPanel()
 	grid.Refresh = function()
 		grid.Layout()
 		FitPanel()
+		-- (The tabs' warnings again too: settings can change with the page open,
+		-- a profile, a test putting back; a "!" was left over, 2026-11-22.)
+		if grid.TabWarning and groupTabs then
+			for i, group in ipairs(GROUP_ORDER) do
+				if groupTabs[i]:IsShown() then grid.TabWarning(groupTabs[i], group) end
+			end
+		end
 	end
 	controls[#controls + 1] = grid
 
@@ -16640,7 +16647,7 @@ local function CreateCooldownPanel()
 			ShowTab(shown)
 			grid:ClearAllPoints()
 			grid:SetPoint("TOPLEFT", panelTop, "TOPLEFT", 10, -12)
-			grid.Show(group, groupSpells[group])
+			grid.ShowBar(group, groupSpells[group])
 			FitPanel()
 		end
 		grid:SetShown(group ~= nil)

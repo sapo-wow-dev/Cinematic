@@ -38,3 +38,17 @@ version. To look at it, start the `style-lab` server from `.claude/launch.json`.
   before trusting it.
 - Only frames with a preview or a settings page are here. The wheels, Welcome, What's new and the hub window around
   the pages aren't.
+
+## The CDM lab
+
+The Cooldown Manager page's grid (UI/CooldownGrid.lua) in 13 states, drawn by its own code, each with a look audit:
+text cut short, gold text in the grid, text on text, and buttons overlapping. For checking the page's look without the
+game.
+
+```bash
+python Tools/style-lab/build.py forever --cdm
+```
+
+That writes `out/cdm-lab.html` and prints each state's audit. `cdm-lab.html#big=s2` shows one state alone, window
+wide, for a close look. A new state: a line in `STATES` in `cdm_dump.lua`. What it can't show: the game's checkbox
+and edit box art and text typed into a box (left empty), and spell icons (stand-ins). Check those in the game.
