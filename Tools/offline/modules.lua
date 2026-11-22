@@ -10,7 +10,8 @@
 --         events and update and every Why tab once, the errors that gives
 --         noted (the stand-in's stubs make some of their own).
 --   Off:  no errors; no frame, hook or timer made by its files; the same
---         DEFAULTS keys as on (profiles, sharing and Reset carry them); the
+--         DEFAULTS keys as on (profiles, sharing and Reset carry them), every
+--         built-in profile's base the same as on; the
 --         setting kept, in the profile too; its pages gone but its General;
 --         its wheel, demos and Why tab rows as left out; a command into its
 --         code says so; every event, update and Why tab with no error on
@@ -309,6 +310,23 @@ local function WhyVisionTabs(visionsOn)
 	if order ~= want then Problem(("the Why window's tabs go %s, not %s"):format(order, want)) end
 end
 
+-- Each built-in profile's base (ns.ProfileBase), its settings that are a
+-- value (not a list): the same with a part left out as loaded. Auto-Hide UI's
+-- scenes came out on with Cameras out (its base ticked them off from the
+-- Cameras page's triggers), and it showed "(changed)" after a reset, 2026-11-22.
+local function Bases()
+	local bases = {}
+	if ns.ForgetProfileBases then ns.ForgetProfileBases() end
+	for _, profile in ipairs(ns.BUILTIN_PROFILES or {}) do
+		local values = {}
+		for k, v in pairs(ns.ProfileBase(profile.name)) do
+			if type(v) ~= "table" and type(v) ~= "function" then values[k] = v end
+		end
+		bases[profile.name] = values
+	end
+	return bases
+end
+
 -- A part's General page's Load box, found by its label.
 local canvases = ns.settingsCanvases or {}
 local function Box(spec)
@@ -326,6 +344,7 @@ local function Box(spec)
 end
 
 if phase == "on" then
+	local bases = Bases()
 	local keys = {}
 	for k in pairs(ns.DEFAULTS) do keys[#keys + 1] = k end
 	if partArg == "visions" then WhyVisionTabs(true) end
@@ -411,10 +430,22 @@ if phase == "on" then
 	local storm = Storm()
 	for err in pairs((WhyTabs())) do storm[err] = true end
 	local file = assert(io.open(tmp, "w"))
-	file:write("return ", saved, ", ", Dump(keys), ", ", Dump(storm), "\n")
+	file:write("return ", saved, ", ", Dump(keys), ", ", Dump(storm), ", ", Dump(bases), "\n")
 	file:close()
 elseif phase == "off" then
-	local _, onKeys, onStorm = assert(loadfile(tmp))()
+	local _, onKeys, onStorm, onBases = assert(loadfile(tmp))()
+	local differ = 0
+	for name, values in pairs(Bases()) do
+		for k, v in pairs(onBases[name] or {}) do
+			if values[k] ~= v and ns.DEFAULTS[k] ~= nil then
+				differ = differ + 1
+				if differ <= 5 then
+					Problem(("%s's base has %s = %s left out, %s loaded"):format(name, k, tostring(values[k]), tostring(v)))
+				end
+			end
+		end
+	end
+	if differ > 5 then Problem(("...%d built-in base settings differ in all"):format(differ)) end
 	local allowed = {}
 	for _, part in ipairs(parts) do
 		for _, line in ipairs(SPECS[part].allowed) do allowed[#allowed + 1] = line end

@@ -26,6 +26,47 @@
 -- follows its camera's until it's given a When of its own, so nothing
 -- changes for settings and profiles from before.
 local _, ns = ...
+
+-- The built-in scenes (each a trigger's own row, ticked off by sceneOff<key>),
+-- and a camera value's mode: loaded with Cameras left out too, as a profile's
+-- base (ProfileModules.lua's CamsOff) ticks scenes off by them. Without them
+-- Auto-Hide UI's base had its scenes on after the reload that leaves Cameras
+-- out, and the profile showed "(changed)" straight after a reset, 2026-11-22.
+-- (Not every one is a row on every client: only those with a sceneOff default.
+-- The chat ones (chat = true) only with the chat camera, ChatCam.lua.)
+local SCENES = {
+	{ key = "Hearth", cameras = { "tele", "none" } }, { key = "Teleport", cameras = { "tele", "none" } },
+	{ key = "Logout" }, { key = "AFK" }, { key = "Sit" }, { key = "SitButton" }, { key = "Sleep" }, { key = "Dance" },
+	{ key = "Kneel" }, { key = "Stare" }, { key = "Chair" }, { key = "Weapon" }, { key = "Campfire" },
+	{ key = "Fishing" }, { key = "Still" }, { key = "Flight", cameras = { "flight", "none" } },
+	{ key = "Quest", cameras = { "quest", "none" } }, { key = "QuestGossip", cameras = { "quest", "none" } },
+	{ key = "Walk", camera = "walkCamera", music = "musicCamWalk", cine = "walkCine", cameras = { "walk", "none" },
+		off = "none" },
+	{ key = "Run", camera = "runCamera", music = "musicCamRun", cine = "runCine", cameras = { "run", "none" },
+		off = "none" },
+	{ key = "Death", camera = "deathOrbit", music = "deathSong", cine = "deathCine", cameras = { true, false },
+		off = false },
+	{ key = "Chat", camera = "chatCamera", cine = "chatCine", cameras = { "chat", "none" }, off = "none", chat = true },
+	{ key = "ChatNearby", camera = "chatNearbyCamera", cine = "chatNearbyCine", cameras = { "chat", "none" },
+		off = "none", chat = true },
+}
+for _, scene in ipairs(SCENES) do
+	scene.event = scene.camera == nil -- (an event's: its settings event<key>Camera...)
+	scene.camera = scene.camera or "event" .. scene.key .. "Camera"
+	scene.sceneOff = "sceneOff" .. scene.key
+end
+ns.BUILTIN_SCENES = SCENES
+
+local CAM_OF = { cozy = "cozy", vista = "vista", fish = "fish", afk = "idle", tele = "tele", flight = "flight",
+	quest = "quest", walk = "walk", run = "run", [true] = "death", chat = "chatcam", death = "death" }
+-- A camera value's mode (as ns.CAMERA_OFF_CAMS names it), or nil for none.
+-- (A shot: its camera's, Shots.lua.)
+local function CamOf(value)
+	if ns.ShotBase then value = ns.ShotBase(value) end
+	return CAM_OF[value]
+end
+function ns.CameraValueMode(value) return CamOf(value) end
+
 ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
@@ -98,29 +139,26 @@ local FOREVER_ONLY = {}
 for _, event in ipairs(ns.EVENTS) do
 	if event.forever then FOREVER_ONLY[event.key] = true end
 end
-for _, trigger in ipairs({
-	Event("Hearth", { "tele", "none" }), Event("Teleport", { "tele", "none" }), Event("Logout"), Event("AFK"),
-	Event("Sit"), Event("SitButton"), Event("Sleep"), Event("Dance"), Event("Kneel"), Event("Stare"),
-	Event("Chair"), Event("Weapon"), Event("Campfire"), Event("Fishing"), Event("Still"),
-	Event("Flight", { "flight", "none" }), Event("Quest", { "quest", "none" }),
-	Event("QuestGossip", { "quest", "none" }),
-	{ key = "Walk", camera = "walkCamera", music = "musicCamWalk", cine = "walkCine", cameras = { "walk", "none" },
-		off = "none" },
-	{ key = "Run", camera = "runCamera", music = "musicCamRun", cine = "runCine", cameras = { "run", "none" },
-		off = "none" },
-	{ key = "Death", camera = "deathOrbit", music = "deathSong", cine = "deathCine", cameras = { true, false },
-		off = false },
-}) do
-	-- (A flight's music is the flight camera's own switch.)
-	if trigger.key == "Flight" then trigger.music = "musicCamFlight" end
-	if not (FOREVER_ONLY[trigger.key] and ns.isRetail) then OwnScene(trigger, false) end
+-- (Each scene above as a trigger of its own: a table each, the page's.)
+local function SceneTrigger(scene)
+	if scene.event then return Event(scene.key, scene.cameras) end
+	return { key = scene.key, camera = scene.camera, music = scene.music, cine = scene.cine, cameras = scene.cameras,
+		off = scene.off }
+end
+for _, scene in ipairs(SCENES) do
+	if not scene.chat then
+		local trigger = SceneTrigger(scene)
+		-- (A flight's music is the flight camera's own switch.)
+		if trigger.key == "Flight" then trigger.music = "musicCamFlight" end
+		if not (FOREVER_ONLY[trigger.key] and ns.isRetail) then OwnScene(trigger, false) end
+	end
 end
 -- (The chat camera: ChatCam.lua; no music switch yet.)
 if ns.ChatCamCommand then
 	-- (Ticked off to start with: the Cinema profile's cameras tick them on.)
-	OwnScene({ key = "Chat", camera = "chatCamera", cine = "chatCine", cameras = { "chat", "none" }, off = "none" }, true)
-	OwnScene({ key = "ChatNearby", camera = "chatNearbyCamera", cine = "chatNearbyCine",
-		cameras = { "chat", "none" }, off = "none" }, true)
+	for _, scene in ipairs(SCENES) do
+		if scene.chat then OwnScene(SceneTrigger(scene), true) end
+	end
 	-- Capital cities' citizens never stop chatting: that row's Cities unticked
 	-- to start with (its other ticks follow the chat camera's).
 	ns.LIST_DEFAULTS.cityShow["trig:ChatNearby"] = false
@@ -135,16 +173,6 @@ ns.CAMERA_NAMES = { cozy = L["Cozy camera"], vista = L["Vista camera"], fish = L
 ns.OnLanguage(function()
 	for value, name in pairs(ns.CAMERA_NAMES) do ns.CAMERA_NAMES[value] = L[name] end
 end)
-local CAM_OF = { cozy = "cozy", vista = "vista", fish = "fish", afk = "idle", tele = "tele", flight = "flight",
-	quest = "quest", walk = "walk", run = "run", [true] = "death", chat = "chatcam", death = "death" }
--- A camera value's mode (as ns.CAMERA_OFF_CAMS names it), or nil for none.
--- (A shot: its camera's, Shots.lua.)
-local function CamOf(value)
-	if ns.ShotBase then value = ns.ShotBase(value) end
-	return CAM_OF[value]
-end
-function ns.CameraValueMode(value) return CamOf(value) end
-
 -- A row's trigger and its number (nil: the trigger's own row).
 function ns.CameraRowTrigger(id)
 	local key, copy = tostring(id):match("^(%a+)(%d?)$")

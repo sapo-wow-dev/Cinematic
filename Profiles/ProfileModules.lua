@@ -47,9 +47,12 @@ local ROW_RULE_LISTS = { frameRules = true, rowFollow = true }
 local function CamsOff(set, cams)
 	local off = {}
 	for _, cam in ipairs(cams) do off[cam] = true end
-	for _, trigger in ipairs(ns.CAMERA_TRIGGERS or {}) do -- (none with Cameras left out, Modules.lua)
-		local mode = trigger.sceneOff and ns.CameraValueMode(ns.DEFAULTS[trigger.camera])
-		if mode and off[mode] then set(trigger.sceneOff, true) end
+	-- (The built-in scenes' list, not the page's triggers: there with Cameras
+	-- left out too, so a profile's base is the same either way. A scene that's
+	-- no row on this client has no sceneOff default.)
+	for _, scene in ipairs(ns.BUILTIN_SCENES or {}) do
+		local mode = ns.DEFAULTS[scene.sceneOff] ~= nil and ns.CameraValueMode(ns.DEFAULTS[scene.camera])
+		if mode and off[mode] then set(scene.sceneOff, true) end
 	end
 end
 
