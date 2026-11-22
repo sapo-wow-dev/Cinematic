@@ -25,3 +25,5 @@ Q2 blocked -> those buttons made lazily out of a fight.
 | 2 | 2026-11-22 | /cine debug loadparts (confirm) | the one Reload box YES (x3, naming both changes, its own Reload used); 57 PASS 0 FAIL, 0 errors, 0 blocked; both off 19.3 MB less | none. The box said "step 4/2" after a reload: the kit counted the steps left, now all of them (Dev/TestKit.lua; loadparts.lua checks it) |
 
 Done: every question answered in 2 runs.
+
+| 3 | 2026-11-22 | /cine debug loadparts (after Camera > General showed "General is off" over its box: the tests only checked the box existed) | Camera > General in the menu: no off card, Load Cameras box shown (WoWScrnShot_112226_011212); 76 PASS 0 FAIL, 0 errors | none. The test's box covered the page's top in its menu shots: hidden for them now |

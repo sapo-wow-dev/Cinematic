@@ -98,8 +98,12 @@ for _, client in ipairs({ "forever", "retail" }) do
 	Check("both wanted out", Has(log, "PASS pick: Auto%-Hide UI: visions left out") and Has(log, "PASS pick: Auto%-Hide UI: cameras left out"))
 	Check("the Load boxes' box, its words", Has(log, "PASS pick: Auto%-Hide UI: says") ~= nil, Has(log, ": says"))
 	Check("at the game's spot", Has(log, "PASS pick: Auto%-Hide UI: at the game's spot") ~= nil)
-	-- (Three parts: "a, b and c", not "a and b and c": run 5.)
-	Check("the words: one list", not ns.MODULE_KEYS.style or Has(log, 'text="Auto%-Hide UI: reload now to leave Visions out, leave the cameras out and leave Style out%?"') ~= nil,
+	-- (Three parts or more: "a, b and c", not "a and b and c": run 5. Atmosphere
+	-- the fourth since 2026-11-22.)
+	local words = ns.MODULE_KEYS.atmosphere and "leave Visions out, leave the cameras out, leave Style out and leave Atmosphere out"
+		or "leave Visions out, leave the cameras out and leave Style out"
+	Check("the words: one list", not ns.MODULE_KEYS.style
+		or Has(log, 'text="Auto%-Hide UI: reload now to ' .. words .. '%?"') ~= nil,
 		Has(log, 'fields Auto%-Hide UI box'))
 	Check("only one box up", popups.CINEMATIC_LOAD_PARTS ~= nil and popups.CINEMATIC_PROFILE_PARTS == nil)
 	ns.HandleSlash("debug profileparts") -- (typed again: stopped, put back)

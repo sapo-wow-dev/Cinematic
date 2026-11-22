@@ -1754,6 +1754,14 @@ ns.ModuleLeftOut("cameras", function()
 		LEFT_OUT[key] = true
 	end
 end)
+-- (Atmosphere left out: Enable Visual Effects and each of its pages, the
+-- Letterbox's, Tint's, Graphics Boost's and Audio's, and their Style pages.)
+ns.ModuleLeftOut("atmosphere", function()
+	for _, key in ipairs({ "visualEffects", "letterboxPage", "tintPage", "graphicsPlus", "musicInCinematic",
+		"letterboxStyle", "tintStyle", "depthOfField" }) do
+		LEFT_OUT[key] = true
+	end
+end)
 -- (A page's switch can be under another's: Duel Vision's ticks under its page's
 -- switch, under Enable Visions.)
 function ns.Setting(key)

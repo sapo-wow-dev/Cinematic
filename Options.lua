@@ -7276,6 +7276,23 @@ local function CreateEffectsPanel()
 
 	local title = Label(content, "GameFontNormalLarge", L["Visual Effects"])
 	title:SetPoint("TOPLEFT", 16, -16)
+	-- Load Atmosphere (2026-11-22, Modules.lua): unticked, from the next
+	-- reload none of Atmosphere's code runs (the tint, letterbox, edge haze,
+	-- Graphics+ and Cinematic's music). Left out: this page has only its box,
+	-- and the hub's other pages aren't made.
+	local ATMOSPHERE_LOAD = { label = L["Load Atmosphere"],
+		tip = L["Unticked, Atmosphere doesn't load at all (takes a reload)."],
+		off = L["Tick it and reload to bring every Atmosphere page back."],
+		on = L["Turn off to keep Atmosphere from loading at all."] }
+	if not ns.ModuleLoaded("atmosphere") then
+		local intro = PageIntro(content, title,
+			L["Atmosphere isn't loaded: no tint, letterbox, haze, Graphics Boost or music runs, and their pages are gone."])
+		canvas.loadAtmosphereBox = ns.LoadPartBox(content, title, intro, "atmosphere", ATMOSPHERE_LOAD)
+		canvas:SetScript("OnShow", PageShown(Refresh, content))
+		canvas:Hide()
+		RegisterSubpage(canvas, "Effects", L["Visual Effects"])
+		return
+	end
 
 	local subtitle = PageIntro(content, title,
 		L["How the game world looks in CineMode: vignette, inn glow, weather and depth of field."])
@@ -7405,6 +7422,8 @@ local function CreateEffectsPanel()
 		slider:SetPoint("LEFT", slider.rowName, "LEFT", nameWidth + 20, 0)
 	end
 
+	ATMOSPHERE_LOAD.beside = true -- (right of the page's switch, as Load Cameras)
+	canvas.loadAtmosphereBox = ns.LoadPartBox(content, title, subtitle, "atmosphere", ATMOSPHERE_LOAD)
 	canvas:SetScript("OnShow", PageShown(Refresh, content))
 	canvas:Hide()
 	-- (Its own name, not "General": Quality of life has a General page. Shown as
@@ -19922,7 +19941,7 @@ local KEYBINDS = {
 		tip = L["Takes a screenshot with the UI hidden."] },
 	{ action = "CINEMATIC_TOGGLEEFFECTS", label = L["Toggle visual effects"],
 		tip = L["Turns the visual effects on or off."] },
-	{ action = "CINEMATIC_TOGGLELETTERBOX", label = L["Toggle letterbox bars"],
+	{ action = "CINEMATIC_TOGGLELETTERBOX", show = function() return ns.ModuleLoaded("atmosphere") end, label = L["Toggle letterbox bars"],
 		tip = L["Shows or hides the letterbox bars."] },
 	{ action = "CINEMATIC_HIDECURSOR", label = L["Hide Cursor till moves"],
 		tip = L["Hides the cursor until you move the mouse."] },
@@ -22480,12 +22499,13 @@ ns.OnLanguage(function()
 		CreateTargetArrowPanel()
 		Lap("CreateTargetArrowPanel")
 	end
-	-- (The Atmosphere hub's Letterbox page either way; its Style tab's page only with Style loaded.)
+	-- (The Atmosphere hub's Letterbox page with Atmosphere loaded; its Style
+	-- tab's page only with Style loaded too. Modules.lua.)
 	if ns.CreateEffectPanel then -- (LetterboxStyle.lua)
 		ns.CreateEffectPanel(ns.lowHealthKit, "letterbox")
 		Lap("CreateEffectPanel")
 	end
-	if ns.CreateLetterboxStylePanel then
+	if ns.CreateLetterboxStylePanel and ns.ModuleLoaded("atmosphere") then
 		ns.CreateLetterboxStylePanel(ns.lowHealthKit)
 		Lap("CreateLetterboxStylePanel")
 	end
@@ -22582,16 +22602,20 @@ ns.OnLanguage(function()
 	end
 	CreateEffectsPanel()
 	Lap("CreateEffectsPanel")
-	ns.CreateEffectPanel(ns.lowHealthKit, "tint") -- (LetterboxStyle.lua: its Show in row)
-	Lap("CreateEffectPanel")
-	if ns.CreateTintStylePanel then -- (TintStyle.lua; a Style page: none with Style left out, Modules.lua)
-		ns.CreateTintStylePanel(ns.lowHealthKit)
-		Lap("CreateTintStylePanel")
+	-- (The Atmosphere hub's other pages, and the Style hub's Tint page: none
+	-- with Atmosphere left out, Modules.lua. Its General page has the box.)
+	if ns.ModuleLoaded("atmosphere") then
+		ns.CreateEffectPanel(ns.lowHealthKit, "tint") -- (LetterboxStyle.lua: its Show in row)
+		Lap("CreateEffectPanel")
+		if ns.CreateTintStylePanel then -- (TintStyle.lua; a Style page: none with Style left out, Modules.lua)
+			ns.CreateTintStylePanel(ns.lowHealthKit)
+			Lap("CreateTintStylePanel")
+		end
+		CreateGraphicsPanel()
+		Lap("CreateGraphicsPanel")
+		CreateAudioPanel()
+		Lap("CreateAudioPanel")
 	end
-	CreateGraphicsPanel()
-	Lap("CreateGraphicsPanel")
-	CreateAudioPanel()
-	Lap("CreateAudioPanel")
 	CreateCamerasPanel()
 	Lap("CreateCamerasPanel")
 	if ns.CreateTriggersPanels then -- (TriggersPage.lua)

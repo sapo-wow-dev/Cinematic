@@ -113,6 +113,8 @@ Style\StyleFonts.lua
 Visions\QuestItemButton.lua
 Plates\PlateSleep.lua
 Effects.lua
+Atmosphere\Music.lua
+Atmosphere\Letterbox.lua
 Plates\NameRowLook.lua
 UI\TooltipParts.lua
 Plates\PlateParts.lua
@@ -140,6 +142,7 @@ Visions\TalkingHeads.lua
 Camera\CameraTests.lua
 Atmosphere\Tint.lua
 Atmosphere\DeathVision.lua
+Visions\TimeOfDay.lua
 Atmosphere\ScreenEffectsData.lua
 Atmosphere\ScreenEffects.lua
 Atmosphere\LowHealthThemes.lua

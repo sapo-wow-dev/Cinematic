@@ -99,6 +99,10 @@ for _, setting in ipairs(ns.GRAPHICS_PLUS) do
 	end
 end
 
+-- (Up to here, the settings, loaded either way: Core.lua's DEFAULTS read them as
+-- it loads. The rest, what writes them, only with Atmosphere loaded, Modules.lua;
+-- leaving it out puts the game's own values back first: ns.SetModuleWanted.)
+ns.Module("atmosphere", function() -- (the rest of this file: only with Atmosphere loaded, Modules.lua)
 local writing = false
 local borrowed = false -- a setting left alone while another feature has it
 
@@ -363,3 +367,4 @@ do
 		return level, Wanted()
 	end
 end
+end)

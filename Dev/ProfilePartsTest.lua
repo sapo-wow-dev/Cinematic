@@ -31,13 +31,15 @@
 -- Into CinematicDB.profilePartsTestLog. Dev copy only.
 local _, ns = ...
 
--- (Style too since 2026-11-22, where the copy has it: Modules.lua's parts.)
+-- (Style and Atmosphere too since 2026-11-22, where the copy has them: Modules.lua's parts.)
 local PARTS = {}
-for _, part in ipairs({ "visions", "cameras", "style" }) do
+for _, part in ipairs({ "visions", "cameras", "style", "atmosphere" }) do
 	if ns.MODULE_KEYS and ns.MODULE_KEYS[part] then PARTS[#PARTS + 1] = part end
 end
-local LOAD_WORDS = { visions = "load Visions", cameras = "load the cameras", style = "load Style" }
-local LEAVE_WORDS = { visions = "leave Visions out", cameras = "leave the cameras out", style = "leave Style out" }
+local LOAD_WORDS = { visions = "load Visions", cameras = "load the cameras", style = "load Style",
+	atmosphere = "load Atmosphere" }
+local LEAVE_WORDS = { visions = "leave Visions out", cameras = "leave the cameras out", style = "leave Style out",
+	atmosphere = "leave Atmosphere out" }
 local function Words(lead, kind)
 	local list = lead and { lead } or {}
 	for _, part in ipairs(PARTS) do list[#list + 1] = (kind == "load" and LOAD_WORDS or LEAVE_WORDS)[part] end

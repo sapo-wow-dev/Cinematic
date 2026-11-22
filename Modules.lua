@@ -1,8 +1,9 @@
 -- Parts of the addon that can be left out, so their code never runs (no
 -- frames, events, hooks or update loops): Visions, from its General page's
 -- Load Visions switch (2026-11-21), and Cameras, from Camera > General's
--- Load Cameras. One addon in the game's AddOns list, not
--- one per part.
+-- Load Cameras, Style from Style > General's Load Style, and Atmosphere from
+-- Atmosphere > General's Load Atmosphere. One addon in the game's AddOns
+-- list, not one per part.
 --
 -- A part's files load as every file does, but only their settings and data
 -- run then (ns.DEFAULTS and the like: profiles, sharing and Reset keep them
@@ -19,7 +20,7 @@
 local _, ns = ...
 
 -- name -> the CinematicDB key that leaves it out (false)
-local PARTS = { visions = "loadVisions", cameras = "loadCameras", style = "loadStyle" }
+local PARTS = { visions = "loadVisions", cameras = "loadCameras", style = "loadStyle", atmosphere = "loadAtmosphere" }
 ns.MODULE_KEYS = PARTS
 
 -- What the rest of the addon asks a part as it plays, with that part left
@@ -29,7 +30,8 @@ ns.MODULE_KEYS = PARTS
 local function No() return false end
 local function Nothing() end
 ns.MODULE_STAND_INS = {
-	visions = { IsQuestMob = No, SoftPlateHidden = No, CardOn = No, SetQuestMark = Nothing, NoteTalkSpot = Nothing },
+	visions = { IsQuestMob = No, SoftPlateHidden = No, CardOn = No, SetQuestMark = Nothing, NoteTalkSpot = Nothing,
+		ShowTimeOfDayTitle = Nothing },
 	-- (Every camera off and why; no scene, script or camera running; the
 	-- calls that move or stop one doing nothing.)
 	cameras = {
@@ -57,18 +59,34 @@ ns.MODULE_STAND_INS = {
 		AddProfileStyleTheme = function() return nil, ns.ModuleLeftOutLine("style") end,
 		SQUARE_SWIPE = "Interface\\Buttons\\WHITE8X8",
 	},
+	-- (No tint, letterbox, haze, Graphics+ or music: nothing drawn, written or
+	-- faded. Death Vision's screen, a Vision, is made and run by the tint's
+	-- calls: with the tint left out these make and run it alone. The music
+	-- volume isn't remembered, as with the Audio page off.)
+	atmosphere = {
+		CreateTint = function() if ns.CreateDeathScreen then ns.CreateDeathScreen() end end,
+		UpdateTint = function(_, elapsed) if ns.UpdateDeathVision then ns.UpdateDeathVision(elapsed or 0) end end,
+		HideTintWash = Nothing, RefreshTint = Nothing, CreateLetterbox = Nothing, UpdateLetterbox = Nothing,
+		LetterboxUp = No, LetterboxOnDiscover = Nothing, UpdateMusic = Nothing, StopMusicNow = Nothing,
+		StopCombatMusicNow = Nothing, StopDeathSongNow = Nothing, MusicTrace = Nothing, PickDeathSong = Nothing,
+		SetDeathSong = Nothing, EndSceneMusic = Nothing,
+		RestoreMusicVolume = function() if ns.db then ns.db.musicVolume = nil end end,
+		music = { managing = false, level = 0, volume = 1 },
+	},
 }
 
 -- The game's key bindings (Bindings.xml) call some of a part's functions by
 -- name, and no addon can take a binding away: left out, each says so.
 local KEY_STAND_INS = {
 	cameras = { "Cinematic_CameraWheel", "Cinematic_CustomTrigger", "Cinematic_ToggleShoulderCam" },
+	atmosphere = { "Cinematic_ToggleLetterbox" },
 }
 -- (The line a left-out part's key or command prints.)
 local LEFT_OUT_LINE = {
 	visions = "Visions isn't loaded (Visions > General)",
 	cameras = "Cameras aren't loaded (Camera > General > Load Cameras)",
 	style = "Style isn't loaded (Style > General > Load Style)",
+	atmosphere = "Atmosphere isn't loaded (Atmosphere > General > Load Atmosphere)",
 }
 function ns.ModuleLeftOutLine(name)
 	local line = LEFT_OUT_LINE[name] or name
@@ -82,11 +100,12 @@ end
 -- sync"). Where the game puts its boxes, as every Reload box of ours.
 -- lead: what comes before "reload now..." (a profile's name), or nil.
 -- Nothing to reload: the box goes. True: it's up.
-local ASK_ORDER = { "visions", "cameras", "style" }
+local ASK_ORDER = { "visions", "cameras", "style", "atmosphere" }
 local ASK_WORDS = {
 	visions = { load = "load Visions", leave = "leave Visions out" },
 	cameras = { load = "load the cameras", leave = "leave the cameras out" },
 	style = { load = "load Style", leave = "leave Style out" },
+	atmosphere = { load = "load Atmosphere", leave = "leave Atmosphere out" },
 }
 ns.MODULES_RELOAD_POPUP = "CINEMATIC_LOAD_PARTS"
 function ns.AskModulesReload(lead)
@@ -234,6 +253,10 @@ function ns.RunModules()
 	end
 end
 
+local ON_LEAVE = {
+	atmosphere = function() if ns.GraphicsPlusPutBack then ns.GraphicsPlusPutBack() end end,
+}
+
 -- Leaves a part out from the next /reload (wanted false), or brings it back.
 -- Its defaults are written down only now, while its code has run (2,000
 -- and more for Visions: not kept in every player's saved settings), and
@@ -243,6 +266,9 @@ function ns.SetModuleWanted(name, wanted)
 	local db = _G.CinematicDB
 	if not key or type(db) ~= "table" then return end
 	db[key] = wanted and true or false
+	-- (What a part must undo as it's left out, now, while its code is here:
+	-- Graphics+'s settings back to the game's, which keeps them between sessions.)
+	if not wanted and loaded[name] and ON_LEAVE[name] then Run(ON_LEAVE[name]) end
 	-- (Ticked again before a reload, still loaded: its code has its defaults, no copy.)
 	if wanted and loaded[name] and type(db.moduleDefaults) == "table" then
 		db.moduleDefaults[name] = nil

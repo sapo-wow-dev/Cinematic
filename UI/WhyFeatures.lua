@@ -463,6 +463,12 @@ end)
 -- (Atmosphere: a tab of its own, there with Visions left out too.)
 ns.WhyProvider("atmosphere", "Atmosphere", "Each Atmosphere page with its tabs: whether it's on now, ready for its " ..
 	"moment, or off, and which switch turned it off.", function()
+	-- (Atmosphere left out, Modules.lua: one row saying so, opening its General page's box.)
+	if not ns.ModuleLoaded("atmosphere") then
+		local why = R("block", L["Load Atmosphere is off: none of it runs"], "Effects")
+		return { { label = L["Atmosphere"], rows = { { key = "atmosphere:loaded", title = L["Atmosphere isn't loaded"],
+			status = "off", reasons = { why }, main = why, settingsPage = "Effects" } } } }
+	end
 	return { HubSection("Atmosphere", "Atmosphere") }
 end)
 

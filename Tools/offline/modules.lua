@@ -76,8 +76,26 @@ local SPECS = {
 		demos = { "combatText" }, -- (the bubbles demo is Chat Bubbles', an Interface page)
 		switch = "styleGeneral",
 	},
+	atmosphere = {
+		label = "Atmosphere",
+		-- (The tint (its vignette and gradient helpers and clock loaded either
+		-- way, for Death Vision and the time of day), the letterbox (how bars
+		-- are drawn stays in Effects.lua), edge haze, music, Graphics+ (its
+		-- list of settings loaded: Core's defaults), the Letterbox and Tint pages.)
+		files = { "Atmosphere/Tint.lua", "Atmosphere/Focus.lua", "Atmosphere/Music.lua", "Atmosphere/Letterbox.lua",
+			"Graphics.lua", "Style/LetterboxStyle.lua" },
+		allowed = {},
+		pages = { "Tint", "Letterbox", "Graphics+", "Audio", "Tint Style", "Letterbox Style" },
+		general = "Effects", box = "Load Atmosphere", ask = "leave Atmosphere out",
+		-- (Its settings are Core.lua's: none of its own to write down.)
+		setting = { "vignetteStrength", 0.33 }, noOwnDefaults = true,
+		why = { tab = "atmosphere", row = "atmosphere:loaded" },
+		demos = { "bars", "letterbox", "tint", "audio" },
+		slash = { "doftest", "you've left out" },
+		switch = "visualEffects",
+	},
 }
-local ORDER = { "visions", "cameras", "style", "both", "all" }
+local ORDER = { "visions", "cameras", "style", "atmosphere", "both", "all" }
 
 -- Values as Lua source (the settings handed from one run to the next).
 local function Dump(value)
@@ -164,7 +182,7 @@ if not phase then
 	os.exit(failed and 1 or 0)
 end
 
-local parts = partArg == "both" and { "visions", "cameras" } or partArg == "all" and { "visions", "cameras", "style" }
+local parts = partArg == "both" and { "visions", "cameras" } or partArg == "all" and { "visions", "cameras", "style", "atmosphere" }
 	or { partArg }
 
 local problems = {}
@@ -322,7 +340,8 @@ if phase == "on" then
 		local hidden
 		rawset(_G, "StaticPopup_Hide", function(which) hidden = which end)
 		-- (The Load boxes' box, Modules.lua: every part this copy has.)
-		local LEAVE = { visions = "leave Visions out", cameras = "leave the cameras out", style = "leave Style out" }
+		local LEAVE = { visions = "leave Visions out", cameras = "leave the cameras out", style = "leave Style out",
+			atmosphere = "leave Atmosphere out" }
 		local OUT = { ": reload now to " }
 		for part in pairs(ns.MODULE_KEYS) do OUT[#OUT + 1] = LEAVE[part] or ("leave " .. part .. " out") end
 		for _, each in ipairs({ { "Auto-Hide UI", false, OUT }, { "Balanced", true },
@@ -382,7 +401,7 @@ if phase == "on" then
 			end
 		end
 		local kept = CinematicDB.moduleDefaults and CinematicDB.moduleDefaults[part]
-		if type(kept) ~= "table" or kept[spec.setting[1]] == nil then
+		if not spec.noOwnDefaults and (type(kept) ~= "table" or kept[spec.setting[1]] == nil) then
 			Problem(("no %s defaults kept as it's switched off"):format(spec.label))
 		end
 		if CinematicDB[ns.MODULE_KEYS[part]] ~= false then Problem(spec.box .. " didn't save as off") end
@@ -482,7 +501,8 @@ elseif phase == "off" then
 		rawset(_G, "StaticPopup_Hide", function(which) hidden = which end)
 		-- (Modules.lua's words, in "<profile>: reload now to ...?")
 		local WORDS = { visions = { "load Visions", "leave Visions out" },
-			cameras = { "load the cameras", "leave the cameras out" }, style = { "load Style", "leave Style out" } }
+			cameras = { "load the cameras", "leave the cameras out" }, style = { "load Style", "leave Style out" },
+			atmosphere = { "load Atmosphere", "leave Atmosphere out" } }
 		ns.ProfilePartsPicked("Balanced")
 		for _, part in ipairs(parts) do
 			if not (ns.ModuleWanted(part) and asked and asked:find(WORDS[part][1], 1, true)

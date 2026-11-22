@@ -4,6 +4,7 @@
 -- set on its page, times Camera haze's dofScale; a camera script's own Edge
 -- haze while one runs). /cine doftest shows it on demand.
 local _, ns = ...
+ns.Module("atmosphere", function() -- (the rest of this file: only with Atmosphere loaded, Modules.lua)
 
 local FOCUS_TEXTURE = "Interface\\AddOns\\Cinematic\\Textures\\Focus"
 local FOCUS_IN_TIME = 3    -- seconds to pull focus in: slow, like a focus pull
@@ -115,3 +116,4 @@ end
 function ns.FocusDemoStrength()
 	return demoStrength or DEMO_STRENGTH
 end
+end)

@@ -2524,10 +2524,10 @@ local function HandleSlash(msg)
 	return true
 end
 
--- (Visions or Cameras left out, Modules.lua: a command into their code finds
+-- (Visions, Cameras, Style or Atmosphere left out, Modules.lua: a command into their code finds
 -- nothing there. Said so, the game's error under it, in place of the error window.)
 local slashInner = HandleSlash
-local PART_NAMES = { visions = "Visions", cameras = "Cameras" }
+local PART_NAMES = { visions = "Visions", cameras = "Cameras", style = "Style", atmosphere = "Atmosphere" }
 local function LeftOut()
 	local names = {}
 	for part in pairs(ns.MODULE_KEYS or {}) do

@@ -531,6 +531,16 @@ ns.ModuleLeftOut("cameras", function()
 	for _, key in ipairs({ "camera", "cameraLook", "shoulder" }) do DEMOS[key] = nil end
 	for key in pairs(CAM_DEMOS) do DEMOS[key] = nil end
 end)
+-- (Atmosphere left out: no letterbox, tint or music demo. The cameras' look
+-- plays its camera alone.)
+ns.ModuleLeftOut("atmosphere", function()
+	for _, key in ipairs({ "bars", "letterbox", "tint", "audio" }) do DEMOS[key] = nil end
+end)
+-- (Atmosphere left out: no letterbox, tint or music demo. The cameras' look
+-- plays its camera alone.)
+ns.ModuleLeftOut("atmosphere", function()
+	for _, key in ipairs({ "bars", "letterbox", "tint", "audio" }) do DEMOS[key] = nil end
+end)
 function ns.ShowMeAvailable(key)
 	return DEMOS[key] ~= nil and not (NEEDS[key] and not ns[NEEDS[key]])
 end

@@ -7,10 +7,12 @@
 -- Atmosphere hub under one icon.
 
 local _, ns = ...
--- (Up to the Letterbox Style page, loaded with Style left out too, Modules.lua:
--- the Atmosphere hub's effect pages, their first tab. Then the Style tab's page.)
+-- (Up to the Letterbox Style page: the Atmosphere hub's effect pages, their
+-- first tab, loaded with Atmosphere, Style or not. Then the Style tab's page,
+-- with Style; with Atmosphere left out Options.lua builds none. Modules.lua.)
 local L = ns.L
 
+ns.Module("atmosphere", function() -- (the Letterbox and Tint pages: only with Atmosphere loaded)
 -- The Atmosphere hub's effects with a page of their own: a Show in row on
 -- the first tab, the look on the Style tab (English: L at the call, once the
 -- language is set). page: the first tab's page, style: the Style tab's.
@@ -152,6 +154,8 @@ function ns.CreateEffectPanel(kit, effect)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, info.page)
 end
+
+end)
 
 ns.Module("style", function() -- (the Letterbox Style page: only with Style loaded, Modules.lua)
 function ns.CreateLetterboxStylePanel(kit)

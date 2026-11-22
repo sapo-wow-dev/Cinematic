@@ -550,6 +550,7 @@ Add("2. Town & inn", { key = "recap", name = "Login with Last time",
 
 -- 5. Scenery & mood -------------------------------------------------------------
 
+ns.Module("atmosphere", function() -- (the tint and haze demos: only with Atmosphere loaded, Modules.lua)
 Add("5. Scenery & mood", { key = "day", name = "Time of day sweep",
 	tip = "/cine tinttest 6: every time of day's tint and title, 6 seconds each, the AFK camera circling, " ..
 		"with the UI hidden.",
@@ -560,11 +561,13 @@ Add("5. Scenery & mood", { key = "day", name = "Time of day sweep",
 		d.Slash("tinttest 6")
 		d.Wait(7 * 6 + 2)
 	end })
+end) -- (ns.Module "atmosphere")
 Add("5. Scenery & mood", { key = "titles", name = "Time-of-day titles", tip = "/cine timetest all",
 	script = function(d)
 		d.Slash("timetest all")
 		d.Wait(7 * 8)
 	end })
+ns.Module("atmosphere", function() -- (the tint and haze demos: only with Atmosphere loaded, Modules.lua)
 local PRESET_TOUR = { "none", "warm", "cool", "night", "dusk", "sepia", "dreamy" }
 Add("5. Scenery & mood", { key = "tints", name = "Tint presets carousel",
 	tip = "Same spot, UI hidden: no tint, then warm, cool, night, dusk, sepia and dreamy, 4 seconds each " ..
@@ -635,6 +638,7 @@ Add("5. Scenery & mood", { key = "vignette", name = "Vignette sweep",
 		d.Animate(3, function(t) Strength(0.6 + (start - 0.6) * t) end)
 		d.Wait(1)
 	end })
+end) -- (ns.Module "atmosphere")
 Add("5. Scenery & mood", { key = "cozy-tour", name = "Cozy Cam: sit, kneel, sleep, dance", still = true,
 	tip = "Each emote for 12 seconds with a stand between, for the Cozy Cam's shots.",
 	script = function(d)

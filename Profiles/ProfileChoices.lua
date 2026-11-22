@@ -308,7 +308,7 @@ ns.BUILTIN_PROFILES = {
 		modules = { "ui-pages-only" },
 		-- (Visions, Cameras and Style not even loaded, 2026-11-22: picking it
 		-- unticks their Load boxes and asks to reload, ns.ProfilePartsPicked.)
-		leaveOut = { "visions", "cameras", "style" },
+		leaveOut = { "visions", "cameras", "style", "atmosphere" },
 		preview = "bars",
 	},
 	-- Nothing on: for players who want just a few parts (Roll, Emote Vision,
@@ -328,7 +328,7 @@ ns.BUILTIN_PROFILES = {
 			"look, Load Style on Style > General."],
 		picks = { frames = "nofade" },
 		modules = { "all-pages-off", "tint-half" },
-		leaveOut = { "visions", "cameras", "style" }, -- (as Auto-Hide UI)
+		leaveOut = { "visions", "cameras", "style", "atmosphere" }, -- (as Auto-Hide UI)
 	},
 }
 
