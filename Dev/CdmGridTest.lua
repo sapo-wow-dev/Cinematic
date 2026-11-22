@@ -189,7 +189,7 @@ ns.TestKit.Define({
 				("here's group never used %s, Otherwise never used %s"):format(tostring(trouble[2] and trouble[2].kind),
 				tostring(otherDead)))
 		end },
-		{ key = "page", proven = "cdmgrid run 9 (2026-11-22): PASS, grid in the shot", title = "the page: the grid on the spell's bar", run = function(r)
+		{ key = "page", proven = "cdmgrid run 13 (2026-11-22): PASS, neutral look in the shot", title = "the page: the grid on the spell's bar", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -288,7 +288,7 @@ ns.TestKit.Define({
 			r:Verdict(not grid.extras:IsShown(), "back to When it shows: the bar's looks line gone")
 			r:Shot("back from Look", { behind = panel })
 		end },
-		{ key = "gallery", proven = "cdmgrid run 10 (2026-11-22): every setup looked at in the shots", title = "the look, setup by setup (screenshots)", run = function(r)
+		{ key = "gallery", proven = "cdmgrid run 13 (2026-11-22): PASS, every setup in the neutral look looked at", title = "the look, setup by setup (screenshots)", run = function(r)
 			-- (The user, 2026-11-22: "evaluate the look for all possible combinations,
 			-- generate a few rows with different options". Each setup on your own bar,
 			-- a screenshot each; everything's put back after.)

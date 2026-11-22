@@ -23,7 +23,11 @@ Tests: Tools/offline/cooldowngrid.lua (retail stand-in, prerelease), Dev/CdmGrid
 
 | Q10 | Round 3 (the user: "mouseover sucks", "clicking a row sucks", "multiple scenes looks really bad"): pills light under the pointer, no tooltips but for icons alone; the name no longer ticks; choices in a pop-up under the cell (nothing moves; a pick or a click away shuts it); new scenes named "Scene N"; 4-5 scenes: icons alone, places under names hidden; one line for scenes with no places; + Add scene by the tabs; editor and ticked-rows bar as pills | forever | yes offline; open in game: the gallery step shoots every setup | run 9 |
 
-Proven: all 10 steps (run 11, full). Any step sets up its own test group (Setup) when the steps before are left out.
+| Q11 | The neutral look (the user: "this looks so bad", "annoyed at the gold"; mockup F-H): gold only on the game's own title and tab; greys and white for what we add; color only for the choices; following cells blank (their faint icon under the pointer); the bar's row a lighter row; places in the headings' tooltips, amber "pick places" / "never applies" only; the editor a plain panel, picked chips filled light | forever | yes offline; open in game | run 12 gallery |
+
+| Q12 | No Cities or Inns chips (the user: "who cares about combat in cities and inns"); shown only on a scene that has them; one off Anywhere = the other chips' places; a note points to Rule... | forever | yes (both cases in the shots) | run 14 |
+
+Proven: all 10 steps. Left: one `full` run before the commit. Any step sets up its own test group (Setup) when the steps before are left out.
 
 ## Runs
 | Run | Date | Command | Answered | Still open, and why this run couldn't |
@@ -39,3 +43,6 @@ Proven: all 10 steps (run 11, full). Any step sets up its own test group (Setup)
 | 9 | 2026-11-22 | /cine debug cdmgrid | Q10 mostly: 12 PASS, 0 errors, 12 gallery shots looked at | from the shots: following cells' faint words buried the set ones (now icon alone); Otherwise's dot floated at the far edge (now after the name); five scenes cut names (now two lines); hover too faint (stronger); Look hint cut (shorter). No tracked buffs: buffs bar not shot |
 | 10 | 2026-11-22 | /cine debug cdmgrid | Q10 yes: the gallery again, every fix seen (icons alone for following cells, dot by the name, two-line names at five, hover, Look hint) | the buffs bar (no tracked buffs here) |
 | 11 | 2026-11-22 | /cine debug cdmgrid full | all: 18 PASS, 0 errors, settings put back; committed | none |
+| 12 | 2026-11-22 | /cine debug cdmgrid | Q11 mostly: 6 PASS, 0 errors, 12 shots: the neutral look reads well | from the shots: the bar row's "every spell follows this row" ran under the first cell (now "for every spell", kept in its column); "never applies" sat on a wrapped name at five scenes (one line when there's a note); Look's hint still said Gold (reworded) |
+| 13 | 2026-11-22 | /cine debug cdmgrid | Q11 yes: 6 PASS, 0 errors; "for every spell" in its column, one-line names with notes, Look's hint right | none (a mob pulled near the end; no effect) |
+| 14 | 2026-11-22 | /cine debug cdmgrid full | Q11, Q12 yes: 18 PASS, 0 errors; no town chips with the Rule note, Town keeps its chips lit; committed | none |

@@ -231,7 +231,8 @@ do
 			grid.Layout()
 			return ok
 		end)())
-		Check("a following cell: no band, still its icon", not im.cells[1].band.mid:IsShown() and im.cells[1].icon:IsShown())
+		Check("a following cell: blank (no band, no icon, no word)", not im.cells[1].band.mid:IsShown()
+			and not im.cells[1].icon:IsShown() and not im.cells[1].text:IsShown())
 		Check("the bar's row: its gold band and what it is", bar.band:IsShown() and bar.sub:IsShown() and not im.sub:IsShown())
 		Check("bar's row: Essential bar", bar.label:GetText() == ns.L["%s bar"]:format(ns.L["Essential"]), bar.label:GetText())
 		local function NotOver(row)
@@ -320,7 +321,7 @@ do
 			if line:IsShown() then lines = lines + 1 end
 		end
 		Check("five scenes: icons alone", grid.layout.compact and im.cells[1].compact and not im.cells[1].text:IsShown())
-		Check("five scenes: no places line under names", subs == 0, subs)
+		Check("five scenes: only the three with no places say so under their names", subs == 3, subs)
 		Check("three with no places: one line for them", lines == 1 and grid.troubleLines[1]:GetText():find(more[3].name, 1, true) ~= nil,
 			lines)
 		Check("+ Add scene gone at five", not grid.plus:IsShown())
@@ -330,8 +331,8 @@ do
 		-- (A following cell: its faint icon alone; a set one: its word too.)
 		ns.SetCooldownCell("spell", IMMOLATE, g1.id, "proc")
 		grid.Layout()
-		Check("a set cell shows its word, a following one its icon alone", im.cells[1].text:IsShown()
-			and not im.cells[2].text:IsShown() and im.cells[2].icon:IsShown())
+		Check("a set cell shows its word, a following one nothing", im.cells[1].text:IsShown()
+			and not im.cells[2].text:IsShown() and not im.cells[2].icon:IsShown())
 		ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
 		grid.Layout()
 		-- The bar's Otherwise has no "follow": its first choice is the built-in default.
@@ -360,11 +361,15 @@ do
 			Click(PlaceButton("any"))
 			Check("Anywhere alone", g2.places.any and not g2.places.city)
 			Click(PlaceButton("raid"))
-			Check("a place off Anywhere: every other one", g2.places.city and g2.places.dungeon and not g2.places.raid
-				and not g2.places.any)
+			Check("a place off Anywhere: the other chips' places, no towns", g2.places.world and g2.places.dungeon
+				and not g2.places.raid and not g2.places.city and not g2.places.any)
 			Click(PlaceButton("raid"))
-			Check("all of them: Anywhere again", g2.places.any == true)
+			Check("all the chips: Anywhere again", g2.places.any == true)
+			-- No Cities or Inns chips (2026-11-22), but on a scene that has them already.
+			Check("no town chips on a scene without towns", not PlaceButton("city"):IsShown() and not PlaceButton("inn"):IsShown())
 			g2.places = { city = true, inn = true }
+			grid.Layout()
+			Check("a scene with towns shows them", PlaceButton("city"):IsShown() and PlaceButton("inn"):IsShown())
 			for _, b in ipairs(grid.combatButtons) do
 				if b.combat == "in" then Click(b) end
 			end
