@@ -1223,4 +1223,18 @@ return {
     proof = "/cine debug loadvisions run 1 (Forever): CinematicQuestItemButton protected type item, CinematicQuestTalkClearTarget protected type macro; 0 errors, 0 blocked over 5 steps and 3 loads",
     source = "Tools/tests/load-visions.md",
   },
+  {
+    id = "forever.addons.enable-no-character",
+    area = "files",
+    clients = { "forever" },
+    api = { "C_AddOns.EnableAddOn", "C_AddOns.GetAddOnEnableState", "C_AddOns.SaveAddOns" },
+    when = "always",
+    rule = "C_AddOns.EnableAddOn(name, UnitName(\"player\")) plus SaveAddOns did not bring a disabled addon back after /reload, and GetAddOnEnableState(name, UnitName(\"player\")) read 2 (on) both before and after while GetAddOnInfo said DISABLED; GetAddOnEnableState(name) with no character read 0, matching the game. The character-name argument doesn't reach the current character here.",
+    works = { "EnableAddOn(name) / DisableAddOn(name) with no character, then SaveAddOns (as /cine debug solo)", "GetAddOnEnableState(name) with no character for the real state" },
+    fails = { "EnableAddOn(name, UnitName(\"player\"))", "GetAddOnEnableState(name, UnitName(\"player\")) as a check" },
+    status = "tested",
+    tested = "2026-11-22",
+    proof = "/cine debug zonecard runs 2-4 (Forever): DaylightUI_QoL state by name 2 before and after, reason DISABLED, not loaded after the Reload; no-character state 0. Run 5: EnableAddOn(name) with no character + SaveAddOns, state 0 -> 2, loaded after the Reload",
+    source = "Dev/ZoneCardTest.lua",
+  },
 }

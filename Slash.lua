@@ -1838,9 +1838,6 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "lowmana" then
 		-- (Dev copy: one run recording why low mana doesn't bring your frames up, LowManaTest.lua.)
 		if ns.LowManaTest then ns.LowManaTest() else ns.Print("/cine debug lowmana is in the dev copy only.") end
-	elseif cmd == "debug" and arg == "zonecard" then
-		-- (Dev copy: one run checking a zone change shows one zone title, not two, ZoneCardTest.lua.)
-		if ns.ZoneCardTest then ns.ZoneCardTest() else ns.Print("/cine debug zonecard is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "fadedemo" then
 		-- (Dev copy: one run checking the welcome window's Fading UI demo, FadeDemoTest.lua.)
 		if ns.FadeDemoTest then ns.FadeDemoTest() else ns.Print("/cine debug fadedemo is in the dev copy only.") end

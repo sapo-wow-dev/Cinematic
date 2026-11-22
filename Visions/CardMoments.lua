@@ -187,6 +187,23 @@ local function ZoneEntered()
 		Discovered(zone, nil, true)
 	end
 end
+-- True if Discovered's card has this place: one just shown, or shown for it
+-- already (its card can come seconds before the game's line).
+local function Carded(place)
+	return GetTime() - shownAt < 5
+		or (place == lastFound and shownAt >= lastFoundAt and GetTime() - shownAt < 30)
+end
+-- Other addons drawing the game's "Discovered:" line in a frame of their own
+-- (DaylightUI's error text, Support/DaylightUI.lua), not the game's: each
+-- fn(text) in ns.DiscoveredLineHiders hides theirs. A frame later, so the
+-- addon has drawn it whichever of us heard the event first.
+local function HideOtherLines(text)
+	local hiders = ns.DiscoveredLineHiders
+	if not (hiders and hiders[1]) then return end
+	C_Timer.After(0, function()
+		for _, fn in ipairs(hiders) do pcall(fn, text) end
+	end)
+end
 local function InfoLine(text)
 	text = Plain(text)
 	if not (text and Wanted()) then return end
@@ -196,14 +213,18 @@ local function InfoLine(text)
 			if GetTime() - zoneFoundAt < 5 then
 				-- (The new zone's card has it: the game's line goes, if that's playing.)
 				if GetTime() - shownAt < 5 and ns.HideGameDiscovered then ns.HideGameDiscovered() end
-				return
+			else
+				local zone = Zone()
+				Discovered(place, zone ~= place and zone or "", place == zone and not ns.Flag(IsInInstance()))
 			end
-			local zone = Zone()
-			Discovered(place, zone ~= place and zone or "", place == zone and not ns.Flag(IsInInstance()))
+			if ns.CardOn("discover") and Carded(place) then HideOtherLines(text) end
 			return
 		end
 	end
 end
+-- (/cine debug zonecard feeds a "Discovered:" line here as the game's own,
+-- Dev/ZoneCardTest.lua.)
+ns.CardInfoLine = InfoLine
 -- (The game's yellow "Discovered:" line goes the moment it's written, so
 -- it never draws: the card's fired right here if its event hasn't come yet,
 -- and the event's own call after is the same place again, skipped.)
@@ -217,9 +238,7 @@ if UIErrorsFrame and UIErrorsFrame.AddMessage then
 			if place then
 				InfoLine(text)
 				-- (Its card just shown, or shown already for this place.)
-				local carded = GetTime() - shownAt < 5
-					or (place == lastFound and shownAt >= lastFoundAt and GetTime() - shownAt < 30)
-				if carded and frame.Clear then pcall(frame.Clear, frame) end
+				if Carded(place) and frame.Clear then pcall(frame.Clear, frame) end
 				return
 			end
 		end

@@ -305,8 +305,9 @@ end)
 -- Hide object icons). Whose plays is the Addon Conflicts pick (AddonSupport,
 -- Conflicts.lua): its own while unpicked (the player's pick, 2026-11-12).
 -- "Ours" holds its banner or screen at alpha 0 while Cinematic's is on. Its
--- error text and quest progress lines need nothing: they draw instead of the
--- game's, which is all Cinematic hides.
+-- error text and quest progress lines draw instead of the game's, which is
+-- all Cinematic hides, but one: the "Discovered:" line under our Discovered
+-- card (both at once, 2026-11-22), hidden below.
 local LABEL = "DaylightUI"
 local function DUI() return _G.DaylightUI end
 local function QoLOn(key)
@@ -318,6 +319,23 @@ local function QoLOn(key)
 		return nil
 	end
 end
+-- Its error text (DaylightUI_QoL/ErrorText.lua) draws the game's lines in
+-- rows of its own, children of DaylightUIErrorText with a .text: the row
+-- with our Discovered card's line goes (CardMoments.lua). Hidden, a row is
+-- free for its next line. A secret line is never compared.
+ns.DiscoveredLineHiders = ns.DiscoveredLineHiders or {}
+table.insert(ns.DiscoveredLineHiders, function(text)
+	local holder = _G.DaylightUIErrorText
+	if type(holder) ~= "table" or not holder.GetChildren then return end
+	for _, row in ipairs({ holder:GetChildren() }) do
+		local line = type(row.text) == "table" and row.text.GetText and row.text:GetText()
+		if not (issecretvalue and issecretvalue(line)) and line == text and ns.Flag(row:IsShown()) then
+			row:Hide()
+			ns.Log("card", "DaylightUI's Discovered line hidden: our card has it")
+		end
+	end
+end)
+
 ns.WhenAddonLoads("DaylightUI_QoL", function()
 	-- Its zone title showing a place's name as you walk into an inn: our
 	-- Rested card (the inn's name too) waits till it's gone, rather than

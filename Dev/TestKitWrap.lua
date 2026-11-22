@@ -45,7 +45,6 @@ local OLD = {
 	{ cmd = "bufftest", fn = "BuffFadeTest", file = "BuffFadeTest.lua", log = "buffTestLog" },
 	{ cmd = "spokentest", fn = "SpokenTest", file = "SpokenTest.lua", log = "spokenTestLog" },
 	{ cmd = "lowmana", fn = "LowManaTest", file = "LowManaTest.lua", category = "lowmana" },
-	{ cmd = "zonecard", fn = "ZoneCardTest", file = "ZoneCardTest.lua", category = "zonecardtest" },
 	{ cmd = "fadedemo", fn = "FadeDemoTest", file = "FadeDemoTest.lua", category = "fadedemo" },
 	{ cmd = "shelf", fn = "ShelfTest", file = "ShelfTest.lua", category = "shelftest" },
 	{ cmd = "whysecret", fn = "WhySecretTest", file = "WhyTest.lua", log = "whySecretTestLog" },
