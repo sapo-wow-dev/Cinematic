@@ -5191,6 +5191,22 @@ STEPS[#STEPS + 1] = function()
 	ns.db.healVisionPlatesBackupsV1 = true
 end
 
+-- Auto-Hide UI had Mouseover groups off from 2026-11-20 to 2026-11-22: on
+-- it, the live switch goes back on, the profile's base having it on now.
+-- Unless you turned it off yourself: then the profile's saved copy says
+-- false (its base said false too until now, so it saved nothing). Once.
+STEPS[#STEPS + 1] = function()
+	if ns.db.autoHideMouseoverV1 then return end
+	local name = "Auto-Hide UI"
+	local saved = ns.db.profiles and ns.db.profiles[name]
+	local own = type(saved) == "table" and (saved.mouseover == false
+		or type(saved.settings) == "table" and saved.settings.mouseover == false)
+	if ns.db.liveProfile == name and not ns.db.offUntilPicked and ns.db.mouseover == false and not own then
+		ns.db.mouseover = true
+	end
+	ns.db.autoHideMouseoverV1 = true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only

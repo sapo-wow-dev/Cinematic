@@ -491,8 +491,8 @@ if arg[1] and not update then
 			print("problem\tAuto-Hide UI: no such profile")
 		else
 			local hide, balanced = Settings("Auto-Hide UI"), Settings("Balanced")
-			-- (Mouseover off, the user's ask 2026-11-20: below.)
-			for _, key in ipairs({ "handleFrames", "handleMinimap", "handleChat", "handlePlates",
+			-- (Mouseover as Balanced's too: off 2026-11-20, on again 2026-11-22, user.)
+			for _, key in ipairs({ "handleFrames", "mouseover", "handleMinimap", "handleChat", "handlePlates",
 				"handleTooltips", "handleBubbles", "chatPeekChannelList", "hoverGroups", "editModeLayout" }) do
 				if ns.SerialValue(hide[key]) ~= ns.SerialValue(balanced[key]) then
 					print("problem\tAuto-Hide UI: " .. key .. " isn't as Balanced has it")
@@ -500,7 +500,7 @@ if arg[1] and not update then
 			end
 			for _, key in ipairs({ "cameraModes", "visualEffects", "letterboxPage", "tintPage", "styleGeneral",
 				"cards", "emoteVision", "teleportVision", "handleFishing", "musicInCinematic", "handleQuality",
-				"handleHealVision", "rollWindow", "cardDuelOn", "cardLevelUpOn", "storyZoneCard", "mouseover",
+				"handleHealVision", "rollWindow", "cardDuelOn", "cardLevelUpOn", "storyZoneCard",
 				"shoulderCam", "skyrideCam" }) do
 				if ns.DEFAULTS[key] ~= nil and hide[key] ~= false then
 					print("problem\tAuto-Hide UI: " .. key .. " is on")

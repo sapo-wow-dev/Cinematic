@@ -16,7 +16,6 @@ Auto-Hide UI|handlePlateStyle=false
 Auto-Hide UI|handleQuality=false
 Auto-Hide UI|irStyle=false
 Auto-Hide UI|letterboxPage=false
-Auto-Hide UI|mouseover=false
 Auto-Hide UI|musicInCinematic=false
 Auto-Hide UI|plateCastStyle=false
 Auto-Hide UI|plateNameStyle=false

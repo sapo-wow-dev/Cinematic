@@ -463,8 +463,8 @@ local DEMOS = {
 	-- (Mouseover: above. Only with your frames looked after.)
 	mouseover = { seconds = HOVER_FADE + HOVER_SHOW + HOVER_AFTER + 1.5, fade = true,
 		start = StartHoverDemo, stop = StopHoverDemo,
-		-- (Mouseover on while it plays: a level with it off (Auto-Hide UI)
-		-- still shows it, and its tile keeps its switch, 2026-11-20.)
+		-- (Mouseover on while it plays: a level with it off still shows it,
+		-- and its tile keeps its switch, 2026-11-20.)
 		switches = { "mouseover" },
 		blocked = function()
 			if not (ns.ProfileChosen() and ns.AnyFramePageOn and ns.AnyFramePageOn()) then

@@ -300,10 +300,12 @@ ns.BUILTIN_PROFILES = {
 		-- own spelling, "Invisibilty".)
 		icon = "Interface\\Icons\\Spell_Magic_LesserInvisibilty",
 		tip = L["Just your UI hiding. It fades away and comes right back for a fight or a quest, as in " ..
-			"Balanced, with your bars and frames where you know them. Nothing else: no mouseover, no " ..
-			"cameras, letterbox, tint or weather, no styles, Visions, cards or music."],
+			"Balanced, with your bars and frames where you know them, and pointing at a faded frame brings it " ..
+			"back. Nothing else: no cameras, letterbox, tint or weather, no styles, Visions, cards or music."],
 		picks = { layout = { forever = "preset" }, camera = "off", chat = "lite", sound = "nomusic" },
-		modules = { "ui-pages-only", "mouseover-off" },
+		-- (Mouseover groups on again, the user's ask 2026-11-22: off since
+		-- 2026-11-20, a faded frame never came back for the mouse.)
+		modules = { "ui-pages-only" },
 		-- (Visions, Cameras and Style not even loaded, 2026-11-22: picking it
 		-- unticks their Load boxes and asks to reload, ns.ProfilePartsPicked.)
 		leaveOut = { "visions", "cameras", "style" },
