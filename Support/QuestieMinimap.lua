@@ -50,13 +50,8 @@ local function Plain(value, kind)
 end
 
 -- Whether Questie is loaded at all (the Use Questie DB box greys out without it).
-local function AskLoaded()
-	if C_AddOns and C_AddOns.IsAddOnLoaded then return C_AddOns.IsAddOnLoaded("Questie") end
-	return IsAddOnLoaded and IsAddOnLoaded("Questie")
-end
 function ns.QuestieLoaded()
-	local ok, loaded = pcall(AskLoaded) -- (no closure a call: this is asked every few frames)
-	return ok and loaded == true or (ok and loaded == 1) or false
+	return ns.AddonUp("Questie")
 end
 
 -- Whether the box could ever be used here: Questie is made for the classic

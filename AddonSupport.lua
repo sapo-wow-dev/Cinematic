@@ -28,6 +28,33 @@ ns.ADDON_SHOWN_BY_DEFAULT = {} -- key -> true, from shownByDefault
 -- the same, with what's done for them (works) in place of the columns. about:
 -- the same said at more length, for its tooltip.
 ns.ADDON_NOTES = {}
+
+-- Whether another addon is in, for code outside a setup: ask it before any
+-- of that addon's support runs, on every path (the frames' and plates'
+-- passes, events, timers). Cheap: a yes is kept (an addon can't unload), a no
+-- till the next addon loads, as one can load late (after this one, or on
+-- demand after login). Tools/offline/noaddons.lua checks nothing of an
+-- addon's support runs with it not loaded, and that this follows late loads.
+do
+	local up, notUp = {}, {}
+	local isLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
+	function ns.AddonUp(name)
+		if up[name] then return true end
+		if notUp[name] or not isLoaded then return false end
+		local ok, loaded = pcall(isLoaded, name)
+		if ok and (loaded == true or loaded == 1) then
+			up[name] = true
+			return true
+		end
+		notUp[name] = true
+		return false
+	end
+	-- (A frame of its own, made as this file loads: before the setups' and the
+	-- features' frames, so each addon's ADDON_LOADED clears the no first.)
+	local clearer = CreateFrame("Frame")
+	clearer:RegisterEvent("ADDON_LOADED")
+	clearer:SetScript("OnEvent", function() wipe(notUp) end)
+end
 -- (Their descriptions are made before the language is known: see Locales.lua.)
 ns.OnLanguage(function()
 	ns.TranslateFields(ns.ADDON_FRAMES, "about", "note")

@@ -2616,7 +2616,10 @@ local function GiversFound(now)
 	for _, key in ipairs(GIVER_CHECKS) do
 		local ok, shown, names = false, nil, nil
 		local started = ns.framePassTimes and debugprofilestop()
-		if ns[key] then ok, shown, names = pcall(ns[key], now) end
+		-- (Questie's only with it in: ns.AddonUp, Tools/offline/noaddons.lua.)
+		if ns[key] and (key ~= "QuestieMinimapRevealed" or ns.AddonUp("Questie")) then
+			ok, shown, names = pcall(ns[key], now)
+		end
 		cursor.TimeNote(key, started)
 		if ok and shown then
 			seenAt = now

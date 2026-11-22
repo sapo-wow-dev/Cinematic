@@ -1259,7 +1259,8 @@ do
 			-- (Use Questie DB ticked and Questie readable: only NPCs it shows a
 			-- "!" or "?" for count, so its own low-level setting decides, no
 			-- talking first. nil: not used, the learned list alone.)
-			scan.questie = db.minimapQuestie == true and ns.QuestieGiverNames and ns.QuestieGiverNames() or nil
+			scan.questie = db.minimapQuestie == true and ns.QuestieGiverNames and ns.AddonUp("Questie")
+				and ns.QuestieGiverNames() or nil
 			scan.i = 1
 			return false
 		end

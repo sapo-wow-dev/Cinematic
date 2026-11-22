@@ -966,7 +966,8 @@ function ns.SetPlateAlpha(plate, alpha, bodyAlpha)
 		end
 		frame:SetAlpha(alpha)
 		KeepRaidMarker(frame, alpha, plate)
-		if ns.QuestiePlateFaded then ns.QuestiePlateFaded(plate, alpha) end -- (PlateParts: its icon slides with it)
+		-- (PlateParts: Questie's or EnhanceQoL's icon slides with it; only with one in.)
+		if ns.QuestiePlateFaded and (ns.eqolMarks or ns.AddonUp("Questie")) then ns.QuestiePlateFaded(plate, alpha) end
 	end
 end
 

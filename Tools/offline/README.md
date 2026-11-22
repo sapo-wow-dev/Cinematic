@@ -28,6 +28,14 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
   stand-in: every page opened, every setting changed and put back. The stand-in's stubs make FAIL lines of their own,
   so they're compared with `sweep-baseline-<client>.txt` and only new ones fail it; `--update` saves this run's as
   the baseline. `SWEEP_DEBUG=1` prints one raw line per erroring code line.
+- `noaddons.lua <forever|retail> [--all]`: no other addon's support runs while that addon isn't loaded. Loads with
+  no other addon in (their globals missing), every page on, then runs every update loop, timer and event (stand-in
+  nameplates, CineMode off then on) and counts each call into a `Support/*.lua` function or a function named after
+  a supported addon: each is a LEAK line with its callers, to gate with `ns.AddonUp(name)` (AddonSupport.lua). It
+  fails too if the drive missed a hot path (frames, plates, plate fades, minimap reveal), and checks addons loading
+  late (after Cinematic, after login): `ns.AddonUp` says so at once and Questie's support runs on the same paths
+  again. About 30 s a client. `NOADDONS_SECONDS` sets the drive's length, `NOADDONS_PROGRESS=1` prints its steps
+  and slow or stuck handlers.
 - `partyflicker.lua`: a stand-in for DaylightUI's party tile dimming itself by a secret range answer
   (SetAlphaFromBoolean), checked against our fade: its dim kept while not faded, our fade back at once while faded.
   An optional .toc argument runs it on other code (a copy with an older Frames.lua, say).

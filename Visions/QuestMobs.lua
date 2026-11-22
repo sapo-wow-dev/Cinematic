@@ -979,7 +979,7 @@ function ns.RefreshTargetQuestIcon()
 		targetIcon:Hide()
 	end
 	-- (Ours winning over Questie's: its icon there made see-through. See Support/Questie.lua.)
-	if ns.QuestieTargetIcon then
+	if ns.QuestieTargetIcon and ns.AddonUp("Questie") then
 		ns.QuestieTargetIcon(show and targetIcon ~= nil)
 	end
 end

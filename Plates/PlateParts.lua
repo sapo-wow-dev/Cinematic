@@ -1547,11 +1547,14 @@ function RefreshQuestIcon(plate)
 	local icon = questIcons[plate]
 	local personal = plate == PersonalPlate()
 	local unit = not personal and (plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)) or nil
-	local questie = not personal and QuestieIcon(plate)
+	-- (Questie's and EnhanceQoL's parts only with them in: ns.AddonUp.)
+	local questieUp = ns.AddonUp("Questie")
+	local questie = not personal and questieUp and QuestieIcon(plate)
 	local stay = questie and ns.Setting("questieMoveIcons") == false
 	-- (EnhanceQoL's quest "!": held while Addon Support moves it. See ns.EQoLMark.)
-	local eqol = not personal and ns.EQoLMark(plate)
-	if level > 0 and (not (unit and ns.IsQuestMob(unit)) or GameIconShows(plate, unit) or ns.QuestieMarks(unit)) then
+	local eqol = not personal and ns.eqolMarks and ns.EQoLMark(plate)
+	if level > 0 and (not (unit and ns.IsQuestMob(unit)) or GameIconShows(plate, unit)
+		or (questieUp and ns.QuestieMarks(unit))) then
 		level = 0
 	end
 	if level <= 0 and (not questie or stay) and not eqol then
@@ -3233,7 +3236,7 @@ watcher:SetScript("OnEvent", function(_, event, unit)
 			end
 			near.left[guid] = nil
 		end
-		if _G.QuestieLoader then
+		if ns.AddonUp("Questie") then
 			ns.FindQuestieIconSoon(plate)
 		end
 		-- (EnhanceQoL makes its "!" as the plate comes, after us or before.)
@@ -3668,7 +3671,7 @@ function ns.UpdatePlateParts(active, elapsed, cinematic)
 			end
 		end
 	end
-	if _G.QuestieLoader and GetTime() >= (ns.questieIconsAt or 0) and ns.Setting("questieMoveIcons") ~= false then
+	if ns.AddonUp("Questie") and GetTime() >= (ns.questieIconsAt or 0) and ns.Setting("questieMoveIcons") ~= false then
 		ns.questieIconsAt = GetTime() + QUEST_ICONS_EVERY
 		for _, plate in ipairs(C_NamePlate and C_NamePlate.GetNamePlates and C_NamePlate.GetNamePlates() or {}) do
 			if ns.Reachable(plate) and not QuestieIcon(plate) and FindQuestieIcon(plate) then

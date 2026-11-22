@@ -1274,7 +1274,7 @@ local function Competitor()
 			return name
 		end
 	end
-	if ElvUIRolls() then
+	if ns.AddonUp("ElvUI") and ElvUIRolls() then
 		return "ElvUI's Loot Roll"
 	end
 	if _G.GroupLootFrame_OpenNewFrame and UIParent.IsEventRegistered then

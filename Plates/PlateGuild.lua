@@ -458,7 +458,8 @@ local function PlateQuestGiver(plate, unit)
 	end
 	questUnit[plate], questAt[plate] = guid, now
 	local giver = false
-	local questie = ns.db.nameServiceQuestie == true and ns.QuestieGiverNames and ns.QuestieGiverNames()
+	local questie = ns.db.nameServiceQuestie == true and ns.QuestieGiverNames and ns.AddonUp("Questie")
+		and ns.QuestieGiverNames()
 	if questie then
 		-- (Questie's own settings decide: its level filter, for one.)
 		local okName, name = pcall(UnitName, unit)
