@@ -216,8 +216,20 @@ do
 		-- short name, ticks only under the pointer or while one's ticked.
 		Check("the bar's Otherwise looks like the bar (gold), its default too", bar.cells[3].style == "bar", bar.cells[3].style)
 		Check("columns 120 at most", grid.layout.colW <= 120, grid.layout.colW)
-		Check("add column shown, narrow with groups", grid.layout.plusShown and grid.layout.plusW == 70
-			and grid.plus.text:GetText() == ns.L["+ Group"], grid.plus.text:GetText())
+		Check("+ Add group: a small pill at the headings' end with groups", grid.layout.plusShown and grid.plus:IsShown()
+			and not grid.addCard:IsShown() and grid.plus.text:GetText() == ns.L["Add scene"], grid.plus.text:GetText())
+		-- The restyle (2026-11-22): pills in each choice's color, a band only when set.
+		Check("a set cell has its band in its color", (function()
+			ns.SetCooldownCell("spell", IMMOLATE, g1.id, "ready")
+			grid.Layout()
+			local c = im.cells[1]
+			local ok = c.style == "own" and c.band.mid:IsShown() and c.icon:IsShown() and c.mode == "ready"
+			ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
+			grid.Layout()
+			return ok
+		end)())
+		Check("a following cell: no band, still its icon", not im.cells[1].band.mid:IsShown() and im.cells[1].icon:IsShown())
+		Check("the bar's row: its gold band and what it is", bar.band:IsShown() and bar.sub:IsShown() and not im.sub:IsShown())
 		Check("bar's row: Essential bar", bar.label:GetText() == ns.L["%s bar"]:format(ns.L["Essential"]), bar.label:GetText())
 		local function NotOver(row)
 			for _, frame in ipairs({ row.name, row.check, unpack(row.cells) }) do
@@ -240,8 +252,8 @@ do
 			for _, child in ipairs({ grid:GetChildren() }) do
 				if child.col and child.col.other and child.sub then otherHead = child end
 			end
-			Check("no groups: + Add a group, wide, saying what a group is", grid.layout.plusW == 176
-				and grid.plus.text:GetText() == ns.L["+ Add a group"] and grid.plus.sub:GetText() ~= "")
+			Check("no groups: the card saying what a group is, no pill", grid.addCard:IsShown() and not grid.plus:IsShown()
+				and grid.addCard.title:GetText() == ns.L["Icons show the same in every scene"])
 			Check("no groups: no in-use dot on Otherwise", otherHead and not otherHead.dot:IsShown())
 			db.cooldownPlaceGroups = kept
 			ns.CooldownRuleFactsStale()

@@ -186,7 +186,7 @@ ns.TestKit.Define({
 				("here's group never used %s, Otherwise never used %s"):format(tostring(trouble[2] and trouble[2].kind),
 				tostring(otherDead)))
 		end },
-		{ key = "page", proven = "cdmgrid run 5 (2026-11-22): PASS, the look fixed in the shots (with groups and none)", title = "the page: the grid on the spell's bar", run = function(r)
+		{ key = "page", proven = "cdmgrid run 8 (2026-11-22, full): PASS, grid, no-scenes card in the shots", title = "the page: the grid on the spell's bar", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -210,16 +210,17 @@ ns.TestKit.Define({
 			local kept = ns.db.cooldownPlaceGroups
 			ns.db.cooldownPlaceGroups = {}
 			ns.CooldownRuleFactsStale()
-			grid.Layout()
+			grid.Changed()
 			r:Sleep(0.3)
-			r:Verdict(grid.layout.plusW == 176 and grid.plus:IsVisible() and grid.plus.text:GetText() == ns.L["+ Add a group"],
-				("no groups: add column %d wide, %s"):format(grid.layout.plusW, tostring(grid.plus.text:GetText())))
+			r:Verdict(grid.addCard:IsVisible() and not grid.plus:IsVisible(),
+				("no groups: the card shown %s, the small + Add group hidden %s"):format(tostring(grid.addCard:IsVisible()),
+				tostring(not grid.plus:IsVisible())))
 			r:Shot("no groups yet", { behind = panel })
 			ns.db.cooldownPlaceGroups = kept
 			ns.CooldownRuleFactsStale()
-			grid.Layout()
+			grid.Changed()
 		end },
-		{ key = "choices", proven = "cdmgrid run 5 (2026-11-22): PASS, strip seen in the shot", title = "a cell's choices", run = function(r)
+		{ key = "choices", proven = "cdmgrid run 8 (2026-11-22, full): PASS, pills in the shot", title = "a cell's choices", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -244,7 +245,7 @@ ns.TestKit.Define({
 			r:Shot("the choices, When ready picked", { behind = panel })
 			Click(row.cells[j])
 		end },
-		{ key = "editor", proven = "cdmgrid run 5 (2026-11-22): PASS, editor seen in the shot", title = "a group's editor", run = function(r)
+		{ key = "editor", proven = "cdmgrid run 8 (2026-11-22, full): PASS, editor in the shot", title = "a group's editor", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -258,7 +259,7 @@ ns.TestKit.Define({
 			r:Shot("the group editor", { behind = panel })
 			Click(head)
 		end },
-		{ key = "ticked", proven = "cdmgrid run 5 (2026-11-22): PASS, bar seen in the shot", title = "ticked rows: set them all", run = function(r)
+		{ key = "ticked", proven = "cdmgrid run 8 (2026-11-22, full): PASS, bar in the shot", title = "ticked rows: set them all", run = function(r)
 			local grid, panel = OpenPage(r)
 			if not grid then return end
 			local row = RowOf(grid, test.spell)
@@ -268,7 +269,7 @@ ns.TestKit.Define({
 			r:Shot("one row ticked", { behind = panel })
 			Click(grid.bulkButtons.clear)
 		end },
-		{ key = "look", proven = "cdmgrid run 5 (2026-11-22): PASS, Look and back from it in the shots", title = "Look", run = function(r)
+		{ key = "look", proven = "cdmgrid run 8 (2026-11-22, full): PASS, Look and back in the shots", title = "Look", run = function(r)
 			local grid, panel = OpenPage(r)
 			if not grid then return end
 			Click(grid.lookSwitch)
