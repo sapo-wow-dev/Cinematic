@@ -360,6 +360,26 @@ function ns.CooldownGroupTrouble()
 	return trouble, all >= #PLACES * 2
 end
 
+-- A bar's cells that can never take effect: set in a scene that never
+-- applies or has no places yet. bar: its group; kind: "spell" or "buff" for
+-- its rows; keys: their IDs. Gives { { key, scene name, why } } (the bar's
+-- own cells with key = bar). For the page's bar tabs (a warning on them,
+-- 2026-11-22: "when something doesnt apply can we add a warning... on the tab").
+function ns.CooldownDeadCells(bar, kind, keys)
+	local found = {}
+	local trouble = ns.CooldownGroupTrouble()
+	for i, group in ipairs(ns.CooldownPlaceGroups()) do
+		local t = trouble[i]
+		if t then
+			if ns.CooldownCell("group", bar, group.id) then found[#found + 1] = { bar, ns.CooldownGroupName(group), t.kind } end
+			for _, key in ipairs(keys or {}) do
+				if ns.CooldownCell(kind, key, group.id) then found[#found + 1] = { key, ns.CooldownGroupName(group), t.kind } end
+			end
+		end
+	end
+	return found
+end
+
 -- /cine debug cooldowns' first lines: where you are, the groups with the one
 -- in use, and each row's cells.
 function ns.ReportCooldownRules()

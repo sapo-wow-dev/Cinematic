@@ -219,6 +219,23 @@ do
 		-- short name, ticks only under the pointer or while one's ticked.
 		Check("the bar's Otherwise looks like the bar (gold), its default too", bar.cells[3].style == "bar", bar.cells[3].style)
 		Check("columns 120 at most", grid.layout.colW <= 120, grid.layout.colW)
+		-- The bar's tab warns when a cell on it never takes effect (2026-11-22).
+		do
+			local tabs = select(4, ns.CdmPageGrid())
+			local tab = tabs and tabs[1]
+			Check("no warning on the tab to start", tab and not (tab.warnMark and tab.warnMark:IsShown()))
+			local dead = ns.AddCooldownGroup()
+			dead.places, dead.combat = { dungeon = true }, "in" -- (Group content, first, takes it all)
+			ns.SetCooldownCell("spell", CORRUPTION, dead.id, "proc")
+			grid.Changed()
+			Check("a cell in a scene that never applies: ! on the tab", tab and tab.warnMark and tab.warnMark:IsShown()
+				and tab.warnLines and tab.warnLines[1]:find(dead.name, 1, true) ~= nil, tab and tab.warnLines and tab.warnLines[1])
+			ns.SetCooldownCell("spell", CORRUPTION, dead.id, nil)
+			grid.Changed()
+			Check("cleared: no ! on the tab", tab and not tab.warnMark:IsShown())
+			ns.RemoveCooldownGroup(dead.id)
+			grid.Changed()
+		end
 		Check("+ Add group: a small pill at the headings' end with groups", grid.layout.plusShown and grid.plus:IsShown()
 			and not grid.addCard:IsShown() and grid.plus.text:GetText() == ns.L["Add scene"], grid.plus.text:GetText())
 		-- The restyle (2026-11-22): pills in each choice's color, a band only when set.

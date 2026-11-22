@@ -16517,6 +16517,12 @@ local function CreateCooldownPanel()
 		Enabled = function() return Handled() and true or false end,
 		Changed = function()
 			FitPanel()
+			-- (Each shown bar tab's warning again: a click can make or clear one.)
+			if grid.TabWarning and groupTabs then
+				for i, group in ipairs(GROUP_ORDER) do
+					if groupTabs[i]:IsShown() then grid.TabWarning(groupTabs[i], group) end
+				end
+			end
 			Refresh()
 			FitContentHeight(content)
 		end,
@@ -16535,6 +16541,59 @@ local function CreateCooldownPanel()
 		FitPanel()
 	end
 	controls[#controls + 1] = grid
+
+	-- A bar's tab warns (an amber "!", its tooltip saying what) when a cell on
+	-- it can never take effect: set in a scene that never applies or has no
+	-- places (ns.CooldownDeadCells; the user, 2026-11-22).
+	local GetSpellName = (C_Spell and C_Spell.GetSpellName) or function(id) return (GetSpellInfo(id)) end
+	local function TabWarning(tab, group)
+		if not tab.warnMark then
+			tab.baseW = tab:GetWidth()
+			tab.warnMark = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+			tab.warnMark:SetText("!")
+			tab.warnMark:SetTextColor(0.88, 0.65, 0.29)
+			tab.warnMark:SetPoint("RIGHT", tab, "RIGHT", -5, 1)
+			tab:HookScript("OnEnter", function(self)
+				local lines = self.warnLines
+				if not lines then return end
+				if not GameTooltip:IsOwned(self) then
+					GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+					GameTooltip:SetText(self:GetText() or "", 1, 0.82, 0)
+				end
+				GameTooltip:AddLine(L["Set here but never takes effect:"], 0.88, 0.65, 0.29, true)
+				for _, line in ipairs(lines) do GameTooltip:AddLine(line, 0.9, 0.88, 0.84, true) end
+				GameTooltip:Show()
+			end)
+			tab:HookScript("OnLeave", function() GameTooltip:Hide() end)
+		end
+		local kind = BUFF_GROUP[group] and "buff" or "spell"
+		local dead = ns.CooldownDeadCells(group, kind, groupSpells[group])
+		local lines
+		for i, each in ipairs(dead) do
+			if i > 6 then
+				lines[#lines + 1] = L["and %d more"]:format(#dead - 6)
+				break
+			end
+			local name
+			if each[1] == group then name = GROUP_NAMES[group] or tostring(group)
+			else
+				local ok, spellName = pcall(GetSpellName, each[1])
+				name = ok and type(spellName) == "string" and spellName or tostring(each[1])
+			end
+			lines = lines or {}
+			lines[#lines + 1] = (each[3] == "todo" and L["%s in %s (no places yet)"] or L["%s in %s (never applies)"]):format(
+				name, each[2])
+		end
+		tab.warnLines = lines
+		tab.warnMark:SetShown(lines ~= nil)
+		tab:SetWidth((tab.baseW or tab:GetWidth()) + (lines and 10 or 0))
+		local label = tab:GetFontString()
+		if label then
+			label:ClearAllPoints()
+			label:SetPoint("CENTER", lines and -4 or 0, 1)
+		end
+	end
+	grid.TabWarning = TabWarning
 
 	-- Every group's spells, then those set on their own that aren't in the
 	-- Cooldown Manager now (spells, then buffs).
@@ -16573,6 +16632,7 @@ local function CreateCooldownPanel()
 		for i, group in ipairs(GROUP_ORDER) do
 			local has = groupSpells[group] ~= nil
 			groupTabs[i]:SetShown(has)
+			if has then TabWarning(groupTabs[i], group) end
 			if has and (not shown or group == picked.open) then shown = i end
 		end
 		local group = shown and GROUP_ORDER[shown]
@@ -16728,7 +16788,7 @@ local function CreateCooldownPanel()
 		FitContentHeight(content)
 	end
 	-- (For tests: the grid, and the Open CDM button.)
-	ns.CdmPageGrid = function() return grid, gameCDM, panel end
+	ns.CdmPageGrid = function() return grid, gameCDM, panel, groupTabs end
 
 	local shown = PageShown(Refresh, content)
 	canvas:SetScript("OnShow", function()

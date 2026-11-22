@@ -27,6 +27,8 @@ Tests: Tools/offline/cooldowngrid.lua (retail stand-in, prerelease), Dev/CdmGrid
 
 | Q12 | No Cities or Inns chips (the user: "who cares about combat in cities and inns"); shown only on a scene that has them; one off Anywhere = the other chips' places; a note points to Rule... | forever | yes (both cases in the shots) | run 14 |
 
+| Q13 | A bar's tab warns (amber "!", tooltip naming each) when a cell on it never takes effect (its scene never applies or has no places) | forever | yes ("Essential !" in the shot, its line right) | run 15 gallery |
+
 Proven: all 10 steps. Left: one `full` run before the commit. Any step sets up its own test group (Setup) when the steps before are left out.
 
 ## Runs
@@ -46,3 +48,5 @@ Proven: all 10 steps. Left: one `full` run before the commit. Any step sets up i
 | 12 | 2026-11-22 | /cine debug cdmgrid | Q11 mostly: 6 PASS, 0 errors, 12 shots: the neutral look reads well | from the shots: the bar row's "every spell follows this row" ran under the first cell (now "for every spell", kept in its column); "never applies" sat on a wrapped name at five scenes (one line when there's a note); Look's hint still said Gold (reworded) |
 | 13 | 2026-11-22 | /cine debug cdmgrid | Q11 yes: 6 PASS, 0 errors; "for every spell" in its column, one-line names with notes, Look's hint right | none (a mob pulled near the end; no effect) |
 | 14 | 2026-11-22 | /cine debug cdmgrid full | Q11, Q12 yes: 18 PASS, 0 errors; no town chips with the Rule note, Town keeps its chips lit; committed | none |
+| 15 | 2026-11-22 | /cine debug cdmgrid | Q13 yes: 3 PASS, 0 errors | none |
+| 16 | 2026-11-22 | /cine debug cdmgrid full | all: 19 PASS, 0 errors; committed | none |

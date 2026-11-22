@@ -288,7 +288,7 @@ ns.TestKit.Define({
 			r:Verdict(not grid.extras:IsShown(), "back to When it shows: the bar's looks line gone")
 			r:Shot("back from Look", { behind = panel })
 		end },
-		{ key = "gallery", proven = "cdmgrid run 13 (2026-11-22): PASS, every setup in the neutral look looked at", title = "the look, setup by setup (screenshots)", run = function(r)
+		{ key = "gallery", proven = "cdmgrid run 15 (2026-11-22): PASS, the tab's ! in the shot", title = "the look, setup by setup (screenshots)", run = function(r)
 			-- (The user, 2026-11-22: "evaluate the look for all possible combinations,
 			-- generate a few rows with different options". Each setup on your own bar,
 			-- a screenshot each; everything's put back after.)
@@ -364,6 +364,15 @@ ns.TestKit.Define({
 			db.cooldownPlaceGroups = { DUNGEON, TOWN, PVP, RAID, NEW }
 			Cell("spell", A, 4, "never")
 			Shoot("4 five scenes, icons alone, troubles")
+			-- (A cell in Raid bosses, which never applies: a "!" on the bar's tab.)
+			local tabs = select(4, Grid())
+			local tab
+			for _, each in ipairs(tabs or {}) do
+				if each:IsShown() and each.warnMark then tab = tab or each end
+			end
+			r:Verdict(tab and tab.warnMark:IsShown() and tab.warnLines ~= nil,
+				("tab warning shown %s: %s"):format(tostring(tab and tab.warnMark:IsShown()),
+				tostring(tab and tab.warnLines and table.concat(tab.warnLines, "; "))))
 			-- 5 The pop-up: a cell in the first column (When ready, its parts), then Otherwise's (the right edge).
 			db.cooldownPlaceGroups = { DUNGEON, TOWN, PVP }
 			grid.Changed()
