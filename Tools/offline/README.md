@@ -65,6 +65,9 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `loosesurvey.lua`: `/cine debug loose` (Dev/LoosePartsSurvey.lua, step A of Tools/loose-parts-plan.md) on the
   dev copy: finds exactly the parts under faded frames that ignore their alpha (regions, children, deeper ones),
   not frames with a row of their own or our own detached parts, counts secret answers apart, changes no alpha.
+- `quietblock.lua`: Settings opened in a fight with Forever's gamepad UI: its blocked lines are known by their stack
+  (our pick + SetSecureValue) and kept out of the dev error box, a pick from any caller marks the fight, and the
+  game's own Escape > Options still shows (Tools/errors/known.lua `settings-pick-in-fight-gamepad`).
 - `Tools/prerelease.py` (one folder up) runs these checks and the rest side by side before a release, and reads the
   in-game `/cine prerelease` results from the saved settings.
 - `export.lua`: `lua5.1 Tools/offline/export.lua > profiles.json` writes the options pages and their sections, the

@@ -15,6 +15,28 @@ import sys
 import time
 
 WOW = r"C:\Program Files (x86)\World of Warcraft"
+# (Known errors and don'ts, Tools/errors: each error is matched against them.)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tools", "errors"))
+try:
+    import errors as known
+    KNOWN = known.load()
+except Exception as err:  # (lupa missing or known.lua broken: say so, carry on)
+    known, KNOWN = None, None
+    print("known errors not loaded: %s" % err)
+
+
+def show_known(text):
+    if known is None:
+        return
+    hits = known.find(text, KNOWN)
+    if not hits:
+        print("  NEW: no known entry. Root first (why: call, caller, path, rule, pattern), then an entry in"
+              " Tools/errors/known.lua with this error as its example")
+    for e in hits:
+        for line in known.describe(e).splitlines():
+            print("  " + line)
+
+
 LINE = re.compile(r'^\s*"(\d\d:\d\d:\d\d(?:\.\d+)?) (.*)",?\s*$')
 SESSION = "session: ----"
 
@@ -70,6 +92,7 @@ def main():
                     if not entries[j][1].startswith(SESSION):
                         print("  %s %s" % entries[j])
             print(">> %s %s" % (when, text))
+            show_known(text)
     if not found:
         print("no errors in those sessions")
 
@@ -81,6 +104,11 @@ def main():
         print("\ncrash reports in the last day:")
         for c in recent:
             print("  %s  %s" % (time.strftime("%H:%M", time.localtime(os.path.getmtime(c))), c))
+            try:
+                with open(c, encoding="utf-8", errors="replace") as f:
+                    show_known(f.read(200000))
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

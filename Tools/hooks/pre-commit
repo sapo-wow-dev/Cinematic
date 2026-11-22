@@ -33,6 +33,12 @@ else
 fi
 if [ -n "$python" ]; then
 	if [ -f Tools/check-toc.py ]; then "$python" -I Tools/check-toc.py || failed=1; fi
+	# (Known errors' don'ts: code doing what a traced error says never to do,
+	# Tools/errors/known.lua. Not a git checkout here, so it walks the files.)
+	if [ -f Tools/errors/errors.py ]; then
+		"$python" -I Tools/errors/errors.py selftest >/dev/null || { "$python" -I Tools/errors/errors.py selftest; failed=1; }
+		"$python" -I Tools/errors/errors.py check . || failed=1
+	fi
 	if command -v lua5.1 >/dev/null 2>&1; then
 		lua5.1 Tools/offline/check.lua || failed=1
 	else

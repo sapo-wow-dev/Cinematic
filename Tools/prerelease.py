@@ -93,6 +93,7 @@ OFFLINE_TESTS = [
     ("the test box's timers: step, run, time left, took", "Tools/offline/testboxclock.lua"),
     ("a bar's numbers sized to fit their bar (the thin mana bar's)", "Tools/offline/bartextsize.lua"),
     ("mana words are whole numbers, never 338.00003051758 (secret mana after a cast)", "Tools/offline/wholemana.lua"),
+    ("settings opened in a fight: the gamepad UI's blocked lines kept out of the dev box", "Tools/offline/quietblock.lua"),
 ]
 
 

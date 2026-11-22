@@ -1131,6 +1131,15 @@ function ns.TestPrompt(msg, seconds)
 			fill:SetColorTexture(0, 0, 0, 0.92)
 			promptFrame.panel = fill
 		end
+		-- (Over windows too: WorldFrame's children draw under the whole UI, so
+		-- the settings window hid a step's words, 2026-11-22. On UIParent while
+		-- it's shown, WorldFrame only while the UI is hidden; same size on both.)
+		local parent = (UIParent and UIParent:IsShown()) and UIParent or WorldFrame
+		if promptFrame:GetParent() ~= parent then
+			promptFrame:SetParent(parent)
+			if promptFrame.SetIgnoreParentScale then promptFrame:SetIgnoreParentScale(true) end
+			promptFrame:SetFrameStrata("TOOLTIP")
+		end
 		promptFrame.text:SetText(msg)
 		promptFrame:Show()
 		local shown = msg

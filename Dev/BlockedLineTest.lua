@@ -246,8 +246,12 @@ local STEPS = {
 	end, function(hook0, chat0, hook1, chat1)
 		local new = hook1 - hook0 + chat1 - chat0
 		local waits = ns.OptionsOpenAfterFight and ns.OptionsOpenAfterFight(true)
-		local shown = ns.OurSettingsShown and ns.OurSettingsShown()
 		local pad = _G.SmartNavigation ~= nil
+		-- (Gamepad UI: the window opens with no page of ours picked till the
+		-- fight ends; the faked fight never ends, so the pick is dropped.)
+		local pickWaits = ns.SettingsPickAfterFight and ns.SettingsPickAfterFight(true)
+		local shown = ns.OurSettingsShown and ns.OurSettingsShown()
+		if pad then shown = _G.SettingsPanel and ns.Flag(_G.SettingsPanel:IsShown()) and pickWaits end
 		Say(("  gamepad UI %s, page shown %s, waits for the fight's end %s, quiet mark %s"):format(
 			pad and "there" or "not there", tostring(shown), tostring(waits), tostring(ns.settingsOpenedInFight)))
 		-- (opened in the fight, gamepad UI or not: players want them there;
@@ -644,16 +648,18 @@ end)
 -- the left list's blocked gamepad calls are kept out of the dev box). One run,
 -- the test says each step on screen and waits for it (no time limit):
 --   1 open     you start a fight; the test opens the Card Vision page (an
---              AddOns page: the left list moves sets, the case that once
---              tainted it). Window open, dev box +0 (PASS/FAIL); yellow chat
---              lines and how many the box skipped (INFO: what players see)
---   2 after    you close it and end the fight: the quiet mark is off (PASS/FAIL);
+--              AddOns page). With the gamepad UI no page is picked in a
+--              fight (that moved the left list's set under our taint): window
+--              open, the pick waiting for the fight's end, dev box +0
+--              (PASS/FAIL); yellow chat lines, how many the box skipped (INFO)
+--   2 after    you end the fight, window left open: Card Vision comes up
+--              (PASS/FAIL); you close it: the quiet mark is off (PASS/FAIL);
 --              left list taint scan (INFO)
 --   3 next     you start a new fight and open Escape > Options yourself: 0
 --              blocked lines, in the box or in chat (PASS/FAIL; 1756 once)
 -- Into CinematicDB.fightOpenTestLog, a screenshot a step. Run again to stop.
 -- Dev copy only.
-local fight, fightWait
+local fight, fightWait, fightHideHooked
 local function FSay(text)
 	local log = CinematicDB and CinematicDB.fightOpenTestLog
 	if log then log[#log + 1] = ("%s %.1f %s"):format(date("%H:%M:%S"), fight and GetTime() - fight.at or 0, text) end
@@ -723,9 +729,8 @@ local function FightNext()
 	end)
 end
 
-local function FightAfter()
-	FSay("--- 2 of 3: settings closed, fight over ---")
-	ns.TestPrompt("Fight open test: press Escape to close the settings, then end the fight. The test waits.", 3600)
+local function FAfterClosed()
+	ns.TestPrompt("Fight open test: press Escape to close the settings. The test waits.", 3600)
 	FWait(function() return not InCombatLockdown() and not PanelShown() end, function()
 		C_Timer.After(0.5, function()
 			if not fight then return end
@@ -734,6 +739,34 @@ local function FightAfter()
 			local ok, err = pcall(TaintScan, "verdict INFO: after the fight", 10, FSay)
 			if not ok then FSay("  taint scan error: " .. tostring(err)) end
 			FightNext()
+		end)
+	end)
+end
+
+-- (Gamepad UI: our page is picked once the fight ends, if the window is still
+-- open, the clean way, out of combat.)
+local function FightAfter()
+	FSay("--- 2 of 3: fight over, our page comes up, then settings closed ---")
+	ns.TestPrompt("Fight open test: end the fight, leave the settings open. The test waits.", 3600)
+	local openAtEnd
+	FWait(function()
+		openAtEnd = PanelShown()
+		return not InCombatLockdown()
+	end, function()
+		C_Timer.After(1.5, function()
+			if not fight then return end
+			FShot("step 2")
+			local shown = ns.ShownOptionsPage and ns.ShownOptionsPage()
+			local waits = ns.SettingsPickAfterFight and ns.SettingsPickAfterFight()
+			if not openAtEnd then
+				-- (Closed in the fight: nothing to pick, rightly; not this step's check.)
+				FSay(("  verdict SKIP: the window was closed before the fight ended, so no page to check (still waiting %s, false wanted)"):format(
+					tostring(waits)))
+			else
+				FVerdict(shown == "Card Vision" and not waits, ("after the fight: page %q (Card Vision wanted), still waiting %s"):format(
+					tostring(shown), tostring(waits)))
+			end
+			FAfterClosed()
 		end)
 	end)
 end
@@ -757,6 +790,19 @@ function ns.FightOpenTest()
 	end
 	CinematicDB.fightOpenTestLog = {}
 	fight = { at = GetTime(), pass = 0, fail = 0 }
+	-- (Who closes the window: twice it was gone by the fight's end with
+	-- nothing of ours closing it, 2026-11-22. Each hide logged with the fight
+	-- state and the stack; dev copy, this test only.)
+	local panel = _G.SettingsPanel
+	if panel and panel.HookScript and not fightHideHooked then
+		fightHideHooked = true
+		panel:HookScript("OnHide", function()
+			if not fight then return end
+			FSay(("  window hid: in a fight %s, lockdown %s, CineMode %s, stack:\n%s"):format(
+				tostring(UnitAffectingCombat and UnitAffectingCombat("player")), tostring(InCombatLockdown()),
+				tostring(ns.IsCineModeOn and ns.IsCineModeOn()), tostring(debugstack and debugstack(2, 14, 8))))
+		end)
+	end
 	if PanelShown() and HideUIPanel then pcall(HideUIPanel, _G.SettingsPanel) end
 	FSay(("start: %s (game %s), gamepad UI %s, GamePadEnable %s"):format(ns.isRetail and "retail" or "Forever",
 		tostring((select(4, GetBuildInfo()))), _G.SmartNavigation and "there" or "not there",
@@ -784,8 +830,13 @@ function ns.FightOpenTest()
 				local _, stack = ns.DevErrorCount(HOOK)
 				if stack then FSay("  newest blocked stack:\n" .. stack) end
 			end
-			FVerdict(shown == "Card Vision" and box1 == box0, ("page %s (Card Vision wanted), dev box +%d (0 wanted)"):format(
-				tostring(shown), box1 - box0))
+			-- (Gamepad UI: no page pick in a fight, so the left list isn't moved
+			-- under our taint; the page waits for the fight's end. 2026-11-22.)
+			local waits, waitPage = false, nil
+			if ns.SettingsPickAfterFight then waits, waitPage = ns.SettingsPickAfterFight() end
+			FVerdict(PanelShown() and waits and waitPage == "Card Vision" and box1 == box0,
+				("window %s (open wanted), page pick waits for the fight's end: %s (Card Vision wanted), dev box +%d (0 wanted)"):format(
+					PanelShown() and "open" or "closed", waits and tostring(waitPage) or "NO", box1 - box0))
 			FightAfter()
 		end)
 	end)

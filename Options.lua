@@ -20501,6 +20501,21 @@ openAfterFight:SetScript("OnEvent", function(self)
 	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 	ns.OpenOptions(self.page)
 end)
+-- Settings opened in a fight with Forever's gamepad UI (no page picked then,
+-- ns.OpenOptions): our page picked once it ends, if the window is still open.
+local pickAfterFight = CreateFrame("Frame")
+pickAfterFight:SetScript("OnEvent", function(self)
+	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	local panel = _G.SettingsPanel
+	if panel and ns.Flag(panel:IsShown()) then ns.OpenOptions(self.page) end
+end)
+-- (BlockedLineTest.lua: whether a pick waits for the fight's end, and
+-- dropping it.)
+function ns.SettingsPickAfterFight(cancel)
+	local waiting, page = pickAfterFight:IsEventRegistered("PLAYER_REGEN_ENABLED"), pickAfterFight.page
+	if cancel then pickAfterFight:UnregisterEvent("PLAYER_REGEN_ENABLED") end
+	return waiting, page
+end
 -- Settings opened by us in a fight with Forever's gamepad UI: the left list's
 -- gamepad cursor calls (SmartNavigation, SetAttribute) are blocked then, a
 -- yellow "Interface action failed" line each, harmless (the cursor just isn't
@@ -20518,11 +20533,16 @@ function ns.SettingsOpenedInFight(on)
 	if on then fightOpened:RegisterEvent("PLAYER_REGEN_ENABLED") else fightOpened:UnregisterEvent("PLAYER_REGEN_ENABLED") end
 end
 -- Whether a blocked action (its stack) is the one above: skipped, counted.
+-- Known by its stack too (our pick + the gamepad cursor's SetSecureValue), not
+-- only by the flag: a flag one caller had to set missed some (2026-11-22,
+-- Tools/errors/known.lua settings-pick-in-fight-gamepad). The flag still
+-- covers later redraws of the list in that fight (scrolling), with no pick of
+-- ours in their stack.
 ns.quietSettingsBlocks = 0
 function ns.QuietSettingsBlock(stack)
-	if not (ns.settingsOpenedInFight and type(stack) == "string" and stack:find("SmartNavigation", 1, true)) then
-		return false
-	end
+	if type(stack) ~= "string" or not stack:find("SmartNavigation", 1, true) then return false end
+	local ours = stack:find("PickSettingsCategory", 1, true) and stack:find("SetSecureValue", 1, true)
+	if not (ns.settingsOpenedInFight or ours) then return false end
 	ns.quietSettingsBlocks = ns.quietSettingsBlocks + 1
 	return true
 end
@@ -20568,6 +20588,9 @@ function ns.PickSettingsCategory(panel, target)
 	end
 	if type(target) == "number" then target = panel and panel.GetCategory and panel:GetCategory(target) or nil end
 	if panel and panel.SelectCategory and type(target) == "table" then
+		-- (A fight: marked here, for every caller, so the gamepad UI's blocked
+		-- lines stay out of the dev box: ns.QuietSettingsBlock.)
+		if InCombatLockdown() or ns.testFakeFight then ns.SettingsOpenedInFight(true) end
 		if not panel:IsShown() then panel:Show() end
 		panel:SelectCategory(target)
 	elseif panel and not InCombatLockdown() then
@@ -20581,6 +20604,7 @@ end
 
 function ns.OpenOptions(page)
 	page = MOVED_PAGES[page] or page
+	local asked = page -- (as asked, before its hub: picked again after a fight)
 	-- (a UI Manager page: that page, then UI Manager open at it)
 	local hubName = page and HubTab(page)
 	page = hubName or page
@@ -20595,8 +20619,21 @@ function ns.OpenOptions(page)
 		-- whose lines set the gamepad cursor's anchor with SetAttribute, blocked
 		-- in a fight, "Interface action failed" once a line; harmless, and kept
 		-- out of the dev error box: ns.SettingsOpenedInFight.)
-		if panel and panel.SelectCategory and not panel:IsProtected() then
-			if _G.SmartNavigation then ns.SettingsOpenedInFight(true) end
+		if panel and panel.SelectCategory and not panel:IsProtected() and _G.SmartNavigation then
+			-- (Forever's gamepad UI: no page pick in a fight. SelectCategory of
+			-- our page moves the left list to the AddOns set under our taint,
+			-- and the game's own Escape > Options in a later fight then has
+			-- every row blocked, 1756 lines: /cine debug fightopen step 3,
+			-- 2026-11-22, Tools/errors/known.lua settings-list-tainted-escape-
+			-- options. The window opens where the game leaves it; our page is
+			-- picked the clean way (OpenToCategory) when the fight ends, if
+			-- it's still open.)
+			ns.SettingsOpenedInFight(true)
+			panel:Show()
+			pickAfterFight.page = asked
+			pickAfterFight:RegisterEvent("PLAYER_REGEN_ENABLED")
+			ns.Print(L["Cinematic's page comes up when the fight ends"])
+		elseif panel and panel.SelectCategory and not panel:IsProtected() then
 			panel:Show()
 			ns.PickSettingsCategory(panel, line or subpages[page] or category)
 		elseif not (panel and panel:IsShown()) then
