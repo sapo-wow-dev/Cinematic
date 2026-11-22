@@ -30,5 +30,8 @@ Done: Q2-Q5 in 1 run.
 | L3 | In game, no loop from a left-out part's files runs | forever | YES: none (99 files checked); loops 1.675 ms a frame loaded, 0.212 left out; 107 PASS 0 FAIL | run 2 |
 | 2 | 2026-11-22 | /cine debug loadparts | L3: 107 PASS 0 FAIL, 0 errors, 0 blocked | none |
 | 3 | 2026-11-22 | /cine debug loadparts full | final full run: 103 PASS 0 FAIL, 0 errors, 0 blocked; no loop of theirs; loops 0.490 -> 0.088 ms a frame | none |
+| 4 | 2026-11-22 | /cine debug loadparts | the four General pages loaded, on and off: Load box clear on the page, on the off card when off (8 shots looked at); 13 PASS 0 FAIL | none |
+| 5 | 2026-11-22 | /cine debug loadparts full | full run: 113 PASS 0 FAIL, all steps, back after both reloads | none |
+| 6 | 2026-11-22 | /cine debug loadparts | the off card's box moved inside the card (it hung over the edge; r:Overlaps now flags past-the-edge): 8 PASS, 8 shots looked at | none |
 
-Proven (left out of plain runs since, 2026-11-22): all four parts, the Reload box question and shot, the screen shot, ticking back and the reload after (the back step). `/cine debug loadparts full` runs them all: the final run.
+Proven (left out of plain runs since, 2026-11-22): all four parts, the Reload box question and shot, the screen shot, ticking back and the reload after (the back step). `/cine debug loadparts full` runs them all: the final run. Since run 4 also the layout step (each General page on and off).

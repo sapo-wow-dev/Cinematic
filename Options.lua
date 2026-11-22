@@ -3890,6 +3890,30 @@ do
 			end
 			ns.PaintPageSwitches()
 		end)
+		-- A part's General page off (Style, Camera, Atmosphere...): its Load box
+		-- on the card too, under the button, so it can be left out while off
+		-- (the user, 2026-11-22: the card hid the page's own box).
+		local load = ns.SkinCheck(CreateFrame("CheckButton", nil, box, "UICheckButtonTemplate"))
+		load:SetSize(24, 24)
+		load.label = load.Text or load.text or load:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		load.label:ClearAllPoints()
+		load.label:SetPoint("LEFT", load, "RIGHT", 2, 0)
+		load.label:SetFontObject("GameFontHighlight")
+		load:SetScript("OnClick", function(self)
+			if not self.part then return end
+			ns.SetModuleWanted(self.part, self:GetChecked() and true or false)
+			ns.AskModulesReload()
+			ns.PaintPageSwitches()
+		end)
+		load:SetScript("OnEnter", function(self)
+			if not self.tip then return end
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(self.tip, 1, 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		load:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		load:Hide()
+		card.load = load
 		card.box = box
 		hub.offCard = card
 		return card
@@ -3973,7 +3997,35 @@ do
 		card.button:SetWidth(math.max(150, (type(textW) == "number" and textW or 0) + 24))
 		card.button.switch = box
 		card.button:SetShown(not stuck)
-		card.box:SetHeight(math.max(32, card.title:GetStringHeight() + 3 + card.text:GetStringHeight()) + 20)
+		local height = math.max(32, card.title:GetStringHeight() + 3 + card.text:GetStringHeight()) + 20
+		-- (Its part's Load box, under the button: LoadPartBox's page.)
+		local loadPart = not game and tile.canvas and tile.canvas.content and tile.canvas.content.loadPart
+		local load = card.load
+		load.part = loadPart and loadPart.part or nil
+		if loadPart then
+			load.label:SetText(loadPart.texts.label)
+			load.tip = loadPart.texts.tip
+			load:SetChecked(ns.ModuleWanted(loadPart.part))
+			load:ClearAllPoints()
+			local labelW = math.ceil(load.label:GetStringWidth() or 80)
+			-- (The button and the box stacked at the top right, the card as tall
+			-- as both: the box sat on the card's bottom edge, 2026-11-22.)
+			card.button:ClearAllPoints()
+			if card.button:IsShown() then
+				card.button:SetPoint("TOPRIGHT", card.box, "TOPRIGHT", -12, -10)
+				load:SetPoint("TOPRIGHT", card.button, "BOTTOMRIGHT", -(labelW + 2), -4)
+				height = math.max(height, 10 + 24 + 4 + 24 + 10)
+			else
+				card.button:SetPoint("RIGHT", -12, 0)
+				load:SetPoint("RIGHT", card.box, "RIGHT", -(labelW + 14), 0)
+			end
+		else
+			card.button:ClearAllPoints()
+			card.button:SetPoint("RIGHT", -12, 0)
+		end
+		load:SetShown(loadPart and true or false)
+		ns.offCardLoad = load -- (/cine debug loadparts: the box as the card shows it)
+		card.box:SetHeight(height)
 		-- A page split into tabs (HUD, Gamepad, Cursor) keeps them over the
 		-- card, still clickable, so the other tabs' pages are a click away.
 		local tabs = tile.canvas.content and tile.canvas.content.pageTabs
@@ -16000,16 +16052,11 @@ end
 -- the note right of the box, not under the intro (a page with things there).
 -- Returns the box, the note and its refresh (for the page's OnShow).
 function ns.LoadPartBox(content, title, intro, part, texts)
+	content.loadPart = { part = part, texts = texts } -- (the page's off card has the box too: PaintOffCard)
 	local load = ns.SkinCheck(CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate"))
 	load:SetSize(26, 26)
 	-- (That switch is made as the page first shows, so placed again then. Left
 	-- out: no switch, right of the title's "?".)
-	local function PlaceLoad()
-		load:ClearAllPoints()
-		load:SetPoint("LEFT", content.pageSwitch or content.pageHelpLast or content.pageHelp or title, "RIGHT", 12, 0)
-	end
-	PlaceLoad()
-	content:HookScript("OnShow", PlaceLoad) -- (after the switch's own OnShow: hooked later)
 	local loadText = load.Text or load.text
 	if not loadText then
 		loadText = load:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -16019,19 +16066,46 @@ function ns.LoadPartBox(content, title, intro, part, texts)
 	loadText:SetText(texts.label)
 	Tooltip(load, texts.tip)
 	local loadNote = Label(content, "GameFontHighlightSmall", "")
-	if texts.beside then
-		loadNote:SetPoint("LEFT", loadText, "RIGHT", 12, 0)
-		loadNote:SetWidth(320)
-	else
-		loadNote:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -10)
-		loadNote:SetWidth(580)
+	-- A tabbed page (Style > General) drops its header, the title's "?" and
+	-- On/Off with it (ns.DropPageHeader: its tab turns it on and off): the box
+	-- goes at the right end of the tab row instead (the user, 2026-11-22: it sat
+	-- on the Themes tab, anchored to the hidden "?"), its note left of it and
+	-- only while a reload is pending.
+	local function Tabbed()
+		local tabs = content.pageTabs
+		return tabs and tabs.panel and content.pageTitle and content.pageTitle.dropped and tabs or nil
 	end
-	loadNote:SetJustifyH("LEFT")
+	local function PlaceLoad()
+		load:ClearAllPoints()
+		loadNote:ClearAllPoints()
+		local tabs = Tabbed()
+		if tabs then
+			local width = math.ceil(loadText:GetStringWidth() or 80)
+			load:SetPoint("BOTTOMRIGHT", tabs.panel, "TOPRIGHT", -(width + 6), 2)
+			loadNote:SetPoint("RIGHT", load, "LEFT", -8, 0)
+			loadNote:SetWidth(220)
+			loadNote:SetJustifyH("RIGHT")
+			return
+		end
+		load:SetPoint("LEFT", content.pageSwitch or content.pageHelpLast or content.pageHelp or title, "RIGHT", 12, 0)
+		if texts.beside then
+			loadNote:SetPoint("LEFT", loadText, "RIGHT", 12, 0)
+			loadNote:SetWidth(320)
+		else
+			loadNote:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -10)
+			loadNote:SetWidth(580)
+		end
+		loadNote:SetJustifyH("LEFT")
+	end
+	PlaceLoad()
+	content:HookScript("OnShow", PlaceLoad) -- (after the switch's own OnShow: hooked later)
 	local function LoadState()
 		local wanted, loaded = ns.ModuleWanted(part), ns.ModuleLoaded(part)
 		load:SetChecked(wanted)
 		if wanted ~= loaded then
 			loadNote:SetText(L["Takes effect after a reload."])
+		elseif Tabbed() then
+			loadNote:SetText("") -- (the tab row: no room for it, its tooltip says it)
 		else
 			loadNote:SetText(loaded and texts.on or texts.off)
 		end

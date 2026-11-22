@@ -143,11 +143,24 @@ Inside a step (each `run = function(r)`, in a coroutine):
 | `r:Click(text, fn, label)` | a call the game takes only from your click (SendChatMessage...): a button, `fn(r)` runs **in the click**, returns `ok, ...`. Made straight from a step it runs in a timer's `resume()` and is blocked ("blocked: resume()"; the kit then says so) |
 | `buttons = {...}` (WaitFor opts, Prompt, a step's `buttons`) | **buttons, never "type /cine ..."**: answers (`"Yes"`: the wait returns `"button", "Yes"`), `{ label, fn }`, `{ kind = "editmode" }` (opens Edit Mode by a secure click, no taint), `{ kind = "reload" }` (secure /reload; the run picks up at the next step after it). Skip step and Stop are on every step by themselves. A step that needs the player to change a game setting gives the button that opens it. Old tests: `ns.TestKit.ShowButtons(entries)` / `HideButtons()` |
 | `r:Sleep(s)`, `r:Shot(label, { behind = frame or {frames} })` | wait; a paced screenshot (1.5 s before, 1.2 s after); `behind` puts a solid background behind the frame(s) the shot is about, for that shot only (`pad`, `color` optional). **Give every shot of a frame or text a `behind`**: it reads far better than against the world |
+| `r:Overlaps(control, page, { its label })` | what a placed control covers on its page: every visible button, tab, box, slider and line of text it overlaps (empty: clear). **Every control you place or move on a settings page gets it**, in game (offline stand-ins have no layout) |
 | `r:Proven(what)` | true (logged "proven, not checked again") unless the run is `full`: `if not r:Proven("seen in run 3") then <check or question> end` |
 | `r:Log(text)` | anything else worth having |
 
 Never call `Sleep` / `Shot` / `WaitFor` inside a pcall (Lua 5.1 can't yield
 across it).
+
+### A menu change: every state the page can be in
+
+A control placed or moved on a settings page is checked in game, by the
+test, in **every state that page can be in**, not just the one the change is
+about: its part loaded and left out, its switch on and off, tabbed (header
+dropped, ns.DropPageHeader) and not, each client. For each: open the page
+(`ns.OpenOptions`), `r:Overlaps` on the control, inside the page's width, no
+off card over it (`ns.PageOffCardWanted`), a shot behind `SettingsPanel`.
+(2026-11-22: Load Style sat on the Themes tab with Style loaded; the tests
+only ever opened the page with Style left out. The user: "checking the menu
+should be a common step in development".)
 
 ### Prove once, then leave it out
 

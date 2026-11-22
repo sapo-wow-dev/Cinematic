@@ -31,20 +31,20 @@ local PARTS = {
 		popup = "CINEMATIC_LOAD_PARTS", setting = "cardSleepBagOn", why = "visions", row = "visions:loaded",
 		pages = { "Heal Vision", "Damage Vision", "Quest Vision", "Roll Vision", "Duel Vision", "Emote Vision",
 			"Card Vision", "Visions Style", "Vitals Vision", "Death Vision", "Teleport Vision", "Vitals Style" },
-		frames = { "CinematicQuestItemButton", "CinematicQuestTalkClearTarget" }, proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
+		frames = { "CinematicQuestItemButton", "CinematicQuestTalkClearTarget" }, switch = "visionsAll", proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 	{ part = "cameras", label = "Cameras", general = "Cameras", box = "loadCamerasBox",
 		popup = "CINEMATIC_LOAD_PARTS", setting = "walkCine", why = "cameras", row = "cameras:loaded",
 		pages = { "Scenes", "Triggers", "Camera Scripts", "My Shots", "Shoulder Cam", "Camera Settings" },
-		frames = { "CinematicCameraWheel", "CinematicShoulderEscapeButton" }, proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
+		frames = { "CinematicCameraWheel", "CinematicShoulderEscapeButton" }, switch = "cameraModes", proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 	{ part = "style", label = "Style", general = "Style General", box = "loadStyleBox",
 		popup = "CINEMATIC_LOAD_PARTS", setting = "abSlots",
 		pages = { "Style Themes", "Unit Style", "Action Style", "Nameplate Style", "Name Style", "Tooltip Style",
 			"Tint Style", "Card Styles", "Vitals Style" },
-		frames = { "CinematicSelfText" }, proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
+		frames = { "CinematicSelfText" }, switch = "styleGeneral", proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 	{ part = "atmosphere", label = "Atmosphere", general = "Effects", box = "loadAtmosphereBox",
 		popup = "CINEMATIC_LOAD_PARTS", setting = "letterboxOnDiscover", why = "atmosphere", row = "atmosphere:loaded",
 		pages = { "Tint", "Letterbox", "Graphics+", "Audio", "Tint Style", "Letterbox Style" },
-		frames = { "CinematicTint", "CinematicLetterbox", "CinematicFocus" }, proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
+		frames = { "CinematicTint", "CinematicLetterbox", "CinematicFocus" }, switch = "visualEffects", proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 }
 
 ns.loadPartsParts = PARTS -- (Tools/offline/loadparts.lua: one marked new, the quick run)
@@ -215,7 +215,8 @@ ns.TestKit.Define({
 	key = "loadPartsTest",
 	title = "Load Visions, Cameras, Style and Atmosphere",
 	about = "Visions, Cameras, Style and Atmosphere left out and back: you click Reload twice, the test does the rest",
-	settings = { "cardSleepBagOn", "walkCine", "abSlots", "letterboxOnDiscover", "loadVisions", "loadCameras",
+	settings = { "visionsAll", "cameraModes", "styleGeneral", "visualEffects",
+		"cardSleepBagOn", "walkCine", "abSlots", "letterboxOnDiscover", "loadVisions", "loadCameras",
 		"loadStyle", "loadAtmosphere" },
 	context = function()
 		local start = ns.moduleStart or {}
@@ -293,6 +294,60 @@ ns.TestKit.Define({
 			data.memOn, data.framesOn = MemoryKB(), FrameCount()
 			r:Log(("memory %.0f KB, %d frames in the game"):format(data.memOn or -1, data.framesOn))
 			r:Verdict(CinematicDB.moduleDefaults == nil, "no copy of their defaults while they're on")
+		end },
+		-- Each General page as you see it, its part loaded, in both states of
+		-- its switch (the user, 2026-11-22: Load Style sat on the Themes tab, and
+		-- with a page off its off card hid the box; the runs before opened the
+		-- pages with their parts left out only, and IsVisible() said "shown"
+		-- under the card). On: no off card, the page's own box clear (r:Overlaps)
+		-- and inside the page. Off: the off card, its Load box for this part,
+		-- ticked as wanted, clear. A shot of each.
+		{ key = "layout", title = "each General page, loaded, on and off",
+			proven = "loadparts 2026-11-22 14:19: all four on and off, the card's box inside it, 8 shots looked at",
+			run = function(r)
+			local function Hide() if ns.padTestBox then ns.padTestBox:Hide() end end
+			local function Back() if ns.padTestBox then ns.padTestBox:Show() end end
+			for _, p in ipairs(PARTS) do
+				if ns.ModuleLoaded(p.part) then
+					r:Set(p.switch, true)
+					if ns.PaintPageSwitches then ns.PaintPageSwitches() end
+					ns.OpenOptions(p.general)
+					r:Sleep(1)
+					local canvas = ns.settingsCanvases and ns.settingsCanvases[p.general]
+					local box = canvas and canvas[p.box]
+					local label = box and (box.Text or box.text)
+					local card = ns.PageOffCardWanted(p.general)
+					local hits = box and box:IsVisible() and r:Overlaps(box, canvas, { label }) or { "no box shown" }
+					local inside = box and canvas and box:GetRight() and canvas:GetRight()
+						and (label and label:GetRight() or box:GetRight()) <= canvas:GetRight() + 1
+					r:Verdict(card == false and #hits == 0 and inside,
+						("%s on: off card %s, its Load box inside the page %s, over %s"):format(p.general, tostring(card),
+						tostring(inside), #hits > 0 and table.concat(hits, ", ") or "nothing"))
+					Hide()
+					r:Shot(p.general .. " on, " .. p.label .. " loaded", { behind = _G.SettingsPanel })
+					Back()
+					-- Off: the card over the page, the box on it.
+					r:Set(p.switch, false)
+					if ns.PaintPageSwitches then ns.PaintPageSwitches() end
+					ns.OpenOptions(p.general)
+					r:Sleep(1)
+					card = ns.PageOffCardWanted(p.general)
+					local load = ns.offCardLoad
+					local shown = load and load:IsVisible() and load.part == p.part
+					local cardHits = shown and r:Overlaps(load, load:GetParent(), { load.label }) or { "no box on the card" }
+					r:Verdict(card == true and shown and load:GetChecked() == ns.ModuleWanted(p.part) and #cardHits == 0,
+						("%s off: off card %s, its Load box on it %s (%s), ticked %s, over %s"):format(p.general,
+						tostring(card), tostring(shown), tostring(load and load.part), tostring(load and load:GetChecked()),
+						#cardHits > 0 and table.concat(cardHits, ", ") or "nothing"))
+					Hide()
+					r:Shot(p.general .. " off, its card", { behind = _G.SettingsPanel })
+					Back()
+					r:Set(p.switch, true)
+					if ns.PaintPageSwitches then ns.PaintPageSwitches() end
+				else
+					r:Skip(p.label .. " isn't loaded: its page as loaded can't be seen")
+				end
+			end
 		end },
 		{ key = "off", title = "both Load boxes unticked", run = function(r)
 			if #Active(r) == 0 then return end

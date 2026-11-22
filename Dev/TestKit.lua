@@ -61,6 +61,7 @@
 -- r:WaitFor(text, { seconds = N }). (The user, 2026-11-21: "i want timers".)
 -- Inside a step (it runs in a coroutine): r:Log, r:Verdict, r:Pass, r:Fail,
 -- r:Skip, r:Probe, r:Set (setting, undo saved), r:Sleep, r:Shot, r:Prompt,
+-- r:Overlaps(control, page) (what a placed control covers: check every new one),
 -- r:WaitFor, r:Fields, r:Click (a call the game takes from a click only:
 -- SendChatMessage...; from a step it's "blocked: resume()"). Never call r:Sleep / r:Shot / r:WaitFor from inside
 -- a pcall (Lua 5.1 can't yield across it).
@@ -723,6 +724,84 @@ local function Pick(def, arg)
 		end
 	end
 	return steps, full, left
+end
+
+-- What a control on a settings page overlaps there (or runs past root's
+-- edges): every other visible
+-- control (button, tab, check box, slider, edit box) and every visible line
+-- of text under root, with its name or words. Its own parts and the frames
+-- it sits in don't count. (Load Style sat on the Themes tab, 2026-11-22, and
+-- no test looked: every placed control gets this, in every state of its page.)
+-- Returns a list of "what (where)" strings; empty: clear.
+local OVERLAP_KINDS = { Button = true, CheckButton = true, Slider = true, EditBox = true }
+function Run:Overlaps(frame, root, also)
+	local hits = {}
+	if not (frame and root and frame.GetLeft) then return { "nothing to check" } end
+	-- (Offline stand-ins place every frame alike: no layout to judge there.)
+	if ns.noRealLayout then
+		Say(self, "  overlaps: no real layout here (offline), not judged")
+		return hits
+	end
+	local function Box(f)
+		local l, r, tp, b = f:GetLeft(), f:GetRight(), f:GetTop(), f:GetBottom()
+		if not (l and r and tp and b) then return nil end
+		local s = f:GetEffectiveScale()
+		return l * s, r * s, tp * s, b * s
+	end
+	local mine = {}
+	local function Mark(f)
+		if not f or mine[f] then return end
+		mine[f] = true
+		for _, region in ipairs({ f:GetRegions() }) do mine[region] = true end
+		for _, child in ipairs({ f:GetChildren() }) do Mark(child) end
+	end
+	Mark(frame)
+	for _, extra in ipairs(also or {}) do Mark(extra) end
+	local up = frame:GetParent()
+	while up do mine[up] = true; up = up:GetParent() end
+	local L1, R1, T1, B1 = Box(frame)
+	if not L1 then return { "the control has no place yet" } end
+	-- (Its own label beside it: a check box's Text reaches past the box.)
+	for _, extra in ipairs(also or {}) do
+		local l, r, tp, b = Box(extra)
+		if l then L1, R1, T1, B1 = math.min(L1, l), math.max(R1, r), math.max(T1, tp), math.min(B1, b) end
+	end
+	local function Hit(f)
+		local l, r, tp, b = Box(f)
+		return l and l < R1 - 1 and r > L1 + 1 and b < T1 - 1 and tp > B1 + 1
+	end
+	local function Name(f)
+		local text = f.GetText and f:GetText()
+		if type(text) == "string" and text ~= "" then return ("%q"):format(text:sub(1, 30)) end
+		return f:GetName() or f:GetObjectType()
+	end
+	local function Walk(f)
+		for _, region in ipairs({ f:GetRegions() }) do
+			if not mine[region] and region:GetObjectType() == "FontString" and region:IsVisible()
+				and (region:GetText() or "") ~= "" and Hit(region) then
+				hits[#hits + 1] = "text " .. Name(region)
+			end
+		end
+		for _, child in ipairs({ f:GetChildren() }) do
+			if child:IsVisible() and not mine[child] then
+				if OVERLAP_KINDS[child:GetObjectType()] and Hit(child) then
+					hits[#hits + 1] = child:GetObjectType():lower() .. " " .. Name(child)
+				end
+				Walk(child)
+			elseif child:IsVisible() and child ~= frame then
+				Walk(child)
+			end
+		end
+	end
+	Walk(root)
+	-- (And past the edge of what it's checked in: Load Style on an off card
+	-- hung over the card's bottom border, 2026-11-22, and nothing it covered.)
+	local l, rr, tp, b = Box(root)
+	if l and (L1 < l - 1 or R1 > rr + 1 or T1 > tp + 1 or B1 < b - 1) then
+		hits[#hits + 1] = ("past the edge of %s (by %d px)"):format(Name(root),
+			math.floor(math.max(l - L1, R1 - rr, T1 - tp, b - B1) + 0.5))
+	end
+	return hits
 end
 
 -- In a step: true (and logged) when this check is proven and the run isn't

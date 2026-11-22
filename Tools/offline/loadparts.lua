@@ -99,6 +99,7 @@ EnumerateFrames = function(after)
 	return wow.frames[i + 1]
 end
 Screenshot = function() end
+ns.noRealLayout = true -- (the stand-in's frames all sit alike: r:Overlaps can't judge them)
 local popup = wow.NewObject("Frame", "StaticPopup1")
 popup._shown = false
 rawset(_G, "StaticPopup1", popup)
@@ -128,8 +129,8 @@ local done = text:find("DONE", 1, true) ~= nil
 -- (The test's box under the game's Reload box while that's up: run 2 hid it.)
 -- (The box's step out of all five, after a reload too: it said "step 4/2".)
 local boxText = ns.padTestBox and ns.padTestBox.text and ns.padTestBox.text:GetText()
-if not done and not (type(boxText) == "string" and boxText:find("step %d/5:")) then
-	problems[#problems + 1] = "the test's box doesn't count out of all 5 steps: " .. tostring(boxText)
+if not done and not (type(boxText) == "string" and boxText:find("step %d/6:")) then
+	problems[#problems + 1] = "the test's box doesn't count out of all 6 steps: " .. tostring(boxText)
 end
 if not done and not (ns.padTestBox and ns.padTestBox.placedUnder == popup) then
 	problems[#problems + 1] = "the test's box isn't under the game's Reload box"
