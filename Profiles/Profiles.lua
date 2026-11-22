@@ -577,7 +577,7 @@ function ns.GameSettingsAgreed(after)
 		text = L["To make its features work, Cinematic changes some of your game settings, like nameplates and " ..
 			"names. They go back when you log out. It may also add an Edit Mode layout, which Reset EVERYTHING " ..
 			"(Reset addon on Cinematic's main settings page) deletes, so do that before removing it."],
-		button1 = _G.CONTINUE or L["Continue"], button2 = _G.CANCEL or L["Cancel"],
+		button1 = L["Agree"], button2 = _G.CANCEL or L["Cancel"],
 		OnAccept = function(_, data)
 			ns.db.gameSettingsNoticeSeen = true
 			if data then data() end

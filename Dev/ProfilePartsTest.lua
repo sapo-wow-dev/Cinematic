@@ -11,9 +11,11 @@
 --   1 ready    any left out at the start: all ticked, the box says load
 --              them; you click Reload UI (none: no reload)
 --   (Run 4, 2026-11-22: "make the windows popout at the same location": the
---   boxes all open at the game's spot, the window's top moves; now it moves
---   under any box while one's up, and back. Steps 2 and 4 put the window high,
---   as a drag would, so the box would land on it.)
+--   boxes all open at the game's spot. Moving the window under each box was
+--   wrong: "the cine welcome windows moves down each time a popup shows".
+--   Now the window stays put and the box draws over it (the window one layer
+--   under the game's boxes). Steps 2 and 4 put the window high, as a drag
+--   would, so the box lands on it.)
 --   2 pick     the welcome window open, Auto-Hide UI's card clicked: both
 --              wanted out; the box up, the Load boxes' one, its words, the
 --              game's spot and layer (as the game's other boxes), clear of
@@ -89,26 +91,34 @@ end
 local function WindowHigh()
 	local welcome = rawget(_G, "CinematicWelcome")
 	if not welcome then return nil end
-	welcome.ownPoint = nil
 	welcome:ClearAllPoints()
 	welcome:SetPoint("TOP", UIParent, "TOP", 0, -60)
 	local e = Edges(welcome)
 	return e and e.top
 end
 
--- The window moved under the box while it's up; back where it was after.
-local function CheckUnder(r, what, popup, highTop)
+-- The window stays where it was while the box is up, and the box draws over
+-- it (a higher layer).
+local STRATA = { BACKGROUND = 1, LOW = 2, MEDIUM = 3, HIGH = 4, DIALOG = 5, FULLSCREEN = 6,
+	FULLSCREEN_DIALOG = 7, TOOLTIP = 8 }
+local function CheckStill(r, what, popup, highTop)
 	local welcome = rawget(_G, "CinematicWelcome")
 	local box, win = Edges(popup), Edges(welcome)
+	local boxLayer, winLayer = popup:GetFrameStrata(), welcome and welcome:GetFrameStrata()
 	r:Fields(what .. " window", {
 		top = function() return win and math.floor(win.top + 0.5) end,
 		was = function() return highTop and math.floor(highTop + 0.5) end,
 		boxBottom = function() return box and math.floor(box.bottom + 0.5) end,
-		moved = function() return welcome and welcome.ownPoint ~= nil end,
+		layers = function() return ("box %s, window %s"):format(tostring(boxLayer), tostring(winLayer)) end,
 	})
-	r:Verdict(box and win and win.top <= box.bottom and true or false,
-		("%s: the welcome window moved under the box (window top %.0f, box bottom %.0f, was %.0f)"):format(what,
-		win and win.top or -1, box and box.bottom or -1, highTop or -1))
+	if not (win and highTop) then
+		r:Log(what .. ": the window's place unreadable (offline): not checked")
+	else
+		r:Verdict(math.abs(win.top - highTop) < 2,
+			("%s: the welcome window stayed put (top %.0f, was %.0f)"):format(what, win.top, highTop))
+	end
+	r:Verdict((STRATA[boxLayer] or 0) > (STRATA[winLayer] or 0),
+		("%s: the box draws over the window (box %s, window %s)"):format(what, tostring(boxLayer), tostring(winLayer)))
 end
 
 local function Wanted(r, want, what)
@@ -173,8 +183,9 @@ local function CheckBox(r, what, words)
 	local welcome = rawget(_G, "CinematicWelcome")
 	if welcome and welcome:IsShown() then
 		local win = Edges(welcome)
-		r:Verdict(not Overlaps(edges, win), ("%s: not on the welcome window (box %.0f-%.0f, window %.0f-%.0f high)"):format(
-			what, edges and edges.bottom or -1, edges and edges.top or -1, win and win.bottom or -1, win and win.top or -1))
+		r:Log(("%s: box %.0f-%.0f, window %.0f-%.0f high, on it %s (fine: the box draws over it)"):format(
+			what, edges and edges.bottom or -1, edges and edges.top or -1, win and win.bottom or -1, win and win.top or -1,
+			tostring(Overlaps(edges, win))))
 	end
 	return popup
 end
@@ -289,7 +300,7 @@ ns.TestKit.Define({
 			for _, part in ipairs(PARTS) do copied = copied and CinematicDB.moduleDefaults[part] ~= nil end
 			r:Verdict(copied, "every part's defaults copied as they're switched off")
 			local popup = CheckBox(r, "Auto-Hide UI", Words("Auto-Hide UI: ", "leave"))
-			if popup then CheckUnder(r, "Auto-Hide UI", popup, highTop) end
+			if popup then CheckStill(r, "Auto-Hide UI", popup, highTop) end
 			if popup then r:Shot("the box with the welcome window", { behind = { popup, rawget(_G, "CinematicWelcome") } }) end
 			ClickReload(r, popup)
 		end },
@@ -351,15 +362,15 @@ ns.TestKit.Define({
 			local editBox = Popup("CINEMATIC_LAYOUT_RELOAD")
 			r:Verdict(editBox ~= nil, "the Edit Mode box is up")
 			if editBox then
-				CheckUnder(r, "Edit Mode box", editBox, highTop)
-				r:Shot("the Edit Mode box over the moved window", { behind = { editBox, rawget(_G, "CinematicWelcome") } })
+				CheckStill(r, "Edit Mode box", editBox, highTop)
+				r:Shot("the Edit Mode box over the window, which stayed put", { behind = { editBox, rawget(_G, "CinematicWelcome") } })
 				StaticPopup_Hide("CINEMATIC_LAYOUT_RELOAD")
 			end
 			r:Sleep(0.5)
 			welcome = rawget(_G, "CinematicWelcome")
 			local e = Edges(welcome)
-			r:Verdict(e and highTop and math.abs(e.top - highTop) < 2 and welcome.ownPoint == nil or false,
-				("box gone: the window back where it was (top %.0f, was %.0f)"):format(e and e.top or -1, highTop or -1))
+			r:Verdict(e and highTop and math.abs(e.top - highTop) < 2 or false,
+				("box gone: the window still where it was (top %.0f, was %.0f)"):format(e and e.top or -1, highTop or -1))
 			if welcome then welcome:Hide() end
 		end },
 	},

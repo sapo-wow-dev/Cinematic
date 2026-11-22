@@ -138,48 +138,12 @@ for _, client in ipairs({ "forever", "retail" }) do
 	ns.ModuleLoaded, ns.AskModulesReload = realLoaded, realAsk
 	for _, part in ipairs({ "visions", "cameras" }) do ns.SetModuleWanted(part, true) end
 
-	-- The welcome window under the game's boxes (Welcome.lua KeepUnderBoxes),
-	-- with pretend places: a box up whose bottom is under the window's top
-	-- moves the window just under it; one already clear moves nothing; all
-	-- gone, the window's own spot back; closing puts it back too.
+	-- The welcome window stays put under the game's boxes (Welcome.lua): one
+	-- layer under theirs (DIALOG), so a box draws over it, and nothing moves it.
 	ns.ShowWelcome()
 	local w = rawget(_G, "CinematicWelcome")
-	local placed = {}
-	local own = { "CENTER", UIParent, "CENTER", 0, 60 }
-	local top = 900
-	rawset(w, "GetTop", function() return top end)
-	rawset(w, "GetCenter", function() return 600, 500 end)
-	rawset(w, "GetPoint", function() return unpack(placed[#placed] or own) end)
-	rawset(w, "ClearAllPoints", function() end)
-	rawset(w, "SetPoint", function(_, ...) placed[#placed + 1] = { ... } end)
-	rawset(w, "GetEffectiveScale", function() return 1 end)
-	rawset(UIParent, "GetEffectiveScale", function() return 1 end)
-	local box = { shown = true, bottom = 800 }
-	local frame = CreateFrame("Frame")
-	rawset(frame, "IsShown", function() return box.shown end)
-	rawset(frame, "GetBottom", function() return box.bottom end)
-	rawset(frame, "GetEffectiveScale", function() return 1 end)
-	_G.StaticPopup1 = frame
-	w.KeepUnderBoxes()
-	local last = placed[#placed]
-	Check("a box over the window's top: moved just under it", last and last[1] == "TOP" and last[5] == 792
-		and w.ownPoint ~= nil, last and table.concat({ tostring(last[1]), tostring(last[5]) }, " "))
-	box.bottom = 700 -- (a taller box: under that one)
-	w.KeepUnderBoxes()
-	Check("a taller box: under that one", placed[#placed][5] == 692, placed[#placed][5])
-	box.shown = false
-	w.KeepUnderBoxes()
-	Check("box gone: its own spot back", placed[#placed][1] == "CENTER" and placed[#placed][5] == 60
-		and w.ownPoint == nil, placed[#placed][1])
-	local n = #placed
-	box.shown, box.bottom, top = true, 800, 750 -- (the window already under the box)
-	w.KeepUnderBoxes()
-	Check("already clear of the box: not moved", #placed == n and w.ownPoint == nil, #placed - n)
-	top = 900
-	w.KeepUnderBoxes()
-	w.KeepUnderBoxes(true) -- (as it closes)
-	Check("closing while moved: its own spot back", placed[#placed][1] == "CENTER" and w.ownPoint == nil)
-	_G.StaticPopup1 = nil
+	Check("welcome window one layer under the game's boxes", w:GetFrameStrata() == "HIGH", w:GetFrameStrata())
+	Check("nothing moves it under a box", rawget(w, "KeepUnderBoxes") == nil)
 end
 print(fails == 0 and "profileparts: all ok" or ("profileparts: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

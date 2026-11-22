@@ -1456,7 +1456,6 @@ local function BuildLevels(page)
 			page.height = page.height + delta
 			if window and window.page == 1 then
 				window:SetHeight(page.height)
-				if window.KeepUnderBoxes then window.KeepUnderBoxes() end -- (taller: up to a box?)
 			end
 		end
 	else
@@ -1870,7 +1869,6 @@ local function ShowPage(n)
 	back:SetShown(n > 1)
 	window.page = n
 	window:SetHeight(pages[n].height)
-	if window.KeepUnderBoxes then window.KeepUnderBoxes() end -- (taller: up to a box?)
 end
 
 -- Closed (the X, Escape, Done or Decide later): what's on now, in chat.
@@ -1935,7 +1933,11 @@ local function CreateWindow()
 	window = CreateFrame("Frame", "CinematicWelcome", UIParent, BackdropTemplateMixin and "BackdropTemplate")
 	window:SetWidth(WIDTH)
 	window:SetPoint("CENTER", 0, 60)
-	window:SetFrameStrata("DIALOG")
+	-- (One layer under the game's boxes, DIALOG: a box opens over the window
+	-- and the window stays put. It moved down under each box, and the user
+	-- said no, 2026-11-22: "the cine welcome windows moves down each time a
+	-- popup shows". Settings hides the window before it opens.)
+	window:SetFrameStrata("HIGH")
 	window:SetToplevel(true)
 	-- (kept on the screen: taller with the shelf open, at a big UI scale its top went off it)
 	window:SetClampedToScreen(true)
@@ -1945,62 +1947,8 @@ local function CreateWindow()
 	window:SetScript("OnDragStart", window.StartMoving)
 	window:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
-		self.ownPoint = nil -- (dragged while moved down: where you put it is its own spot now)
 	end)
-	window:SetScript("OnHide", function(...)
-		if window.KeepUnderBoxes then window.KeepUnderBoxes(true) end
-		OnHide(...)
-	end)
-	-- Under the game's boxes (the user, 2026-11-22: "make the windows popout
-	-- at the same location"): every box (ours, the game's) opens at the
-	-- game's spot, top middle, and the window's top moves with its height
-	-- (the shelf) and your drags, so a box sat on its title one time and over
-	-- it the next. While one's up the window moves down just under the lowest,
-	-- and back to its own spot once they've all gone (or as it closes).
-	-- (On the window, not a local: this file's main chunk is near Lua's 200.)
-	window.KeepUnderBoxes = function(back)
-		if not window then return end
-		local scale = UIParent:GetEffectiveScale()
-		local low
-		if not back and window:IsShown() then
-			for i = 1, (_G.STATICPOPUP_NUMDIALOGS or 4) do
-				local box = _G["StaticPopup" .. i]
-				local bottom = box and box:IsShown() and box:GetBottom()
-				if bottom then
-					bottom = bottom * box:GetEffectiveScale() / scale
-					if not low or bottom < low then low = bottom end
-				end
-			end
-		end
-		local ws = window:GetEffectiveScale() / scale
-		if low then
-			local top = window:GetTop()
-			if not window.ownPoint then
-				if not top or top * ws <= low - 8 then return end -- (clear of it already)
-				window.ownPoint = { window:GetPoint(1) }
-			end
-			local x = window:GetCenter()
-			if not x then return end
-			window:ClearAllPoints()
-			window:SetPoint("TOP", UIParent, "BOTTOMLEFT", x, (low - 8) / ws)
-		elseif window.ownPoint then
-			local point = window.ownPoint
-			window.ownPoint = nil
-			window:ClearAllPoints()
-			window:SetPoint(unpack(point))
-		end
-	end
-	if not ns.welcomeBoxHooks and StaticPopup_Show then
-		ns.welcomeBoxHooks = true
-		-- (A moment on: the game places the box after it's shown.)
-		local function Later() C_Timer.After(0, function() if window and window.KeepUnderBoxes then window.KeepUnderBoxes() end end) end
-		hooksecurefunc("StaticPopup_Show", Later)
-		for i = 1, (_G.STATICPOPUP_NUMDIALOGS or 4) do
-			local box = _G["StaticPopup" .. i]
-			if box then box:HookScript("OnHide", Later) end
-		end
-	end
-	window:HookScript("OnShow", function() window.KeepUnderBoxes() end)
+	window:SetScript("OnHide", OnHide)
 	Flat(window, { BG[1], BG[2], BG[3], 0.97 })
 	tinsert(UISpecialFrames, "CinematicWelcome") -- Escape closes it, as the X does
 

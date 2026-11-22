@@ -21007,7 +21007,9 @@ StaticPopupDialogs.CINEMATIC_ADDON_RESET = {
 		"deleted so your own comes back.\n\n" ..
 		"Either way the UI reloads and the game settings Cinematic changed go back to yours."],
 	button1 = L["Reset EVERYTHING"], button2 = CANCEL, button3 = L["Reset Settings"],
-	OnAccept = function() StaticPopup_Show("CINEMATIC_ADDON_RESET_ALL") end,
+	-- (A frame later: shown from OnAccept, this popup is still up, so the game
+	-- stacks the new one below it; once this one has gone it takes its place.)
+	OnAccept = function() C_Timer.After(0, function() StaticPopup_Show("CINEMATIC_ADDON_RESET_ALL") end) end,
 	OnAlt = function() ns.ResetAddon(true) end,
 	cineReload = 3, -- (Reset Settings reloads; Forever: a secure Reload over it, QoL/Reload.lua)
 	timeout = 0, whileDead = true, hideOnEscape = true,
