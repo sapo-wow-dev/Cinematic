@@ -4771,10 +4771,11 @@ function ns.EnsureTables()
 	-- ...a bar (its group) or spell ID -> { numbers, keybinds, notBuff }: its row's own (Frames.lua's ns.CooldownRowSetting)
 	ns.db.cooldownRowSettings = ns.db.cooldownRowSettings or {}
 	ns.db.cooldownFlashReady = ns.db.cooldownFlashReady or {} -- ...spell ID -> true/false: Flash, its own
-	-- ...each row's numbered lines, read before its own dropdown (CooldownRules.lua): spell ID, tracked buff, bar ->
-	ns.db.cooldownSpellRules = ns.db.cooldownSpellRules or {}
-	ns.db.cooldownBuffRules = ns.db.cooldownBuffRules or {}
-	ns.db.cooldownGroupRules = ns.db.cooldownGroupRules or {}
+	-- ...the place groups, and each row's cell per group (CooldownRules.lua): spell ID, tracked buff, bar ->
+	ns.db.cooldownPlaceGroups = ns.db.cooldownPlaceGroups or {}
+	ns.db.cooldownSpellCells = ns.db.cooldownSpellCells or {}
+	ns.db.cooldownBuffCells = ns.db.cooldownBuffCells or {}
+	ns.db.cooldownGroupCells = ns.db.cooldownGroupCells or {}
 	ns.db.cooldownNoBuff = nil -- (a test build's per-spell Only cooldown, not buff)
 	ns.db.cooldownEarlyOff = nil -- (a test build's, when Show early started ticked)
 	ns.db.gamepadPressButtons = ns.db.gamepadPressButtons or {} -- Gamepad page: button -> reveals the bars

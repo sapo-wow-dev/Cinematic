@@ -1,16 +1,17 @@
--- Cinematic: the Cooldown Manager page's numbered lines (2026-11-20, in place
--- of situations). A spell, a tracked buff or a bar's row can have lines of
--- its own, each "Icon shows X | where": a Combat (any, in a fight, out of
--- one) and a Location (anywhere, or one place), or a CQL rule written in the
--- rule editor (its Edit). They're read top to bottom and the first that fits
--- now decides; none fits: the row's own dropdown, its last line (Everywhere
--- else). A spell's lines come before its own dropdown and its bar's lines.
--- Kept in db.cooldownSpellRules (spell ID ->), cooldownBuffRules (tracked
--- buff's spell ID ->) and cooldownGroupRules (bar ->): a list of
--- { show = mode, combat = "any"|"in"|"out", place = "any"|place } or
--- { show = mode, cql = text }. (Frames.lua's ns.CooldownSpellMode and the
--- rest ask ns.CooldownRuleMode; the lines on the page are built here too,
--- ns.CooldownRuleLines.)
+-- Cinematic: the Cooldown Manager page's place groups (2026-11-22, in place of
+-- each row's numbered lines, which came in place of situations). A group is
+-- only a where: some places (or Anywhere) and a combat (any, in a fight, out
+-- of one), or a CQL rule. Groups are shared by every bar and read left to
+-- right: the first that fits now is the one in use. Each row (a spell, a
+-- tracked buff or a bar) has a cell per group saying what its icon shows
+-- there; a cell not set follows: a spell's its bar's cell, then its own
+-- Otherwise (the row's own mode), then its bar's Otherwise. The page draws
+-- them as a grid (UI/CooldownGrid.lua).
+-- Kept in db.cooldownPlaceGroups (a list of { id, name, places = { place =
+-- true } or { any = true }, combat } or { id, name, cql }) and the cells in
+-- db.cooldownSpellCells (spell ID ->), cooldownBuffCells (tracked buff's
+-- spell ID ->) and cooldownGroupCells (bar ->): { [group id] = mode }.
+-- (Frames.lua's ns.CooldownSpellMode and the rest ask ns.CooldownRuleMode.)
 local _, ns = ...
 local L = ns.L
 
@@ -19,103 +20,158 @@ local PLACES = {
 	{ "world", L["Open world"] }, { "city", L["Cities"] }, { "inn", L["Inns"] }, { "dungeon", L["Dungeons"] },
 	{ "raid", L["Raids"] }, { "bg", L["BGs & arenas"] },
 }
--- (none: a new line's, no place picked yet; it fits nowhere till one is.)
-local PLACE_NAME = { any = L["Anywhere"], none = L["Pick a place"] }
+local PLACE_NAME = { any = L["Anywhere"] }
 for _, place in ipairs(PLACES) do PLACE_NAME[place[1]] = place[2] end
-local COMBATS = { { "any", L["Any"] }, { "in", L["In combat"] }, { "out", L["Out of combat"] } }
+local COMBATS = { { "any", L["Any time"] }, { "in", L["In combat"] }, { "out", L["Out of combat"] } }
 local COMBAT_NAME = {}
 for _, combat in ipairs(COMBATS) do COMBAT_NAME[combat[1]] = combat[2] end
 -- (In combat: the Calm Timer after a fight too, as everywhere since 2026-11-10.)
 local COMBAT_WORDS = { ["in"] = "(combat or calm)", out = "nocombat" }
 ns.COOLDOWN_RULE_PLACES, ns.COOLDOWN_RULE_COMBATS = PLACES, COMBATS
+ns.COOLDOWN_PLACE_NAME, ns.COOLDOWN_COMBAT_NAME = PLACE_NAME, COMBAT_NAME
+-- (More than this and the grid's columns are too narrow to read.)
+ns.COOLDOWN_GROUP_MAX = 5
 
-local TABLES = { spell = "cooldownSpellRules", buff = "cooldownBuffRules", group = "cooldownGroupRules" }
-ns.COOLDOWN_RULE_TABLES = TABLES
+local CELLS = { spell = "cooldownSpellCells", buff = "cooldownBuffCells", group = "cooldownGroupCells" }
+ns.COOLDOWN_CELL_TABLES = CELLS
 
--- A line as it should be (from a profile or an import: bad parts mended), or
--- nil for one that can't be.
-local function Mend(rule)
-	if type(rule) ~= "table" or type(rule.show) ~= "string" then return nil end
-	if type(rule.cql) == "string" then
-		rule.combat, rule.place = nil, nil
-		return rule
+-- A group as it should be (from a profile or an import: bad parts mended),
+-- or nil for one that can't be.
+local function Mend(group)
+	if type(group) ~= "table" or type(group.id) ~= "number" then return nil end
+	if type(group.name) ~= "string" then group.name = "" end
+	if type(group.cql) == "string" and group.cql:find("%S") then
+		group.places, group.combat = nil, nil
+		return group
 	end
-	rule.cql = nil
-	if not COMBAT_NAME[rule.combat] then rule.combat = "any" end
-	if not PLACE_NAME[rule.place] then rule.place = "any" end
-	return rule
+	group.cql = nil
+	if type(group.places) ~= "table" then group.places = {} end
+	for place, on in pairs(group.places) do
+		if not PLACE_NAME[place] or on ~= true then group.places[place] = nil end
+	end
+	if group.places.any then group.places = { any = true } end
+	if not COMBAT_NAME[group.combat] then group.combat = "any" end
+	return group
 end
+ns.MendCooldownGroup = Mend
 
--- A row's lines (kind "spell", "buff" or "group"; key its spell ID or bar),
--- mended, or nil with none. make: an empty list made for it if it has none.
--- A spell or buff's are kept under its ID, else its base spell's.
-function ns.CooldownRules(kind, key, make)
+-- The groups, in order (mended; the list made if missing).
+function ns.CooldownPlaceGroups()
 	local db = ns.db
-	local name = TABLES[kind]
-	if not (db and name) or key == nil then return nil end
-	if type(db[name]) ~= "table" then db[name] = {} end
-	local all = db[name]
-	local list = all[key]
-	if list == nil and kind ~= "group" and ns.BaseSpell then
-		local base = ns.BaseSpell(key)
-		if base ~= key and all[base] ~= nil then key, list = base, all[base] end
-	end
-	if type(list) ~= "table" then
-		list = nil
-		all[key] = nil
-	end
-	if list then
-		for i = #list, 1, -1 do
-			if not Mend(list[i]) then table.remove(list, i) end
-		end
-		if not list[1] and not make then
-			all[key] = nil
-			list = nil
-		end
-	end
-	if not list and make then
-		list = {}
-		all[key] = list
+	if not db then return {} end
+	if type(db.cooldownPlaceGroups) ~= "table" then db.cooldownPlaceGroups = {} end
+	local list = db.cooldownPlaceGroups
+	for i = #list, 1, -1 do
+		if not Mend(list[i]) then table.remove(list, i) end
 	end
 	return list
 end
 
--- A line's where as a CQL rule: its own, or its dropdowns' ("" for anywhere, any).
-function ns.CooldownRuleText(rule)
-	if rule.cql then return rule.cql end
+-- A group by its id, and its place in the order.
+function ns.CooldownPlaceGroup(id)
+	for i, group in ipairs(ns.CooldownPlaceGroups()) do
+		if group.id == id then return group, i end
+	end
+end
+
+-- A new group at the end (no places yet: it fits nowhere till one is
+-- picked), or nil at the most.
+function ns.AddCooldownGroup()
+	local list = ns.CooldownPlaceGroups()
+	if #list >= ns.COOLDOWN_GROUP_MAX then return nil end
+	local id = 0
+	for _, group in ipairs(list) do id = math.max(id, group.id) end
+	local group = { id = id + 1, name = "", places = {}, combat = "any" }
+	list[#list + 1] = group
+	ns.CooldownRuleFactsStale()
+	return group
+end
+
+-- A group gone, with every row's cell for it.
+function ns.RemoveCooldownGroup(id)
+	local list = ns.CooldownPlaceGroups()
+	for i = #list, 1, -1 do
+		if list[i].id == id then table.remove(list, i) end
+	end
+	for _, name in pairs(CELLS) do
+		local all = ns.db[name]
+		for key, row in pairs(type(all) == "table" and all or {}) do
+			if type(row) == "table" then
+				row[id] = nil
+				if next(row) == nil then all[key] = nil end
+			end
+		end
+	end
+	ns.CooldownRuleFactsStale()
+end
+
+-- A group moved one place left (by -1) or right (by 1) in the order.
+function ns.MoveCooldownGroup(id, by)
+	local list = ns.CooldownPlaceGroups()
+	local _, i = ns.CooldownPlaceGroup(id)
+	local j = i and i + by
+	if not j or j < 1 or j > #list then return false end
+	list[i], list[j] = list[j], list[i]
+	ns.CooldownRuleFactsStale()
+	return true
+end
+
+-- The places a group has, in the page's order (any: Anywhere alone).
+local function PlacesOf(group)
+	local out = {}
+	if not group.places then return out end
+	if group.places.any then return { "any" } end
+	for _, place in ipairs(PLACES) do
+		if group.places[place[1]] then out[#out + 1] = place[1] end
+	end
+	return out
+end
+ns.CooldownGroupPlaces = PlacesOf
+
+-- A group's where as words for people: "Dungeons, Raids · In combat", or its rule.
+function ns.CooldownGroupWhere(group)
+	if group.cql then return group.cql end
+	local places = PlacesOf(group)
+	if #places == 0 then return L["No place yet"] end
+	local names = {}
+	for i, place in ipairs(places) do names[i] = PLACE_NAME[place] end
+	local text = table.concat(names, ", ")
+	if group.combat ~= "any" then text = text .. " · " .. COMBAT_NAME[group.combat] end
+	return text
+end
+
+-- Its name: its own, else its where.
+function ns.CooldownGroupName(group)
+	if group.name and group.name:find("%S") then return group.name end
+	return ns.CooldownGroupWhere(group)
+end
+
+-- A group's where as a CQL rule: its own, or its places and combat ("" for anywhere, any).
+function ns.CooldownGroupText(group)
+	if group.cql then return group.cql end
 	local words = {}
-	if rule.place ~= "any" and rule.place ~= "none" then words[#words + 1] = rule.place end
-	if COMBAT_WORDS[rule.combat] then words[#words + 1] = COMBAT_WORDS[rule.combat] end
+	local places = PlacesOf(group)
+	if #places > 0 and places[1] ~= "any" then
+		words[1] = #places == 1 and places[1] or ("(" .. table.concat(places, " or ") .. ")")
+	end
+	if COMBAT_WORDS[group.combat] then words[#words + 1] = COMBAT_WORDS[group.combat] end
 	return table.concat(words, " and ")
 end
 
--- A rule typed in the editor, put on a line: back in its dropdowns when it's
--- one they can say (a place, a combat, or both), else kept as the line's CQL.
--- Gives false (and why) for one that doesn't read, leaving the line as it was.
+-- A rule typed in the editor, put on a group: emptied, back to its places
+-- and combat (none picked); the same as they say, kept as them; else its
+-- CQL. Gives false (and why) for one that doesn't read, leaving it as it was.
 local function Squash(text) return (text:lower():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
-function ns.SetCooldownRuleText(rule, text)
+function ns.SetCooldownGroupText(group, text)
 	text = text or ""
 	if not text:find("%S") then
-		-- (A new line's empty place stays empty: closing the editor on it blank changes nothing.)
-		rule.cql, rule.combat, rule.place = nil, "any", rule.place == "none" and "none" or "any"
+		if group.cql then group.cql, group.places, group.combat = nil, {}, "any" end
 		return true
 	end
 	local _, err = ns.CompileRule(text)
 	if err then return false, err end
-	local want = Squash(text)
-	for _, place in ipairs({ "any", "world", "city", "inn", "dungeon", "raid", "bg" }) do
-		for _, combat in ipairs({ "any", "in", "out" }) do
-			local probe = { place = place, combat = combat }
-			local said = Squash(ns.CooldownRuleText(probe))
-			-- (Either way round: "dungeon and nocombat" or "nocombat and dungeon".)
-			local swapped = place ~= "any" and COMBAT_WORDS[combat] and Squash(COMBAT_WORDS[combat] .. " and " .. place)
-			if said ~= "" and (want == said or want == swapped) then
-				rule.cql, rule.combat, rule.place = nil, combat, place
-				return true
-			end
-		end
-	end
-	rule.cql, rule.combat, rule.place = text, nil, nil
+	if not group.cql and Squash(text) == Squash(ns.CooldownGroupText(group)) then return true end
+	group.cql, group.places, group.combat = text, nil, nil
 	return true
 end
 
@@ -126,10 +182,11 @@ local function Spot(facts)
 		or facts.city and "city" or facts.inn and "inn" or "world"
 	return place, not facts.nocombat
 end
+ns.CooldownSpot = Spot
 
--- The facts the lines are read against, once per moment (each icon of each
+-- The facts the groups are read against, once per moment (each icon of each
 -- bar asks, every pass).
-local factsAt, factsNow
+local factsAt, factsNow, nowAt, nowGroup, nowIndex
 function ns.CooldownRuleFacts()
 	local now = GetTime()
 	if factsAt ~= now or not factsNow then
@@ -138,432 +195,188 @@ function ns.CooldownRuleFacts()
 	return factsNow
 end
 -- (A change on the page, or a test faking a place: read again at once.)
-function ns.CooldownRuleFactsStale() factsAt = nil end
-
--- Whether a line fits now. (A CQL rule that doesn't read never fits.)
-function ns.CooldownRuleFits(rule, facts)
-	facts = facts or ns.CooldownRuleFacts()
-	if rule.show == "" then return false end
-	if rule.cql then
-		local test = ns.CompileRule(rule.cql)
-		return test ~= nil and test(facts) and true or false
-	end
-	-- (A new line, its Icon shows or its place not picked yet: it counts nowhere.)
-	if rule.show == "" or rule.place == "none" then return false end
-	local place, fight = Spot(facts)
-	if rule.place ~= "any" and rule.place ~= place then return false end
-	return rule.combat == "any" or (rule.combat == "in") == fight
+function ns.CooldownRuleFactsStale()
+	factsAt, nowAt = nil, nil
 end
 
--- The mode of a row's first line that fits now, and its number; nil with
--- none (the row's own dropdown then, or what it follows).
-function ns.CooldownRuleMode(kind, key, facts)
-	local list = ns.CooldownRules(kind, key)
-	if not list then return nil end
+-- Whether a group fits now. (A CQL rule that doesn't read, or no place picked, never fits.)
+function ns.CooldownGroupFits(group, facts)
 	facts = facts or ns.CooldownRuleFacts()
-	for i, rule in ipairs(list) do
-		if ns.CooldownRuleFits(rule, facts) then return rule.show, i end
+	if group.cql then
+		local test = ns.CompileRule(group.cql)
+		return test ~= nil and test(facts) and true or false
 	end
+	if not (group.places and next(group.places)) then return false end
+	local place, fight = Spot(facts)
+	if not (group.places.any or group.places[place]) then return false end
+	return group.combat == "any" or (group.combat == "in") == fight
+end
+
+-- The group in use now (the first that fits) and its place in the order; nil
+-- with none. facts given: read against them, not kept.
+function ns.CooldownGroupNow(facts)
+	if facts then
+		for i, group in ipairs(ns.CooldownPlaceGroups()) do
+			if ns.CooldownGroupFits(group, facts) then return group, i end
+		end
+		return nil
+	end
+	local now = GetTime()
+	if nowAt ~= now then
+		nowAt, nowGroup, nowIndex = now, nil, nil
+		local current = ns.CooldownRuleFacts()
+		for i, group in ipairs(ns.CooldownPlaceGroups()) do
+			if ns.CooldownGroupFits(group, current) then
+				nowGroup, nowIndex = group, i
+				break
+			end
+		end
+	end
+	return nowGroup, nowIndex
+end
+
+-- A row's cells (kind "spell", "buff" or "group"; key its spell ID or bar),
+-- or nil with none. make: an empty table made for it. A spell or buff's are
+-- kept under its ID, else its base spell's.
+local function CellRow(kind, key, make)
+	local db = ns.db
+	local name = CELLS[kind]
+	if not (db and name) or key == nil then return nil end
+	if type(db[name]) ~= "table" then db[name] = {} end
+	local all = db[name]
+	local row = all[key]
+	if row == nil and kind ~= "group" and ns.BaseSpell then
+		local base = ns.BaseSpell(key)
+		if base ~= key and all[base] ~= nil then key, row = base, all[base] end
+	end
+	if row ~= nil and type(row) ~= "table" then
+		all[key] = nil
+		row = nil
+	end
+	if not row and make then
+		row = {}
+		all[key] = row
+	end
+	return row, all, key
+end
+
+-- What a row's cell for a group says (a mode), nil when it follows.
+function ns.CooldownCell(kind, key, id)
+	local row = CellRow(kind, key)
+	local value = row and row[id]
+	return type(value) == "string" and value ~= "" and value or nil
+end
+
+-- (mode nil: back to following.)
+function ns.SetCooldownCell(kind, key, id, mode)
+	local row, all, at = CellRow(kind, key, mode ~= nil)
+	if not row then return end
+	row[id] = mode
+	if next(row) == nil then all[at] = nil end
+	ns.CooldownRuleFactsStale()
+	if ns.readyPace then ns.readyPace.due = true end
+end
+
+-- A row's cells as a copy (Copy row), and put on another (Paste row: its own cells replaced).
+function ns.CooldownCellsOf(kind, key)
+	local copy = {}
+	for id, mode in pairs(CellRow(kind, key) or {}) do copy[id] = mode end
+	return copy
+end
+function ns.SetCooldownCells(kind, key, cells)
+	local row, all, at = CellRow(kind, key, true)
+	wipe(row)
+	for id, mode in pairs(cells or {}) do row[id] = mode end
+	if next(row) == nil then all[at] = nil end
+	ns.CooldownRuleFactsStale()
+	if ns.readyPace then ns.readyPace.due = true end
+end
+
+-- The mode of a row's cell for the group in use now, and that group's place
+-- in the order; nil when it has none (it follows: what asks goes on to the
+-- next in line, Frames.lua).
+function ns.CooldownRuleMode(kind, key, facts)
+	local group, index = ns.CooldownGroupNow(facts)
+	if not group then return nil end
+	local mode = ns.CooldownCell(kind, key, group.id)
+	if mode then return mode, index end
 	return nil
 end
 
--- Whether any row has lines (the ready check runs while one does).
+-- Whether any row has a cell (the ready check runs while one does).
 function ns.CooldownRulesAny()
 	local db = ns.db
-	for _, name in pairs(TABLES) do
+	if not (db and type(db.cooldownPlaceGroups) == "table" and db.cooldownPlaceGroups[1]) then return false end
+	for _, name in pairs(CELLS) do
 		if type(db[name]) == "table" and next(db[name]) then return true end
 	end
 	return false
 end
 
--- A line's where as words for people: "Dungeons, In combat", or its rule.
-function ns.CooldownRuleWhere(rule)
-	if rule.cql then return rule.cql end
-	if rule.place == "none" then return L["Pick a place"] end
-	if rule.place == "any" and rule.combat == "any" then return L["Anywhere"] end
-	if rule.place == "any" then return COMBAT_NAME[rule.combat] end
-	if rule.combat == "any" then return PLACE_NAME[rule.place] end
-	return PLACE_NAME[rule.place] .. ", " .. COMBAT_NAME[rule.combat]
+-- Each group's trouble, by its place in the order: "dead" with the names of
+-- the groups before it that take every place and time it has (it's never in
+-- use), or "todo" (no place picked yet). And whether Otherwise is never in
+-- use (the groups take everywhere). CQL groups aren't judged.
+function ns.CooldownGroupTrouble()
+	local trouble, taken = {}, {}
+	local list = ns.CooldownPlaceGroups()
+	local all = 0
+	for i, group in ipairs(list) do
+		if not group.cql then
+			local places = PlacesOf(group)
+			if #places == 0 then
+				trouble[i] = { kind = "todo" }
+			else
+				if places[1] == "any" then
+					places = {}
+					for j, place in ipairs(PLACES) do places[j] = place[1] end
+				end
+				local combats = group.combat == "any" and { "in", "out" } or { group.combat }
+				local by, fresh = {}, {}
+				for _, place in ipairs(places) do
+					for _, combat in ipairs(combats) do
+						local spot = place .. "|" .. combat
+						if taken[spot] then by[taken[spot]] = true else fresh[#fresh + 1] = spot end
+					end
+				end
+				if #fresh == 0 then
+					local names = {}
+					for j = 1, i - 1 do
+						if by[j] then names[#names + 1] = ns.CooldownGroupName(list[j]) end
+					end
+					trouble[i] = { kind = "dead", by = names }
+				end
+				for _, spot in ipairs(fresh) do
+					taken[spot] = i
+					all = all + 1
+				end
+			end
+		end
+	end
+	return trouble, all >= #PLACES * 2
 end
 
--- /cine debug cooldowns' first lines: where you are, and each row's lines
--- with the one that fits now.
+-- /cine debug cooldowns' first lines: where you are, the groups with the one
+-- in use, and each row's cells.
 function ns.ReportCooldownRules()
 	local db = ns.db
 	local facts = ns.RuleFactsNow()
 	local place, fight = Spot(facts)
-	ns.Print(("cooldown lines: you're in %s, %s"):format(place, fight and "in a fight" or "out of fights"))
-	local any = false
-	for kind, name in pairs(TABLES) do
-		for key in pairs(type(db[name]) == "table" and db[name] or {}) do
-			local list = ns.CooldownRules(kind, key)
-			if list then
-				any = true
-				local _, hit = ns.CooldownRuleMode(kind, key, facts)
-				print(("  %s %s:"):format(kind, tostring(key)))
-				for i, rule in ipairs(list) do
-					print(("    %d. %s | %s%s"):format(i, rule.show, ns.CooldownRuleWhere(rule),
-						i == hit and " [FITS]" or ""))
-				end
-				print(("    %d. own dropdown | everywhere else%s"):format(#list + 1, hit and "" or " [IN USE]"))
-			end
+	ns.Print(("cooldown groups: you're in %s, %s"):format(place, fight and "in a fight" or "out of fights"))
+	local _, hit = ns.CooldownGroupNow(facts)
+	local trouble = ns.CooldownGroupTrouble()
+	local list = ns.CooldownPlaceGroups()
+	for i, group in ipairs(list) do
+		print(("  %d. [%d] %s | %s%s%s"):format(i, group.id, ns.CooldownGroupName(group), ns.CooldownGroupWhere(group),
+			i == hit and " [IN USE]" or "", trouble[i] and (" [" .. trouble[i].kind:upper() .. "]") or ""))
+	end
+	if not list[1] then print("  no groups: each row's own Otherwise") end
+	for kind, name in pairs(CELLS) do
+		for key, row in pairs(type(db[name]) == "table" and db[name] or {}) do
+			local parts = {}
+			for id, mode in pairs(type(row) == "table" and row or {}) do parts[#parts + 1] = ("%s=%s"):format(id, mode) end
+			table.sort(parts)
+			print(("  %s %s: %s"):format(kind, tostring(key), table.concat(parts, " ")))
 		end
 	end
-	if not any then print("  none: each row's own dropdown") end
-end
-
--- ---------------------------------------------------------------------------
--- The page's part: a row's lines, under its name. ns.CooldownRuleLines(parent,
--- opts) gives a block; block.Set(kind, key, label, modes) and block.Layout()
--- (its height: the lines, then the Everywhere else line's room, where the
--- page puts the row's own dropdown). opts: { Tooltip(frame, text), Enabled(),
--- Changed() after a change (the page lists its spells again) }.
--- Each line: its number, Icon shows, a bar, Combat and Location (or its CQL
--- rule), Edit, move up and down, delete.
-
--- (30: at 26 the dropdowns, about as tall, touched line to line, 2026-11-20.)
-ns.COOLDOWN_LINE_H = 30
-local LINE_H = ns.COOLDOWN_LINE_H
--- (Icon shows under the row's own dropdown, the page's Icon shows column, so
--- every line's reads down one column; its where to the right, where the
--- Everywhere else line has the row's When ready parts.)
-local SHOW_X, SHOW_W, BAR_X = 180, 135, 318
--- (Each number right beside its dropdown, Active left of it: under the
--- spell's name, 160 px off, they read as loose, 2026-11-20.)
-local NUM_R, IN_USE_R = SHOW_X - 6, SHOW_X - 24
--- (Move up and down stacked in one column, and the delete inside the panel:
--- side by side the arrows were hard to tell apart and pushed the delete past
--- the panel's edge, cut off, in the first game test, 2026-11-20.)
-local COMBAT_X, COMBAT_W, PLACE_X, PLACE_W = 326, 94, 424, 96
-local EDIT_X, EDIT_W, UP_X, DOWN_X, DELETE_X = 524, 38, 566, 566, 582
-
--- A dropdown (or, on clients without the modern one, a button stepping through
--- the choices): List() its choices ({ value, text }), Get() the one picked.
-local function Pick(parent, width, List, Get, Set, placeholder)
-	local ok, dropdown = ns.MenuDropdown(parent)
-	local control
-	if ok and dropdown and dropdown.SetupMenu then
-		dropdown:SetWidth(width)
-		-- (Nothing picked yet, a new line's: this, greyed by the game, till one is.)
-		if placeholder and dropdown.SetDefaultText then dropdown:SetDefaultText(placeholder) end
-		dropdown:SetupMenu(function(_, root)
-			for _, choice in ipairs(List()) do
-				root:CreateRadio(choice.text, function() return Get() == choice.value end,
-					function() Set(choice.value) end)
-			end
-		end)
-		control = dropdown
-	else
-		control = ns.PanelButton(parent)
-		control:SetSize(width, 22)
-		control:SetScript("OnClick", function()
-			local list, now = List(), Get()
-			for i, choice in ipairs(list) do
-				if choice.value == now then
-					Set(list[i % #list + 1].value)
-					return
-				end
-			end
-			if list[1] then Set(list[1].value) end
-		end)
-	end
-	control.searchSkip, control.cdmLinePick = true, true -- (cdmLinePick: for tests)
-	function control.Show_()
-		if control.GenerateMenu then
-			control:GenerateMenu()
-		else
-			local now, shown = Get(), false
-			for _, choice in ipairs(List()) do
-				if choice.value == now then
-					control:SetText(choice.text)
-					shown = true
-				end
-			end
-			if not shown and placeholder then control:SetText(placeholder) end
-		end
-	end
-	return control
-end
-
-local COMBAT_LIST, PLACE_LIST = {}, { { value = "any", text = L["Anywhere"] } }
-for _, combat in ipairs(COMBATS) do COMBAT_LIST[#COMBAT_LIST + 1] = { value = combat[1], text = combat[2] } end
-for _, place in ipairs(PLACES) do PLACE_LIST[#PLACE_LIST + 1] = { value = place[1], text = place[2] } end
-
--- (Every block made, for the in-game test to read the page: Dev/CdmLinesTest.lua.)
-ns.cooldownLineBlocks = setmetatable({}, { __mode = "k" })
--- The line deciding now, where you are: a green "Active" left of its number,
--- the number green too, its tip saying why. (A gold band across the line,
--- till 2026-11-20, looked like the line was picked, the user said.)
-local function InUseMark(parent, Tip)
-	local mark = CreateFrame("Frame", nil, parent)
-	mark:SetSize(60, 18)
-	local text = mark:CreateFontString(nil, "OVERLAY", "GameFontGreenSmall")
-	text:SetPoint("RIGHT")
-	text:SetText(L["Active"])
-	mark:SetWidth(math.max(type(text:GetStringWidth()) == "number" and text:GetStringWidth() or 0, 30) + 4)
-	mark:EnableMouse(true)
-	Tip(mark, L["This line decides right now, where you are."])
-	mark:Hide()
-	return mark
-end
-local NUMBER_GOLD, NUMBER_GREEN = { 1, 0.82, 0 }, { 0.25, 1, 0.25 }
-local function NumberColor(number, inUse)
-	local color = inUse and NUMBER_GREEN or NUMBER_GOLD
-	number:SetTextColor(color[1], color[2], color[3])
-end
-
-function ns.CooldownRuleLines(parent, opts)
-	local block = CreateFrame("Frame", nil, parent)
-	block:SetSize(DELETE_X + 24, 1)
-	ns.cooldownLineBlocks[block] = true
-	local kind, key, label, modes
-	local lines = {}
-
-	local function List() return ns.CooldownRules(kind, key) or {} end
-	local function Tip(frame, text) if text and opts.Tooltip then opts.Tooltip(frame, text) end end
-	local function Enabled() return not opts.Enabled or opts.Enabled() end
-	local function Changed()
-		ns.CooldownRuleFactsStale()
-		if ns.readyPace then ns.readyPace.due = true end
-		opts.Changed()
-	end
-
-	local function Line(n)
-		if lines[n] then return lines[n] end
-		local line = CreateFrame("Frame", nil, block)
-		line:SetSize(DELETE_X + 24, LINE_H)
-		line.n = n
-		local function Rule() return List()[line.n] end
-		line.inUse = InUseMark(line, Tip)
-		line.inUse:SetPoint("RIGHT", line, "LEFT", IN_USE_R, 0)
-		line.number = line:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		line.number:SetPoint("RIGHT", line, "LEFT", NUM_R, 0)
-		line.number:SetJustifyH("RIGHT")
-		line.show = Pick(line, SHOW_W, function() return modes end,
-			function() local rule = Rule() return rule and rule.show end,
-			function(value)
-				local rule = Rule()
-				if rule then rule.show = value end
-				Changed()
-			end, L["Pick one"])
-		line.show:SetPoint("LEFT", line, "LEFT", SHOW_X, 0)
-		Tip(line.show, L["What the icon shows while this line fits."])
-		line.bar = line:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-		line.bar:SetPoint("LEFT", line, "LEFT", BAR_X, 0)
-		line.bar:SetText("|")
-		line.combat = Pick(line, COMBAT_W, function() return COMBAT_LIST end,
-			function() local rule = Rule() return rule and rule.combat end,
-			function(value)
-				local rule = Rule()
-				if rule then rule.combat = value end
-				Changed()
-			end)
-		line.combat:SetPoint("LEFT", line, "LEFT", COMBAT_X, 0)
-		Tip(line.combat, L["In a fight (the Calm Timer after one too), out of one, or either."])
-		line.place = Pick(line, PLACE_W, function() return PLACE_LIST end,
-			function() local rule = Rule() return rule and rule.place end,
-			function(value)
-				local rule = Rule()
-				if rule then rule.place = value end
-				Changed()
-			end, L["Pick one"]) -- (Pick a place didn't fit: "Pick a pl...", 2026-11-20)
-		line.place:SetPoint("LEFT", line, "LEFT", PLACE_X, 0)
-		Tip(line.place, L["Where this line fits."])
-		-- (A rule of its own: its words, colored as the editor has them, in place of the two.)
-		-- (In a box as wide as the two, so the line reads as even as the
-		-- others; clicked, it edits, as Edit does. Loose small text, it looked
-		-- unfinished, 2026-11-20.)
-		line.cqlBox = CreateFrame("Button", nil, line)
-		line.cqlBox:SetSize(PLACE_X + PLACE_W - COMBAT_X, 22)
-		line.cqlBox:SetPoint("LEFT", line, "LEFT", COMBAT_X, 0)
-		local fill = line.cqlBox:CreateTexture(nil, "BACKGROUND")
-		fill:SetAllPoints()
-		fill:SetColorTexture(0.06, 0.05, 0.04, 0.9)
-		for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", false }, { "BOTTOMLEFT", "BOTTOMRIGHT", false },
-			{ "TOPLEFT", "BOTTOMLEFT", true }, { "TOPRIGHT", "BOTTOMRIGHT", true } }) do
-			local edge = line.cqlBox:CreateTexture(nil, "BORDER")
-			edge:SetPoint(side[1])
-			edge:SetPoint(side[2])
-			if side[3] then edge:SetWidth(1) else edge:SetHeight(1) end
-			edge:SetColorTexture(0.45, 0.38, 0.2, 1)
-		end
-		local glow = line.cqlBox:CreateTexture(nil, "HIGHLIGHT")
-		glow:SetAllPoints()
-		glow:SetColorTexture(1, 1, 1, 0.06)
-		line.cql = line.cqlBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		line.cql:SetPoint("LEFT", line.cqlBox, "LEFT", 8, 0)
-		line.cql:SetPoint("RIGHT", line.cqlBox, "RIGHT", -6, 0)
-		line.cql:SetJustifyH("LEFT")
-		line.cql:SetWordWrap(false)
-		Tip(line.cqlBox, L["This line's rule (CQL). Click to edit it."])
-		line.cqlBox:SetScript("OnClick", function()
-			local click = line.edit and line.edit:GetScript("OnClick")
-			if click then click(line.edit) end
-		end)
-
-		line.edit = ns.PanelButton(line)
-		line.edit:SetSize(EDIT_W, 20)
-		line.edit:SetPoint("LEFT", line, "LEFT", EDIT_X, 0)
-		line.edit:SetText(L["Edit"])
-		line.edit.searchSkip = true
-		Tip(line.edit, L["Write where this line fits as a rule (CQL). Empty it to go back to the dropdowns."])
-		line.edit:SetScript("OnClick", function()
-			local rule = Rule()
-			if not rule then return end
-			local was = ns.CooldownRuleText(rule)
-			ns.OpenRuleEditor({
-				key = "cdm",
-				label = ("%s, %s %d"):format(label or "", L["line"], line.n),
-				Text = function() return ns.CooldownRuleText(rule) end,
-				SetText = function() end,
-				Close = function(text)
-					if not ns.SetCooldownRuleText(rule, text) then ns.SetCooldownRuleText(rule, was) end
-					Changed()
-				end,
-			})
-		end)
-
-		local function Move(by)
-			local list, i = List(), line.n
-			local j = i + by
-			if j < 1 or j > #list then return end
-			list[i], list[j] = list[j], list[i]
-			Changed()
-		end
-		for _, which in ipairs({ { "up", -1, UP_X, "Interface\\Buttons\\Arrow-Up-",
-			L["Moves this line up, so it's checked sooner."] },
-			{ "down", 1, DOWN_X, "Interface\\Buttons\\Arrow-Down-", L["Moves this line down, so it's checked later."] } }) do
-			local button = CreateFrame("Button", nil, line)
-			button:SetSize(14, 14)
-			button:SetPoint("LEFT", line, "LEFT", which[3], which[2] < 0 and 6 or -6)
-			button:SetNormalTexture(which[4] .. "Up")
-			button:SetPushedTexture(which[4] .. "Down")
-			button:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-			button:HookScript("OnDisable", function(self) self:SetAlpha(0.3) end)
-			button:HookScript("OnEnable", function(self) self:SetAlpha(1) end)
-			Tip(button, which[5])
-			button:SetScript("OnClick", function() Move(which[2]) end)
-			line[which[1]] = button
-		end
-		-- (A plain grey X, red under the pointer: the game's red close
-		-- buttons were the loudest thing on the page, 2026-11-20.)
-		line.delete = CreateFrame("Button", nil, line)
-		line.delete:SetSize(18, 20)
-		line.delete:SetPoint("LEFT", line, "LEFT", DELETE_X + 2, 0)
-		local cross = line.delete:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		cross:SetPoint("CENTER")
-		cross:SetText("X")
-		cross:SetTextColor(0.6, 0.6, 0.6)
-		line.delete:HookScript("OnEnter", function() cross:SetTextColor(1, 0.3, 0.25) end)
-		line.delete:HookScript("OnLeave", function() cross:SetTextColor(0.6, 0.6, 0.6) end)
-		line.delete:HookScript("OnDisable", function(self) self:SetAlpha(0.3) end)
-		line.delete:HookScript("OnEnable", function(self) self:SetAlpha(1) end)
-		Tip(line.delete, L["Deletes this line."])
-		line.delete:SetScript("OnClick", function()
-			local list = List()
-			if list[line.n] then table.remove(list, line.n) end
-			ns.CooldownRules(kind, key) -- (an empty list dropped)
-			Changed()
-		end)
-		lines[n] = line
-		return line
-	end
-
-	-- The Everywhere else line: its number and words; the page puts the
-	-- row's own dropdown beside them.
-	-- (Its words where a line's where goes, after a bar as theirs, full size
-	-- in a soft color: small and grey, it was the faintest thing on the page.)
-	local elseNumber = block:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	elseNumber:SetJustifyH("RIGHT")
-	local elseBar = block:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-	elseBar:SetText("|")
-	local elseText = block:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	elseText:SetTextColor(0.78, 0.74, 0.64)
-	elseText:SetText(L["Everywhere else"])
-	local elseInUse = InUseMark(block, Tip)
-
-	function block.Set(newKind, newKey, newLabel, newModes)
-		kind, key, label, modes = newKind, newKey, newLabel, newModes
-	end
-	-- What it's for, and how many lines it shows (for tests).
-	function block.For() return kind, key end
-	function block.Shown()
-		local count = 0
-		for _, line in ipairs(lines) do
-			if line:IsShown() then count = count + 1 end
-		end
-		return count
-	end
-	-- Whether the row has lines to show.
-	function block.Has() return ns.CooldownRules(kind, key) ~= nil end
-	-- A new line at the bottom, empty: no Icon shows and no place picked, so
-	-- it counts nowhere till both are. (It started Always, Anywhere, which
-	-- took over every line under it at once, 2026-11-20.)
-	function block.Add()
-		local list = ns.CooldownRules(kind, key, true)
-		list[#list + 1] = { show = "", combat = "any", place = "none" }
-		Changed()
-	end
-
-	-- Lays the lines out from the top; gives the height, the Everywhere else
-	-- line's included (0 with no lines: the row as it always was).
-	function block.Layout()
-		local list = ns.CooldownRules(kind, key)
-		local count = list and #list or 0
-		local enabled = Enabled()
-		local _, hit = ns.CooldownRuleMode(kind, key)
-		for i = 1, count do
-			local line, rule = Line(i), list[i]
-			line.n = i
-			line:ClearAllPoints()
-			line:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -(i - 1) * LINE_H)
-			line:Show()
-			line.inUse:SetShown(i == hit)
-			NumberColor(line.number, i == hit)
-			line.number:SetText(tostring(i))
-			line.show.Show_()
-			local own = rule.cql ~= nil
-			line.combat:SetShown(not own)
-			line.place:SetShown(not own)
-			line.cqlBox:SetShown(own)
-			if own then
-				line.cql:SetText(ns.ColoredRule and ns.ColoredRule(rule.cql) or rule.cql)
-			else
-				line.combat.Show_()
-				line.place.Show_()
-			end
-			for _, control in ipairs({ line.show, line.combat, line.place, line.edit, line.delete, line.cqlBox }) do
-				if control.SetEnabled then control:SetEnabled(enabled) end
-			end
-			line.up:SetEnabled(enabled and i > 1)
-			line.down:SetEnabled(enabled and i < count)
-		end
-		for i = count + 1, #lines do lines[i]:Hide() end
-		if count == 0 then
-			elseNumber:Hide()
-			elseBar:Hide()
-			elseText:Hide()
-			elseInUse:Hide()
-			block:SetHeight(1)
-			return 0
-		end
-		local y = -count * LINE_H
-		elseNumber:ClearAllPoints()
-		elseNumber:SetPoint("RIGHT", block, "TOPLEFT", NUM_R, y - LINE_H / 2)
-		elseNumber:SetText(tostring(count + 1))
-		elseNumber:Show()
-		elseText:ClearAllPoints()
-		elseBar:ClearAllPoints()
-		elseBar:SetPoint("LEFT", block, "TOPLEFT", BAR_X, y - LINE_H / 2)
-		elseBar:Show()
-		elseText:SetPoint("LEFT", block, "TOPLEFT", COMBAT_X + 8, y - LINE_H / 2)
-		elseText:Show()
-		elseInUse:ClearAllPoints()
-		elseInUse:SetPoint("RIGHT", block, "TOPLEFT", IN_USE_R, y - LINE_H / 2)
-		elseInUse:SetShown(hit == nil)
-		NumberColor(elseNumber, hit == nil)
-		block:SetHeight((count + 1) * LINE_H)
-		return (count + 1) * LINE_H
-	end
-	return block
 end

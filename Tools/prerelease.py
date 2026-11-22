@@ -58,7 +58,7 @@ OFFLINE_TESTS = [
     ("Heal Vision: its own Show in for unit frames and for nameplates", "Tools/offline/healtworules.lua"),
     ("tooltip Location row (zone apart from class)", "Tools/offline/tooltiplocation.lua"),
     ("You level up card: Cheer, Congratulate, Commend", "Tools/offline/youlevelemotes.lua"),
-    ("Cooldown Manager numbered lines (in place of situations)", "Tools/offline/cooldownlines.lua"),
+    ("Cooldown Manager grid: place groups and cells", "Tools/offline/cooldowngrid.lua"),
     ("cast bar other kind's look, forever", "Tools/offline/castlook.lua", "forever"),
     ("cast bar other kind's look, retail", "Tools/offline/castlook.lua", "retail"),
     ("preview match unit frames run, forever", "Tools/offline/unitmatch.lua", "forever"),

@@ -9360,9 +9360,11 @@ function ns.CooldownGroupCentered(group)
 	return ns.COOLDOWN_GROUP_CENTER[group] or false
 end
 
--- Each of these asks the row's numbered lines first (CooldownRules.lua: the
--- first that fits where you are now), then its own dropdown. own false: the
--- dropdown alone, as the page shows it, no lines.
+-- Each of these asks the row's cell for the place group in use first
+-- (CooldownRules.lua: the first group that fits where you are now), a
+-- spell's or buff's then its bar's cell, then its own mode (the page's
+-- Otherwise column), then its bar's. own false: the Otherwise alone, as the
+-- page's Otherwise column shows it, no cells.
 
 -- A group's mode, and its Resources and Show early seconds (nil: the default share).
 function ns.CooldownGroupSettings(group, own)
@@ -9396,20 +9398,25 @@ end
 function ns.CooldownSpellMode(id, group, own)
 	if ns.CdmTabOff(group) then return "always", false end
 	local db = ns.db
-	-- (A line of its own that fits: When ready with its own When ready parts
-	-- if it has them, else its bar's.)
+	-- (A cell of its own for the group in use: When ready with its own When
+	-- ready parts if it has them, else its bar's. None: its bar's cell for it,
+	-- before its own Otherwise, as the page's grid shows it.)
 	local ruled = own ~= false and ns.CooldownRuleMode("spell", id)
+	local barCell = not ruled and own ~= false and ns.CooldownRuleMode("group", group or "other")
+	if ruled or barCell then
+		-- (When ready parts: the spell's own if it has any (the grid's choice
+		-- strip sets them), else its bar's.)
+		local partsKey = ns.CooldownOwnReadyKey and ns.CooldownOwnReadyKey(id)
+		if partsKey then
+			return ruled or barCell, ruled and true or false, db.cooldownNeedsPower[partsKey],
+				db.cooldownEarlyOn[partsKey], db.cooldownReadyEarly[partsKey], db.cooldownReadyAnyTime[partsKey]
+		end
+		local set = db.cooldownGroupDefaults[group or "other"] or NO_DEFAULTS
+		return ruled or barCell, ruled and true or false, set.power, true, set.early, set.anyTime
+	end
 	if not (db.cooldownReadyOnly[id] or db.cooldownRechargeOnly[id] or db.cooldownProcOnly[id]
 		or db.cooldownAlwaysShow[id] or db.cooldownNeverShow[id]) then
 		id = ns.BaseSpell(id)
-	end
-	if ruled then
-		if ruled == "ready" and not db.cooldownReadyOnly[id] then
-			local set = db.cooldownGroupDefaults[group or "other"] or NO_DEFAULTS
-			return "ready", true, set.power, true, set.early, set.anyTime
-		end
-		return ruled, true, db.cooldownNeedsPower[id], db.cooldownEarlyOn[id], db.cooldownReadyEarly[id],
-			db.cooldownReadyAnyTime[id]
 	end
 	if db.cooldownReadyOnly[id] then
 		return "ready", true, db.cooldownNeedsPower[id], db.cooldownEarlyOn[id], db.cooldownReadyEarly[id],
@@ -9423,12 +9430,7 @@ function ns.CooldownSpellMode(id, group, own)
 	elseif db.cooldownNeverShow[id] then
 		return "never", true
 	end
-	-- (Its bar's lines next: one that fits decides for it.)
 	local set = db.cooldownGroupDefaults[group or "other"]
-	local barRuled = own ~= false and ns.CooldownRuleMode("group", group or "other")
-	if barRuled then
-		return barRuled, false, set and set.power, true, set and set.early, set and set.anyTime
-	end
 	-- (Its group's mode not set: the Smart set pick, if it has one and Smart
 	-- set's ticked, and no addon places the icons itself: see CooldownGroupSettings.)
 	if db.cooldownSmartDefaults and not (set and set.mode) and ns.COOLDOWN_SMART_GROUPS[group]
@@ -9452,6 +9454,9 @@ function ns.CooldownBuffMode(id, group, ownOnly)
 	if ns.CdmTabOff(group) then return "always", false end
 	local ruled = ownOnly ~= false and ns.CooldownRuleMode("buff", id)
 	if ruled then return ruled, true end
+	-- (Its bar's cell for the group in use, before its own Otherwise.)
+	local barCell = ownOnly ~= false and ns.CooldownRuleMode("group", group or "buffs")
+	if barCell then return barCell, false end
 	local own = ns.db.cooldownBuffMode[id] or ns.db.cooldownBuffMode[ns.BaseSpell(id)]
 	if own then return own, true end
 	return (ns.CooldownGroupSettings(group or "buffs", ownOnly)), false

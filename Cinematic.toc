@@ -83,6 +83,7 @@ Frames.lua
 UI\QuestStandIn.lua
 UI\CooldownStacks.lua
 UI\CooldownRules.lua
+UI\CooldownGrid.lua
 Visions\HealVisionFrames.lua
 UI\Chat.lua
 UI\ChatCopy.lua

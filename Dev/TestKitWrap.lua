@@ -109,7 +109,6 @@ local OLD = {
 	{ cmd = "findtabs", fn = "FindTabsTest", file = "FindTabsTest.lua", log = "findTabsLog" },
 	{ cmd = "cvartrace", fn = "CVarTraceTest", file = "CVarTraceTest.lua", log = "cvarTraceLog" },
 	{ cmd = "dotnumbers", fn = "DotNumbersTest", file = "DotNumbersTest.lua", log = "dotNumbersLog" },
-	{ cmd = "cdmlines", fn = "CdmLinesTest", file = "CdmLinesTest.lua", log = "cdmLinesLog" },
 	{ cmd = "anytime", fn = "ReadyAnyTimeTest", file = "ReadyAnyTimeTest.lua", log = "anyTimeLog" },
 	{ cmd = "stylerevamp", fn = "StyleRevampTest", file = "StyleRevampTest.lua", log = "styleRevampLog" },
 	{ cmd = "aggro", fn = "AggroTest", file = "AggroTest.lua", category = "aggro" },

@@ -78,6 +78,7 @@ Frames.lua
 UI\QuestStandIn.lua
 UI\CooldownStacks.lua
 UI\CooldownRules.lua
+UI\CooldownGrid.lua
 Visions\HealVisionFrames.lua
 UI\Chat.lua
 UI\ChatCopy.lua
@@ -304,7 +305,7 @@ Dev\NpcTitleTest.lua
 Dev\ThemeArtTest.lua
 Dev\FindTabsTest.lua
 Dev\ReadyAnyTimeTest.lua
-Dev\CdmLinesTest.lua
+Dev\CdmGridTest.lua
 Dev\DotNumbersTest.lua
 Dev\FollowHudTest.lua
 Dev\ResetTest.lua

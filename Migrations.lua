@@ -5207,6 +5207,74 @@ STEPS[#STEPS + 1] = function()
 	ns.db.autoHideMouseoverV1 = true
 end
 
+-- (Step: Cooldown Manager lines to place groups, 2026-11-22.)
+STEPS[#STEPS + 1] = function()
+	-- The Cooldown Manager page's numbered lines are gone: the page is a grid
+	-- of place groups across and rows down (CooldownRules.lua). Each line's
+	-- where (its place and combat, or its CQL rule) becomes a group, one per
+	-- different where, in the order they're first met (bars' lines, then
+	-- spells', then buffs'); the line's Icon shows goes in its row's cell for
+	-- it (a row's first line for a where wins, as it did). Unfinished lines
+	-- add nothing. Here, in saved profiles and reset points. Once.
+	if ns.db.cooldownGridV1 then return end
+	local KINDS = { { "cooldownGroupRules", "cooldownGroupCells" }, { "cooldownSpellRules", "cooldownSpellCells" },
+		{ "cooldownBuffRules", "cooldownBuffCells" } }
+	local function Convert(t)
+		if type(t) ~= "table" then return end
+		local groups, byWhere = {}, {}
+		local cells = {}
+		local any = false
+		for _, kind in ipairs(KINDS) do
+			local all = t[kind[1]]
+			t[kind[1]] = nil
+			-- (Keys in order, so the groups come out the same each time.)
+			local keys = {}
+			for key in pairs(type(all) == "table" and all or {}) do keys[#keys + 1] = key end
+			table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+			for _, key in ipairs(keys) do
+				local list = all[key]
+				for _, line in ipairs(type(list) == "table" and list or {}) do
+					if type(line) == "table" and type(line.show) == "string" and line.show ~= "" then
+						local where, group
+						if type(line.cql) == "string" and line.cql:find("%S") then
+							where = "cql:" .. line.cql
+							group = { cql = line.cql }
+						elseif type(line.place) == "string" and line.place ~= "none" then
+							local combat = (line.combat == "in" or line.combat == "out") and line.combat or "any"
+							where = line.place .. "|" .. combat
+							group = { places = { [line.place] = true }, combat = combat }
+						end
+						if where then
+							if not byWhere[where] then
+								group.id, group.name = #groups + 1, ""
+								groups[#groups + 1] = group
+								byWhere[where] = group.id
+							end
+							cells[kind[2]] = cells[kind[2]] or {}
+							local row = cells[kind[2]][key] or {}
+							cells[kind[2]][key] = row
+							if row[byWhere[where]] == nil then row[byWhere[where]] = line.show end
+							any = true
+						end
+					end
+				end
+			end
+		end
+		if not any then return end
+		t.cooldownPlaceGroups = groups
+		for name, rows in pairs(cells) do t[name] = rows end
+	end
+	Convert(ns.db)
+	for _, saved in pairs(ns.db.profiles or {}) do
+		if type(saved) == "table" then
+			Convert(saved)
+			Convert(saved.settings)
+		end
+	end
+	for _, point in pairs(ns.db.profileResetPoints or {}) do Convert(point) end
+	ns.db.cooldownGridV1 = true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only

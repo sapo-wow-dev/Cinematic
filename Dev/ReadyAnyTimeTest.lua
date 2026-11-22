@@ -19,7 +19,7 @@ local _, ns = ...
 local SETUP, STEP, WAIT = 8, 12, 4 -- seconds: the first step, each one's, before it acts
 local KEYS = { "cooldownReadyOnly", "cooldownReadyEarly", "cooldownEarlyOn", "cooldownRechargeOnly",
 	"cooldownNeedsPower", "cooldownReadyAnyTime", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow",
-	"cooldownGroupDefaults", "cooldownSpellRules" }
+	"cooldownGroupDefaults", "cooldownPlaceGroups", "cooldownSpellCells" }
 local PLACES = { "world", "city", "inn", "dungeon", "raid", "bg" }
 
 local run -- { at, steps, step, notes, spell, group, name }
@@ -67,7 +67,7 @@ end)
 -- The spell on its own: When ready, Out of fights as asked; no numbered lines.
 local function OwnReady(anyTime)
 	local db, id = ns.db, run.spell
-	db.cooldownSpellRules[id] = nil
+	db.cooldownSpellCells[id] = nil
 	db.cooldownRechargeOnly[id], db.cooldownProcOnly[id], db.cooldownAlwaysShow[id] = nil, nil, nil
 	db.cooldownNeverShow[id] = nil
 	db.cooldownReadyOnly[id] = true
@@ -76,11 +76,12 @@ local function OwnReady(anyTime)
 	db.cooldownReadyAnyTime[id] = anyTime or nil
 	ns.readyPace.due = true
 end
--- A numbered line on the spell, Always in place ("any": anywhere), its own
--- dropdown When ready with Out of fights off under it.
+-- A place group (the grid's, 2026-11-22) with the spell Always in it ("any":
+-- anywhere), its own Otherwise When ready with Out of fights off.
 local function Line(place)
 	OwnReady(false)
-	ns.db.cooldownSpellRules[run.spell] = { { show = "always", combat = "any", place = place } }
+	ns.db.cooldownPlaceGroups = { { id = 1, name = "Test", places = { [place] = true }, combat = "any" } }
+	ns.db.cooldownSpellCells[run.spell] = { [1] = "always" }
 	ns.CooldownRuleFactsStale()
 	ns.readyPace.due = true
 end
@@ -88,7 +89,7 @@ end
 local function PlaceNow()
 	local facts = ns.RuleFactsNow()
 	for _, place in ipairs(PLACES) do
-		if ns.CooldownRuleFits({ show = "always", place = place, combat = "any" }, facts) then return place end
+		if ns.CooldownGroupFits({ places = { [place] = true }, combat = "any" }, facts) then return place end
 	end
 end
 

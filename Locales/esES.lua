@@ -7054,6 +7054,8 @@ L["Favorites"] = "Favoritos"
 L["Click the star beside any settings page's search box to save that page, open at the tab you're on. Your favorites get their own line at the top of Cinematic's list."] = "Pulsa la estrella junto a la búsqueda de cualquier página de opciones para guardar esa página, abierta en la pestaña en la que estás. Tus favoritos tienen su propia línea arriba en la lista de Cinematic."
 L["Text on You"] = "Texto sobre ti"
 L["The game's floating combat text about you (hits, heals, misses, power, auras, Low Health) now has a page of its own on Style: a look for each kind, beside your character, and it can follow the Shoulder Cam."] = "El texto de combate flotante del juego sobre ti (golpes, curaciones, fallos, poder, auras, Salud baja) tiene ahora su propia página en Estilo: un aspecto para cada tipo, junto a tu personaje, y puede seguir a la Cámara al hombro."
+L["Cooldown Manager grid"] = "Cuadrícula del Gestor de reutilización"
+L["Make groups of places, like dungeons in combat, and pick what each spell shows in each one, side by side in one grid. Tick several spells to set them at once, or copy one spell's row onto others."] = "Crea grupos de lugares, como mazmorras en combate, y elige qué muestra cada hechizo en cada uno, lado a lado en una sola cuadrícula. Marca varios hechizos para ajustarlos a la vez, o copia la fila de un hechizo en otros."
 
 -- UI/GridRows.lua (rule words)
 L["Gliding"] = "Planeando"

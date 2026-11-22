@@ -49,16 +49,18 @@ Check("group set Never: its spells read never",
 	(ns.CooldownSpellMode(NEVER, "utility", false)) == "never")
 db.cooldownGroupDefaults.utility = nil
 
--- On a numbered line (situations gone, 2026-11-20: CooldownRules.lua).
-db.cooldownSpellRules[NEVER] = { { show = "never", combat = "any", place = "any" } }
-ns.CooldownRuleFactsStale()
-Check("a line's Never used by CooldownSpellMode", (ns.CooldownSpellMode(NEVER, "essential")) == "never")
-Check("the page's own dropdown left as it was", (ns.CooldownSpellMode(NEVER, "essential", false)) ~= "never")
-db.cooldownSpellRules[NEVER] = nil
+-- In a place group's cell (the grid, 2026-11-22: CooldownRules.lua).
+ns.RuleFactsNow = function() return { nocombat = true } end
+local group = ns.AddCooldownGroup()
+group.places = { any = true }
+ns.SetCooldownCell("spell", NEVER, group.id, "never")
+Check("a cell's Never used by CooldownSpellMode", (ns.CooldownSpellMode(NEVER, "essential")) == "never")
+Check("the page's Otherwise left as it was", (ns.CooldownSpellMode(NEVER, "essential", false)) ~= "never")
+ns.RemoveCooldownGroup(group.id)
 
--- The page's dropdown: the Options.lua MODES list (by its source, the page's locals).
-local src = io.open("Options.lua"):read("*a")
-Check("dropdown lists Never", src:find('{ value = "never", text = L%["Never"%] }') ~= nil)
+-- The grid's choices (by its source, UI/CooldownGrid.lua's locals).
+local src = io.open("UI/CooldownGrid.lua"):read("*a")
+Check("choices list Never", src:find('{ "never", L%["Never"%] }') ~= nil)
 Check("OWN_MODES stores never", src:find('never = "cooldownNeverShow"') ~= nil)
 local profiles = io.open("Profiles/Profiles.lua"):read("*a")
 Check("profiles carry cooldownNeverShow", profiles:find('"cooldownNeverShow"') ~= nil)
