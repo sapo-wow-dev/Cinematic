@@ -2726,7 +2726,8 @@ end
 function ns.CameraOffBesidesRows(cam)
 	local db = ns.db
 	if not db then return false end
-	if db.cameraModes == false then
+	-- (Cameras left out, Modules.lua: off, and no delay timed.)
+	if db.cameraModes == false or LEFT_OUT.cameraModes then
 		return true
 	end
 	-- Stopped (ns.StopCamera): off until what started it is over.
@@ -4111,8 +4112,11 @@ local function OnUpdate(_, elapsed)
 		-- (Out of CineMode, the Subtle profile's effects over the normal UI,
 		-- their rows asked only every EFFECT_ASK seconds, or at once when the
 		-- fight or effectsOn changes: their fades still run every tick.)
-		local ask = cinematic or ns.effectsDemo or effectAsk.fight ~= inCombat or effectAsk.on ~= effectsOn
-			or now - effectAsk.at >= EFFECT_ASK
+		-- (Atmosphere left out, Modules.lua: no effect's row asked at all, none
+		-- wanted; the tint's call still runs Death Vision's screen, a Vision.)
+		local atmo = not LEFT_OUT.visualEffects
+		local ask = atmo and (cinematic or ns.effectsDemo or effectAsk.fight ~= inCombat or effectAsk.on ~= effectsOn
+			or now - effectAsk.at >= EFFECT_ASK)
 		if ask then
 			effectAsk.fight, effectAsk.on, effectAsk.at = inCombat, effectsOn, now
 			for _, key in ipairs(GRID_EFFECTS) do
@@ -4129,18 +4133,18 @@ local function OnUpdate(_, elapsed)
 			effectWanted[key] = effectAsk[key]
 		end
 		-- (The letterbox key and a new place's few seconds: Effects.lua.)
-		if not ns.effectsDemo and ns.LetterboxExtra then
+		if atmo and not ns.effectsDemo and ns.LetterboxExtra then
 			effectWanted.letterbox = Step(ns.LetterboxExtra, effectWanted.letterbox, inCombat, cinematic)
 				or false
 		end
 		idleTick.NoteEffects(now, effectWanted)
-		Step(ns.UpdateLetterbox, effectWanted.letterbox, restElapsed)
+		if atmo then Step(ns.UpdateLetterbox, effectWanted.letterbox, restElapsed) end
 		-- (The vignette and weather share the tint's overlay, each fading on its own.)
 		Step(ns.UpdateTint, effectWanted.tint, restElapsed, effectWanted.vignette, effectWanted.weather)
 		Step(ns.UpdateCVars, cinematic)
 		Step(ns.UpdateReadyOnly, restElapsed) -- (Cooldown Manager icons: Frames.lua)
 		Step(ns.WarmCombatShown) -- (the next frames' pass's combat rows, worked out here: Frames.lua)
-		Step(ns.UpdateMusic, cinematic, restElapsed)
+		if atmo then Step(ns.UpdateMusic, cinematic, restElapsed) end
 		Step(ns.UpdatePlates, ns.PlatesCinematic(cinematic), restElapsed) -- (Allow outside CineMode's Nameplates)
 		Step(ns.UpdateTooltip)
 		Step(ns.UpdateTaxi)
@@ -4444,7 +4448,8 @@ function ns.Resume()
 	if ns.ApplyHealVisionFrames then ns.ApplyHealVisionFrames() end
 	if started then
 		ticker:SetScript("OnUpdate", OnUpdate)
-		ns.orbitFrame:SetScript("OnUpdate", OnOrbitUpdate)
+		-- (Cameras left out, Modules.lua: no orbit to run, and nothing of theirs to put it to sleep.)
+		if ns.ModuleLoaded("cameras") then ns.orbitFrame:SetScript("OnUpdate", OnOrbitUpdate) end
 		if ns.SetDirectorRunning then ns.SetDirectorRunning(true) end
 	end
 	ns.Log("safety", "resumed")
@@ -5404,7 +5409,7 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		started = true
 		if not suspended then
 			self:SetScript("OnUpdate", OnUpdate)
-			ns.orbitFrame:SetScript("OnUpdate", OnOrbitUpdate)
+			if ns.ModuleLoaded("cameras") then ns.orbitFrame:SetScript("OnUpdate", OnOrbitUpdate) end -- (as above)
 			if ns.SetDirectorRunning then ns.SetDirectorRunning(true) end
 		end
 	elseif event == "LOADING_SCREEN_DISABLED" then

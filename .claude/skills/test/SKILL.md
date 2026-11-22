@@ -112,8 +112,11 @@ example to copy is `Dev/KitCheckTest.lua`). One `ns.TestKit.Define({...})` in
 with all the in-game-testing rules already kept, so the test only says its
 steps:
 
-- the command itself: `/cine debug <name> [step numbers | restore]`, typed
-  again to stop; `/cine debug kit` lists every kit test. No Slash.lua edit.
+- the command itself: `/cine debug <name> [full | step numbers | restore]`,
+  typed again to stop; `/cine debug kit` lists every kit test. No Slash.lua edit.
+- **focused runs** (the user, 2026-11-22: "once we know something works ...
+  test just what we need", reload boxes and questions cost the most time):
+  see "Prove once, then leave it out" below.
 - the big lasting box per step, no hidden time limit, a DONE box;
 - CineMode off for the run, kept off, back after (`cineMode = true` only for
   a test about CineMode);
@@ -140,10 +143,32 @@ Inside a step (each `run = function(r)`, in a coroutine):
 | `r:Click(text, fn, label)` | a call the game takes only from your click (SendChatMessage...): a button, `fn(r)` runs **in the click**, returns `ok, ...`. Made straight from a step it runs in a timer's `resume()` and is blocked ("blocked: resume()"; the kit then says so) |
 | `buttons = {...}` (WaitFor opts, Prompt, a step's `buttons`) | **buttons, never "type /cine ..."**: answers (`"Yes"`: the wait returns `"button", "Yes"`), `{ label, fn }`, `{ kind = "editmode" }` (opens Edit Mode by a secure click, no taint), `{ kind = "reload" }` (secure /reload; the run picks up at the next step after it). Skip step and Stop are on every step by themselves. A step that needs the player to change a game setting gives the button that opens it. Old tests: `ns.TestKit.ShowButtons(entries)` / `HideButtons()` |
 | `r:Sleep(s)`, `r:Shot(label, { behind = frame or {frames} })` | wait; a paced screenshot (1.5 s before, 1.2 s after); `behind` puts a solid background behind the frame(s) the shot is about, for that shot only (`pad`, `color` optional). **Give every shot of a frame or text a `behind`**: it reads far better than against the world |
+| `r:Proven(what)` | true (logged "proven, not checked again") unless the run is `full`: `if not r:Proven("seen in run 3") then <check or question> end` |
 | `r:Log(text)` | anything else worth having |
 
 Never call `Sleep` / `Shot` / `WaitFor` inside a pcall (Lua 5.1 can't yield
 across it).
+
+### Prove once, then leave it out
+
+Every user action (a Reload click, a "do you see it?" question, a shot to look
+at) is paid once. After the log proves it:
+
+- mark it **proven** in the test, with what proved it:
+  - a whole step: `proven = "<test> run N: what it showed"` on the step: left
+    out of normal runs, the start line names it;
+  - one check or question inside a step: `if not r:Proven("...") then ... end`;
+  - a test over many parts or rows (loadparts' `PARTS`): `proven` per entry,
+    the run takes only the unproven ones, so a new part is tested alone.
+- A step or check can be proven only by a PASS in a real log. A FAIL, a SKIP,
+  or a check whose code changed since loses its mark: unmark it on the change.
+- A normal `/cine debug <name>` then runs only what's new: hand that over while
+  working. The ledger says what is proven and by which run.
+- **One full run at the end**, before the commit (or release) the work goes in:
+  `/cine debug <name> full` runs every step and check, proven or not. Say in
+  the hand-over that it's the full one.
+- Grow a test by adding the new checks as unproven, never by making the user
+  sit through the old ones again.
 
 **Old tests** (written before the kit) are wrapped by `Dev/TestKitWrap.lua`:
 their steps stay as tested, but each run gets the kit's context lines, the run
@@ -158,9 +183,10 @@ missing one).
 Before handing it over: luacheck, compile, an offline run through the kit on
 the stand-in where it can reach the code (`Tools/offline/testkit.lua` shows
 how: pretend timers, `ns.HandleSlash("debug <name>")`, then check the log).
-Count the user's actions. Then the reply is only: the one command in its own
-block, what the box will ask, that there's no time limit, and "say check
-log". Log the run in the ledger.
+Count the user's actions: everything proven costs none (leave it out). Then
+the reply is only: the one command in its own block (`full` only for the final
+run), what the box will ask, that there's no time limit, and "say check log".
+Log the run in the ledger.
 
 ## 5. Check log
 
@@ -182,7 +208,8 @@ Then, in this order:
    answers picked.
 3. **The test itself** (it gets better each log): wrong verdicts and why, values
    you had to guess, what the user would have seen that the test didn't check.
-   Fix all three.
+   Fix all three. Then mark what this log proved as `proven` (step, check or
+   part), so the next run doesn't ask for it again.
 4. **Decide**:
    - everything answered: build or finish; the next run is the confirm run.
    - still open: write in the ledger *why this run couldn't answer it* (a

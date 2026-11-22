@@ -1,7 +1,7 @@
 -- The test kit: what every self-running in-game test needs, done once, so a
 -- test only says its steps (dev copy only). The /test skill's rules
 -- (.claude/skills/test/SKILL.md) are built in:
---   * one command, /cine debug <name> [step numbers | restore]; typed again
+--   * one command, /cine debug <name> [full | step numbers | restore]; typed again
 --     while it runs, it stops;
 --   * each step in the big lasting box (ns.PadTestBox), no hidden time limit
 --     (WaitFor waits as long as it takes), a DONE box at the end;
@@ -23,6 +23,17 @@
 --     shot only: use it on every shot of a frame or text;
 --   * the log in CinematicDB.<key>Log, the run before in <key>PrevLog, so a
 --     rerun doesn't lose it before .claude/skills/test/read_log.py archives it.
+--
+-- Focused runs (the user, 2026-11-22: "once we know something works ...
+-- test just what we need", one full test at the end): what's proven
+-- isn't asked again while working on something else.
+--   * a step with proven = "what proved it (ledger run)" is left out of a
+--     run; the start line says which and why;
+--   * inside a step, `if not r:Proven("what proved it") then <check> end`
+--     leaves out one check or question (a Reload box asked about, a shot
+--     already looked at) the same way;
+--   * /cine debug <name> full runs everything, proven or not: the final
+--     test before a commit or release. Step numbers run just those.
 --
 -- A test:
 --   ns.TestKit.Define({
@@ -455,7 +466,7 @@ function Run:SaveResume()
 	local rest = {}
 	for i = (self.index or 0) + 1, #self.steps do rest[#rest + 1] = self.steps[i].number end
 	CinematicDB[self.def.key .. "Resume"] = { steps = table.concat(rest, " "), pass = self.pass, fail = self.fail,
-		skip = self.skip, verdicts = self.verdicts }
+		skip = self.skip, verdicts = self.verdicts, full = self.full or nil }
 	Say(self, ("  reload clicked: picks up at login with step(s) %s"):format(#rest > 0 and table.concat(rest, " ") or "none"))
 end
 
@@ -696,13 +707,30 @@ function Kit.Finish(run, done)
 	C_Timer.After(60, function() if not current and ns.PadTestBoxHide then ns.PadTestBoxHide(run) end end)
 end
 
+-- The steps to run: the numbers given, else every step not proven (all with
+-- "full"). Also whether it's a full run, and the proven ones left out.
 local function Pick(def, arg)
-	local wanted, steps = {}, {}
+	local wanted, steps, left = {}, {}, {}
+	local full = (arg or ""):find("full") ~= nil
 	for number in (arg or ""):gmatch("%d+") do wanted[tonumber(number)] = true end
 	for i, step in ipairs(def.steps) do
-		if not next(wanted) or wanted[i] then steps[#steps + 1] = { step = step, number = i } end
+		if next(wanted) then
+			if wanted[i] then steps[#steps + 1] = { step = step, number = i } end
+		elseif step.proven and not full then
+			left[#left + 1] = ("%s (%s)"):format(step.key, step.proven)
+		else
+			steps[#steps + 1] = { step = step, number = i }
+		end
 	end
-	return steps
+	return steps, full, left
+end
+
+-- In a step: true (and logged) when this check is proven and the run isn't
+-- full, so the caller leaves it out; false when it should run.
+function Run:Proven(what)
+	if self.full then return false end
+	Say(self, "  proven, not checked again: " .. tostring(what))
+	return true
 end
 
 function Kit.Start(name, arg, resume)
@@ -728,10 +756,15 @@ function Kit.Start(name, arg, resume)
 	local run = setmetatable({ def = def, pass = resume and resume.pass or 0, fail = resume and resume.fail or 0,
 		skip = resume and resume.skip or 0, verdicts = resume and resume.verdicts or {}, began = GetTime() }, Run)
 	if ns.PadTestBoxClock then ns.PadTestBoxClock(function() return Kit.Clock(run) end) end
-	run.steps = Pick(def, arg)
+	local left
+	run.steps, run.full, left = Pick(def, arg)
+	if resume then run.full = resume.full and true or false end
 	current = run
-	Say(run, ("start: /cine debug %s%s, %s, %d of %d step(s)"):format(def.name, arg and arg ~= "" and (" " .. arg) or "",
-		date("%Y-%m-%d"), #run.steps, #def.steps))
+	Say(run, ("start: /cine debug %s%s, %s, %d of %d step(s)%s"):format(def.name, arg and arg ~= "" and (" " .. arg) or "",
+		date("%Y-%m-%d"), #run.steps, #def.steps, run.full and ", full run" or ""))
+	if #left > 0 then
+		Say(run, ("proven, left out (/cine debug %s full runs them): %s"):format(def.name, table.concat(left, "; ")))
+	end
 	if resume then
 		-- (After the Reload button: the same run's undo kept, CineMode as it was.)
 		local undo = CinematicDB[UndoKey(def)] or {}
@@ -780,7 +813,7 @@ end
 function ns.TestKitRun(arg)
 	local name, rest = (arg or ""):match("^(%S+)%s*(.-)$")
 	if name == "kit" then
-		ns.Print("test kit tests (/cine debug <name> [steps | restore]):")
+		ns.Print("test kit tests (/cine debug <name> [full | steps | restore]; proven steps left out unless full):")
 		for _, each in ipairs(order) do
 			local def = defs[each]
 			print(("  %s - %s (%d steps)"):format(each, def.about or def.title, #def.steps))

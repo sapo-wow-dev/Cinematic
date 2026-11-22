@@ -27,7 +27,9 @@ end
 
 if not phase then
 	local failed = false
-	for _, each in ipairs({ { "on", 3 }, { "off", 4 } }) do
+	-- (on, off: full runs, every part, Visions left out to start in off; quick:
+	-- every part proven but Visions, so just it: one reload, the proven left out.)
+	for _, each in ipairs({ { "on", 3 }, { "off", 4 }, { "quick", 2 } }) do
 		local file = os.tmpname()
 		local f = assert(io.open(file, "w"))
 		f:write(each[1] == "off" and "return { loadVisions = false }" or "return nil")
@@ -107,8 +109,10 @@ StaticPopup_Hide = function() popup._shown = false end
 StaticPopup_FindVisible = function() return popup._shown and popup or nil end
 
 local problems = {}
+-- (quick: Visions as if new, not proven yet.)
+if start == "quick" then ns.loadPartsParts[1].proven = nil end
 if phase == "1" then
-	ns.HandleSlash("debug loadparts")
+	ns.HandleSlash(start == "quick" and "debug loadparts" or "debug loadparts full")
 	Advance(120)
 else
 	-- (The kit picks the run up 2 s after the reload's PLAYER_ENTERING_WORLD: isLogin false, isReload true.)
@@ -140,6 +144,13 @@ else
 	if not text:find(" 0 fail", 1, true) then problems[#problems + 1] = "the summary isn't 0 fail" end
 	if CinematicDB.loadVisions == false or CinematicDB.loadCameras == false or CinematicDB.loadStyle == false then problems[#problems + 1] = "a Load box left off" end
 	if CinematicDB.loadPartsTestUndo then problems[#problems + 1] = "the undo wasn't put back" end
+	if start == "quick" then
+		-- (Just Visions, the proven checks left out: no question, no second reload.)
+		if text:find("Cameras not loaded", 1, true) then problems[#problems + 1] = "quick: a proven part was left out too" end
+		if not text:find("Visions not loaded after the reload", 1, true) then problems[#problems + 1] = "quick: Visions wasn't checked" end
+		if text:find("Do you see the game's box", 1, true) then problems[#problems + 1] = "quick: asked about the Reload box again" end
+		if not text:find("proven, left out", 1, true) then problems[#problems + 1] = "quick: the proven step wasn't left out" end
+	end
 end
 if os.getenv("LOADPARTS_LOG") then print(text) end
 local tag = ("loadparts %s %s"):format(start or "on", phase)

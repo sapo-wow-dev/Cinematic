@@ -33,7 +33,7 @@ local SPECS = {
 			"Atmosphere/DeathVision.lua", "Dev/WindGuide.lua" },
 		-- (Its one frame loaded either way: the ambience volume put back after a
 		-- cue cut short.)
-		allowed = { "frame from @Visions/CombatSoundRules.lua" },
+		allowed = { "from @Visions/CombatSoundRules.lua" },
 		pages = { "Heal Vision", "Damage Vision", "Quest Vision", "Roll Vision", "Duel Vision", "Emote Vision",
 			"Card Vision", "Card Styles", "Damage Vision Look", "Quest Talk Style", "Quest Item Style", "Roll Style",
 			"Visions Style", "Vitals Vision", "Death Vision", "Teleport Vision", "Vitals Style" },
@@ -65,9 +65,9 @@ local SPECS = {
 		loadedFiles = { "Style/StyleFonts.lua", "Style/StylePages.lua", "Style/ColorPalette.lua" },
 		-- (Loaded either way, in Style files: the Atmosphere effect pages and
 		-- their tabs (LetterboxStyle.lua), Roll Vision's tabs (RollStyle.lua).)
-		allowed = { "frame from @Style/LetterboxStyle.lua", "frame from @Style/RollStyle.lua",
-			"frame from @Style/StylePages.lua", "frame from @Style/ColorPalette.lua", "frame from @Style/StyleFonts.lua",
-			"hook from @Style/StylePages.lua", "timer from @Style/StylePages.lua", "hook from @Style/LetterboxStyle.lua" },
+		-- (Anything they make: frames, scripts, events, hooks, timers.)
+		allowed = { "from @Style/LetterboxStyle.lua", "from @Style/RollStyle.lua", "from @Style/StylePages.lua",
+			"from @Style/ColorPalette.lua", "from @Style/StyleFonts.lua" },
 		pages = { "Style Themes", "Style Overrides", "Interface Recolor", "Unit Style", "Personal Style", "Raid Style",
 			"Action Style", "Combat Text Style", "Nameplate Style", "Name Style", "Bubble Style", "Tooltip Style",
 			"Tint Style", "Letterbox Style", "Visions Style", "Vitals Style", "Card Styles", "Damage Vision Look",
@@ -226,10 +226,28 @@ local ns, wow = dofile("Tools/offline/load.lua")(client, toc, function(stand)
 		if source then made[#made + 1] = "hook from " .. source end
 	end)
 	local after = stand.Stub
-	rawset(_G, "C_Timer", { After = function()
+	-- (Every timer and ticker, every event registered, every script set or
+	-- hooked, by the part's file that asked: left out, none may happen.)
+	local function Note(kind)
 		local source = Caller()
-		if source then made[#made + 1] = "timer from " .. source end
-	end, NewTicker = function() return after end, NewTimer = function() return after end })
+		if source then made[#made + 1] = kind .. " from " .. source end
+	end
+	rawset(_G, "C_Timer", {
+		After = function() Note("timer") end,
+		NewTicker = function() Note("ticker") return after end,
+		NewTimer = function() Note("timer") return after end,
+	})
+	local M = stand.Methods
+	for _, name in ipairs({ "RegisterEvent", "RegisterUnitEvent", "SetScript", "HookScript" }) do
+		local real = M[name]
+		M[name] = function(self, what, fn, ...)
+			-- (SetScript with nil clears a script: not a leak.)
+			if not (name == "SetScript" and fn == nil) then
+				Note((name:find("Event") and "event " or "script ") .. tostring(what))
+			end
+			return real(self, what, fn, ...)
+		end
+	end
 end)
 
 for _, w in ipairs(wow.warnings) do Problem("load: " .. w) end
@@ -241,11 +259,138 @@ for _, e in ipairs(ns.migrationErrors or {}) do Problem("settings update: " .. e
 -- runs on and on (a loop waiting on the stand-in's clock, which never moves)
 -- is cut off after a while, an error of its own.
 local RUNAWAY = "ran too long"
+-- (With ran set: every Lua function called, by its file and first line, for
+-- the leak scan below.)
+local ran
 local function Once(fn, ...)
-	debug.sethook(function() error(RUNAWAY) end, "", 2000000)
+	if ran then
+		debug.sethook(function(event)
+			if event == "count" then error(RUNAWAY) end
+			local info = debug.getinfo(2, "S")
+			if info and info.what == "Lua" then ran[info.source .. ":" .. info.linedefined] = info end
+		end, "c", 100000000)
+	else
+		debug.sethook(function() error(RUNAWAY) end, "", 2000000)
+	end
 	local ok, err = pcall(fn, ...)
 	debug.sethook()
 	return ok, err
+end
+
+-- Leaks the other way: code loaded either way that still runs with a part
+-- left out and calls into it (a function the part defines, or one of its
+-- stand-ins): work done for a part that isn't there. Each such function the
+-- event storm ran, by file and line, with the part's names it reads.
+local function InPart(source, part)
+	for _, file in ipairs(SPECS[part].files) do
+		if source:find(file, 1, true) then return true end
+	end
+	return false
+end
+local fileLines = {}
+local function Lines(path)
+	if fileLines[path] == nil then
+		local list = {}
+		local f = io.open(path, "r")
+		if f then
+			for line in f:lines() do list[#list + 1] = (line:gsub("\r", "")) end
+			f:close()
+		end
+		fileLines[path] = list
+	end
+	return fileLines[path]
+end
+local function TocFiles()
+	local list = {}
+	for line in io.lines("CinematicDev.toc") do
+		line = line:gsub("\r", "")
+		if line:find("%.lua$") and not line:find("^#") then list[#list + 1] = (line:gsub("\\", "/")) end
+	end
+	return list
+end
+-- The names a part's files give ns (and its stand-ins), less any a loaded file gives too.
+local function PartNames(part)
+	local names, shared = {}, {}
+	for _, path in ipairs(TocFiles()) do
+		local mine = InPart("@" .. path, part)
+		for _, line in ipairs(Lines(path)) do
+			for name in line:gmatch("^%s*function ns%.([%w_]+)") do (mine and names or shared)[name] = true end
+			for name in line:gmatch("^%s*ns%.([%w_]+)%s*=[^=]") do (mine and names or shared)[name] = true end
+		end
+	end
+	for name in pairs(shared) do names[name] = nil end
+	for name in pairs(ns.MODULE_STAND_INS and ns.MODULE_STAND_INS[part] or {}) do names[name] = true end
+	return names
+end
+-- (Every file's text as it was loaded, for the leak scan's lines: another
+-- session's edit during a run moved them, 2026-11-22.)
+for _, path in ipairs(TocFiles()) do Lines(path) end
+
+-- Reviewed: loaded code that names a part but does no work for it while
+-- it's left out (a guard first, a stand-in that does nothing, one call at
+-- login). By file and the function's first line, the names it may read.
+-- A new one fails until it's looked at (2026-11-22 audit: the effect rows,
+-- the camera delay and the orbit's every-frame loop were real, and fixed).
+local LEAK_OK = {
+	["Core.lua local function OnUpdate(_, elapsed)"] = { "UpdateLetterbox", "UpdateMusic", "UpdateTint",
+		"db.visualEffects", "UpdateTaxi", why = "atmo/LEFT_OUT guards; UpdateTint runs Death Vision; UpdateTaxi a stand-in" },
+	['Core.lua ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg1, arg2)'] = {
+		"CreateLetterbox", "CreateTint", "MusicTrace", "RestoreMusicVolume", "StopCombatMusicNow", "StopDeathSongNow",
+		"StopMusicNow", "HookCameraInput", "HookTaxiRoutes", "LoginZoom", "StopIdleZoomNow", "StopOrbitNow",
+		"db.styleGeneral", "ShowTimeOfDayTitle", why = "login and logout: one stand-in call each; styleGeneral behind ModuleLoaded" },
+	["Core.lua Guard(function()"] = { "MusicTrace", why = "login/logout trace line: a stand-in" },
+	["Core.lua function ns.CameraOffBesidesRows(cam)"] = { "db.cameraModes", why = "LEFT_OUT.cameraModes returns first" },
+	["Core.lua function ns.IsCameraOffHere(cam)"] = { "CameraRowsOff", why = "a stand-in: off" },
+	["Core.lua local function ShouldBeCinematic(now)"] = { "ActiveEvent", "TriggerStartsCine", why = "stand-ins: no" },
+	["Frames.lua function ns.ApplyUnitFrameParts()"] = { "StyleOverride", why = "a stand-in: no override" },
+	["Profiles/Welcome.lua local function UpdateChoices()"] = { "ActiveStyleTheme", why = "the window's own: a stand-in" },
+	-- (One part calling another left out: a stand-in.)
+	["Camera/Camera.lua function ns.UpdateOrbit(cinematic, elapsed)"] = { "SetDeathSong", why = "Atmosphere's stand-in" },
+	["Camera/CameraScripts.lua local function Finish(why)"] = { "EndSceneMusic", why = "Atmosphere's stand-in" },
+	["Visions/Cards.lua function ns.Cards.Fire(id, card, force)"] = { "LetterboxUp", why = "Atmosphere's stand-in: no bars" },
+	["Visions/FlightLine.lua local function Wanted()"] = { "FlightDuration", why = "Cameras' stand-in" },
+}
+
+local function LeakScan(part)
+	local names = PartNames(part)
+	local found = {}
+	for _, info in pairs(ran or {}) do
+		local source = info.source or ""
+		local path = source:match("^@(.*)")
+		local inAnyPart = false
+		for _, each in ipairs(parts) do if InPart(source, each) then inAnyPart = true end end
+		if path and not path:find("^Tools/") and not inAnyPart then
+			local lines = Lines(path)
+			local reads = {}
+			for n = info.linedefined, math.min(info.lastlinedefined, #lines) do
+				local code = lines[n]:gsub("%-%-.*", "")
+				for name in code:gmatch("ns%.([%w_]+)") do
+					if names[name] then reads[name] = true end
+				end
+				-- (And a left-out switch read straight from the settings, past
+				-- ns.Setting: it reads on, and the part's work goes on.)
+				for name in code:gmatch("db%.([%w_]+)") do
+					if ns.LEFT_OUT_SWITCHES and ns.LEFT_OUT_SWITCHES[name] then reads["db." .. name] = true end
+				end
+			end
+			local list = {}
+			for name in pairs(reads) do list[#list + 1] = name end
+			local key = path .. " " .. (lines[info.linedefined] or ""):gsub("^%s+", ""):gsub("%s+$", "")
+			local ok = LEAK_OK[key]
+			local new = {}
+			for _, name in ipairs(list) do
+				local fine = false
+				for _, each in ipairs(ok or {}) do if each == name then fine = true end end
+				if not fine then new[#new + 1] = name end
+			end
+			if #new > 0 then
+				table.sort(new)
+				found[#found + 1] = ("%s:%d (%s) reads %s"):format(path, info.linedefined, key, table.concat(new, ", "))
+			end
+		end
+	end
+	table.sort(found)
+	return found
 end
 local function Storm()
 	local seen = {}
@@ -570,9 +715,16 @@ elseif phase == "off" then
 	-- Back on (then a /reload: the back run).
 	for _, part in ipairs(parts) do ns.SetModuleWanted(part, true) end
 	local saved = Dump(CinematicDB)
+	ran = {}
 	for err in pairs(Storm()) do
 		if not onStorm[err] then Problem("event error while left out: " .. err) end
 	end
+	for _, part in ipairs(parts) do
+		for _, line in ipairs(LeakScan(part)) do
+			Problem(("loaded code still calls into %s while it's left out: %s"):format(part, line))
+		end
+	end
+	ran = nil
 	for err in pairs((WhyTabs())) do
 		if not onStorm[err] then Problem("Why window error while left out: " .. err) end
 	end

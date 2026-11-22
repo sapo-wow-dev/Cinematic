@@ -21,3 +21,14 @@ Q2 an error -> its deverror line names the call: a stand-in missing in Modules.l
 | 1 | 2026-11-22 | /cine debug loadparts | Q2-Q5: 105 PASS 0 FAIL, 0 errors, 0 blocked; one Reload box naming all four each time | Q6 in game (Visions on, Atmosphere off): offline only |
 
 Done: Q2-Q5 in 1 run.
+
+## Leak audit (2026-11-22, user: "no code leaks in")
+| # | Question | Client | Answer | From |
+|---|----------|--------|--------|------|
+| L1 | A left-out part's files start nothing: no frame, timer, ticker, event, script or hook | both | YES offline (modules.lua counts each by file; kept toolkit files allowed) | modules.lua |
+| L2 | Loaded code does no work for a left-out part | both | Offline: 3 leaks found and fixed (Core's effect rows every tick, the camera orbit's every-frame loop, the auto-walk delay timing); the rest reviewed (LEAK_OK: stand-in calls, login one-offs) | modules.lua |
+| L3 | In game, no loop from a left-out part's files runs | forever | YES: none (99 files checked); loops 1.675 ms a frame loaded, 0.212 left out; 107 PASS 0 FAIL | run 2 |
+| 2 | 2026-11-22 | /cine debug loadparts | L3: 107 PASS 0 FAIL, 0 errors, 0 blocked | none |
+| 3 | 2026-11-22 | /cine debug loadparts full | final full run: 103 PASS 0 FAIL, 0 errors, 0 blocked; no loop of theirs; loops 0.490 -> 0.088 ms a frame | none |
+
+Proven (left out of plain runs since, 2026-11-22): all four parts, the Reload box question and shot, the screen shot, ticking back and the reload after (the back step). `/cine debug loadparts full` runs them all: the final run.

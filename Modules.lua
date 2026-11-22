@@ -160,9 +160,24 @@ function ns.ModuleLoaded(name)
 	return loaded[name] == true
 end
 
+-- Each part's files, by name (Tint.lua), as their code was handed in: what
+-- /cine debug loadparts checks the game's running loops against (a loop
+-- from one of them with the part left out is a leak).
+local partFiles = {}
+function ns.ModuleFiles(name)
+	return partFiles[name] or {}
+end
+
 -- fn: the rest of a part's file. (Handed in after the start, it runs now.)
 function ns.Module(name, fn)
 	assert(PARTS[name], "unknown module " .. tostring(name))
+	-- (The game's stack text; offline, Lua's own.)
+	local stack = (debugstack and debugstack(2, 1, 0)) or (debug and debug.traceback and debug.traceback("", 2)) or ""
+	local file = type(stack) == "string" and stack:match("([%w_]+%.lua)")
+	if file then
+		partFiles[name] = partFiles[name] or {}
+		partFiles[name][file] = true
+	end
 	if ran then
 		if loaded[name] then Run(fn) end
 		return

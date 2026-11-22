@@ -23,27 +23,46 @@
 local ADDON_NAME, ns = ...
 
 -- Each part: its General page and box, a setting of its, pages, frames made
--- as its code runs, its Why tab's left-out row.
+-- as its code runs, its Why tab's left-out row. proven: what proved it; a
+-- run leaves out only the parts not proven yet (a new one: just it, one
+-- reload), /cine debug loadparts full every part (the final test).
 local PARTS = {
 	{ part = "visions", label = "Visions", general = "Visions General", box = "loadVisionsBox",
 		popup = "CINEMATIC_LOAD_PARTS", setting = "cardSleepBagOn", why = "visions", row = "visions:loaded",
 		pages = { "Heal Vision", "Damage Vision", "Quest Vision", "Roll Vision", "Duel Vision", "Emote Vision",
 			"Card Vision", "Visions Style", "Vitals Vision", "Death Vision", "Teleport Vision", "Vitals Style" },
-		frames = { "CinematicQuestItemButton", "CinematicQuestTalkClearTarget" } },
+		frames = { "CinematicQuestItemButton", "CinematicQuestTalkClearTarget" }, proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 	{ part = "cameras", label = "Cameras", general = "Cameras", box = "loadCamerasBox",
 		popup = "CINEMATIC_LOAD_PARTS", setting = "walkCine", why = "cameras", row = "cameras:loaded",
 		pages = { "Scenes", "Triggers", "Camera Scripts", "My Shots", "Shoulder Cam", "Camera Settings" },
-		frames = { "CinematicCameraWheel", "CinematicShoulderEscapeButton" } },
+		frames = { "CinematicCameraWheel", "CinematicShoulderEscapeButton" }, proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 	{ part = "style", label = "Style", general = "Style General", box = "loadStyleBox",
 		popup = "CINEMATIC_LOAD_PARTS", setting = "abSlots",
 		pages = { "Style Themes", "Unit Style", "Action Style", "Nameplate Style", "Name Style", "Tooltip Style",
 			"Tint Style", "Card Styles", "Vitals Style" },
-		frames = { "CinematicSelfText" } },
+		frames = { "CinematicSelfText" }, proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 	{ part = "atmosphere", label = "Atmosphere", general = "Effects", box = "loadAtmosphereBox",
 		popup = "CINEMATIC_LOAD_PARTS", setting = "letterboxOnDiscover", why = "atmosphere", row = "atmosphere:loaded",
 		pages = { "Tint", "Letterbox", "Graphics+", "Audio", "Tint Style", "Letterbox Style" },
-		frames = { "CinematicTint", "CinematicLetterbox", "CinematicFocus" } },
+		frames = { "CinematicTint", "CinematicLetterbox", "CinematicFocus" }, proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 }
+
+ns.loadPartsParts = PARTS -- (Tools/offline/loadparts.lua: one marked new, the quick run)
+
+-- The parts this run leaves out and checks: those not proven, or all on a full run.
+local function Active(r)
+	local list = {}
+	for _, p in ipairs(PARTS) do
+		if r.full or not p.proven then list[#list + 1] = p end
+	end
+	return list
+end
+local function Has(r, part)
+	for _, p in ipairs(Active(r)) do
+		if p.part == part then return true end
+	end
+	return false
+end
 
 local function Data()
 	CinematicDB.loadPartsTestData = CinematicDB.loadPartsTestData or {}
@@ -97,6 +116,26 @@ local function WhyRow(id)
 	end
 end
 
+-- Every update loop that runs for seconds (/cine debug loops' audit): label
+-- (File.lua:line) -> ms, and the ms a frame in all.
+local function Loops(r, seconds)
+	ns.loopAudit = {}
+	local frames = 0
+	local counter = CreateFrame("Frame")
+	counter:SetScript("OnUpdate", function() frames = frames + 1 end)
+	r:Sleep(seconds)
+	counter:SetScript("OnUpdate", nil)
+	local audit = ns.loopAudit or {}
+	ns.loopAudit = nil
+	local total, labels = 0, {}
+	for label, row in pairs(audit) do
+		total = total + row.ms
+		labels[#labels + 1] = ("%s %.2f ms/%d"):format(label, row.ms, row.calls)
+	end
+	table.sort(labels)
+	return audit, total / math.max(1, frames), labels
+end
+
 -- A command or key into a left-out part's code: what it said.
 local function Said(fn, ...)
 	local said
@@ -112,7 +151,8 @@ end
 -- your click (or the kit's Reload).
 local function Flip(r, wanted, only)
 	local shown = {}
-	for _, p in ipairs(PARTS) do
+	local list = only and PARTS or Active(r)
+	for _, p in ipairs(list) do
 		if not only or only[p.part] then
 			local canvas = ns.settingsCanvases and ns.settingsCanvases[p.general]
 			local box = canvas and canvas[p.box]
@@ -147,17 +187,22 @@ local function Flip(r, wanted, only)
 	local text = t and t.GetText and t:GetText()
 	if type(text) ~= "string" then text = "" end
 	local named = 0
-	for _, p in ipairs(PARTS) do
+	for _, p in ipairs(list) do
 		if (not only or only[p.part]) and text:find(({ visions = "Visions", cameras = "cameras", style = "Style", atmosphere = "Atmosphere" })[p.part], 1, true) then
 			named = named + 1
 		end
 	end
 	local want = 0
-	for _, p in ipairs(PARTS) do if not only or only[p.part] then want = want + 1 end end
+	for _, p in ipairs(list) do if not only or only[p.part] then want = want + 1 end end
 	r:Verdict(#shown == 1 and named == want, ("one Reload box for it all: %d, naming %d of %d: %s"):format(#shown,
 		named, want, text))
-	if #shown > 0 then r:Shot("the Reload boxes", { behind = shown }) end
 	r:SaveResume()
+	-- (Seen and shot in runs 1-5: the one Reload box, over the test's own.)
+	if r:Proven("the game's Reload box shows and you see it (loadparts runs 1-5)") then
+		r:WaitFor("Click Reload in the game's box.", { check = function() return false end, buttons = { { kind = "reload" } } })
+		return
+	end
+	if #shown > 0 then r:Shot("the Reload boxes", { behind = shown }) end
 	local _, answer = r:WaitFor("Do you see the game's box asking to reload?",
 		{ check = function() return false end, buttons = { "Yes, I see it", "No box", { kind = "reload" } } })
 	r:Verdict(answer == "Yes, I see it", "you see the Reload box: " .. tostring(answer))
@@ -208,6 +253,10 @@ ns.TestKit.Define({
 			Flip(r, true, off)
 		end },
 		{ key = "on", title = "both loaded", run = function(r)
+			if #Active(r) == 0 then
+				r:Skip("every part proven: nothing to leave out (/cine debug loadparts full checks them all)")
+				return
+			end
 			local start = ns.moduleStart or {}
 			r:Fields("start", { db = function() return start.db end, locale = function() return start.locale end,
 				combat = function() return start.combat end, saved = function() return start.saved end })
@@ -216,7 +265,7 @@ ns.TestKit.Define({
 			local data = Data()
 			wipe(data)
 			data.settings = {}
-			for _, p in ipairs(PARTS) do
+			for _, p in ipairs(Active(r)) do
 				r:Verdict(ns.ModuleLoaded(p.part), p.label .. " loaded (tick its Load box and reload first if not)")
 				for _, name in ipairs(p.frames) do
 					local frame = rawget(_G, name)
@@ -230,23 +279,30 @@ ns.TestKit.Define({
 				data.settings[p.setting] = ns.db[p.setting] == false -- (the other way from now: on unless false)
 				r:Set(p.setting, data.settings[p.setting])
 			end
-			local cameraChoice
-			for _, choice in ipairs(ns.MASTER_WHEEL_CHOICES or {}) do
-				if choice.key == "camera" then cameraChoice = true end
+			if Has(r, "cameras") then
+				local cameraChoice
+				for _, choice in ipairs(ns.MASTER_WHEEL_CHOICES or {}) do
+					if choice.key == "camera" then cameraChoice = true end
+				end
+				r:Verdict(cameraChoice, "the master wheel can have the camera wheel")
 			end
-			r:Verdict(cameraChoice, "the master wheel can have the camera wheel")
 			data.music = GetCVar("Sound_MusicVolume") -- (Atmosphere's music left out: yours untouched)
+			local _, perFrame, labels = Loops(r, 4)
+			data.loopsOn = perFrame
+			r:Log(("loops with them loaded: %.3f ms a frame; %s"):format(perFrame, table.concat(labels, ", ")))
 			data.memOn, data.framesOn = MemoryKB(), FrameCount()
 			r:Log(("memory %.0f KB, %d frames in the game"):format(data.memOn or -1, data.framesOn))
 			r:Verdict(CinematicDB.moduleDefaults == nil, "no copy of their defaults while they're on")
 		end },
 		{ key = "off", title = "both Load boxes unticked", run = function(r)
+			if #Active(r) == 0 then return end
 			Flip(r, false)
 		end },
 		{ key = "leftout", title = "Visions, Cameras, Style and Atmosphere left out", run = function(r)
+			if #Active(r) == 0 then return end
 			local data = Data()
 			local settings = ns.ProfileSettings and ns.ProfileSettings(ns.ActiveProfile())
-			for _, p in ipairs(PARTS) do
+			for _, p in ipairs(Active(r)) do
 				r:Verdict(not ns.ModuleLoaded(p.part), p.label .. " not loaded after the reload")
 				for _, name in ipairs(p.frames) do
 					r:Verdict(rawget(_G, name) == nil, name .. " never made")
@@ -262,57 +318,68 @@ ns.TestKit.Define({
 					and settings[p.setting] == want, ("%s' setting %s kept: %s, in the profile %s"):format(p.label,
 					p.setting, tostring(ns.db[p.setting]), tostring(settings and settings[p.setting])))
 			end
-			-- Visions: every Vision's switch off, its wheel empty, the plates' check no.
-			local _, all = 0, #(ns.VISION_LIST or {})
-			r:Verdict(all == 0, ("vision wheel: %d slots left"):format(all))
-			r:Verdict(ns.Setting("lowHealth") == false and ns.Setting("questVision") == false and ns.Setting("cards") == false,
-				"Vitals, Quest and Card Vision read as off")
-			r:Verdict(ns.IsQuestMob("target") == false, "nameplates' Quest Vision check answers no")
-			-- Cameras: their switches off, every camera off and why, no camera wheel.
-			r:Verdict(ns.Setting("cameraModes") == false and ns.Setting("shoulderCam") == false,
-				"Enable Cameras and Shoulder Cam read as off")
-			r:Verdict(ns.IsCameraOffHere("idle") and true or false, "the AFK camera is off here: " ..
-				tostring(ns.CameraOffWhy and ns.CameraOffWhy("idle")))
-			local cameraChoice
-			for _, choice in ipairs(ns.MASTER_WHEEL_CHOICES or {}) do
-				if choice.key == "camera" then cameraChoice = true end
+			-- (Each part's own checks, for the parts in this run only.)
+			local ok, said
+			if Has(r, "visions") then
+				-- Visions: every Vision's switch off, its wheel empty, the plates' check no.
+				local _, all = 0, #(ns.VISION_LIST or {})
+				r:Verdict(all == 0, ("vision wheel: %d slots left"):format(all))
+				r:Verdict(ns.Setting("lowHealth") == false and ns.Setting("questVision") == false and ns.Setting("cards") == false,
+					"Vitals, Quest and Card Vision read as off")
+				r:Verdict(ns.IsQuestMob("target") == false, "nameplates' Quest Vision check answers no")
+				ok, said = Said(ns.HandleSlash, "report")
+				r:Verdict(ok and said and said:find("left out", 1, true), "/cine report: " .. tostring(said))
 			end
-			r:Verdict(not cameraChoice, "the master wheel has no camera wheel")
-			-- Style: every Style page off whatever's saved; a page's look its defaults.
-			r:Verdict(ns.StyleOn(nil) == false and ns.Setting("styleGeneral") == false,
-				"Enable Style reads off (ns.StyleOn and the switch)")
-			-- Atmosphere: Enable Visual Effects and its pages read off; nothing of
-			-- Graphics Boost's left written (put back as its box was unticked);
-			-- your music volume as it was.
-			r:Verdict(ns.Setting("visualEffects") == false and ns.Setting("letterboxPage") == false
-				and ns.Setting("graphicsPlus") == false and ns.Setting("musicInCinematic") == false,
-				"Enable Visual Effects, Letterbox, Graphics Boost and Audio read as off")
-			r:Verdict(next(ns.db.graphicsPlusSaved or {}) == nil, "Graphics Boost: none of its values left written")
-			r:Verdict(GetCVar("Sound_MusicVolume") == data.music, ("your music volume as it was: %s (on: %s)"):format(
-				tostring(GetCVar("Sound_MusicVolume")), tostring(data.music)))
-			r:Verdict(not (ns.letterbox or rawget(_G, "CinematicTint")), "no letterbox or tint frame")
-			-- Commands and keys into their code: a line saying so.
-			local ok, said = Said(ns.HandleSlash, "report")
-			r:Verdict(ok and said and said:find("left out", 1, true), "/cine report: " .. tostring(said))
-			ok, said = Said(ns.HandleSlash, "flyby")
-			r:Verdict(ok and said and said:find("aren't loaded", 1, true), "/cine flyby: " .. tostring(said))
-			ok, said = Said(Cinematic_StartCam, "idle")
-			r:Verdict(ok and said and said:find("aren't loaded", 1, true), "the AFK camera's key: " .. tostring(said))
-			ok, said = Said(Cinematic_CameraWheel)
-			r:Verdict(ok and said and said:find("aren't loaded", 1, true), "the camera wheel's key: " .. tostring(said))
-			ok, said = Said(ns.HandleSlash, "doftest")
-			r:Verdict(ok and said and said:find("left out", 1, true), "/cine doftest: " .. tostring(said))
-			ok, said = Said(Cinematic_ToggleLetterbox)
-			r:Verdict(ok and said and said:find("isn't loaded", 1, true), "the letterbox key: " .. tostring(said))
-			r:Prompt("Visions, Cameras, Style and Atmosphere left out: 8 seconds of play.", "Nothing to do.", 8)
+			if Has(r, "cameras") then
+				-- Cameras: their switches off, every camera off and why, no camera wheel, their keys say so.
+				r:Verdict(ns.Setting("cameraModes") == false and ns.Setting("shoulderCam") == false,
+					"Enable Cameras and Shoulder Cam read as off")
+				r:Verdict(ns.IsCameraOffHere("idle") and true or false, "the AFK camera is off here: " ..
+					tostring(ns.CameraOffWhy and ns.CameraOffWhy("idle")))
+				local cameraChoice
+				for _, choice in ipairs(ns.MASTER_WHEEL_CHOICES or {}) do
+					if choice.key == "camera" then cameraChoice = true end
+				end
+				r:Verdict(not cameraChoice, "the master wheel has no camera wheel")
+				ok, said = Said(ns.HandleSlash, "flyby")
+				r:Verdict(ok and said and said:find("aren't loaded", 1, true), "/cine flyby: " .. tostring(said))
+				ok, said = Said(Cinematic_StartCam, "idle")
+				r:Verdict(ok and said and said:find("aren't loaded", 1, true), "the AFK camera's key: " .. tostring(said))
+				ok, said = Said(Cinematic_CameraWheel)
+				r:Verdict(ok and said and said:find("aren't loaded", 1, true), "the camera wheel's key: " .. tostring(said))
+			end
+			if Has(r, "style") then
+				-- Style: every Style page off whatever's saved; a page's look its defaults.
+				r:Verdict(ns.StyleOn(nil) == false and ns.Setting("styleGeneral") == false,
+					"Enable Style reads off (ns.StyleOn and the switch)")
+			end
+			if Has(r, "atmosphere") then
+				-- Atmosphere: Enable Visual Effects and its pages read off; nothing of
+				-- Graphics Boost's left written (put back as its box was unticked);
+				-- your music volume as it was; its command and key say so.
+				r:Verdict(ns.Setting("visualEffects") == false and ns.Setting("letterboxPage") == false
+					and ns.Setting("graphicsPlus") == false and ns.Setting("musicInCinematic") == false,
+					"Enable Visual Effects, Letterbox, Graphics Boost and Audio read as off")
+				r:Verdict(next(ns.db.graphicsPlusSaved or {}) == nil, "Graphics Boost: none of its values left written")
+				r:Verdict(GetCVar("Sound_MusicVolume") == data.music, ("your music volume as it was: %s (on: %s)"):format(
+					tostring(GetCVar("Sound_MusicVolume")), tostring(data.music)))
+				r:Verdict(not (ns.letterbox or rawget(_G, "CinematicTint")), "no letterbox or tint frame")
+				ok, said = Said(ns.HandleSlash, "doftest")
+				r:Verdict(ok and said and said:find("left out", 1, true), "/cine doftest: " .. tostring(said))
+				ok, said = Said(Cinematic_ToggleLetterbox)
+				r:Verdict(ok and said and said:find("isn't loaded", 1, true), "the letterbox key: " .. tostring(said))
+			end
+			r:Prompt("Left out: 8 seconds of play.", "Nothing to do.", 8)
 			r:Sleep(8)
 			-- (The screen as it is with Style left out: the game's own look on the
 			-- frames, plates and bars, no theme. Its frames, for the eye.)
-			r:Shot("the screen with Visions, Cameras, Style and Atmosphere left out", { behind = { _G.PlayerFrame, _G.TargetFrame } })
+			if not r:Proven("the screen with them left out, looked at (loadparts runs 1-5)") then
+				r:Shot("the screen with them left out", { behind = { _G.PlayerFrame, _G.TargetFrame } })
+			end
 			-- The menu as you'd open it: each part's General page, its Load box
 			-- showing, no off card over it (Camera > General showed "General is
 			-- off" and hid its box, 2026-11-22: the run before never opened it).
-			for _, p in ipairs(PARTS) do
+			for _, p in ipairs(Active(r)) do
 				ns.OpenOptions(p.general)
 				r:Sleep(1)
 				local canvas = ns.settingsCanvases and ns.settingsCanvases[p.general]
@@ -326,6 +393,26 @@ ns.TestKit.Define({
 				r:Shot(p.general .. " with " .. p.label .. " left out", { behind = _G.SettingsPanel })
 				if ns.padTestBox then ns.padTestBox:Show() end
 			end
+			-- No loop of theirs running (the leak audit, 2026-11-22: the camera
+			-- orbit's ran every frame with Cameras left out): each running loop's
+			-- file against the files their code came from (Modules.lua).
+			local audit, perFrame, labels = Loops(r, 4)
+			local leaks = {}
+			for label in pairs(audit) do
+				local file = label:match("([%w_]+%.lua)")
+				for _, p in ipairs(Active(r)) do
+					if (file and ns.ModuleFiles(p.part)[file]) or label:find("orbit camera", 1, true) then
+						leaks[#leaks + 1] = label .. " (" .. p.label .. ")"
+						break
+					end
+				end
+			end
+			r:Log(("loops with them left out: %.3f ms a frame (loaded: %.3f); %s"):format(perFrame, data.loopsOn or -1,
+				table.concat(labels, ", ")))
+			r:Verdict(#leaks == 0, "no loop of theirs running: " .. (#leaks > 0 and table.concat(leaks, ", ") or "none"))
+			local files = 0
+			for _, p in ipairs(Active(r)) do for _ in pairs(ns.ModuleFiles(p.part)) do files = files + 1 end end
+			r:Verdict(files > 0, ("their files known to check against: %d"):format(files))
 			data.memOff, data.framesOff = MemoryKB(), FrameCount()
 			r:Log(("memory %.0f KB (on: %.0f), %d frames (on: %d)"):format(data.memOff or -1, data.memOn or -1,
 				data.framesOff, data.framesOn or -1))
@@ -333,12 +420,22 @@ ns.TestKit.Define({
 				("memory down %.0f KB without them"):format((data.memOn or 0) - (data.memOff or 0)))
 			r:Verdict(data.framesOff < (data.framesOn or 0),
 				("%d frames fewer without them"):format((data.framesOn or 0) - data.framesOff))
-			Flip(r, true)
+			-- (Ticked back and loaded again after the reload: runs 1-5. Proven, ticked
+			-- back with no Reload box: they load again from your next /reload.)
+			if r:Proven("ticking them back and the reload after (loadparts runs 1-5)") then
+				for _, p in ipairs(Active(r)) do ns.SetModuleWanted(p.part, true) end
+				if StaticPopup_Hide then StaticPopup_Hide(ns.MODULES_RELOAD_POPUP) end
+				r:Log("ticked back on: they load again from your next /reload")
+			else
+				Flip(r, true)
+			end
 		end },
-		{ key = "back", title = "both back", run = function(r)
+		{ key = "back", title = "both back",
+			proven = "loadparts runs 1-5: every part loaded again, settings kept, frames and pages back",
+			run = function(r)
 			local data = Data()
 			r:Verdict(CinematicDB.moduleDefaults == nil, "the copy of their defaults gone from the saved settings")
-			for _, p in ipairs(PARTS) do
+			for _, p in ipairs(Active(r)) do
 				r:Verdict(ns.ModuleLoaded(p.part), p.label .. " loaded again")
 				local want = data.settings and data.settings[p.setting]
 				r:Verdict(ns.db[p.setting] == want, ("%s' setting still %s"):format(p.label, tostring(ns.db[p.setting])))

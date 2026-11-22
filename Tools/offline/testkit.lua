@@ -214,6 +214,32 @@ local function RunClient(client)
 	Check("blocked resume(): the hint", Has(CinematicDB.kitClickTestLog, "give it r:Click") ~= nil
 		and Has(CinematicDB.kitClickTestLog, "FAIL blocked: 1 blocked") ~= nil)
 
+	-- Proven: a proven step left out of a run (the start line says so), a
+	-- proven check left out in a step; "full" runs both (2026-11-22).
+	local ranProven, checked = false, nil
+	ns.TestKit.Define({ name = "kitproven", key = "kitProvenTest", title = "Kit proven", steps = {
+		{ key = "new", title = "the new check", run = function(r)
+			checked = not r:Proven("seen in run 1")
+			r:Pass("the new check")
+		end },
+		{ key = "old", title = "a proven step", proven = "run 1", run = function(r)
+			ranProven = true
+			r:Pass("the old check")
+		end },
+	} })
+	ns.HandleSlash("debug kitproven")
+	Advance(3)
+	local pLog = CinematicDB.kitProvenTestLog
+	Check("proven: the step left out", ranProven == false and Has(pLog, "proven, left out") ~= nil
+		and Has(pLog, "old %(run 1%)") ~= nil, Has(pLog, "proven"))
+	Check("proven: the check left out", checked == false and Has(pLog, "not checked again: seen in run 1") ~= nil)
+	Check("proven: the run done", Has(pLog, "DONE: 1 pass") ~= nil, Has(pLog, "DONE"))
+	ns.HandleSlash("debug kitproven full")
+	Advance(3)
+	pLog = CinematicDB.kitProvenTestLog
+	Check("full: the proven step runs", ranProven == true and Has(pLog, "full run") ~= nil)
+	Check("full: the proven check runs", checked == true and Has(pLog, "DONE: 2 pass") ~= nil, Has(pLog, "DONE"))
+
 	-- The list.
 	local printed = {}
 	local oldPrint = print
