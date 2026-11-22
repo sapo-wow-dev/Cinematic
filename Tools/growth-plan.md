@@ -120,6 +120,7 @@ Suggested path, smallest risk first:
    the same addon. The page's frame and its menu entry stay at login. That
    gives most of the gain without a second addon. `/cine find` and the
    profiles' page list would then build what they need when asked.
+   (Measured 2026-11-22: 589 ms, 13-22 MB at login on Forever. Plan: Tools/lazy-pages-plan.md.)
 3. Only after that, if memory matters, a separate load-on-demand addon
    (`Cinematic_Options`). Its code would share `ns` through one global, and
    the 43 links above would move to the game side first.

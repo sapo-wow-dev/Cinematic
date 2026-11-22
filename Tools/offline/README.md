@@ -11,6 +11,14 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
   hands back a do-nothing stub.
 - `load.lua`: loads a .toc's files in order on the stand-in, then fires `ADDON_LOADED` and `PLAYER_LOGIN` as a fresh
   install, so every options page is built.
+- `pagecost.lua [forever|retail]`: what the settings pages make at login on the stand-in: frames and regions per
+  page, their share of all the addon makes, and what opening each page made on first open adds.
+- `lazyaudit.lua [forever|retail] [piece ...]`: what making a settings page on first open would break: per piece
+  of the login build, the ns keys other files read, globals, events, hooks and timers; then every event,
+  update, Why tab and Refresh with the waiting pages unbuilt (Tools/lazy-pages-plan.md). Exit 1 on a problem.
+- `lazysearch.lua`: settings pages made on first open, both clients: the main search shows Searching... and makes
+  the waiting pages over frames, then the same matches as with every page made; a hub's General switch makes
+  only its hub's pages, with the same page switches as with every page made.
 - `check.lua`: `lua5.1 Tools/offline/check.lua` runs the profile modules' checks (ProfileModules.lua) on both clients
   and both builds. It exits 1 on any problem. CI runs it on every push (`.github/workflows/checks.yml`).
   It also compares each built-in profile's settings, retired ones too, with `profile-settings-<client>.txt`, so a

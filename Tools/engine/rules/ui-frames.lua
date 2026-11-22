@@ -1237,4 +1237,18 @@ return {
     proof = "/cine debug zonecard runs 2-4 (Forever): DaylightUI_QoL state by name 2 before and after, reason DISABLED, not loaded after the Reload; no-character state 0. Run 5: EnableAddOn(name) with no character + SaveAddOns, state 0 -> 2, loaded after the Reload",
     source = "Dev/ZoneCardTest.lua",
   },
+  {
+    id = "forever.memory.collect-count-during-load",
+    area = "lua",
+    clients = { "forever" },
+    api = { "collectgarbage", "GetAddOnMemoryUsage", "UpdateAddOnMemoryUsage" },
+    when = "at ADDON_LOADED, while building frames",
+    rule = "collectgarbage(\"count\") read between pieces of a long build at load is not that piece's memory: the incremental collector runs inside the build, so a piece can come out negative (-17.9 MB) and the total undercounts. GetAddOnMemoryUsage after collectgarbage(\"collect\") + UpdateAddOnMemoryUsage is steady (Lua heap only, not the game's own memory for the frames).",
+    works = { "collectgarbage(\"collect\") before each reading, out of the load (a test step)", "memory per object from builds measured that way" },
+    fails = { "collectgarbage(\"count\") deltas between laps of the login page build" },
+    status = "tested",
+    tested = "2026-11-22",
+    proof = "/cine debug pagecost run 1 (Forever): CreateCombatTextStylePanel lap -17937 KB; login build 12675 KB by count vs about 22.5 MB at 0.56 KB per object from collected builds",
+    source = "Tools/tests/page-cost.md",
+  },
 }

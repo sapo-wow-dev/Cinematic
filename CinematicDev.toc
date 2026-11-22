@@ -273,6 +273,7 @@ Dev\ListFoldTest.lua
 Dev\KitCheckTest.lua
 Dev\ResetPopupTest.lua
 Dev\LoadPartsTest.lua
+Dev\PageCostTest.lua
 Dev\ProfilePartsTest.lua
 Dev\LevelEmoteTest.lua
 Dev\AuraPlateTest.lua
@@ -333,6 +334,7 @@ Dev\TotemHitTest.lua
 Dev\PageStateDebug.lua
 Camera\CameraScriptsPage.lua
 Camera\CameraManager.lua
+LazyPageDefaults.lua
 Options.lua
 UI\Favorites.lua
 Changelog.lua

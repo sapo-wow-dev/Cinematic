@@ -1706,6 +1706,7 @@ ns.searchPrepare = {} -- pages that fill their rows only when shown: called to f
 -- and so does anything that reads every page: the search (and /cine find),
 -- ns.PageSettings (the profiles), ns.SettingIds. The log says when each is made.
 local lazyPages = { list = {}, waiting = {} }
+ns.lazySettingsPages = lazyPages.waiting -- (each { name, made, Make }: /cine debug pagecost)
 -- Made ahead a few ms a frame, not in one go (2026-11-18: the HUD took 351 ms
 -- in one frame, Hover Groups 215, Nameplates 139, a profile showed): the build
 -- runs in a coroutine, stopping at ns.PageBuildStep (at the start of the
@@ -1843,6 +1844,7 @@ function lazyPages.Add(canvas, name, build)
 	canvas:SetScript("OnShow", FirstShow)
 	lazyPages.list[#lazyPages.list + 1] = Make
 	entry.Make, entry.name = Make, name
+	entry.canvas = canvas
 	lazyPages.waiting[#lazyPages.waiting + 1] = entry
 	return Make
 end
@@ -1876,13 +1878,77 @@ function lazyPages.StartAhead()
 end
 -- (For pages made in other files: ns.LazyPageBody(canvas, name, build).)
 ns.LazyPageBody = lazyPages.Add
-function ns.MakeLazyPages(why)
+-- The pages still waiting to be made: all, or those of pages (search pages, { canvas = }).
+function lazyPages.Waiting(pages)
+	local wanted
+	if pages then
+		wanted = {}
+		for _, page in ipairs(pages) do
+			if page.canvas then wanted[page.canvas] = true end
+		end
+	end
+	-- (A page's own canvas, or one inside it: a tab's.)
+	local function Wanted(frame)
+		while frame do
+			if wanted[frame] then return true end
+			frame = frame.GetParent and frame:GetParent()
+		end
+		return false
+	end
+	local list = {}
+	for _, entry in ipairs(lazyPages.waiting) do
+		if not entry.made and (not wanted or Wanted(entry.canvas)) then list[#list + 1] = entry end
+	end
+	return list
+end
+-- Makes them now (pages: just those pages'), and finishes one being made ahead.
+function ns.MakeLazyPages(why, pages)
+	if pages then
+		for _, entry in ipairs(lazyPages.Waiting(pages)) do entry.Make(why) end
+		local job = lazyPages.job
+		for _, entry in ipairs(lazyPages.waiting) do
+			if job and entry.job == job then entry.Make(why) end
+		end
+		return
+	end
 	for _, Make in ipairs(lazyPages.list) do Make(why) end
 end
-ns.searchPrepare[#ns.searchPrepare + 1] = function() ns.MakeLazyPages("search") end
+-- Makes them a few ms a frame (no one long freeze, 2026-11-22: the search with
+-- most pages made on first open), then done(), and returns true. With nothing
+-- waiting, or in a fight (made at once): false, and done isn't called (go on).
+local soon = { calls = {} }
+function ns.MakeLazyPagesSoon(why, pages, done)
+	if #lazyPages.Waiting(pages) == 0 and not lazyPages.job then return false end
+	if InCombatLockdown() then
+		ns.MakeLazyPages(why, pages)
+		return false
+	end
+	soon.calls[#soon.calls + 1] = { why = why, pages = pages, done = done }
+	soon.frame = soon.frame or CreateFrame("Frame")
+	ns.SetOnUpdate(soon.frame, function()
+		if lazyPages.job then -- (one at a time: lazyPages.stepper runs it; a fight: finished at once)
+			if InCombatLockdown() then lazyPages.Run(lazyPages.job, true) end
+			return
+		end
+		local call = soon.calls[1]
+		if not call then
+			ns.SetOnUpdate(soon.frame, nil)
+			return
+		end
+		local nextOne = lazyPages.Waiting(call.pages)[1]
+		if nextOne then
+			if InCombatLockdown() then nextOne.Make(call.why) else nextOne.Make(call.why, true) end
+			return
+		end
+		table.remove(soon.calls, 1)
+		if call.done then ns.Guard(call.done) end
+	end)
+	return true
+end
+ns.searchPrepare[#ns.searchPrepare + 1] = function(pages) ns.MakeLazyPages("search", pages) end
 local function BuildSearchIndex(pages)
 	Refresh() -- (slider titles and some rows are only filled in on refresh)
-	for _, prepare in ipairs(ns.searchPrepare) do prepare() end
+	for _, prepare in ipairs(ns.searchPrepare) do prepare(pages) end
 	local entries, keyed = {}, {}
 	local named = not pages or #pages > 1 -- (pages to pick among: their names count too)
 	for _, page in ipairs(pages or searchPages) do
@@ -2236,6 +2302,7 @@ local function CreateSearch(canvas, parent, pages)
 	bg:SetColorTexture(0.05, 0.05, 0.05, 0.97)
 
 	local rows, matches, index = {}, {}, nil
+	local searching = false -- (pages still being made for it: ns.MakeLazyPagesSoon)
 	local function Row(i)
 		if rows[i] then return rows[i] end
 		local row = CreateFrame("Button", nil, list)
@@ -2278,7 +2345,7 @@ local function CreateSearch(canvas, parent, pages)
 			lines = lines + 1
 			local row = Row(lines)
 			row.entry = nil
-			row.text:SetText(#matches == 0 and L["|cff808080Nothing found|r"] or
+			row.text:SetText(searching and L["|cff808080Searching...|r"] or #matches == 0 and L["|cff808080Nothing found|r"] or
 				("|cff808080" .. L["Scroll for %d more"]:format(below) .. "|r"))
 			row:Show()
 		end
@@ -2295,6 +2362,19 @@ local function CreateSearch(canvas, parent, pages)
 		local query = (box:GetText() or ""):match("^%s*(.-)%s*$")
 		if query == "" then
 			list:Hide()
+			return
+		end
+		if not index and not searching then
+			-- (Pages made on first open: made first, a few ms a frame, "Searching..." meanwhile.)
+			searching = ns.MakeLazyPagesSoon("search", pages, function()
+				searching = false
+				if list:IsShown() then Update() end
+			end)
+		end
+		if searching then
+			matches, offset = {}, 0
+			Draw()
+			list:Show()
 			return
 		end
 		index = index or BuildSearchIndex(pages)
@@ -4649,8 +4729,20 @@ do
 	function ns.CascadeHub(hubName, generalKey, on)
 		local db = ns.GetDB()
 		if not db then return end
-		if ns.MakeLazyPages then ns.MakeLazyPages("a hub's General switch") end
 		db.hubKept = db.hubKept or {}
+		-- (Its pages made on first open made first, just this hub's: their switches with them.)
+		if ns.MakeLazyPages then
+			local pages = {}
+			for _, hub in ipairs(HUBS) do
+				if hub.name == hubName then
+					for _, page in ipairs(hub.pages) do
+						local canvas = ns.settingsCanvases and ns.settingsCanvases[page[1]]
+						if canvas then pages[#pages + 1] = { canvas = canvas } end
+					end
+				end
+			end
+			ns.MakeLazyPages("a hub's General switch", pages)
+		end
 		for _, hub in ipairs(HUBS) do
 			if hub.name == hubName then
 				local kept = on and db.hubKept[hubName] or {}
@@ -4972,6 +5064,7 @@ local function CreateRevealPanel()
 
 	-- (Search over all of Cinematic's settings, at the right of the tabs.)
 	local searchBox = CreateSearch(canvas, content)
+	ns.mainSearchBox = searchBox -- (Tools/offline/lazysearch.lua)
 	searchBox:SetWidth(200)
 	searchBox:SetPoint("BOTTOMRIGHT", tabsPanel, "TOPRIGHT", -4, 4)
 
@@ -7343,6 +7436,10 @@ local function CreateGraphicsPanel()
 		L["Uses the settings below, or the game's own when turned off."],
 		subtitle, Changed)
 
+	-- (Everything below is made the first time the page is needed, not at
+	-- login: lazyPages, 2026-11-22: 1.4 MB of the login build,
+	-- Tools/lazy-pages-plan.md. Not indented a step more, to keep the change small.)
+	local function MakeBody()
 	-- Folder tabs (ns.PageTabsBelow), each group of settings on one; a tab
 	-- this game version has none of says so.
 	local TABS = {
@@ -7523,6 +7620,8 @@ local function CreateGraphicsPanel()
 		Refresh()
 		TabsShown()
 	end, content))
+	end
+	lazyPages.Add(canvas, "Graphics+", MakeBody)
 	canvas:Hide()
 	RegisterSubpage(canvas, "Graphics+", L["Graphics Boost"])
 end
@@ -14637,6 +14736,10 @@ do
 			L["Turns this page's chat settings on or off."],
 			subtitle)
 
+		-- (Everything below is made the first time the page is needed, not at
+		-- login: lazyPages, 2026-11-22: 2.0 MB and 33 ms of the login build,
+		-- Tools/lazy-pages-plan.md. Not indented a step more, to keep the change small.)
+		local function MakeBody()
 		-- (When the chat window shows at all: the Chat icon's Show in tab, the
 		-- HUD page's Chat window section.)
 		local tabsAnchor = switch
@@ -14856,6 +14959,8 @@ do
 			Refresh() -- (after: new channels' rows too)
 			TabsShown()
 		end, chatPanel))
+		end
+		lazyPages.Add(chatCanvas, "Chat", MakeBody)
 		chatCanvas:Hide()
 		-- A hub tile, hidden under the Chat icon (its Show in tab, the HUD
 		-- page's: tabOf): Reveal, at the part last shown, or General.
@@ -19013,7 +19118,9 @@ local function CreateExtrasPanel()
 	-- till then), all on this one page: its tile's onSelect shows the part.
 	-- (A frame with no height draws nothing: tabsPanel sized by Layout's Fit.)
 	local tabsPanel, tabsHeight = CreateFrame("Frame", nil, content), 0
+	local MakeExtras -- (the page's body, made the first time it's needed: below)
 	local function ShowPart(i)
+		MakeExtras("a part picked")
 		tab = i
 		if i == 2 then
 			ns.FindFoundFrames()
@@ -19040,6 +19147,10 @@ local function CreateExtrasPanel()
 		ns.ShowHubPage(PARTS[i].name)
 		if tab ~= i then ShowPart(i) end
 	end
+	-- (Everything below is made the first time the page is needed, not at
+	-- login: lazyPages, 2026-11-22: 3.5 MB and 48 ms of the login build,
+	-- Tools/lazy-pages-plan.md. Not indented a step more, to keep the change small.)
+	local function MakeBody()
 	tabsPanel:SetPoint("TOPLEFT", holder, "TOPLEFT")
 	tabsPanel:SetSize(PANEL_W, 1)
 	box:SetPoint("TOPLEFT", tabsPanel, "TOPLEFT", 0, -6)
@@ -19860,6 +19971,8 @@ local function CreateExtrasPanel()
 			RefreshFound()
 		end
 	end, content))
+	end
+	MakeExtras = lazyPages.Add(canvas, "Advanced Frames", MakeBody)
 	canvas:Hide()
 	RegisterSubpage(canvas, L["Advanced Frames"], L["Addon Frames"])
 end
@@ -22266,11 +22379,16 @@ ns.OnLanguage(function()
 	local buildStarted = type(debugprofilestop) == "function" and debugprofilestop()
 	-- (Each page's own time, between laps: the slowest go in the log too.)
 	local laps, lastLap = {}, buildStarted
+	-- (And the Lua memory each took, garbage too: /cine debug pagecost reads it, ns.settingsPagesBuilt.)
+	local kbStarted = collectgarbage("count")
+	local lastKB = kbStarted
+	if ns.settingsLapHook then ns.settingsLapHook(false) end -- (the build starts: Tools/offline/lazyaudit.lua)
 	local function Lap(name)
 		if type(lastLap) ~= "number" then return end
-		local now = debugprofilestop()
-		laps[#laps + 1] = { name = name, ms = now - lastLap }
-		lastLap = now
+		local now, kb = debugprofilestop(), collectgarbage("count")
+		laps[#laps + 1] = { name = name, ms = now - lastLap, kb = kb - lastKB }
+		lastLap, lastKB = now, kb
+		if ns.settingsLapHook then ns.settingsLapHook(name) end -- (Tools/offline/lazyaudit.lua: what each piece made)
 	end
 	PVP_TIP, ZOOM_TIP, INPUT_PAUSE_TIP = L[PVP_TIP], L[ZOOM_TIP], L[INPUT_PAUSE_TIP]
 	ns.TranslateFields(PLACES, 2)
@@ -22640,6 +22758,7 @@ ns.OnLanguage(function()
 	local buildEnded = type(buildStarted) == "number" and debugprofilestop()
 	if type(buildEnded) == "number" and ns.Log then
 		ns.Log("load", ("settings pages made in %d ms"):format(buildEnded - buildStarted))
+		ns.settingsPagesBuilt = { ms = buildEnded - buildStarted, kb = collectgarbage("count") - kbStarted, laps = laps }
 		table.sort(laps, function(a, b) return a.ms > b.ms end)
 		for index = 1, math.min(12, #laps) do
 			ns.Log("load", ("  %d ms  %s"):format(laps[index].ms, laps[index].name))

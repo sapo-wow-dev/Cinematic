@@ -774,7 +774,10 @@ function ns.CreateAddonLinksPage(kit)
 		"pick which frame Cinematic treats as each part."])
 
 	-- A frame for each tab, under the intro, its switch and its groups' sections on it.
-	local hosts, sections = {}, {}
+	-- (The sections are made the first time the page is needed, not at login:
+	-- lazyPages, 2026-11-22: 2.1 MB of the login build. The hosts and their
+	-- switches stay: the hub's tiles show them.)
+	local hosts, sections, builds = {}, {}, {}
 	for i, each in ipairs(tabs) do
 		local host = CreateFrame("Frame", nil, content)
 		host:SetSize(1, 1)
@@ -784,6 +787,7 @@ function ns.CreateAddonLinksPage(kit)
 		host:Hide()
 		ns.LinksSwitch(host, each.groups[1])
 		hosts[i], sections[i] = host, {}
+		builds[i] = function()
 		local below -- (the last group's section: the next heading goes under it)
 		for _, groupKey in ipairs(each.groups) do
 			-- (The resource bars' only where Cinematic has its own.)
@@ -804,6 +808,7 @@ function ns.CreateAddonLinksPage(kit)
 				below = section
 			end
 		end
+		end
 	end
 
 	local current = 1
@@ -820,7 +825,9 @@ function ns.CreateAddonLinksPage(kit)
 		end
 		for i, tab in ipairs(tabFrames) do tab:SetShown(not any or shown[i] or i == want) end
 	end
+	local MakeLinks -- (below)
 	local function ShowPart(i)
+		MakeLinks("a part picked")
 		FitTabs(i)
 		current = i
 		for n, host in ipairs(hosts) do host:SetShown(n == i) end
@@ -853,10 +860,13 @@ function ns.CreateAddonLinksPage(kit)
 			tabOf = "Addon Links", switchLabel = each.name, switchFrame = hosts[i],
 			onSelect = function() ShowPart(i) end }
 	end
-	canvas:SetScript("OnShow", kit.PageShown(function()
-		kit.Refresh()
-		ShowPart(current)
-	end, content))
+	MakeLinks = ns.LazyPageBody(canvas, "Addon Links", function()
+		for i = 1, #builds do builds[i]() end
+		canvas:SetScript("OnShow", kit.PageShown(function()
+			kit.Refresh()
+			ShowPart(current)
+		end, content))
+	end)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Addon Links", L["Links"])
 end

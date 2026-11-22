@@ -49,6 +49,10 @@ local function CreateFeaturesPanel(kit)
 		L["What's new in Cinematic, newest first. Show me opens the page a feature is on. Every change, " ..
 		"including fixes, is on the All Changes page."])
 
+	-- (Everything below is made the first time the page is needed, not at
+	-- login: lazyPages, 2026-11-22: 1.0 MB and 43 ms of the login build,
+	-- Tools/lazy-pages-plan.md. Not indented a step more, to keep the change small.)
+	ns.LazyPageBody(canvas, "New features", function()
 	local entries = {}
 	for i, entry in ipairs(ns.CHANGELOG_FEATURES or {}) do
 		if not entry.client or (entry.client == "retail") == (ns.isRetail and true or false) then
@@ -124,6 +128,7 @@ local function CreateFeaturesPanel(kit)
 	end
 	content:HookScript("OnSizeChanged", Fit)
 	canvas:SetScript("OnShow", kit.PageShown(Fit, content))
+	end)
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "New features", L["New Features"])
 end
