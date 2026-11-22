@@ -20535,8 +20535,14 @@ local function CreateKeybindsPanel()
 	local list, keyTabs, base, height = {}
 	for i, each in ipairs(sections) do list[i] = { each.tab } end
 	panel, keyTabs, ShowTab, base, height = ns.FolderTabs(content, list, Pick, nil, SECTION_WIDTH + 8)
-	-- (Each tab a container: off, its keys do nothing, Cinematic_KeyOn.)
-	for i, each in ipairs(sections) do ns.TabContainer(keyTabs[i], each.body, ("tabOn:Keybinds:%d"):format(each.index)) end
+	-- (Each tab a container: off, its keys do nothing, Cinematic_KeyOn. Its
+	-- switch is the tab's right-click: the rows' "?"s aren't a title's, so
+	-- none is taken for one, or an On switch showed past the first row's.)
+	for i, each in ipairs(sections) do
+		each.body.pageHelp, each.body.pageHelpLast, each.body.pageTitle = nil, nil, nil
+		ns.TabContainer(keyTabs[i], each.body, ("tabOn:Keybinds:%d"):format(each.index))
+	end
+	ns.keybindSections = sections -- (Dev/KeybindSwitchTest.lua)
 	panelTop:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -16 - height)
 	panel:SetPoint("TOPLEFT", panelTop, "TOPLEFT")
 	-- (On panelTop, not the panel: the panel's bottom hangs on the rows under them.)
