@@ -13438,8 +13438,14 @@ function ns.UpdateFrames(cinematic, elapsed)
 		if entry.frame == personalPower.healthStandIn then
 			ns.SetPersonalPlateAlpha(entry.alpha)
 		end
+		-- (The row's lowest: on Forever both the display frame and the health
+		-- stand-in are in it, and they part ways with secret health in a fight
+		-- (the frame on the game's curve, the stand-in up while health
+		-- changes). The last one's alone let the power bars go with the frame
+		-- faded, and they vanished with it: a player's report, 2026-11-22,
+		-- /cine debug prdkill run 4.)
 		if entry.group == "prd" then
-			personalPower.health = entry.alpha
+			personalPower.health = math.min(personalPower.health, entry.alpha or 1)
 		elseif entry.group == "prdpower" then
 			personalPower.level = entry.alpha
 			-- (Faded out under a secret share: the bars take the game's curve.)

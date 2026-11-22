@@ -376,10 +376,10 @@ return {
     clients = { "forever" },
     api = { "PersonalResourceDisplayFrame", "PowerBar", "AlternatePowerBar", "ClassFrameContainer", "HealthBarsContainer" },
     when = "always",
-    rule = "The personal resource bars are PersonalResourceDisplayFrame (shown by the portrait), not only the own nameplate. Fields: AlternatePowerBar, ClassFrameContainer, HealthBarsContainer, PowerBar, healthbar (lowercase), tempMaxHealthLossBar, classFrame, Selection.",
+    rule = "The personal resource bars are PersonalResourceDisplayFrame (shown by the portrait), not only the own nameplate. Fields: AlternatePowerBar, ClassFrameContainer, HealthBarsContainer, PowerBar, healthbar (lowercase), tempMaxHealthLossBar, classFrame, Selection. With nameplateShowSelf 1 there is no own nameplate at all (GetNamePlateForUnit(\"player\") nil in and out of a fight); PowerBar, AlternatePowerBar and ClassFrameContainer are children of PersonalResourceDisplayFrame and HealthBarsContainer too. The NameplatePersonalShow* CVars don't exist (GetCVar nil).",
     status = "tested",
-    tested = "2026-10-19",
-    proof = "/cine debug plates (personal resource bars line)",
+    tested = "2026-11-22",
+    proof = "/cine debug plates (personal resource bars line); /cine debug prdkill run 1 (Dev/PrdKillTest.lua, level 12 warlock, Elwynn: plate none through a fight and a kill, bars held at 1 with ignore parent alpha while the health row faded)",
     source = "memory: forever-prd-frame",
   },
 
