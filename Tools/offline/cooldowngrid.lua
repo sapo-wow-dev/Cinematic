@@ -274,8 +274,7 @@ do
 			for _, child in ipairs({ grid:GetChildren() }) do
 				if child.col and child.col.other and child.sub and child:IsShown() then otherHead = child end
 			end
-			Check("no groups: the card saying what a group is, no pill", grid.addCard:IsShown() and not grid.plus:IsShown()
-				and grid.addCard.title:GetText() == ns.L["Icons show the same in every scene"])
+			Check("no groups: no card, just + Add scene", not grid.addCard:IsShown() and grid.plus:IsShown())
 			Check("no groups: no in-use dot on Otherwise", otherHead and not otherHead.dot:IsShown())
 			Check("no scenes: the column is headed Shows, not Otherwise", otherHead and otherHead.text:GetText() == ns.L["Shows"],
 				otherHead and otherHead.text:GetText())
@@ -305,9 +304,7 @@ do
 		Check("choosing When ready sets its cell", ns.CooldownCell("spell", IMMOLATE, g1.id) == "ready"
 			and im.cells[1].style == "own", im.cells[1].style)
 		Check("When ready's parts show in the strip", grid.readyParts.power:IsShown() and grid.readyParts.early:IsShown())
-		Click(grid.readyParts.power)
-		-- (The stand-in's tick doesn't toggle itself: GetChecked as it was, so set first.)
-		grid.readyParts.power:SetChecked(true)
+		-- (A toggle chip now: one click turns it on, 2026-11-22.)
 		Click(grid.readyParts.power)
 		Check("Wait for resources sets its own part", db.cooldownNeedsPower[IMMOLATE] == true)
 		Click(im.cells[1], "RightButton")

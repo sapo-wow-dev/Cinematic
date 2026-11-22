@@ -1054,7 +1054,7 @@ function ns.CooldownGrid(parent, opts)
 	-- The choices: a small pop-up under the open cell, over the grid (a strip
 	-- under the row pushed every row below down, 2026-11-22). A choice picked
 	-- closes it (When ready stays, for its parts); a click anywhere else too.
-	local POP_W = 184
+	local POP_W = 208 -- (a scene's name fits on the title's line)
 	local catcher = CreateFrame("Button", nil, grid)
 	catcher.cdmCatcher = true -- (the lab's overlap audit leaves it out)
 	catcher:SetAllPoints(grid)
@@ -1113,28 +1113,49 @@ function ns.CooldownGrid(parent, opts)
 	-- When ready's parts (a spell's or a bar's), under the choices while it's When ready.
 	local readyLabel = chooser:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	readyLabel:SetText(L["When ready:"])
+	-- (Toggle chips, filled while on: the game's square checkboxes were the
+	-- last of its own art on the page, and the lab can't draw them. 2026-11-22.)
 	local function Tick(label, tip, part)
-		local check = CreateFrame("CheckButton", nil, chooser, "UICheckButtonTemplate")
-		if ns.SkinCheck then check = ns.SkinCheck(check) or check end
-		check:SetSize(20, 20)
-		check.label = chooser:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		check.label:SetPoint("LEFT", check, "RIGHT", 1, 0)
-		check.label:SetText(label)
+		local check = PillButton(chooser, 200, 22)
+		check.label = check.text -- (its words are its own)
+		check.labelText = label
+		check.on = false
+		function check:SetChecked(on)
+			self.on = on and true or false
+			self:SetWidth(200)
+			self:SetWidth(SetPill(self, nil, label, self.on and "picked" or "chip"))
+		end
+		function check:GetChecked() return self.on end
 		Tip(check, tip)
 		check:SetScript("OnClick", function(self)
 			if not (Enabled() and state.open) then return end
-			SetReadyPart(KindOf(state.open.key), state.open.key, state.tab, part, self:GetChecked() and true or false)
+			self:SetChecked(not self.on)
+			SetReadyPart(KindOf(state.open.key), state.open.key, state.tab, part, self.on)
 			Changed()
 		end)
+		check:SetChecked(false)
 		return check
 	end
 	local powerTick = Tick(L["Wait for resources"], L["The icon also waits until you have the resources to cast it."], "power")
 	local anyTimeTick = Tick(L["Out of fights too"], L["Out of fights, the icon also shows once it's ready."], "anyTime")
 	local earlyLabel = chooser:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	earlyLabel:SetText(L["Show early (sec)"])
-	local earlyBox = CreateFrame("EditBox", nil, chooser, "InputBoxTemplate")
-	if ns.SkinEditBox then ns.SkinEditBox(earlyBox) end
-	earlyBox:SetSize(36, 16) -- (as tall as its label: 20 stood out, 2026-11-22)
+	-- (A soft field like the scene name's: not the game's black box.)
+	local earlyBox = CreateFrame("EditBox", nil, chooser)
+	earlyBox:SetFontObject("GameFontHighlightSmall")
+	earlyBox:SetTextInsets(6, 6, 0, 0)
+	earlyBox:SetJustifyH("CENTER")
+	earlyBox:SetSize(40, 20)
+	do
+		local fill = earlyBox:CreateTexture(nil, "BACKGROUND")
+		fill:SetAllPoints()
+		fill:SetColorTexture(1, 1, 1, 0.06)
+		local under = earlyBox:CreateTexture(nil, "BORDER")
+		under:SetPoint("BOTTOMLEFT")
+		under:SetPoint("BOTTOMRIGHT")
+		under:SetHeight(1)
+		under:SetColorTexture(1, 1, 1, 0.28)
+	end
 	earlyBox:SetAutoFocus(false)
 	earlyBox:SetNumeric(true)
 	earlyBox:SetMaxLetters(4)
@@ -1189,11 +1210,14 @@ function ns.CooldownGrid(parent, opts)
 		local where = col.other and (ns.CooldownPlaceGroups()[1] and L["Otherwise"] or L["everywhere"])
 			or ns.CooldownGroupName(col.group)
 		-- (No scenes: the spell's name alone, not "in everywhere".)
+		-- (Its width set first, so how many lines it takes is known: the
+		-- second line was measured as none and cut, run 21.)
+		chooserTitle:SetWidth(POP_W - 32)
 		chooserTitle:SetText(ns.CooldownPlaceGroups()[1] and L["%s in %s"]:format(NameOf(key), where) or NameOf(key))
 		-- (One under another, a pill each in its choice's color; the one set has its band.)
-		-- (Under the title, one line or two.)
 		local titleH = chooserTitle:GetStringHeight()
-		local y = -10 - (type(titleH) == "number" and titleH or 12) - 4
+		titleH = type(titleH) == "number" and titleH > 0 and titleH or 12
+		local y = -8 - titleH - 6
 		for i, item in ipairs(list) do
 			local box = Choice(i)
 			box.value = item[1]
@@ -1210,7 +1234,7 @@ function ns.CooldownGrid(parent, opts)
 		-- (When ready's parts, while this cell says When ready.)
 		local mode = col.other and (OtherwiseOf(kind, key, state.tab)) or (CellOf(kind, key, state.tab, col.id))
 		local ready = mode == "ready" and kind ~= "buff"
-		for _, part in ipairs({ readyLabel, powerTick, powerTick.label, anyTimeTick, anyTimeTick.label, earlyLabel, earlyBox }) do
+		for _, part in ipairs({ readyLabel, powerTick, anyTimeTick, earlyLabel, earlyBox }) do
 			part:SetShown(ready)
 		end
 		if ready then
@@ -1222,13 +1246,13 @@ function ns.CooldownGrid(parent, opts)
 			powerTick:ClearAllPoints()
 			powerTick:SetPoint("TOPLEFT", chooser, "TOPLEFT", 6, y)
 			powerTick:SetChecked(power and true or false)
-			y = y - 20
+			y = y - 24
 			anyTimeTick:ClearAllPoints()
 			anyTimeTick:SetPoint("TOPLEFT", chooser, "TOPLEFT", 6, y)
 			anyTimeTick:SetChecked(anyTime and true or false)
-			y = y - 22
+			y = y - 26
 			earlyLabel:ClearAllPoints()
-			earlyLabel:SetPoint("TOPLEFT", chooser, "TOPLEFT", 10, y - 4)
+			earlyLabel:SetPoint("TOPLEFT", chooser, "TOPLEFT", 10, y - 5)
 			earlyBox:ClearAllPoints()
 			earlyBox:SetPoint("LEFT", earlyLabel, "RIGHT", 8, 0)
 			if not earlyBox:HasFocus() then earlyBox:SetText(not earlyOn and "0" or early and tostring(early) or "") end
@@ -1440,12 +1464,14 @@ function ns.CooldownGrid(parent, opts)
 		PaintTab(showsSwitch, L["When it shows"], not state.look)
 		PaintTab(lookSwitch, L["Look"], state.look)
 		-- (Room as wide as what's beside it: + Add scene isn't there in Look.)
-		hint:SetWidth(WIDTH - (state.look and 200 or 310))
-		hint:SetText(state.look and L["Shown: set for this spell. Blank: same as the bar."]
-			or L["The first scene that fits decides. Blank: same as the bar."])
+		-- (No hint line: it said what the page already shows. The user,
+		-- 2026-11-22: "i dont see the point of these texts".)
+		hint:Hide()
 		local groups = ns.CooldownPlaceGroups()
-		local cardShown = not state.look and not groups[1]
-		local plusShown = not state.look and groups[1] ~= nil and #groups < ns.COOLDOWN_GROUP_MAX
+		-- (No card with no scenes: + Add scene alone, by the tabs. The user,
+		-- 2026-11-22: "this bar is unneeded, just add scene is good".)
+		local cardShown = false
+		local plusShown = not state.look and #groups < ns.COOLDOWN_GROUP_MAX
 		local free = WIDTH - CHECK_W - NAME_W - GAP * 2
 		local colW = math.min(COL_MAX, math.floor((free - GAP * (n - 1)) / math.max(n, 1)))
 		-- (Too narrow for its words, 4 or 5 scenes: each cell its icon alone.)
