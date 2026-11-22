@@ -18,8 +18,9 @@ Tests: Tools/offline/cooldowngrid.lua (retail stand-in, prerelease), Dev/CdmGrid
 | Q5 | Old lines become groups and cells | both | yes offline | cooldowngrid.lua |
 | Q6 | Open CDM still opens the game's window and says Close CDM | forever | yes (window opens docked, Close CDM; again: shut) | run 2 step 9 |
 | Q7 | Back from Look, nothing of Look left on the page | forever | yes after the fix (run 2 found "This bar:" left under the grid: `false ~= nil`) | run 3 step 8 |
+| Q8 | The look fixed (the user, after f2540f5: "something doesn't look right", empty state): columns 120 max from the left, + Add a group column (wide with no groups) before Otherwise, bar's Otherwise gold, bar's row "Essential bar", no dot with no groups, Spell centered, ticks on hover only | forever | yes (offline, and in game: every one seen in the shots, with groups and none) | run 5 steps 4-8 |
 
-Proven: all 9 steps. Left: one `full` run before the commit.
+Proven: all 9 steps. Left: one `full` run before the commit of the look fixes. Any step sets up its own test group (Setup) when the steps before are left out.
 
 ## Runs
 | Run | Date | Command | Answered | Still open, and why this run couldn't |
@@ -28,3 +29,5 @@ Proven: all 9 steps. Left: one `full` run before the commit.
 | 2 | 2026-11-22 | /cine debug cdmgrid | Q6 yes; Q4's "Own cooldown" fits. 3 PASS, 0 errors | Q7 found in the step 9 shot (no step looked back after Look). Step 8 now checks and shoots it |
 | 3 | 2026-11-22 | /cine debug cdmgrid | Q7 yes: 2 PASS, nothing of Look left (shot) | none |
 | 4 | 2026-11-22 | /cine debug cdmgrid full | all: 14 PASS, 0 FAIL, 0 errors, 0 blocked, 7 shots right, settings put back | none: done in 4 runs (run 1's test bug cost one) |
+| 5 | 2026-11-22 | /cine debug cdmgrid | Q8 yes: 9 PASS, 7 shots right | 1 FAIL the test's: "3 columns" counted step 3's group, left out (proven). Now 2 at least |
+| 6 | 2026-11-22 | /cine debug cdmgrid full | (pending: the final run before the commit) | |

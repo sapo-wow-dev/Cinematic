@@ -16520,7 +16520,13 @@ local function CreateCooldownPanel()
 		end,
 		KeyGet = KeyGet,
 		KeyPut = KeyPut,
-		BarName = function(group) return GROUP_NAMES[group] or tostring(group) end,
+		-- (Short: the tab says which bar; "Essential Cooldowns" was cut short in it.)
+		BarName = function(group)
+			if group == "other" then return L["All spells here"] end
+			if group == "otherbuffs" then return L["All buffs here"] end
+			if group == "bars" then return L["All tracked bars"] end
+			return L["%s bar"]:format(TAB_NAMES[group] or tostring(group))
+		end,
 	})
 	grid.Refresh = function()
 		grid.Layout()

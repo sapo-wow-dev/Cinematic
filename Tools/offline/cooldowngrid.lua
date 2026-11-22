@@ -211,6 +211,42 @@ do
 		Check("the bar's row first, then the spells", grid.rows[1] == bar and grid.rows[2] == im and RowOf(AGONY) ~= nil)
 		Check("no tick box on the bar's row", not bar.check:IsShown() and im.check:IsShown())
 		Check("a spell's cell follows (grey) until set", im.cells[1].style == "follow", im.cells[1].style)
+		-- The look, 2026-11-22: the bar's Otherwise gold, columns no wider than
+		-- 120 from the left, the add column before Otherwise, the bar's row by a
+		-- short name, ticks only under the pointer or while one's ticked.
+		Check("the bar's Otherwise looks like the bar (gold), its default too", bar.cells[3].style == "bar", bar.cells[3].style)
+		Check("columns 120 at most", grid.layout.colW <= 120, grid.layout.colW)
+		Check("add column shown, narrow with groups", grid.layout.plusShown and grid.layout.plusW == 70
+			and grid.plus.text:GetText() == ns.L["+ Group"], grid.plus.text:GetText())
+		Check("bar's row: Essential bar", bar.label:GetText() == ns.L["%s bar"]:format(ns.L["Essential"]), bar.label:GetText())
+		local function NotOver(row)
+			for _, frame in ipairs({ row.name, row.check, unpack(row.cells) }) do
+				frame.IsMouseOver = function() return false end
+			end
+		end
+		NotOver(im)
+		im.ShowTick()
+		Check("tick box unseen with no pointer and none ticked", im.tickSeen == false)
+		im.name.IsMouseOver = function() return true end
+		im.ShowTick()
+		Check("seen under the pointer", im.tickSeen == true)
+		im.name.IsMouseOver = function() return false end
+		im.ShowTick()
+		do
+			local kept = db.cooldownPlaceGroups
+			db.cooldownPlaceGroups = {}
+			grid.Layout()
+			local otherHead
+			for _, child in ipairs({ grid:GetChildren() }) do
+				if child.col and child.col.other and child.sub then otherHead = child end
+			end
+			Check("no groups: + Add a group, wide, saying what a group is", grid.layout.plusW == 176
+				and grid.plus.text:GetText() == ns.L["+ Add a group"] and grid.plus.sub:GetText() ~= "")
+			Check("no groups: no in-use dot on Otherwise", otherHead and not otherHead.dot:IsShown())
+			db.cooldownPlaceGroups = kept
+			ns.CooldownRuleFactsStale()
+			grid.Layout()
+		end
 		-- A cell: click opens its choices under the row; a choice sets it.
 		Click(im.cells[1])
 		Check("click opens its choices", grid.chooser:IsShown() and grid.state.open and grid.state.open.key == IMMOLATE)

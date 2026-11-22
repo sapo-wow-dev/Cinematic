@@ -33,7 +33,11 @@ local OWN_MODES = { ready = "cooldownReadyOnly", recharge = "cooldownRechargeOnl
 ns.COOLDOWN_SHORT_MODE = SHORT
 
 -- Sizes (px).
-local CHECK_W, NAME_W, PLUS_W, GAP = 16, 150, 22, 3
+local CHECK_W, NAME_W, GAP = 16, 150, 3
+-- (Columns no wider than this, from the left: one stretched across the page,
+-- with no groups, read as an empty bar, 2026-11-22. The add column: wide
+-- with no groups, its words saying what a group is; narrow once there are.)
+local COL_MAX, ADD_WIDE, ADD_NARROW = 120, 176, 70
 local ROW_H, HEAD_H = 22, 34
 
 local function db() return ns.GetDB and ns.GetDB() or ns.db end
@@ -365,7 +369,8 @@ function ns.CooldownGrid(parent, opts)
 		if col.other then mode, own = OtherwiseOf(kind, key, state.tab)
 		else mode, own = CellOf(kind, key, state.tab, col.id) end
 		local text = SHORT[mode] or tostring(mode)
-		if kind == "group" then return text, own and "bar" or "follow", own and mode or nil end
+		-- (The bar's Otherwise is what its row follows: gold, set or its default.)
+		if kind == "group" then return text, (own or col.other) and "bar" or "follow", own and mode or nil end
 		return text, own and "own" or "follow", own and mode or nil
 	end
 	grid.CellLook = CellLook
@@ -446,9 +451,18 @@ function ns.CooldownGrid(parent, opts)
 		heads[i] = head
 		return head
 	end
-	local plus = Box(grid, PLUS_W, HEAD_H)
-	plus.text:SetText("+")
-	plus.text:SetFontObject("GameFontNormal")
+	-- (A column of its own before Otherwise, where the next group goes.)
+	local plus = Box(grid, ADD_WIDE, HEAD_H)
+	plus.text:ClearAllPoints()
+	plus.text:SetPoint("TOPLEFT", plus, "TOPLEFT", 4, -4)
+	plus.text:SetPoint("TOPRIGHT", plus, "TOPRIGHT", -4, -4)
+	plus.text:SetJustifyH("LEFT")
+	plus.text:SetFontObject("GameFontNormalSmall")
+	plus.sub = plus:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	plus.sub:SetPoint("BOTTOMLEFT", plus, "BOTTOMLEFT", 4, 4)
+	plus.sub:SetPoint("BOTTOMRIGHT", plus, "BOTTOMRIGHT", -4, 4)
+	plus.sub:SetJustifyH("LEFT")
+	plus.sub:SetWordWrap(false)
 	Tip(plus, L["Adds a group: some places and a combat, where icons can show differently."])
 	plus:SetScript("OnClick", function()
 		if not Enabled() then return end
@@ -698,6 +712,19 @@ function ns.CooldownGrid(parent, opts)
 			return row.label:IsTruncated() and row.label:GetText() or nil
 		end)
 		row.cells = {}
+		-- Its tick box seen only under the pointer, or while any row's ticked
+		-- (a column of empty boxes read as stray squares, 2026-11-22). Kept
+		-- shown at no alpha: still there to click, no flicker moving onto it.
+		function row.ShowTick()
+			local over = row.name:IsMouseOver() or row.check:IsMouseOver()
+			for _, cell in ipairs(row.cells) do over = over or (cell:IsShown() and cell:IsMouseOver()) end
+			row.tickSeen = (next(state.selected) ~= nil or over) and true or false
+			row.check:SetAlpha(row.tickSeen and 1 or 0)
+		end
+		for _, frame in ipairs({ row.name, row.check }) do
+			frame:HookScript("OnEnter", row.ShowTick)
+			frame:HookScript("OnLeave", row.ShowTick)
+		end
 		rows[i] = row
 		return row
 	end
@@ -750,6 +777,8 @@ function ns.CooldownGrid(parent, opts)
 			return tip .. "\n\n" .. (self.col.look and L["Click for the next choice. Right-click: back to following."]
 				or L["Click to choose. Right-click: back to following."])
 		end)
+		cell:HookScript("OnEnter", function() if row.ShowTick then row.ShowTick() end end)
+		cell:HookScript("OnLeave", function() if row.ShowTick then row.ShowTick() end end)
 		row.cells[j] = cell
 		return cell
 	end
@@ -1091,10 +1120,6 @@ function ns.CooldownGrid(parent, opts)
 	end
 	grid.extraParts, grid.extras = extraParts, extras
 
-	local empty = grid:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	empty:SetWidth(WIDTH)
-	empty:SetJustifyH("LEFT")
-	empty:SetText(L["No groups yet: + adds one, a few places where icons show differently (dungeons in combat, say)."])
 
 	-- ---------------------------------------------------------------------
 	-- Lays it all out from the top; gives the height.
@@ -1109,15 +1134,22 @@ function ns.CooldownGrid(parent, opts)
 		Paint(lookSwitch, state.look and "on" or "off", L["Look"])
 		hint:SetText(state.look and L["Gold: set for this spell, grey: follows the bar. Click to step."]
 			or L["The first group that fits decides. Gold: set, grey: follows the bar."])
-		local plusShown = not state.look
-		local free = WIDTH - CHECK_W - NAME_W - GAP * 2 - (plusShown and (PLUS_W + GAP) or 0)
-		local colW = math.floor((free - GAP * (n - 1)) / math.max(n, 1))
-		local x0 = CHECK_W + GAP + NAME_W + GAP
-		local y = -26
-		-- Headings.
-		spellHead:ClearAllPoints()
-		spellHead:SetPoint("BOTTOMLEFT", grid, "TOPLEFT", CHECK_W + GAP, y - HEAD_H + 4)
 		local groups = ns.CooldownPlaceGroups()
+		local plusShown = not state.look and #groups < ns.COOLDOWN_GROUP_MAX
+		local plusW = groups[1] and ADD_NARROW or ADD_WIDE
+		local free = WIDTH - CHECK_W - NAME_W - GAP * 2 - (plusShown and (plusW + GAP) or 0)
+		local colW = math.min(COL_MAX, math.floor((free - GAP * (n - 1)) / math.max(n, 1)))
+		local x0 = CHECK_W + GAP + NAME_W + GAP
+		-- (Each column's left: Otherwise after the add column.)
+		local function ColX(j, col)
+			local x = x0 + (j - 1) * (colW + GAP)
+			if col.other and plusShown then x = x + plusW + GAP end
+			return x
+		end
+		local y = -26
+		-- Headings. (Spell level with their middle.)
+		spellHead:ClearAllPoints()
+		spellHead:SetPoint("LEFT", grid, "TOPLEFT", CHECK_W + GAP, y - HEAD_H / 2)
 		local _, nowIndex = ns.CooldownGroupNow()
 		local trouble, otherDead = ns.CooldownGroupTrouble()
 		for j, col in ipairs(cols) do
@@ -1125,13 +1157,14 @@ function ns.CooldownGrid(parent, opts)
 			head.col = col
 			head:SetSize(colW, HEAD_H)
 			head:ClearAllPoints()
-			head:SetPoint("TOPLEFT", grid, "TOPLEFT", x0 + (j - 1) * (colW + GAP), y)
+			head:SetPoint("TOPLEFT", grid, "TOPLEFT", ColX(j, col), y)
 			local style, name, sub, dot = "off"
 			if col.look then
 				name, sub = LOOK[col.look].label, ""
 			elseif col.other then
 				name, sub = L["Otherwise"], L["everywhere else"]
-				dot = nowIndex == nil and not otherDead
+				-- (In use: said only once there's a group it could be told from.)
+				dot = groups[1] ~= nil and nowIndex == nil and not otherDead
 				if otherDead then style = "warn" end
 			else
 				name, sub = ns.CooldownGroupName(col.group), ns.CooldownGroupWhere(col.group)
@@ -1146,10 +1179,14 @@ function ns.CooldownGrid(parent, opts)
 			head:Show()
 		end
 		for j = n + 1, #heads do heads[j]:Hide() end
-		plus:SetShown(plusShown and #groups < ns.COOLDOWN_GROUP_MAX)
+		plus:SetShown(plusShown)
+		plus:SetSize(plusW, HEAD_H)
 		plus:ClearAllPoints()
-		plus:SetPoint("TOPLEFT", grid, "TOPLEFT", x0 + n * (colW + GAP), y)
-		Paint(plus, "off", "+")
+		plus:SetPoint("TOPLEFT", grid, "TOPLEFT", x0 + (n - 1) * (colW + GAP), y)
+		Paint(plus, "follow", groups[1] and L["+ Group"] or L["+ Add a group"])
+		plus.text:SetTextColor(1, 0.82, 0)
+		plus.sub:SetText(groups[1] and "" or L["places where icons differ"])
+		grid.layout = { colW = colW, plusW = plusW, plusShown = plusShown, x0 = x0 }
 		y = y - HEAD_H - GAP
 		-- The editor.
 		local edited = EditorShow()
@@ -1190,12 +1227,6 @@ function ns.CooldownGrid(parent, opts)
 				line:Hide()
 			end
 		end
-		empty:SetShown(not state.look and not groups[1])
-		if empty:IsShown() then
-			empty:ClearAllPoints()
-			empty:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, y - 2)
-			y = y - 18
-		end
 		-- Rows: the bar's, then each spell's.
 		local keys = { state.tab }
 		for _, id in ipairs(state.ids) do keys[#keys + 1] = id end
@@ -1209,6 +1240,7 @@ function ns.CooldownGrid(parent, opts)
 			row.check:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, y - (ROW_H - CHECK_W) / 2)
 			Paint(row.check, state.selected[key] and "on" or "off", "")
 			row.tick:SetShown(state.selected[key] and true or false)
+			row.ShowTick()
 			row.name:ClearAllPoints()
 			row.name:SetPoint("TOPLEFT", grid, "TOPLEFT", CHECK_W + GAP, y)
 			row.name:Show()
@@ -1226,7 +1258,7 @@ function ns.CooldownGrid(parent, opts)
 				cell.col = col
 				cell:SetSize(colW, ROW_H)
 				cell:ClearAllPoints()
-				cell:SetPoint("TOPLEFT", grid, "TOPLEFT", x0 + (j - 1) * (colW + GAP), y)
+				cell:SetPoint("TOPLEFT", grid, "TOPLEFT", ColX(j, col), y)
 				local text, style, value = CellLook(key, col)
 				local open = state.open and state.open.key == key and state.open.j == j
 				Paint(cell, style, text, open)
