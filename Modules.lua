@@ -98,41 +98,43 @@ end
 -- profile that leaves parts out (Profiles.lua ns.ProfilePartsPicked), the
 -- same box and words either way (the user, 2026-11-22: "keep everything in
 -- sync"). Where the game puts its boxes, as every Reload box of ours.
--- lead: what comes before "reload now..." (a profile's name), or nil.
--- Nothing to reload: the box goes. True: it's up.
+-- One short line, "Reload now to unload Visions, Cameras, Atmosphere" (the
+-- user, 2026-11-22), the same from a profile pick: no profile name.
 local ASK_ORDER = { "visions", "cameras", "style", "atmosphere" }
-local ASK_WORDS = {
-	visions = { load = "load Visions", leave = "leave Visions out" },
-	cameras = { load = "load the cameras", leave = "leave the cameras out" },
-	style = { load = "load Style", leave = "leave Style out" },
-	atmosphere = { load = "load Atmosphere", leave = "leave Atmosphere out" },
-}
+local ASK_NAMES = { visions = "Visions", cameras = "Cameras", style = "Style", atmosphere = "Atmosphere" }
 ns.MODULES_RELOAD_POPUP = "CINEMATIC_LOAD_PARTS"
-function ns.AskModulesReload(lead)
+function ns.AskModulesReload()
 	local L = ns.L
 	local which = ns.MODULES_RELOAD_POPUP
-	local changes = {}
+	local load, unload = {}, {}
 	for _, part in ipairs(ASK_ORDER) do
-		local words = ASK_WORDS[part]
-		if words and ns.ModuleWanted(part) ~= ns.ModuleLoaded(part) then
-			changes[#changes + 1] = L[ns.ModuleWanted(part) and words.load or words.leave]
+		if ASK_NAMES[part] and ns.ModuleWanted(part) ~= ns.ModuleLoaded(part) then
+			local list = ns.ModuleWanted(part) and load or unload
+			list[#list + 1] = L[ASK_NAMES[part]]
 		end
 	end
 	if StaticPopup_Hide then StaticPopup_Hide(which) end -- (its text anew, or gone)
-	if #changes == 0 then return false end
+	if #load == 0 and #unload == 0 then return false end
 	StaticPopupDialogs[which] = {
 		text = "%s", button1 = RELOADUI or L["Reload"], button2 = L["Later"],
 		OnAccept = function() ns.Reload() end,
 		cineReload = 1, -- (Forever: a secure Reload over the button, QoL/Reload.lua)
 		timeout = 0, whileDead = true, hideOnEscape = true,
 	}
-	-- ("a, b and c": three joined by "and" read badly, run 5 of profileparts.)
-	local ask = #changes < 2 and (changes[1] or "")
-		or table.concat(changes, ", ", 1, #changes - 1) .. L[" and "] .. changes[#changes]
-	local text = lead and L["%s: reload now to %s?"]:format(lead, ask) or L["Reload now to %s?"]:format(ask)
+	local text
+	if #load > 0 and #unload > 0 then
+		text = L["Reload now to load %s and unload %s"]:format(table.concat(load, ", "), table.concat(unload, ", "))
+	elseif #load > 0 then
+		text = L["Reload now to load %s"]:format(table.concat(load, ", "))
+	else
+		text = L["Reload now to unload %s"]:format(table.concat(unload, ", "))
+	end
+	-- (At the game's width, as every box: a long list wraps. Widened to one
+	-- line, it didn't match the game's other boxes, the user 2026-11-22.)
 	StaticPopup_Show(which, text)
 	return true
 end
+
 
 local queue = {}
 local ran = false

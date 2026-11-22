@@ -36,13 +36,11 @@ local PARTS = {}
 for _, part in ipairs({ "visions", "cameras", "style", "atmosphere" }) do
 	if ns.MODULE_KEYS and ns.MODULE_KEYS[part] then PARTS[#PARTS + 1] = part end
 end
-local LOAD_WORDS = { visions = "load Visions", cameras = "load the cameras", style = "load Style",
-	atmosphere = "load Atmosphere" }
-local LEAVE_WORDS = { visions = "leave Visions out", cameras = "leave the cameras out", style = "leave Style out",
-	atmosphere = "leave Atmosphere out" }
-local function Words(lead, kind)
-	local list = lead and { lead } or {}
-	for _, part in ipairs(PARTS) do list[#list + 1] = (kind == "load" and LOAD_WORDS or LEAVE_WORDS)[part] end
+-- (Modules.lua's box: "Reload now to unload Visions, Cameras, Atmosphere".)
+local NAMES = { visions = "Visions", cameras = "Cameras", style = "Style", atmosphere = "Atmosphere" }
+local function Words(kind, parts)
+	local list = { "Reload now to " .. kind .. " " }
+	for _, part in ipairs(parts or PARTS) do list[#list + 1] = NAMES[part] end
 	return list
 end
 local TOUCHED = { "Auto-Hide UI", "Balanced", "Blank Slate" }
@@ -99,6 +97,19 @@ local function WindowHigh()
 	return e and e.top
 end
 
+-- (A pick on the welcome window that asks to reload: the window back after
+-- it, the user 2026-11-22. Welcome.lua opens it 1 s after the reload.)
+local function WelcomeBack(r, what)
+	r:Sleep(1.5)
+	local welcome = rawget(_G, "CinematicWelcome")
+	r:Verdict(welcome and welcome:IsShown() and true or false,
+		what .. " picked on the welcome window: the window back after the reload")
+	-- (Where it was, not the middle: run 6.)
+	local was, e = Data().windowTop, Edges(welcome)
+	r:Verdict(was and e and math.abs(e.top - was) < 2 or false,
+		("%s: the window back where it was (top %.0f, was %.0f)"):format(what, e and e.top or -1, was or -1))
+	r:Verdict(CinematicDB.welcomeAfterReload == nil, what .. ": the mark gone once back")
+end
 -- The window stays where it was while the box is up, and the box draws over
 -- it (a higher layer).
 local STRATA = { BACKGROUND = 1, LOW = 2, MEDIUM = 3, HIGH = 4, DIALOG = 5, FULLSCREEN = 6,
@@ -140,6 +151,24 @@ end
 -- The box: the Load boxes' (one name), its words, the game's own spot and
 -- layer: where the game's first box sits (StaticPopup1, its strata as made),
 -- and, with the welcome window open, not on it.
+-- Every box's width, by name (CinematicDB: across the reloads).
+local function NoteBoxWidth(r, what, popup)
+	local widths = Data().boxWidths or {}
+	Data().boxWidths = widths
+	widths[what] = math.floor(popup:GetWidth() + 0.5)
+	r:Log(("%s: box %d wide"):format(what, widths[what]))
+end
+-- All the boxes seen this run, ours and the game's notice, one width.
+local function BoxesMatch(r)
+	local widths, list, first, same = Data().boxWidths or {}, {}, nil, true
+	for what, w in pairs(widths) do
+		list[#list + 1] = what .. " " .. w
+		first = first or w
+		if w ~= first then same = false end
+	end
+	table.sort(list)
+	r:Verdict(#list >= 3 and same, "every box one width: " .. table.concat(list, ", "))
+end
 local function CheckBox(r, what, words)
 	local popup = Popup()
 	local text = PopupText(popup)
@@ -173,6 +202,16 @@ local function CheckBox(r, what, words)
 		if not text:find(word, 1, true) then ok = false end
 	end
 	r:Verdict(ok, ("%s: says %s: %s"):format(what, table.concat(words, " + "), text))
+	-- (Every box one width, the game's: ours widened to one line didn't match
+	-- the game's other boxes, run 7. Each box's width, kept across reloads,
+	-- for BoxesMatch.)
+	local region = popup.text or popup.Text or _G[(popup:GetName() or "") .. "Text"]
+	local textEdges, boxEdges = Edges(region), Edges(popup)
+	r:Verdict(textEdges and boxEdges and textEdges.left >= boxEdges.left and textEdges.right <= boxEdges.right or false,
+		("%s: the words inside the box (words %.0f-%.0f, box %.0f-%.0f)"):format(what,
+			textEdges and textEdges.left or -1, textEdges and textEdges.right or -1,
+			boxEdges and boxEdges.left or -1, boxEdges and boxEdges.right or -1))
+	NoteBoxWidth(r, what, popup)
 	r:Verdict(popup:GetFrameStrata() == "DIALOG", what .. ": the game's layer for its boxes: " .. tostring(popup:GetFrameStrata()))
 	-- (The game's spot: the first of its boxes, top middle, as the Edit Mode
 	-- box in the user's screenshot.)
@@ -267,9 +306,7 @@ ns.TestKit.Define({
 			r:Log("left out at the start: " .. table.concat(out, ", ") .. "; all ticked, a reload first")
 			for _, part in ipairs(PARTS) do ns.SetModuleWanted(part, true) end
 			ns.AskModulesReload()
-			local words = {}
-			for _, part in ipairs(out) do words[#words + 1] = LOAD_WORDS[part] end
-			local popup = CheckBox(r, "Loading them", words)
+			local popup = CheckBox(r, "Loading them", Words("load", out))
 			ClickReload(r, popup)
 		end },
 		{ key = "pick", title = "Auto-Hide UI on the welcome window", run = function(r)
@@ -301,8 +338,9 @@ ns.TestKit.Define({
 			local copied = type(CinematicDB.moduleDefaults) == "table"
 			for _, part in ipairs(PARTS) do copied = copied and CinematicDB.moduleDefaults[part] ~= nil end
 			r:Verdict(copied, "every part's defaults copied as they're switched off")
-			local popup = CheckBox(r, "Auto-Hide UI", Words("Auto-Hide UI: ", "leave"))
+			local popup = CheckBox(r, "Auto-Hide UI", Words("unload"))
 			if popup then CheckStill(r, "Auto-Hide UI", popup, highTop) end
+			Data().windowTop = highTop
 			if popup then r:Shot("the box with the welcome window", { behind = { popup, rawget(_G, "CinematicWelcome") } }) end
 			ClickReload(r, popup)
 		end },
@@ -316,6 +354,7 @@ ns.TestKit.Define({
 			r:Verdict(kept, "their defaults' copy kept while they're out")
 			r:Verdict(not ns.settingsCanvases or ns.settingsCanvases["Roll Vision"] == nil, "Visions' pages gone")
 			r:Verdict(not ns.settingsCanvases or ns.settingsCanvases["Scenes"] == nil, "Cameras' pages gone")
+			WelcomeBack(r, "Auto-Hide UI")
 			ns.ShowWelcome()
 			r:Sleep(0.5)
 			local cards = Cards()
@@ -328,7 +367,7 @@ ns.TestKit.Define({
 			r:Sleep(0.5)
 			r:Verdict(ns.ActiveProfile() == "Balanced", "Balanced picked: " .. tostring(ns.ActiveProfile()))
 			Wanted(r, true, "Balanced")
-			local popup = CheckBox(r, "Balanced", Words("Balanced: ", "load"))
+			local popup = CheckBox(r, "Balanced", Words("load"))
 			if popup then r:Shot("the box saying load them", { behind = { popup, rawget(_G, "CinematicWelcome") } }) end
 			ClickReload(r, popup)
 		end },
@@ -339,6 +378,7 @@ ns.TestKit.Define({
 			r:Verdict(ns.ActiveProfile() == "Balanced", "still Balanced: " .. tostring(ns.ActiveProfile()))
 			r:Verdict(ns.settingsCanvases and ns.settingsCanvases["Roll Vision"] ~= nil and ns.settingsCanvases["Scenes"] ~= nil
 				and true or false, "their pages back")
+			WelcomeBack(r, "Balanced")
 			local welcome = rawget(_G, "CinematicWelcome")
 			if welcome and welcome:IsShown() then welcome:Hide() end
 			ns.HandleSlash("profile blank slate")
@@ -346,7 +386,8 @@ ns.TestKit.Define({
 			r:Sleep(0.5)
 			r:Verdict(ns.ActiveProfile() == "Blank Slate", "Blank Slate picked: " .. tostring(ns.ActiveProfile()))
 			Wanted(r, false, "Blank Slate")
-			local popup = CheckBox(r, "Blank Slate", Words("Blank Slate: ", "leave"))
+			r:Verdict(CinematicDB.welcomeAfterReload == nil, "/cine profile: no welcome window after its reload")
+			local popup = CheckBox(r, "Blank Slate", Words("unload"))
 			if popup then r:Shot("the box, no welcome window", { behind = popup }) end
 			ns.HandleSlash("profile balanced")
 			ns.db.fadeUI = false
@@ -364,6 +405,7 @@ ns.TestKit.Define({
 			local editBox = Popup("CINEMATIC_LAYOUT_RELOAD")
 			r:Verdict(editBox ~= nil, "the Edit Mode box is up")
 			if editBox then
+				NoteBoxWidth(r, "Edit Mode box", editBox)
 				CheckStill(r, "Edit Mode box", editBox, highTop)
 				r:Shot("the Edit Mode box over the window, which stayed put", { behind = { editBox, rawget(_G, "CinematicWelcome") } })
 				StaticPopup_Hide("CINEMATIC_LAYOUT_RELOAD")
@@ -373,6 +415,24 @@ ns.TestKit.Define({
 			local e = Edges(welcome)
 			r:Verdict(e and highTop and math.abs(e.top - highTop) < 2 or false,
 				("box gone: the window still where it was (top %.0f, was %.0f)"):format(e and e.top or -1, highTop or -1))
+			-- The first pick's notice (Agree / Cancel), shown for a moment as
+			-- on a new character: no profile picked, not seen. Both put back,
+			-- the box hidden (no Agree, no Cancel).
+			local realChosen, seen = ns.ProfileChosen, ns.db.gameSettingsNoticeSeen
+			ns.ProfileChosen = function() return false end
+			ns.db.gameSettingsNoticeSeen = nil
+			local okAsk, askErr = pcall(ns.GameSettingsAgreed, nil)
+			ns.ProfileChosen, ns.db.gameSettingsNoticeSeen = realChosen, seen
+			if not okAsk then r:Log("the notice: " .. tostring(askErr)) end
+			r:Sleep(0.5)
+			local notice = Popup("CINEMATIC_GAME_SETTINGS_NOTICE")
+			r:Verdict(notice ~= nil, "the first pick's notice is up")
+			if notice then
+				NoteBoxWidth(r, "first pick's notice", notice)
+				r:Shot("the first pick's notice, the game's width", { behind = { notice, rawget(_G, "CinematicWelcome") } })
+				StaticPopup_Hide("CINEMATIC_GAME_SETTINGS_NOTICE")
+			end
+			BoxesMatch(r)
 			if welcome then welcome:Hide() end
 		end },
 	},

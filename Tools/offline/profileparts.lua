@@ -91,19 +91,18 @@ for _, client in ipairs({ "forever", "retail" }) do
 	for _, line in ipairs(log or {}) do
 		-- (Edges: the stand-in's frames have no size.)
 		if line:find("verdict FAIL") and not line:find("not on the welcome window", 1, true)
-			and not line:find("moved under the box", 1, true) then
+			and not line:find("moved under the box", 1, true)
+			and not line:find("the words inside the box", 1, true) then
 			Check("verdict", false, line)
 		end
 	end
 	Check("both wanted out", Has(log, "PASS pick: Auto%-Hide UI: visions left out") and Has(log, "PASS pick: Auto%-Hide UI: cameras left out"))
 	Check("the Load boxes' box, its words", Has(log, "PASS pick: Auto%-Hide UI: says") ~= nil, Has(log, ": says"))
 	Check("at the game's spot", Has(log, "PASS pick: Auto%-Hide UI: at the game's spot") ~= nil)
-	-- (Three parts or more: "a, b and c", not "a and b and c": run 5. Atmosphere
-	-- the fourth since 2026-11-22.)
-	local words = ns.MODULE_KEYS.atmosphere and "leave Visions out, leave the cameras out, leave Style out and leave Atmosphere out"
-		or "leave Visions out, leave the cameras out and leave Style out"
+	-- (One short line, the parts by name: the user, 2026-11-22.)
+	local words = ns.MODULE_KEYS.atmosphere and "Visions, Cameras, Style, Atmosphere" or "Visions, Cameras, Style"
 	Check("the words: one list", not ns.MODULE_KEYS.style
-		or Has(log, 'text="Auto%-Hide UI: reload now to ' .. words .. '%?"') ~= nil,
+		or Has(log, 'text="Reload now to unload ' .. words .. '"') ~= nil,
 		Has(log, 'fields Auto%-Hide UI box'))
 	Check("only one box up", popups.CINEMATIC_LOAD_PARTS ~= nil and popups.CINEMATIC_PROFILE_PARTS == nil)
 	ns.HandleSlash("debug profileparts") -- (typed again: stopped, put back)
@@ -122,7 +121,7 @@ for _, client in ipairs({ "forever", "retail" }) do
 	Advance(5)
 	log = CinematicDB.profilePartsTestLog
 	Check("left out at the start: says so", Has(log, "left out at the start: visions") ~= nil)
-	Check("left out at the start: the box says load Visions", Has(log, "PASS ready: Loading them: says load Visions") ~= nil,
+	Check("left out at the start: the box says load Visions", Has(log, "PASS ready: Loading them: says Reload now to load  %+ Visions") ~= nil,
 		Has(log, ": says"))
 	Check("left out at the start: waits on Reload UI, then every step", Has(log, "asked: Click Reload UI") ~= nil
 		and CinematicDB.profilePartsTestResume and CinematicDB.profilePartsTestResume.steps == "2 3 4",

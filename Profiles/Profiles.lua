@@ -645,7 +645,7 @@ function ns.ProfilePartsPicked(name)
 			changed[part] = wanted
 		end
 	end
-	if next(changed) then ns.AskModulesReload(ns.ProfileLabel(name)) end
+	if next(changed) then ns.AskModulesReload() end
 	return changed
 end
 

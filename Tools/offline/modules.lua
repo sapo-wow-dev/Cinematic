@@ -37,7 +37,7 @@ local SPECS = {
 		pages = { "Heal Vision", "Damage Vision", "Quest Vision", "Roll Vision", "Duel Vision", "Emote Vision",
 			"Card Vision", "Card Styles", "Damage Vision Look", "Quest Talk Style", "Quest Item Style", "Roll Style",
 			"Visions Style", "Vitals Vision", "Death Vision", "Teleport Vision", "Vitals Style" },
-		general = "Visions General", box = "Load Visions", ask = "leave Visions out",
+		general = "Visions General", box = "Load Visions", ask = "Visions",
 		setting = { "cardSleepBagOn", false },
 		why = { tab = "visions", row = "visions:loaded" },
 		demos = { "vitals", "tele", "emote", "deathVision", "cards" },
@@ -50,7 +50,7 @@ local SPECS = {
 		allowed = {},
 		pages = { "Scenes", "Triggers", "Trigger Priority", "Trigger Log", "Trigger Settings", "Camera Scripts",
 			"My Shots", "Shoulder Cam", "Skyriding Cam", "Camera Settings" },
-		general = "Cameras", box = "Load Cameras", ask = "leave the cameras out",
+		general = "Cameras", box = "Load Cameras", ask = "Cameras",
 		setting = { "walkCine", true },
 		why = { tab = "cameras", row = "cameras:loaded" },
 		demos = { "camera", "cameraLook", "shoulder", "afk", "flight" },
@@ -72,7 +72,7 @@ local SPECS = {
 			"Action Style", "Combat Text Style", "Nameplate Style", "Name Style", "Bubble Style", "Tooltip Style",
 			"Tint Style", "Letterbox Style", "Visions Style", "Vitals Style", "Card Styles", "Damage Vision Look",
 			"Emote Vision Style" },
-		general = "Style General", box = "Load Style", ask = "leave Style out",
+		general = "Style General", box = "Load Style", ask = "Style",
 		setting = { "tooltipFont", "friz" },
 		demos = { "combatText" }, -- (the bubbles demo is Chat Bubbles', an Interface page)
 		switch = "styleGeneral",
@@ -87,7 +87,7 @@ local SPECS = {
 			"Graphics.lua", "Style/LetterboxStyle.lua" },
 		allowed = {},
 		pages = { "Tint", "Letterbox", "Graphics+", "Audio", "Tint Style", "Letterbox Style" },
-		general = "Effects", box = "Load Atmosphere", ask = "leave Atmosphere out",
+		general = "Effects", box = "Load Atmosphere", ask = "Atmosphere",
 		-- (Its settings are Core.lua's: none of its own to write down.)
 		setting = { "vignetteStrength", 0.33 }, noOwnDefaults = true,
 		why = { tab = "atmosphere", row = "atmosphere:loaded" },
@@ -504,10 +504,9 @@ if phase == "on" then
 		local hidden
 		rawset(_G, "StaticPopup_Hide", function(which) hidden = which end)
 		-- (The Load boxes' box, Modules.lua: every part this copy has.)
-		local LEAVE = { visions = "leave Visions out", cameras = "leave the cameras out", style = "leave Style out",
-			atmosphere = "leave Atmosphere out" }
-		local OUT = { ": reload now to " }
-		for part in pairs(ns.MODULE_KEYS) do OUT[#OUT + 1] = LEAVE[part] or ("leave " .. part .. " out") end
+		local NAMES = { visions = "Visions", cameras = "Cameras", style = "Style", atmosphere = "Atmosphere" }
+		local OUT = { "Reload now to unload " }
+		for part in pairs(ns.MODULE_KEYS) do OUT[#OUT + 1] = NAMES[part] or part end
 		for _, each in ipairs({ { "Auto-Hide UI", false, OUT }, { "Balanced", true },
 			{ "Blank Slate", false, OUT }, { "Cinema", true } }) do
 			asked, hidden = nil, nil
@@ -560,7 +559,7 @@ if phase == "on" then
 		else
 			box:SetChecked(false)
 			box._scripts.OnClick(box)
-			if not (asked and asked:find(spec.ask, 1, true)) then
+			if not (asked and asked:find("Reload now to unload ", 1, true) and asked:find(spec.ask, 1, true)) then
 				Problem(("unticking %s didn't ask to reload: %s"):format(spec.box, tostring(asked)))
 			end
 		end
@@ -675,14 +674,13 @@ elseif phase == "off" then
 		local asked, hidden
 		rawset(_G, "StaticPopup_Show", function(which, text) asked = which .. ": " .. tostring(text) end)
 		rawset(_G, "StaticPopup_Hide", function(which) hidden = which end)
-		-- (Modules.lua's words, in "<profile>: reload now to ...?")
-		local WORDS = { visions = { "load Visions", "leave Visions out" },
-			cameras = { "load the cameras", "leave the cameras out" }, style = { "load Style", "leave Style out" },
-			atmosphere = { "load Atmosphere", "leave Atmosphere out" } }
+		-- (Modules.lua's words, "Reload now to load Visions, Cameras")
+		local WORDS = { visions = { "Visions" }, cameras = { "Cameras" }, style = { "Style" },
+			atmosphere = { "Atmosphere" } }
 		ns.ProfilePartsPicked("Balanced")
 		for _, part in ipairs(parts) do
 			if not (ns.ModuleWanted(part) and asked and asked:find(WORDS[part][1], 1, true)
-				and asked:find("Balanced: reload now to", 1, true)) then
+				and asked:find("Reload now to load ", 1, true)) then
 				Problem(("picking Balanced with %s left out didn't ask to reload it in: %s"):format(part, tostring(asked)))
 			end
 		end
@@ -703,7 +701,7 @@ elseif phase == "off" then
 			end
 		else
 			for part in pairs(ns.MODULE_KEYS) do
-				local says = asked and asked:find(WORDS[part][2], 1, true)
+				local says = asked and asked:find(WORDS[part][1], 1, true)
 				if (out[part] and says) or (not out[part] and not says) then
 					Problem(("picking Blank Slate with %s left out asked wrong about %s: %s"):format(
 						table.concat(parts, "+"), part, tostring(asked)))

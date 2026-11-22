@@ -340,7 +340,15 @@ local function Pick(name, level)
 	if level and level.shoulderCam and ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
 	ns.SetProfile(name)
 	if level and level.shoulderCam and ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
-	ns.ProfilePartsPicked(name) -- (Auto-Hide UI, Blank Slate: no Visions; asks to reload)
+	-- (Auto-Hide UI, Blank Slate: no Visions; asks to reload. The reload
+	-- brings this window back: the user, 2026-11-22. Not a pick on the
+	-- Profiles page or /cine profile: only from here.)
+	-- (Where the window is too: back in that spot, not the middle, the user
+	-- 2026-11-22.)
+	if next(ns.ProfilePartsPicked(name)) then
+		local point, _, relativePoint, x, y = window:GetPoint(1)
+		CinematicDB.welcomeAfterReload = { at = time(), point = point and { point, relativePoint, x, y } or nil }
+	end
 	-- (your switches on the tiles, kept over the level picked)
 	if demoRow and demoRow.LevelPicked then demoRow:LevelPicked(level) end
 	-- (the profile's tint strength on the slider)
@@ -1909,6 +1917,7 @@ function OpenPageFromWelcome(page)
 	backButton:Show()
 end
 local function OnHide()
+	CinematicDB.welcomeAfterReload = nil -- (closed: not back after a reload)
 	if demoRow and demoRow.ForgetSwitches then demoRow:ForgetSwitches() end
 	-- (A window waiting its turn, the conflicts one: opened once this has
 	-- closed, a moment on so See Profile's settings open first.)
@@ -2052,10 +2061,23 @@ function ns.WelcomeCards()
 end
 
 -- At login (and /reload), until a profile's been picked.
+local WELCOME_BACK_SECONDS = 600 -- (a pick's reload later than this: not back)
 local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:SetScript("OnEvent", function(_, _, isLogin, isReload)
-	if (isLogin or isReload) and ns.db and not ns.db.profileChosen and ns.db.enabled then
+	-- (Or a reload a pick here asked for, a moment ago: back where you were.)
+	local back = CinematicDB and CinematicDB.welcomeAfterReload
+	if CinematicDB then CinematicDB.welcomeAfterReload = nil end
+	if isReload and type(back) == "table" and type(back.at) == "number" and time() - back.at < WELCOME_BACK_SECONDS then
+		C_Timer.After(1, function()
+			ns.ShowWelcome()
+			local spot = back.point
+			if window and type(spot) == "table" and spot[1] then
+				window:ClearAllPoints()
+				window:SetPoint(spot[1], UIParent, spot[2] or spot[1], tonumber(spot[3]) or 0, tonumber(spot[4]) or 0)
+			end
+		end)
+	elseif (isLogin or isReload) and ns.db and not ns.db.profileChosen and ns.db.enabled then
 		C_Timer.After(1, ns.ShowWelcome)
 	end
 end)
