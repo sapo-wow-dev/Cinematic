@@ -117,12 +117,14 @@ local function RestedNow(kind, now)
 	return now - lastChange[kind] >= REST_WINDOW
 end
 
--- A row (Standard Frames' player, prd, prdpower) to hold back from the fight
--- now: Wait at pull is on (one for every row since 2026-11-15) and what it
--- shows has been at rest since the fight started. Out of a fight (casting at
--- an enemy, the pull), while it's at rest now.
+-- A row (the PRD's prd, prdpower, prdmana) to hold back from the fight now:
+-- Wait at pull is on (one for every bar since 2026-11-15) and what it shows
+-- has been at rest since the fight started. Out of a fight (casting at an
+-- enemy, the pull), while it's at rest now.
+-- (Not the player frame: it isn't a bar, and before 2.1.0 its own wait was
+-- off to start with. Folded into Wait at pull, it came up only once you
+-- were hit, not when a mob pulled you: a player's report, 2026-11-22.)
 local ROW_WAIT = {
-	player = { "fightWaitPull", "health", "power" },
 	prd = { "fightWaitPull", "health" },
 	prdpower = { "fightWaitPull", "power" },
 	prdmana = { "fightWaitPull", "mana" },
