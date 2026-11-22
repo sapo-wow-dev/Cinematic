@@ -46,9 +46,12 @@ end
 -- refusing tainted code either. On WoW Forever a frame can say it isn't
 -- forbidden and still refuse in a fight: "calling '?' on bad self (Attempt to
 -- access forbidden object from code tainted by an AddOn)" on GetParent,
--- IsShown, GetText (issue #7, d88eb23). There's no tested check for that
--- (CanBeAccessedInContext is the untested candidate), so a fight probes one
--- cheap read, once per frame per fight. Use this, never IsForbidden() alone
+-- IsShown, GetText (issue #7, d88eb23). CanBeAccessedInContext() tells ahead:
+-- false on exactly the ones that refuse (6710 of 129411 with EllesmereUI's
+-- suite, never a miss or false alarm, never secret, never erroring; rule
+-- forever.frame.not-forbidden-still-refuses). Out of a fight none refuse, so
+-- it's asked in fights only, once per frame per fight. A client without it
+-- probes one cheap read instead. Use this, never IsForbidden() alone
 -- (Tools/errors/known.lua: region-refuses-tainted-code).
 local inFight = {} -- frame -> true / false, this fight's answers
 setmetatable(inFight, { __mode = "k" })
@@ -61,8 +64,17 @@ function Check.Reachable(object)
 	if not (InCombatLockdown and InCombatLockdown()) then return true end
 	local known = inFight[object]
 	if known ~= nil then return known end
-	-- pcall: the refusal can't be asked ahead (see above).
-	known = type(object.GetParent) ~= "function" or (pcall(object.GetParent, object))
+	if type(object.CanBeAccessedInContext) == "function" then
+		local can = object:CanBeAccessedInContext()
+		if issecretvalue and issecretvalue(can) then
+			known = false -- (never seen; a secret can't be tested for truth)
+		else
+			known = can ~= false
+		end
+	else
+		-- pcall: no check to ask on this client, so one cheap read tells.
+		known = type(object.GetParent) ~= "function" or (pcall(object.GetParent, object))
+	end
 	inFight[object] = known
 	return known
 end

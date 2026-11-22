@@ -274,6 +274,7 @@ Dev\DetachedFadeTest.lua
 Dev\XpRelogTest.lua
 Dev\ListFoldTest.lua
 Dev\KitCheckTest.lua
+Dev\ReachFightTest.lua
 Dev\ResetPopupTest.lua
 Dev\KeybindSwitchTest.lua
 Dev\LoadPartsTest.lua

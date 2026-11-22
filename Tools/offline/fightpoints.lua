@@ -154,6 +154,29 @@ if type(ns.Reachable) == "function" then
 	fight = true
 	wow.Fire("PLAYER_REGEN_DISABLED")
 	Check("the next fight asks afresh", ns.Reachable(shy) and probes == 2, probes)
+
+	-- With CanBeAccessedInContext (Forever and retail): asked instead of the
+	-- probe, in fights only (rule forever.frame.not-forbidden-still-refuses).
+	local asked, read = 0, 0
+	local function Checked(can)
+		local frame = Widget(false)
+		frame.CanBeAccessedInContext = function() asked = asked + 1 return can end
+		frame.GetParent = function() read = read + 1 return UIParent end
+		return frame
+	end
+	fight = false
+	wow.Fire("PLAYER_REGEN_ENABLED")
+	local closed = Checked(false)
+	Check("out of a fight: the check isn't asked", ns.Reachable(closed) and asked == 0, asked)
+	fight = true
+	wow.Fire("PLAYER_REGEN_DISABLED")
+	Check("in a fight: the check's false means not reachable", not ns.Reachable(closed))
+	Check("in a fight: the check's true means reachable", ns.Reachable(Checked(true)))
+	Check("asked once per frame, remembered, and no probe on GetParent", not ns.Reachable(closed) and asked == 2 and read == 0,
+		("asked %d, GetParent read %d"):format(asked, read))
+	Check("a secret answer counts as not reachable", not ns.Reachable(Checked(SECRET)))
+	fight = false
+	wow.Fire("PLAYER_REGEN_ENABLED")
 end
 
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
