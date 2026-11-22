@@ -16109,72 +16109,6 @@ function ns.CreateVisionsGeneralPanel()
 	RegisterSubpage(canvas, "Visions General", L["General"])
 end
 
--- Sub-page: the breath bar (the game's mirror timers: breath underwater,
--- fatigue in deep water, Feign Death): hiding it always, and its look
--- (PARKED since 2026-11-17: not made, ns.BREATH_PARKED; its tab gone)
--- (MirrorTimerStyle.lua). The Timers icon's Breath Bar tab (2026-11-16: once
--- under the HUD page's Trackers rows); when it shows: its row on Show in.
--- (On ns: this file's main chunk is near Lua's 200 locals.)
-function ns.CreateBreathBarPanel()
-	local canvas, content = CreateScrollPage()
-	local title = Label(content, "GameFontNormalLarge", L["Breath Bar"])
-	local tabs = ns.PageTabs(content, ns.ShowInTabs("timers"), ns.ShowInIndex("timers", "Breath Bar"))
-	title:SetPoint("TOPLEFT", tabs, "BOTTOMLEFT", 8, -14)
-	local intro = PageIntro(content, title, L["The breath bar and the game's other bars like it."])
-
-	local function Apply()
-		if ns.ApplyMirrorTimers then ns.ApplyMirrorTimers() end
-		Refresh()
-	end
-	local function Shown(db) return not db.mirrorHide end
-	local function Worded(db) return not db.mirrorHide and not db.mirrorHideText end
-	-- (Its switch, 2026-11-17: off, the game's own bars, MirrorTimerStyle.lua.)
-	local switch = PageSwitch(content, "breathBar", L["Enable Page"],
-		L["Turns this page's breath bar settings on or off."], intro, function()
-			if ns.ApplyMirrorTimers then ns.ApplyMirrorTimers() end
-		end)
-	local hide = Check(content, "mirrorHide", L["Hide the breath bar"],
-		L["Hides the breath bar and the game's other bars like it."], function(value)
-			ns.GetDB().mirrorHide = value
-			Apply()
-		end)
-	hide:SetPoint("TOPLEFT", switch, "BOTTOMLEFT", 0, 0)
-	local words = Check(content, "mirrorHideText", L["Hide its text"],
-		L["Hides the word on the bar (Breath, Fatigue...), leaving the bar."], function(value)
-			ns.GetDB().mirrorHideText = value
-			Apply()
-		end)
-	words:SetPoint("TOPLEFT", hide, "BOTTOMLEFT", 0, 0)
-	GreyUnless(words, Shown)
-	local last = words
-	-- (A dropdown with its name before it; nil where the client has no menus.)
-	local function Pick(label, key, choices, tip, test)
-		local dropdown = Dropdown(content, key, choices, 180, Apply)
-		if not dropdown then return end
-		local name = Label(content, "GameFontHighlight", label)
-		name:SetPoint("TOPLEFT", last, "BOTTOMLEFT", last == words and 4 or 0, -10)
-		name:SetSize(90, 30)
-		name:SetJustifyV("MIDDLE")
-		dropdown:SetPoint("LEFT", name, "RIGHT", 4, 0)
-		Tooltip(dropdown, tip)
-		GreyUnless(dropdown, test)
-		last = name
-	end
-	Pick(L["Bar texture:"], "mirrorTexture", function() return ns.StyleTextureChoices() end,
-		L["The bar's fill texture."], Shown)
-	Pick(L["Font:"], "mirrorFont", function() return ns.StyleFontChoices() end,
-		L["The font of the word on the bar. (In Russian, Korean and Chinese it stays the game's.)"], Worded)
-	local size = Slider(content, "mirrorTextScale", L["Text size"], 50, 200, 5, "%d%%", 100,
-		function() if ns.ApplyMirrorTimers then ns.ApplyMirrorTimers() end end)
-	size:SetPoint("TOPLEFT", last, "BOTTOMLEFT", last == words and 4 or 0, -22)
-	Tooltip(size, L["The size of the word on the bar, compared to the game's."])
-	GreyUnless(size, Worded)
-
-	canvas:SetScript("OnShow", PageShown(Refresh, content))
-	canvas:Hide()
-	RegisterSubpage(canvas, "Breath Bar")
-end
-
 -- Sub-page: Classic's swing timer bars: only the weapons in use, and the
 -- off-hand's hidden. (Applies in CineMode and out.)
 local function CreateSwingPanel()
@@ -22464,12 +22398,6 @@ ns.OnLanguage(function()
 	if not ns.isRetail then
 		CreateSwingPanel()
 		Lap("CreateSwingPanel")
-	end
-	-- (The Breath Bar page, the Timers icon's tab: parked 2026-11-17, not made
-	-- while MirrorTimerStyle.lua's BREATH_PARKED; its row on Show stays.)
-	if not ns.BREATH_PARKED then
-		ns.CreateBreathBarPanel()
-		Lap("CreateBreathBarPanel")
 	end
 	-- (Only with a Cooldown Manager: the game's, on clients that have it, or the addon.
 	-- ProfileModules.lua.)
