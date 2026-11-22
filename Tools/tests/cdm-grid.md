@@ -21,7 +21,9 @@ Tests: Tools/offline/cooldowngrid.lua (retail stand-in, prerelease), Dev/CdmGrid
 | Q8 | The look fixed (the user, after f2540f5: "something doesn't look right", empty state): columns 120 max from the left, + Add a group column (wide with no groups) before Otherwise, bar's Otherwise gold, bar's row "Essential bar", no dot with no groups, Spell centered, ticks on hover only | forever | yes (offline, and in game: every one seen in the shots, with groups and none) | run 5 steps 4-8 |
 | Q9 | The restyle (the user: "clunky, not stylish"; mockup frames D and E): a table, not boxes; pills with an icon and color per choice (Textures/CdmIcons, CdmDisc, Media/make_cdm_icons.py); the bar's gold band; tabs; + Add group pill, a card with no groups | forever | yes offline; open in game (new textures need a /reload) | run 7 steps 4-8 |
 
-Proven: all 9 steps (run 8, full). Any step sets up its own test group (Setup) when the steps before are left out.
+| Q10 | Round 3 (the user: "mouseover sucks", "clicking a row sucks", "multiple scenes looks really bad"): pills light under the pointer, no tooltips but for icons alone; the name no longer ticks; choices in a pop-up under the cell (nothing moves; a pick or a click away shuts it); new scenes named "Scene N"; 4-5 scenes: icons alone, places under names hidden; one line for scenes with no places; + Add scene by the tabs; editor and ticked-rows bar as pills | forever | yes offline; open in game: the gallery step shoots every setup | run 9 |
+
+Proven: all 10 steps (run 11, full). Any step sets up its own test group (Setup) when the steps before are left out.
 
 ## Runs
 | Run | Date | Command | Answered | Still open, and why this run couldn't |
@@ -34,3 +36,6 @@ Proven: all 9 steps (run 8, full). Any step sets up its own test group (Setup) w
 | 6 | 2026-11-22 | /cine debug cdmgrid full | all: 16 PASS, look fixes committed (d872f7d) | none |
 | 7 | 2026-11-22 | /cine debug cdmgrid | Q9 mostly: 10 PASS, the pills, band, tabs, card and choices right in the shots | the no-groups shot ran past the panel (the test redrew with grid.Layout, no refit: now grid.Changed); Look's "This bar:" still boxes (now pills). The columns are "scenes" to players now ("group" read as party/raid; the user picked scene over situation, knowing cameras have Scenes too) |
 | 8 | 2026-11-22 | /cine debug cdmgrid full | Q9 yes: 16 PASS, 0 errors; scenes, pills, the no-groups card fitting, Look's bar pills in the shots | none |
+| 9 | 2026-11-22 | /cine debug cdmgrid | Q10 mostly: 12 PASS, 0 errors, 12 gallery shots looked at | from the shots: following cells' faint words buried the set ones (now icon alone); Otherwise's dot floated at the far edge (now after the name); five scenes cut names (now two lines); hover too faint (stronger); Look hint cut (shorter). No tracked buffs: buffs bar not shot |
+| 10 | 2026-11-22 | /cine debug cdmgrid | Q10 yes: the gallery again, every fix seen (icons alone for following cells, dot by the name, two-line names at five, hover, Look hint) | the buffs bar (no tracked buffs here) |
+| 11 | 2026-11-22 | /cine debug cdmgrid full | all: 18 PASS, 0 errors, settings put back; committed | none |

@@ -15,7 +15,10 @@
 --   6 editor   the group's heading clicked: its editor (a screenshot)
 --   7 ticked   the spell's row ticked: the bar to set them all (a screenshot)
 --   8 look     Look: the looks' columns, the bar's own looks under (a screenshot)
---   9 button   Open CDM clicked: the game's window opens, Close CDM; again: shut
+--   9 gallery  the look, setup by setup: no scenes, one, three (every choice), five
+--              (icons alone, troubles), the pop-up (and at the right edge), the
+--              editor, ticked rows, Look, the buffs bar (a screenshot each)
+--  10 button   Open CDM clicked: the game's window opens, Close CDM; again: shut
 -- Its settings and CineMode are put back after (and at the next login if a
 -- /reload cuts it short). Offline: Tools/offline/cooldowngrid.lua. Into
 -- CinematicDB.cdmGridTestLog. Dev copy only.
@@ -186,7 +189,7 @@ ns.TestKit.Define({
 				("here's group never used %s, Otherwise never used %s"):format(tostring(trouble[2] and trouble[2].kind),
 				tostring(otherDead)))
 		end },
-		{ key = "page", proven = "cdmgrid run 8 (2026-11-22, full): PASS, grid, no-scenes card in the shots", title = "the page: the grid on the spell's bar", run = function(r)
+		{ key = "page", proven = "cdmgrid run 9 (2026-11-22): PASS, grid in the shot", title = "the page: the grid on the spell's bar", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -220,7 +223,7 @@ ns.TestKit.Define({
 			ns.CooldownRuleFactsStale()
 			grid.Changed()
 		end },
-		{ key = "choices", proven = "cdmgrid run 8 (2026-11-22, full): PASS, pills in the shot", title = "a cell's choices", run = function(r)
+		{ key = "choices", proven = "cdmgrid run 9 (2026-11-22): PASS, the pop-up in the shot", title = "a cell's choices", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -245,7 +248,7 @@ ns.TestKit.Define({
 			r:Shot("the choices, When ready picked", { behind = panel })
 			Click(row.cells[j])
 		end },
-		{ key = "editor", proven = "cdmgrid run 8 (2026-11-22, full): PASS, editor in the shot", title = "a group's editor", run = function(r)
+		{ key = "editor", proven = "cdmgrid run 9 (2026-11-22): PASS, editor pills in the shot", title = "a group's editor", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -259,7 +262,7 @@ ns.TestKit.Define({
 			r:Shot("the group editor", { behind = panel })
 			Click(head)
 		end },
-		{ key = "ticked", proven = "cdmgrid run 8 (2026-11-22, full): PASS, bar in the shot", title = "ticked rows: set them all", run = function(r)
+		{ key = "ticked", proven = "cdmgrid run 9 (2026-11-22): PASS, bar pills in the shot", title = "ticked rows: set them all", run = function(r)
 			local grid, panel = OpenPage(r)
 			if not grid then return end
 			local row = RowOf(grid, test.spell)
@@ -269,7 +272,7 @@ ns.TestKit.Define({
 			r:Shot("one row ticked", { behind = panel })
 			Click(grid.bulkButtons.clear)
 		end },
-		{ key = "look", proven = "cdmgrid run 8 (2026-11-22, full): PASS, Look and back in the shots", title = "Look", run = function(r)
+		{ key = "look", proven = "cdmgrid run 9 (2026-11-22): PASS, Look in the shot", title = "Look", run = function(r)
 			local grid, panel = OpenPage(r)
 			if not grid then return end
 			Click(grid.lookSwitch)
@@ -284,6 +287,134 @@ ns.TestKit.Define({
 			-- (Run 2's shot: "This bar:" was left under the grid after Look.)
 			r:Verdict(not grid.extras:IsShown(), "back to When it shows: the bar's looks line gone")
 			r:Shot("back from Look", { behind = panel })
+		end },
+		{ key = "gallery", proven = "cdmgrid run 10 (2026-11-22): every setup looked at in the shots", title = "the look, setup by setup (screenshots)", run = function(r)
+			-- (The user, 2026-11-22: "evaluate the look for all possible combinations,
+			-- generate a few rows with different options". Each setup on your own bar,
+			-- a screenshot each; everything's put back after.)
+			if not test.here and not Setup(r) then return end
+			local grid, panel = OpenPage(r)
+			if not grid then return end
+			local ids = {}
+			for _, spell in ipairs(ns.CooldownManagerSpells()) do
+				if spell.group == test.group then ids[#ids + 1] = spell.id end
+			end
+			local A, B, C, D, E = ids[1], ids[2] or ids[1], ids[3] or ids[1], ids[4] or ids[1], ids[5] or ids[1]
+			r:Log(("%d spells on the %s bar"):format(#ids, tostring(test.group)))
+			local db = ns.db
+			local function Scenes(list)
+				db.cooldownPlaceGroups = list
+				wipe(db.cooldownSpellCells)
+				wipe(db.cooldownGroupCells)
+				for _, id in ipairs(ids) do
+					for _, key in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow",
+						"cooldownAlwaysShow" }) do db[key][id] = nil end
+				end
+				wipe(grid.state.selected)
+				grid.state.open, grid.state.editing, grid.state.look = nil, nil, false
+			end
+			local function Cell(kind, key, id, mode) ns.SetCooldownCell(kind, key, id, mode) end
+			local function Shoot(label)
+				grid.Changed()
+				r:Sleep(0.4)
+				local L2 = grid.layout or {}
+				r:Log(("%s: columns %s wide, icons only %s, card %s, + Add scene %s, height %d"):format(label,
+					tostring(L2.colW), tostring(L2.compact), tostring(L2.cardShown), tostring(L2.plusShown),
+					math.floor(grid:GetHeight() + 0.5)))
+				r:Shot(label, { behind = panel })
+			end
+			local DUNGEON = { id = 1, name = "Dungeon fights", places = { dungeon = true, raid = true }, combat = "in" }
+			local TOWN = { id = 2, name = "Town", places = { city = true, inn = true }, combat = "out" }
+			local PVP = { id = 3, name = "PvP", places = { bg = true }, combat = "any" }
+			-- 1 No scenes: the card; one spell Never and one Procs on their own.
+			Scenes({})
+			ns.CooldownSetOtherwise("spell", B, test.group, "never")
+			ns.CooldownSetOtherwise("spell", C, test.group, "proc")
+			Shoot("1 no scenes")
+			-- 2 One scene, a few set.
+			Scenes({ DUNGEON })
+			Cell("spell", A, 1, "ready")
+			Cell("spell", B, 1, "never")
+			Cell("group", test.group, 1, "always")
+			ns.CooldownSetOtherwise("spell", D, test.group, "recharge")
+			Shoot("2 one scene")
+			-- 3 Three scenes, every choice somewhere, the bar's row set in one.
+			Scenes({ DUNGEON, TOWN, PVP })
+			Cell("spell", A, 1, "ready")
+			Cell("spell", B, 1, "recharge")
+			Cell("spell", C, 1, "proc")
+			Cell("spell", D, 2, "never")
+			Cell("spell", E, 3, "always")
+			Cell("group", test.group, 2, "never")
+			ns.CooldownSetOtherwise("spell", C, test.group, "never")
+			Shoot("3 three scenes, every choice")
+			-- 3b One cell under the pointer (its hover band).
+			local rowA = RowOf(grid, A)
+			local hovered = rowA and rowA.cells[2]
+			if hovered then
+				hovered.hovered = true
+				if hovered.repaint then hovered.repaint() end
+				r:Sleep(0.3)
+				r:Shot("3b a cell under the pointer", { behind = panel })
+				hovered.hovered = false
+			end
+			-- 4 Five scenes: icons alone; one never used, one with no places.
+			local RAID = { id = 4, name = "Raid bosses", places = { raid = true }, combat = "in" }
+			local NEW = { id = 5, name = "Scene 5", places = {}, combat = "any" }
+			db.cooldownPlaceGroups = { DUNGEON, TOWN, PVP, RAID, NEW }
+			Cell("spell", A, 4, "never")
+			Shoot("4 five scenes, icons alone, troubles")
+			-- 5 The pop-up: a cell in the first column (When ready, its parts), then Otherwise's (the right edge).
+			db.cooldownPlaceGroups = { DUNGEON, TOWN, PVP }
+			grid.Changed()
+			rowA = RowOf(grid, A)
+			if rowA then
+				Click(rowA.cells[1])
+				r:Sleep(0.4)
+				r:Verdict(grid.chooser:IsVisible(), "pop-up open under the first column's cell")
+				r:Shot("5 pop-up, When ready parts", { behind = panel })
+				Click(rowA.cells[1])
+				Click(rowA.cells[4])
+				r:Sleep(0.4)
+				r:Shot("5b pop-up at the right edge (Otherwise)", { behind = panel })
+				Click(rowA.cells[4])
+			end
+			-- 6 The editor open on Town.
+			grid.state.editing = 2
+			Shoot("6 editor open")
+			grid.state.editing = nil
+			-- 7 Two rows ticked: the bar to set them all.
+			grid.state.selected[B] = true
+			grid.state.selected[C] = true
+			Shoot("7 two rows ticked")
+			wipe(grid.state.selected)
+			-- 8 Look with a few changed.
+			ns.SetCooldownRow(A, "keybinds", true)
+			db.cooldownFlashReady[B] = true
+			ns.SetCooldownRow(C, "numbers", "show")
+			grid.state.look = true
+			Shoot("8 Look, a few changed")
+			grid.state.look = false
+			ns.SetCooldownRow(A, "keybinds", nil)
+			ns.SetCooldownRow(C, "numbers", nil)
+			db.cooldownFlashReady[B] = nil
+			-- 9 The buffs bar: its own choices (In combat, Out of combat, Hidden).
+			local buffs = {}
+			for _, spell in ipairs(ns.CooldownManagerSpells()) do
+				if spell.group == "buffs" then buffs[#buffs + 1] = spell.id end
+			end
+			if buffs[1] then
+				Cell("buff", buffs[1], 1, "combat")
+				if buffs[2] then Cell("buff", buffs[2], 2, "quiet") end
+				if buffs[3] then Cell("buff", buffs[3], 3, "hidden") end
+				pcall(ns.CdmShowSpells, "buffs")
+				r:Sleep(0.4)
+				r:Shot("9 buffs bar", { behind = panel })
+				pcall(ns.CdmShowSpells, test.group)
+			else
+				r:Log("9 no tracked buffs in the Cooldown Manager: buffs bar not shown")
+			end
+			r:Pass("gallery shot; look at the screenshots")
 		end },
 		{ key = "button", proven = "cdmgrid run 2 (2026-11-22): PASS, Close CDM and the window in the shot", title = "Open CDM", run = function(r)
 			local grid = OpenPage(r)

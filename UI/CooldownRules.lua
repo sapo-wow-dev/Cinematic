@@ -81,7 +81,11 @@ function ns.AddCooldownGroup()
 	if #list >= ns.COOLDOWN_GROUP_MAX then return nil end
 	local id = 0
 	for _, group in ipairs(list) do id = math.max(id, group.id) end
-	local group = { id = id + 1, name = "", places = {}, combat = "any" }
+	-- (A name of its own, "Scene 2": four new ones all read "No place yet", 2026-11-22.)
+	local taken, n = {}, 1
+	for _, other in ipairs(list) do taken[other.name] = true end
+	while taken[L["Scene %d"]:format(n)] do n = n + 1 end
+	local group = { id = id + 1, name = L["Scene %d"]:format(n), places = {}, combat = "any" }
 	list[#list + 1] = group
 	ns.CooldownRuleFactsStale()
 	return group

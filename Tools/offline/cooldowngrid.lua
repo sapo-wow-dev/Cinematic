@@ -69,7 +69,10 @@ g1.places, g1.combat = { dungeon = true, raid = true }, "in"
 local g2 = ns.AddCooldownGroup()
 g2.places, g2.combat = { city = true, inn = true }, "out"
 Check("two groups, ids apart", g1 and g2 and g1.id ~= g2.id and #ns.CooldownPlaceGroups() == 2)
-Check("names from places", ns.CooldownGroupName(g1) == ns.L["Dungeons"] .. ", " .. ns.L["Raids"] .. " · " .. ns.L["In combat"],
+Check("a new scene named on its own", g1.name == ns.L["Scene %d"]:format(1) and g2.name == ns.L["Scene %d"]:format(2),
+	g2.name)
+g1.name = ""
+Check("no name: named by its places", ns.CooldownGroupName(g1) == ns.L["Dungeons"] .. ", " .. ns.L["Raids"] .. " · " .. ns.L["In combat"],
 	ns.CooldownGroupName(g1))
 g1.name = "Group content"
 Check("own name wins", ns.CooldownGroupName(g1) == "Group content")
@@ -283,6 +286,54 @@ do
 		Click(im.cells[1])
 		Click(im.cells[1])
 		Check("clicking the open cell shuts it", not grid.chooser:IsShown())
+		-- The pop-up (2026-11-22): over the grid, a pick closes it, a click away too.
+		Click(im.cells[1])
+		local neverChoice
+		for _, box in ipairs(grid.choices) do
+			if box:IsShown() and box.value == "never" then neverChoice = box end
+		end
+		Click(neverChoice)
+		Check("a pick (not When ready) closes the pop-up", not grid.chooser:IsShown()
+			and ns.CooldownCell("spell", IMMOLATE, g1.id) == "never")
+		ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
+		Click(im.cells[1])
+		local catcher
+		for _, child in ipairs({ grid:GetChildren() }) do
+			if child ~= grid.chooser and child:IsShown() and child:GetScript("OnClick") and not child.col and not child.text
+				and not child.check then catcher = catcher or child end
+		end
+		Check("a click away closes it", catcher ~= nil and (function()
+			catcher:GetScript("OnClick")(catcher)
+			return not grid.chooser:IsShown()
+		end)())
+		-- Five scenes: each cell its icon alone, the places under the names hidden,
+		-- one line for the three with no places.
+		local more = {}
+		for i = 1, 3 do more[i] = ns.AddCooldownGroup() end
+		grid.Layout()
+		local subs = 0
+		for _, child in ipairs({ grid:GetChildren() }) do
+			if child.col and child.sub and child:IsShown() and child.sub:IsShown() then subs = subs + 1 end
+		end
+		local lines = 0
+		for _, line in ipairs(grid.troubleLines) do
+			if line:IsShown() then lines = lines + 1 end
+		end
+		Check("five scenes: icons alone", grid.layout.compact and im.cells[1].compact and not im.cells[1].text:IsShown())
+		Check("five scenes: no places line under names", subs == 0, subs)
+		Check("three with no places: one line for them", lines == 1 and grid.troubleLines[1]:GetText():find(more[3].name, 1, true) ~= nil,
+			lines)
+		Check("+ Add scene gone at five", not grid.plus:IsShown())
+		for i = 1, 3 do ns.RemoveCooldownGroup(more[i].id) end
+		grid.Layout()
+		Check("back to two: not narrow again", not grid.layout.compact and not im.cells[1].compact)
+		-- (A following cell: its faint icon alone; a set one: its word too.)
+		ns.SetCooldownCell("spell", IMMOLATE, g1.id, "proc")
+		grid.Layout()
+		Check("a set cell shows its word, a following one its icon alone", im.cells[1].text:IsShown()
+			and not im.cells[2].text:IsShown() and im.cells[2].icon:IsShown())
+		ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
+		grid.Layout()
 		-- The bar's Otherwise has no "follow": its first choice is the built-in default.
 		Click(bar.cells[3])
 		Check("bar's Otherwise: a Default choice first", grid.choices[1].value == nil
@@ -337,7 +388,8 @@ do
 		Check("then deletes", ns.CooldownPlaceGroup(added.id) == nil and not grid.editor:IsShown())
 		-- Ticked rows: set one column of them all; copy one onto another.
 		Click(RowOf(CORRUPTION).check)
-		Click(RowOf(AGONY).name)
+		Check("the name doesn't tick the row", RowOf(AGONY).name:GetScript("OnClick") == nil)
+		Click(RowOf(AGONY).check)
 		Check("two ticked: the bar shows", grid.bulk:IsShown() and grid.state.selected[CORRUPTION] and grid.state.selected[AGONY])
 		local b = grid.bulkButtons
 		Click(b.value)
