@@ -25,7 +25,7 @@ local builtAt, builtFor = -math.huge, ""
 ns.questStandInProblem = nil -- (the last reason one couldn't be drawn: /cine debug questfocus)
 
 local function IsForbidden(frame)
-	return frame.IsForbidden and frame:IsForbidden()
+	return not ns.Reachable(frame)
 end
 
 local function Visible(frame)

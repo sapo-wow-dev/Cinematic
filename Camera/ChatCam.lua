@@ -674,7 +674,7 @@ local function BubbleAngle(text)
 	local angle, sx, sy, how
 	local shown = 0
 	for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(false)) do
-		if not (bubble.IsForbidden and bubble:IsForbidden()) and ns.Flag(bubble:IsVisible()) then
+		if ns.Reachable(bubble) and ns.Flag(bubble:IsVisible()) then
 			shown = shown + 1
 			if not angle and ns.BubbleSays(bubble, text) then
 				local x, y = Place(bubble)
@@ -723,7 +723,7 @@ local function BubbleSide(text)
 		return nil
 	end
 	for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(false)) do
-		if not (bubble.IsForbidden and bubble:IsForbidden()) and ns.BubbleSays(bubble, text) then
+		if ns.Reachable(bubble) and ns.BubbleSays(bubble, text) then
 			local x = Place(bubble)
 			if x and x < 0 then
 				return -1
@@ -856,7 +856,7 @@ local function DumpTree(frame, depth, out)
 	end
 	local okChildren, children = pcall(function() return { frame:GetChildren() } end)
 	for _, child in ipairs(okChildren and children or {}) do
-		if not (child.IsForbidden and child:IsForbidden()) then
+		if ns.Reachable(child) then
 			DumpTree(child, depth + 1, out)
 		end
 	end
@@ -874,7 +874,7 @@ local function FindPart(frame, match, depth)
 	if depth < 5 then
 		local okChildren, children = pcall(function() return { frame:GetChildren() } end)
 		for _, child in ipairs(okChildren and children or {}) do
-			if not (child.IsForbidden and child:IsForbidden()) then
+			if ns.Reachable(child) then
 				if match(child) then
 					return child
 				end
@@ -914,7 +914,7 @@ local function DebugBubbles(now)
 	local readable = C_ChatBubbles.GetAllChatBubbles(false)
 	DebugAdd(("bubbles: %d in all, %d readable"):format(#all, #readable))
 	for _, bubble in ipairs(readable) do
-		if not (bubble.IsForbidden and bubble:IsForbidden()) then
+		if ns.Reachable(bubble) then
 			local id = debugLog.ids[bubble]
 			if not id then
 				debugLog.nextId = debugLog.nextId + 1
@@ -982,7 +982,7 @@ local function DebugPlates()
 	local okFriendly, friendly = pcall(GetCVar, "nameplateShowFriendlyNPCs")
 	DebugAdd(("plates: %d (friendly NPC plates %s)"):format(#plates, okFriendly and Show(friendly) or "?"))
 	for _, plate in ipairs(plates) do
-		if not (plate.IsForbidden and plate:IsForbidden()) then
+		if ns.Reachable(plate) then
 			local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
 			DebugAdd(("plate %s | %s"):format(unit and DebugUnit(unit, speaker) or "no unit", Rect(plate)))
 		end

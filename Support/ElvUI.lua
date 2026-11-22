@@ -137,7 +137,7 @@ local LINKS = {
 
 local function IsUsable(frame)
 	return type(frame) == "table" and type(frame.GetObjectType) == "function"
-		and not (frame.IsForbidden and frame:IsForbidden())
+		and ns.Reachable(frame)
 end
 
 -- Its detached power bars still inside their faded unit frame (Parent:
@@ -197,7 +197,7 @@ local function FollowFades()
 	end
 	hooksecurefunc(E, "UIFrameFade", function(_, frame, info)
 		if type(frame) ~= "table" or type(frame.SetAlpha) ~= "function"
-			or (frame.IsForbidden and frame:IsForbidden())
+			or not ns.Reachable(frame)
 			or type(info) ~= "table" or type(info.endAlpha) ~= "number"
 			or (issecretvalue and issecretvalue(info.endAlpha)) then
 			return
@@ -335,9 +335,9 @@ ns.WhenAddonLoads("ElvUI", function()
 			local list = {}
 			local all = C_ChatBubbles and C_ChatBubbles.GetAllChatBubbles and C_ChatBubbles.GetAllChatBubbles()
 			for _, bubble in pairs(type(all) == "table" and all or {}) do
-				if type(bubble) == "table" and not (bubble.IsForbidden and bubble:IsForbidden()) then
+				if type(bubble) == "table" and ns.Reachable(bubble) then
 					local holder = bubble:GetChildren()
-					if type(holder) == "table" and not (holder.IsForbidden and holder:IsForbidden()) then
+					if type(holder) == "table" and ns.Reachable(holder) then
 						list[#list + 1] = holder
 					end
 				end

@@ -242,7 +242,7 @@ end
 -- (A forbidden frame (the trade window's money boxes...) can't even be asked what
 -- it is: that's checked first, and every question after it asked safely.)
 local function Kind(object)
-	local okForbidden, forbidden = pcall(function() return object.IsForbidden and object:IsForbidden() end)
+	local okForbidden, forbidden = pcall(function() return not ns.Reachable(object) end)
 	if not okForbidden or forbidden then return nil end
 	local ok, kind = pcall(object.GetObjectType, object)
 	return ok and kind or nil
@@ -539,7 +539,7 @@ local function DressRaidTitles(color)
 		local holder = _G[name]
 		local title = type(holder) == "table" and (holder.title or _G[name .. "Title"])
 		local text = type(title) == "table" and title.GetFontString and title:GetFontString()
-		if text and not (text.IsForbidden and text:IsForbidden()) then
+		if text and ns.Reachable(text) then
 			if color then
 				titled[text] = true
 				text:SetTextColor(color[1], color[2], color[3])
@@ -609,7 +609,7 @@ end
 -- One texture of the game's in a row's color, or back to its own (as the row's
 -- frames are): the raid members' borders, which come and go with the group.
 function ns.RecolorTexture(texture, key)
-	if not texture or (texture.IsForbidden and texture:IsForbidden()) then return end
+	if not texture or not ns.Reachable(texture) then return end
 	local color = ColorOf({ key = key })
 	if color or tinted[texture] then Tint(texture, color, key) end
 end

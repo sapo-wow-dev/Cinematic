@@ -41,7 +41,7 @@ local function Parts(frame)
 	local function Walk(object, depth)
 		if seen[object] or depth > 4 then return end
 		seen[object] = true
-		if object.IsForbidden and object:IsForbidden() then return end
+		if not ns.Reachable(object) then return end
 		if object:GetObjectType() == "StatusBar" and not seenAll[object] then
 			seenAll[object] = true
 			found.bars[#found.bars + 1] = object

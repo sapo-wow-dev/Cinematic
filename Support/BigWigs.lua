@@ -14,7 +14,7 @@ local _, ns = ...
 local L = ns.L
 
 local function Usable(frame)
-	return not (frame.IsForbidden and frame:IsForbidden())
+	return ns.Reachable(frame)
 end
 
 for _, known in ipairs({

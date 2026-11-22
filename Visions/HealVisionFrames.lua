@@ -45,7 +45,7 @@ local function Secret(value)
 end
 
 local function Forbidden(frame)
-	return frame.IsForbidden and frame:IsForbidden()
+	return not ns.Reachable(frame)
 end
 
 -- Each kind of member's health and opacity settings (Vision section).

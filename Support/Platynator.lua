@@ -25,7 +25,7 @@ table.insert(ns.ADDON_NOTES, {
 local LABEL = "Platynator plate alpha"
 
 local function Usable(frame)
-	return type(frame) == "table" and not (frame.IsForbidden and frame:IsForbidden())
+	return type(frame) == "table" and ns.Reachable(frame)
 end
 
 -- Its plates on a game plate: the children made from its plate template (its

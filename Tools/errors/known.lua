@@ -351,8 +351,9 @@ return {
       rule = "in a fight on WoW Forever a region can say IsForbidden() false and still refuse tainted code",
       pattern = "trusting IsForbidden() alone before calling methods on other addons' or the game's parts",
     },
-    dont = "On parts we don't own, check IsForbidden and also pcall a cheap read (GetParent) before using them; skip any that refuse.",
-    fix = "2026-11-22: FadeDetached's Reachable (pcall GetParent) in Usable and Walk; EllesmereUI's IsUsable pcalls GetName (issue #7). Earlier: d88eb23 for IsShown/GetText in Frames.lua",
+    dont = "Never guard with IsForbidden() alone: use ns.Reachable(frame) (Checks.lua), which also skips a frame that refuses our code in a fight.",
+    check = { pattern = [[:IsForbidden\(\)]], allow = { "Checks.lua", "Dev/", "Tools/", "Libs/" } },
+    fix = "2026-11-22: ns.Reachable (Checks.lua: not forbidden, a secret answer counts as forbidden, and in a fight one GetParent probe per frame, kept till the fight ends) in place of every IsForbidden() guard, 144 in 48 files (issue #7). Earlier: d88eb23 for IsShown/GetText in Frames.lua",
     engine = { "forever.frame.not-forbidden-still-refuses" },
     seen = { "2026-11-11", "2026-11-22" },
     example = [[Interface/AddOns/Cinematic/FadeDetached.lua:155: calling '?' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())

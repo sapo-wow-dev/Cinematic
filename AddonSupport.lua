@@ -490,7 +490,7 @@ function ns.AfterPlateAdded(fn)
 	watcher:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 	watcher:SetScript("OnEvent", function(_, _, unit)
 		local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
-		if type(plate) == "table" and not (plate.IsForbidden and plate:IsForbidden()) then
+		if type(plate) == "table" and ns.Reachable(plate) then
 			fn(plate)
 		end
 	end)

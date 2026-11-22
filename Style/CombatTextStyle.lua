@@ -1674,7 +1674,7 @@ local function OnHit(unit, action, flag, amount, school, spot)
 		local get = C_NamePlate and C_NamePlate.GetNamePlateForUnit
 		local ok
 		ok, plate = pcall(get or error, unit)
-		if not ok or not plate or (plate.IsForbidden and plate:IsForbidden()) then
+		if not ok or not plate or not ns.Reachable(plate) then
 			if record then record(("plate hit %s %s skipped: no plate, or locked"):format(unit, action)) end
 			return
 		end

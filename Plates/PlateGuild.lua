@@ -33,7 +33,7 @@ local function Known(value)
 end
 
 local function Usable(frame)
-	return type(frame) == "table" and frame.SetAlpha and not (frame.IsForbidden and frame:IsForbidden())
+	return type(frame) == "table" and frame.SetAlpha and ns.Reachable(frame)
 end
 
 -- The unit's guild as the game writes it under names, or nil.

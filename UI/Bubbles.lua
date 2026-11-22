@@ -304,7 +304,7 @@ local function StyleFrame(frame, inside, look)
 	Style(inside, look, frame:GetRegions())
 	for i = 1, select("#", frame:GetChildren()) do
 		local child = select(i, frame:GetChildren())
-		if not ours[child] and not (child.IsForbidden and child:IsForbidden()) then
+		if not ours[child] and ns.Reachable(child) then
 			StyleFrame(child, inside, look)
 		end
 	end
@@ -376,9 +376,9 @@ local function StyleBubbles()
 		return
 	end
 	for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(false)) do
-		if not (bubble.IsForbidden and bubble:IsForbidden()) then
+		if ns.Reachable(bubble) then
 			local inside = bubble:GetChildren()
-			if inside and not (inside.IsForbidden and inside:IsForbidden()) then
+			if inside and ns.Reachable(inside) then
 				StyleFrame(bubble, inside, look)
 				Skin(bubble, inside, look)
 			end
@@ -759,9 +759,9 @@ local function HookBubbles()
 		return
 	end
 	for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(false)) do
-		if not hooked[bubble] and not (bubble.IsForbidden and bubble:IsForbidden()) then
+		if not hooked[bubble] and ns.Reachable(bubble) then
 			local inside = bubble:GetChildren()
-			if inside and not (inside.IsForbidden and inside:IsForbidden()) then
+			if inside and ns.Reachable(inside) then
 				hooked[bubble] = true
 				ns.HookOnUpdate(bubble, function() Lift(inside) end)
 				-- (Gone or reused: our copy goes too, and the game's comes back.)
@@ -829,7 +829,7 @@ local function SaysText(frame, text)
 	end
 	for i = 1, select("#", frame:GetChildren()) do
 		local child = select(i, frame:GetChildren())
-		if not (child.IsForbidden and child:IsForbidden()) and SaysText(child, text) then
+		if ns.Reachable(child) and SaysText(child, text) then
 			return true
 		end
 	end
@@ -844,7 +844,7 @@ function ns.IsBubbleOnScreen(text)
 	end
 	local width, height = WorldFrame:GetWidth(), WorldFrame:GetHeight()
 	for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(false)) do
-		if not (bubble.IsForbidden and bubble:IsForbidden()) and ns.Flag(bubble:IsVisible())
+		if ns.Reachable(bubble) and ns.Flag(bubble:IsVisible())
 			and SaysText(bubble, text) then
 			-- (Ours showing for it, below the bar: on screen, wherever the game's is.)
 			local inside = bubble:GetChildren()
@@ -856,7 +856,7 @@ function ns.IsBubbleOnScreen(text)
 			-- frame's own units, inside the screen: one cut off at an edge can't
 			-- be read. Past the top counts too while Keep bubbles on screen
 			-- brings it down. Its centre where the edges can't be read.)
-			local box = inside and not (inside.IsForbidden and inside:IsForbidden()) and inside or bubble
+			local box = inside and ns.Reachable(inside) and inside or bubble
 			local left, right, bottom, top = box:GetLeft(), box:GetRight(), box:GetBottom(), box:GetTop()
 			if not (Readable(left) and Readable(right) and Readable(bottom) and Readable(top)) then
 				local x, y = bubble:GetCenter()
@@ -889,7 +889,7 @@ function ns.HideOffScreenBubble(text)
 	end
 	HookBubbles() -- (its OnHide gives it back)
 	for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(false)) do
-		local inside = not (bubble.IsForbidden and bubble:IsForbidden()) and bubble:GetChildren()
+		local inside = ns.Reachable(bubble) and bubble:GetChildren()
 		if inside and hooked[bubble] and SaysText(bubble, text) then
 			local state = lifted[inside]
 			if not state then
@@ -924,7 +924,7 @@ end
 local BUBBLE_WAIT = 0.5
 local function BubbleFor(text)
 	for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(false)) do
-		if not (bubble.IsForbidden and bubble:IsForbidden()) and ns.Flag(bubble:IsShown()) and SaysText(bubble, text) then
+		if ns.Reachable(bubble) and ns.Flag(bubble:IsShown()) and SaysText(bubble, text) then
 			return true
 		end
 	end

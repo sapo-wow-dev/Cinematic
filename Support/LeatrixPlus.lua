@@ -32,7 +32,7 @@ end
 
 local function Usable(frame)
 	return type(frame) == "table" and type(frame.GetObjectType) == "function"
-		and not (frame.IsForbidden and frame:IsForbidden())
+		and ns.Reachable(frame)
 end
 
 -- Addon Frames row: its flight bar, unnamed on UIParent (made on your first

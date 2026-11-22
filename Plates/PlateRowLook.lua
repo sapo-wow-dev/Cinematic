@@ -357,10 +357,7 @@ end
 local gameTrim
 local function MeasureTrim(bar)
 	if not (bar and bar.GetStatusBarTexture) then return nil end
-	if bar.IsForbidden then
-		local forbidden = bar:IsForbidden()
-		if not Readable(forbidden) or forbidden then return nil end
-	end
+	if not ns.Reachable(bar) then return nil end
 	local ground = bar.bgTexture
 	if not (ground and ground.GetNumPoints) then return nil end
 	local atlas, file = ground.GetAtlas and ground:GetAtlas(), ground:GetTexture()

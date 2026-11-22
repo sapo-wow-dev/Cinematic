@@ -332,7 +332,7 @@ local function LooseParts(frame, depth, found)
 	end
 	if depth > 0 then
 		for _, child in ipairs({ frame:GetChildren() }) do
-			if not (child.IsForbidden and child:IsForbidden()) then
+			if ns.Reachable(child) then
 				LooseParts(child, depth - 1, found)
 			end
 		end
@@ -786,7 +786,7 @@ ns.GroupHandled = GroupHandled
 do
 	local parts, below, belowCount = {}, {}, 0
 	local function Set(region, info, on)
-		if info.on ~= on and not (region.IsForbidden and region:IsForbidden()) then
+		if info.on ~= on and ns.Reachable(region) then
 			info.on = on
 			region:SetIgnoreParentAlpha(on)
 			return true
@@ -843,13 +843,9 @@ function ns.PageOn(switch)
 	return true
 end
 
--- (Also true for one that says it isn't forbidden and still refuses tainted
--- code, as some do in a fight on WoW Forever: "calling '?' on bad self
--- (Attempt to access forbidden object...)", issue #7 and d88eb23.
--- Tools/errors/known.lua: region-refuses-tainted-code.)
+-- (Also true for one that refuses our code in a fight: ns.Reachable, Checks.lua.)
 local function IsForbidden(frame)
-	if frame.IsForbidden and frame:IsForbidden() then return true end
-	return type(frame.GetParent) == "function" and not pcall(frame.GetParent, frame)
+	return not ns.Reachable(frame)
 end
 
 local function AddFrame(frame, group)
@@ -1209,7 +1205,7 @@ local function ScanTopLevelFrames()
 		if GroupHandled(group) then anyAuto = true end
 	end
 	for _, frame in ipairs(anyAuto and { UIParent:GetChildren() } or seen.none) do
-		if not seen[frame] and not (frame.IsForbidden and frame:IsForbidden()) then
+		if not seen[frame] and ns.Reachable(frame) then
 			local name = frame:GetName()
 			if name then
 				local group = AutoPatternGroup(name)
@@ -1223,7 +1219,7 @@ local function ScanTopLevelFrames()
 	end
 	for name in pairs(ns.db.extraFrames) do
 		local frame = _G[name]
-		if type(frame) == "table" and frame.GetFrameStrata and not (frame.IsForbidden and frame:IsForbidden())
+		if type(frame) == "table" and frame.GetFrameStrata and ns.Reachable(frame)
 			and not IsWindow(frame, name) then
 			-- (One holding a row's frames, found only once they're faded:
 			-- EllesmereUI's full-screen EllesmereUIUnitFrames_Hider holds its
@@ -1248,7 +1244,7 @@ local function ScanAddonFrames()
 			end
 			if known.match or known.patterns then
 				for _, frame in ipairs({ UIParent:GetChildren() }) do
-					if not seen[frame] and not (frame.IsForbidden and frame:IsForbidden()) then
+					if not seen[frame] and ns.Reachable(frame) then
 						local name = frame:GetName()
 						if name then
 							for _, pattern in ipairs(known.patterns or {}) do
@@ -1980,7 +1976,7 @@ do -- (a block: this file is at Lua's 200-local cap)
 local CLICK_GROUPS = { bars = true, sidebars = true }
 
 local function ClicksOff(frame, list)
-	if frame.IsForbidden and frame:IsForbidden() then return end
+	if not ns.Reachable(frame) then return end
 	if ns.Flag(frame:IsMouseClickEnabled()) then
 		frame:SetMouseClickEnabled(false)
 		list[#list + 1] = frame
@@ -1993,7 +1989,7 @@ function ns.EntryClicksBack(entry)
 	if not list or InCombatLockdown() then return end
 	entry.clicksOff = nil
 	for _, frame in ipairs(list) do
-		if not (frame.IsForbidden and frame:IsForbidden()) then frame:SetMouseClickEnabled(true) end
+		if ns.Reachable(frame) then frame:SetMouseClickEnabled(true) end
 	end
 end
 
@@ -10570,12 +10566,12 @@ do
 	end
 
 	local function Open(root)
-		return root and not (root.IsForbidden and root:IsForbidden()) and root or nil
+		return root and ns.Reachable(root) and root or nil
 	end
 
 	local function Usable(frame)
 		return type(frame) == "table" and frame.SetAlpha and frame.SetIgnoreParentAlpha and frame.GetParent
-			and not (frame.IsForbidden and frame:IsForbidden())
+			and ns.Reachable(frame)
 	end
 
 	-- Whether a frame sits inside the personal bars (a few parents up at most).

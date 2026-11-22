@@ -2793,7 +2793,7 @@ aim.farthest = 0.85 -- (the click's x it's never taken past: the furthest measur
 function aim.OverWorld()
 	local ok, focus = pcall(ns.MouseFocus)
 	if not ok or focus == nil or focus == WorldFrame then return true end
-	if focus.IsForbidden and focus:IsForbidden() then return true end
+	if not ns.Reachable(focus) then return true end
 	local okName, name = pcall(focus.GetName, focus)
 	return okName and type(name) == "string" and name:find("^NamePlate") ~= nil or false
 end

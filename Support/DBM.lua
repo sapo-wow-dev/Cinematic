@@ -19,7 +19,7 @@ for _, known in ipairs({
 		match = function(frame)
 			local first = frame:GetChildren()
 			-- (an unnamed frame of the game's can hold a forbidden one first)
-			if not first or (first.IsForbidden and first:IsForbidden()) then
+			if not first or not ns.Reachable(first) then
 				return false
 			end
 			local name = first:GetName()

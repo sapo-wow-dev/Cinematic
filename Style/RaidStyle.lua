@@ -105,7 +105,7 @@ end
 local function Members()
 	local list = {}
 	local function Add(frame)
-		if frame and not (frame.IsForbidden and frame:IsForbidden()) then list[#list + 1] = frame end
+		if frame and ns.Reachable(frame) then list[#list + 1] = frame end
 	end
 	for i = 1, 5 do
 		Add(_G["CompactPartyFrameMember" .. i])
@@ -168,7 +168,7 @@ local skinned = setmetatable({}, { __mode = "k" }) -- health bar -> true, once i
 local valueHooked = setmetatable({}, { __mode = "k" }) -- health bar -> true, once By health follows its value
 -- One compact frame as its group's look says.
 local function Dress(frame)
-	if dressing or not frame or (frame.IsForbidden and frame:IsForbidden()) then return end
+	if dressing or not frame or not ns.Reachable(frame) then return end
 	local id = GroupOf(frame)
 	if not id then return end
 	local active = ns.StyleOn("rfStyle")

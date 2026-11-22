@@ -47,7 +47,7 @@ local bodyShare, nameShare, markShare = {}, {}, {}
 local textShare = {}
 
 local function Usable(frame)
-	return type(frame) == "table" and frame.SetAlpha and not (frame.IsForbidden and frame:IsForbidden())
+	return type(frame) == "table" and frame.SetAlpha and ns.Reachable(frame)
 end
 
 local function Field(unitFrame, field)
@@ -844,7 +844,7 @@ local questieIcons = {} -- [plate] = Questie's icon frame on it (see RefreshQues
 
 local function ApplyPlate(plate, personal)
 	local unitFrame = plate and plate.UnitFrame
-	if not Usable(unitFrame) or (plate.IsForbidden and plate:IsForbidden()) then
+	if not Usable(unitFrame) or not ns.Reachable(plate) then
 		return
 	end
 	-- (Showing nothing: done as it wakes. PlateSleep.lua.)
@@ -1043,7 +1043,7 @@ end
 
 -- Shows or hides a plate's class icon as its row and its unit say.
 local function RefreshClass(plate)
-	if not plate or (plate.IsForbidden and plate:IsForbidden()) then
+	if not plate or not ns.Reachable(plate) then
 		return
 	end
 	if plateClass[plate] == nil then
@@ -1114,7 +1114,7 @@ end
 
 -- Shows or hides a plate's role icon as its row and its unit say.
 local function RefreshRoleIcon(plate)
-	if not plate or (plate.IsForbidden and plate:IsForbidden()) then
+	if not plate or not ns.Reachable(plate) then
 		return
 	end
 	if plateRole[plate] == nil then
@@ -1381,10 +1381,10 @@ end
 -- quest can't be read, from the plate or the cursor (tested): both show.)
 local function GameIconShows(plate, unit)
 	local frame = plate.UnitFrame and plate.UnitFrame.SoftTargetFrame
-	if type(frame) == "table" and not (frame.IsForbidden and frame:IsForbidden()) then
+	if type(frame) == "table" and ns.Reachable(frame) then
 		frame = type(frame.Icon) == "table" and frame.Icon or frame
 	end
-	if type(frame) == "table" and frame.IsVisible and not (frame.IsForbidden and frame:IsForbidden()) then
+	if type(frame) == "table" and frame.IsVisible and ns.Reachable(frame) then
 		local okShown, shown = pcall(frame.IsVisible, frame)
 		local okAlpha, alpha = pcall(frame.GetEffectiveAlpha, frame)
 		if okShown and Known(shown) and shown and okAlpha and type(alpha) == "number" and Known(alpha)
@@ -1407,7 +1407,7 @@ function ns.DescribeGameIcon(unit)
 		return "game icon: no plate"
 	end
 	local function State(frame)
-		if type(frame) ~= "table" or (frame.IsForbidden and frame:IsForbidden()) then
+		if type(frame) ~= "table" or not ns.Reachable(frame) then
 			return tostring(frame and "forbidden" or nil)
 		end
 		local okS, shown = pcall(frame.IsShown, frame)
@@ -1422,7 +1422,7 @@ function ns.DescribeGameIcon(unit)
 			V(okA, alpha), V(okT, atlas), V(okF, file))
 	end
 	local frame = plate.UnitFrame and plate.UnitFrame.SoftTargetFrame
-	local icon = type(frame) == "table" and not (frame.IsForbidden and frame:IsForbidden()) and frame.Icon
+	local icon = type(frame) == "table" and ns.Reachable(frame) and frame.Icon
 	local icons = questIcons[plate]
 	return ("game icon: shows=%s | SoftTargetFrame %s | its Icon %s | softinteract=%s softfriend=%s"
 		.. " | SoftTargetInteract=%s SoftTargetIconInteract=%s SoftTargetIconFriend=%s | questie icon=%s"
@@ -1455,7 +1455,7 @@ end
 local function FindQuestieIcon(plate)
 	local ok, children = pcall(function() return { plate:GetChildren() } end)
 	for _, child in ipairs(ok and children or {}) do
-		if not (child.IsForbidden and child:IsForbidden()) and rawget(child, "lastIcon") and rawget(child, "Icon")
+		if ns.Reachable(child) and rawget(child, "lastIcon") and rawget(child, "Icon")
 			and child:IsShown() then
 			questieIcons[plate] = child
 			return child
@@ -1516,7 +1516,7 @@ function ns.DescribeQuestieIcon(unit)
 	local found = {}
 	local okKids, children = pcall(function() return { plate:GetChildren() } end)
 	for _, child in ipairs(okKids and children or {}) do
-		if not (child.IsForbidden and child:IsForbidden()) and rawget(child, "lastIcon") ~= nil then
+		if ns.Reachable(child) and rawget(child, "lastIcon") ~= nil then
 			local okPoint, point, rel, relPoint, x, y = pcall(child.GetPoint, child, 1)
 			found[#found + 1] = ("shown=%s alpha=%s ours=%s pinned=%s point=%s %s %s %s %s"):format(
 				tostring(child:IsShown()), tostring(child:GetAlpha()), tostring(questieIcons[plate] == child),
@@ -1534,7 +1534,7 @@ function ns.DescribeQuestieIcon(unit)
 end
 
 function RefreshQuestIcon(plate)
-	if not plate or (plate.IsForbidden and plate:IsForbidden()) then
+	if not plate or not ns.Reachable(plate) then
 		return
 	end
 	-- (Showing just its name: as far as the name shows. See ApplyPlate.)
@@ -1642,11 +1642,11 @@ end
 
 function ns.FindEQoLMark(plate)
 	local marks = ns.eqolMarks
-	if not marks or marks[plate] or (plate.IsForbidden and plate:IsForbidden()) then
+	if not marks or marks[plate] or not ns.Reachable(plate) then
 		return marks and marks[plate]
 	end
 	local unitFrame = plate.UnitFrame
-	if not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
+	if not unitFrame or not ns.Reachable(unitFrame) then
 		return nil
 	end
 	local ok, regions = pcall(function() return { unitFrame:GetRegions() } end)
@@ -2925,7 +2925,7 @@ mouseoverWatch:Hide()
 
 -- Shows or hides a plate's mark and colors as the rows that fit it say.
 local function RefreshTargetArrow(plate)
-	if not plate or (plate.IsForbidden and plate:IsForbidden()) then
+	if not plate or not ns.Reachable(plate) then
 		return
 	end
 	local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
@@ -3497,7 +3497,7 @@ ns.SetOnUpdate(namesColours, function()
 			end
 			if depth < 3 then
 				for _, child in ipairs({ frame:GetChildren() }) do
-					if not (child.IsForbidden and child:IsForbidden()) and Seen(child) ~= false then
+					if ns.Reachable(child) and Seen(child) ~= false then
 						Scan(child, depth + 1)
 					end
 				end
@@ -3671,7 +3671,7 @@ function ns.UpdatePlateParts(active, elapsed, cinematic)
 	if _G.QuestieLoader and GetTime() >= (ns.questieIconsAt or 0) and ns.Setting("questieMoveIcons") ~= false then
 		ns.questieIconsAt = GetTime() + QUEST_ICONS_EVERY
 		for _, plate in ipairs(C_NamePlate and C_NamePlate.GetNamePlates and C_NamePlate.GetNamePlates() or {}) do
-			if not (plate.IsForbidden and plate:IsForbidden()) and not QuestieIcon(plate) and FindQuestieIcon(plate) then
+			if ns.Reachable(plate) and not QuestieIcon(plate) and FindQuestieIcon(plate) then
 				RefreshQuestIcon(plate)
 			end
 		end

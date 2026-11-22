@@ -79,7 +79,7 @@ local function PartyFrames()
 		if frame then list[#list + 1] = frame end
 	end
 	local holder = _G.PartyFrame
-	if holder and not (holder.IsForbidden and holder:IsForbidden()) then
+	if holder and ns.Reachable(holder) then
 		for _, child in ipairs({ holder:GetChildren() }) do
 			if child ~= _G.CompactPartyFrame then list[#list + 1] = child end
 		end
@@ -725,7 +725,7 @@ end
 -- (retail's health bar: its green is in the art, which ours doesn't have).
 -- fade: the color its gradient fades to (Fade), nil for none.
 local function DressBar(bar, view, r, g, b, tint, under, fade)
-	if not (bar and bar.SetStatusBarTexture) or (bar.IsForbidden and bar:IsForbidden()) then return end
+	if not (bar and bar.SetStatusBarTexture) or not ns.Reachable(bar) then return end
 	local saved = OwnOf(bar)
 	dressing = true
 	-- (A full-color fill, Sunset's, as it is on health only: the bar under it takes
@@ -890,7 +890,7 @@ end
 -- The name as view says: its color, font, outline and size.
 local ROMAN = not ({ ruRU = true, koKR = true, zhCN = true, zhTW = true })[GetLocale and GetLocale() or ""]
 local function DressName(text, view, unit)
-	if not (text and text.SetTextColor) or (text.IsForbidden and text:IsForbidden()) then return end
+	if not (text and text.SetTextColor) or not ns.Reachable(text) then return end
 	local saved = OwnOf(text)
 	local color = view and view.ufNameColor
 	local r, g, b
@@ -989,7 +989,7 @@ local function Refit(text, saved, again)
 end
 
 local function FitName(text, view)
-	if not (text and text.SetText) or (text.IsForbidden and text:IsForbidden()) then return end
+	if not (text and text.SetText) or not ns.Reachable(text) then return end
 	local saved = OwnOf(text)
 	saved.cut = view and view.ufNameCut == "first" or false
 	if saved.cut and not saved.fitHooked then
@@ -1024,11 +1024,11 @@ function ns.BarTextSize(size, height, flags)
 	return math.min(size, math.max(6, math.floor((height - edge) / 1.15 + 0.5)))
 end
 local function DressBarText(bar, view)
-	if not (bar and ROMAN) or (bar.IsForbidden and bar:IsForbidden()) then return end
+	if not (bar and ROMAN) or not ns.Reachable(bar) then return end
 	local height = bar:GetHeight()
 	for _, key in ipairs(BAR_WORDS) do
 		local text = bar[key]
-		if text and text.SetFont and not (text.IsForbidden and text:IsForbidden()) then
+		if text and text.SetFont and ns.Reachable(text) then
 			local saved = OwnOf(text)
 			local object = saved.object
 			local file, size, flags
@@ -1052,7 +1052,7 @@ ns.UnitStyleDressBar, ns.UnitStyleDressName, ns.UnitStyleColor = DressBar, Dress
 -- The portrait: a player's class icon, or their face (the game's).
 local CLASS_ICONS = "Interface\\TargetingFrame\\UI-Classes-Circles"
 local function DressPortrait(portrait, view, unit)
-	if not (portrait and portrait.SetTexture) or (portrait.IsForbidden and portrait:IsForbidden()) then return end
+	if not (portrait and portrait.SetTexture) or not ns.Reachable(portrait) then return end
 	local want = view and view.ufPortrait == "class"
 	local class
 	if want and Readable(unit) then
@@ -1117,7 +1117,7 @@ local function DressFrameArt(frame, active)
 	for _, art in ipairs(FrameArt(frame)) do
 		local color = ring
 		if art == rank and not plainElite then color = nil end
-		if not (art.IsForbidden and art:IsForbidden()) and (color or tinted[art]) then
+		if ns.Reachable(art) and (color or tinted[art]) then
 			-- (Its alpha as it is: left out, it'd be set to 1, undoing a frame's fade.)
 			local _, _, _, alpha = art:GetVertexColor()
 			if not Readable(alpha) then alpha = nil end
@@ -1740,7 +1740,7 @@ local function StripMasks(state, bar)
 	end
 	for _, region in ipairs({ bar:GetRegions() }) do Unmask(region) end
 	for _, child in ipairs({ bar:GetChildren() }) do
-		if not (child.IsForbidden and child:IsForbidden()) then
+		if ns.Reachable(child) then
 			for _, region in ipairs({ child:GetRegions() }) do Unmask(region) end
 			if child.GetStatusBarTexture and child:GetStatusBarTexture() then Unmask(child:GetStatusBarTexture()) end
 		end
@@ -2485,7 +2485,7 @@ local function DressFrame(info)
 	local view = active and View(info[1]) or nil
 	for _, frame in ipairs(GameFrames(info)) do
 		frameInfo[frame] = info
-		if not (frame.IsForbidden and frame:IsForbidden()) then
+		if ns.Reachable(frame) then
 			local unit = frame.unit
 			local health, power, text, portrait = Parts(frame)
 			local r, g, b

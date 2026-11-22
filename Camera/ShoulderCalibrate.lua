@@ -82,7 +82,7 @@ end
 -- middle), or nil and why.
 local function BubbleText(bubble)
 	local inside = bubble:GetChildren()
-	if not inside or (inside.IsForbidden and inside:IsForbidden()) then return nil end
+	if not inside or not ns.Reachable(inside) then return nil end
 	if inside.String and inside.String.GetText then return inside.String:GetText() end
 	for _, region in ipairs({ inside:GetRegions() }) do
 		if region.GetObjectType and region:GetObjectType() == "FontString" then return region:GetText() end
@@ -94,7 +94,7 @@ local function BubbleSpot()
 	if not okAll or not all then return nil, "bubbles can't be read here" end
 	local line = Line()
 	for _, bubble in ipairs(all) do
-		if not (bubble.IsForbidden and bubble:IsForbidden()) then
+		if ns.Reachable(bubble) then
 			local okText, says = pcall(BubbleText, bubble)
 			local okSame, same = pcall(function()
 				return type(says) == "string" and says:sub(1, 40) == line:sub(1, 40)

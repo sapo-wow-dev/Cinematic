@@ -134,7 +134,7 @@ local function HoverSpot(rows)
 	local best
 	for _, entry in ipairs(ns.managed or {}) do
 		local frame = entry.frame
-		if rows[entry.row] and frame and frame.GetCenter and not (frame.IsForbidden and frame:IsForbidden())
+		if rows[entry.row] and frame and frame.GetCenter and ns.Reachable(frame)
 			and ns.Flag(frame:IsVisible()) then
 			local x, y = frame:GetCenter()
 			if type(x) == "number" and type(y) == "number" and not (issecretvalue and issecretvalue(x)) then

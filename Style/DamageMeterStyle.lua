@@ -36,7 +36,7 @@ function ns.DamageMeterWindows()
 		local okName, name = pcall(kid.GetName, kid)
 		name = okName and Plain(name, "string")
 		if name and name:find("^DamageMeter") and not windows[name] then
-			local okForbidden, forbidden = pcall(function() return kid.IsForbidden and kid:IsForbidden() end)
+			local okForbidden, forbidden = pcall(function() return not ns.Reachable(kid) end)
 			if okForbidden and not forbidden then
 				windows[name] = kid
 				list[#list + 1] = kid
@@ -129,7 +129,7 @@ local counts = { bars = 0, texts = 0, windows = 0 }
 local function Walk(frame, depth, seen)
 	if type(frame) ~= "table" or seen[frame] or not frame.GetObjectType then return end
 	seen[frame] = true
-	local okForbidden, forbidden = pcall(function() return frame.IsForbidden and frame:IsForbidden() end)
+	local okForbidden, forbidden = pcall(function() return not ns.Reachable(frame) end)
 	if not okForbidden or forbidden then return end
 	if frame:GetObjectType() == "StatusBar" then
 		DressBar(frame)

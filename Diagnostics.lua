@@ -981,7 +981,7 @@ do
 		local ok, plate = pcall(get, unit)
 		if not ok then return "plate error" end
 		if not plate then return "no plate" end
-		local forbidden = plate.IsForbidden and plate:IsForbidden()
+		local forbidden = not ns.Reachable(plate)
 		return forbidden and "plate LOCKED" or "plate open"
 	end
 

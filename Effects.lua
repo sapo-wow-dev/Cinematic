@@ -695,7 +695,7 @@ do
 		end
 		for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
 			local frame = plate.UnitFrame
-			if frame and frame.cinematicAlpha and not (plate.IsForbidden and plate:IsForbidden()) then
+			if frame and frame.cinematicAlpha and ns.Reachable(plate) then
 				local state = State(plate, frame)
 				if watch.last[frame] ~= state then
 					watch.last[frame] = state
@@ -739,7 +739,7 @@ end
 -- plate fades, with showInteractPrompt (Gamepad page).
 local function KeepInteractPrompt(frame)
 	local prompt = frame.SoftTargetFrame
-	if not (prompt and prompt.SetIgnoreParentAlpha) or (prompt.IsForbidden and prompt:IsForbidden()) then
+	if not (prompt and prompt.SetIgnoreParentAlpha) or not ns.Reachable(prompt) then
 		return
 	end
 	local keep = ns.db and ns.db.showInteractPrompt and ns.db.handleGamepad ~= false or false
@@ -754,7 +754,7 @@ end
 -- While the plate is faded it fades with it.
 local function FadeBarHighlight(frame, faded)
 	local bar = frame.healthBar or (frame.HealthBarsContainer and frame.HealthBarsContainer.healthBar)
-	if type(bar) ~= "table" or not bar.GetRegions or (bar.IsForbidden and bar:IsForbidden()) then
+	if type(bar) ~= "table" or not bar.GetRegions or not ns.Reachable(bar) then
 		return
 	end
 	-- (Found once per bar: the regions that ignored their parent's alpha.)
@@ -790,7 +790,7 @@ end
 -- still holds it. Returns the icon, its frame, and true for a stand-in.
 local function GameMarkerIcon(frame)
 	local marker = frame.RaidTargetFrame
-	if not (type(marker) == "table" and marker.GetRegions) or (marker.IsForbidden and marker:IsForbidden()) then
+	if not (type(marker) == "table" and marker.GetRegions) or not ns.Reachable(marker) then
 		return nil
 	end
 	local icon = marker.RaidTargetIcon or marker.icon or marker.Icon or marker:GetRegions()
@@ -891,7 +891,7 @@ local function RefreshKeptMarkers()
 	end
 	for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
 		local frame = plate.UnitFrame
-		if frame and not (plate.IsForbidden and plate:IsForbidden()) then
+		if frame and ns.Reachable(plate) then
 			KeepRaidMarker(frame, frame.cinematicAlpha or 1, plate)
 		end
 	end
@@ -944,17 +944,17 @@ ns.addonPlateHidden = nil
 -- bodyAlpha: for a plate up for its name alone, how far the rest of it shows.
 function ns.SetPlateAlpha(plate, alpha, bodyAlpha)
 	if alpha > 0 and plate then ns.plateSleep.Shown(plate) end -- (PlateSleep.lua)
-	if ns.addonPlateAlpha and plate and not (plate.IsForbidden and plate:IsForbidden()) then
+	if ns.addonPlateAlpha and plate and ns.Reachable(plate) then
 		ns.addonPlateAlpha(plate, alpha)
 	end
-	if ns.addonPlateHidden and plate and not (plate.IsForbidden and plate:IsForbidden())
+	if ns.addonPlateHidden and plate and ns.Reachable(plate)
 		and ns.addonPlateHidden(plate) then
 		if plate.UnitFrame then
 			plate.UnitFrame.cinematicAlpha = nil -- (the keeper lets go of it)
 		end
 		return
 	end
-	if plate and plate.UnitFrame and not (plate.IsForbidden and plate:IsForbidden()) then
+	if plate and plate.UnitFrame and ns.Reachable(plate) then
 		local frame = plate.UnitFrame
 		KeepInteractPrompt(frame)
 		FadeBarHighlight(frame, alpha < 1)
@@ -1830,8 +1830,8 @@ do
 
 	local function Overlay(plate)
 		local unitFrame = plate.UnitFrame
-		if not unitFrame or (plate.IsForbidden and plate:IsForbidden())
-			or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
+		if not unitFrame or not ns.Reachable(plate)
+			or not ns.Reachable(unitFrame) then
 			return nil
 		end
 		local overlay = overlays[plate]
@@ -2825,7 +2825,7 @@ local function LetGoOfPlate(plate)
 			plate.UnitFrame.cinematicMarker:Hide() -- (its last unit's)
 		end
 	end
-	if ns.addonPlateAlpha and not (plate.IsForbidden and plate:IsForbidden()) then
+	if ns.addonPlateAlpha and ns.Reachable(plate) then
 		ns.addonPlateAlpha(plate, nil)
 	end
 end
@@ -2837,7 +2837,7 @@ local function StyleOnly(plate)
 	if opacity < 1 then
 		ns.SetPlateAlpha(plate, opacity)
 	else
-		if plate.UnitFrame and plate.UnitFrame.cinematicAlpha and not (plate.IsForbidden and plate:IsForbidden()) then
+		if plate.UnitFrame and plate.UnitFrame.cinematicAlpha and ns.Reachable(plate) then
 			ns.SetPlateAlpha(plate, 1) -- (back from an opacity of ours)
 		end
 		LetGoOfPlate(plate) -- (left to the game: Nameplates page's switch off)
@@ -2851,7 +2851,7 @@ local function ApplyPlateAlpha(plate, unit)
 		SetPlateAlphas(plate, alpha, body, name, mark, text)
 	else
 		ns.SetPlateBody(plate, 1, 0)
-		if plate.UnitFrame and plate.UnitFrame.cinematicAlpha and not (plate.IsForbidden and plate:IsForbidden()) then
+		if plate.UnitFrame and plate.UnitFrame.cinematicAlpha and ns.Reachable(plate) then
 			ns.SetPlateAlpha(plate, 1) -- (back from a fade of ours)
 		end
 		LetGoOfPlate(plate) -- a reused plate: let go of its last unit's alpha
@@ -2876,7 +2876,7 @@ end
 -- A plate's alpha again, its unit the same (its Style hub opacity changed:
 -- PlateParts).
 function ns.RefreshPlateAlpha(plate)
-	if not plate or (plate.IsForbidden and plate:IsForbidden()) or not ns.db then
+	if not plate or not ns.Reachable(plate) or not ns.db then
 		return
 	end
 	if not ns.db.handlePlates then
@@ -2917,7 +2917,7 @@ function ns.plates.RollStep()
 	local to = math.min(#list, from + ns.plates.ROLL_STEP)
 	for i = from + 1, to do
 		local plate = list[i]
-		if not (plate.IsForbidden and plate:IsForbidden()) then
+		if ns.Reachable(plate) then
 			local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
 			SetPlateAlphas(plate, PlateAlphas(unit, plate))
 		end
@@ -3192,12 +3192,12 @@ function ns.PrintPlatesDebug()
 		if ns.DescribeManaCost then ns.Print("  " .. ns.DescribeManaCost()) end
 		if ns.DescribeManaText then ns.Print("  " .. ns.DescribeManaText()) end
 		local own = PersonalPlate()
-		if own and own.UnitFrame and not (own.IsForbidden and own:IsForbidden()) then
+		if own and own.UnitFrame and ns.Reachable(own) then
 			local _, fields = ns.DescribePlateParts(own.UnitFrame)
 			ns.Print("  your plate's fields: " .. fields)
 		end
 		local display = _G.PersonalResourceDisplayFrame
-		if display and not (display.IsForbidden and display:IsForbidden()) then
+		if display and ns.Reachable(display) then
 			local _, fields = ns.DescribePlateParts(display)
 			ns.Print("  the frame's fields: " .. fields)
 		end
@@ -3407,7 +3407,7 @@ function ns.PlateItemsWhy()
 		return #words > 0 and table.concat(words, ", ") or L["a box on its row"]
 	end
 	for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
-		local unit = not (plate.IsForbidden and plate:IsForbidden()) and plate ~= PersonalPlate()
+		local unit = ns.Reachable(plate) and plate ~= PersonalPlate()
 			and (plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit))
 		if type(unit) == "string" then
 			local kind = PlateKind(unit)
@@ -3565,7 +3565,7 @@ function ns.PrintDuelsDebug()
 	-- A duelist's health bar, for one that looks empty (0 hp).
 	local function BarState(plate, unit)
 		local frame = plate and plate.UnitFrame
-		if frame and not (frame.IsForbidden and frame:IsForbidden()) then
+		if frame and ns.Reachable(frame) then
 			local bar, box = frame.healthBar, frame.HealthBarsContainer
 			local function Show(fn)
 				local ok, x, y = pcall(fn)

@@ -7,7 +7,12 @@
 -- refuse our code (FadeDetached.lua:155, "calling '?' on bad self" on
 -- GetParent). On the stand-in game with such frames: ns.NumPoints gives 0 for
 -- them, the EllesmereUI chat scan and the fade walk run with no error, and the
--- chat part anchored plainly is still found. Says PASS or FAIL per check.
+-- chat part anchored plainly is still found. ns.Reachable (Checks.lua): a
+-- forbidden frame or a secret answer is out; in a fight a refusing frame is
+-- out, probed once per fight, asked afresh in the next; out of a fight no
+-- probe. Says PASS or FAIL per check.
+local fight = false
+local probes = 0
 local SECRET = setmetatable({}, { __tostring = function() return "secret" end })
 local function Refuse()
 	error("Attempt to access forbidden object from code tainted by an AddOn")
@@ -16,6 +21,7 @@ end
 -- luacheck: push ignore 111 112 113 121 122 212
 local ns, wow = dofile("Tools/offline/load.lua")("forever", arg and arg[1], function()
 	issecretvalue = function(value) return value == SECRET end
+	InCombatLockdown = function() return fight end
 end)
 -- luacheck: pop
 
@@ -84,6 +90,8 @@ local anchorReads = 0
 local secretCount = secretKid.GetNumPoints
 secretKid.GetNumPoints = function(...) anchorReads = anchorReads + 1 return secretCount(...) end
 wow.Fire("ADDON_LOADED", "EllesmereUIChat")
+fight = true -- (the refusals come in fights)
+wow.Fire("PLAYER_REGEN_DISABLED")
 local scanned, err = xpcall(ns.BuildManagedList, debug.traceback)
 Check("the chat scan runs with a secret and a refusing frame", scanned, err)
 Check("the scan read the secret frame's anchors", anchorReads > 0, anchorReads)
@@ -112,5 +120,40 @@ inner.SetAlpha = function() end
 root:SetAlpha(0)
 local walked, walkErr = xpcall(function() ns.SyncDetached(root) end, debug.traceback)
 Check("the fade walk runs over a part that refuses our code", walked, walkErr)
+
+-- ns.Reachable on its own.
+local function Widget(forbidden)
+	local frame = CreateFrame("Frame", nil, UIParent)
+	frame.IsForbidden = function() return forbidden end
+	return frame
+end
+Check("ns.Reachable is there", type(ns.Reachable) == "function")
+if type(ns.Reachable) == "function" then
+	fight = false
+	wow.Fire("PLAYER_REGEN_ENABLED")
+	Check("a plain frame is reachable", ns.Reachable(Widget(false)))
+	Check("a forbidden frame isn't", not ns.Reachable(Widget(true)))
+	Check("a secret IsForbidden answer counts as forbidden", not ns.Reachable(Widget(SECRET)))
+	Check("not a table isn't", not ns.Reachable(nil) and not ns.Reachable("x"))
+	local shy = Widget(false)
+	local refusing = false
+	shy.GetParent = function(self)
+		probes = probes + 1
+		if refusing then Refuse() end
+		return UIParent
+	end
+	refusing = true
+	Check("out of a fight: no probe", ns.Reachable(shy) and probes == 0, probes)
+	fight = true
+	wow.Fire("PLAYER_REGEN_DISABLED")
+	Check("in a fight: a refusing frame isn't reachable", not ns.Reachable(shy))
+	Check("probed once, then remembered", not ns.Reachable(shy) and probes == 1, probes)
+	refusing = false
+	fight = false
+	wow.Fire("PLAYER_REGEN_ENABLED")
+	fight = true
+	wow.Fire("PLAYER_REGEN_DISABLED")
+	Check("the next fight asks afresh", ns.Reachable(shy) and probes == 2, probes)
+end
 
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))

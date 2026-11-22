@@ -39,15 +39,9 @@ local function Plain(value)
 	if value == nil or (issecretvalue and issecretvalue(value)) then return nil end
 	return value
 end
--- (A part can say it isn't forbidden and still refuse tainted code in a fight
--- on WoW Forever: "calling '?' on bad self (Attempt to access forbidden object
--- from code tainted by an AddOn)" on GetParent, under EllesmereUI's chat dock,
--- 2026-11-22. One it refuses is left alone: Tools/errors/known.lua,
--- region-refuses-tainted-code.)
-local function Reachable(region)
-	return not (region.IsForbidden and region:IsForbidden())
-		and type(region.GetParent) == "function" and (pcall(region.GetParent, region))
-end
+-- (A part that refuses our code in a fight, as one under EllesmereUI's chat
+-- dock did, 2026-11-22, is left alone: ns.Reachable, Checks.lua.)
+local Reachable = ns.Reachable
 local function Usable(region)
 	return type(region) == "table" and type(region.SetAlpha) == "function"
 		and type(region.IsIgnoringParentAlpha) == "function"

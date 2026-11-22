@@ -81,7 +81,7 @@ end
 local function Walk(object, depth, seen)
 	if not object or seen[object] or depth > 4 then return end
 	seen[object] = true
-	if object.IsForbidden and object:IsForbidden() then return end
+	if not ns.Reachable(object) then return end
 	if object:GetObjectType() == "FontString" then Hook(object) return end
 	for _, region in ipairs({ object:GetRegions() }) do
 		if region:GetObjectType() == "FontString" then Hook(region) end

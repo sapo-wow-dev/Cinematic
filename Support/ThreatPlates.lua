@@ -27,7 +27,7 @@ table.insert(ns.ADDON_NOTES, {
 local LABEL = "Threat Plates plate alpha"
 
 local function Usable(frame)
-	return type(frame) == "table" and not (frame.IsForbidden and frame:IsForbidden())
+	return type(frame) == "table" and ns.Reachable(frame)
 end
 
 local function SetPlateAlpha(plate, alpha)

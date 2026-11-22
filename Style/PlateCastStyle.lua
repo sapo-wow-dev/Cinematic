@@ -76,7 +76,7 @@ local function Known(value)
 end
 
 local function Usable(region)
-	return type(region) == "table" and region.SetAlpha and not (region.IsForbidden and region:IsForbidden())
+	return type(region) == "table" and region.SetAlpha and ns.Reachable(region)
 end
 
 -- [bar] = what's ours on it: its ground, border, overlay and timer, the

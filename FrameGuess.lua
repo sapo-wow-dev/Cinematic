@@ -36,7 +36,7 @@ end
 -- this one (folder names before Cinematic's, and their libraries).
 local before = setmetatable({}, { __mode = "k" })
 for _, frame in ipairs({ UIParent:GetChildren() }) do
-	if not (frame.IsForbidden and frame:IsForbidden()) and not frame:GetName() then
+	if ns.Reachable(frame) and not frame:GetName() then
 		before[frame] = true
 	end
 end
@@ -79,7 +79,7 @@ local SPOT_SHARE = 0.5
 local MAX_UNNAMED = 15 -- unnamed frames listed (the rest counted)
 
 local function IsForbidden(frame)
-	return frame.IsForbidden and frame:IsForbidden()
+	return not ns.Reachable(frame)
 end
 
 local function Plain(value)

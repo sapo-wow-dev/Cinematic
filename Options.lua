@@ -21567,7 +21567,7 @@ local function CreateMouseoverPanel()
 				if entry.name then faded[entry.name] = true end
 			end
 			for _, frame in ipairs({ UIParent:GetChildren() }) do
-				local name = not (frame.IsForbidden and frame:IsForbidden()) and frame:GetName()
+				local name = ns.Reachable(frame) and frame:GetName()
 				if name and frame:IsShown() and not faded[name] and not name:find("^Cinematic") then
 					AddToCatalog("frame:" .. name, name, L["not faded yet"])
 				end

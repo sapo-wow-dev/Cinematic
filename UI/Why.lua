@@ -851,7 +851,7 @@ local function EntryRect(entry)
 		return
 	end
 	local frame = entry.frame
-	if not frame or (frame.IsForbidden and frame:IsForbidden()) or not ns.Flag(frame:IsVisible()) then
+	if not frame or not ns.Reachable(frame) or not ns.Flag(frame:IsVisible()) then
 		return
 	end
 	local left, bottom, width, height = frame:GetRect()
@@ -886,7 +886,7 @@ local function AddonFrameUnderCursor()
 	local screen = UIParent:GetWidth() * UIParent:GetHeight()
 	local best, bestArea, bestSource
 	local function Consider(frame, depth)
-		if (frame.IsForbidden and frame:IsForbidden()) or managed[frame] or not ns.Flag(frame:IsVisible())
+		if not ns.Reachable(frame) or managed[frame] or not ns.Flag(frame:IsVisible())
 			or not ns.Flag(frame:IsMouseOver()) then
 			return
 		end
@@ -1307,7 +1307,7 @@ function ns.DebugInspect()
 	-- (Anything on screen under the cursor, named or not, a level or two in.)
 	local seenAny = 0
 	local function Look(frame, depth, parentName)
-		if seenAny >= 12 or (frame.IsForbidden and frame:IsForbidden()) then return end
+		if seenAny >= 12 or not ns.Reachable(frame) then return end
 		if not (ns.Flag(frame:IsVisible()) and ns.Flag(frame:IsMouseOver())) then return end
 		local name = frame:GetName()
 		local alpha = frame:GetEffectiveAlpha()

@@ -1727,7 +1727,7 @@ function cursor.Begin()
 	end
 	s.seen = {}
 	local function Mute(frame, depth)
-		if Secret(frame) or (frame.IsForbidden and frame:IsForbidden()) then return end
+		if Secret(frame) or not ns.Reachable(frame) then return end
 		if s.seen[frame] then return end
 		s.seen[frame] = true
 		-- (A protected frame can't be changed in a fight: left as it is.)

@@ -1288,7 +1288,7 @@ do
 
 	local function PlateOwner(owner)
 		if type(owner) ~= "table" then return false, "no owner" end
-		local okF, forbidden = pcall(function() return owner.IsForbidden and owner:IsForbidden() end)
+		local okF, forbidden = pcall(function() return not ns.Reachable(owner) end)
 		if okF and forbidden == true then return true, "forbidden" end
 		local frame = owner
 		for _ = 1, 3 do

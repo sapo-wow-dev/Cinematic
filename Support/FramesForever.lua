@@ -47,7 +47,7 @@ local LINKS = {
 
 local function IsUsable(frame)
 	return type(frame) == "table" and type(frame.GetObjectType) == "function"
-		and not (frame.IsForbidden and frame:IsForbidden())
+		and ns.Reachable(frame)
 end
 
 ns.WhenAddonLoads("Frames_Forever", function()

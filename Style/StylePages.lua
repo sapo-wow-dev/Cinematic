@@ -2279,7 +2279,7 @@ function ns.ReportPlateTextures(which)
 		end
 		root = plate.UnitFrame or plate
 	end
-	if root.IsForbidden and root:IsForbidden() then
+	if not ns.Reachable(root) then
 		ns.Print("This plate is closed to addons (a friendly plate in an instance?): try an enemy's.")
 		return
 	end
@@ -2349,7 +2349,7 @@ function ns.ReportPlateTextures(which)
 			end
 		end
 		for _, child in ipairs({ frame:GetChildren() }) do
-			if not (child.IsForbidden and child:IsForbidden()) then Walk(child, depth + 1) end
+			if ns.Reachable(child) then Walk(child, depth + 1) end
 		end
 	end
 	pcall(Walk, root, 0)

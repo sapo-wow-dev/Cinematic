@@ -41,11 +41,44 @@ end
 
 -- Frames and regions ------------------------------------------------------------
 
--- A frame or region we may call methods on: a widget, and not forbidden
--- (forbidden ones, like nameplates in instances, error on almost any call).
+-- Whether our code may call its methods: not forbidden (forbidden ones, like
+-- nameplates in instances, error on almost any call), and in a fight not
+-- refusing tainted code either. On WoW Forever a frame can say it isn't
+-- forbidden and still refuse in a fight: "calling '?' on bad self (Attempt to
+-- access forbidden object from code tainted by an AddOn)" on GetParent,
+-- IsShown, GetText (issue #7, d88eb23). There's no tested check for that
+-- (CanBeAccessedInContext is the untested candidate), so a fight probes one
+-- cheap read, once per frame per fight. Use this, never IsForbidden() alone
+-- (Tools/errors/known.lua: region-refuses-tainted-code).
+local inFight = {} -- frame -> true / false, this fight's answers
+setmetatable(inFight, { __mode = "k" })
+function Check.Reachable(object)
+	if type(object) ~= "table" then return false end
+	-- (A secret answer counts as forbidden: it can't be tested for truth.)
+	local forbidden = object.IsForbidden and object:IsForbidden()
+	if issecretvalue and issecretvalue(forbidden) then return false end
+	if forbidden then return false end
+	if not (InCombatLockdown and InCombatLockdown()) then return true end
+	local known = inFight[object]
+	if known ~= nil then return known end
+	-- pcall: the refusal can't be asked ahead (see above).
+	known = type(object.GetParent) ~= "function" or (pcall(object.GetParent, object))
+	inFight[object] = known
+	return known
+end
+ns.Reachable = Check.Reachable
+if CreateFrame then
+	-- (A new fight asks afresh: a frame refusing in one may not in the next.)
+	local watcher = CreateFrame("Frame")
+	watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
+	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+	watcher:SetScript("OnEvent", function() wipe(inFight) end)
+end
+
+-- A frame or region we may call methods on: a widget we can reach.
 function Check.Usable(object)
 	if type(object) ~= "table" or type(object.GetObjectType) ~= "function" then return false end
-	return not (object.IsForbidden and object:IsForbidden())
+	return Check.Reachable(object)
 end
 
 -- Whether moving, showing or hiding it works now: a protected frame can't be

@@ -197,7 +197,7 @@ function ns.ApplyFrameLinks()
 		if name then
 			local frame = _G[name]
 			if type(frame) == "table" and type(frame.GetObjectType) == "function"
-				and not (frame.IsForbidden and frame:IsForbidden()) then
+				and ns.Reachable(frame) then
 				apply(frame, {})
 			end
 		else

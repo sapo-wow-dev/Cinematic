@@ -71,7 +71,7 @@ local function Bubbles(text)
 	local readable = C_ChatBubbles.GetAllChatBubbles(false)
 	local found = {}
 	for _, bubble in ipairs(readable) do
-		if not (bubble.IsForbidden and bubble:IsForbidden()) and ns.Flag(bubble:IsVisible())
+		if ns.Reachable(bubble) and ns.Flag(bubble:IsVisible())
 			and ns.BubbleSays and ns.BubbleSays(bubble, text) then
 			local where, why = Where(bubble)
 			found[#found + 1] = where or why

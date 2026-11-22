@@ -74,7 +74,7 @@ end
 -- resource. Any can be missing.
 local function Parts()
 	local root = _G.PersonalResourceDisplayFrame
-	if not root or (root.IsForbidden and root:IsForbidden()) then return end
+	if not root or not ns.Reachable(root) then return end
 	local holder = root.HealthBarsContainer
 	local health = holder and holder.healthBar or root.healthbar or root.healthBar
 	return root, holder or health, health, root.PowerBar, root.ClassFrameContainer

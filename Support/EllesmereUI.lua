@@ -366,7 +366,7 @@ for addon, parts in pairs(LINKS) do
 			for part, name in pairs(parts) do
 				local frame = _G[name]
 				if type(frame) == "table" and type(frame.GetObjectType) == "function"
-					and not (frame.IsForbidden and frame:IsForbidden()) then
+					and ns.Reachable(frame) then
 					ns.ClaimLinkPart("EllesmereUI", part, frame)
 				end
 			end
@@ -413,7 +413,7 @@ do
 		hooked[frame] = true
 		ns.HookPlateFrame(frame, LABEL)
 		hooksecurefunc(frame, "SetParent", function(self, parent)
-			local unitFrame = type(parent) == "table" and not (parent.IsForbidden and parent:IsForbidden())
+			local unitFrame = type(parent) == "table" and ns.Reachable(parent)
 				and parent.UnitFrame
 			ns.SetPlateFrameAlpha(self, type(unitFrame) == "table" and unitFrame.cinematicAlpha or nil, LABEL)
 		end)
@@ -433,7 +433,7 @@ do
 		local unitFrame = plate.UnitFrame
 		for _, child in ipairs({ plate:GetChildren() }) do
 			if child ~= unitFrame and not child:GetName() and not (unitFrame and (child == unitFrame.WidgetContainer
-				or child == unitFrame.SoftTargetFrame)) and not (child.IsForbidden and child:IsForbidden()) then
+				or child == unitFrame.SoftTargetFrame)) and ns.Reachable(child) then
 				HookPiece(child)
 				list[#list + 1] = child
 			end
@@ -601,9 +601,9 @@ ns.WhenAddonLoads("EllesmereUIQuestTracker", function()
 			if not customItemLayer then
 				-- (Forbidden frames first: even asking one its name errors.)
 				for _, layer in ipairs({ UIParent:GetChildren() }) do
-					if not (layer.IsForbidden and layer:IsForbidden()) and not layer:GetName() then
+					if ns.Reachable(layer) and not layer:GetName() then
 						local first = select(1, layer:GetChildren())
-						if type(first) == "table" and not (first.IsForbidden and first:IsForbidden())
+						if type(first) == "table" and ns.Reachable(first)
 							and first.questID ~= nil and first.cd then
 							customItemLayer = layer
 							break
@@ -695,13 +695,11 @@ end)
 -- frames on UIParent, so they don't fade with the chat frames. The panel and
 -- sidebar are found through its per-chat-frame data; the rest by what
 -- they're anchored to (those parts, or the tab dock).
--- (In a fight on WoW Forever a frame can say it isn't forbidden and still
--- refuse tainted code: one GetName refuses is left alone. Its anchors are
--- counted with ns.NumPoints, which can be secret then.)
+-- (One that refuses our code in a fight is left alone: ns.Reachable. Its
+-- anchors are counted with ns.NumPoints, which can be secret then.)
 local function IsUsable(frame)
 	return type(frame) == "table" and type(frame.GetObjectType) == "function"
-		and type(frame.SetAlpha) == "function" and not (frame.IsForbidden and frame:IsForbidden())
-		and type(frame.GetName) == "function" and (pcall(frame.GetName, frame))
+		and type(frame.SetAlpha) == "function" and ns.Reachable(frame)
 end
 
 local function IsAnchoredTo(frame, targets)
@@ -802,7 +800,7 @@ local function TooltipSkinParts(tooltip, out)
 		end
 	end
 	for _, child in ipairs({ tooltip:GetChildren() }) do
-		if not (child.IsForbidden and child:IsForbidden()) and not child:GetName()
+		if ns.Reachable(child) and not child:GetName()
 			and child ~= tooltip.NineSlice and type(child.SetBackdrop) == "function" then
 			local ok, _, relativeTo = pcall(child.GetPoint, child, 1)
 			if ok and relativeTo == tooltip then out[#out + 1] = child end
@@ -820,7 +818,7 @@ local function BubbleFrames()
 	bubbleCount = count
 	wipe(bubbleFrames)
 	for _, frame in ipairs({ UIParent:GetChildren() }) do
-		if not (frame.IsForbidden and frame:IsForbidden()) and not frame:GetName()
+		if ns.Reachable(frame) and not frame:GetName()
 			and frame:GetFrameStrata() == "HIGH" and frame:GetFrameLevel() == 150
 			and type(frame.bg) == "table" and type(frame.text) == "table"
 			and frame.text.GetObjectType and frame.text:GetObjectType() == "FontString" then
@@ -845,7 +843,7 @@ ns.WhenAddonLoads("EllesmereUIBlizzardSkin", function()
 			for _, name in ipairs(TOOLTIPS) do
 				local tooltip = _G[name]
 				if type(tooltip) == "table" and tooltip.GetRegions
-					and not (tooltip.IsForbidden and tooltip:IsForbidden()) then
+					and ns.Reachable(tooltip) then
 					TooltipSkinParts(tooltip, list)
 				end
 			end

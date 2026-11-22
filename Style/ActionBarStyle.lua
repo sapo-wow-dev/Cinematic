@@ -620,7 +620,7 @@ local function SetPageArrows()
 	for _, name in ipairs(DIVIDER_BARS) do
 		local bar = _G[name]
 		local arrows = type(bar) == "table" and bar.ActionBarPageNumber
-		if arrows and arrows.SetAlpha and not (arrows.IsForbidden and arrows:IsForbidden()) then
+		if arrows and arrows.SetAlpha and ns.Reachable(arrows) then
 			if roundNow and not arrowsHooked[arrows] then
 				arrowsHooked[arrows] = true
 				hooksecurefunc(arrows, "SetAlpha", KeepArrowsHidden)
@@ -645,7 +645,7 @@ local function SetDividers()
 		local bar = _G[name]
 		if type(bar) == "table" and bar.GetChildren then
 			for _, kid in ipairs({ bar:GetChildren() }) do
-				if kid.TopEdge and kid.BottomEdge and not (kid.IsForbidden and kid:IsForbidden()) then
+				if kid.TopEdge and kid.BottomEdge and ns.Reachable(kid) then
 					if hide and not dividerHooked[kid] then
 						dividerHooked[kid] = true
 						hooksecurefunc(kid, "SetAlpha", KeepDividerHidden)
@@ -895,7 +895,7 @@ function ns.RefreshActionBarStyle()
 	opacityNow = plan.alpha
 	local failed
 	EachButton(function(button)
-		if not (button.IsForbidden and button:IsForbidden()) then
+		if ns.Reachable(button) then
 			local ok, err = pcall(Dress, button, plan)
 			if not ok then failed = err end
 			ok, err = pcall(SetOpacity, button)

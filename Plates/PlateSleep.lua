@@ -126,7 +126,7 @@ end)
 local function CanSleep(plate)
 	if sleep.mode == "off" or not plate or Fighting() then return false end
 	if ns.addonPlateAlpha or ns.addonPlateHidden then return false end -- (a nameplate addon draws them)
-	if plate.IsForbidden and plate:IsForbidden() then return false end
+	if not ns.Reachable(plate) then return false end
 	if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return false end
 	return not Kept(plate)
 end

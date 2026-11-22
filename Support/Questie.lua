@@ -74,7 +74,7 @@ function ns.QuestieTargetIcon(yield)
 		return
 	end
 	for _, child in ipairs({ parent:GetChildren() }) do
-		if not (child.IsForbidden and child:IsForbidden()) and rawget(child, "Icon") and not child:GetName()
+		if ns.Reachable(child) and rawget(child, "Icon") and not child:GetName()
 			and child:GetObjectType() == "Frame" then
 			child:SetAlpha(0)
 			hiddenTargetIcons[child] = true

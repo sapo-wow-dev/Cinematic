@@ -458,7 +458,7 @@ local function LockReleased()
 end
 
 local function Usable(plate)
-	return plate and not (plate.IsForbidden and plate:IsForbidden())
+	return plate and ns.Reachable(plate)
 end
 
 -- Your own value for a game setting (put back once the glow lets go).
@@ -502,7 +502,7 @@ local function UpdateHiddenSoftPlate()
 	local old = hiddenSoftPlate
 	hiddenSoftPlate = plate
 	for _, changed in ipairs({ old or false, plate or false }) do
-		if changed and ns.RefreshPlate and not (changed.IsForbidden and changed:IsForbidden()) then
+		if changed and ns.RefreshPlate and ns.Reachable(changed) then
 			ns.RefreshPlate(changed, changed.namePlateUnitToken)
 		end
 	end
@@ -544,7 +544,7 @@ ns.OwnSoftIconShows = OwnIconShows
 
 local function IconOf(plate)
 	local frame = plate and plate.UnitFrame and plate.UnitFrame.SoftTargetFrame
-	if type(frame) == "table" and frame.SetAlpha and not (frame.IsForbidden and frame:IsForbidden()) then
+	if type(frame) == "table" and frame.SetAlpha and ns.Reachable(frame) then
 		return frame
 	end
 	return nil
@@ -589,7 +589,7 @@ local function UpdateIcon()
 				end
 			end
 			local name = object and not ownPlates and plate.UnitFrame and plate.UnitFrame.name
-			if type(name) == "table" and name.SetAlpha and not (name.IsForbidden and name:IsForbidden()) then
+			if type(name) == "table" and name.SetAlpha and ns.Reachable(name) then
 				hideNow[name] = true
 			end
 		end
@@ -1315,7 +1315,7 @@ function ns.DescribeEQoLMarker(unit)
 		return { "eqol: no plate for the unit" }
 	end
 	local unitFrame = plate.UnitFrame
-	if not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
+	if not unitFrame or not ns.Reachable(unitFrame) then
 		return { "eqol: plate's unit frame forbidden" }
 	end
 	local function N(fn, ...)
@@ -1378,7 +1378,7 @@ function ns.DescribeEQoLMarker(unit)
 		return list
 	end)
 	for _, kid in ipairs(okK and kids or {}) do
-		if not (kid.IsForbidden and kid:IsForbidden()) and ns.Flag(kid:IsVisible()) then
+		if ns.Reachable(kid) and ns.Flag(kid:IsVisible()) then
 			local l, r = Num(kid.GetLeft, kid), Num(kid.GetRight, kid)
 			local b, t = Num(kid.GetBottom, kid), Num(kid.GetTop, kid)
 			if l and r and b and t and cx >= l and cx <= r and cy >= b and cy <= t then

@@ -178,7 +178,7 @@ end
 -- An area's frame: its own by name with the row (hooked), unnamed ones as
 -- found, and the game's (already faded with their own rows) followed.
 local function AddAreaFrame(frame, row, group)
-	if type(frame) ~= "table" or type(frame.GetName) ~= "function" or (frame.IsForbidden and frame:IsForbidden()) then
+	if type(frame) ~= "table" or type(frame.GetName) ~= "function" or not ns.Reachable(frame) then
 		return
 	end
 	local name = frame:GetName()
@@ -447,9 +447,9 @@ ns.WhenAddonLoads("DaylightUI_Chat", function()
 			local list = {}
 			local all = C_ChatBubbles and C_ChatBubbles.GetAllChatBubbles and C_ChatBubbles.GetAllChatBubbles()
 			for _, bubble in pairs(type(all) == "table" and all or {}) do
-				if type(bubble) == "table" and not (bubble.IsForbidden and bubble:IsForbidden()) then
+				if type(bubble) == "table" and ns.Reachable(bubble) then
 					local frame = bubble:GetChildren()
-					if type(frame) == "table" and not (frame.IsForbidden and frame:IsForbidden()) then
+					if type(frame) == "table" and ns.Reachable(frame) then
 						list[#list + 1] = frame
 					end
 				end
@@ -517,7 +517,7 @@ do
 	local LABEL = "DaylightUI plate alpha"
 
 	local function Usable(frame)
-		return type(frame) == "table" and not (frame.IsForbidden and frame:IsForbidden())
+		return type(frame) == "table" and ns.Reachable(frame)
 	end
 
 	-- Its plate on a game plate: the child that has that plate's unit frame
@@ -570,7 +570,7 @@ do
 			DUI.RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit)
 				local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(unit)
 				if ns.db and ns.db.enabled and type(plate) == "table"
-					and not (plate.IsForbidden and plate:IsForbidden()) then
+					and ns.Reachable(plate) then
 					ns.RefreshPlateAlpha(plate)
 				end
 			end, true)

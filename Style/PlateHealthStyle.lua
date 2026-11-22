@@ -45,9 +45,7 @@ end
 
 local function Usable(region)
 	if type(region) ~= "table" or not region.SetAlpha then return false end
-	if not region.IsForbidden then return true end
-	local forbidden = region:IsForbidden()
-	return Known(forbidden) and not forbidden
+	return ns.Reachable(region)
 end
 
 local function BarOf(plate)

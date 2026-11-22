@@ -321,7 +321,7 @@ local found -- (for /cine debug questtracker: what the last pass found)
 local function Each(frame, depth, visit, seen)
 	if type(frame) ~= "table" or seen[frame] or not frame.GetObjectType then return end
 	seen[frame] = true
-	local okForbidden, forbidden = pcall(function() return frame.IsForbidden and frame:IsForbidden() end)
+	local okForbidden, forbidden = pcall(function() return not ns.Reachable(frame) end)
 	if okForbidden and forbidden then return end
 	visit(frame)
 	if depth >= DEPTH or not frame.GetChildren then return end

@@ -158,7 +158,7 @@ local function On()
 end
 
 local function ShowIcon(icon)
-	if icon.IsForbidden and icon:IsForbidden() then return end
+	if not ns.Reachable(icon) then return end
 	local entry = EntryOf(icon)
 	local stacks = entry and Stacks(entry, icon) or 0
 	if stacks > 0 then
