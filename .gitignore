@@ -28,3 +28,7 @@ out.html
 
 # Archived test logs (.claude/skills/test/read_log.py): game data from this PC, kept here
 Tools/tests/logs/
+
+# Profiler recordings and reports (Tools/perf/analyze.py): game data from this PC
+Tools/perf/history/
+Tools/perf/reports/

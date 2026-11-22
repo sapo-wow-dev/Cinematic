@@ -579,6 +579,10 @@ function ns.CreateFavoritesPage(kit)
 	if ns.IconBrowser then
 		picker = ns.IconBrowser(canvas, function(place, icon) ns.FavoriteSetIcon(place, icon) end)
 	end
+	-- (Hidden till the settings show it, as every page: left shown, with no
+	-- parent yet, it counted as "settings open" from login, so the idle
+	-- checks never slowed. Tools/offline/settingsclosed.lua, 2026-11-22.)
+	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Favorites", L["Favorites"])
 	page = canvas
 end

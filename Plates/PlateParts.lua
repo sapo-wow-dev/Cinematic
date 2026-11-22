@@ -1452,9 +1452,12 @@ local function QuestieIcon(plate)
 	end
 	questieIcons[plate] = nil
 end
-local function FindQuestieIcon(plate)
-	local ok, children = pcall(function() return { plate:GetChildren() } end)
-	for _, child in ipairs(ok and children or {}) do
+-- (The children as arguments, not a table, and no closure: made per plate
+-- per look, 40 plates twice a second, ~14 KB/s. Tools/perf/ledger.md.)
+local function PickQuestieIcon(plate, ok, ...)
+	if not ok then return nil end
+	for i = 1, select("#", ...) do
+		local child = select(i, ...)
 		if ns.Reachable(child) and rawget(child, "lastIcon") and rawget(child, "Icon")
 			and child:IsShown() then
 			questieIcons[plate] = child
@@ -1462,6 +1465,10 @@ local function FindQuestieIcon(plate)
 		end
 	end
 end
+local function FindQuestieIcon(plate)
+	return PickQuestieIcon(plate, pcall(plate.GetChildren, plate))
+end
+ns.FindQuestieIconNow = FindQuestieIcon -- (tests: Tools/offline/questieicon.lua)
 -- (anchorOnly: back on its own anchor, its alpha left as it is.)
 local function ReleaseQuestieIcon(frame, anchorOnly)
 	if not frame then

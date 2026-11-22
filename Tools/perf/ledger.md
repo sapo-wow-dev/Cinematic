@@ -1,0 +1,242 @@
+# Performance ledger
+
+Every fix from the /perf skill: what, expected saving, commit, measured
+result after the next recording. Older history (2026-10-30 to 2026-11-19) is
+in the cpu-profiling memory; its leads still open are copied below.
+
+Recordings: `python Tools/perf/analyze.py --all` keeps each one in
+Tools/perf/history/ (local, not committed) and writes a report to
+Tools/perf/reports/.
+
+## Baselines
+
+| Date | Client | Kind | Real ms/frame | KB/s | Over 5 ms |
+|------|--------|------|---------------|------|-----------|
+| 2026-11-19 07:14 | forever | CineMode, calm, solo, 40 plates | 1.232 | 120 | 1.2% |
+| 2026-11-22 01:40 | forever | CineMode, calm, solo, 5 plates | 0.416 | 24 | 0.9% |
+
+## Fixes
+
+| Date | Issue | Change | Expected | Commit | Measured |
+|------|-------|--------|----------|--------|----------|
+| 2026-11-22 | 1. FriendRowWanted full settings scan x6 / 10 s | Row column keys listed once (ns.plates.FriendRowsTicked), relisted on a new key (ns.db __newindex); test friendrows.lua: same answers on the real 8,322-key settings, 19x faster offline | the 6-9 ms UpdatePlates spike every 10 s gone | - | 02:28: UpdatePlates worst 9.01 -> 2.11 ms in 120 s. Confirmed |
+| 2026-11-22 | 2. Combat list kept 2 s | 10 s while ns.SlowChecks (SHOWN_STEADY_SLOW); test combatshownhold.lua | ~0.7 ms off most frames passes (3.3 -> ~2.6) | - | 02:28: GetCombatShownFrames 0.82 -> 0.56 ms a pass, UpdateFrames 3.30 -> 3.15. Partial: still worked out on most passes (an input it compares changes: likely the rule facts stamp while moving, 20% of frames) |
+| 2026-11-22 | 3. Idle tick held busy by every wake | Only idleTick.HARD_WAKE holds Settle(); "tick busy: why" counts in recordings; test idletick.lua | ~0.085 ms a frame calm in CineMode (26 -> ~10 ticks/s) | - | 02:28: no change (24 ticks/s): a shown GameTooltip held the full pace on 56% of frames, moving 20%. The wakes it covers now under 3%. Blocked by the tooltip hold |
+| 2026-11-22 | 0. Favorites page left shown with no parent: "settings open" from login (ns.OurSettingsShown), so ns.SlowChecks off all session till the window was opened once | canvas:Hide() before RegisterSubpage (UI/Favorites.lua) + WatchSettingsCanvas skips parentless canvases (Options.lua); test settingsclosed.lua | every idle saving back from login | - | 02:28: slow checks on 92% (was 2.4%). Confirmed. Found by the 02:20 recording: slow checks off 97.6% "settings open", 0.79 ms/frame |
+| 2026-11-22 | 5. A shown GameTooltip held the tick's full pace (56% of frames in a city), blocking fix 3 | Held only while the Tooltips page handles tooltips (idleTick.TooltipHolds + ns.TooltipsHandled; its ns.UpdateTooltip is the only tick step reading it); test idletick.lua (tooltip cases) | fix 3's saving: ~24 -> ~10-14 ticks/s standing still (moving still holds it, 20%) | - | 13:33 (open world): no "tooltip shown" busy reason left. Holds now: fight 48%, settling after PLAYER_TARGET_CHANGED 39% (expected) |
+| 2026-11-22 | 6. Calm Timer worked the fight frames list's rows out on every pass (4-6 ms, 8/s; 10 of 12 slow calls in the 13:33 fight run) | tickTables.fightTicks kept while `fighting` (fight or Calm Timer), made afresh once at PLAYER_REGEN_ENABLED, which now also stamps lastCombatAt (Frames.lua); test combatshownhold.lua: 298 rows -> 0 a Calm Timer pass | the 9-13 ms Calm Timer hitches down to ~5-8 ms (the list's ~4 ms gone; the rest is UpdateFrames' hidden 6 ms) | - | 14:11 (fights 79%): rows worked out down 85-92% (IsCineShowOn 4.13 -> 0.63/frame, IsCombatShowOn 3.21 -> 0.25), but GetCombatShownFrames 0.42 -> 0.46 ms a call, worst 6.3 -> 10.5. **No time saved**: the rows' ticks were not its cost. Kept (harmless, fewer calls) |
+| 2026-11-22 | 7. Quest walk (Show just that quest) walked the game's whole tracker every frames pass, ~0.8 ms, settled walks changing nothing | Walk only while the others fade, the tracker's own alpha changes, 2 s after a quest log/watch/zone/scenario change or a reveal (focus.watch, Focus), a timer / Close the gaps / others up, and once a second else; skipped passes reuse the last walk's answers (Frames.lua QuestFocusTick); test questwalkskip.lua; bench questwalk now settled with questRevealTime 60 | ~0.8 ms off each frames pass while a quest is shown alone (1.55 -> ~0.8 ms in the bench) | - | 15:31 perf: walked 47 of 47 passes, no gain: Close the gaps (questRevealCollapse, on for the user) kept every pass walking. Now its copies stay as drawn between walks too; walk reasons counted ("quest focus: walked for ..."); the perf test fails if settled passes don't mostly skip. **15:40 perf: quest walk 1.071 -> 0.035 ms a call (-97%); held 10 s it walked 10 of 56 passes (3 tracker changes, 7 once a second), the game putting back 0 of 200 parts. Confirmed.** |
+| 2026-11-22 | 4. FindQuestieIcon closure + table per plate | Children as varargs (PickQuestieIcon); test questieicon.lua: 0 KB per 1000 looks | ~14 KB/s at 40 plates, with Questie loaded only (the sweep is gated on QuestieLoader; never ran without it) | - | - |
+
+## Open leads
+
+First /perf dig, 2026-11-22 (4 agents, each claim checked in code):
+
+1. ns.plates.FriendRowWanted (Effects.lua:3951) goes over all of ns.db
+   (~8,300 keys) 6 times every 10 s out of fights: the 5.7-9 ms UpdatePlates
+   spikes. Fix: cached candidate key list, rebuilt on profile load.
+2. GetCombatShownFrames kept only 2 s (SHOWN_STEADY, Frames.lua:5057) while
+   its inputs hold: ~0.8 ms of each 3.3 ms UpdateFrames pass. Raise while
+   ns.SlowChecks.
+3. Idle tick never quiet: any non-soft wake (chat lines, peeks) or a shown
+   GameTooltip holds the full 0.03 s tick (Core.lua:3995, 4054): 26.6 ticks/s
+   instead of ~10. ~0.085 ms a frame.
+4. FindQuestieIcon (Plates/PlateParts.lua:1455): closure + {GetChildren()}
+   per plate per sweep, ~14 KB/s at 40 plates.
+5. Plate parts keeper keeps parts of removed plates in `held` (REMOVED
+   doesn't let go): 0.045 ms a frame at 5 plates. Check the pool size first.
+6. CooldownFlash OnUpdate runs every frame with nothing recharging: 0.035 ms.
+7. Small garbage: NodeSweep.lua:2636 note string and `nodes = {}` every pass;
+   FrameLinks.lua:112/128 `claims[part] or {}`; GetNamePlates() up to 6 times
+   a pass.
+8. Later, bigger: UpdateFrames fast path for plain settled entries (~0.5 ms a
+   pass), needs an offline equivalence test.
+- Latent: platesDirty cleared only when plates are filtered (Effects.lua:4171).
+- Timers to add (cost nothing unprofiled): ns.plates.FriendWants/FriendRowWanted/
+  OffscreenWhy, UpdateLockedPlates, duels.Sync/Update, PlateParts watchers.
+- Fights not recorded since 2026-11-11 (~1.1 ms/frame then).
+- Analyzer note: a deep run's "not timed" gap is mostly the profiler's own
+  wrapper cost; a normal (not deep) run gives the real unwrapped figure.
+
+2026-11-22 02:20 recording (fixes 1-4 in, but slow checks off: not comparable):
+UpdatePlates worst 4.76 ms (was 9.01), WarmCombatShown 0.6 ms a call x 0.52 a
+frame (slow checks off: renewed every 0.2 s), UpdateFrames 2.36 ms x 4.6/s.
+New lead from the "tick busy" counts: **GameTooltip shown on 61% of frames**
+held the full tick pace (Core.lua ns.Pace, Flag(GameTooltip:IsShown())), moving
+23%; the wakes fix 3 covered are now under 4%.
+
+2026-11-22 02:28 (12 s after /reload): 0.540 ms/frame real, 49.6 KB/s. Not like
+for like with 01:40 (0.416, 2 min after login, no name-only plates): the slot
+build ran all through (ns.SettingSlot/MarkRowDefault ~90 calls a frame, mostly
+wrapper cost; ns.ApplyModules + ConvertOffGrids ~20 KB/s), and name-only plates
+ran "Plate names" every frame (0.038 ms, 14 KB/s for 4 plates). The analyzer
+now warns about recordings started within 180 s of a login.
+
+Next leads (ranked):
+1. (done: fix 5) GameTooltip hold.
+2. GetCombatShownFrames still worked out most passes: find which compared
+   input moves (count each in Kept while profiling).
+3. "Plate names" (Plates/PlateParts.lua:3342): 14 KB/s for 4 plates (DrawName
+   every FAR_CHECK, pcalls per plate).
+4. Plate parts keeper 0.045 -> 0.103 ms a call at similar plates: held parts
+   of gone plates grow over a session (old lead 5).
+
+2026-11-22 13:33 Forever, open world, fights 44% of frames (first fight run
+since 11-11): 0.558 ms/frame real, 70 KB/s, 2.0% of frames over 5 ms, worst 14.
+- UpdateFrames 3.27 ms a pass x 7.2/s (worst 12.5), 24 KB/s: 10 of 12 slow
+  calls are in the Calm Timer, each with GetCombatShownFrames 4-6 ms. The
+  fight ticks cache (tickTables.fightTicks, Frames.lua:4979) holds only while
+  `fight` (lockdown) and is cleared at PLAYER_REGEN_ENABLED, so every Calm
+  Timer pass works every row out again, 8 times a second.
+- UpdateFrames hidden: 6.3 ms of a 10.2 ms call untimed (its locals).
+- ns.UpdateEntryClicks 534 calls/s, 6.8 KB/s (a clicksOff table per fade-out,
+  plus ClicksOff's walk).
+- ns.IsMinimapRevealed 7.4 KB/s (old lead 7: note string + nodes = {}).
+- ns.QuestFocusTick 1.5 ms in several slow calls.
+Analyzer: kinds now by fight share from the counts (not the start state).
+
+2026-11-22 14:02 Forever, open world, normal UI (CineMode off: "stays off while
+moving"), fights 22% of frames: 0.246 ms/frame real, 16 KB/s, 4 of 9,559 frames
+over 5 ms, worst 7.3. Fight cost with CineMode off is low. Fix 6 not measured
+(the list is only asked in CineMode).
+- ns.RefreshUnitStyle (Style/UnitStyle.lua:2706): 1.25 ms a call, 0.4/s, worst
+  2.2; 2 closures and 8 string builds a call.
+- Camera rows chain (ns.CameraRowsScripted -> SceneLead -> TriggerRowNow ->
+  TriggerSetting, Camera/CameraRows.lua): ~3 KB/s, CameraRowsScripted makes a
+  table each call.
+Analyzer: fight share now over the frames the slow checks were asked on (they
+aren't asked every frame out of CineMode; 13:33 reads 78%, not 44%), and a
+Dev/ test's wrapper is no longer given as a function's source.
+
+2026-11-22 14:11 Forever, open world, CineMode, fights 79% (12 s after /reload):
+0.518 ms/frame real (13:33: 0.558), 68 KB/s, 1.1% over 5 ms (was 2.0%), worst
+28.8. Slow calls: 10, still UpdateFrames 8-17 ms with GetCombatShownFrames
+4-10 ms in most.
+- GetCombatShownFrames' spikes are not its rows' ticks (fix 6). Left in it:
+  ns.RuleShows per row (6.4 calls a frame, ~0.5 ms a list) and untimed locals
+  (PlaceListsHere, KeptHere/IsListOn in the extra frames loop, the spellbook
+  loop). Next: time those parts (reassign the locals through ns.Profiled, no
+  new locals) and record again; no more guessing at it.
+- ns.UpdateEntryClicks 1.2-2.1 ms in single calls (slow call lines): the
+  ClicksOff walk over a frame's children as it fades out.
+
+Timers added 2026-11-22 (cost while not recording: one ns.profiling check a
+part): ns.ProfileAdd(name, ms, kb) in Profiler.lua records a code-timed part
+under the running section (and names it in slow call lines from 0.5 ms).
+- GetCombatShownFrames: "combat list: ..." fight target and cast, place
+  lists, fight ticks and rule facts, rows' rules, rows' ticks, rows' fight
+  hold, rows other, spellbook bars, added frames; and change check (Kept).
+  Test: combatshownhold.lua (listed, add up to no more than the list, none
+  timed while not recording).
+- ns.UpdateFrames: its /cine debug framepass parts go to the profiler while
+  recording ("frames pass: switches, combat list, rest of setup, mouse hover,
+  peeks and minimap reveal, cooldown bars, groups, unit frame parts, death and
+  minimap, targets, applying, after"). Not testable offline (the pass doesn't
+  return on the stand-in): the next recording shows them.
+Next recording: a CineMode fight run, 3 min after /reload.
+
+2026-11-22 14:41 Forever, open world, CineMode, calm (0% fights; 27 s after
+/reload): 0.305 ms/frame real, 40 KB/s, 0.2% over 5 ms (30 of 12,982), worst
+15. The new timers work (slow calls name the parts).
+- A full combat list (calm, not kept): ~3.4 ms = rows' ticks 1.8 + rows'
+  rules 1.5; every other part under 0.15 ms. So out of fights the list is its
+  ~300 rows, half ticks, half rules.
+- Frames pass parts, a pass: targets 0.84 ms, mouse hover 0.58, rest of setup
+  0.23, combat list 0.26 (mostly kept), applying 1.09 (one 12.6 ms, the
+  recording's first pass).
+- One-offs in the first 20 s: UpdatePlates 13.2 ms, UpdateFadingFrames 10.4 ms
+  (likely login work; check in a run started 3 min after /reload).
+Still wanted: a CineMode fight run with the timers, for the list's 4-10 ms in
+fights.
+
+2026-11-22 14:50 Forever, open world, CineMode, fights 81% (12 s after /reload):
+0.335 ms/frame real (14:11: 0.518; 135 fps here vs 89), 70 KB/s, 0.5% over
+5 ms (was 1.1%), worst 23. Slow calls (8-14 ms) = combat list 4.4-5.9 +
+applying 3-6, at fight ends.
+- A full list: rows' rules 1.4 ms every rebuild, rows' ticks 3.5 ms at the
+  one rebuild a fight's end (0.28 on average: fix 6 holds). The rest < 0.5.
+- But in a deep run each row calls 3 wrapped ns functions (RuleShows,
+  RuleTest, FollowKey, ~1.5 us each): 300 rows x ~4.5 us = ~1.35 ms, nearly
+  all of "rows' rules". The list's spikes are mostly the profiler's own cost.
+- "applying" 5-6 ms at a fight's end: ~170 frames starting to fade at once.
+- Frames pass "targets" 1.2 ms a pass on average (the steadiest part).
+Next: a NORMAL fight run (`/cine profiler 120`, no deep) for the real spikes
+(the game's Over5Ms) before any more list work. Analyzer and /perf skill now
+say so for deep runs.
+
+2026-11-22 15:01 Forever, NORMAL run (no wrappers), open world, CineMode,
+fights 30%, 82 s after /reload: **0.421 ms/frame (the game's figure), 35 KB/s,
+29 of 13,971 frames over 5 ms (0.2%), none over 10, worst 8.1 ms**; one slow
+call (8.1: applying 3.7, targets 1.6, combat list 0.9).
+- Combat list real: 0.12 ms a call, worst 1.9 (deep read 4-6). Done with it.
+- Frames pass: 2.5 ms a pass x ~6/s. "targets" 1.26 ms a pass = half of it,
+  the biggest real part (~170 entries, ~7 us each): old lead 8, the fast
+  path for plain settled entries. "applying" 0.61 (worst 4.3 at fight ends).
+- Fixed: the timers gave the whole pass's / list's garbage to "frames pass:
+  after" / "combat list: added frames" (now time only; the parent rows carry
+  it). Analyzer: deep and normal runs are now different kinds.
+
+"targets" dug 2026-11-22: it isn't the ~170 plain entries. In the 14:50 fight
+run ns.QuestFocusTick (Frames.lua, Quest tracker's Show just that quest) took
+0.72 of targets' 1.22 ms a pass (60%); calm, 0.005. On about half the passes
+it gets past its early return and ApplyFocus walks every section, block and
+bar of the game's tracker. A skip-when-settled fix needs to know whether the
+game puts block alphas back itself (no engine rule says): so a probe first.
+- Probe (profiling only): counts "quest focus walks: <why>" (a quest shown
+  alone / a tracker timer / close the gaps / others held up / fading back)
+  and "settled"/"fading"; times "quest focus: game's tracker" and "addons'
+  trackers"; ns.FadeRelative counts, for the walk's parts (ns.fadeRelativeTag),
+  "the game changed it" / "set" / "already so". Test: questwalkprobe.lua.
+- Next: a NORMAL fight run with quests tracked. If the walks are settled and
+  "already so" with "the game changed it" near 0, walk only while fading or
+  on a tracker change; else walk on the game's redraws only.
+- Note: Frames.lua's main chunk is at Lua's 200 locals (a new local
+  function broke the load; luacheck doesn't see it). Compile check:
+  python -I -c "import lupa.lua51 as l; ..." loadfile.
+
+2026-11-22 15:11 Forever, NORMAL, open world, CineMode, fights 69%, 64 s after
+/reload: **0.302 ms/frame, 39 KB/s, 11 of 18,669 frames over 5 ms (0.1%), none
+over 10, worst 7.05**: the best fight run yet. No quest walk at all (no probe
+counts): frames pass 1.64 ms a pass, targets 0.47 (15:01: 2.52 and 1.26), so
+the walk is ~0.8 ms of a pass when it runs. The probe still needs a fight on
+a tracked quest's mobs (the walk runs while Show just that quest focuses one).
+
+Benchmarks, 2026-11-22: `/cine debug perf` (Dev/PerfTest.lua) times the hot
+code in a state the test sets up (CineMode on, a quest revealed alone by
+ns.PerfQuestReveal), one call a frame x 60, exact KB a call, with ProfileAdd
+parts: frames pass, combat list afresh / kept, plates pass, friendly plate
+rows, quest walk settled; and a 10 s live hold of the quest walk with the
+probe's counts (the answer the walk fix waits on). Results in
+CinematicDB.perfResults / perfHistory; `analyze.py --bench` compares each
+with its last run. Offline: Tools/offline/perftest.lua.
+
+2026-11-22 15:26 first /cine debug perf (Forever, Teldrassil, CineMode, 170
+frames, 0 plates, 38 fps): 9 pass, 15 s, nothing to do. Per call:
+| Step | ms | p95 | worst | KB |
+|---|---|---|---|---|
+| frames pass | 1.552 | 2.06 | 2.38 | 0.71 |
+| combat list afresh | 0.793 | 0.90 | 1.05 | 0.30 |
+| combat list kept | 0.069 | 0.11 | 0.19 | 0.00 |
+| plates pass | 0.049 | 0.07 | 0.11 | 0.01 |
+| friendly plate rows | 0.114 | 0.07 | 3.81 (one relist) | 0.40 |
+| quest walk settled | 0.822 | 0.98 | 1.14 | 0.24 |
+Frames pass parts: targets 0.55, applying 0.50, setup 0.13, hover 0.08,
+combat list 0.07. List afresh: rows' ticks 0.37, rules 0.15, other 0.11.
+**Quest walk answer:** held 10 s, 23 settled walks touched 413 parts: the
+game changed 0, we set 0, all "already so". Settled walks change nothing.
+Caveat: no quest progress in those 10 s, and progress redraws the tracker
+(blocks reused): walk while fading, and for a moment after a tracker change
+(QUEST_LOG_UPDATE, a reveal), plus a slow safety walk; skip the rest.
+Expected: ~0.8 ms off each frames pass while a quest is shown alone.
+
+2026-11-22 15:31 second /cine debug perf (Forever, 109 fps): every step 9-17%
+slower than 15:26 at 38 fps (one run each: noise between runs is that big;
+compare steps within a run, or several runs). Quest walk 0.933 ms, walked
+47/47: the fix above was held off by Close the gaps.
+
+## Ruled out
+
+- GetCombatShownFrames' per-row ticks as its cost (fix 6, 2026-11-22 14:11).
+
+- Minimap sweep garbage (~410 B a point): the game's tooltip tables; only
+  sweeping less often would cut it (2026-11-05).

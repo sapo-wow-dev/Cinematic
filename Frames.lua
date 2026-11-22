@@ -456,7 +456,13 @@ end
 -- A part of a frame (a chat window's background, its button column) faded
 -- relative to its own alpha, which Blizzard may fade too, and put back to it
 -- once alpha is 1 again.
+-- (Profiling, with ns.fadeRelativeTag set by the caller: how many of its
+-- parts the game had changed since, were set, or were already so. For the
+-- quest tracker walk: whether going over it every pass ever changes a thing,
+-- 2026-11-22, Tools/perf/ledger.md.)
+-- (Inline, not a local: the main chunk is at Lua's 200 locals.)
 function ns.FadeRelative(part, alpha)
+	local tag = ns.profiling and ns.fadeRelativeTag
 	if alpha < 1 then
 		local own = part:GetAlpha()
 		if issecretvalue and issecretvalue(own) then
@@ -464,11 +470,15 @@ function ns.FadeRelative(part, alpha)
 		end
 		if not part.cinematicOwnAlpha or (own and math.abs(own - part.cinematicSetAlpha) > ALPHA_SLACK) then
 			-- (First time, or Blizzard set its own since.)
+			if tag and part.cinematicOwnAlpha then ns.ProfileCount(tag .. ": the game changed it") end
 			part.cinematicOwnAlpha = own or 1
 		end
 		part.cinematicSetAlpha = alpha * part.cinematicOwnAlpha
 		if not own or math.abs(own - part.cinematicSetAlpha) > ALPHA_SLACK then
+			if tag then ns.ProfileCount(tag .. ": set") end
 			part:SetAlpha(part.cinematicSetAlpha)
+		elseif tag then
+			ns.ProfileCount(tag .. ": already so")
 		end
 	elseif part.cinematicOwnAlpha then
 		part:SetAlpha(part.cinematicOwnAlpha)
@@ -3594,6 +3604,9 @@ function ns.IsCamShowOn(key) return IsListOn("camShow", key, NO_DEFAULTS) end
 -- Tables UpdateFrames (and what it calls) fills afresh each tick, kept rather
 -- than made anew: making them 33 times a second was a lot of garbage.
 local tickTables = {
+	-- (passProf: the frames pass's part stamps while profiling, when
+	-- /cine debug framepass's table isn't in use: ns.UpdateFrames.)
+	passProf = {},
 	-- (fading: the frames still fading after a pass, for ns.UpdateFadingFrames;
 	-- fadeOnly: whether every one of them can be faded on by that alone.)
 	fading = {}, fadeOnly = false,
@@ -4942,6 +4955,12 @@ do
 		return ns.IsCineShowOn(key) or KeptHere(tickNow.places, key)
 	end
 	function GetCombatShownFrames()
+		-- (Profiling: its parts to the profiler, ns.ProfileAdd, as "combat
+		-- list: ..." under the tick. Its 4-10 ms calls in fights weren't its
+		-- rows' ticks, 2026-11-22: these say what they are.)
+		local prof = ns.profiling and debugprofilestop
+		local p0 = prof and prof()
+		local ruleMs, tickMs, holdMs = 0, 0, 0
 		local fight = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))
 		-- (The Calm Timer after a fight is the fight still, for the ticks and the rules.)
 		local fighting = fight or GetTime() - lastCombatAt < (ns.db.calmTime or 0)
@@ -4966,16 +4985,22 @@ do
 			isOn = CastIsOn
 		end
 		-- (And the rows ticked for where you are.)
+		local p1 = prof and prof()
 		local placeLists = PlaceListsHere()
+		local p2 = prof and prof()
 		local shown = wipe(tickTables.combatShown)
 		-- In a fight, each row's ticks (Always, the place columns, In combat)
 		-- are worked out once and kept till it ends, or you move to another
 		-- kind of place or group: only your settings decide them, and one
 		-- changed mid-fight counts from its end. Rules and the fight's hold
 		-- are still asked every time. (Two thirds of this list's work, asked
-		-- again and again through each fight, 2026-11-21.)
+		-- again and again through each fight, 2026-11-21.) Through the Calm
+		-- Timer after it too: the same In combat rows, made afresh once as the
+		-- fight ends (PLAYER_REGEN_ENABLED, below). It was only while locked
+		-- down: each Calm Timer pass, 8 a second, worked every row out again,
+		-- 4-6 ms each, 10 of 12 slow calls in a fight run, 2026-11-22.
 		local ticks = nil
-		if fight and isOn == ns.IsCombatShowOn then
+		if fighting and isOn == ns.IsCombatShowOn then
 			local where = (placeLists[1] or "") .. (placeLists[2] or "")
 			ticks = tickTables.fightTicks
 			if not ticks or ticks.where ~= where then
@@ -4989,19 +5014,27 @@ do
 		-- Rows for gamepad mode only, and the ones they stand in for then.
 		local gamepad = ns.IsGamePadOn()
 		local facts = ns.RuleFacts(inCombat)
+		local p3 = prof and prof()
 		for _, item in ipairs(ns.COMBAT_SHOW) do
 			local applies = not (gamepad and item.notGamepad) and not (item.gamepadOnly and not gamepad)
 			-- (A row's rule, when it has one that reads, decides instead of its ticks.)
+			local r0 = prof and prof()
 			local ticked = ns.RuleShows(item.key, facts)
+			local r1 = prof and prof()
 			if ticked == nil then
 				ticked = Ticked(item.key)
 			end
+			local r2 = prof and prof()
 			-- (Your bars held back at a fight's start, Personal Resources page:
 			-- up only where Always or a place keeps them. The fight itself, not the
 			-- Calm Timer after it.)
 			if ticked and (fight or isOn == CastIsOn) and ns.FightHold(item.key)
 				and not AlwaysOrKept(item.key) then
 				ticked = false
+			end
+			if prof then
+				local r3 = prof()
+				ruleMs, tickMs, holdMs = ruleMs + r1 - r0, tickMs + r2 - r1, holdMs + r3 - r2
 			end
 			if applies and ticked then
 				for _, name in ipairs(item.frames or NO_DEFAULTS) do
@@ -5012,6 +5045,7 @@ do
 				end
 			end
 		end
+		local p4 = prof and prof()
 		-- (The action bars while the spellbook or macros are open: Action bars
 		-- tab's Show while the spellbook is open, barsWithSpellbook.)
 		if ns.SpellbookOpen() then
@@ -5023,6 +5057,7 @@ do
 				end
 			end
 		end
+		local p5 = prof and prof()
 		-- Added frames, by their rows on the Advanced Frames page.
 		for name in pairs(ns.db.extraFrames) do
 			local key = tickTables.extraKey[name]
@@ -5033,6 +5068,19 @@ do
 			if ticked then
 				shown[GROUP_KEY[key]] = true
 			end
+		end
+		if prof then
+			-- (Time only: the list's garbage is its own row's.)
+			local p6 = prof()
+			ns.ProfileAdd("combat list: fight target and cast", p1 - p0)
+			ns.ProfileAdd("combat list: place lists", p2 - p1)
+			ns.ProfileAdd("combat list: fight ticks and rule facts", p3 - p2)
+			ns.ProfileAdd("combat list: rows' rules", ruleMs)
+			ns.ProfileAdd("combat list: rows' ticks", tickMs)
+			ns.ProfileAdd("combat list: rows' fight hold", holdMs)
+			ns.ProfileAdd("combat list: rows other", (p4 - p3) - ruleMs - tickMs - holdMs)
+			ns.ProfileAdd("combat list: spellbook bars", p5 - p4)
+			ns.ProfileAdd("combat list: added frames", p6 - p5)
 		end
 		return shown
 	end
@@ -5055,8 +5103,14 @@ do
 	-- once), for up to SHOWN_STEADY seconds. Worked out every 0.2 s anyway,
 	-- it was a tenth of a ms every frame, standing still. 2026-11-11.)
 	local SHOWN_STEADY = 2
+	-- (With the "in case" checks slowed, ns.SlowChecks: out of fights, the
+	-- Calm Timer over, settings closed, no preview. Every input above is still
+	-- compared, so only a setting changed by a command waits that long. It
+	-- ran out on every other frames pass, ~0.8 of its 3.3 ms, 2026-11-22.)
+	local SHOWN_STEADY_SLOW = 10
 	local wasFighting, wasCalm, wasTarget, wasEnemy, wasCast, wasRuleCast, wasBook, wasStamp, wasPad
 	local function Kept(now, hold)
+		local k0 = ns.profiling and debugprofilestop()
 		local fighting = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))
 		local calm = not fighting and now - lastCombatAt < (ns.db.calmTime or 0)
 		local target = HasAnyTarget() and true or false
@@ -5066,11 +5120,12 @@ do
 		local book = ns.SpellbookOpen()
 		ns.RuleFacts(fighting or calm) -- (its stamp brought up to date)
 		local stamp, pad = ns.factsStamp, ns.IsGamePadOn() and true or false
+		if k0 then ns.ProfileAdd("combat list: change check", debugprofilestop() - k0) end
 		if keptShown and now >= keptAt and fighting == wasFighting
 			and calm == wasCalm and target == wasTarget and enemy == wasEnemy and cast == wasCast
 			and ruleCast == wasRuleCast and book == wasBook
-			and (now - keptAt < hold or (now - keptAt < SHOWN_STEADY and stamp == wasStamp and pad == wasPad
-				and not ns.SettingsPanelShown())) then
+			and (now - keptAt < hold or (now - keptAt < (ns.SlowChecks() and SHOWN_STEADY_SLOW or SHOWN_STEADY)
+				and stamp == wasStamp and pad == wasPad and not ns.SettingsPanelShown())) then
 			return keptShown
 		end
 		wasFighting, wasCalm, wasTarget, wasEnemy, wasCast, wasRuleCast, wasBook = fighting, calm, target, enemy, cast,
@@ -5151,6 +5206,7 @@ do
 	end
 end
 GetCombatShownFrames = ns.Profiled("GetCombatShownFrames", GetCombatShownFrames)
+ns.CombatShownFrames = GetCombatShownFrames -- (tests: Tools/offline/combatshownhold.lua)
 
 -- Power types that sit empty at rest (rage, runic power, Insanity, Maelstrom,
 -- Astral Power, Fury, Pain) don't count: leftover rage draining after a fight
@@ -7199,7 +7255,23 @@ do
 	-- the rest of that reveal. (Retail-style tracker: sections with
 	-- usedBlocks, keyed by quest ID.) Scenario progress focuses the scenario
 	-- section the same way, key SCENARIO: its header, stage and objectives.
-	local focus = { on = false, quests = {}, since = 0, othersAlpha = 1 }
+	local focus = { on = false, quests = {}, since = 0, othersAlpha = 1,
+		-- (The game's tracker walked only while something can change it, see
+		-- QuestFocusTick: walkUntil after a tracker change, walkedAt the last
+		-- walk, walkAlpha the tracker's alpha then, lastFound / lastSaw its
+		-- answers for the passes in between. Fields, not locals: the main
+		-- chunk is at Lua's 200 locals.)
+		walkUntil = 0, walkedAt = -math.huge, walkAlpha = nil, lastFound = false, lastSaw = false,
+		WALK_AFTER = 2, WALK_EVERY = 1 }
+	-- (Quest log and watch changes redraw the tracker's blocks: walk it again
+	-- for a moment after one.)
+	focus.watch = CreateFrame("Frame")
+	for _, event in ipairs({ "QUEST_LOG_UPDATE", "QUEST_WATCH_LIST_CHANGED", "QUEST_WATCH_UPDATE", "QUEST_REMOVED",
+		"QUEST_TURNED_IN", "QUEST_ACCEPTED", "SUPER_TRACKING_CHANGED", "ZONE_CHANGED_NEW_AREA", "SCENARIO_UPDATE",
+		"SCENARIO_CRITERIA_UPDATE" }) do
+		pcall(focus.watch.RegisterEvent, focus.watch, event)
+	end
+	focus.watch:SetScript("OnEvent", function() focus.walkUntil = GetTime() + focus.WALK_AFTER end)
 	local SCENARIO = "scenario"
 	local function IsScenarioSection(section)
 		return section == _G.ScenarioObjectiveTracker or type(section.StageBlock) == "table"
@@ -7659,6 +7731,7 @@ do
 			focus.quests[questID] = true
 		elseif entry and (entry.alpha == 0 or focus.timers) then -- (up for just a timer: still focus)
 			focus.on, focus.since = true, GetTime()
+			focus.walkUntil = GetTime() + focus.WALK_AFTER
 			wipe(focus.quests)
 			focus.quests[questID] = true
 		else
@@ -7788,12 +7861,50 @@ do
 		if want == 1 and focus.othersAlpha == 1 and not questGaps.up and not ns.questFocusOthersUp then
 			return
 		end
+		-- (Profiling: why the tracker's walked this pass, and its parts timed.
+		-- 60% of the frames pass's targets in a fight run, 2026-11-22.)
+		local prof = ns.profiling and debugprofilestop
+		if prof then
+			ns.ProfileCount("quest focus walks: " .. (focus.on and "a quest shown alone" or timers and "a tracker timer"
+				or questGaps.up and "close the gaps" or ns.questFocusOthersUp and "others held up" or "fading back"))
+			ns.ProfileCount("quest focus walks: " .. (focus.othersAlpha == want and "settled" or "fading"))
+		end
 		-- (Hidden with the tracker: no fade to see.)
+		local fading = focus.othersAlpha ~= want
 		focus.othersAlpha = entry.alpha == 0 and want
 			or ns.Approach(focus.othersAlpha, want, elapsed, want > 0 and ns.FadeInTime() or ns.FadeOutTime())
-		started = ns.framePassTimes and debugprofilestop()
-		local found, sawQuests = ApplyFocus(entry.frame, focus.othersAlpha, timers, want == 0)
-		ns.NoteSlowCall("quest tracker focus (game's tracker)", started)
+		-- The game's tracker walked only while something can change it: the
+		-- others' fade, the tracker's own, a moment after the tracker changes
+		-- (a quest's progress, a reveal: the watch above, Focus), a timer up
+		-- (its countdown: every pass, as before), and once a second else.
+		-- Settled walks changed nothing: 413 parts in 23 walks, the game
+		-- putting none back, /cine debug perf 2026-11-22; ~0.8 ms a pass.
+		-- Close the gaps' copies (questGaps) stay as drawn between walks: the
+		-- quests' text changes with the quest log events above, and the
+		-- focus ending is a fade (walked: its copies taken down). It walked
+		-- every pass with it on, the user's setting, a second perf run.
+		local walk = fading or timers or ns.questFocusOthersUp or now < focus.walkUntil
+			or now - focus.walkedAt >= focus.WALK_EVERY or entry.alpha ~= focus.walkAlpha
+		if prof then
+			ns.ProfileCount(walk and "quest focus: walked" or "quest focus: walk skipped")
+			if walk then
+				ns.ProfileCount("quest focus: walked for " .. (fading and "a fade" or timers and "a timer"
+					or ns.questFocusOthersUp and "others held up" or now < focus.walkUntil and "a tracker change"
+					or entry.alpha ~= focus.walkAlpha and "the tracker's alpha" or "the once a second walk"))
+			end
+		end
+		local found, sawQuests
+		if walk then
+			started = (ns.framePassTimes or prof) and debugprofilestop()
+			if prof then ns.fadeRelativeTag = "quest tracker walk" end
+			found, sawQuests = ApplyFocus(entry.frame, focus.othersAlpha, timers, want == 0)
+			ns.fadeRelativeTag = nil
+			if prof then ns.ProfileAdd("quest focus: game's tracker", debugprofilestop() - started) end
+			ns.NoteSlowCall("quest tracker focus (game's tracker)", started)
+			focus.walkedAt, focus.walkAlpha, focus.lastFound, focus.lastSaw = now, entry.alpha, found, sawQuests
+		else
+			found, sawQuests = focus.lastFound, focus.lastSaw
+		end
 		-- (A shown quest the tracker had no room to draw: its stand-in,
 		-- QuestStandIn.lua, under the shown ones it did draw.)
 		if ns.QuestStandIn then
@@ -7827,6 +7938,7 @@ do
 					drew and "drawn" or ("not drawn, " .. tostring(ns.questStandInProblem))))
 			end
 		end
+		local q0 = prof and prof()
 		-- (Other addons' trackers in its place: AddonSupport.lua.)
 		for _, apply in ipairs(ns.QUEST_FOCUS_TRACKERS) do
 			started = ns.framePassTimes and debugprofilestop()
@@ -7836,6 +7948,7 @@ do
 					started)
 			end
 		end
+		if q0 then ns.ProfileAdd("quest focus: addons' trackers", prof() - q0) end
 		-- (None of its quests in the tracker by then. A tracked quest the
 		-- tracker has no room for (a full one lists only the first 16 or so)
 		-- isn't drawn: with the game's tracker readable (it has quests), the
@@ -7886,6 +7999,32 @@ do
 			ns.framesWake = "quest reveal" -- (the frames' pass at once: Core.lua)
 		end
 	end
+	-- (Dev perf test, Dev/PerfTest.lua: the tracker's first drawn quest
+	-- revealed as its progress would, so the quest walk can be timed and
+	-- probed without a kill. Its ID, or nil with none drawn.)
+	function ns.PerfQuestReveal()
+		local tracker = _G.ObjectiveTrackerFrame
+		if not tracker or IsForbidden(tracker) then return nil end
+		for _, section in ipairs(TrackerSections(tracker)) do
+			if type(section) == "table" and type(section.usedBlocks) == "table" and not IsForbidden(section)
+				and not IsScenarioSection(section) then
+				for _, blocks in pairs(section.usedBlocks) do
+					if type(blocks) == "table" then
+						for id in pairs(blocks) do
+							if type(id) == "number" then
+								Reveal("questRevealOnProgress", id)
+								return id
+							end
+						end
+					end
+				end
+			end
+		end
+		return nil
+	end
+	-- (The same test: whether the quest focus is on now, and how far the
+	-- others have faded.)
+	function ns.PerfQuestFocusState() return focus.on, focus.othersAlpha end
 	-- When a quest was last picked up, or a tracked one moved on (Keep open's
 	-- "Only after progress", Minimap page). QUEST_WATCH_UPDATE gives a quest
 	-- ID on retail and a quest log index on the older clients.
@@ -12570,7 +12709,10 @@ do
 	-- (A fight's end: the rows' ticks kept for it go, GetCombatShownFrames.)
 	pcall(wake.RegisterEvent, wake, "PLAYER_REGEN_ENABLED")
 	wake:SetScript("OnEvent", function(self, event)
-		if event == "PLAYER_REGEN_ENABLED" then tickTables.fightTicks = nil end
+		-- (The Calm Timer counts from the fight's end too: the passes in the
+		-- fight stamp it as well, the last one up to an eighth of a second
+		-- before. Offline tests start one this way: combatshownhold.lua.)
+		if event == "PLAYER_REGEN_ENABLED" then tickTables.fightTicks, lastCombatAt = nil, GetTime() end
 		if self.soft[event] and InCombatLockdown() then return end
 		ns.framesWake = event
 	end)
@@ -12602,24 +12744,27 @@ end
 ns.ProfileName(ns.HoverProbe, "HoverProbe")
 
 function ns.UpdateFrames(cinematic, elapsed)
-	-- (/cine debug framepass: where a pass's time goes, ns.framePassTimes.)
-	local clock = ns.framePassTimes and debugprofilestop
+	-- (/cine debug framepass: where a pass's time goes, ns.framePassTimes.
+	-- And while profiling, its parts go to the profiler, ns.ProfileAdd, on a
+	-- table of its own: tickTables.passTimes is whichever is in use.)
+	tickTables.passTimes = ns.framePassTimes or (ns.profiling and tickTables.passProf) or nil
+	local clock = tickTables.passTimes and debugprofilestop
 	local tick0 = clock and clock()
 	-- (And the slowest pass's own parts: the memory before, for a garbage
 	-- collection step landing in it; the switches and the combat list apart.
 	-- Kept on the timing table: this function is near Lua's local limit.)
-	if clock then ns.framePassTimes.kb0 = collectgarbage("count") end
+	if clock then tickTables.passTimes.kb0 = collectgarbage("count") end
 	local now = GetTime()
 	SyncSwitches() -- (UpdateReadyOnly: the tick's second half, Core.lua)
 	if not ns.isRetail then
 		ns.UpdateSwingOrder()
 	end
-	if clock then ns.framePassTimes.syncAt = clock() end
+	if clock then tickTables.passTimes.syncAt = clock() end
 	local combatShown
 	if cinematic then
 		combatShown = GetCombatShownFrames()
 	end
-	if clock then ns.framePassTimes.combatAt = clock() end
+	if clock then tickTables.passTimes.combatAt = clock() end
 	local fighting = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))
 	-- (Casting at an enemy: the rows it brings up fade in over what's left of
 	-- the cast, at the Combat fade in time just after it.)
@@ -12839,7 +12984,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 		or minimapPage and ns.IsMinimapRevealed(now))
 	events.quest, events.roster = ns.PageOn("handleQuests") and questReveal, rosterReveal
 	events.gamepad = ns.PageOn("handleGamepad") and padReveal
-	if clock then ns.framePassTimes.ev0 = clock() end
+	if clock then tickTables.passTimes.ev0 = clock() end
 	-- (Each bar's own Stay up while recharging: Essential's, with Enhanced
 	-- Cooldown Manager's bars, and Utility's. A bar comes up only for its own
 	-- cooldowns; anything else in the group, for either.)
@@ -12853,7 +12998,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 	events.cooldown = barUp.essential or barUp.utility
 	-- (The page's Flash Test: the Essential and Utility bars up while it plays.)
 	local flashTestUp = ns.CooldownFlashTesting(now)
-	if clock then ns.framePassTimes.ev1 = clock() end
+	if clock then tickTables.passTimes.ev1 = clock() end
 	-- (auraOnly: rows brought up by a buff or debuff peek and nothing else.)
 	local auraOnly = wipe(tickTables.auraOnly)
 	for _, group in ipairs(hoverGroups) do
@@ -12882,7 +13027,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 	-- (All but the parts unticked in its groups. After the events: they're
 	-- groups up too. Out of CineMode no group's up: any group it's in counts.)
 	local partsBusy = false
-	if clock then ns.framePassTimes.ev2 = clock() end
+	if clock then tickTables.passTimes.ev2 = clock() end
 	if ns.SetUnitPartsHovered then
 		ns.SetUnitPartsOff(hoverGroups, cinematic and tickTables.groupsUp or nil, offWhen)
 		local partsHovered, partsHeldUntil = wipe(tickTables.partsHovered), tickTables.partsHeldUntil
@@ -12904,7 +13049,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 		end
 		if ns.SetUnitPartsHovered(partsHovered, elapsed) then partsBusy = true end
 	end
-	if clock then ns.framePassTimes.ev3 = clock() end
+	if clock then tickTables.passTimes.ev3 = clock() end
 
 	-- Dead, with the death camera watching: everything goes, quickly, whatever
 	-- would normally keep it up (the release button is a popup: it stays).
@@ -12942,7 +13087,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 	-- (Every frame at its alpha, none fading: ns.framesSettled, so the tick
 	-- can run this pass less often, Core.lua.)
 	local settled = not ns.layoutFadeUntil and not ns.previewRows and not partsBusy
-	if clock and partsBusy then
+	if clock and partsBusy and ns.framePassTimes then
 		local unsettled = ns.framePassTimes.unsettled
 		unsettled["unit frame parts held after the mouse"] = (unsettled["unit frame parts held after the mouse"] or 0) + 1
 	end
@@ -13160,7 +13305,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 		end
 		-- (/cine debug framepass: a frame whose target keeps flipping between
 		-- passes, which keeps the pass from settling.)
-		if clock then
+		if clock and ns.framePassTimes then
 			if entry.passTarget ~= nil and entry.passTarget ~= target then
 				local flips = ns.framePassTimes.flips
 				local name = tostring(entry.name or entry.group)
@@ -13190,7 +13335,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 				tickTables.fadeOnly = false
 			end
 			-- (/cine debug framepass: which frames keep the pass from settling.)
-			if clock then
+			if clock and ns.framePassTimes then
 				local name = ("%s (%s)"):format(tostring(entry.name or entry.group), tostring(entry.group))
 				local unsettled = ns.framePassTimes.unsettled
 				unsettled[name] = (unsettled[name] or 0) + 1
@@ -13326,7 +13471,23 @@ function ns.UpdateFrames(cinematic, elapsed)
 	-- (Not settled, and every frame left fading can go on alone: the tick
 	-- may run ns.UpdateFadingFrames instead of the whole pass, Core.lua.)
 	ns.framesFadeOnly = not settled and tickTables.fadeOnly and #tickTables.fading > 0
-	if clock then
+	if clock and not ns.framePassTimes then
+		-- (Profiling only: the parts, under the tick, named in its slow calls.)
+		-- (Time only: the pass's garbage is its own row's, UpdateFrames.)
+		local t, tick5 = tickTables.passTimes, clock()
+		ns.ProfileAdd("frames pass: switches", t.syncAt - tick0)
+		ns.ProfileAdd("frames pass: combat list", t.combatAt - t.syncAt)
+		ns.ProfileAdd("frames pass: rest of setup", tick1 - t.combatAt)
+		ns.ProfileAdd("frames pass: mouse hover", tick2 - tick1)
+		ns.ProfileAdd("frames pass: peeks and minimap reveal", t.ev0 - tick2)
+		ns.ProfileAdd("frames pass: cooldown bars", t.ev1 - t.ev0)
+		ns.ProfileAdd("frames pass: groups", t.ev2 - t.ev1)
+		ns.ProfileAdd("frames pass: unit frame parts", t.ev3 - t.ev2)
+		ns.ProfileAdd("frames pass: death and minimap", tick3 - t.ev3)
+		ns.ProfileAdd("frames pass: targets", targetTime)
+		ns.ProfileAdd("frames pass: applying", tick4 - tick3 - targetTime)
+		ns.ProfileAdd("frames pass: after", tick5 - tick4)
+	elseif clock then
 		local t = ns.framePassTimes
 		local tick5 = clock()
 		t.passes, t.entries = t.passes + 1, t.entries + #ns.managed

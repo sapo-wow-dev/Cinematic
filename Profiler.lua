@@ -135,7 +135,7 @@ end
 -- the frames between (and their garbage) as its own. "Minimap sweep" times it.
 -- (FindFoundFrames and FindNamedFrames likewise, in the background look's
 -- coroutine, FrameGuess.lua.)
-local DEEP_SKIP = { SweepMinimap = true, FindFoundFrames = true, FindNamedFrames = true, Profiled = true, ProfileMark = true, ProfileStep = true, ProfileName = true,
+local DEEP_SKIP = { SweepMinimap = true, FindFoundFrames = true, FindNamedFrames = true, Profiled = true, ProfileMark = true, ProfileStep = true, ProfileName = true, ProfileAdd = true,
 	ProfileCount = true, StartProfile = true, StopProfile = true, IsProfiling = true, ProfileGameMetric = true,
 	ProfileTimeLeft = true, ShowProfileTimer = true,
 	Print = true, Log = true, LogDetail = true, Verbose = true, Flag = true, Approach = true, GetDB = true }
@@ -176,6 +176,17 @@ function ns.ProfileStep(fn, started, memory)
 	local kb = Memory() - memory
 	if ns.profiling then
 		Record(stepNames[fn] or localNames[fn] or "(step)", current == nil, ms, kb, current)
+	end
+end
+
+-- A part of the section running now, timed by the code itself (ms, kb):
+-- listed under the section like a wrapped call, and named in its slow call
+-- lines from 0.5 ms. For the parts of a long function that are loops or
+-- branches, not functions (the frames' pass, its combat list: 2026-11-22).
+-- Callers check ns.profiling first. Outside a section: not recorded.
+function ns.ProfileAdd(name, ms, kb)
+	if ns.profiling and run and current ~= nil then
+		Record(name, false, ms, kb or 0, current)
 	end
 end
 

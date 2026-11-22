@@ -1683,7 +1683,9 @@ function ns.WatchSettingsCanvas(canvas)
 	local shown = ns.shownSettingsCanvases
 	canvas:HookScript("OnShow", function(self) shown[self] = true end)
 	canvas:HookScript("OnHide", function(self) shown[self] = nil end)
-	if canvas:IsVisible() then shown[canvas] = true end
+	-- (Not one with no parent yet: not in the settings window, and left
+	-- shown it would count as open till first shown and hidden there.)
+	if canvas:GetParent() and canvas:IsVisible() then shown[canvas] = true end
 end
 
 -- Text as shown, without colour codes; nil if it has no words.

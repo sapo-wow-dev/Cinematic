@@ -3928,6 +3928,26 @@ function idleTick.Settle()
 	return math.max(db.fadeOutTime or 0, db.fadeInTime or 0, db.musicFadeTime or 0, db.zoneFadeTime or 0,
 		db.letterboxTime or 0, db.plateStyleFadeTime or 0, db.plateNameFadeTime or 0) + 0.5
 end
+-- A shown tooltip keeps the full pace only while the Tooltips page handles
+-- tooltips (ns.UpdateTooltip's checks, Effects.lua). Off, the default, the
+-- tick doesn't read it: a unit coming under the mouse wakes the pass anyway.
+function idleTick.TooltipHolds()
+	return ns.TooltipsHandled ~= nil and ns.TooltipsHandled() and Flag(GameTooltip:IsShown()) and true or false
+end
+-- (Profiling only: the first of ns.Pace's reasons that holds.)
+function idleTick.BusyWhy(now, fight, cine, mouseMoved, unitParts)
+	if fight then return "fight" end
+	if now < idleTick.busyUntil then return "settling: " .. tostring(idleTick.busyWhy) end
+	if not ns.framesSettled then return "frames fading" end
+	if ns.framesFadeOnly then return "frames fade-only" end
+	if cine and ns.framesWake then return "wake: " .. tostring(ns.framesWake) end
+	if ns.playerMoving or ns.stopWhileGliding then return "moving" end
+	if ns.OnTaxi() then return "flight" end
+	if idleTick.TooltipHolds() then return "tooltip shown (Tooltips page on)" end
+	if ns.IsChatActive and ns.IsChatActive() then return "chat typing" end
+	if mouseMoved and (cine or unitParts) then return "mouse moved" end
+	return "other (dead, keys, preview, demo, immersive)"
+end
 -- The pace, one answer a frame for every loop that slows down while nothing
 -- happens (this tick, the camera director), so they all go quiet and wake
 -- together rather than each asking the same questions its own way:
@@ -3961,11 +3981,14 @@ function ns.Pace()
 		or (cine and ns.framesWake) or ns.previewRows or ns.layoutFadeUntil
 		or ns.fadeDemo or ns.effectsDemo or ns.plateDemo
 		or ns.playerMoving or ns.stopWhileGliding or ns.OnTaxi() or Flag(UnitIsDeadOrGhost("player"))
-		or IsModifierKeyDown() or (ns.IsChatActive and ns.IsChatActive()) or Flag(GameTooltip:IsShown())
+		or IsModifierKeyDown() or (ns.IsChatActive and ns.IsChatActive()) or idleTick.TooltipHolds()
 		or (ns.ChatCamImmersive and ns.ChatCamImmersive())
 		or (mouseMoved and (cine or unitParts)))
 	if not pace.quiet then
 		pace.wait = 0
+		-- (/cine debug cpu: what kept it busy, a frame's count each.)
+		if ns.profiling and ns.ProfileCount then ns.ProfileCount("tick busy: " .. idleTick.BusyWhy(now, fight, cine,
+			mouseMoved, unitParts)) end
 	elseif cine or unitParts or ns.db.outsideCinePlates then
 		pace.wait = idleTick.CINE
 	else
@@ -4016,13 +4039,28 @@ function idleTick.Wait(p)
 	return math.max(TICK, p.wait)
 end
 -- After a tick: a change starts the full pace for its fades.
+-- Only a wake that starts a fade of its own outside the frames' pass (plates,
+-- the target's, tint, music, letterbox: your target or focus, the place, the
+-- group, resting, a form or mount, your pet) holds it Settle() seconds. A
+-- peek, a reveal, a chat line or the mouse on a unit fades frames, and the
+-- pass's own fades keep the full pace already (ns.framesSettled, ns.Pace).
+-- (Every wake held it: in a city, chat lines and peeks kept the tick at 26 a
+-- second standing still, not 10. 2026-11-22, Tools/perf/ledger.md.)
+idleTick.HARD_WAKE = { PLAYER_TARGET_CHANGED = true, PLAYER_FOCUS_CHANGED = true, GROUP_ROSTER_UPDATE = true,
+	ZONE_CHANGED = true, ZONE_CHANGED_INDOORS = true, ZONE_CHANGED_NEW_AREA = true, PLAYER_UPDATE_RESTING = true,
+	UPDATE_SHAPESHIFT_FORM = true, PLAYER_MOUNT_DISPLAY_CHANGED = true, UNIT_PET = true,
+	UNIT_SPELLCAST_START = true, UNIT_SPELLCAST_STOP = true, UNIT_SPELLCAST_CHANNEL_START = true,
+	UNIT_SPELLCAST_CHANNEL_STOP = true, UNIT_SPELLCAST_INTERRUPTED = true, ["group changed"] = true,
+	["fade demo"] = true, ["mouseover demo"] = true }
 function idleTick.Note(now, cinematic, fight, wakeEvent)
-	local soft = wakeEvent and ns.FRAMES_SOFT_WAKE and ns.FRAMES_SOFT_WAKE[wakeEvent]
-	if cinematic ~= idleTick.cine or fight ~= idleTick.fight or (cinematic and wakeEvent and not soft) then
+	local hard = wakeEvent and idleTick.HARD_WAKE[wakeEvent]
+	if cinematic ~= idleTick.cine or fight ~= idleTick.fight or (cinematic and hard) then
 		idleTick.cine, idleTick.fight = cinematic, fight
 		idleTick.busyUntil = now + idleTick.Settle()
+		idleTick.busyWhy = hard and wakeEvent or "CineMode or a fight changed"
 	end
 end
+ns.idleTick = idleTick -- (tests: Tools/offline/idletick.lua)
 -- After the effects are asked: one wanted on or off now starts the full pace too.
 function idleTick.NoteEffects(now, wanted)
 	local was = idleTick.effects

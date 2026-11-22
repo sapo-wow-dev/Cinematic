@@ -3949,29 +3949,80 @@ ns.plates.FRIEND_ROWS = { body = { "Friends", "GroupMembers" },
 	players = { "Friends" }, group = { "GroupMembers" } }
 ns.plates.friendWants = { at = -math.huge, body = true, minions = true, target = true, shownBody = true,
 	shownMinions = true, players = true, groupRows = true, shownPlayers = true }
-function ns.plates.FriendRowWanted(rows, names, suffix)
-	local db = ns.db
-	for _, row in ipairs(rows) do
-		if ns.RuleTest(PLATE_RULE_KEY[row]) then return true end
-		if names and ns.RuleTest(ns.NameRuleKey(row)) then return true end
-	end
-	local pvp = Ask(UnitIsPVP, "player") and true or false
-	for key, value in pairs(db) do
-		if value == true and type(key) == "string" and not key:find("Part", 1, true) then
-			local head = key:match("^plate") or (names and key:match("^name"))
-			if head then
-				for _, row in ipairs(rows) do
+-- Every FRIEND_ROWS row's ticked Nameplates ("plate") and Names ("name")
+-- columns here: [head][row] = true. (Each FriendRowWanted went over all the
+-- settings itself, ~8,300 keys, six times every 10 s: the 6-9 ms plate pass,
+-- 2026-11-22 recording, Tools/perf/ledger.md.) Now the row columns' keys
+-- (~130) are listed once and only they are read. The list is made again
+-- when a key is added to the settings (a box ticked for the first time:
+-- ns.db's __newindex, which only new keys reach) or ns.db is another table.
+-- (In a block: Effects.lua's main chunk is at Lua's 200 locals.)
+do
+local friendScan = { plate = {}, name = {}, rows = {}, list = nil, db = nil, stale = true }
+for _, list in pairs(ns.plates.FRIEND_ROWS) do
+	for _, row in ipairs(list) do friendScan.rows[row] = true end
+end
+local BYTE_P, BYTE_N = ("p"):byte(), ("n"):byte()
+local function NewKey(t, key, value)
+	rawset(t, key, value)
+	friendScan.stale = true
+end
+-- The row columns' keys: { key, head, row, place or false, pvp only }, flat.
+local function ListKeys(db)
+	local list = {}
+	for key in pairs(db) do
+		if type(key) == "string" then
+			local first = key:byte(1)
+			local head = first == BYTE_P and key:match("^plate") or first == BYTE_N and key:match("^name")
+			if head and not key:find("Part", 1, true) then
+				for row in pairs(friendScan.rows) do
 					if #key > #head + #row and key:sub(-#row) == row then
 						local mid = key:sub(#head + 1, -#row - 1)
-						local place = mid:match("^In(%u%a*)$")
-						-- (Another place's column, or PvP fights while not flagged: not here.)
-						if not (place and place ~= suffix) and not (mid == "CombatPvP" and not pvp) then
-							return true
-						end
+						local n = #list
+						list[n + 1], list[n + 2], list[n + 3] = key, head, row
+						list[n + 4], list[n + 5] = mid:match("^In(%u%a*)$") or false, mid == "CombatPvP"
 					end
 				end
 			end
 		end
+	end
+	return list
+end
+function ns.plates.FriendRowsTicked(suffix)
+	local db = ns.db
+	if friendScan.db ~= db then
+		friendScan.db, friendScan.stale = db, true
+		-- (Only on a table with no metatable of its own: else listed every time.)
+		if getmetatable(db) == nil then setmetatable(db, { __newindex = NewKey }) end
+	end
+	local watched = getmetatable(db)
+	if friendScan.stale or not (watched and watched.__newindex == NewKey) then
+		friendScan.list, friendScan.stale = ListKeys(db), false
+	end
+	local plate, name = friendScan.plate, friendScan.name
+	wipe(plate)
+	wipe(name)
+	local pvp = Ask(UnitIsPVP, "player") and true or false
+	local list = friendScan.list
+	for i = 1, #list, 5 do
+		local key, head, row, place, pvpOnly = list[i], list[i + 1], list[i + 2], list[i + 3], list[i + 4]
+		-- (Another place's column, or PvP fights while not flagged: not here.)
+		if db[key] == true and not (place and place ~= suffix) and not (pvpOnly and not pvp) then
+			if head == "plate" then plate[row] = true else name[row] = true end
+		end
+	end
+	return friendScan
+end
+end
+-- (ticked: FriendRowsTicked's answer, when asking for several row sets at once.)
+function ns.plates.FriendRowWanted(rows, names, suffix, ticked)
+	for _, row in ipairs(rows) do
+		if ns.RuleTest(PLATE_RULE_KEY[row]) then return true end
+		if names and ns.RuleTest(ns.NameRuleKey(row)) then return true end
+	end
+	ticked = ticked or ns.plates.FriendRowsTicked(suffix)
+	for _, row in ipairs(rows) do
+		if ticked.plate[row] or (names and ticked.name[row]) then return true end
 	end
 	return false
 end
@@ -3982,13 +4033,14 @@ function ns.plates.FriendWants(suffix)
 	if InCombatLockdown() then return wants.shownBody, wants.shownMinions, wants.shownPlayers end
 	if wants.place ~= suffix or now - wants.at >= 10 then
 		wants.place, wants.at = suffix, now
-		local rows = ns.plates.FRIEND_ROWS
-		wants.body = ns.plates.FriendRowWanted(rows.body, false, suffix)
-		wants.minions = ns.plates.FriendRowWanted(rows.minions, true, suffix)
-		wants.target = ns.plates.FriendRowWanted(rows.target, false, suffix)
-		wants.targetNames = ns.plates.FriendRowWanted(rows.target, true, suffix)
-		wants.players = ns.plates.FriendRowWanted(rows.players, true, suffix)
-		wants.groupRows = ns.plates.FriendRowWanted(rows.group, true, suffix)
+		local rows, Wanted = ns.plates.FRIEND_ROWS, ns.plates.FriendRowWanted
+		local ticked = ns.plates.FriendRowsTicked(suffix)
+		wants.body = Wanted(rows.body, false, suffix, ticked)
+		wants.minions = Wanted(rows.minions, true, suffix, ticked)
+		wants.target = Wanted(rows.target, false, suffix, ticked)
+		wants.targetNames = Wanted(rows.target, true, suffix, ticked)
+		wants.players = Wanted(rows.players, true, suffix, ticked)
+		wants.groupRows = Wanted(rows.group, true, suffix, ticked)
 		-- (Emote Vision's Nameplates tab: a stranger's buff names its caster,
 		-- and a guildie, ally or achiever is seen, only through a unit, a
 		-- plate for most.)
@@ -4506,6 +4558,11 @@ end
 local function Handling()
 	return ns.db.enabled and ns.db.handleTooltips and not ns.MasterOff("handleTooltips") and true or false
 end
+-- (Core.lua's ns.Pace: a shown tooltip holds the tick's full pace only while
+-- this page handles tooltips, for ns.UpdateTooltip's checks. Off, nothing
+-- on the tick reads it: it held the full pace on 56% of frames standing in a
+-- city, 2026-11-22, Tools/perf/ledger.md.)
+ns.TooltipsHandled = Handling
 
 -- Holding the Show hidden tooltips keybind shows tooltips the page would
 -- hide, in combat and in CineMode alike.
