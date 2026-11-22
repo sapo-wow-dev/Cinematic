@@ -616,6 +616,38 @@ function ns.SetProfile(name)
 	return true
 end
 
+-- The parts a built-in leaves out (its leaveOut, Modules.lua: Auto-Hide UI and
+-- Blank Slate don't load Visions or Cameras, the user's ask 2026-11-22), set as a
+-- player picks one (the welcome window, the Profiles page, /cine profile; not
+-- in ns.SetProfile: code switching for a moment, a demo or a test, leaves
+-- them). A built-in that doesn't leave one out loads it again; your own
+-- profiles leave the Load boxes as they are. Then the Load boxes' own Reload
+-- box (ns.AskModulesReload: the same box and words, where the game puts it;
+-- nothing to reload, it goes). Returns the parts changed, part -> wanted.
+function ns.ProfilePartsPicked(name)
+	local builtin = builtinByName[name]
+	if not builtin or not ns.SetModuleWanted then return {} end
+	-- (Only the parts some built-in leaves out: no built-in decides another.)
+	local decided, out = {}, {}
+	for _, each in pairs(builtinByName) do
+		for _, part in ipairs(each.leaveOut or {}) do
+			-- (Only parts this copy has: Modules.lua's PARTS.)
+			if ns.MODULE_KEYS and ns.MODULE_KEYS[part] then decided[part] = true end
+		end
+	end
+	for _, part in ipairs(builtin.leaveOut or {}) do out[part] = true end
+	local changed = {}
+	for part in pairs(decided) do
+		local wanted = not out[part]
+		if ns.ModuleWanted(part) ~= wanted then
+			ns.SetModuleWanted(part, wanted)
+			changed[part] = wanted
+		end
+	end
+	if next(changed) then ns.AskModulesReload(ns.ProfileLabel(name)) end
+	return changed
+end
+
 -- One choice on its own over the live settings (the welcome window's
 -- Customize pages, the Profiles demo): just its slot's settings (the ones
 -- any of the slot's choices change, ns.SettingSlot, and their rows of shared

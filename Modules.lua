@@ -94,7 +94,9 @@ function ns.AskModulesReload(lead)
 		cineReload = 1, -- (Forever: a secure Reload over the button, QoL/Reload.lua)
 		timeout = 0, whileDead = true, hideOnEscape = true,
 	}
-	local ask = table.concat(changes, L[" and "])
+	-- ("a, b and c": three joined by "and" read badly, run 5 of profileparts.)
+	local ask = #changes < 2 and (changes[1] or "")
+		or table.concat(changes, ", ", 1, #changes - 1) .. L[" and "] .. changes[#changes]
 	local text = lead and L["%s: reload now to %s?"]:format(lead, ask) or L["Reload now to %s?"]:format(ask)
 	StaticPopup_Show(which, text)
 	return true

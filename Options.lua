@@ -21139,6 +21139,7 @@ local function CreateProfilesPanel()
 				-- (The first pick asks about game settings first; Continue clicks again.)
 				if not ns.GameSettingsAgreed(function() self:Click("LeftButton") end) then return end
 				if not ns.SetProfile(self.name) then return end -- (in a fight: it said so)
+				ns.ProfilePartsPicked(self.name) -- (Auto-Hide UI, Blank Slate: no Visions; asks to reload)
 				ns.PreviewProfile(self.name)
 				-- (Cinema: Vitals Vision's screen edges for a moment, as on the
 				-- welcome window. Another profile ends that look at once.)

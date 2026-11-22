@@ -304,6 +304,9 @@ ns.BUILTIN_PROFILES = {
 			"cameras, letterbox, tint or weather, no styles, Visions, cards or music."],
 		picks = { layout = { forever = "preset" }, camera = "off", chat = "lite", sound = "nomusic" },
 		modules = { "ui-pages-only", "mouseover-off" },
+		-- (Visions, Cameras and Style not even loaded, 2026-11-22: picking it
+		-- unticks their Load boxes and asks to reload, ns.ProfilePartsPicked.)
+		leaveOut = { "visions", "cameras", "style" },
 		preview = "bars",
 	},
 	-- Nothing on: for players who want just a few parts (Roll, Emote Vision,
@@ -317,10 +320,13 @@ ns.BUILTIN_PROFILES = {
 		default = true,
 		icon = "Interface\\Icons\\INV_Misc_Note_01",
 		tip = L["Start from scratch. Every part of Cinematic is off, and your UI and camera stay as the game " ..
-			"has them. Turn on only the pages you want, like Roll Vision, Emote Vision or the cards, with " ..
-			"each page's Enable switch or a right-click on its icon."],
+			"has them, and Visions, the cameras and Style don't even load. Turn on only the pages you want, with " ..
+			"each page's Enable switch or a right-click on its icon. For Roll Vision, Emote Vision or the cards, " ..
+			"tick Load Visions on Visions > General first; for a camera, Load Cameras on Camera > General; for a " ..
+			"look, Load Style on Style > General."],
 		picks = { frames = "nofade" },
 		modules = { "all-pages-off", "tint-half" },
+		leaveOut = { "visions", "cameras", "style" }, -- (as Auto-Hide UI)
 	},
 }
 

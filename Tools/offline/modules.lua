@@ -294,6 +294,50 @@ if phase == "on" then
 	rawset(_G, "StaticPopup_Show", function(which, text) asked = which .. ": " .. tostring(text) end)
 	-- (Not written down while they're on: only as each is switched off, below.)
 	if CinematicDB.moduleDefaults then Problem("defaults saved while the parts are on") end
+	-- Picking Auto-Hide UI or Blank Slate leaves Visions, Cameras and Style out and
+	-- asks to reload; another built-in puts them back (nothing to reload: the
+	-- popup goes); your own profile leaves them (ns.ProfilePartsPicked).
+	do
+		local hidden
+		rawset(_G, "StaticPopup_Hide", function(which) hidden = which end)
+		-- (The Load boxes' box, Modules.lua: every part this copy has.)
+		local LEAVE = { visions = "leave Visions out", cameras = "leave the cameras out", style = "leave Style out" }
+		local OUT = { ": reload now to " }
+		for part in pairs(ns.MODULE_KEYS) do OUT[#OUT + 1] = LEAVE[part] or ("leave " .. part .. " out") end
+		for _, each in ipairs({ { "Auto-Hide UI", false, OUT }, { "Balanced", true },
+			{ "Blank Slate", false, OUT }, { "Cinema", true } }) do
+			asked, hidden = nil, nil
+			ns.ProfilePartsPicked(each[1])
+			-- (Every part: one a built-in doesn't decide yet is a problem, a
+			-- reminder to add it to Auto-Hide UI / Blank Slate's leaveOut.)
+			for part in pairs(ns.MODULE_KEYS) do
+				if ns.ModuleWanted(part) ~= each[2] then
+					Problem(("picking %s left %s wanted %s"):format(each[1], part, tostring(ns.ModuleWanted(part))))
+				end
+			end
+			if each[3] then
+				for _, text in ipairs(each[3]) do
+					if not (asked and asked:find(text, 1, true) and asked:find("CINEMATIC_LOAD_PARTS", 1, true)) then
+						Problem(("picking %s didn't say \"%s\": %s"):format(each[1], text, tostring(asked)))
+					end
+				end
+			elseif asked or hidden ~= "CINEMATIC_LOAD_PARTS" then
+				Problem(("picking %s with the parts loaded: asked %s, hid %s"):format(each[1], tostring(asked), tostring(hidden)))
+			end
+		end
+		ns.ProfilePartsPicked("Auto-Hide UI")
+		asked = nil
+		if next(ns.ProfilePartsPicked("My own")) or not next(ns.ProfilePartsPicked("Subtle")) or asked then
+			Problem("your own profile changed a Load box, or Subtle didn't bring them back")
+		end
+		local off = false
+		for _, key in pairs(ns.MODULE_KEYS) do
+			if CinematicDB[key] ~= true then off = true end
+		end
+		if off or CinematicDB.moduleDefaults then
+			Problem("picking the profiles left a part off, or its defaults written down, with it back on")
+		end
+	end
 	for _, part in ipairs(parts) do
 		local spec = SPECS[part]
 		if not ns.ModuleLoaded(part) then Problem(spec.label .. " didn't load") end
@@ -395,6 +439,49 @@ elseif phase == "off" then
 			Problem("the Why window's Cards tab doesn't say Visions aren't loaded")
 		end
 		WhyVisionTabs(false)
+	end
+	-- Left out: a built-in using it asks to reload to load it; Blank Slate
+	-- then wants it out as it is (nothing to reload for it; the parts still
+	-- loaded ask). Every part wanted again after (Subtle), for the back run.
+	do
+		local asked, hidden
+		rawset(_G, "StaticPopup_Show", function(which, text) asked = which .. ": " .. tostring(text) end)
+		rawset(_G, "StaticPopup_Hide", function(which) hidden = which end)
+		-- (Modules.lua's words, in "<profile>: reload now to ...?")
+		local WORDS = { visions = { "load Visions", "leave Visions out" },
+			cameras = { "load the cameras", "leave the cameras out" }, style = { "load Style", "leave Style out" } }
+		ns.ProfilePartsPicked("Balanced")
+		for _, part in ipairs(parts) do
+			if not (ns.ModuleWanted(part) and asked and asked:find(WORDS[part][1], 1, true)
+				and asked:find("Balanced: reload now to", 1, true)) then
+				Problem(("picking Balanced with %s left out didn't ask to reload it in: %s"):format(part, tostring(asked)))
+			end
+		end
+		asked, hidden = nil, nil
+		ns.ProfilePartsPicked("Blank Slate")
+		for _, part in ipairs(parts) do
+			if ns.ModuleWanted(part) then Problem("picking Blank Slate with " .. part .. " left out wanted it") end
+		end
+		-- (All out: nothing to reload. Some out: the loaded ones ask, only they.)
+		local out, loadedOnes = {}, {}
+		for _, part in ipairs(parts) do out[part] = true end
+		for part in pairs(ns.MODULE_KEYS) do
+			if not out[part] then loadedOnes[#loadedOnes + 1] = part end
+		end
+		if #loadedOnes == 0 then
+			if asked or hidden ~= "CINEMATIC_LOAD_PARTS" then
+				Problem("picking Blank Slate with every part left out asked to reload: " .. tostring(asked))
+			end
+		else
+			for part in pairs(ns.MODULE_KEYS) do
+				local says = asked and asked:find(WORDS[part][2], 1, true)
+				if (out[part] and says) or (not out[part] and not says) then
+					Problem(("picking Blank Slate with %s left out asked wrong about %s: %s"):format(
+						table.concat(parts, "+"), part, tostring(asked)))
+				end
+			end
+		end
+		ns.ProfilePartsPicked("Subtle")
 	end
 	-- Back on (then a /reload: the back run).
 	for _, part in ipairs(parts) do ns.SetModuleWanted(part, true) end

@@ -2502,7 +2502,10 @@ local function HandleSlash(msg)
 		if name then
 			-- (The first pick asks about game settings first; Continue picks it again.)
 			local function Pick()
-				if ns.SetProfile(name) then ns.Print(L["profile: %s"]:format(ns.ProfileLabel(name))) end
+				if ns.SetProfile(name) then
+					ns.Print(L["profile: %s"]:format(ns.ProfileLabel(name)))
+					ns.ProfilePartsPicked(name) -- (Auto-Hide UI, Blank Slate: no Visions; asks to reload)
+				end
 			end
 			if ns.GameSettingsAgreed(Pick) then Pick() end
 		else
