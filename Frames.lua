@@ -7530,7 +7530,7 @@ do
 	-- but aren't its children. Nil for anything else.
 	local function AnchorBlock(frame)
 		for _ = 1, 4 do
-			if not (frame.GetPoint and frame:GetNumPoints() > 0) then
+			if not (frame.GetPoint and ns.NumPoints(frame) > 0) then
 				return nil
 			end
 			local ok, _, relativeTo = pcall(frame.GetPoint, frame, 1)
@@ -11529,7 +11529,7 @@ function ns.ReportMinimap()
 		Value(frame:IsShown()), Value(frame:IsVisible()), Value(frame:GetAlpha()),
 		Value(frame.GetEffectiveAlpha and frame:GetEffectiveAlpha()), Value(frame:GetScale()),
 		Value(frame:GetWidth()), Value(frame:GetHeight())))
-	local count = frame:GetNumPoints()
+	local count = ns.NumPoints(frame)
 	ns.Print(("  %d anchor%s"):format(count, count == 1 and "" or "s"))
 	for i = 1, count do
 		local ok, point, relativeTo, relativePoint, x, y = pcall(frame.GetPoint, frame, i)

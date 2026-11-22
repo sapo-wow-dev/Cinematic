@@ -271,7 +271,7 @@ local function DressBar(bar, tooltip, look)
 		local texture = bar:GetStatusBarTexture()
 		barOwn = { height = bar:GetHeight(), points = {},
 			file = texture and texture:GetTexture(), atlas = texture and texture.GetAtlas and texture:GetAtlas() }
-		for i = 1, tonumber(bar:GetNumPoints()) or 0 do barOwn.points[i] = { bar:GetPoint(i) } end
+		for i = 1, ns.NumPoints(bar) do barOwn.points[i] = { bar:GetPoint(i) } end
 	end
 	local where = look and look.tooltipBar or "under"
 	local height = look and tonumber(look.tooltipBarHeight) or barOwn.height

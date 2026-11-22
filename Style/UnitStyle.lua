@@ -27,7 +27,7 @@ function ns.PreviewAnchorCheck(unit)
 		if found or depth > 8 or seen[object] then return end
 		seen[object] = true
 		if object == unit.health then found = table.concat(path, " > ") return end
-		local points = object.GetNumPoints and tonumber(object:GetNumPoints()) or 0
+		local points = ns.NumPoints(object)
 		for i = 1, points do
 			local point, relative, relPoint = object:GetPoint(i)
 			if relative then
@@ -1533,7 +1533,7 @@ local function SpotsOf(region)
 	if firstSpots[region] then return firstSpots[region] end
 	-- (Retail can keep even how many points a region has secret: nothing kept then.)
 	local spots = {}
-	local count = region:GetNumPoints()
+	local count = ns.NumPoints(region)
 	if type(count) ~= "number" or not Readable(count) then return spots end
 	for i = 1, count do spots[i] = { region:GetPoint(i) } end
 	firstSpots[region] = spots
@@ -2632,7 +2632,7 @@ function ns.UnitStyleSpots()
 					local text = region.GetFont ~= nil
 					local words = { Near(region:GetParent()), text and "" or Near(region:GetWidth()),
 						text and "" or Near(region:GetHeight()) }
-					local count = region:GetNumPoints()
+					local count = ns.NumPoints(region)
 					for i = 1, type(count) == "number" and Readable(count) and count or 0 do
 						local point, to, toPoint, x, y = region:GetPoint(i)
 						words[#words + 1] = table.concat({ Near(point), Near(to), Near(toPoint), Near(x), Near(y) }, " ")
@@ -4147,7 +4147,7 @@ function ns.ReportPlayerName()
 	local function Box(label, region)
 		if not region then return Say(label .. ": none") end
 		local points = {}
-		for i = 1, (region.GetNumPoints and region:GetNumPoints() or 0) do
+		for i = 1, ns.NumPoints(region) do
 			local point, to, toPoint, x, y = region:GetPoint(i)
 			local okName, toName = pcall(function() return to and (to.GetDebugName and to:GetDebugName() or to:GetName()) end)
 			points[#points + 1] = ("%s>%s.%s %s,%s"):format(tostring(point), tostring(okName and toName), tostring(toPoint),
@@ -4260,7 +4260,7 @@ function ns.ReportHealForecast()
 		local n = region.GetNumMaskTextures and region:GetNumMaskTextures()
 		for i = 1, (Readable(n) and n or 0) do masks[#masks + 1] = Name(region:GetMaskTexture(i)) end
 		local points = {}
-		for i = 1, (region.GetNumPoints and region:GetNumPoints() or 0) do
+		for i = 1, ns.NumPoints(region) do
 			local point, to, toPoint, x, y = region:GetPoint(i)
 			points[#points + 1] = ("%s>%s.%s(%s,%s)"):format(N(point), to and Name(to) or "nil", N(toPoint), N(x), N(y))
 		end

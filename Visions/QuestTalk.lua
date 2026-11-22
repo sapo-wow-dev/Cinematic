@@ -336,7 +336,7 @@ end
 
 local function SavePoints(frame)
 	local points = {}
-	for i = 1, Plain(frame:GetNumPoints()) or 0 do
+	for i = 1, Plain(ns.NumPoints(frame)) or 0 do
 		local point, relative, relativePoint, x, y = frame:GetPoint(i)
 		if Plain(point) and Plain(x) and Plain(y) then
 			points[#points + 1] = { point, relative, relativePoint, x, y }

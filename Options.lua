@@ -15937,7 +15937,7 @@ function ns.PageTabsBelow(content, anchor, list, id, linksTab, groupKey, adoptTa
 					-- (Placed under the switch: at the tab's top instead, its
 					-- other points as they were.)
 					local points, moved = {}, false
-					for n = 1, (oldAnchor and object:GetNumPoints() or 0) do
+					for n = 1, (oldAnchor and ns.NumPoints(object) or 0) do
 						points[n] = { object:GetPoint(n) }
 						if points[n][2] == oldAnchor then moved = true end
 					end

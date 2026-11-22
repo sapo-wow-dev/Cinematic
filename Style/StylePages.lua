@@ -1842,11 +1842,11 @@ end
 local function ApplyFit(preview)
 	local list = {}
 	for _, child in ipairs({ preview:GetChildren() }) do
-		if not child.zoomSkip and child:GetNumPoints() <= 1 then
+		if not child.zoomSkip and ns.NumPoints(child) <= 1 then
 			-- (Its own scale and spot, as its maker last set them.)
 			local scale = child:GetScale()
 			if child.zoomScale == nil or math.abs(scale - child.zoomScale) > 0.0001 then child.zoomBase = scale end
-			if child:GetNumPoints() == 1 then
+			if ns.NumPoints(child) == 1 then
 				local point, rel, relPoint, x, y = child:GetPoint(1)
 				local applied = child.zoomPoint
 				if not (applied and applied[1] == point and applied[2] == rel and math.abs(applied[4] - x) < 0.01

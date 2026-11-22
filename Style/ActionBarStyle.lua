@@ -134,7 +134,7 @@ end
 -- (Anchored, not sized: sizes read at login can be 0, the layout not run yet.)
 local function OnIcon(region, button, part, inset)
 	local icon = part.icon
-	if not (icon and icon.GetPoint and icon:GetNumPoints() > 0) then
+	if not (icon and icon.GetPoint and ns.NumPoints(icon) > 0) then
 		Inset(region, button, inset)
 		return
 	end

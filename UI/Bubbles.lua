@@ -735,7 +735,7 @@ local function Lift(inside)
 		return
 	end
 	if not state.points then
-		if inside:GetNumPoints() == 0 then return end
+		if ns.NumPoints(inside) == 0 then return end
 		state.points = {}
 		for i = 1, ns.NumPoints(inside) do
 			state.points[i] = { inside:GetPoint(i) }

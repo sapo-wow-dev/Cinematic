@@ -329,9 +329,10 @@ return {
       rule = "on WoW Forever another addon's frame can give a secret GetNumPoints in a fight; a for loop can't take a secret limit",
       pattern = "looping over a raw GetNumPoints() count; it errored every tick, so the safety check stopped Cinematic for the session",
     },
-    dont = "Never loop over frame:GetNumPoints(): loop over ns.NumPoints(frame) (0 when the count is secret or refused).",
-    check = { pattern = [[for \w+ = 1, [\w.]+:GetNumPoints\(\)]], allow = { "Dev/" } },
-    fix = "2026-11-22: ns.NumPoints (Core.lua) in every such loop (issue #7)",
+    dont = "Never read frame:GetNumPoints() directly (a loop limit, a compare, tonumber, a format): use ns.NumPoints(frame) (0 when the count is secret or refused).",
+    check = { pattern = [[:GetNumPoints\(\)]], allow = { "Dev/", "Tools/" } },
+    fix = "2026-11-22: ns.NumPoints (Core.lua) in every such loop (issue #7); then every other raw read too (compares, tonumber, debug prints), and the check widened from loops to any :GetNumPoints() call",
+    engine = { "forever.frame.numpoints-secret-in-fight" },
     seen = { "2026-11-22" },
     example = [[Interface/AddOns/Cinematic/Support/EllesmereUI.lua:704: 'for' limit must be a number
 [Cinematic/Support/EllesmereUI.lua]:704: in function <Cinematic/Support/EllesmereUI.lua:703>
@@ -352,6 +353,7 @@ return {
     },
     dont = "On parts we don't own, check IsForbidden and also pcall a cheap read (GetParent) before using them; skip any that refuse.",
     fix = "2026-11-22: FadeDetached's Reachable (pcall GetParent) in Usable and Walk; EllesmereUI's IsUsable pcalls GetName (issue #7). Earlier: d88eb23 for IsShown/GetText in Frames.lua",
+    engine = { "forever.frame.not-forbidden-still-refuses" },
     seen = { "2026-11-11", "2026-11-22" },
     example = [[Interface/AddOns/Cinematic/FadeDetached.lua:155: calling '?' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())
 [C]: in function '?'

@@ -420,7 +420,7 @@ local function OpenPanels()
 			end
 			open[#open + 1] = frame
 			if not Spot(frame) then
-				if frame:GetNumPoints() ~= 1 then
+				if ns.NumPoints(frame) ~= 1 then
 					return nil
 				end
 				local point, relativeTo, relativePoint = frame:GetPoint(1)
@@ -797,7 +797,7 @@ function ns.PrintPanelsDebug()
 				area, tostring(frame:GetName()), tostring(ns.Flag(frame:IsShown())), tostring(frame:IsProtected()),
 				tostring(frame:IsMouseEnabled()), tostring(frame:IsMovable()), tostring(hooked[frame] or false),
 				tostring(handles[frame] and ns.Flag(handles[frame]:IsShown()) or false), tostring(Spot(frame) ~= nil)))
-			ns.Print(("   %d point(s): %s %s %s %s %s; size %s x %s, scale %s"):format(frame:GetNumPoints(), tostring(point),
+			ns.Print(("   %d point(s): %s %s %s %s %s; size %s x %s, scale %s"):format(ns.NumPoints(frame), tostring(point),
 				tostring(relativeName), tostring(relativePoint), tostring(Number(x)), tostring(Number(y)),
 				tostring(Number(frame:GetWidth())), tostring(Number(frame:GetHeight())), tostring(Number(frame:GetScale()))))
 		end
@@ -844,7 +844,7 @@ function ns.PrintPanelsDebug()
 			or relativeTo.GetName and relativeTo:GetName()) or tostring(relativeTo)
 		ns.Print(("loot rolls: shown %s, protected %s, hooked %s, saved spot %s, %d point(s): %s %s %s %s %s"):format(
 			tostring(ns.Flag(box:IsShown())), tostring(box:IsProtected()), tostring(hooked[box] or false),
-			tostring(Spot(box) ~= nil), box:GetNumPoints(), tostring(point), tostring(relativeName), tostring(relativePoint),
+			tostring(Spot(box) ~= nil), ns.NumPoints(box), tostring(point), tostring(relativeName), tostring(relativePoint),
 			tostring(Number(x)), tostring(Number(y))))
 	end
 	local focus = ns.MouseFocus()

@@ -1237,7 +1237,7 @@ local function ListLines(tooltip, title)
 				Try(function() return select(2, fs:GetPoint(1)):GetDebugName() end),
 				Num(function() return (select(4, fs:GetPoint(1))) end),
 				Num(function() return (select(5, fs:GetPoint(1))) end),
-				Try(function() return fs:GetNumPoints() end),
+				Try(function() return fs:GetNumPoints() end), -- dont-ok: points-count-secret (debug readout: Try shows a secret as "secret")
 				Num(function() return fs:GetLeft() - tooltip:GetLeft() end),
 				Try(function() return ns.Flag(fs:IsShown()) end), Try(function() return fs:CanWordWrap() end),
 				Try(function() return fs:GetJustifyH() end),

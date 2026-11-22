@@ -365,7 +365,7 @@ local function MeasureTrim(bar)
 	if not (ground and ground.GetNumPoints) then return nil end
 	local atlas, file = ground.GetAtlas and ground:GetAtlas(), ground:GetTexture()
 	if not (Readable(atlas) and Readable(file)) then return nil end
-	local count = ground:GetNumPoints()
+	local count = ns.NumPoints(ground)
 	if not (Known(count) and count > 0) then return nil end
 	local points = {}
 	for i = 1, count do

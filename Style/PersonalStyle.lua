@@ -167,7 +167,7 @@ local function CopyTrim(from, to)
 						copy:SetPoint(point, to, relPoint, x, y)
 					end
 				end)
-				if not placed or copy:GetNumPoints() == 0 then
+				if not placed or ns.NumPoints(copy) == 0 then
 					copy:ClearAllPoints()
 					copy:SetAllPoints()
 				end
