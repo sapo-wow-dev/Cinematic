@@ -4506,7 +4506,8 @@ do
 		end
 	end
 	-- Every switch key a page goes by: its own, or each of its group's (an
-	-- icon over tabs with switches of their own: Unit Frames). (Dev/FavStarsTest.lua.)
+	-- icon over tabs with switches of their own: Unit Frames); empty for none.
+	-- (Dev/FavStarsTest.lua; the welcome window's links, ShowMe.lua.)
 	function ns.PageSwitchKeys(name)
 		local tile = byName[name]
 		local list = {}
@@ -16714,11 +16715,17 @@ local function CreateCooldownPanel()
 
 	-- The Flash style, for every spell with Flash ticked (Frames.lua): a
 	-- glow, the icon growing with each beat, a colored border, and how long.
-	local flashLabel = Label(settings, "GameFontHighlight", L["Flash style:"])
-	flashLabel:SetPoint("TOPLEFT", smartSet, "BOTTOMLEFT", 2, -18)
+	-- (Its switch first: off, no spell flashes, the style greyed under it.)
+	local flashLabel = Check(settings, "cooldownFlash", L["Flash"],
+		L["Spells with Flash set flash as their cooldown ends. Off: none do."],
+		function(value)
+			KeyPut("cooldownFlash", value)
+			Refresh()
+		end)
+	flashLabel:SetPoint("TOPLEFT", smartSet, "BOTTOMLEFT", 0, -14)
 	local flashGlow = Check(settings, "cooldownFlashGlow", L["Glow"],
 		L["The icon glows bright and dim while it flashes."])
-	flashGlow:SetPoint("LEFT", flashLabel, "RIGHT", 8, 0)
+	flashGlow:SetPoint("LEFT", flashLabel.Text or flashLabel.text or flashLabel, "RIGHT", 16, 0)
 	local flashGrow = Check(settings, "cooldownFlashGrow", L["Grow"],
 		L["The icon grows a little and shrinks back with each beat while it flashes."])
 	flashGrow:SetPoint("LEFT", flashGlow.Text or flashGlow.text or flashGlow, "RIGHT", 12, 0)
@@ -16759,10 +16766,11 @@ local function CreateCooldownPanel()
 	flashTest:SetScript("OnClick", function() ns.TestCooldownFlash() end)
 	local flashTime = Slider(settings, "cooldownFlashTime", L["Flash for"], 1, 6, 0.5,
 		function(value) return L["%.1f sec"]:format(value) end)
-	flashTime:SetPoint("TOPLEFT", flashLabel, "BOTTOMLEFT", 0, -28)
+	flashTime:SetPoint("TOPLEFT", flashLabel, "BOTTOMLEFT", 2, -24)
 	Tooltip(flashTime, L["How long the icon flashes once its cooldown ends."])
+	GreyUnless(flashLabel, function(db) return db.handleCooldowns end)
 	for _, control in ipairs({ flashGlow, flashGrow, flashBorder, flashTime }) do
-		GreyUnless(control, function(db) return db.handleCooldowns end)
+		GreyUnless(control, function(db) return db.handleCooldowns and db.cooldownFlash ~= false end)
 	end
 	panelTop:SetPoint("TOPLEFT", readyHeader, "BOTTOMLEFT", 0, -12 - height)
 	noSpells:SetPoint("TOPLEFT", readyHeader, "BOTTOMLEFT", 0, -16)

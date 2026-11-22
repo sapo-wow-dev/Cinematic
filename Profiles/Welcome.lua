@@ -345,7 +345,7 @@ local function Pick(name, level)
 	-- Profiles page or /cine profile: only from here.)
 	-- (Where the window is too: back in that spot, not the middle, the user
 	-- 2026-11-22.)
-	if next(ns.ProfilePartsPicked(name)) then
+	if next((ns.ProfilePartsPicked(name))) then
 		local point, _, relativePoint, x, y = window:GetPoint(1)
 		CinematicDB.welcomeAfterReload = { at = time(), point = point and { point, relativePoint, x, y } or nil }
 	end
@@ -879,7 +879,9 @@ local function BuildDemoRow(page, width)
 			self:GetScript("OnEnter")(self)
 		end)
 		sw:SetScript("OnEnter", function(self)
-			b:SetBackdropBorderColor(unpack(LIT))
+			-- (a tile's border lit; a page link has none: its words)
+			if b.SetBackdropBorderColor then b:SetBackdropBorderColor(unpack(LIT)) end
+			if b.text then Color(b.text, GOLD) end
 			local level = levelOf[Active()]
 			local text = (self.on and L["Turn %s off"] or L["Turn %s on"]):format(L[demo.label])
 			local line = (self.on and L["Takes it out of %s, the profile you're trying."]
@@ -892,7 +894,10 @@ local function BuildDemoRow(page, width)
 			about:SetText("|cffffd100" .. text .. "|r   " .. line)
 		end)
 		sw:SetScript("OnLeave", function()
-			b:SetBackdropBorderColor(unpack(ns.ShowMeRunning(demo.key) and GOLD or EDGE))
+			if b.SetBackdropBorderColor then
+				b:SetBackdropBorderColor(unpack(ns.ShowMeRunning(demo.key) and GOLD or EDGE))
+			end
+			if b.text then Color(b.text, SOFT) end
 			DescribeSoon()
 		end)
 		sw:Hide()
@@ -1133,6 +1138,12 @@ local function BuildDemoRow(page, width)
 			Color(self.text, SOFT)
 			DescribeSoon()
 		end)
+		-- (Its switch: the page's Enable, right of its name, as a tile's;
+		-- shown once a level's picked, for a page that has one.)
+		a.demo = { key = "page:" .. link.page, label = link.label }
+		SwitchOn(a, a.demo)
+		a.switch:ClearAllPoints()
+		a.switch:SetPoint("LEFT", a.text, "RIGHT", 5, 0)
 		a.link = link
 		a:Hide()
 		links[#links + 1] = a
@@ -1210,6 +1221,10 @@ local function BuildDemoRow(page, width)
 		for _, a in ipairs(links) do
 			local fits = Matches(a.link, words) and (not ns.HasOptionsPage or ns.HasOptionsPage(a.link.page))
 			a:SetShown(fits and true or false)
+			-- (room for its switch, a level picked or not: the links don't
+			-- jump about as one's picked)
+			a.hasSwitch = ns.ShowMeCanSwitch and ns.ShowMeCanSwitch(a.demo.key) or false
+			a:SetWidth(a.text:GetStringWidth() + 2 + (a.hasSwitch and SWITCH_W + 5 or 0))
 			if fits then
 				if linkCount == 0 then
 					y = y + (shown > 0 and 6 or 24)
@@ -1349,6 +1364,12 @@ local function BuildDemoRow(page, width)
 		Recount()
 		for _, b in ipairs(buttons) do
 			if b:IsShown() then Paint(b) end
+		end
+		-- (the links' switches: for the level picked, as a tile's; grey in a fight)
+		local picked = SwitchLevel()
+		for _, a in ipairs(links) do
+			a.switch:SetShown(a:IsShown() and a.hasSwitch and picked ~= nil or false)
+			if a.switch:IsShown() then a.switch:Paint(ns.ShowMeOn(a.demo.key), not fight) end
 		end
 	end
 	-- A new level picked: your switches again, over its settings (its own

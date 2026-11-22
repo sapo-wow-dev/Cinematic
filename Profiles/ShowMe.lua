@@ -639,7 +639,27 @@ local IN_PROFILE = { fadeUI = { "handleFrames" }, bars = { "letterboxPage", "let
 	recap = { "damageVision" }, damage = { "damageVision" }, emote = { "emoteVision" }, roll = { "rollWindow" },
 	deathVision = { "deathScreen" }, duel = { "duelPlates" }, audio = { "musicInCinematic" },
 	mouseover = { "handleFrames", "mouseover" }, heal = { "handleHealVision" }, plates = { "handlePlates" },
-	bubbles = { "handleBubbles" }, combatText = { "combatTextStyle" } }
+	bubbles = { "handleBubbles" }, combatText = { "combatTextStyle" },
+	-- (Speech: the Chat bubbles page's off-screen bubbles, with the chat peeks
+	-- it hangs on, as Speech.lua checks; Cooldown Flash: the Cooldown Manager
+	-- page's Flash switch, every spell's own Flash kept under it.)
+	speech = { "handleBubbles", "chatPeek", "chatHideBubbled", "chatSpeechBehind" },
+	cdflash = { "handleCooldowns", "cooldownFlash" } }
+-- Features on with any one of theirs (all of them for Turn on, none for Turn
+-- off): Fight Recap's two (a boss, a dungeon), under Damage Vision, which its
+-- switch leaves on (it turned the whole Vision off before).
+local ANY_OF = { recap = { "damageVisionRecapBoss", "damageVisionRecapRun" } }
+-- The shelf's page links ("page:<page>", Welcome.lua): their page's Enable
+-- switch (or every one of a page's group), from the settings window
+-- (Options.lua's ns.PageSwitchKeys: an empty list for none).
+local function PageOf(key)
+	return type(key) == "string" and key:match("^page:(.+)$")
+end
+local function PageKeys(key)
+	local page = PageOf(key)
+	local keys = page and ns.PageSwitchKeys and ns.PageSwitchKeys(page)
+	return keys and #keys > 0 and keys or nil
+end
 -- A camera's Test by its scene (CameraRows.lua's triggers): on with the Cameras
 -- page's switch, the scene ticked and a camera picked (camera: the one to pick
 -- for Turn on).
@@ -705,6 +725,13 @@ local function InSettings(key, base)
 	if key == "tint" and base.tintPreset == "none" then return false end
 	for _, each in ipairs(keys) do
 		if not On(base, each) then return false end
+	end
+	if ANY_OF[key] then
+		local any = false
+		for _, each in ipairs(ANY_OF[key]) do
+			if On(base, each) then any = true end
+		end
+		if not any then return false end
 	end
 	return SceneOn(base, key)
 end
@@ -824,10 +851,14 @@ end
 -- camera's scene; the camera, the Cameras page.
 local OWN_OFF = { camera = "cameraModes", fadeUI = "handleFrames", tint = "tintPage" }
 function ns.ShowMeCanSwitch(key)
+	if PageOf(key) then return PageKeys(key) ~= nil end
 	return IN_PROFILE[key] ~= nil and DEMOS[key] ~= nil
 end
 function ns.ShowMeOn(key)
 	if not ns.db then return false end
+	-- (a page link's: its switch as the settings window shows it)
+	local page = PageOf(key)
+	if page then return ns.PageSwitchOff ~= nil and not ns.PageSwitchOff(page) end
 	-- (the tag's: a Show in look with nothing ticked is off too)
 	local name = ns.ActiveProfile()
 	if IsLive(name) then return select(2, ns.ShowMeWhen(key, name)) == true end
@@ -853,8 +884,36 @@ function ns.ShowMeSwitch(key, on, batch)
 		end
 		db[list][row] = v
 	end
+	-- (A page link: the pages over it on first, then its own switch flipped as
+	-- a click on it would, so the page does what its box does; what it changed
+	-- kept for Undo.)
+	local pageKeys = PageKeys(key)
+	if pageKeys then
+		if on then
+			for _, each in ipairs(pageKeys) do
+				local k = ns.PageSwitchOf(each)
+				while k do
+					Set(k, true)
+					k = ns.PageSwitchOf(k)
+				end
+			end
+		end
+		if ns.ShowMeOn(key) ~= on then
+			local before = {}
+			for _, each in ipairs(pageKeys) do before[each] = db[each] end
+			ns.FlipPageSwitch(PageOf(key))
+			for _, each in ipairs(pageKeys) do
+				if db[each] ~= before[each] and changed[each] == nil then
+					changed[each] = before[each] == nil and "nil" or before[each]
+				end
+			end
+		end
+		if not batch then ns.ShowMeSwitched() end
+		return changed
+	end
 	local trigger = CAM_SCENE[key] and ns.CAMERA_TRIGGER and ns.CAMERA_TRIGGER[CAM_SCENE[key][1]]
 	if on then
+		for _, each in ipairs(ANY_OF[key] or {}) do Set(each, true) end
 		for _, each in ipairs(IN_PROFILE[key]) do
 			local k = each
 			while k do
@@ -889,6 +948,8 @@ function ns.ShowMeSwitch(key, on, batch)
 	else
 		if trigger then
 			Set(trigger.sceneOff, true)
+		elseif ANY_OF[key] then
+			for _, each in ipairs(ANY_OF[key]) do Set(each, false) end
 		else
 			local keys = IN_PROFILE[key]
 			Set(OWN_OFF[key] or keys[#keys], false)

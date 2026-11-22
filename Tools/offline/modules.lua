@@ -530,7 +530,7 @@ if phase == "on" then
 		end
 		ns.ProfilePartsPicked("Auto-Hide UI")
 		asked = nil
-		if next(ns.ProfilePartsPicked("My own")) or not next(ns.ProfilePartsPicked("Subtle")) or asked then
+		if next((ns.ProfilePartsPicked("My own"))) or not next((ns.ProfilePartsPicked("Subtle"))) or asked then
 			Problem("your own profile changed a Load box, or Subtle didn't bring them back")
 		end
 		local off = false

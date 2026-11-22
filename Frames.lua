@@ -9529,6 +9529,7 @@ for _, group in ipairs({ "essential", "utility", "buffs", "bars", "other", "othe
 	ns.DEFAULTS[ns.CDM_TABS[group]] = true
 	ns.SetPageMaster({ ns.CDM_TABS[group] }, "handleCooldowns")
 end
+ns.SetPageMaster({ "cooldownFlash" }, "handleCooldowns") -- (its Flash switch: under the page's)
 -- (On ns: this file's main chunk is at Lua's 200 locals.)
 function ns.CdmTabOff(group)
 	local key = group and ns.CDM_TABS[group]
@@ -11323,6 +11324,7 @@ do
 
 	-- (Any spell or group with Flash on.)
 	local function AnyFlash()
+		if ns.db.cooldownFlash == false then return false end -- (the page's Flash switch off)
 		for _, on in pairs(ns.db.cooldownFlashReady) do
 			if on then return true end
 		end

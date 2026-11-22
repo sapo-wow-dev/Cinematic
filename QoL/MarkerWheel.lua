@@ -1167,7 +1167,7 @@ extrasFrame:SetScript("OnEvent", function(self, event)
 	end
 	-- (PLAYER_LOGIN: the settings are loaded.)
 	for key in pairs(EXTRA_WHEELS) do
-		if next(ns.WheelExtras(key)) then
+		if next((ns.WheelExtras(key))) then
 			ns.ApplyWheelExtras(key)
 		end
 	end

@@ -420,4 +420,26 @@ return {
     example = [[Frames.lua:120: ambiguous syntax (function call x new statement) near '(']],
     source = "memory: lua51-ambiguous-call",
   },
+  {
+    id = "lua-multireturn-arg",
+    status = "fixed",
+    title = "A call's second return value lands in the next argument (next(f()), tonumber(f()))",
+    match = { any = { "invalid key to 'next'", "bad argument #2 to 'tonumber'" } },
+    why = {
+      call = "next(t, k) / tonumber(v, base) given a function's results straight in",
+      caller = "Dev/ShelfTest.lua's everyswitch step: next(row.Switches()); earlier PlateParts' tonumber(ns.NameLookValue(...))",
+      path = "checking a returned table is empty (or a returned value is a number) in one expression",
+      rule = "in Lua a call as the last argument expands to all its returns: row.Switches() gives mine, undo, so undo went in as next's key (not a key of mine: error); a second return went in as tonumber's base",
+      pattern = "a function call passed as the last argument to next or tonumber, where the callee returns more than one value; luacheck can't see return counts",
+    },
+    dont = "Never pass a call straight into next( or tonumber(: put its result in a local first, or wrap it, next((f())) / tonumber((f())). The check covers next(; tonumber( calls are too many to flag, so keep helpers fed to it single-return (return (f())).",
+    check = { pattern = [[\bnext\(\s*[A-Za-z_][A-Za-z0-9_.:]*\([^()]*\)\s*\)]] },
+    fix = "2026-11-22: ShelfTest keeps Switches()'s first in a local; the other next(f()) lines wrapped; this check stops new ones at commit",
+    engine = { "all.lua.tonumber-multireturn" },
+    seen = { "2026-11-14", "2026-11-22" },
+    example = [[invalid key to 'next'
+[C]: in function 'next'
+[CinematicDev/Dev/ShelfTest.lua]:954: in function <CinematicDev/Dev/ShelfTest.lua:952>]],
+    source = "memory: lua-multireturn-traps",
+  },
 }

@@ -1291,6 +1291,9 @@ DEFAULTS.cooldownFollowNumbers = true -- its icons' countdown numbers follow the
 DEFAULTS.cooldownShowNumbers = true -- with that off: its icons' countdown numbers shown (false: hidden)
 DEFAULTS.cooldownSpellNotBuff = true -- its icons show the spell's cooldown, not a buff the game puts on them (Frames.lua)
 DEFAULTS.cooldownStacks = true -- stack numbers on tracked buffs of known stacking spells, counted from casts (CooldownStacks.lua)
+-- Its Flash switch (the Settings tab's Flash, the welcome window's Cooldown
+-- Flash tile): off, no spell flashes, each one's own Flash kept for after.
+DEFAULTS.cooldownFlash = true
 -- Its Flash style, for every spell with Flash ticked: how long, and whether
 -- the icon glows, grows and gets a colored border while it flashes.
 DEFAULTS.cooldownFlashTime = 3

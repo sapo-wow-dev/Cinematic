@@ -22,6 +22,9 @@
 --            up); Balanced again: both kept over it; Undo: Balanced's own
 --            back. Then your level's card again, Subtle's and Balanced's
 --            saved changes put back as they were;
+--   everyswitch: Subtle picked, every tile and Also in link shown: its
+--            switch there, clicked over and back (live with it), what else
+--            moved logged; Undo; your level and Subtle's saved ones back;
 --   tour:    Watch the tour clicked: the plan's order, the window faded the
 --            whole way, the notice's n of N, Emote held about 15 s; then
 --            Stop on the notice ends it;
@@ -455,7 +458,8 @@ end
 -- list: what to test, words apart ("questCam duel search"): tiles by their
 -- keys, and the parts groups, search, switches. None: everything. The size
 -- and the closing again always run (a second, and they open the shelf).
-local PARTS = { groups = true, search = true, switches = true, tour = true, links = true, hover = true }
+local PARTS = { groups = true, search = true, switches = true, tour = true, links = true, hover = true,
+	everyswitch = true }
 function ns.ShelfTest(list)
 	-- (Never the Ctrl+C copy window over the game: the user's rule; its lines
 	-- are in chat and the log. Set first: the start's lines opened it.)
@@ -494,7 +498,7 @@ function ns.ShelfTest(list)
 		end
 		for word in pairs(only) do
 			if not (known[word] or PARTS[word]) then
-				ns.Print(("Shelf test: no \"%s\". Tiles: %s. Parts: hover, groups, search, switches, tour, links."):format(word,
+				ns.Print(("Shelf test: no \"%s\". Tiles: %s. Parts: hover, groups, search, switches, everyswitch, tour, links."):format(word,
 					table.concat(keys, ", ")))
 				run = nil
 				return
@@ -878,6 +882,111 @@ function ns.ShelfTest(list)
 					end)
 				end)
 			end)
+		end)
+	end
+	-- Every switch (the user's rule 2026-11-22: every feature has one): Subtle
+	-- picked by its card, then each tile shown and each Also in link: its
+	-- switch shown (a link whose page has none: logged), clicked over and back,
+	-- live with it; what else moved logged (Fight Recap's must leave Damage
+	-- Vision be). Undo, then your level back, Subtle's saved changes put back.
+	steps[#steps + 1] = Want("everyswitch") and function(Next)
+		local cards, level = ns.WelcomeCards and ns.WelcomeCards() or {}, {}
+		for i, each in ipairs(ns.WELCOME_LEVELS) do level[each.profile or ns.DEFAULT_PROFILE] = cards[i] end
+		local yours, subtle = ns.ActiveProfile(), level.Subtle
+		if not subtle or yours == "Subtle" then
+			Log(("everyswitch: not tried (Subtle card %s, active %s)"):format(tostring(subtle ~= nil), tostring(yours)))
+			return Next()
+		end
+		local saved = ns.db.profiles and ns.db.profiles.Subtle
+		saved = saved and DeepCopy(saved) or false
+		local function Back()
+			if row.ForgetSwitches then row:ForgetSwitches() end
+			if level[yours] then level[yours]:Click() else ns.SetProfile(yours) end
+			ns.db.profiles.Subtle = saved or nil
+			ns.db.fadeUI = false
+		end
+		run.switchBack = Back
+		-- (All picked: every tile and link up)
+		for _, g in ipairs(Each(window, function(f) return f.group ~= nil and f.GetObjectType and f:IsShown() end)) do
+			if g.group.key == "all" then g:Click() end
+		end
+		subtle:Click()
+		ns.db.fadeUI = false
+		C_Timer.After(1.5, function()
+			if not run then return end
+			local AVOID = { shoulder = true, fadeUI = true }
+			local items, keys = {}, {}
+			for _, b in ipairs(row.ShelfTiles()) do
+				if b:IsShown() then
+					Verdict(b.switch ~= nil and b.switch:IsShown(), b.demo.key .. ": its tile has a switch")
+					if b.switch and b.switch:IsShown() and not AVOID[b.demo.key] then items[#items + 1] = b end
+					keys[#keys + 1] = b.demo.key
+				end
+			end
+			for _, a in ipairs(row.ShelfLinks) do
+				if a:IsShown() then
+					local pageKeys = ns.PageSwitchKeys and ns.PageSwitchKeys(a.link.page)
+					-- (an empty list for a page with none)
+					if pageKeys and #pageKeys > 0 then
+						Verdict(a.switch:IsShown(), a.link.page .. ": its link has a switch (" ..
+							table.concat(pageKeys, ", ") .. ")")
+						if a.switch:IsShown() then items[#items + 1] = a end
+					else
+						Log("everyswitch: " .. a.link.page .. ": its page has no switch, a plain link")
+					end
+					keys[#keys + 1] = a.demo.key
+				end
+			end
+			Log(("everyswitch: on %s, %d to flip"):format(tostring(ns.ActiveProfile()), #items))
+			local function States()
+				local out = {}
+				for _, key in ipairs(keys) do out[key] = ns.ShowMeOn(key) end
+				return out
+			end
+			local i = 0
+			local function One()
+				if not run then return end
+				i = i + 1
+				local b = items[i]
+				if not b then
+					row.UndoButton:Click()
+					C_Timer.After(0.5, function()
+						if not run then return end
+						-- (its first only: Switches gives mine and undo)
+						local mine = row.Switches()
+						Verdict(next(mine) == nil, "everyswitch: Undo forgets them")
+						run.switchBack = nil
+						Back()
+						C_Timer.After(1.5, function()
+							if not run then return end
+							Verdict(ns.ActiveProfile() == yours, "everyswitch: back on your profile, " .. tostring(yours))
+							Next()
+						end)
+					end)
+					return
+				end
+				local key, was, before = b.demo.key, ns.ShowMeOn(b.demo.key), States()
+				b.switch:Click()
+				local now, after = ns.ShowMeOn(key), States()
+				local moved = {}
+				for k, v in pairs(after) do
+					if k ~= key and v ~= before[k] then moved[#moved + 1] = k end
+				end
+				table.sort(moved)
+				Log(("everyswitch: %s %s -> %s, switch %s; also moved: %s"):format(key, tostring(was), tostring(now),
+					tostring(b.switch.on), #moved > 0 and table.concat(moved, ", ") or "none"))
+				Verdict(now ~= was and b.switch.on == now, key .. ": its switch turns it " .. (was and "off" or "on"))
+				if key == "recap" and not now then
+					Verdict(after.damage == before.damage, "recap: off leaves Damage Vision as it was")
+				end
+				C_Timer.After(0.3, function()
+					if not run then return end
+					b.switch:Click()
+					Verdict(ns.ShowMeOn(key) == was and b.switch.on == was, key .. ": clicked again, back as it was")
+					C_Timer.After(0.3, One)
+				end)
+			end
+			One()
 		end)
 	end
 	steps[#steps + 1] = function(Next)
