@@ -131,8 +131,14 @@ if Update and ns.PlateNameZoom then
 	for z = 30, 2, -0.05 do Zoom(z, 1) end
 	Check(offPixel == 0, ("zooming: every font set at a whole pixel height (%d off)"):format(offPixel))
 	Check(turns == 0, ("zooming: the size only ever goes the way of the zoom (%d flickers)"):format(turns))
-	Check(out <= 12 and sets - out <= 12, ("zooming: font set %d times out, %d back in (once a pixel)"):format(out,
-		sets - out))
+	-- (Once a pixel: no more sets than pixel heights crossed, zoom 2 to 30.)
+	ns.PlateNameZoom(2)
+	local big = Look()
+	ns.PlateNameZoom(30)
+	local small = Look()
+	local span = math.ceil((big - small) * PX_PER) + 1
+	Check(out <= span and sets - out <= span, ("zooming: font set %d times out, %d back in (once a pixel: %d or fewer)")
+		:format(out, sets - out, span))
 	-- Hovering: the zoom wobbling at a pixel line (the camera gliding).
 	local hover = { pxPer = PX_PER }
 	local flips, lastHover, clock = 0, nil, 0

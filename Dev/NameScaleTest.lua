@@ -30,7 +30,7 @@
 -- Zoom only since 2026-11-23 (PlateParts' Look: the user didn't want names
 -- resizing as they walk): a plain run is far, the walk and near, its
 -- verdict that our name kept one size the whole walk; the far and near
--- pairs show it against the game's (ours: the game's at ~16 yards). "full"
+-- pairs show it against the game's (ours: the game's at ~8 yards since 2026-11-23, 16 before). "full"
 -- adds walk 1, UI scale and Shoulder Cam (proven, runs 1-8).
 -- Walk 1 and back are proven (runs 1 and 2, 2026-11-23: the game's names
 -- measured twice, the same within 5%, Tools/tests/name-scale.md): left out
@@ -370,6 +370,13 @@ local function Tick()
 		local x, y = Position()
 		run.start = x and { x = x, y = y } or nil
 		Say("  camera at start: " .. CameraLine())
+		-- (The game's shots compare with ITS name over the head: a character whose
+		-- settings show NPC plates instead drew a full target plate when paused,
+		-- run 13, so those shots had no name to compare.)
+		Say(("  game's own: UnitNameNPC %s, nameplateShowFriendlyNPCs %s, nameplateSelectedScale %s%s"):format(
+			tostring(GetCVar("UnitNameNPC")), tostring(GetCVar("nameplateShowFriendlyNPCs")),
+			tostring(GetCVar("nameplateSelectedScale")),
+			GetCVar("UnitNameNPC") == "0" and " (NPC names over heads OFF: the game shots show a plate, not a name)" or ""))
 		Say(("start: target %s, %s, position %s, zoom %.1f, Name Style %s, close %s/%s far %s/%s"):format(
 			tostring(UnitName("target")), (TargetDistance()), run.start and ("%.1f,%.1f"):format(x, y) or "unreadable",
 			Plain(Call(GetCameraZoom)) or -1, tostring(ns.db and ns.db.plateNameStyle),

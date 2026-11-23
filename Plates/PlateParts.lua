@@ -382,7 +382,9 @@ ns.SetPlateNameFont = SetNameFont
 -- (swaps and the ghosts are left from the old bands, unused: no swap starts.)
 local FAR_USED = not ns.isRetail
 local FAR_CHECK, FAR_SWAP = 0.25, 0.6 -- seconds
-local UNIT_YARDS = 16 -- a unit's guessed distance from you
+-- (8, the user 2026-11-23: at 16, the game's own size there, names felt "a
+-- lot smaller than before": 0.48 at zoom 10 against 0.85 before; 8 gives ~0.69.)
+local UNIT_YARDS = 8 -- the distance names are sized for: the game's own name that far off
 -- (The page's two points, from the camera: close is the camera right in,
 -- far about 34 yards out, so both can be reached.)
 local FAR_YARDS = 50

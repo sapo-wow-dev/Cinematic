@@ -27,6 +27,9 @@ Code: Plates/PlateParts.lua (Look, UNIT_YARDS, CLOSE_YARDS/FAR_YARDS), Core.lua 
 - Easing (after run 2): after crossing into a band it heads for the band's far side (walking in: toward 10), not the middle.
 - Offline: Tools/offline/namescale.lua (forever + retail) ALL PASS; migrate-test on the real saved file OK.
 
+## Sized for 8 yards (after run 12, user: "names are feeling a lot smaller than before")
+UNIT_YARDS 16 -> 8: at zoom 10 a name is 0.69 (was 0.50 at 16; 0.85 before 2026-11-23); past 40 yd from the camera 0.45. Offline: zoom 2->30 font sets bounded by the pixel span now (bigger names cross more pixels). Confirm: /cine debug namescale (walk, near pair should now match the game's ~8 yd).
+
 ## Far names smaller (after run 11, user: "one step, far only")
 Effects.lua ns.plates.FAR_NAME_CVARS "Far names smaller": nameplateMinScale 0.65, MaxScale 1, MaxScaleDistance 41, MinScaleDistance 5 (min from 45-5 = 40: the distances cross, so the game jumps in one step at ~40 yd from the camera). Held with every plate on (CineMode away from instances), Forever, Name Style on; kept through fights. Q13: does it step once at ~40 and nowhere else? /cine debug farnames (Dev/FarNamesTest.lua).
 
@@ -64,4 +67,6 @@ Ours then matches the game's for a unit ~16 yd from you; still the same size as 
 | 11 | 2026-11-23 | /cine debug nameconsole | Q12: plates DO shrink on Forever now (min scale 0.5: far 0.64 -> 0.32, our names with them); rule forever.plate.no-distance-scale changed. Help lines read (1876 commands): MaxScaleDistance from the camera, MinScaleDistance back from nameplateMaxDistance 45; WorldTextMinSize = "smallest size used for world text like player names" (0); MaxUnitNameDistance not a setting | which distances give one clean step (not a gradual scale: whole-pixel pops) not yet mapped |
 
 | 12 | 2026-11-23 | /cine debug farnames | Q13 answered: one step works | the screenshot couldn't show names (faded): fixed for any later run |
+
+| 13 | 2026-11-23 | /cine debug namescale (queue q5ca5) | sized for 8 yd: PASS one size (0.714) all walk at zoom 9.7, no errors | pairs unusable: this character (Coldridge) shows the game's full target plate when paused, not a name over the head; target plate at 1.2x (nameplateSelectedScale) |
 
