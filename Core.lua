@@ -4875,6 +4875,7 @@ function ns.EnsureTables()
 	ns.db.cooldownNeverShow = ns.db.cooldownNeverShow or {} -- ...spell ID -> true: Never, faded all the time
 	ns.db.cooldownGroupDefaults = ns.db.cooldownGroupDefaults or {} -- ...group -> { mode, power, early, anyTime }
 	ns.db.cooldownBuffMode = ns.db.cooldownBuffMode or {} -- ...tracked buff's spell ID -> its own mode
+	ns.db.cooldownBuffGroups = ns.db.cooldownBuffGroups or {} -- ...lead buff ID -> { lead, members... }: count as one (UI/CooldownMissing.lua)
 	-- ...a bar (its group) or spell ID -> { numbers, keybinds, notBuff }: its row's own (Frames.lua's ns.CooldownRowSetting)
 	ns.db.cooldownRowSettings = ns.db.cooldownRowSettings or {}
 	ns.db.cooldownFlashReady = ns.db.cooldownFlashReady or {} -- ...spell ID -> true/false: Flash, its own

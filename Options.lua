@@ -16645,6 +16645,7 @@ local function CreateCooldownPanel()
 	RecordKey(icons, "cooldownAlwaysShow")
 	RecordKey(icons, "cooldownNeverShow")
 	RecordKey(icons, "cooldownBuffMode")
+	RecordKey(icons, "cooldownBuffGroups")
 	RecordKey(icons, "cooldownSmartDefaults")
 	RecordKey(icons, "cooldownFlashReady")
 	RecordKey(icons, "cooldownPlaceGroups") -- (the grid's place groups and cells: CooldownRules.lua)
@@ -16883,7 +16884,7 @@ local function CreateCooldownPanel()
 	-- Reset: just the spell icons' settings (the page's Reset does the rest too).
 	local SPELL_ICON_KEYS = { cooldownReadyOnly = true, cooldownReadyEarly = true, cooldownEarlyOn = true,
 		cooldownRechargeOnly = true, cooldownNeedsPower = true, cooldownReadyAnyTime = true, cooldownGroupDefaults = true,
-		cooldownProcOnly = true, cooldownAlwaysShow = true, cooldownNeverShow = true, cooldownBuffMode = true, cooldownSmartDefaults = true,
+		cooldownProcOnly = true, cooldownAlwaysShow = true, cooldownNeverShow = true, cooldownBuffMode = true, cooldownBuffGroups = true, cooldownSmartDefaults = true,
 		cooldownFlashReady = true, cooldownPlaceGroups = true, cooldownSpellCells = true, cooldownBuffCells = true,
 		cooldownGroupCells = true,
 		cooldownRowSettings = true }

@@ -9640,11 +9640,13 @@ function ns.CooldownSpellMode(id, group, own)
 end
 
 -- A tracked buff's or bar's mode ("always", "combat": in fights, "quiet":
--- out of fights, "hidden"), and whether it's its own (db.cooldownBuffMode,
+-- out of fights, "missing" / "missingeach": UI/CooldownMissing.lua, "hidden"), and whether it's its own (db.cooldownBuffMode,
 -- by spell ID), else its group's. Each goes by whether you're in a fight
 -- only: the game keeps your buffs secret in fights.
 function ns.CooldownBuffMode(id, group, ownOnly)
 	if ownOnly ~= false and ns.CdmTabOff(group) then return "always", false end
+	-- (In a group of buffs that count as one: its lead's settings, UI/CooldownMissing.lua.)
+	if ns.CooldownBuffKey then id = ns.CooldownBuffKey(id) end
 	local ruled = ownOnly ~= false and ns.CooldownRuleMode("buff", id)
 	if ruled then return ruled, true end
 	-- (Its bar's cell for the group in use, before its own Otherwise.)
@@ -9675,9 +9677,13 @@ function ns.CooldownSpellFlash(id, group)
 	return ns.CooldownGroupFlash(group)
 end
 
--- Whether a tracked buff's or bar's icon shows in a mode.
-function ns.CooldownBuffShows(mode, inCombat)
+-- Whether a tracked buff's or bar's icon shows in a mode. icon: for Missing,
+-- shown while its buff is off you (UI/CooldownMissing.lua); no icon, shown.
+function ns.CooldownBuffShows(mode, inCombat, icon)
 	if mode == "hidden" then return false end
+	if mode == "missing" or mode == "missingeach" then
+		return not icon or not ns.CooldownMissingShows or ns.CooldownMissingShows(icon, mode)
+	end
 	if mode == "combat" then return inCombat end
 	if mode == "quiet" then return not inCombat end
 	return true
@@ -11146,7 +11152,7 @@ local function ReadyTarget(icon, id, bar)
 	if ns.cooldownFadePaused then return end
 	local buffGroup = ns.COOLDOWN_BUFF_GROUPS[bar]
 	if buffGroup then
-		if not ns.CooldownBuffShows(ns.CooldownBuffMode(id, buffGroup), passInCombat) then
+		if not ns.CooldownBuffShows(ns.CooldownBuffMode(id, buffGroup), passInCombat, icon) then
 			readyTargets[icon] = 0
 		end
 		return
@@ -11606,7 +11612,7 @@ function ns.ReportCooldowns()
 		local okShown, shown = pcall(icon.IsShown, icon)
 		print(("  %s spell=%s up=%s mode=%s%s -> %s, alpha %s"):format(group, tostring(id),
 			okShown and Show(shown) or "?", mode, own and "" or " (its group's)",
-			ns.CooldownBuffShows(mode, inCombat) and "shown" or "faded", Show(readyAlpha[icon] or 1)))
+			ns.CooldownBuffShows(mode, inCombat, icon) and "shown" or "faded", Show(readyAlpha[icon] or 1)))
 		ns.ReportCooldownIconLook(icon, id)
 	end, true)
 	if not any then

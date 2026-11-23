@@ -18,11 +18,14 @@ local L = ns.L
 
 local MODES = { { "always", L["Always"] }, { "ready", L["When ready"] }, { "recharge", L["While recharging"] },
 	{ "proc", L["When it procs"] }, { "never", L["Never"] } }
+-- (Missing: shown while the buff is off you, a reminder; Missing: each, on a
+-- group of buffs that count as one: UI/CooldownMissing.lua, 2026-11-23.)
 local BUFF_MODES = { { "always", L["Always"] }, { "combat", L["In combat"] }, { "quiet", L["Out of combat"] },
-	{ "hidden", L["Hidden"] } }
+	{ "missing", L["Missing"] }, { "missingeach", L["Missing: each"] }, { "hidden", L["Hidden"] } }
 -- (In a cell: short, the columns are narrow.)
 local SHORT = { always = L["Always"], ready = L["Ready"], recharge = L["Recharging"], proc = L["Procs"],
-	never = L["Never"], combat = L["In fights"], quiet = L["Out of fights"], hidden = L["Hidden"] }
+	never = L["Never"], combat = L["In fights"], quiet = L["Out of fights"], missing = L["Missing"], missingeach = L["Missing: each"],
+	hidden = L["Hidden"] }
 local FULL = {}
 for _, mode in ipairs(MODES) do FULL[mode[1]] = mode[2] end
 for _, mode in ipairs(BUFF_MODES) do FULL[mode[1]] = mode[2] end
@@ -318,10 +321,12 @@ end
 -- set; faint, with no band, while it follows. Each choice its own color and
 -- icon (Media/make_cdm_icons.py: Textures/CdmIcons, Textures/CdmDisc).
 local TEXTURES = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\"
-local ICON_AT = { always = 0, ready = 1, recharge = 2, proc = 3, never = 4, hidden = 4, combat = 5, quiet = 6, add = 7 }
+local ICON_AT = { always = 0, ready = 1, recharge = 2, proc = 3, never = 4, hidden = 4, combat = 5, quiet = 6, add = 7,
+	missing = 3, missingeach = 3 } -- (Missing: the procs spark for now, its own icon later)
 local MODE_COLOR = { always = { 0.9, 0.88, 0.83 }, ready = { 0.45, 0.85, 0.48 }, recharge = { 0.42, 0.71, 1 },
 	proc = { 1, 0.69, 0.33 }, never = { 1, 0.48, 0.42 }, hidden = { 1, 0.48, 0.42 }, combat = { 1, 0.6, 0.35 },
-	quiet = { 0.66, 0.72, 1 }, add = { 0.85, 0.83, 0.78 } }
+	quiet = { 0.66, 0.72, 1 }, add = { 0.85, 0.83, 0.78 }, missing = { 1, 0.85, 0.35 },
+	missingeach = { 1, 0.85, 0.35 } }
 -- (Neutral, no gold: gold was on everything and nothing stood out, 2026-11-22.)
 local NEUTRAL = { 0.9, 0.88, 0.84 } -- (a look's value, a chip: no icon)
 local WHITE, GREY, DIM, AMBER = { 0.95, 0.94, 0.92 }, { 0.66, 0.65, 0.61 }, { 0.54, 0.53, 0.49 }, { 0.88, 0.65, 0.29 }
@@ -599,11 +604,26 @@ function ns.CooldownGrid(parent, opts)
 	end
 	-- (A buff's In combat / Out of combat: offered only where already picked;
 	-- scenes say in or out of combat now, the two said it twice. 2026-11-22.)
-	local function ModesFor(current)
+	-- A buffs tab's row for a group of buffs that count as one (its lead's ID).
+	local function IsGroup(key)
+		return key ~= state.tab and BUFF_TAB[state.tab] and ns.CooldownBuffMembers and ns.CooldownBuffMembers(key) ~= nil
+			or false
+	end
+	-- (On the grid too: Layout is at Lua's 60-upvalue cap.)
+	grid.IsGroup = IsGroup
+	-- A mode's words; on a group's row Missing says it's any one of them.
+	local function ModeText(mode, key, short)
+		if mode == "missing" and IsGroup(key) then return short and L["Missing: any"] or L["Missing: any one"] end
+		return (short and SHORT[mode]) or FULL[mode] or SHORT[mode] or tostring(mode)
+	end
+	-- (Missing: each only on a group's row: one buff has nothing to tell apart.)
+	local function ModesFor(current, key)
 		if not BUFF_TAB[state.tab] then return MODES end
 		local list = {}
 		for _, mode in ipairs(BUFF_MODES) do
-			if (mode[1] ~= "combat" and mode[1] ~= "quiet") or mode[1] == current then list[#list + 1] = mode end
+			local offered = (mode[1] ~= "combat" and mode[1] ~= "quiet") or mode[1] == current
+			if mode[1] == "missingeach" then offered = (key ~= nil and IsGroup(key)) or mode[1] == current end
+			if offered then list[#list + 1] = { mode[1], ModeText(mode[1], key) } end
 		end
 		return list
 	end
@@ -621,6 +641,33 @@ function ns.CooldownGrid(parent, opts)
 		return cols
 	end
 	grid.Columns = Columns
+	-- The line under a buff's name: a group's other buffs; a buff on Missing
+	-- anywhere, the ready-made ones that count for it too. Nil: none. Then
+	-- a short one for when it doesn't fit the name's column ("or X +2").
+	local function Either(names)
+		local full = L["or %s"]:format(table.concat(names, L[" or "]))
+		local short = #names > 1 and L["or %s +%d"]:format(names[1], #names - 1) or full
+		return full, short
+	end
+	function grid.SubLine(key)
+		if key == state.tab or not BUFF_TAB[state.tab] then return nil end
+		if IsGroup(key) then
+			local others = {}
+			for k, member in ipairs(ns.CooldownBuffMembers(key)) do
+				if k > 1 then others[#others + 1] = NameOf(member) end
+			end
+			return Either(others)
+		end
+		local alts = ns.CooldownBuffAlternatives and ns.CooldownBuffAlternatives(NameOf(key))
+		if not alts then return nil end
+		local missing = ns.COOLDOWN_MISSING_MODES or {}
+		local onMissing = missing[(OtherwiseOf("buff", key, state.tab))] or false
+		for _, col in ipairs(Columns()) do
+			if not onMissing and col.id and missing[(CellOf("buff", key, state.tab, col.id))] then onMissing = true end
+		end
+		if not onMissing then return nil end
+		return Either(alts)
+	end
 
 	-- What a cell says: text, style, and its value (a mode, or a look's value).
 	local function CellLook(key, col)
@@ -634,7 +681,7 @@ function ns.CooldownGrid(parent, opts)
 		local mode, own
 		if col.other then mode, own = OtherwiseOf(kind, key, state.tab)
 		else mode, own = CellOf(kind, key, state.tab, col.id) end
-		local text = SHORT[mode] or tostring(mode)
+		local text = ModeText(mode, key, true)
 		-- (The bar's Otherwise is what its row follows: gold, set or its default.)
 		if kind == "group" then
 			-- (The bar's scene cell the same as its Otherwise changes nothing:
@@ -1567,7 +1614,7 @@ function ns.CooldownGrid(parent, opts)
 			end
 		end
 		local _, _, current = CellLook(key, col)
-		for _, mode in ipairs(ModesFor(current)) do list[#list + 1] = { mode[1], mode[2] } end
+		for _, mode in ipairs(ModesFor(current, key)) do list[#list + 1] = { mode[1], mode[2] } end
 		local _, _, own = CellLook(key, col)
 		local where = col.other and (ns.CooldownPlaceGroups()[1] and L["Everywhere else"] or L["everywhere"])
 			or ns.CooldownGroupName(col.group)
@@ -1766,6 +1813,33 @@ function ns.CooldownGrid(parent, opts)
 		Changed()
 		Flash(pasted, MODE_COLOR.ready)
 	end)
+	-- (Buffs: the ticked ones made one group that counts as one, in the
+	-- page's order; one group ticked alone, split back. Mockup B, 2026-11-23.)
+	local function TickedGroup()
+		local only
+		for key in pairs(state.selected) do
+			if key ~= state.tab then
+				if only then return nil end
+				only = key
+			end
+		end
+		return only and IsGroup(only) and only or nil
+	end
+	local bulkGroup = BulkButton(110, L["Makes the ticked buffs count as one: any of them on you is enough."], function()
+		local lead = TickedGroup()
+		if lead then
+			ns.UngroupCooldownBuff(lead)
+		else
+			local ids = {}
+			for _, key in ipairs(grid.RowKeys()) do
+				if state.selected[key] then ids[#ids + 1] = key end
+			end
+			if #ids < 2 then return end
+			ns.SetCooldownBuffGroup(ids)
+		end
+		wipe(state.selected)
+		Changed()
+	end)
 	local bulkClear = BulkButton(20, L["Unticks every spell."], function()
 		wipe(state.selected)
 		Changed()
@@ -1784,7 +1858,8 @@ function ns.CooldownGrid(parent, opts)
 	bulkValue:SetPoint("LEFT", toLabel, "RIGHT", 6, 0)
 	bulkSet:SetPoint("LEFT", bulkValue, "RIGHT", 4, 0)
 	grid.bulk = bulk
-	grid.bulkButtons = { col = bulkCol, value = bulkValue, set = bulkSet, copy = bulkCopy, paste = bulkPaste, clear = bulkClear }
+	grid.bulkButtons = { col = bulkCol, value = bulkValue, set = bulkSet, copy = bulkCopy, paste = bulkPaste, clear = bulkClear,
+		group = bulkGroup }
 	local function BulkShow()
 		local count = 0
 		for key in pairs(state.selected) do
@@ -1822,10 +1897,16 @@ function ns.CooldownGrid(parent, opts)
 			Put(bulkPaste, state.pasted and L["Pasted on %d"]:format(state.pasted) or L["Paste %s"]:format(name),
 				state.pasted and "picked" or "chip")
 		end
-		-- (From the right: x, then Paste and Copy where shown. Copy sat on
-		-- Apply while hidden Paste kept its place, CDM lab 2026-11-22.)
+		-- (Buffs: Count as one buff with two or more ticked; Ungroup with one group.)
+		local ungroup = TickedGroup()
+		bulkGroup:SetShown(BUFF_TAB[state.tab] and ns.SetCooldownBuffGroup ~= nil and (count >= 2 or ungroup ~= nil) or false)
+		if bulkGroup:IsShown() then
+			Put(bulkGroup, ungroup and L["Ungroup"] or L["Count as one buff"], "chip")
+		end
+		-- (From the right: x, then Paste, Copy and the group button where shown.
+		-- Copy sat on Apply while hidden Paste kept its place, CDM lab 2026-11-22.)
 		local last = bulkClear
-		for _, button in ipairs({ bulkPaste, bulkCopy }) do
+		for _, button in ipairs({ bulkPaste, bulkCopy, bulkGroup }) do
 			if button:IsShown() then
 				button:ClearAllPoints()
 				button:SetPoint("RIGHT", last, "LEFT", -4, 0)
@@ -2195,7 +2276,7 @@ function ns.CooldownGrid(parent, opts)
 		end
 		-- Rows: the bar's (a gold band), then each spell's.
 		local keys = { state.tab }
-		for _, id in ipairs(state.ids) do keys[#keys + 1] = id end
+		for _, key in ipairs(grid.RowKeys()) do keys[#keys + 1] = key end
 		local openShown = false
 		local openCell, openX, openBottom
 		-- (Which column decides for a row while previewing: its own cell for the
@@ -2235,7 +2316,8 @@ function ns.CooldownGrid(parent, opts)
 			local row = Row(i)
 			row.key = key
 			local isBar = key == state.tab
-			local rowH = isBar and BAR_H or ROW_H
+			local subText, subShort = grid.SubLine(key)
+			local rowH = (isBar or subText) and BAR_H or ROW_H
 			local decideAt = previewing and DecideAt(key)
 			row.band:ClearAllPoints()
 			row.band:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, y)
@@ -2275,12 +2357,18 @@ function ns.CooldownGrid(parent, opts)
 			if isBar then row.label:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) end
 			row.label:SetText(NameOf(key))
 			row.label:ClearAllPoints()
-			row.label:SetPoint("LEFT", row.icon, "RIGHT", 7, 0)
-			row.label:SetPoint("RIGHT", row.name, "RIGHT", -2, 0)
+			-- (A group's row: its first buff's name, the others under it; a
+			-- Missing buff's ready-made alternatives the same way.)
+			row.label:SetPoint("LEFT", row.icon, "RIGHT", 7, subText and 6 or 0)
+			row.label:SetPoint("RIGHT", row.name, "RIGHT", -2, subText and 6 or 0)
 			row.sub:ClearAllPoints()
 			row.sub:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -1)
 			-- (No "for every spell": its card says it, the user, 2026-11-22.)
-			row.sub:SetShown(false)
+			row.sub:SetShown(subText ~= nil)
+			if subText then
+				row.sub:SetText(subText)
+				if row.sub:IsTruncated() then row.sub:SetText(subShort) end
+			end
 			-- (A buffs bar's row is for its buffs: "spell" read wrong there, the CDM lab.)
 			if isBar then row.sub:SetText(BUFF_TAB[state.tab] and L["for every buff"] or L["for every spell"]) end
 			if isBar then
@@ -2400,6 +2488,21 @@ function ns.CooldownGrid(parent, opts)
 	end
 	grid.Layout = Layout
 
+	-- The rows under the bar's: its spells, a group of buffs that count as one
+	-- as one row (its lead's ID) where its first member is listed.
+	function grid.RowKeys()
+		local keys, done = {}, {}
+		for _, id in ipairs(state.ids) do
+			local lead = BUFF_TAB[state.tab] and ns.CooldownBuffLead and ns.CooldownBuffLead(id)
+			local key = lead or id
+			if not done[key] then
+				done[key] = true
+				keys[#keys + 1] = key
+			end
+		end
+		return keys
+	end
+
 	-- A bar's rows (tab: its group; ids its spells, in order): lays out, gives the height.
 	-- (Not grid.Show: that hid the frame's own Show, 2026-11-22.)
 	function grid.ShowBar(tab, ids)
@@ -2410,7 +2513,7 @@ function ns.CooldownGrid(parent, opts)
 		end
 		state.tab, state.ids = tab, ids or {}
 		local listed = {}
-		for _, id in ipairs(state.ids) do listed[id] = true end
+		for _, key in ipairs(grid.RowKeys()) do listed[key] = true end
 		for key in pairs(state.selected) do
 			if not listed[key] then state.selected[key] = nil end
 		end

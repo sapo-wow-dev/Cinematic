@@ -19,6 +19,16 @@
 --              (icons alone, troubles), the pop-up (and at the right edge), the
 --              editor, ticked rows, Look, the buffs bar (a screenshot each)
 --  10 button   Open CDM clicked: the game's window opens, Close CDM; again: shut
+--  11 missing  Missing (UI/CooldownMissing.lua): a tracked buff that's off you,
+--              set Missing, shows (the game hides it with Hide When Inactive)
+--              and stays; one that's on you fades; put back, hidden again; a
+--              stand-in of our own at a hidden icon's place (way A2), shots
+--  12 missingfight  the same through a fight: shown, not refused, on/off
+--              read, no errors (the one thing to do: attack something)
+--  13 missinggroup  buffs that count as one: any one (Blood Pact, your imp's,
+--              counts), each, none on; the group's row on the page, Ungroup
+--  14 missingalts  the ready-made alternatives' names here; the hint under a
+--              Missing buff on the page (nothing to do)
 -- Its settings and CineMode are put back after (and at the next login if a
 -- /reload cuts it short). Offline: Tools/offline/cooldowngrid.lua. Into
 -- CinematicDB.cdmGridTestLog. Dev copy only.
@@ -27,7 +37,7 @@ local _, ns = ...
 local KEYS = { "cooldownPlaceGroups", "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells",
 	"cooldownReadyOnly", "cooldownEarlyOn", "cooldownReadyEarly", "cooldownNeedsPower", "cooldownReadyAnyTime",
 	"cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow", "cooldownGroupDefaults",
-	"cooldownFlashReady", "cooldownRowSettings" }
+	"cooldownFlashReady", "cooldownRowSettings", "cooldownBuffMode", "cooldownBuffGroups" }
 local PLACES = { "world", "city", "inn", "dungeon", "raid", "bg" }
 
 local function Copy(value)
@@ -206,11 +216,139 @@ local function Audit(r, label, root)
 		table.concat(cut, " | "), table.concat(gold, " | "), table.concat(overlaps, " | ")))
 end
 
+-- Missing (steps 11-12): the tracked buffs bar's icons, one off you and one on.
+local missing = {} -- { off = { icon, id }, on = { icon, id } }
+local function BuffItems()
+	local items = {}
+	ns.EachCooldownIcon(function(icon, id, bar)
+		if bar == "BuffIconCooldownViewer" then items[#items + 1] = { icon = icon, id = id } end
+	end, true)
+	return items
+end
+local function Plain(fn, ...)
+	local ok, value = pcall(fn, ...)
+	if not ok or (issecretvalue and issecretvalue(value)) then return nil end
+	return value
+end
+local function IconLine(item)
+	local icon = item.icon
+	local tex = icon.Icon
+	return ("spell %s cooldownID %s on=%s you=%s shown=%s alpha=%s protected=%s desat=%s here=%s"):format(
+		tostring(item.id), tostring(icon.cooldownID), tostring(ns.CooldownBuffActive(icon)), tostring(ns.CooldownBuffOnYou(icon)),
+		tostring(Plain(icon.IsShown, icon)), tostring(Plain(icon.GetAlpha, icon)),
+		tostring(Plain(icon.IsProtected, icon)), tostring(tex and tex.IsDesaturated and Plain(tex.IsDesaturated, tex)),
+		tostring(ns.CooldownMissingShownHere(icon)))
+end
+-- Both icons set Missing, the rest as they were; cells and scenes cleared so
+-- their own mode decides. False (and skips) when it can't.
+local function SetupMissing(r, onCheck)
+	if not ns.PageOn("handleCooldowns") then r:Skip("the Cooldown Manager page is off") return false end
+	local viewer = _G.BuffIconCooldownViewer
+	if not viewer then r:Skip("no tracked buffs bar (BuffIconCooldownViewer)") return false end
+	r:Fields("tracked buffs bar", { shown = function() return viewer:IsShown() end,
+		hideWhenInactive = function() return viewer.hideWhenInactive end,
+		protected = function() return viewer:IsProtected() end, fight = function() return InCombatLockdown() end })
+	-- (Looked up fresh each time: run 1 kept the buff it found on as "on"
+	-- after it was right-clicked off, one buff as both, 2026-11-23.)
+	local function Find()
+		wipe(missing)
+		for _, item in ipairs(BuffItems()) do
+			if item.icon.cooldownID ~= nil then
+				if ns.CooldownBuffActive(item.icon) then missing.on = missing.on or item
+				else missing.off = missing.off or item end
+			end
+		end
+		return missing.off
+	end
+	-- (No tracked buff at all: nothing to right-click off. The full run on a
+	-- shaman with none waited on that till a /reload, 2026-11-23.)
+	local tracked = 0
+	for i, item in ipairs(BuffItems()) do
+		r:Log(("  item %d: %s"):format(i, IconLine(item)))
+		if item.icon.cooldownID ~= nil then tracked = tracked + 1 end
+	end
+	if tracked == 0 then
+		r:Skip("no tracked buff in your Cooldown Manager (run it on a character with one, a warlock's Demon Skin)")
+		return false
+	end
+	for _, key in ipairs(KEYS) do r:Set(key, Copy(ns.db[key]) or {}) end
+	ns.db.cooldownPlaceGroups, ns.db.cooldownBuffCells, ns.db.cooldownGroupCells = {}, {}, {}
+	Find()
+	-- (A buff on you, set Missing first: it fades. With one tracked buff, the
+	-- same one is then right-clicked off below: no second thing to do.)
+	if onCheck and missing.on then
+		local on = missing.on
+		ns.db.cooldownBuffMode[on.id] = "missing"
+		Fresh()
+		ns.CooldownMissingPass()
+		r:Sleep(1.5)
+		r:Log("set Missing while on you: " .. IconLine(on))
+		r:Verdict((Plain(on.icon.GetAlpha, on.icon) or 1) < 0.1, "the icon of a buff on you fades, set Missing")
+		r:Shot("Missing: the buff on you faded", { behind = viewer })
+	elseif onCheck then
+		r:Skip("no tracked buff on you: the fade while it's on isn't checked")
+	end
+	if not Find() then
+		r:WaitFor("Right-click one of your tracked buffs off (Demon Skin...).", { check = Find })
+	end
+	if not missing.off then r:Skip("no tracked buff off you") return false end
+	ns.db.cooldownBuffMode[missing.off.id] = "missing"
+	if missing.on then ns.db.cooldownBuffMode[missing.on.id] = "missing" end
+	Fresh()
+	ns.CooldownMissingPass()
+	r:Log(("off: %s; on: %s"):format(IconLine(missing.off), missing.on and IconLine(missing.on) or "none (every tracked buff off you)"))
+	return true
+end
+-- Your buffs as read here (any caster, out of fights): name=who, and the
+-- first aura's raw fields.
+local function LogBuffRead(r, label)
+	local okRead, read = pcall(ns.CooldownReadBuffs)
+	local parts = {}
+	for name, who in pairs(ns.CooldownReadBuffNames()) do parts[#parts + 1] = name .. "=" .. who end
+	table.sort(parts)
+	r:Log(("%s: read %s; %s"):format(label, tostring(okRead and read), #parts > 0 and table.concat(parts, ", ") or "none"))
+	if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and not InCombatLockdown() then
+		for i = 1, 3 do
+			local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+			if not ok or type(aura) ~= "table" then break end
+			r:Fields(("%s aura %d"):format(label, i), { name = function() return aura.name end,
+				sourceUnit = function() return aura.sourceUnit end, spellId = function() return aura.spellId end,
+				isFromPlayerOrPlayerPet = function() return aura.isFromPlayerOrPlayerPet end })
+		end
+	end
+end
+-- The stand-in (way A2): our own texture at a hidden icon's place.
+local standIn
+local function StandIn(r, icon)
+	if not standIn then
+		standIn = CreateFrame("Frame", nil, UIParent)
+		standIn.tex = standIn:CreateTexture(nil, "ARTWORK")
+		standIn.tex:SetAllPoints()
+		standIn.edge = standIn:CreateTexture(nil, "BACKGROUND")
+		standIn.edge:SetPoint("TOPLEFT", -2, 2)
+		standIn.edge:SetPoint("BOTTOMRIGHT", 2, -2)
+		standIn.edge:SetColorTexture(1, 0.85, 0.35, 0.9)
+	end
+	local _, file = r:Probe("hidden icon's texture", function() return icon.Icon:GetTexture() end)
+	r:Probe("hidden icon's center", function() return icon:GetCenter() end)
+	r:Probe("hidden icon's size, scale", function() return icon:GetWidth(), icon:GetEffectiveScale() end)
+	standIn:ClearAllPoints()
+	local okPoint = pcall(standIn.SetPoint, standIn, "CENTER", icon, "CENTER")
+	local w = Plain(icon.GetWidth, icon) or 36
+	local scale = Plain(icon.GetEffectiveScale, icon) or 1
+	local size = w * scale / UIParent:GetEffectiveScale()
+	standIn:SetSize(size, size)
+	pcall(standIn.tex.SetTexture, standIn.tex, file)
+	standIn:Show()
+	return standIn, okPoint
+end
+
 ns.TestKit.Define({
 	name = "cdmgrid",
 	key = "cdmGridTest",
 	title = "Cooldown Manager grid",
 	about = "the CDM page's grid: groups, cells, the bar's row, choices, editor, ticks, Look, nothing to do",
+	needs = "A warlock (Demon Skin, imp out) and a mob or training dummy",
 	settings = KEYS,
 	context = function()
 		-- (A new run: nothing kept from the last one, whose groups were put back.)
@@ -627,6 +765,257 @@ ns.TestKit.Define({
 			r:Sleep(0.5)
 			r:Verdict(button:GetText() == ns.L["Open CDM"] and not (window and window:IsShown()),
 				("clicked again: %s"):format(tostring(button:GetText())))
+		end },
+		{ key = "missing", proven = "cdmgrid run 2 (2026-11-23, Forever): PASS shown, stays 8/8, put back hidden, stand-in at the slot (shot)", title = "Missing: a tracked buff's icon while the buff is off you", seconds = 4, run = function(r)
+			if InCombatLockdown() then return r:Skip("in a fight: leave it first") end
+			if not SetupMissing(r, true) then return end
+			local viewer = _G.BuffIconCooldownViewer
+			local off, on = missing.off, missing.on
+			r:Sleep(1.5)
+			r:Log("after 1.5 s, off: " .. IconLine(off))
+			r:Verdict(Plain(off.icon.IsShown, off.icon) == true and (Plain(off.icon.GetAlpha, off.icon) or 0) > 0.9,
+				"the icon of a buff off you shows, set Missing (hideWhenInactive " .. tostring(viewer.hideWhenInactive) .. ")")
+			-- (Stays shown: the game hides it again on its own updates.)
+			local shownCount = 0
+			for _ = 1, 8 do
+				r:Sleep(0.5)
+				if Plain(off.icon.IsShown, off.icon) then shownCount = shownCount + 1 end
+			end
+			local stats = ns.cooldownMissingStats
+			r:Verdict(shownCount == 8, ("stays shown: %d of 8 looks over 4 s; shown here %d times, refused %d"):format(
+				shownCount, stats.shown, stats.refused))
+			r:Probe("icon art", function() return off.icon.Icon:GetTexture() end)
+			r:Shot("Missing: the buff off you shown", { behind = viewer })
+			-- (Put back: Missing off, the game's hidden again.)
+			ns.db.cooldownBuffMode[off.id] = nil
+			if on then ns.db.cooldownBuffMode[on.id] = nil end
+			Fresh()
+			ns.CooldownMissingPass()
+			r:Sleep(1.5)
+			r:Log("put back, off: " .. IconLine(off))
+			if viewer.hideWhenInactive then
+				r:Verdict(Plain(off.icon.IsShown, off.icon) == false, "put back: hidden again, as the game has it")
+			else
+				r:Skip("Hide When Inactive is off: the game shows it anyway")
+			end
+			-- (Way A2: our own stand-in at the hidden icon's place.)
+			local frame, okPoint = StandIn(r, off.icon)
+			r:Sleep(0.3)
+			-- (Both values: Plain gave the first alone, run 1's Lua error.)
+			local fx, fy = frame:GetCenter()
+			local okCenter, ix, iy = pcall(off.icon.GetCenter, off.icon)
+			if not okCenter or (issecretvalue and (issecretvalue(ix) or issecretvalue(iy))) then ix, iy = nil, nil end
+			local fs, is = frame:GetEffectiveScale(), Plain(off.icon.GetEffectiveScale, off.icon) or 1
+			r:Verdict(okPoint and fx and fy and ix and iy and math.abs(fx * fs - ix * is) < 2 and math.abs(fy * fs - iy * is) < 2,
+				("stand-in at the hidden icon's place: anchored %s, ours %s,%s theirs %s,%s"):format(tostring(okPoint),
+				tostring(fx), tostring(fy), tostring(ix), tostring(iy)))
+			r:Shot("the stand-in (gold edge) at the hidden icon's place", { behind = viewer })
+			frame:Hide()
+		end },
+		{ key = "missinggroup", proven = "cdmgrid runs 4 + 6 (2026-11-23, Forever): any one / each / none on, the group's row, Ungroup clear and splits back", title = "Buffs that count as one: Missing any one / each, the group's row and Ungroup", seconds = 4, run = function(r)
+			if InCombatLockdown() then return r:Skip("in a fight: leave it first") end
+			local PACT, ARMOR = 6307, 706 -- (Blood Pact: your imp's; Demon Armor: not on you)
+			local viewer = _G.BuffIconCooldownViewer
+			local lead
+			-- (Demon Skin off you, with your imp's Blood Pact on: the group of
+			-- the two has one on, so any one shows nothing and each shows Skin.)
+			if not r:Proven("cdmgrid run 4 (2026-11-23, Forever): any one with Blood Pact on = no reminder; each = shown; none on = Skin's icon") then
+				if not SetupMissing(r, false) then return end
+				local off = missing.off
+				lead = ns.BaseSpell(off.id)
+				ns.db.cooldownBuffMode = {}
+				LogBuffRead(r, "before")
+				local function Shown(icon)
+					return Plain(icon.IsShown, icon) == true and (Plain(icon.GetAlpha, icon) or 0) > 0.9
+				end
+				local function Settle()
+					Fresh()
+					ns.CooldownMissingPass()
+					r:Sleep(1.5)
+				end
+				if ns.CooldownReadBuffNames()["Blood Pact"] == "other" then
+					ns.SetCooldownBuffGroup({ lead, PACT })
+					ns.db.cooldownBuffMode[lead] = "missing"
+					Settle()
+					r:Log("any one, Blood Pact on: " .. IconLine(off))
+					r:Verdict(not Shown(off.icon), "Missing: any one, Blood Pact (your imp's) on you: no reminder")
+					ns.db.cooldownBuffMode[lead] = "missingeach"
+					Settle()
+					r:Log("each, Blood Pact on: " .. IconLine(off))
+					r:Verdict(Shown(off.icon), "Missing: each: Demon Skin's own reminder shows")
+					ns.UngroupCooldownBuff(lead)
+			else
+				r:Skip("no Blood Pact on you (summon your imp to check a group member cast by another)")
+			end
+			ns.db.cooldownBuffMode = {}
+			ns.SetCooldownBuffGroup({ lead, ARMOR })
+			ns.db.cooldownBuffMode[lead] = "missing"
+			Settle()
+			r:Log("any one, none on: " .. IconLine(off))
+			r:Verdict(Shown(off.icon), "Missing: any one, none of the group on you: Demon Skin's icon is the reminder")
+			r:Shot("a group's reminder (Demon Skin or Demon Armor)", { behind = viewer })
+			else
+				-- (Proven: the page alone, on the first tracked buff, its settings undone after.)
+				local first
+				for _, item in ipairs(BuffItems()) do
+					if item.icon.cooldownID ~= nil then first = first or item end
+				end
+				if not first then return r:Skip("no tracked buff in your Cooldown Manager") end
+				for _, key in ipairs(KEYS) do r:Set(key, Copy(ns.db[key]) or {}) end
+				lead = ns.BaseSpell(first.id)
+				ns.SetCooldownBuffGroup({ lead, ARMOR })
+				ns.db.cooldownBuffMode[lead] = "missing"
+			end
+			-- The page: the group's row, its members under it; ticked: Ungroup.
+			local ok, err = pcall(ns.OpenOptionsAt, "Cooldown Manager")
+			if not ok then return r:Fail("couldn't open the page: " .. tostring(err)) end
+			r:Sleep(0.4)
+			pcall(ns.CdmShowSpells, "buffs")
+			r:Sleep(0.3)
+			local grid, _, panel = Grid()
+			if not (grid and grid:IsVisible()) then return r:Fail("the grid isn't shown") end
+			local row = RowOf(grid, lead)
+			r:Verdict(row ~= nil and row.sub:IsShown() and (row.sub:GetText() or ""):find("Demon Armor", 1, true) ~= nil,
+				("the group's row: %s, under it %s"):format(row and tostring(row.label:GetText()) or "none",
+				row and row.sub:IsShown() and tostring(row.sub:GetText()) or "nothing"))
+			r:Shot("the Buffs tab, a group's row", { behind = panel })
+			-- (As the tick box's click does: Changed, which fits the panel too.
+			-- Layout alone left the bar 8 px under the panel's edge, run 4.)
+			grid.state.selected[lead] = true
+			grid.Changed()
+			r:Sleep(0.3)
+			local button = grid.bulkButtons.group
+			r:Verdict(button:IsShown() and button.text and button.text:GetText() == ns.L["Ungroup"],
+				("ticked alone: the bar's group button says %s"):format(tostring(button.text and button.text:GetText())))
+			local hits = r:Overlaps(button, panel)
+			if #hits > 0 then r:Log("Ungroup covers: " .. table.concat(hits, ", ")) end
+			r:Verdict(#hits == 0, "Ungroup: nothing under it")
+			r:Shot("one group ticked: Ungroup", { behind = panel })
+			button:Click()
+			r:Sleep(0.3)
+			-- (Not "no line under it": still on Missing, its ready-made
+			-- alternatives show there, run 6.)
+			r:Verdict(ns.CooldownBuffLead(ARMOR) == nil and not grid.IsGroup(lead),
+				("Ungroup: split back, the row a single buff again (under it now: %s)"):format(
+				RowOf(grid, lead) and RowOf(grid, lead).sub:IsShown() and tostring(RowOf(grid, lead).sub:GetText()) or "nothing"))
+		end },
+		{ key = "missingalts", proven = "cdmgrid run 6 (2026-11-23, Forever): sets' names (Salvation, Sanctuary, Light, Fel / Molten Armor, Water Shield not on Forever), the hint under Demon Skin", title = "Ready-made alternatives: their names on this client, the hint under a Missing buff", seconds = 4, run = function(r)
+			if InCombatLockdown() then return r:Skip("in a fight: leave it first") end
+			-- Each set's names as this client gives them (an ID it hasn't got drops out).
+			local GetName = (C_Spell and C_Spell.GetSpellName) or function(id) return (GetSpellInfo(id)) end
+			ns.CooldownBuffAlternativesReset()
+			local missingIDs = {}
+			for _, set in ipairs(ns.COOLDOWN_BUFF_ALTERNATIVES) do
+				local names = {}
+				for _, id in ipairs(set) do
+					local ok, name = pcall(GetName, id)
+					if ok and type(name) == "string" then names[#names + 1] = name
+					else missingIDs[#missingIDs + 1] = tostring(id) end
+				end
+				r:Log("set: " .. table.concat(names, " / "))
+			end
+			r:Log("IDs this client hasn't got: " .. (#missingIDs > 0 and table.concat(missingIDs, ", ") or "none"))
+			r:Verdict((ns.CooldownBuffAlternatives(GetName(687) or "?") or {})[1] ~= nil,
+				"Demon Skin has its alternatives here: " .. table.concat(ns.CooldownBuffAlternatives(GetName(687) or "?") or { "none" }, ", "))
+			-- The page: the first tracked buff with alternatives set Missing, the hint under it.
+			local pick
+			for _, item in ipairs(BuffItems()) do
+				local okName, name = pcall(GetName, item.id)
+				if not pick and item.icon.cooldownID ~= nil and okName and ns.CooldownBuffAlternatives(name) then pick = item end
+			end
+			if not pick then return r:Skip("no tracked buff here with ready-made alternatives") end
+			for _, key in ipairs(KEYS) do r:Set(key, Copy(ns.db[key]) or {}) end
+			ns.db.cooldownBuffGroups, ns.db.cooldownBuffCells, ns.db.cooldownPlaceGroups = {}, {}, {}
+			local key = ns.BaseSpell(pick.id)
+			ns.db.cooldownBuffMode = { [key] = "missing" }
+			Fresh()
+			local ok, err = pcall(ns.OpenOptionsAt, "Cooldown Manager")
+			if not ok then return r:Fail("couldn't open the page: " .. tostring(err)) end
+			r:Sleep(0.4)
+			pcall(ns.CdmShowSpells, "buffs")
+			r:Sleep(0.3)
+			local grid, _, panel = Grid()
+			if not (grid and grid:IsVisible()) then return r:Fail("the grid isn't shown") end
+			local row = RowOf(grid, key)
+			local sub = row and row.sub:IsShown() and row.sub:GetText()
+			r:Verdict(type(sub) == "string" and sub ~= "" and not row.sub:IsTruncated(),
+				("under %s: %s"):format(row and tostring(row.label:GetText()) or "no row", tostring(sub)))
+			r:Shot("a Missing buff, its ready-made alternatives under it", { behind = panel })
+		end },
+		{ key = "missingfight", proven = "cdmgrid run 4 (2026-11-23, Forever): off 4/4 shown, on 17/17 faded in a 14 s fight, 0 refused, 0 errors", title = "Missing in a fight: shown while off you, faded while on, not refused, no errors", run = function(r)
+			if InCombatLockdown() then return r:Skip("in a fight already: start out of one") end
+			-- (The fade checked first while it's on you: run 3 asked to right-click
+			-- it off and never saw it on, 2026-11-23.)
+			if not SetupMissing(r, true) then return end
+			local stats = ns.cooldownMissingStats
+			local refusedBefore = stats.refused
+			local items = { missing.off }
+			if missing.on and missing.on.icon ~= missing.off.icon then items[2] = missing.on end
+			-- (Any caster: your buffs read here, the icon's names, before the fight.)
+			LogBuffRead(r, "before the fight")
+			for _, item in ipairs(items) do
+				r:Log(("names of spell %s: %s"):format(tostring(item.id), table.concat(ns.CooldownBuffNames(item.icon), ", ")))
+			end
+			r:Sleep(1)
+			r:WaitFor("Attack something (a training dummy or any mob). In the fight, cast Demon Skin once. Fight about 10 seconds, then end it.",
+				{ events = { "PLAYER_REGEN_DISABLED" } })
+			-- (The lockdown comes a moment after the event: run 2 looked at once,
+			-- found none, and measured nothing, 2026-11-23.)
+			local function Fighting() return InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")) end
+			r:Sleep(0.3)
+			-- Per look and icon: off you, shown in full; on you, faded. The two
+			-- looks after its buff goes on or off aren't counted (the fade's time).
+			local offLooks, offOk, onLooks, onOk, looks, lastLine = 0, 0, 0, 0, 0, nil
+			local was, settle = {}, {}
+			local started = GetTime()
+			while Fighting() and GetTime() - started < 120 do
+				looks = looks + 1
+				for _, item in ipairs(items) do
+					local icon = item.icon
+					local on = ns.CooldownBuffOnYou(icon)
+					if was[icon] ~= nil and was[icon] ~= on then settle[icon] = 2 end
+					was[icon] = on
+					if (settle[icon] or 0) > 0 then
+						settle[icon] = settle[icon] - 1
+					elseif on then
+						onLooks = onLooks + 1
+						if (Plain(icon.GetAlpha, icon) or 1) < 0.1 then onOk = onOk + 1 end
+					else
+						offLooks = offLooks + 1
+						if Plain(icon.IsShown, icon) and (Plain(icon.GetAlpha, icon) or 0) > 0.9 then offOk = offOk + 1 end
+					end
+				end
+				local parts = {}
+				for _, item in ipairs(items) do parts[#parts + 1] = IconLine(item) end
+				local line = "in the fight: " .. table.concat(parts, "; ")
+				if line ~= lastLine then
+					r:Log(line)
+					lastLine = line
+				end
+				if looks == 4 then r:Shot("Missing in a fight", { behind = _G.BuffIconCooldownViewer }) end
+				r:Sleep(0.5)
+			end
+			r:Log(("fight %.1f s, %d looks; off you %d (shown %d), on you %d (faded %d)"):format(GetTime() - started, looks,
+				offLooks, offOk, onLooks, onOk))
+			r:Verdict(looks >= 4, ("the fight was looked at: %d looks"):format(looks))
+			if offLooks > 0 then
+				r:Verdict(offOk == offLooks, ("in the fight, off you: shown %d of %d looks"):format(offOk, offLooks))
+			else
+				r:Skip("the buff was never off you in the fight")
+			end
+			if onLooks > 0 then
+				r:Verdict(onOk == onLooks, ("in the fight, on you: faded %d of %d looks"):format(onOk, onLooks))
+			else
+				r:Skip("the buff was never on you in the fight (cast it in the fight to check the fade)")
+			end
+			r:Verdict(stats.refused == refusedBefore, ("Shows refused in the fight (protected icon): %d"):format(stats.refused - refusedBefore))
+			r:Sleep(2)
+			LogBuffRead(r, "after the fight")
+			r:Log("after the fight: " .. IconLine(missing.off))
+			local icon = missing.off.icon
+			r:Verdict(ns.CooldownBuffOnYou(icon) and (Plain(icon.GetAlpha, icon) or 1) < 0.1
+				or not ns.CooldownBuffOnYou(icon) and Plain(icon.IsShown, icon) == true,
+				"after the fight: shown while off you, faded while on")
 		end },
 	},
 })

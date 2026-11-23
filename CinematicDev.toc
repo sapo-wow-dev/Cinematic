@@ -77,6 +77,7 @@ Support\ShamanPower.lua
 Frames.lua
 UI\QuestStandIn.lua
 UI\CooldownStacks.lua
+UI\CooldownMissing.lua
 UI\CooldownRules.lua
 UI\CooldownGrid.lua
 Visions\HealVisionFrames.lua

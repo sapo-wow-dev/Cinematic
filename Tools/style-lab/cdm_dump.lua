@@ -18,6 +18,8 @@ client, outPath = client or "retail", outPath or "Tools/style-lab/out/cdm.json"
 local SPELLS = {
 	{ 1978, "Serpent Sting", 132204 }, { 3044, "Arcane Shot", 132218 }, { 2973, "Raptor Strike", 132223 },
 	{ 58984, "Shadowmeld", 132089 }, { 1126, "Mark of the Wild", 136078 }, { 5487, "Bear Form", 132276 },
+	{ 687, "Demon Skin", 136185 }, { 706, "Demon Armor", 136185 }, { 21849, "Gift of the Wild", 136038 },
+	{ 28176, "Fel Armor", 136185 },
 }
 local NAME, ICON = {}, {}
 for _, s in ipairs(SPELLS) do NAME[s[1]], ICON[s[1]] = s[2], s[3] end
@@ -98,6 +100,9 @@ ns.CooldownManagerSpells = function()
 	for _, id in ipairs(ESSENTIAL) do list[#list + 1] = { id = id, group = "essential" } end
 	list[#list + 1] = { id = 1126, group = "buffs" }
 	list[#list + 1] = { id = 5487, group = "buffs" }
+	list[#list + 1] = { id = 687, group = "buffs" }
+	list[#list + 1] = { id = 21849, group = "buffs" }
+	list[#list + 1] = { id = 706, group = "buffs" }
 	return list
 end
 
@@ -148,7 +153,7 @@ local function Reset(tab)
 	for _, name in ipairs({ "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells", "cooldownReadyOnly",
 		"cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow", "cooldownBuffMode",
 		"cooldownFlashReady", "cooldownRowSettings", "cooldownGroupDefaults", "cooldownEarlyOn", "cooldownReadyEarly",
-		"cooldownNeedsPower", "cooldownReadyAnyTime" }) do
+		"cooldownNeedsPower", "cooldownReadyAnyTime", "cooldownBuffGroups" }) do
 		db[name] = {}
 	end
 	wipe(grid.state.selected)
@@ -156,6 +161,7 @@ local function Reset(tab)
 	grid.state.selecting = nil
 	ns.CdmShowSpells(tab or "essential")
 end
+local function ReShow(tab) ns.CdmShowSpells(tab) end
 local function Scene(id, name, places, combat)
 	local list = db.cooldownPlaceGroups
 	list[#list + 1] = { id = id, name = name, places = places, combat = combat or "any" }
@@ -242,6 +248,44 @@ local STATES = {
 		DUNGEON()
 		Cell("buff", 1126, 1, "combat")
 		Cell("buff", 5487, 1, "hidden")
+	end },
+	{ id = "s20", name = "20 Buffs: three ticked, Count as one buff", set = function()
+		Reset("buffs")
+		grid.state.selected[687] = true
+		grid.state.selected[706] = true
+		grid.state.selected[1126] = true
+	end },
+	{ id = "s21", name = "21 Buffs: two groups (any one / each by scene), a single Missing", set = function()
+		Reset("buffs")
+		ns.SetCooldownBuffGroup({ 687, 706 })
+		ns.SetCooldownBuffGroup({ 1126, 21849 })
+		Scene(1, "Solo", { world = true }, "any")
+		Scene(2, "Raid", { raid = true }, "any")
+		Cell("buff", 687, 1, "missing")
+		Cell("buff", 687, 2, "missingeach")
+		Cell("buff", 1126, 1, "missing")
+		ns.CooldownSetOtherwise("buff", 5487, "buffs", "missing")
+		ReShow("buffs")
+	end },
+	{ id = "s22", name = "22 Buffs: a group's pop-up (any one / each)", set = function()
+		Reset("buffs")
+		ns.SetCooldownBuffGroup({ 687, 706 })
+		Scene(1, "Solo", { world = true }, "any")
+		ReShow("buffs")
+		Click(RowOf(687).cells[1])
+	end },
+	{ id = "s23", name = "23 Buffs: a group ticked alone (Copy row, Ungroup)", set = function()
+		Reset("buffs")
+		ns.SetCooldownBuffGroup({ 687, 706 })
+		ReShow("buffs")
+		grid.state.selected[687] = true
+	end },
+	{ id = "s24", name = "24 Buffs: Missing on single buffs, their ready-made alternatives under them", set = function()
+		Reset("buffs")
+		Scene(1, "Solo", { world = true }, "any")
+		ns.CooldownSetOtherwise("buff", 687, "buffs", "missing")
+		Cell("buff", 1126, 1, "missing")
+		ReShow("buffs")
 	end },
 	{ id = "s14", name = "14 Previewing a dungeon fight", set = function()
 		Reset()
