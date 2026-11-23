@@ -3832,11 +3832,17 @@ function ns.SaveCVar(cvar)
 	end
 end
 
+-- (Let go too, and written as ours: a plain SetCVar looked like an outside
+-- change to a kept set (Combat Text Style's), which wrote its value back a
+-- frame later; a Reset not reloaded in that frame lost yours for good.
+-- Audit 2026-11-23, Tools/audits/2026-11-23-cvar-reset-restore.md.)
 function ns.RestoreCVar(cvar)
 	local value = ns.db.savedCVars[cvar]
 	if value ~= nil then
 		ns.LogDetail("cvar", ("%s back to %s"):format(cvar, tostring(value)))
-		SetCVar(cvar, value)
+		heldCVars[cvar:lower()] = nil
+		overridden[cvar:lower()] = nil
+		WriteCVar(cvar, value)
 		ns.db.savedCVars[cvar] = nil
 	end
 end
