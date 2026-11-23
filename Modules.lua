@@ -305,7 +305,8 @@ function ns.RunModules()
 		if not loaded[name] then
 			for _, global in ipairs(list) do
 				if rawget(_G, global) == nil then
-					_G[global] = function() if ns.Print then ns.Print(ns.ModuleLeftOutLine(name)) end end
+					-- (Our own key binding's global, only while it doesn't exist.)
+					_G[global] = function() if ns.Print then ns.Print(ns.ModuleLeftOutLine(name)) end end -- dont-ok: test-global-swap-taint
 				end
 			end
 		end

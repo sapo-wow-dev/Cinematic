@@ -883,6 +883,8 @@ function Run:Overlaps(frame, root, also)
 	local function Mark(f)
 		if not f or mine[f] then return end
 		mine[f] = true
+		-- (A font string or texture given: it has no regions or children.)
+		if not f.GetChildren then return end
 		for _, region in ipairs({ f:GetRegions() }) do mine[region] = true end
 		for _, child in ipairs({ f:GetChildren() }) do Mark(child) end
 	end

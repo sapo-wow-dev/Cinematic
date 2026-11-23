@@ -5709,6 +5709,27 @@ STEPS[#STEPS + 1] = function()
 	ns.db.nameScaleV1, ns.db.nameScaleV2, ns.db.nameScaleV3 = nil, nil, true
 end
 
+-- Entering a PvP fight's card (Cards.lua, 2026-11-23) is on for a new
+-- install, off for one that had Cinematic before: it'd change what their
+-- fights show unasked. Their settings, saved profile copies and reset
+-- points without it get it off. Once.
+-- (db: the saved settings; the in-game test hands in pretend ones,
+-- Dev/PvpCardTest.lua.)
+function ns.PvpCardOffForOld(db)
+	local function Off(store)
+		if type(store) == "table" and store.cardCombatPvpOn == nil then store.cardCombatPvpOn = false end
+	end
+	Off(db)
+	for _, list in ipairs({ db.profiles or false, db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do Off(saved) end
+	end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.pvpCardOffV1 then return end
+	if not ns.newInstall then ns.PvpCardOffForOld(ns.db) end
+	ns.db.pvpCardOffV1 = true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only

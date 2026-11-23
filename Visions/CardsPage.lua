@@ -885,6 +885,8 @@ end
 -- Events: each event's tick and Show in row.
 local TIPS = {
 	combatIn = "As a fight starts: a word (Combat), a pulse around the screen's edges and a sound.",
+	combatPvp = "As a fight against players starts (in a battleground, an arena or out in the world), its own " ..
+		"words and look in place of the Entering combat card.",
 	combatOut = "As a fight ends: a word (Respite) and a sound. Skipped after fights shorter than the time set " ..
 		"on the Settings tab.",
 	boss = "A boss's name as its fight starts, or earlier as you first target it or get near it, with the " ..
@@ -1219,6 +1221,8 @@ function ns.CreateCardsPanel(kit)
 			empty = L["No events use this card type."], collapsible = true, onOpen = Show,
 			count = function(n) return n == 1 and L["1 card"] or L["%d cards"]:format(n) end })
 		stack:Add(rowList, "label")
+		-- (An event's row opened, scrolled to and flashed: Dev/PvpCardTest.lua.)
+		function ns.CardEventFlash(id) rowList:Flash(id) end
 		stack:Note(content, L["+2 own means the card has two settings of its own on top of its card type (gold dots mark them " ..
 			"on the Style tab). The arrow on a row moves it to another card type."], NOTE_W)
 
@@ -1670,6 +1674,11 @@ function ns.CreateCardSettingsPanel(kit)
 		WordsRow(kit, content, stack, "combatTextIn", L["Words:"],
 			L["The words as you go into a fight; leave empty for none."])
 	end)
+	parts.Part("combatPvp", function()
+		Header(L["Words"])
+		WordsRow(kit, content, stack, "combatTextPvp", L["Words:"],
+			L["The words as you go into a fight against players; leave empty for none."])
+	end)
 	parts.Part("combatOut", function()
 		Header(L["Words"])
 		WordsRow(kit, content, stack, "combatTextOut", L["Words:"],
@@ -1943,6 +1952,7 @@ function ns.CreateCardSoundsPanel(kit)
 		-- own, read as the card shows.)
 		local parts = Parts(kit, content, stack, function() return CARD.now end)
 		parts.Part("combatIn", function() ns.CombatSoundRulesSection(kit, content, stack) end)
+		parts.Part("combatPvp", function() ns.CombatSoundRulesSection(kit, content, stack) end)
 		parts.Part("combatOut", function() ns.CombatSoundRulesSection(kit, content, stack) end)
 		parts.Part("boss", function() ns.CombatSoundRulesSection(kit, content, stack, true) end)
 		parts.Part("time", function() ns.CombatSoundRulesSection(kit, content, stack, "time") end)

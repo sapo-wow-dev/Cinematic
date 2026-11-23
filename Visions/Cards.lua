@@ -65,6 +65,10 @@ local HELD_MAX = 300 -- a card held through a fight longer than this is dropped
 local EVENTS = {
 	{ id = "combatIn", name = "Entering combat", on = "combatOnEnter", priority = 50,
 		icon = "Interface\\Icons\\Ability_DualWield", fight = true },
+	-- (In place of Entering combat's card when the fight's against players:
+	-- CombatVision.lua. Its look is Entering combat's until it has its own.)
+	{ id = "combatPvp", name = "Entering a PvP fight", on = "cardCombatPvpOn", priority = 50,
+		icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance", parent = "combatIn", fight = true },
 	{ id = "combatOut", name = "Leaving combat", on = "combatOnLeave", priority = 50, icon = 132320, fight = true },
 	{ id = "boss", name = "Boss", on = "cardBossOn", priority = 80,
 		icon = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull", fight = true },
@@ -150,7 +154,7 @@ ns.CARD_BY_ID = BY_ID
 -- The Events tab's groups, in its order, a title over each (as the emote
 -- page's moments). An event left out of them goes in the last.
 ns.CARD_GROUPS = {
-	{ name = "Combat", "combatIn", "combatOut", "attack", "streak", "death", "revived" },
+	{ name = "Combat", "combatIn", "combatPvp", "combatOut", "attack", "streak", "death", "revived" },
 	{ name = "Bosses and rares", "boss", "bossDown", "cleared", "rare", "felled" },
 	{ name = "Places and travel", "zone", "subzone", "discover", "newZone", "departure", "arrival", "rested", "sleepBag" },
 	{ name = "Your story", "login", "time", "quest" },
@@ -303,7 +307,7 @@ for _, style in ipairs(STYLES) do STYLE_BY_ID[style.id] = style end
 ns.CARD_STYLE_BY_ID = STYLE_BY_ID
 -- The style each event starts from ("follow": the one its parent starts
 -- from).
-local BASES = { combatIn = "danger", combatOut = "respite", attack = "danger", death = "death",
+local BASES = { combatIn = "danger", combatPvp = "follow", combatOut = "respite", attack = "danger", death = "death",
 	levelUp = "milestone", achievement = "milestone", cleared = "milestone", discover = "milestone",
 	newZone = "headline", quest = "milestone", battleground = "place",
 	zone = "place", subzone = "follow", departure = "follow", arrival = "follow", login = "place", boss = "place", duel = "place",
@@ -800,6 +804,10 @@ ns.CardSamples = ns.CardSamples or {}
 local samples = ns.CardSamples
 samples.combatIn = function()
 	return { name = ns.CardWords("combatTextIn"),
+		sound = function() ns.PlayCombatCueSound("enter") end }
+end
+samples.combatPvp = function()
+	return { name = ns.CardWords("combatTextPvp"),
 		sound = function() ns.PlayCombatCueSound("enter") end }
 end
 samples.combatOut = function()

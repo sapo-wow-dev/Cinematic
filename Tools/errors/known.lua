@@ -202,6 +202,27 @@ return {
     source = "memory: combine-bags-taint",
   },
   {
+    id = "test-global-swap-taint",
+    status = "fixed",
+    title = "CompactUnitFrame errors on secret health after a test swapped the game's unit functions",
+    match = { all = { "CompactUnitFrame", "tainted by CinematicDev" }, any = { "maxHealth", "UpdateHealPrediction" } },
+    why = {
+      call = "CompactUnitFrame_UpdateHealPrediction compares secret maxHealth under our taint (x1322)",
+      caller = "none in the stack: the game's raid/party frame update; Dev/PvpCardTest.lua had set _G.UnitExists, UnitGUID, UnitIsPlayer, UnitCanAttack, UnitIsUnit, IsInInstance for one call and put them back",
+      path = "a test pretending a duel by making the game's unit reads say your target is an enemy player",
+      rule = "a global written by addon code stays tainted till /reload, even written back to the same function; every game frame calling it then runs tainted and secret values error",
+      pattern = "writing a Blizzard global for a moment (pretend/stub in a game test)",
+    },
+    dont = "Never write a game global from in-game code, not even for a moment: hand pretend reads in as an argument (ns.CardPvpFight(reads)). Stubbing globals is for the offline stand-in only.",
+    check = { pattern = [[_G(\.(Unit\w+|IsInInstance|GetInstanceInfo|C_\w+)|\[\w+\])\s*=(?!=)]], allow = { "Tools/" } },
+    fix = "2026-11-23: CombatVision.lua's PvP check takes a reads table; the test hands it pretend ones",
+    seen = { "2026-11-23" },
+    example = [[error (Blizzard_UnitFrame, tainted by CinematicDev)
+...ddOns/Blizzard_UnitFrame/Shared/CompactUnitFrame.lua:1205: attempt to compare local 'maxHealth' (a secret number value, while execution tainted by 'CinematicDev')
+[Blizzard_UnitFrame/Shared/CompactUnitFrame.lua]:1205: in function 'CompactUnitFrame_UpdateHealPrediction']],
+    source = "/cine debug pvpcard run 3",
+  },
+  {
     id = "edit-mode-refresh-taints",
     status = "fixed",
     title = "Edit Mode errors on secret values after our code refreshed its layouts",

@@ -279,6 +279,7 @@ Dev\KitCheckTest.lua
 Dev\ReachFightTest.lua
 Dev\PrdKillTest.lua
 Dev\ExitRowTest.lua
+Dev\PvpCardTest.lua
 Dev\PerfTest.lua
 Dev\ResetPopupTest.lua
 Dev\ResetCvarsTest.lua

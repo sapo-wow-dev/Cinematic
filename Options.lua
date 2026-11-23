@@ -2182,18 +2182,36 @@ local function ShowMatch(entry, onPage)
 		return
 	end
 	if not entry.edges then return end
-	-- (once the page has shown and sized itself)
-	C_Timer.After(0.1, function()
+	-- (once the page has shown and sized itself; then looked at again: the
+	-- scroll itself can move what's above it, Card Vision's preview docking
+	-- small as the page scrolls, and its top rows ended up above the view,
+	-- /cine debug pvpcard 2026-11-23. Each look scrolls to where it is now,
+	-- till it's stayed put for three looks: a page made on first open takes
+	-- longer than half a second to settle, run 6.)
+	local function Place()
 		local content, scroll = canvas.content, canvas.scroll
 		local top, contentTop = entry.edges.top:GetTop(), content:GetTop()
-		if not top or not contentTop then return end
+		if not top or not contentTop then return nil end
 		local offset = contentTop - top - 40
 		local range = scroll:GetVerticalScrollRange()
-		if not (issecretvalue and issecretvalue(range)) then
-			scroll:SetVerticalScroll(math.max(0, math.min(offset, range or 0)))
+		if issecretvalue and issecretvalue(range) then return nil end
+		offset = math.max(0, math.min(offset, range or 0))
+		scroll:SetVerticalScroll(offset)
+		return offset
+	end
+	local looks, still, last = 0, 0, nil
+	local function Look()
+		looks = looks + 1
+		local offset = Place()
+		still = (offset and last and math.abs(offset - last) < 1) and still + 1 or 0
+		last = offset
+		if still >= 3 or looks >= 30 then -- (settled, or 3 s at most)
+			Highlight(canvas, entry.edges)
+			return
 		end
-		Highlight(canvas, entry.edges)
-	end)
+		C_Timer.After(0.1, Look)
+	end
+	C_Timer.After(0.1, Look)
 end
 
 -- (For the results window, UI/Find.lua: a match opened as a click on it in

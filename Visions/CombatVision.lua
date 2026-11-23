@@ -16,6 +16,8 @@ DEFAULTS.combatOnLeave = false         -- ...and Leaving combat
 DEFAULTS.combatMinFight = 3            -- no leaving card after a fight shorter than this (seconds)
 DEFAULTS.combatTextIn = "Combat"       -- the words ("": none, just the icon, pulse, bar; these
 DEFAULTS.combatTextOut = "Respite"     -- two shown in the game's language: ns.CardWords)
+DEFAULTS.cardCombatPvpOn = true        -- the Entering a PvP fight row: its card in place of Entering combat's (off for players from before it, Migrations.lua's pvpCardOffV1)
+DEFAULTS.combatTextPvp = "Rival"       -- ...when the fight's against players, with these words
 -- Boss fights: the boss's name for its words, once a run for each boss: as
 -- it's pulled, or before that as you first target it or come near it.
 DEFAULTS.cardBossOn = false            -- the Boss row
@@ -1052,13 +1054,62 @@ end
 -- cards (their Show in rows read with the rules' entering or leaving true),
 -- and the fight's sound with it.
 local fightStart = 0
-local function FightCard(enter)
+
+-- Whether a fight starting now is against players, for Entering a PvP
+-- fight's card, and how it was told: "battleground" or "arena" (where you
+-- are), else the unit that's an enemy player (your target, focus, mouseover,
+-- soft target, your target's target, or a plate whose target is you). Read
+-- just before the lockdown; anything secret counts as not known. A player by
+-- GUID where it's readable (UnitIsPlayer can say false for players on
+-- Forever), else UnitIsPlayer.
+local PVP_UNITS = { "target", "focus", "mouseover", "softenemy", "targettarget" }
+-- (reads: where the game's unit calls come from, the game's own (_G) unless
+-- the test hands in pretend ones: Dev/PvpCardTest.lua. Never swap the
+-- globals themselves: written by us, they taint the game's frames till a
+-- reload, Tools/errors/known.lua's test-global-swap-taint.)
+local function FlagOf(fn, ...)
+	local ok, value = pcall(fn, ...)
+	return ok and ns.Flag(value) or false
+end
+local function EnemyPlayer(unit, reads)
+	reads = reads or _G
+	if not (FlagOf(reads.UnitExists, unit) and FlagOf(reads.UnitCanAttack, "player", unit)) then return false end
+	local ok, guid = pcall(reads.UnitGUID, unit)
+	if ok and type(guid) == "string" and not (issecretvalue and issecretvalue(guid)) then
+		return guid:find("^Player%-") ~= nil
+	end
+	return FlagOf(reads.UnitIsPlayer, unit)
+end
+function ns.CardPvpFight(reads)
+	reads = reads or _G
+	local inInstance, kind = reads.IsInInstance()
+	if ns.Flag(inInstance) and (kind == "pvp" or kind == "arena") then return kind == "pvp" and "battleground" or kind end
+	for _, unit in ipairs(PVP_UNITS) do
+		if EnemyPlayer(unit, reads) then return unit end
+	end
+	for i = 1, 40 do
+		local unit = "nameplate" .. i
+		if EnemyPlayer(unit, reads) and FlagOf(reads.UnitIsUnit, unit .. "target", "player") then return unit end
+	end
+	return nil
+end
+
+local function FightCard(enter, reads)
 	local edge = enter and "enter" or "leave"
-	ns.Cards.Fire(enter and "combatIn" or "combatOut", {
-		name = ns.CardWords(enter and "combatTextIn" or "combatTextOut"), edge = edge,
+	local id, words = enter and "combatIn" or "combatOut", enter and "combatTextIn" or "combatTextOut"
+	-- (Against players, with its row on and its Show in row saying yes: its
+	-- card in place of Entering combat's.)
+	if enter and ns.CardOn("combatPvp") then
+		local how = ns.CardPvpFight(reads)
+		ns.Log("card", "fight started: " .. (how and ("against players (" .. how .. ")") or "no enemy player seen"))
+		if how and ns.CardAllowed("combatPvp", edge) then id, words = "combatPvp", "combatTextPvp" end
+	end
+	ns.Cards.Fire(id, {
+		name = ns.CardWords(words), edge = edge,
 		sound = function() ns.PlayCombatCueSound(edge) end, -- (CombatSoundRules.lua)
 	})
 end
+ns.CardFightCard = FightCard -- (for the test: Dev/PvpCardTest.lua)
 
 -- Boss cards. A boss is told by the pull (ENCOUNTER_START: its name, plain)
 -- or, before it, as an enemy elite in a dungeon or raid at a skull's level,
@@ -1309,6 +1360,7 @@ watcher:SetScript("OnEvent", function(_, event, ...)
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		-- (Entering combat's card or a boss's still showing: cut short.)
 		ns.Cards.Cut("combatIn")
+		ns.Cards.Cut("combatPvp")
 		ns.Cards.Cut("boss")
 		if GetTime() - fightStart >= db.combatMinFight then
 			FightCard(false)
