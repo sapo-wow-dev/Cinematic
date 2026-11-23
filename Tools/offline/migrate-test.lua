@@ -39,6 +39,60 @@ if ns.migrationErrors then
 	os.exit(1)
 end
 
+-- Run again, every done-flag now set: nothing may change (an update not
+-- guarded by its flag takes a setting at every login: 0fd4d31, the Cities
+-- columns and tooltip fade time back to their defaults at each /reload). As
+-- /cine prerelease's "migrations: run again" smoke, offline, on your own
+-- settings. (Keys that are logs and per-session state left out, as there.)
+local QUIET = { log = true, sweepLog = true, sweepPending = true, prerelease = true, prereleaseLog = true,
+	selfTest = true, pageTimes = true, profiler = true, slashUsage = true, savedCVars = true, profiles = true,
+	hubLastTab = true, hubKept = true, sectionsOpen = true, chatCamDebug = true, smartFindLooks = true }
+local function Copy(value)
+	if type(value) ~= "table" then return value end
+	local result = {}
+	for k, v in pairs(value) do result[k] = Copy(v) end
+	return result
+end
+local function Same(a, b)
+	if a == b then return true end
+	if type(a) == "number" and type(b) == "number" then return math.abs(a - b) < 1e-6 end
+	if type(a) ~= "table" or type(b) ~= "table" then return false end
+	for k, v in pairs(a) do
+		if not Same(v, b[k]) then return false end
+	end
+	for k in pairs(b) do
+		if a[k] == nil then return false end
+	end
+	return true
+end
+if ns.RunMigrations then
+	local before = {}
+	for k, v in pairs(db) do
+		if not QUIET[k] then before[k] = Copy(v) end
+	end
+	ns.migrationErrors = nil
+	ns.RunMigrations()
+	local changed = {}
+	for k, v in pairs(before) do
+		if not Same(v, db[k]) then changed[#changed + 1] = tostring(k) end
+	end
+	for k in pairs(db) do
+		if before[k] == nil and not QUIET[k] then changed[#changed + 1] = tostring(k) end
+	end
+	table.sort(changed)
+	if ns.migrationErrors then
+		for _, problem in ipairs(ns.migrationErrors) do print("update failed on a second run: " .. problem) end
+		os.exit(1)
+	end
+	if #changed > 0 then
+		for _, key in ipairs(changed) do
+			print(("update failed: a second run changed %s (%s -> %s)"):format(key, tostring(before[key]),
+				tostring(db[key])))
+		end
+		os.exit(1)
+	end
+end
+
 -- Sorted, so equal settings give equal files.
 local out = {}
 local function Key(k)

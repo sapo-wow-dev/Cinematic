@@ -3,6 +3,7 @@ the repo root:
 
     python -I Tools/prerelease.py            all of it (about 4 minutes)
     python -I Tools/prerelease.py --game     only the in-game runs' results
+    python -I Tools/prerelease.py --nogame   the in-game runs skipped this time (said, not a FAIL)
 
 Runs side by side, each a PASS or FAIL line, then one line for all of it:
 - luacheck (baseline 0 warnings) and the Lua 5.1 compile of every .lua (the
@@ -15,7 +16,9 @@ Runs side by side, each a PASS or FAIL line, then one line for all of it:
   (Tools/offline/sweep.lua: new FAIL lines against its baseline);
 - the once-only settings updates on your own saved settings (each client's
   Cinematic.lua and CinematicDev.lua, a copy: nothing is written there),
-  every update run from scratch: none may error;
+  every update run from scratch: none may error, and a second run may change
+  nothing (an update its done-flag doesn't guard takes a setting at every
+  login, as the Cities columns did before 0fd4d31);
 - the upgrade check (Tools/upgrade-check.py): the last release's code and
   this one's on the same players' saved settings; what changes for existing
   players is listed (never a FAIL: the review judges it), only a version
@@ -29,6 +32,9 @@ Runs side by side, each a PASS or FAIL line, then one line for all of it:
   whether its commit carried the user's OK; never a FAIL).
 Then the last /cine prerelease runs on each client, read from the dev
 copy's saved settings (after a /reload): their summary and NEW FAIL lines.
+Each client needs a finished full run newer than the last change to the
+addon's code (a commit or a changed file outside Tools/, docs/, .claude/):
+none, or an older one, FAILs, unless --nogame says they were skipped.
 
 Exit 1 on any FAIL. Needs lupa (pip install lupa) and luacheck in ~/bin.
 The game's folder: CINE_WOW, else C:/Program Files (x86)/World of Warcraft.
@@ -249,9 +255,10 @@ def judge_addons(ok, output):
 
 
 def judge_migrate(ok, output):
+    # (Also a second run that changes anything: an update not guarded by its done-flag.)
     failed = [l for l in output.splitlines() if l.startswith("update failed")]
     if failed:
-        return False, "; ".join(failed[:3])
+        return False, "; ".join(failed[:3]) + (" (and %d more)" % (len(failed) - 3) if len(failed) > 3 else "")
     line = last_line(output)
     return ok, line.split(" lines written")[0] + " lines" if " lines written" in line else line
 
@@ -264,17 +271,80 @@ def judge_upgrade(ok, output):
     return ok, detail + "".join("\n      " + l[:220] for l in shown[:30])
 
 
-def game_results():
-    """The last /cine prerelease runs per client and kind, from the dev copy's saved settings."""
+def last_code_change():
+    """When the addon's code last changed: its last commit, or a file changed since (not Tools/, docs/ or
+    .claude/: they don't run in the game). As "YYYY-MM-DD HH:MM", the in-game runs' own clock."""
+    outside = ["--", ".", ":!Tools", ":!docs", ":!.claude", ":!*.md"]
+    stamp = subprocess.run(["git", "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M"] + outside,
+                           cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    changed = subprocess.run(["git", "diff", "HEAD", "--name-only"] + outside, cwd=ROOT, capture_output=True,
+                             text=True).stdout.split()
+    changed += subprocess.run(["git", "ls-files", "--others", "--exclude-standard"] + outside, cwd=ROOT,
+                              capture_output=True, text=True).stdout.split()
+    for path in changed:
+        full = os.path.join(ROOT, path)
+        if os.path.exists(full):
+            stamp = max(stamp, time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(full))))
+    return stamp
+
+
+def selftest():
+    """The in-game gate on made-up saved settings: no run, an older full run, a newer one, one with a NEW FAIL,
+    --nogame. PASS/FAIL per check."""
+    global WOW
+    real, failed = WOW, 0
+    run = ('{ kind = "%s", when = "%s", finished = true, summary = "s", new = {%s}, '
+           'results = { ["x"] = { detail = "d" } } }')
+    cases = [
+        ("no run: FAIL", "", "2026-11-23 10:00", False, False),
+        ("a full run older than the code: FAIL", run % ("full", "2026-11-23 09:00", ""), "2026-11-23 10:00", False,
+         False),
+        ("a full run newer than the code: PASS", run % ("full", "2026-11-23 11:00", ""), "2026-11-23 10:00", False,
+         True),
+        ("a newer full run with a NEW FAIL: FAIL", run % ("full", "2026-11-23 11:00", '"x"'), "2026-11-23 10:00",
+         False, False),
+        ("only an older quick run, no full: FAIL", run % ("quick", "2026-11-23 09:00", ""), "2026-11-23 10:00", False,
+         False),
+        ("--nogame: never a FAIL", "", "2026-11-23 10:00", True, True),
+    ]
+    global last_code_change
+    real_since = last_code_change
+    try:
+        for name, runs, since, skipped, want in cases:
+            WOW = tempfile.mkdtemp(prefix="cine-prerelease-selftest-")
+            for client, folder in CLIENTS.items():
+                saved = os.path.join(WOW, folder, "WTF", "Account", "A", "SavedVariables")
+                os.makedirs(saved)
+                with open(os.path.join(saved, "CinematicDev.lua"), "w", encoding="utf-8") as f:
+                    f.write("CinematicDB = { prerelease = { %s = { %s } } }\n" % (client, runs))
+            last_code_change = lambda since=since: since  # noqa: E731
+            rows = game_results(skipped)
+            passed = all(ok is not False for _, ok, _ in rows)
+            good = passed == want
+            failed += 0 if good else 1
+            print("%s %s%s" % ("PASS" if good else "FAIL", name, "" if good else ": " + repr(rows)))
+            shutil.rmtree(WOW, ignore_errors=True)
+    finally:
+        WOW, last_code_change = real, real_since
+    return failed
+
+
+def game_results(skipped=False):
+    """The last /cine prerelease runs per client and kind, from the dev copy's saved settings. Each client
+    needs a finished full run after the last code change: none, or an older one, FAILs (it proves nothing
+    about this code). --nogame: the user skipped them this time (said, never a FAIL)."""
+    if skipped:
+        return [("in game, %s" % client, None, "skipped this time (--nogame)") for client in CLIENTS]
     try:
         import lupa.lua51 as lua51
     except ImportError:
-        return [("in-game runs", None, "lupa isn't installed (pip install lupa)")]
+        return [("in-game runs", False, "lupa isn't installed (pip install lupa)")]
+    since = last_code_change()
     rows = []
     for client in CLIENTS:
         files = saved_files(client, "CinematicDev.lua")
         if not files:
-            rows.append(("in game, %s" % client, None, "no CinematicDev.lua saved settings found"))
+            rows.append(("in game, %s" % client, False, "no CinematicDev.lua saved settings found"))
             continue
         for path in files:
             lua = lua51.LuaRuntime(unpack_returned_tuples=True)
@@ -286,14 +356,23 @@ def game_results():
             store = db and db["prerelease"]
             runs = store and store[client]
             if not runs or len(runs) == 0:
-                rows.append(("in game, %s" % client, None, "no /cine prerelease run yet"))
+                rows.append(("in game, %s" % client, False, "no /cine prerelease run yet (run it, or --nogame to "
+                                                            "skip it this time)"))
                 continue
             latest = {}
             for i in range(1, len(runs) + 1):
                 latest[runs[i]["kind"]] = runs[i]
+            if "full" not in latest:
+                rows.append(("in game, %s, full" % client, False, "no full /cine prerelease run yet"))
             for kind in ("full", "quick", "guided"):
                 each = latest.get(kind)
                 if not each:
+                    continue
+                if str(each["when"]) < since:
+                    # (A run of older code: it proves nothing about this one.)
+                    rows.append(("in game, %s, %s" % (client, kind), False if kind == "full" else None,
+                                 "%s (%s): older than the last code change (%s), run it again" % (
+                                     each["summary"], each["when"], since)))
                     continue
                 new = each["new"]
                 names = [new[i] for i in range(1, len(new) + 1)] if new else []
@@ -309,6 +388,8 @@ def game_results():
 
 
 def main():
+    if "--selftest" in sys.argv:
+        sys.exit(1 if selftest() else 0)
     only_game = "--game" in sys.argv
     jobs = []
     if not only_game:
@@ -324,6 +405,8 @@ def main():
             jobs.append(Job("offline sweep, %s" % client, lua + ["Tools/offline/sweep.lua", client], judge_sweep))
         for name, script, *args in OFFLINE_TESTS:
             jobs.append(Job(name, lua + [script] + args, judge_test))
+        jobs.append(Job("prerelease's own checks (the in-game gate)", [PY, "-I", "Tools/prerelease.py", "--selftest"],
+                        judge_test))
         jobs.append(Job("audit kit's own checks (Tools/audit.py selftest)", [PY, "-I", "Tools/audit.py", "selftest"],
                         judge_test))
         jobs.append(Job("fix cards' matrices vs the last release (Tools/audits)", [PY, "-I", "Tools/audit.py",
@@ -353,7 +436,7 @@ def main():
             print("      " + "\n      ".join(job.output.strip().splitlines()[-8:]))
     if not only_game:
         shutil.rmtree(scratch, ignore_errors=True)
-    for name, ok, detail in game_results():
+    for name, ok, detail in game_results("--nogame" in sys.argv):
         mark = "PASS" if ok else ("----" if ok is None else "FAIL")
         failed += 1 if ok is False else 0
         print("%s  %s: %s" % (mark, name, detail))

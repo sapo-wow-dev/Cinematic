@@ -63,8 +63,10 @@ without asking.
        `/reload`. Don't wait: carry on with phase 1 while they run (about
        6 minutes each); the review's stop (step 8) reminds them to say
        "check log" with their answer.
-     - **Skip it this time**: carry on; the review says "in-game check
-       skipped".
+     - **Skip it this time**: carry on with `--nogame` on the prerelease
+       run (without it, no run or one older than the code FAILs); the
+       review says "in-game check skipped". `/release quick` and `nogame`
+       pass `--nogame` too.
      - **Already ran it**: read the results now (below).
      Reading results: `python -I Tools/prerelease.py --game` shows each run's
      NEW FAIL lines (passed last time, fail now); `CinematicDB.prereleaseLog`
