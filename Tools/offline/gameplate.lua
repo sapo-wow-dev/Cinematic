@@ -232,7 +232,18 @@ Check("the page's preview on the game's plate", pagePreview.gameMode == true and
 Check("one plate, bigger, centered on its bar (not moved left)", inner.gamePlate:IsShown()
 	and (inner.gameScale or 0) > 0 and not inner.gameShift, tostring(inner.gameScale))
 Check("no drawn plates over it, no Scene button on its Unit list", pagePreview.backButton == nil)
-Check("the preview kept tall enough (minHeight, not the screen's shape)", (pagePreview.minHeight or 0) >= 200)
+Check("the preview kept tall enough (minHeight, not the screen's shape)", (pagePreview.minHeight or 0) >= 210)
+-- (What it shows, in the middle of the room over its lists: cast bar to name, or
+-- to its debuffs when they're on (it sat low, then high with debuffs: the user's shots).)
+for _, withDebuffs in ipairs({ false, true }) do
+	-- (Ticked in the previewer's own State list: the page places it again.)
+	if (ns.PlatePreviewStates().debuffs and true or false) ~= withDebuffs then inner.ToggleState("debuffs") end
+	local lift, h, s = inner.plateLift or 38, pagePreview:GetHeight(), inner.gameScale or 1
+	local middle = (inner.gameLift or 0) + (withDebuffs and 89.1 or 58.3) * s / 2
+	Check(("what it shows in the middle of the room over its lists (debuffs %s)"):format(withDebuffs and "on" or "off"),
+		inner.gameLift ~= nil and math.abs(middle - (lift + h) / 2) < 0.5, tostring(middle) .. " vs " .. tostring((lift + h) / 2))
+end
+inner.ToggleState("debuffs")
 local before = #styled
 pcall(pagePreview.Pick, pagePreview, "others")
 local dressed = 0

@@ -597,7 +597,8 @@ end
 
 -- (holder.kind: the row it dresses, changed by Nameplate Style's page as a
 -- row is picked; holder.hoverTheme: a plate theme pointed at, not saved;
--- holder.gameScale, gameShift: the game plate bigger (and moved left), that page's.)
+-- holder.gameScale, gameShift, gameLift: the game plate bigger (moved left, its
+-- bottom this high), that page's.)
 function ns.MakePlateRowLookPreview(parent, width, startKind)
 	local L = ns.L
 	local holder = CreateFrame("Frame", nil, parent)
@@ -668,15 +669,20 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		sampleNow = i
 		holder:Refresh()
 	end
+	-- (holder.onStates: its page drawn again instead, Nameplate Style's, which
+	-- places the plate by what it shows.)
+	local function StatesChanged()
+		if holder.onStates then holder.onStates() else holder:Refresh() end
+	end
 	local function ToggleState(key)
 		PickState(key)
-		holder:Refresh()
+		StatesChanged()
 	end
 	holder.PickSample, holder.ToggleState = PickSample, ToggleState
 	local ROW_H = 28
 	local okUnit, unitDrop = ns.MenuDropdown(holder)
 	if not (okUnit and unitDrop and unitDrop.SetupMenu) then unitDrop = nil end
-	local stateDrop = unitDrop and game and ns.MakePlateStateDropdown(holder, 170, function() holder:Refresh() end) or nil
+	local stateDrop = unitDrop and game and ns.MakePlateStateDropdown(holder, 170, StatesChanged) or nil
 	local picks = {}
 	local sceneButton = Pill(holder, L["Scene"], function()
 		if not ns.db then return end
@@ -736,7 +742,9 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 	-- the plate itself by it.)
 	holder.plateLift = sceneY + (unitDrop and ROW_H or 20) + 4
 	if game then
-		holder:SetHeight(holder.plateLift + game:GetHeight() + 6)
+		-- (Room over its debuffs, which reach past the plate's frame (89 of 85):
+		-- they touched the top, the user 2026-11-23.)
+		holder:SetHeight(holder.plateLift + 89 + 18)
 		game:SetPoint("BOTTOM", holder, "BOTTOM", 0, holder.plateLift)
 	end
 	holder.unitDropdown, holder.stateDropdown = unitDrop, stateDrop
@@ -815,7 +823,7 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 			if self.gameScale then
 				game:SetScale(self.gameScale)
 				game:ClearAllPoints()
-				game:SetPoint("BOTTOM", self, "BOTTOM", -(self.gameShift or 0), self.plateLift / self.gameScale)
+				game:SetPoint("BOTTOM", self, "BOTTOM", -(self.gameShift or 0), (self.gameLift or self.plateLift) / self.gameScale)
 			end
 			if gameMark and ns.StyleTargetArrow and ns.TargetMarkSetting then
 				ns.StyleTargetArrow(gameMark, nil, kind)

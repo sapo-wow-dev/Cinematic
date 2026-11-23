@@ -12664,7 +12664,7 @@ do
 			-- with its debuffs over it and its lists under it.)
 			local gameCapable = not ns.isRetail and ns.MakeGamePlate ~= nil
 			preview:SetSize(560, 190)
-			preview.minHeight = gameCapable and 200 or nil
+			preview.minHeight = gameCapable and 210 or nil
 			stack:Add(preview, "label")
 			ns.StylePopout(preview, Tooltip) -- (StylePages.lua)
 			if preview.SetClipsChildren then preview:SetClipsChildren(true) end
@@ -12691,6 +12691,8 @@ do
 				inner:SetAllPoints(preview)
 				inner.zoomSkip = true
 				inner:Hide()
+				-- (A state ticked: placed again by what it shows, debuffs or not.)
+				inner.onStates = function() preview:Refresh() end
 				-- (Its own Scene pill: the pop-out's backdrop button would sit on its Unit list.)
 				if preview.backButton then preview.backButton:Hide() end
 				preview.backButton = nil
@@ -12959,14 +12961,23 @@ do
 				caption:SetText(self.hoverTheme and L["Preview: not saved"] or L["Preview"])
 				caption:SetShown(not gameMode) -- (the previewer has its own "not saved")
 				if gameMode then
-					-- (As big as fits: its debuffs over it under the top, its lists
-					-- under it. Centered on its bar, as the game's (the user
-					-- 2026-11-23: moved left for the crowd control icon, it looked off
-					-- center); its crowd control icon, 180 right of the middle, kept inside.)
+					-- (What it shows, cast bar to name (0 to NAME_TOP of the plate) or
+					-- to its debuffs over the name (DEBUFF_TOP) when they're on, in the
+					-- middle of the room over its lists (the user 2026-11-23: it sat
+					-- low, the room over it empty; centered on the name, its debuffs
+					-- filled the top). As big as fits with its debuffs. Centered on its
+					-- bar, as the game's (the user: moved left for the crowd control
+					-- icon, it looked off center); that icon, 180 right of the middle,
+					-- kept inside.)
 					self.noAutoFit = true
+					local NAME_TOP, DEBUFF_TOP = 58.3, 89.1
 					local lift = inner.plateLift or 38
+					local room = height - lift
+					local scale = math.max(0.6, math.min(1.6, (room - 8) / DEBUFF_TOP, (width - 12) / 360))
+					local top = ns.PlatePreviewStates and ns.PlatePreviewStates().debuffs and DEBUFF_TOP or NAME_TOP
 					inner.gameShift = nil
-					inner.gameScale = math.max(0.6, math.min(1.6, (height - lift - 8) / 92, (width - 12) / 360))
+					inner.gameScale = scale
+					inner.gameLift = lift + (room - top * scale) / 2
 					inner.kind, inner.hoverTheme = previewed, self.hoverTheme
 					inner:Refresh()
 					for _, plate in pairs(plates) do plate:Hide() end

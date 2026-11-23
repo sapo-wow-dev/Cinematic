@@ -143,6 +143,17 @@ All through the game's own code (read in the Forever export), each as your game 
   page's previewer as your settings draw it (interrupted, marker, boss shots looked at); the compare step too.
 - After it, the user: "its not really centered". The plate sat 38 left for its crowd control icon; centered on
   its bar now (as the game's), the scale kept so the icon (180 right of the middle) still fits. Plain run to confirm.
+- Run 17 (2026-11-23): 14/0, centered on its bar; committed bdc70d4. Then the user: "center this better" (the
+  plate sat low, the room over it empty) and, on the Look panel, "give more space" (its debuffs touched the top).
+  Fixed: the page's plate body (cast bar to name, 0-58.3) in the middle of the room over its lists, scale to fit
+  its debuffs (to 89.1) under the top, minHeight 240 so 1.6 still fits on an ultrawide; the Look panel's previewer
+  18 over its debuffs (height plateLift + 89 + 18; was the frame's 85 + 6).
+- Run 18 (2026-11-23): `platematch 2 4`, 53/0. The Look panel's debuffs 18 under its top. The page's plate was
+  centered on cast bar to name, so with debuffs on they filled the top (4 from it) and left a gap under the cast.
+  Fixed: centered on what it shows, to its debuffs' top when they're on (it moves as Debuffs is ticked; the
+  previewer's own State list now redraws the page, holder.onStates), scale fit for debuffs, minHeight 210.
+- Run 19 (2026-11-23): 14/0, the preview 607 x 210 at 1.6; debuffs 13 under the top on every unit; shots: centered
+  with debuffs on (debuffs to cast bar) and with Casting only (name to cast bar).
 
 ## Questions
 | # | Question | Answer | From |
