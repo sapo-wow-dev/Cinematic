@@ -4043,7 +4043,7 @@ do
 	ns.RANGE_BANDS = RANGE_BANDS
 	local rangeSpells, rangeLookAt = {}, -math.huge
 	local RANGE_TESTS = {
-		harmful = C_Spell and C_Spell.IsSpellHarmful or IsHarmfulSpell,
+		harmful = C_Spell and C_Spell.IsSpellHarmful or IsHarmfulSpell, -- dont-ok: lua-local-before-defined (the game's)
 		helpful = C_Spell and C_Spell.IsSpellHelpful or IsHelpfulSpell,
 	}
 	-- (Each band's shortest spell: bandSpells[i].harmful = id, its yards

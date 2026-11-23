@@ -59,7 +59,7 @@ local clockBase -- time() - GetTime(); nil until lined up
 do
 	local syncer, lastSecond = CreateFrame("Frame"), nil
 	syncer:SetScript("OnUpdate", function() -- (loads before ns.SetOnUpdate)
-		local second = time()
+		local second = time() -- dont-ok: lua-local-before-defined (the game's)
 		if lastSecond and second ~= lastSecond then
 			clockBase = second - GetTime()
 			syncer:SetScript("OnUpdate", nil)

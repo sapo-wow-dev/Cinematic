@@ -39,6 +39,12 @@ else
 fi
 if [ -n "$python" ]; then
 	if [ -f Tools/check-toc.py ]; then "$python" -I Tools/check-toc.py || failed=1; fi
+	# (A local function called above its own line calls a nil global; luacheck
+	# misses it when the name is also a known global. known.lua:
+	# lua-local-before-defined.)
+	if [ -n "$luacheck" ] && [ -f Tools/errors/forwardlocal.py ]; then
+		"$python" -I Tools/errors/forwardlocal.py "$luacheck" || failed=1
+	fi
 	# (Known errors' don'ts: code doing what a traced error says never to do,
 	# Tools/errors/known.lua. Not a git checkout here, so it walks the files.)
 	if [ -f Tools/errors/errors.py ]; then

@@ -4623,8 +4623,8 @@ function ns.TurnOffCompletely(onCancel)
 		button1 = L["Turn off and reload"],
 		button2 = CANCEL,
 		OnAccept = function()
-			local DisableAddOn = (C_AddOns and C_AddOns.DisableAddOn) or DisableAddOn
-			local SaveAddOns = (C_AddOns and C_AddOns.SaveAddOns) or SaveAddOns
+			local DisableAddOn = (C_AddOns and C_AddOns.DisableAddOn) or DisableAddOn -- dont-ok: lua-local-before-defined (the game's)
+			local SaveAddOns = (C_AddOns and C_AddOns.SaveAddOns) or SaveAddOns -- dont-ok: lua-local-before-defined (the game's)
 			DisableAddOn(ADDON_NAME)
 			SaveAddOns()
 			ns.Reload()

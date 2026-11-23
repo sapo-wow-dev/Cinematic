@@ -482,4 +482,25 @@ return {
 [CinematicDev/Dev/ShelfTest.lua]:954: in function <CinematicDev/Dev/ShelfTest.lua:952>]],
     source = "memory: lua-multireturn-traps",
   },
+  {
+    id = "lua-local-before-defined",
+    status = "fixed",
+    title = "attempt to call a nil value: a local function called above its own local line",
+    match = { all = { "attempt to call a nil value" }, any = { "in function 'Columns'" } },
+    why = {
+      call = "Columns() inside grid.SubLine (UI/CooldownGrid.lua), drawing the CDM page's Buffs tab",
+      caller = "grid.SubLine, written above `local function Columns` in a mid-edit copy of the file the game loaded at login",
+      path = "a parallel session adding the Missing reminder's sub line saved the file half-done; the game read it before the next save moved SubLine under Columns",
+      rule = "Lua binds a name at compile time: read above its `local` line it's a global (nil), even if the local exists by the time the code runs",
+      pattern = "a function using a local helper declared further down the file; luacheck (W113) catches it unless the name is also a known global",
+    },
+    dont = "Never call a local above its `local` line: declare it first (or `local X` up top, assigned later). Checked at commit by luacheck plus Tools/errors/forwardlocal.py for names that are also globals; a line that means the real global gets -- dont-ok: lua-local-before-defined.",
+    fix = "2026-11-23: CooldownGrid.lua already saved with SubLine under Columns; repo scanned, no other cases (4 deliberate global reads marked); forwardlocal.py in the pre-commit hook",
+    seen = { "2026-11-23" },
+    example = [[Interface/AddOns/CinematicDev/UI/CooldownGrid.lua:629: attempt to call a nil value
+[C]: in function 'Columns'
+[CinematicDev/UI/CooldownGrid.lua]:629: in function 'SubLine'
+[CinematicDev/UI/CooldownGrid.lua]:2313: in function <CinematicDev/UI/CooldownGrid.lua:1973>
+[CinematicDev/Options.lua]:16847: in function <CinematicDev/Options.lua:16799>]],
+  },
 }
