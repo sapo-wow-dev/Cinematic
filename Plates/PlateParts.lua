@@ -2673,6 +2673,13 @@ local function FittingRow(plate, unit, start)
 				end
 			else
 				fits = PlateOf(base, plate)
+				-- (The Nameplates page's Mouseover row fading a plate back down
+				-- after the mouse left: it keeps its mouseover look till it's
+				-- gone, not the plain one popping in for the fade. Effects.lua.)
+				if not fits and base == "mouseover" and plate and ns.plates and ns.plates.hover
+					and ns.plates.hover.leaving[plate] then
+					fits = true
+				end
 			end
 			if fits and reaction then
 				if not asked then

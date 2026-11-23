@@ -81,9 +81,22 @@ Step(0.01)
 Check(p.HoverLevel(plateA) > 0 and p.HoverLevel(plateA) < 1, "the plate left fades down, not cut")
 Check(p.HoverLevel(plateB) > 0, "the new plate under the mouse fades up")
 
--- Mouse off every unit: both go down, and are forgotten.
+-- Mouse off every unit: both go down, and are forgotten. Each plate's look
+-- is redrawn as it starts fading and once it's gone (run 7: PlateParts' own
+-- mouse check could run first and leave it plain for the whole fade).
+local redrawn, realRefresh = {}, ns.RefreshPlateLook
+ns.RefreshPlateLook = function(plate) redrawn[#redrawn + 1] = plate end
 mouse = nil
+Step(0.01)
+local atLeave = 0
+for _, each in ipairs(redrawn) do if each == plateB then atLeave = atLeave + 1 end end
+Check(atLeave == 1, ("the plate left: its look redrawn as it starts fading (%d)"):format(atLeave))
 for _ = 1, 100 do Step(0.05) end
+local seen = {}
+for _, each in ipairs(redrawn) do seen[each] = (seen[each] or 0) + 1 end
+Check((seen[plateA] or 0) >= 1 and (seen[plateB] or 0) >= 2,
+	("each plate's look redrawn once faded (A %d, B %d)"):format(seen[plateA] or 0, seen[plateB] or 0))
+ns.RefreshPlateLook = realRefresh
 Check(p.HoverLevel(plateA) == 0 and p.HoverLevel(plateB) == 0, "mouse gone: both back to 0")
 Check(not p.HoverActive(), "nothing left held or leaving")
 
@@ -102,6 +115,27 @@ ns.db.plateAlwaysYourMouseover = true
 ns.db.handlePlates = false
 clock = clock + 1
 Check(not p.HoverWanted(), "Nameplates page off: not wanted")
+
+-- Nameplate Style's Mouseover row (its look: a white bar...) while the plate
+-- fades back down after the mouse left: it keeps that row, not the plain
+-- look popping in for the fade (the user, 2026-11-23). Gone once faded.
+ns.db.handlePlates = true
+mouse = nil
+clock = clock + 1
+if ns.PlateRowNow then
+	local before = ns.PlateRowNow(plateA, "nameplate1")
+	p.hover.leaving[plateA] = 0.5
+	clock = clock + 1
+	local fading = ns.PlateRowNow(plateA, "nameplate1")
+	p.hover.leaving[plateA] = nil
+	clock = clock + 1
+	local after = ns.PlateRowNow(plateA, "nameplate1")
+	Check(before ~= "mouseover", "mouse elsewhere, nothing fading: not the Mouseover look (" .. tostring(before) .. ")")
+	Check(fading == "mouseover", "fading back down: keeps the Mouseover look (" .. tostring(fading) .. ")")
+	Check(after ~= "mouseover", "faded: the Mouseover look gone (" .. tostring(after) .. ")")
+else
+	Check(false, "ns.PlateRowNow loaded")
+end
 
 print(failed == 0 and "ALL PASS" or (failed .. " FAILED"))
 if failed > 0 then os.exit(1) end

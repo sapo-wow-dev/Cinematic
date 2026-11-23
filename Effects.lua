@@ -2582,9 +2582,16 @@ end
 function ns.plates.UpdateHover(elapsed)
 	local hover = ns.plates.hover
 	local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and ns.plates.HoverPlate() or nil
+	-- (Its look redrawn as it starts fading down and once it's gone: Nameplate
+	-- Style's Mouseover row keeps it through the fade, PlateParts' FittingRow.
+	-- PlateParts' own mouse check could run before this, see the plate no
+	-- longer under the mouse nor leaving, and give it the plain look for the
+	-- whole fade: run 7, 2026-11-23.)
+	local left
 	if plate ~= hover.plate then
 		if hover.plate and hover.level > 0 then
 			hover.leaving[hover.plate] = hover.level
+			left = hover.plate
 		end
 		-- (Back on a plate still on its way down: carries on from there.)
 		hover.plate, hover.level = plate, plate and hover.leaving[plate] or 0
@@ -2601,8 +2608,10 @@ function ns.plates.UpdateHover(elapsed)
 	for leavingPlate, level in pairs(hover.leaving) do
 		level = ns.Approach(level, 0, elapsed, ns.FadeOutTime())
 		hover.leaving[leavingPlate] = level > 0 and level or nil
+		if level <= 0 and ns.RefreshPlateLook then ns.RefreshPlateLook(leavingPlate) end
 		moving = true
 	end
+	if left and ns.RefreshPlateLook then ns.RefreshPlateLook(left) end
 	return moving
 end
 

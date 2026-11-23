@@ -25,3 +25,22 @@ under the mouse, without targeting it.
   was the test's: other plates with names kept by other rows (0.24-1.00)
   read the same before and after; the check now says "left as they were".
   Steps 3-4 proven by this run. Open: in a fight; retail.
+- Fade-out look (the user, 2026-11-23: the plate went back to the game's
+  green while fading). Fix 1: PlateParts' FittingRow keeps the mouseover row
+  while hover.leaving holds the plate. Run 7 (queue q3a30, Dun Morogh): still
+  green at 0.3 s (0,1,0 vs hovered white): PlateParts' mouse check ran before
+  Effects set leaving and nothing redrew it after. Fix 2: UpdateHover redraws
+  the plate's look (ns.RefreshPlateLook) as it starts leaving and once faded.
+  Run 7's row-off FAIL was the test's (the player's own Always on, steps 1-2
+  left out): step 3 now sets the row off itself.
+- Run 8 (queue q9b61): fix 2 WORKS, the bar kept its hovered white while
+  fading (1,1,1 at 0.3 s). Step 4's leave fired 0.2 s after asking while the
+  shot still showed the unit's tooltip, and the plate was held again at 2.1 s
+  (run 7: a 2 s "no plate under the mouse" mid-hover too). Unknown: a game
+  blip in mouseover/GetNamePlateForUnit, or the mouse moving. The test now
+  traces the raw mouseover every 0.05 s and needs 0.5 s off to count a leave.
+- Run 9 (queue q96aa, Dun Morogh): 8/8. The trace showed the game's
+  mouseover steady through the hold (no blip): runs 7-8's gaps were the
+  mouse moving. Fade-out keeps the hovered look. Steps 3-4 proven.
+  Seen: the hold lets go up to ~1 s after the mouseover clears (trace lines
+  are per second, not measured closer). Still open: fights, retail.

@@ -116,7 +116,46 @@ local function FindText(root, words)
 	return Walk(root, 0)
 end
 
-local heldPlate -- (the plate step 3 read, for step 4)
+local heldPlate, heldColor -- (the plate step 3 read and its bar's color, for step 4)
+
+-- Every change of what the game says is under the mouse, every 0.05 s, from
+-- step 3's hold to step 4's end (runs 7 and 8: "no plate under the mouse"
+-- while the tooltip still showed the unit, then held again: a game blip or
+-- the mouse really moving?). Logs unit exists / name / plate / our hold.
+local trace
+local function TraceState(plate)
+	local exists = UnitExists("mouseover")
+	local ok, now = pcall(C_NamePlate.GetNamePlateForUnit, "mouseover")
+	now = ok and now or nil
+	local where = not now and "no plate" or (now == plate and "its plate") or "another plate"
+	return ("mouseover %s (%s), %s, our hold %s"):format(exists and "yes" or "NO", exists and Who() or "-", where,
+		ns.plates.hover.plate == plate and "on it" or (ns.plates.hover.leaving[plate] and "fading" or "off"))
+end
+local function StartTrace(r, plate)
+	if trace then trace:Cancel() end
+	local last
+	trace = C_Timer.NewTicker(0.05, function()
+		local line = TraceState(plate)
+		if line ~= last then
+			last = line
+			r:Log("  trace: " .. line)
+		end
+	end)
+end
+local function StopTrace()
+	if trace then trace:Cancel() trace = nil end
+end
+
+-- The plate's health bar color as drawn ("r,g,b"), or nil unread.
+local function BarColor(plate)
+	local frame = plate and plate.UnitFrame
+	local bar = frame and (frame.healthBar or frame.HealthBar
+		or (frame.HealthBarsContainer and frame.HealthBarsContainer.healthBar))
+	if not (bar and bar.GetStatusBarColor) then return nil end
+	local ok, red, green, blue = pcall(bar.GetStatusBarColor, bar)
+	if not ok or not (Known(red) and Known(green) and Known(blue)) or type(red) ~= "number" then return nil end
+	return ("%.2f,%.2f,%.2f"):format(red, green, blue)
+end
 
 ns.TestKit.Define({
 	name = "mouseplate",
@@ -133,6 +172,7 @@ ns.TestKit.Define({
 			tostring(ns.db.plateAlwaysYourMouseover), ns.FadeInTime(), ns.FadeOutTime())
 	end,
 	putBack = function(extra)
+		StopTrace()
 		if extra.cineTurnedOn and ns.IsCineModeOn and ns.IsCineModeOn() and Cinematic_ToggleCineMode then
 			pcall(Cinematic_ToggleCineMode)
 			return "CineMode off again"
@@ -184,9 +224,33 @@ ns.TestKit.Define({
 			LogOthers(r, "baseline", nil)
 		end },
 		{ key = "hover", title = "the row off, then ticked: sampled under the mouse",
-			proven = "run 4 (queue qd36b), 2026-11-23: whole in 1.5 s; others' check fixed after", run = function(r)
-			r:WaitFor("Put your mouse on an NPC STANDING STILL (not a player walking by) and hold it there.",
-				{ check = MousePlate })
+			proven = "run 9 (queue q96aa), 2026-11-23: 4/4", run = function(r)
+			-- (Run 6 waited 90 s and was skipped, with no word why: what's under
+			-- the mouse and why it isn't taken, each new unit once.)
+			-- (Run 6 waited 90 s and was skipped, with no word why: what's under
+			-- the mouse and why it isn't taken, logged and said in the box.)
+			-- (Off for the row-off reads: steps 1-2, which set it, are left out
+			-- once proven, and run 7 had the player's own Always on.)
+			r:Set("plateAlwaysYourMouseover", false)
+			local ASK = "Put your mouse on an NPC STANDING STILL (not a player walking by) and hold it there."
+			local TELL = { target = "That's your TARGET: press Escape to clear it, then hover it again.",
+				you = "That's you: hover an NPC.",
+				player = "That's a PLAYER with no plate here: hover an NPC instead.",
+				none = "It has no nameplate here: try another NPC (a guard or a vendor)." }
+			local said
+			r:WaitFor(ASK, { check = function()
+				local plate = MousePlate()
+				if plate or not UnitExists("mouseover") then return plate end
+				local why = UnitIsUnit("mouseover", "player") and "you"
+					or (UnitExists("target") and UnitIsUnit("mouseover", "target")) and "target"
+					or UnitIsPlayer("mouseover") and "player" or "none"
+				local line = Who() .. ": " .. why
+				if line ~= said then
+					said = line
+					r:Log("  under the mouse, not taken: " .. line)
+					r:Prompt(ASK, TELL[why])
+				end
+			end })
 			-- Row off: every 0.25 s for 2 s, whatever plate is under the mouse.
 			local offMax, offSeen = 0, 0
 			for i = 1, 8 do
@@ -235,6 +299,11 @@ ns.TestKit.Define({
 				return r:Skip(("no plate stayed under the mouse for %.1f s: pick an NPC standing still"):format(wait))
 			end
 			heldPlate = best.plate
+			heldColor = BarColor(best.plate)
+			StartTrace(r, best.plate)
+			r:Log(("row on: its bar color %s, Nameplate Style row %s"):format(tostring(heldColor),
+				tostring(ns.PlateRowNow and ns.PlateRowNow(best.plate,
+				best.plate.namePlateUnitToken or (best.plate.UnitFrame and best.plate.UnitFrame.unit)))))
 			local _, _, during = LogOthers(r, "row on", best.plate)
 			local changed = {}
 			for plate, alpha in pairs(during) do
@@ -250,14 +319,21 @@ ns.TestKit.Define({
 			r:Verdict(#changed == 0, "row on: the other plates left as they were"
 				.. (#changed > 0 and (" (" .. table.concat(changed, ", ") .. ")") or ""))
 		end },
-		{ key = "leave", title = "the mouse off it", proven = "run 4 (queue qd36b), 2026-11-23: 3/3", run = function(r)
+		{ key = "leave", title = "the mouse off it", proven = "run 9 (queue q96aa), 2026-11-23: 4/4", run = function(r)
 			local plate = heldPlate
 			if not plate then return r:Skip("no plate held in step 3") end
+			-- (Off for 0.5 s straight: run 8 took a 0.2 s blip as the mouse leaving.)
+			local offSince
 			r:WaitFor("Now move the mouse OFF it, onto the ground or sky.",
-				{ check = function() return MousePlate() ~= plate end })
+				{ check = function()
+					if MousePlate() == plate then offSince = nil return nil end
+					offSince = offSince or GetTime()
+					return GetTime() - offSince >= 0.5
+				end })
 			local leftAt = GetTime()
 			r:Sleep(0.3)
 			local early = PlateParts(plate)
+			local earlyColor = BarColor(plate)
 			r:Sleep(ns.FadeOutTime() + 0.3)
 			local frame = PlateParts(plate)
 			LogOthers(r, "after", plate)
@@ -265,8 +341,14 @@ ns.TestKit.Define({
 				GetTime() - leftAt, ns.plates.HoverLevel(plate)))
 			r:Shot("after the mouse left")
 			r:Verdict(early ~= nil and early > 0.3, ("fades down, not cut (%s at 0.3 s)"):format(Text(early)))
+			-- (Run 5's bug, the user 2026-11-23: the plate went back to the
+			-- game's green for the fade, its Nameplate Style Mouseover look gone.)
+			r:Verdict(heldColor ~= nil and earlyColor == heldColor,
+				("keeps its hovered look while fading (bar %s, hovered %s)"):format(tostring(earlyColor),
+				tostring(heldColor)))
 			r:Verdict(ns.plates.HoverLevel(plate) == 0, "its hold let go")
 			r:Verdict(frame ~= nil and frame < 0.05, ("back down to hidden (%s)"):format(Text(frame)))
+			StopTrace()
 		end },
 	},
 })
