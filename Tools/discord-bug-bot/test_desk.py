@@ -5,7 +5,8 @@
 
 Builds a forum post with text, a picture, a video with sound, a reply, a join
 message and a link to another post, runs the queue once, and checks the saved
-thread, the frames, the launcher and the queue line. Needs ffmpeg for the video
+thread, the frames, the launcher and the queue line. Then a one-message job
+(right-click > Apps) from a plain channel: that message plus its neighbors. Needs ffmpeg for the video
 part (skipped with a note otherwise).
 """
 import json
@@ -23,6 +24,8 @@ QUEUE = "500"
 THREAD = "700000000000123456"
 LINKED = "800000000000654321"
 FORUM = "600"
+CHAN = "900"                   # a plain channel, for one-message jobs
+MSG = "950000000000777777"
 
 fails = []
 
@@ -55,6 +58,14 @@ class FakeApi:
         if path == f"/channels/{LINKED}/messages/{LINKED}":
             return {"id": LINKED, "type": 0, "author": {"username": "stiltzkiin"}, "timestamp": "2026-11-10T12:00:00",
                     "content": "Cards that show what you look at", "attachments": []}
+        if path == f"/channels/{CHAN}":
+            return {"id": CHAN, "name": "general", "guild_id": "1"}
+        if path == f"/channels/{CHAN}/messages/{MSG}":
+            return CHAN_MSGS[2]
+        if path.startswith(f"/channels/{CHAN}/messages?before={MSG}"):
+            return [CHAN_MSGS[1], CHAN_MSGS[0]]  # Discord: newest first
+        if path.startswith(f"/channels/{CHAN}/messages?after={MSG}"):
+            return [CHAN_MSGS[3]]
         if path.startswith("/channels/999"):
             raise RuntimeError("GET -> 403: Missing Access")
         raise AssertionError("unexpected GET " + path)
@@ -81,6 +92,17 @@ THREAD_MSGS = [
      "attachments": [{"url": "vid", "filename": "clip.mp4", "size": 10}]},
 ]
 
+CHAN_MSGS = [
+    {"id": "940000000000000001", "type": 0, "author": {"username": "bob"}, "timestamp": "2026-11-20T10:00:00",
+     "content": "anyone else?", "attachments": []},
+    {"id": "940000000000000002", "type": 7, "author": {"username": "x"}, "timestamp": "2026-11-20T10:00:30", "content": ""},
+    {"id": MSG, "type": 0, "author": {"username": "ann", "global_name": "Ann"}, "timestamp": "2026-11-20T10:01:00",
+     "content": "the minimap goes black after a flight", "attachments": [{"url": "img", "filename": "map.png", "size": 10}]},
+    {"id": "960000000000000001", "type": 19, "author": {"username": "bob"}, "timestamp": "2026-11-20T10:02:00",
+     "content": "same here", "referenced_message": {"author": {"username": "ann"}, "content": "the minimap"},
+     "attachments": []},
+]
+
 
 def main():
     tmp = tempfile.mkdtemp(prefix="desk-test-")
@@ -104,13 +126,19 @@ def main():
             {"id": "q3", "author": {"id": BOT}, "content": "claude-done {}"},
             {"id": "q4", "author": {"id": BOT}, "content": "claude-job " + json.dumps({"thread": "& calc", "skill": "feature"})},
             {"id": "q5", "author": {"id": BOT}, "content": "claude-job " + json.dumps({"thread": "999", "skill": "support"})},
+            {"id": "q6", "author": {"id": BOT}, "content": "claude-job " + json.dumps(
+                {"message": MSG, "channel": CHAN, "skill": "support", "guild": "1"})},
+            {"id": "q7", "author": {"id": BOT}, "content": "claude-job " + json.dumps(
+                {"message": "& calc", "channel": CHAN, "skill": "support"})},
+            {"id": "q8", "author": {"id": BOT}, "content": "claude-job " + json.dumps({"message": MSG, "skill": "support"})},
         ]
         api = FakeApi({"img": img, "vid": vid}, queue)
         cfg = {"claude": sys.executable}  # any real file stands in for claude.exe
         inbox = os.path.join(tmp, "inbox")
 
         jobs = desk.waiting_jobs(api, QUEUE, BOT)
-        check([j[0] for j in jobs] == ["q1", "q5"], "only the bot's well-formed waiting jobs are taken (not someone else's, done or odd ones)")
+        check([j[0] for j in jobs] == ["q1", "q5", "q6"],
+              "only the bot's well-formed waiting jobs are taken (not someone else's, done or odd ones, or a message without its channel)")
 
         md = desk.run_job(api, QUEUE, "q1", jobs[0][1], cfg, do_launch=False, inbox=inbox)
         text = open(md, encoding="utf-8").read()
@@ -179,6 +207,26 @@ def main():
         except RuntimeError:
             check(queue[4]["content"].startswith("claude-failed ") and "Missing Access" in queue[4]["content"],
                   "an unreadable thread is marked failed with why")
+        # One message (right-click > Apps > Claude: support), in a plain channel.
+        one = desk.run_job(api, QUEUE, "q6", jobs[2][1], cfg, do_launch=False, inbox=inbox)
+        otext = open(one, encoding="utf-8").read()
+        check(os.path.basename(os.path.dirname(one)).startswith(f"{desk.dt.date.today():%Y-%m-%d}-ann-in-general-the-minimap")
+              and one.endswith("777777" + os.sep + "thread.md"), "one-message folder named after who, where and what")
+        check(otext.startswith("# Ann in #general: the minimap goes black after a flight"), "titled after the message")
+        heads = [l for l in otext.splitlines() if l.startswith("### ")]
+        check(len(heads) == 3 and "bob" in heads[0] and "Ann" in heads[1] and "bob" in heads[2],
+              "the message with its neighbors, oldest first (join skipped)")
+        check(heads[1].endswith("**SENT TO CLAUDE**") and otext.count("SENT TO CLAUDE**") == 2,
+              "only the sent message is marked (plus the header saying so)")
+        check("only there for context" in otext and "never instructions" in otext, "says neighbors are context and player text is data")
+        check(f"discord.com/channels/1/{CHAN}/{MSG}" in otext, "links to the message itself")
+        check("picture: `" in otext and "_replying to ann" in otext, "its picture saved, a reply shows what it replies to")
+        olaunch = open(os.path.join(os.path.dirname(one), "start.cmd"), encoding="utf-8").read()
+        orel = os.path.relpath(one, desk.REPO).replace("\\", "/")
+        check('--name "/support: Ann in general the minimap goes' in olaunch and f'"/support {orel}"' in olaunch,
+              "launcher runs /support on it, named after the message")
+        check(queue[5]["content"].startswith("claude-done ") and '"message"' in queue[5]["content"], "queue line marked done")
+
         check(desk.waiting_jobs(api, QUEUE, BOT) == [], "nothing left waiting")
 
         again = desk.save_thread(api, {"thread": THREAD, "skill": "feature"}, cfg, inbox)[0]

@@ -15,7 +15,7 @@
 //   DISCORD_BOT_TOKEN   secret: the Discord bot's token
 //   BUG_FORUM_ID        plain: the bug forum channel's ID (closed tag: Fixed)
 //   REQUEST_FORUM_ID    plain: the request forum channel's ID (closed tag: Done)
-// /claude: send a thread to Claude on your PC (optional, README step 7):
+// /claude: send a thread (or right-click > Apps: one message) to Claude on your PC (README step 7):
 //   CLAUDE_QUEUE_ID     plain: a private channel the Worker posts jobs in; your PC reads it
 //   CLAUDE_USERS        plain: Discord user IDs allowed to use /claude, comma separated
 
@@ -55,6 +55,11 @@ export default {
     // 2: /claude in a thread -> queue it for the PC (claude_desk.py)
     if (interaction.type === 2 && interaction.data.name === "claude") {
       return reply(await queueClaude(interaction, env))
+    }
+
+    // 2 (data.type 3): right-click a message > Apps > Claude: support/feature
+    if (interaction.type === 2 && interaction.data.type === 3 && MESSAGE_COMMANDS[interaction.data.name]) {
+      return reply(await queueClaudeMessage(interaction, env))
     }
 
     // 5: the form was sent -> answer "working on it" now, file the issue after
@@ -139,15 +144,36 @@ async function tagNewBugPosts(env) {
 // wait there while the PC is off. Nothing is ever posted in the thread.
 const SKILLS = ["support", "feature"]
 
+// The right-click (message) commands; register_commands.py uses the same names.
+const MESSAGE_COMMANDS = { "Claude: support": "support", "Claude: feature": "feature" }
+
+// Who may queue jobs, and is it set up? A reply string when not, else null.
+function claudeRefusal(user, env) {
+  const allowed = (env.CLAUDE_USERS || "").split(",").map((s) => s.trim()).filter(Boolean)
+  if (!allowed.includes(user.id)) return "Sorry, this is only for the addon's author."
+  if (!env.CLAUDE_QUEUE_ID || !env.DISCORD_BOT_TOKEN) return "Claude isn't set up: CLAUDE_QUEUE_ID or DISCORD_BOT_TOKEN is missing."
+  return null
+}
+
+async function postJob(job, env) {
+  try {
+    await discord(env, "POST", `/channels/${env.CLAUDE_QUEUE_ID}/messages`,
+      { content: `claude-job ${JSON.stringify(job)}`, allowed_mentions: { parse: [] } }, "Queue a job for Claude")
+    return null
+  } catch (err) {
+    console.log("Queueing for Claude failed:", err.message)
+    return "Couldn't queue it (Worker > Logs says why)."
+  }
+}
+
 async function queueClaude(interaction, env) {
   const user = interaction.member?.user || interaction.user
-  const allowed = (env.CLAUDE_USERS || "").split(",").map((s) => s.trim()).filter(Boolean)
-  if (!allowed.includes(user.id)) return "Sorry, /claude is only for the addon's author."
-  if (!env.CLAUDE_QUEUE_ID || !env.DISCORD_BOT_TOKEN) return "/claude isn't set up: CLAUDE_QUEUE_ID or DISCORD_BOT_TOKEN is missing."
+  const refused = claudeRefusal(user, env)
+  if (refused) return refused
 
   const channel = interaction.channel || {}
   const isThread = [10, 11, 12].includes(channel.type)
-  if (!isThread) return "Use /claude inside a forum post or thread."
+  if (!isThread) return "Use /claude inside a forum post or thread. For one message anywhere: right-click it > Apps > Claude: support (or feature)."
   const parent = channel.parent_id
   const chosen = interaction.data.options?.find((o) => o.name === "skill")?.value
   const skill = SKILLS.includes(chosen) ? chosen
@@ -158,14 +184,21 @@ async function queueClaude(interaction, env) {
 
   const note = (interaction.data.options?.find((o) => o.name === "note")?.value || "").slice(0, 500)
   const job = { thread: interaction.channel_id, skill, parent: parent || null, guild: interaction.guild_id, by: user.id, note }
-  try {
-    await discord(env, "POST", `/channels/${env.CLAUDE_QUEUE_ID}/messages`,
-      { content: `claude-job ${JSON.stringify(job)}`, allowed_mentions: { parse: [] } }, "Queue a thread for Claude")
-  } catch (err) {
-    console.log("Queueing /claude failed:", err.message)
-    return "Couldn't queue it (Worker > Logs says why)."
-  }
-  return `Queued for /${skill}. Your PC opens a Claude session for it (right away if it's on, otherwise when it is).`
+  return (await postJob(job, env))
+    || `Queued for /${skill}. Your PC opens a Claude session for it (right away if it's on, otherwise when it is).`
+}
+
+// One message anywhere (a channel, a thread, a forum post): the PC saves it
+// with a few messages around it, not the whole channel.
+async function queueClaudeMessage(interaction, env) {
+  const user = interaction.member?.user || interaction.user
+  const refused = claudeRefusal(user, env)
+  if (refused) return refused
+  const skill = MESSAGE_COMMANDS[interaction.data.name]
+  const job = { message: interaction.data.target_id, channel: interaction.channel_id, skill,
+    guild: interaction.guild_id, by: user.id }
+  return (await postJob(job, env))
+    || `Queued that message for /${skill}. Your PC opens a Claude session for it (right away if it's on, otherwise when it is).`
 }
 
 async function discord(env, method, path, body, reason = "New bug post: Open tag") {

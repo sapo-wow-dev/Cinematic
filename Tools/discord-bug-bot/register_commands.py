@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tells Discord about the /bug command. Run once, and again after changing it.
+"""Tells Discord about the /bug and /claude commands and the Claude right-click entries. Run once, and again after changing it.
 
     python Tools/discord-bug-bot/register_commands.py
 
@@ -64,6 +64,11 @@ COMMANDS = [
             },
         ],
     },
+    # Right-click a message > Apps: sends that one message (with a few around
+    # it) to Claude, in any channel. Message commands take no options, so
+    # each skill is its own entry. Names must match MESSAGE_COMMANDS in worker.js.
+    {"name": "Claude: support", "type": 3, "contexts": [0], "default_member_permissions": "0"},
+    {"name": "Claude: feature", "type": 3, "contexts": [0], "default_member_permissions": "0"},
 ]
 
 
@@ -85,7 +90,7 @@ def main():
     try:
         with urllib.request.urlopen(req) as res:
             names = [c["name"] for c in json.load(res)]
-            print("Registered:", ", ".join("/" + n for n in names))
+            print("Registered:", ", ".join(n if " " in n else "/" + n for n in names))
     except urllib.error.HTTPError as err:
         sys.exit(f"Discord said {err.code}: {err.read().decode()}")
 

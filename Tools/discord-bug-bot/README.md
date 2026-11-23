@@ -41,7 +41,7 @@ It is not part of the addon (Tools/ is left out of the CurseForge package).
    python Tools/discord-bug-bot/register_commands.py
    ```
 
-   It should print `Registered: /bug, /claude`. (The application ID is in the script; for another app, set `DISCORD_APP_ID`.)
+   It should print `Registered: /bug, /claude, Claude: support, Claude: feature`. (The application ID is in the script; for another app, set `DISCORD_APP_ID`.)
 
 Then type `/bug` in the server.
 
@@ -78,6 +78,12 @@ when it's done the session opens in the Claude desktop app's sidebar, titled
 Discord: replies are drafts for you. Jobs wait in a private channel, so `/claude`
 from your phone works while the PC is off; it opens when the PC is back.
 
+**One message, anywhere:** right-click a message (on a phone, long-press it) >
+**Apps** > **Claude: support** or **Claude: feature**. That works in any channel,
+thread or post. The PC saves that message, marked **SENT TO CLAUDE**, plus up to 5
+messages before and 5 after it for context, not the whole channel. The bot needs
+**View Channel** and **Read Message History** in that channel.
+
 1. Make a private text channel, e.g. `#claude-queue`: only you and the bot can see it.
    In its permissions give the bot **View Channel**, **Send Messages**, **Read Message History**.
    The bot must also be able to see the bug and request forums.
@@ -87,7 +93,9 @@ from your phone works while the PC is off; it opens when the PC is back.
    - `CLAUDE_QUEUE_ID`: right-click the channel > **Copy Channel ID**
    - `CLAUDE_USERS`: your own Discord user ID (right-click your name > **Copy User ID**)
    Then **Edit code**, paste the new `worker.js`, Deploy.
-3. Run `register_commands.py` again (step 4.2). `/claude` is only shown to admins.
+3. Run `register_commands.py` again (step 4.2). It should print
+   `Registered: /bug, /claude, Claude: support, Claude: feature`. `/claude` and the
+   two right-click entries are only shown to admins.
 4. On the PC, once: copy the bot token, then run this in PowerShell (it reads the
    token from the clipboard, asks for the queue channel ID, and saves both in
    `%LOCALAPPDATA%\cinematic-desk\config.json`, not the repo):
