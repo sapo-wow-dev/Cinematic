@@ -36,7 +36,7 @@ local KEY_ADDRESSES = {
 	prdOnFights = "Personal Resources", -- (the same switch, for fights that show it)
 	chatPeekChannelList = "Chat/Other",
 	-- (the effects' switches, set from their row of the Visual Effects grid, or the Letterbox page's)
-	letterbox = "Letterbox/Show in", vignette = "Effects/Show in", weatherTint = "Effects/Show in",
+	letterbox = "Letterbox/Show in", vignette = "Effects/Show in", weatherTint = "Weather/Show in",
 }
 -- Lists whose rows go with the same rows of the grids: a row's rule, or the
 -- row it follows, is where that row is.
@@ -554,7 +554,7 @@ ns.PROFILE_MODULES = {
 	{ key = "all-pages-off", name = "Every page off", scope = WithKeysOff({ "Action Style/top", "Advanced Frames/Supported addons",
 		"Audio/top", "Bubble Style/top", "Buffs/debuffs/top", "Cameras/top", "Card Vision/top", "Cast Bar Style/top",
 		"Chat/top", "Cooldown Manager/top", "Death Vision/top", "Duel Vision/top", "Effects/top", "Fishing/top", "Gamepad/top",
-		"General/top", "Graphics+/top", "Heal Vision/top", "Hunter/top", "Letterbox/top", "Minimap/top",
+		"General/top", "Graphics+/top", "Heal Vision/top", "Hunter/top", "Letterbox/top", "Weather/top", "Minimap/top",
 		"Interface Recolor/top", "Minimap Style/top", "Mouseover groups/top", "Name Style/top", "Nameplate Style/top", "Nameplates/top", "Personal Resources/top",
 		"Personal Style/top", "Quest Vision/top", "Quest tracker/top", "Raid Style/top", "Roll Vision/top",
 		"Skyriding Cam/top", "Standard Frames/top", "Style General/top", "Swing timer/top", "Tint/top",
@@ -570,7 +570,7 @@ ns.PROFILE_MODULES = {
 	-- the cameras, effects, styles, Visions, cards, music and the rest, so
 	-- only the fading and the frame pages are left.)
 	{ key = "ui-pages-only", name = "Only the UI pages", scope = WithKeysOff({ "Cameras/top", "Shoulder Cam",
-		"Skyriding Cam/top", "Effects/top", "Letterbox/top", "Tint/top", "Graphics+/top", "General/top",
+		"Skyriding Cam/top", "Effects/top", "Letterbox/top", "Weather/top", "Tint/top", "Graphics+/top", "General/top",
 		"Style General/top", "Unit Style/top", "Raid Style/top", "Action Style/top", "Personal Style/top",
 		"Tooltip Style/top", "Nameplate Style/top", "Name Style/top", "Cast Bar Style/top", "Bubble Style/top",
 		"Interface Recolor/top", "Minimap Style/top", "Heal Vision/top", "Damage Vision", "Vitals Vision", "Quest Vision/top",
@@ -580,7 +580,7 @@ ns.PROFILE_MODULES = {
 			"wheels or Keyboard Map, and the Cooldown Manager page. Music goes by the Sound choice.",
 		apply = function(set)
 			for _, key in ipairs({ "cameraModes", "shoulderCam", "skyrideCam", "visualEffects", "letterboxPage",
-				"tintPage", "graphicsPlus", "styleGeneral", "ufStyle", "rfStyle", "abStyle",
+				"tintPage", "weatherPage", "graphicsPlus", "styleGeneral", "ufStyle", "rfStyle", "abStyle",
 				"prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle", "plateCastStyle", "bubblesStyle",
 				"irStyle", "minimapStyle", "combatTextStyle", "handleHealVision", "damageVision", "lowHealth", "questVision",
 				"questTalk", "rollWindow", "teleportVision", "deathScreen", "duelPlates", "emoteVision", "cards",
@@ -757,10 +757,12 @@ ns.PROFILE_MODULES = {
 	{ key = "tint-in-cinemode", name = "Tint all through CineMode", scope = { "Tint/Show in" },
 		tip = "The tint shows all through CineMode, fights too (the row set to Always).",
 		settings = { tintAlways = true } },
-	{ key = "effects-in-cinemode", name = "Vignette and weather all through CineMode", scope = { "Effects/Show in" },
-		tip = "The vignette and weather show all through CineMode, fights too (their rows set to Always).",
-		settings = { vignetteAlways = true, weatherAlways = true } },
-	{ key = "effects-in-cameras", name = "Effects only in cameras", scope = { "Effects/Show in", "Letterbox/Show in", "Tint/Show in" },
+	-- (The vignette left out since 2026-11-23: off to start with, yours to turn on.)
+	{ key = "effects-in-cinemode", name = "Weather all through CineMode", scope = { "Weather/Show in" },
+		tip = "The weather shows all through CineMode, fights too (its row set to Always).",
+		settings = { weatherAlways = true } },
+	{ key = "effects-in-cameras", name = "Effects only in cameras", scope = { "Effects/Show in", "Letterbox/Show in", "Tint/Show in",
+		"Weather/Show in" },
 		tip = "The letterbox, tint, vignette and weather only while a camera mode runs; no soft edges.",
 		apply = function(set)
 			for _, effect in ipairs(ns.EFFECT_GRID) do
@@ -788,7 +790,7 @@ ns.PROFILE_MODULES = {
 	{ key = "tint-medium", name = "Medium tint", scope = { "Tint/How strong" },
 		tip = "The tint at two thirds of its strength (Strength 66%).",
 		apply = function(set) set("tintStrength", 0.66) end },
-	{ key = "weather-view-distance", name = "View distance in bad weather", scope = { "Effects/Show in" },
+	{ key = "weather-view-distance", name = "View distance in bad weather", scope = { "Weather/View distance" },
 		tip = "In rain, snow or a sandstorm the view distance comes all the way in (Reduce view distance in bad " ..
 			"weather at 100%).",
 		apply = function(set) set("rainViewScale", 1) end },

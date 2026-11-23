@@ -5751,6 +5751,48 @@ STEPS[#STEPS + 1] = function()
 	ns.MinimapPageFromRecolor(ns.db)
 	ns.db.minimapPageV1 = true
 end
+-- The camera modes' Edge haze raised from 2.5% to 15% by default
+-- (2026-11-23: it couldn't be seen). Where a mode's haze is still the old
+-- default, here and in every saved profile and reset point, it moves to the
+-- new one; one picked by hand (any other value, 0 included) stays. Once.
+ns.DOF_STRENGTH_KEYS = { "dofIdle", "dofCozy", "dofVista", "dofFish", "dofFlight" }
+function ns.RaiseOldHaze(t)
+	if type(t) ~= "table" then return end
+	for _, key in ipairs(ns.DOF_STRENGTH_KEYS) do
+		local value = tonumber(t[key])
+		if value and math.abs(value - 0.025) < 0.0001 then t[key] = 0.15 end
+	end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.dofStrengthV1 then return end
+	ns.RaiseOldHaze(ns.db)
+	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do ns.RaiseOldHaze(saved) end
+	end
+	ns.db.dofStrengthV1 = true
+end
+-- The vignette off everywhere, once (2026-11-23): Core's Step dropped its
+-- wanted from 2026-10-13, so it never showed whatever was set; with that
+-- fixed it would have come in for every profile with Visual Effects on (and
+-- outside CineMode on Balanced, Cinema and Shoulder Cam). Off here and in
+-- every saved profile and reset point: its switch, its row's Always and any
+-- other column's tick or rule. Its strength is kept for when you turn it on.
+function ns.VignetteOff(t)
+	if type(t) ~= "table" then return end
+	t.vignette, t.vignetteAlways = false, false
+	for list in pairs(ns.LIST_DEFAULTS or {}) do
+		if type(t[list]) == "table" then t[list]["effect:vignette"] = nil end
+	end
+	if type(t.frameRules) == "table" then t.frameRules["effect:vignette"] = nil end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.vignetteOffV1 then return end
+	ns.VignetteOff(ns.db)
+	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do ns.VignetteOff(saved) end
+	end
+	ns.db.vignetteOffV1 = true
+end
 
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.

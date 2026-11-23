@@ -312,10 +312,17 @@ do
 	local BLEND_TIME = 10 -- seconds to come all the way in, or back out
 	local level, writtenLevel = 0, 0 -- how far in it is (0-1), and as last written
 	local written = {} -- [cvar] = what we wrote, to tell your changes from ours
+	-- The Visual Effects page's Preview (2026-11-23): as a downpour would pull
+	-- it in at your slider, in CineMode or not, for a few seconds; straight in
+	-- and straight back out (its 10 seconds' blend is too slow to judge by).
+	local previewUntil = 0
 
 	local function Wanted()
 		local db = ns.db
 		local scale = db and db.rainViewScale or 0
+		if GetTime() < previewUntil and db and db.enabled then
+			return math.min(1, scale)
+		end
 		if scale <= 0 or not (db.enabled and db.visualEffects and ns.lastCinematic and ns.BadWeatherIntensity) then
 			return 0
 		end
@@ -358,12 +365,26 @@ do
 		end
 		local want = Wanted()
 		local step = TICK / BLEND_TIME
-		level = want > level and math.min(want, level + step) or math.max(want, level - step)
+		if previewUntil > 0 then
+			level = want -- (a preview, or its end: straight there)
+			if GetTime() >= previewUntil then previewUntil = 0 end
+		else
+			level = want > level and math.min(want, level + step) or math.max(want, level - step)
+		end
 		if level ~= writtenLevel then
 			WriteView(level)
 		end
 	end
 	C_Timer.NewTicker(TICK, Tick)
+
+	-- Starts the preview for seconds (default 5), or stops it (seconds 0).
+	function ns.PreviewRainView(seconds)
+		previewUntil = seconds == 0 and (previewUntil > 0 and GetTime() or 0) or GetTime() + (seconds or 5)
+		Tick()
+	end
+	function ns.RainViewPreviewing()
+		return GetTime() < previewUntil
+	end
 
 	-- For /cine debug viewdist: how far in it is, and how far it's going.
 	function ns.RainViewDebug()

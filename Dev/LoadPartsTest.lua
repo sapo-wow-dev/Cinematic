@@ -43,7 +43,7 @@ local PARTS = {
 		frames = { "CinematicSelfText" }, switch = "styleGeneral", proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 	{ part = "atmosphere", label = "Atmosphere", general = "Effects", box = "loadAtmosphereBox",
 		popup = "CINEMATIC_LOAD_PARTS", setting = "letterboxOnDiscover", why = "atmosphere", row = "atmosphere:loaded",
-		pages = { "Tint", "Letterbox", "Graphics+", "Audio", "Tint Style", "Letterbox Style" },
+		pages = { "Tint", "Letterbox", "Weather", "Graphics+", "Audio", "Tint Style", "Letterbox Style", "Weather Style" },
 		frames = { "CinematicTint", "CinematicLetterbox", "CinematicFocus" }, switch = "visualEffects", proven = "loadparts runs 1-5, 2026-11-21/22: left out and back, menu, leaks" },
 }
 

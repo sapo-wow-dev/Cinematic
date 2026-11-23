@@ -32,7 +32,112 @@ local EFFECT_PAGES = {
 			"The Visual Effects page's Enable Page turns it off too. The UI isn't tinted.",
 		switchTip = "When on, the tint shows where the row below says. Turn it off for no tint anywhere; this page " ..
 			"and its Style tab keep their settings for when you turn it back on." },
+	-- (Its own icon since 2026-11-23, out of the Visual Effects page: its row,
+	-- strength and view distance here, its colors on the Style tab.)
+	weather = { name = "Weather", page = "Weather", style = "Weather Style",
+		tip = "Where and when the weather tints the scene.",
+		styleTip = "Each weather's color, and how fast it comes in.",
+		intro = "Rain, snow and sandstorms tint the scene in CineMode, more in heavier weather, and never under " ..
+			"a roof. The row below sets where and when; with nothing ticked, it's off. Set each weather's color " ..
+			"on the Style tab. The Visual Effects page's Enable Page turns it off too.",
+		switchTip = "When on, the weather tints the scene where the row below says. Turn it off for no weather " ..
+			"tint anywhere; this page and its Style tab keep their settings for when you turn it back on." },
 }
+
+-- A Preview button (2026-11-23): shows its effect over the world for a
+-- while, CineMode or not, and is Stop while that runs (and back by itself
+-- after). Greyed while usable(db) says no. anchor: a slider (the button
+-- goes past its value) or another control (just right of it).
+local PREVIEW_SECONDS = 8 -- (a button's; a slider's move shows ns.EFFECT_PREVIEW_SECONDS)
+function ns.EffectPreviewButton(kit, parent, anchor, text, width, tip, usable, Running, Start, Stop)
+	local button = ns.PanelButton(parent)
+	button:SetSize(width, 20)
+	if anchor.GetObjectType and anchor:GetObjectType() == "Slider" then
+		button:SetPoint("LEFT", anchor, "RIGHT", 58, 0) -- (past the value, "100%")
+	else
+		button:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
+	end
+	button:SetText(text)
+	button.searchSkip = true
+	kit.Tooltip(button, tip)
+	button:SetScript("OnClick", function()
+		if Running() then Stop() else Start() end
+	end)
+	local shown, enabled
+	ns.SetOnUpdate(button, function(self)
+		local running = Running() and true or false
+		if running ~= shown then
+			shown = running
+			self:SetText(running and L["Stop"] or text)
+		end
+		local db = ns.GetDB()
+		local can = running or (db.visualEffects ~= false and usable(db)) or false
+		if can ~= enabled then
+			enabled = can
+			self:SetEnabled(can)
+		end
+	end)
+	-- (For /cine debug atmosphere: Dev/AtmosphereTest.lua.)
+	ns.effectPreviewButtons = ns.effectPreviewButtons or {}
+	ns.effectPreviewButtons[#ns.effectPreviewButtons + 1] = button
+	return button
+end
+-- One for a Tint.lua preview kind ("vignette", "inn", "weather"); weather: a
+-- function giving the weather type to show (the Weather page's pick).
+function ns.TintPreviewButton(kit, parent, anchor, kind, text, width, tip, usable, weather)
+	local button = ns.EffectPreviewButton(kit, parent, anchor, text, width, tip, usable,
+		function() return ns.EffectPreviewing(kind) end,
+		function() ns.PreviewEffect(kind, PREVIEW_SECONDS, weather and weather() or nil) end,
+		function() ns.StopEffectPreview() end)
+	button.previewFor = kind
+	return button
+end
+
+-- Under the Weather tab's row: how strong, with a weather to preview (a
+-- dropdown and Preview), and the view distance in bad weather.
+EFFECT_PAGES.weather.More = function(kit, content, stack)
+	local function Picked() return ns.WeatherTypeOf(ns.GetDB().weatherPreviewKind or "Rain") end
+	stack:Header(content, L["How strong"])
+	local strength = stack:Add(kit.Slider(content, "weatherTintStrength", L["Strength"], 0, 100, 5, function(value)
+		return value == 0 and L["Off"] or ("%d%%"):format(value)
+	end, 100, function()
+		ns.RefreshTint()
+		ns.PreviewEffect("weather", nil, Picked())
+	end), "slider")
+	kit.Tooltip(strength, L["Rain, snow and sandstorms tint the scene, more strongly in heavier weather."])
+	-- (Which weather the preview shows: rarely the one where you stand. On a
+	-- line of its own under the slider: beside it, Preview ran past the
+	-- settings' edge, in game 2026-11-23.)
+	local line = stack:Add(kit.Label(content, "GameFontHighlight", L["Preview:"]), "label")
+	line.searchSkip = true
+	line:SetHeight(28) -- (as tall as the dropdown beside it: the next row clears it)
+	local choices = {}
+	for _, each in ipairs(ns.PreviewWeatherTypes()) do choices[#choices + 1] = { value = each[4], text = each[2] } end
+	local pick = kit.Dropdown(content, "weatherPreviewKind", choices, 120, function()
+		if ns.EffectPreviewing("weather") then ns.PreviewEffect("weather", PREVIEW_SECONDS, Picked()) end
+	end)
+	if pick then
+		pick:SetPoint("LEFT", line, "RIGHT", 10, 0)
+		kit.Tooltip(pick, L["The weather the Preview shows."])
+		ns.weatherPreviewPick = pick -- (for /cine debug atmosphere)
+	end
+	ns.TintPreviewButton(kit, content, pick or line, "weather", L["Preview"], 80,
+		L["Shows this weather's tint at its heaviest for a few seconds (at 50% while Strength is Off)."],
+		function() return true end, Picked)
+	-- View distance in bad weather (Graphics.lua): only where the game says
+	-- the weather and has the view distance setting.
+	if C_Weather and C_Weather.GetCurrentWeather and GetCVar("horizonStart") ~= nil then
+		stack:Header(content, L["View distance"])
+		local view = stack:Add(kit.Slider(content, "rainViewScale", L["Reduce view distance in bad weather"], 0, 100, 5,
+			function(value) return value == 0 and L["Off"] or ("%d%%"):format(value) end, 100), "slider")
+		kit.Tooltip(view, L["Brings the view distance in during rain, snow or sandstorms, more the heavier it gets."])
+		ns.EffectPreviewButton(kit, content, view, L["Preview"], 80,
+			L["Pulls the view distance in as a downpour would, for a few seconds."],
+			function(db) return (db.rainViewScale or 0) > 0 end,
+			function() return ns.RainViewPreviewing() end, function() ns.PreviewRainView(PREVIEW_SECONDS) end,
+			function() ns.PreviewRainView(0) end).previewFor = "viewdist"
+	end
+end
 
 -- Under the Letterbox tab's row: the bars for a few seconds on a place new
 -- to you (CineMode or not: Effects.lua, ns.LetterboxOnDiscover).
@@ -277,5 +382,88 @@ function ns.CreateLetterboxStylePanel(kit)
 	canvas:SetScript("OnShow", kit.PageShown(kit.Refresh, content))
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Letterbox Style", L["Letterbox"])
+end
+
+-- The Weather icon's Style tab (2026-11-23): each weather's color and how
+-- fast it comes in and goes (Tint.lua's ns.WeatherColor, ns.WeatherBlendTime;
+-- off: the built-in ones). A picture at the top: the same scene clear, then
+-- in rain, snow and a sandstorm at your strength (50% while it's Off).
+function ns.CreateWeatherStylePanel(kit)
+	local canvas, content = kit.CreateScrollPage()
+	local title = kit.Label(content, "GameFontNormalLarge", L["Weather"])
+	ns.EffectTabs(content, title, "weather", 2)
+	local intro = kit.PageIntro(content, title,
+		L["How the weather tints the scene: a color for each weather, and how fast it comes in and goes."])
+
+	local preview -- (below: drawn again as each setting changes)
+	local function Changed()
+		ns.RefreshTint()
+		if preview then preview:Refresh() end
+	end
+	local switch = kit.PageSwitch(content, "weatherStyle", L["Enable Page"],
+		L["When on, the weather uses the colors and time set here. When off, Cinematic's own."], intro, Changed)
+	local stack = kit.Stack(switch, "check")
+	local rows = ns.StyleRows(kit, content, stack, Changed, "weatherStyle")
+
+	-- The picture: four panes of one scene (a sky over ground), clear, then
+	-- each weather's tint over it as the real one multiplies the world.
+	local PREVIEW_W, PREVIEW_H = 480, 110
+	preview = CreateFrame("Frame", nil, content)
+	preview:SetSize(PREVIEW_W, PREVIEW_H + 18)
+	local SKY, GROUND = { 0.78, 0.82, 0.88 }, { 0.36, 0.38, 0.34 }
+	local panes = {}
+	local kinds = { false }
+	for _, each in ipairs(ns.PreviewWeatherTypes()) do kinds[#kinds + 1] = each end
+	local paneW = PREVIEW_W / #kinds
+	for i, each in ipairs(kinds) do
+		local sky = preview:CreateTexture(nil, "BACKGROUND")
+		sky:SetColorTexture(1, 1, 1, 1)
+		sky:SetPoint("TOPLEFT", (i - 1) * paneW, -18)
+		sky:SetSize(paneW - 4, PREVIEW_H * 0.55)
+		local ground = preview:CreateTexture(nil, "BACKGROUND")
+		ground:SetColorTexture(1, 1, 1, 1)
+		ground:SetPoint("TOPLEFT", sky, "BOTTOMLEFT", 0, 0)
+		ground:SetSize(paneW - 4, PREVIEW_H * 0.45)
+		local name = kit.Label(preview, "GameFontHighlightSmall", each and each[2] or L["Clear"])
+		name:SetPoint("BOTTOMLEFT", sky, "TOPLEFT", 2, 4)
+		name.searchSkip = true
+		panes[i] = { sky = sky, ground = ground, kind = each and each[1] }
+	end
+	preview.panes = panes -- (for /cine debug atmosphere)
+	function preview.Refresh()
+		local db = ns.GetDB() or {}
+		local strength = db.weatherTintStrength or 0
+		if strength <= 0 then strength = 0.5 end
+		for _, pane in ipairs(panes) do
+			local color = pane.kind and ns.WeatherColor(pane.kind) or { 1, 1, 1 }
+			local mix = {}
+			for c = 1, 3 do mix[c] = 1 - (1 - color[c]) * strength end
+			pane.mix = mix
+			local function Shade(base, dim)
+				return { base[1] * mix[1] * dim, base[2] * mix[2] * dim, base[3] * mix[3] * dim, 1 }
+			end
+			ns.TintSetGradient(pane.sky, "VERTICAL", Shade(SKY, 0.85), Shade(SKY, 1))
+			ns.TintSetGradient(pane.ground, "VERTICAL", Shade(GROUND, 0.7), Shade(GROUND, 1))
+		end
+	end
+	kit.AddControl(preview)
+	stack:Add(preview, "label")
+	ns.weatherStylePreview = preview
+	preview.Refresh()
+
+	stack:Header(content, L["Colors"])
+	for _, each in ipairs(ns.PreviewWeatherTypes()) do
+		local name = each[4]
+		rows.Color(each[2] .. ":", { "weather" .. name .. "R", "weather" .. name .. "G", "weather" .. name .. "B" },
+			L["Pick this weather's tint. White is no change; darker colors darken the scene more."])
+	end
+
+	stack:Header(content, L["Coming in and going"])
+	rows.Slider("weatherBlendTime", L["How long"], 1, 20, 1, L["%d sec"], 1,
+		L["How long the weather's tint takes to come in as it starts, or to go as it clears or you step inside."])
+
+	canvas:SetScript("OnShow", kit.PageShown(kit.Refresh, content))
+	canvas:Hide()
+	kit.RegisterSubpage(canvas, "Weather Style", L["Weather"])
 end
 end) -- (ns.Module "style")

@@ -272,6 +272,7 @@ local WHEN = {
 	["Emote Vision"] = "Shows a card when someone emotes at you or another of its moments happens",
 	["Card Vision"] = "Each card is on the Cards tab", ["Tint"] = "Tints the world by the time of day and where you are",
 	["Letterbox"] = "Black bars at the top and bottom of the screen in CineMode",
+	["Weather"] = "Tints the scene in rain, snow and sandstorms in CineMode",
 	["Graphics+"] = "Raises the game's graphics where it can", ["Audio"] = "Music and sounds for CineMode",
 	-- (The Camera hub's.)
 	["Scenes"] = "Picks the camera for each moment",

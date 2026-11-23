@@ -498,7 +498,7 @@ if arg[1] and not update then
 					print("problem\tAuto-Hide UI: " .. key .. " isn't as Balanced has it")
 				end
 			end
-			for _, key in ipairs({ "cameraModes", "visualEffects", "letterboxPage", "tintPage", "styleGeneral",
+			for _, key in ipairs({ "cameraModes", "visualEffects", "letterboxPage", "tintPage", "weatherPage", "styleGeneral",
 				"cards", "emoteVision", "teleportVision", "handleFishing", "musicInCinematic", "handleQuality",
 				"handleHealVision", "rollWindow", "cardDuelOn", "cardLevelUpOn", "storyZoneCard",
 				"shoulderCam", "skyrideCam" }) do
@@ -1311,10 +1311,15 @@ if arg[1] and not update then
 			end
 		end
 		-- (The effects only show in CineMode now: Subtle's are on all through it,
-		-- their rows' Always, with no CineMode tick left over.)
+		-- their rows' Always, with no CineMode tick left over. But the vignette:
+		-- off in every profile since 2026-11-23, the user's OK "off for all".)
 		for _, effect in ipairs(ns.EFFECT_GRID) do
 			local row = "effect:" .. effect
-			if not subtle[effect .. "Always"] or (subtle.cineModeShow and subtle.cineModeShow[row]) then
+			if effect == "vignette" then
+				if subtle.vignetteAlways or subtle.vignette then
+					print("problem	Subtle's vignette is on (off in every profile since 2026-11-23)")
+				end
+			elseif not subtle[effect .. "Always"] or (subtle.cineModeShow and subtle.cineModeShow[row]) then
 				print("problem	Subtle's " .. effect .. " isn't on all through CineMode")
 			end
 		end

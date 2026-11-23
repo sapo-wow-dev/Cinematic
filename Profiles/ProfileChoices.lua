@@ -155,15 +155,15 @@ ns.SLOT_CHOICES = {
 	} },
 	vfx = { label = "Look", page = "Effects", question = "How should the world look?",
 		about = "Screen effects in CineMode: letterbox bars, a color tint, a vignette and weather.", default = "standard", choices = {
-		{ part = "standard", label = "Letterbox and tint", line = "Bars top and bottom, a color tint, vignette and weather",
+		{ part = "standard", label = "Letterbox and tint", line = "Bars top and bottom and a color tint",
 			modules = {} },
-		{ part = "noletterbox", label = "Tint only", line = "The tint, vignette and weather, no letterbox",
+		{ part = "noletterbox", label = "Tint only", line = "The tint, no letterbox",
 			modules = { "no-letterbox" } },
 		{ part = "cameras", label = "During cameras", line = "The effects only while a camera mode runs",
 			modules = { "effects-in-cameras" } },
 		-- (Only Subtle's: not offered.)
 		{ part = "cinebars", hidden = true, label = "In CineMode",
-			line = "The letterbox, tint, vignette and weather all through CineMode",
+			line = "The letterbox, tint and weather all through CineMode",
 			modules = { "letterbox-in-cinemode", "tint-in-cinemode", "effects-in-cinemode" } },
 		{ part = "pure", label = "Through fights", line = "Fights don't bring the letterbox down",
 			modules = { "letterbox-in-fights" } },

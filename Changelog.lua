@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-23", page = "Weather", title = "Weather page",
+		text = "Rain, snow and sandstorms have their own page in Atmosphere. Preview each one, and pick its color " ..
+		"and how fast it comes in on the Style tab." },
 	{ date = "2026-11-23", page = "Minimap Style", client = "forever", title = "Minimap Style",
 		text = "A Minimap page in the Style hub: make the minimap square with a border in your theme's color, " ..
 		"change its size, and hide its zoom buttons, zone bar or day and night dial." },

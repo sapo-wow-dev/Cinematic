@@ -3130,6 +3130,8 @@ do
 			{ "Tint", "Interface\\Icons\\INV_Misc_Gem_Variety_02", section = "Visuals" },
 			-- (Tint Style and Letterbox Style: the Style hub's since 2026-11-17.)
 			{ "Letterbox", "Interface\\Icons\\Spell_Shadow_ShadesOfDarkness", section = "Visuals" },
+			-- (Weather: its own icon since 2026-11-23, out of General; its Style tab the Style hub's.)
+			{ "Weather", "Interface\\Icons\\Spell_Frost_IceStorm", section = "Visuals" },
 			{ "Graphics+", "Interface\\Icons\\INV_Misc_Gem_Pearl_04", label = "Graphics Boost", section = "Visuals" },
 			{ "Audio", "Interface\\Icons\\INV_Misc_Drum_01", section = "Audio" },
 		} },
@@ -3210,6 +3212,7 @@ do
 			{ "Tint Style", "Interface\\Icons\\INV_Misc_Gem_Variety_02", label = "Tint", section = "Atmosphere" },
 			{ "Letterbox Style", "Interface\\Icons\\Spell_Shadow_ShadesOfDarkness", label = "Letterbox",
 				section = "Atmosphere" },
+			{ "Weather Style", "Interface\\Icons\\Spell_Frost_IceStorm", label = "Weather", section = "Atmosphere" },
 		} },
 		-- (Everything about nameplates, listed after Interface: which show
 		-- (General: the Nameplates page, its id kept), the icons on them, then
@@ -7441,19 +7444,19 @@ local function CreateEffectsPanel()
 	end
 
 	local subtitle = PageIntro(content, title,
-		L["How the game world looks in CineMode: vignette, inn glow, weather and depth of field."])
+		L["How the game world looks in CineMode: vignette, inn glow and depth of field."])
 
 	local master = VisualEffectsSwitch(content, subtitle)
 
-	-- Show in: a row each for the vignette and weather, as the Standard
-	-- Frames page's (GridRows.lua): where and when each shows. A row off
-	-- everywhere switches its effect off (its own switch follows). (The
-	-- letterbox's and tint's rows: their own pages, LetterboxStyle.lua.)
+	-- Show in: the vignette's row, as the Standard Frames page's
+	-- (GridRows.lua): where and when it shows. A row off everywhere switches
+	-- it off (its own switch follows). (The letterbox's, tint's and, since
+	-- 2026-11-23, the weather's rows: their own pages, LetterboxStyle.lua.)
 	local gridHeader = Header(content, L["Show in"], master, -18)
 	gridHeader:SetPoint("TOPLEFT", master, "BOTTOMLEFT", 2, -18)
 	PageIntro(content, gridHeader,
 		L["Pick where and when each effect shows in CineMode."])
-	local EFFECT_LABELS = { vignette = L["Vignette"], weather = L["Weather"] }
+	local EFFECT_LABELS = { vignette = L["Vignette"] }
 	-- (No CineMode column: the effects only show in CineMode, so Always says it all.)
 	local effectRows = { opts = { quiet = true, cam = true, anyFight = true }, underHeader = true }
 	for _, effect in ipairs(ns.EFFECT_GRID) do
@@ -7472,10 +7475,10 @@ local function CreateEffectsPanel()
 	end
 	local lastGridRow = ns.ShowTable(content, gridHeader, effectRows, L["Visual Effects"])
 
-	-- The vignette, inn glow and weather: each slider on one line with its
-	-- name, as on Graphics+, the sliders lined up past the longest name and
-	-- each one's value to its right. All the way left is Off. (The vignette
-	-- and weather are switched on and off in the grid's Always column.)
+	-- The vignette, inn glow and camera haze: each slider on one line with
+	-- its name, as on Graphics+, the sliders lined up past the longest name
+	-- and each one's value to its right. All the way left is Off. (The
+	-- vignette is switched on and off in the grid's Always column.)
 	local inlineRows = {}
 	local function InlineSlider(anchor, gap, key, label, maxV, step, onChange)
 		local name = Label(content, "GameFontHighlight", label)
@@ -7503,11 +7506,21 @@ local function CreateEffectsPanel()
 		end
 	end
 
+	-- Previews (2026-11-23): each slider shows its effect over the world as
+	-- it moves, CineMode or not (Tint.lua ns.PreviewEffect; the effects only
+	-- show in CineMode, so with the settings open nothing changed), and a
+	-- Preview button at its row's end shows it for longer, Stop while it runs
+	-- (LetterboxStyle.lua's). Greyed while the row can't show anything.
+	local kit = ns.lowHealthKit
+
 	-- Vignette
 	local vignetteStrength = InlineSlider(lastGridRow, 24, "vignetteStrength", L["Vignette strength"], 100, 5,
-		ns.RefreshTint)
+		function() ns.RefreshTint() ns.PreviewEffect("vignette") end)
 	Tooltip(vignetteStrength, L["Darkens the edges of the screen."])
 	GreyRow(vignetteStrength, function(db) return db.vignette end)
+	ns.TintPreviewButton(kit, content, vignetteStrength, "vignette", L["Preview"], 80,
+		L["Shows the vignette for a few seconds, in CineMode or not."],
+		function(db) return db.vignette and (db.vignetteStrength or 0) > 0 end)
 
 	-- Inns: Off is the inn glow switched off (its amount kept for next time).
 	local innGlowStrength = InlineSlider(vignetteStrength.rowName, 18, {
@@ -7521,25 +7534,18 @@ local function CreateEffectsPanel()
 			db.innGlow = value > 0
 			if value > 0 then db.innGlowAmount = value end
 		end,
-	}, L["Inn glow amount"], 100, 1, ns.RefreshTint)
+	}, L["Inn glow amount"], 100, 1, function() ns.RefreshTint() ns.PreviewEffect("inn") end)
 	RecordKey(content, "innGlow") -- (for Reset page)
 	RecordKey(content, "innGlowAmount")
 	Tooltip(innGlowStrength, L["Inside an inn, a firelight glow replaces the outdoor tint."] .. " " ..
 		L["How much light the glow adds at its brightest, low on the screen."])
+	ns.TintPreviewButton(kit, content, innGlowStrength, "inn", L["Preview"], 80,
+		L["Shows the glow for a few seconds as if you were inside an inn."],
+		function(db) return db.innGlow and (db.innGlowAmount or 0) > 0 end)
 
-	-- Weather
-	local weatherTintStrength = InlineSlider(innGlowStrength.rowName, 18, "weatherTintStrength", L["Weather strength"], 100, 5,
-		ns.RefreshTint)
-	Tooltip(weatherTintStrength, L["Rain, snow and sandstorms tint the scene, more strongly in heavier weather."])
-	GreyRow(weatherTintStrength, function(db) return db.weatherTint end)
-
-	-- View distance in bad weather (Graphics.lua): only where the game says the
-	-- weather and has the view distance setting.
-	local lastRow = weatherTintStrength
-	if C_Weather and C_Weather.GetCurrentWeather and GetCVar("horizonStart") ~= nil then
-		lastRow = InlineSlider(weatherTintStrength.rowName, 18, "rainViewScale", L["Reduce view distance in bad weather"], 100, 5)
-		Tooltip(lastRow, L["Brings the view distance in during rain, snow or sandstorms, more the heavier it gets."])
-	end
+	-- (The weather's strength and the view distance in bad weather: the
+	-- Weather icon's page since 2026-11-23, LetterboxStyle.lua.)
+	local lastRow = innGlowStrength
 
 	-- Camera haze (depth of field): each camera mode's page sets its own
 	-- strength, this scales them all. Off is the haze switched off (the
@@ -7555,10 +7561,18 @@ local function CreateEffectsPanel()
 			db.depthOfField = value > 0
 			if value > 0 then db.dofScale = value end
 		end,
-	}, L["Camera haze"], 200, 5)
+	}, L["Camera haze"], 200, 5, function(value)
+		if value > 0 then ns.FocusPreview(ns.FocusScaledStrength(value / 100)) end
+	end)
 	RecordKey(content, "depthOfField") -- (for Reset page)
 	RecordKey(content, "dofScale")
 	Tooltip(cameraHaze, L["A light haze around the edges of the screen in the camera modes."])
+	ns.EffectPreviewButton(kit, content, cameraHaze, L["Preview"], 80,
+		L["Shows the camera modes' haze at this scale for a few seconds."],
+		function(db) return db.depthOfField and (db.dofScale or 0) > 0 end,
+		function() return ns.FocusDemoRunning() end,
+		function() ns.FocusDemo(8, ns.FocusScaledStrength(ns.GetDB().dofScale or 1)) end,
+		function() ns.FocusDemo() end).previewFor = "haze"
 
 	local nameWidth = 0
 	for _, slider in ipairs(inlineRows) do
@@ -7566,6 +7580,27 @@ local function CreateEffectsPanel()
 	end
 	for _, slider in ipairs(inlineRows) do
 		slider:SetPoint("LEFT", slider.rowName, "LEFT", nameWidth + 20, 0)
+	end
+
+	-- How the effects look: a link to each Style page (2026-11-23: nothing
+	-- here led to them). Only with Style loaded, where they're made.
+	if ns.ModuleLoaded("style") and ns.StyleLink then
+		local looksHeader = Header(content, L["How they look"], cameraHaze.rowName, -24)
+		local looksLine = Label(content, "GameFontHighlight", L["Style pages:"])
+		looksLine:SetPoint("TOPLEFT", looksHeader, "BOTTOMLEFT", 0, -12)
+		looksLine.searchSkip = true
+		local after = looksLine
+		for _, link in ipairs({
+			{ "Tint Style", L["Tint"], L["The tint's preset, time of day and zone moods."] },
+			{ "Letterbox Style", L["Letterbox"], L["How the letterbox bars look and come in."] },
+			{ "Weather Style", L["Weather"], L["Each weather's color, and how fast it comes in."] },
+		}) do
+			-- (Each made with Style loaded; some after this page, so not asked here.)
+			after = ns.StyleLink(content, nil, link[1], link[3], Tooltip, link[2], after)
+			after.styleLinkFor = link[1] -- (for /cine debug atmosphere)
+			ns.effectStyleLinks = ns.effectStyleLinks or {}
+			ns.effectStyleLinks[#ns.effectStyleLinks + 1] = after
+		end
 	end
 
 	ATMOSPHERE_LOAD.beside = true -- (right of the page's switch, as Load Cameras)
@@ -22194,6 +22229,12 @@ ns.OnLanguage(function()
 	if ns.ModuleLoaded("atmosphere") then
 		ns.CreateEffectPanel(ns.lowHealthKit, "tint") -- (LetterboxStyle.lua: its Show in row)
 		Lap("CreateEffectPanel")
+		ns.CreateEffectPanel(ns.lowHealthKit, "weather") -- (and the weather's, its strength and view distance)
+		Lap("CreateEffectPanel")
+		if ns.CreateWeatherStylePanel then -- (LetterboxStyle.lua; a Style page: none with Style left out)
+			ns.CreateWeatherStylePanel(ns.lowHealthKit)
+			Lap("CreateWeatherStylePanel")
+		end
 		if ns.CreateTintStylePanel then -- (TintStyle.lua; a Style page: none with Style left out, Modules.lua)
 			ns.CreateTintStylePanel(ns.lowHealthKit)
 			Lap("CreateTintStylePanel")

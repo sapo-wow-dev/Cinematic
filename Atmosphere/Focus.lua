@@ -112,6 +112,20 @@ function ns.FocusPreview(value)
 	level = 1 -- straight in, so you see the value now
 end
 
+-- Whether a demo or preview is showing (the Visual Effects page's Preview
+-- button turns into Stop meanwhile; ns.FocusDemo() with nothing stops it).
+function ns.FocusDemoRunning()
+	return GetTime() < stopAt
+end
+
+-- The haze the camera modes would show at Camera haze's scale (0-2): the
+-- strongest mode's, for the Visual Effects page's preview.
+function ns.FocusScaledStrength(scale)
+	local db, most = ns.db or {}, 0
+	for _, key in pairs(MODE_KEY) do most = math.max(most, tonumber(db[key]) or 0) end
+	return math.min(1, most * (scale or 1))
+end
+
 -- The demo's strength (for /cine doftest's message).
 function ns.FocusDemoStrength()
 	return demoStrength or DEMO_STRENGTH

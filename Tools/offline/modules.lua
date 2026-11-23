@@ -71,7 +71,7 @@ local SPECS = {
 			"from @Style/ColorPalette.lua", "from @Style/StyleFonts.lua" },
 		pages = { "Style Themes", "Style Overrides", "Interface Recolor", "Unit Style", "Personal Style", "Raid Style",
 			"Action Style", "Combat Text Style", "Nameplate Style", "Name Style", "Bubble Style", "Tooltip Style", "Minimap Style",
-			"Tint Style", "Letterbox Style", "Visions Style", "Vitals Style", "Card Styles", "Damage Vision Look",
+			"Tint Style", "Letterbox Style", "Weather Style", "Visions Style", "Vitals Style", "Card Styles", "Damage Vision Look",
 			"Emote Vision Style" },
 		general = "Style General", box = "Load Style", ask = "Style",
 		setting = { "tooltipFont", "friz" },
@@ -87,7 +87,7 @@ local SPECS = {
 		files = { "Atmosphere/Tint.lua", "Atmosphere/Focus.lua", "Atmosphere/Music.lua", "Atmosphere/Letterbox.lua",
 			"Graphics.lua", "Style/LetterboxStyle.lua" },
 		allowed = {},
-		pages = { "Tint", "Letterbox", "Graphics+", "Audio", "Tint Style", "Letterbox Style" },
+		pages = { "Tint", "Letterbox", "Weather", "Graphics+", "Audio", "Tint Style", "Letterbox Style", "Weather Style" },
 		general = "Effects", box = "Load Atmosphere", ask = "Atmosphere",
 		-- (Its settings are Core.lua's: none of its own to write down.)
 		setting = { "vignetteStrength", 0.33 }, noOwnDefaults = true,

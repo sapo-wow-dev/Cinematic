@@ -263,7 +263,7 @@ local OFF_UNTIL_PICKED = {
 	"handleBuffs", "handleCooldowns", "handleSwing", "handleMinimap", "minimapKeepOpen", "handleQuests", "handleTooltips",
 	"handleChat", "handlePlates", "handleNames", "handleBubbles",
 	"cameraModes", "shoulderCam", "skyrideCam",
-	"visualEffects", "letterboxPage", "tintPage", "graphicsPlus", "musicInCinematic",
+	"visualEffects", "letterboxPage", "tintPage", "weatherPage", "graphicsPlus", "musicInCinematic",
 	"styleGeneral", "ufStyle", "rfStyle", "abStyle", "prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle",
 	"plateCastStyle", "bubblesStyle", "irStyle", "minimapStyle", "combatTextStyle",
 	"handleHealVision", "damageVision", "lowHealth", "questVision", "questTalk", "rollWindow", "teleportVision", "deathScreen",

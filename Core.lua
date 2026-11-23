@@ -88,6 +88,15 @@ local DEFAULTS = {
 	letterbox = true,
 	letterboxPage = true,  -- the Letterbox page's Enable Page (off: no bars; tintPage: the Tint page's)
 	tintPage = true,
+	-- The Weather page's Enable Page (2026-11-23: its own icon, out of General),
+	-- and its Style tab's: your color per weather and how fast it blends.
+	weatherPage = true,
+	weatherStyle = true,
+	weatherPreviewKind = "Rain", -- (the weather its Preview shows: Rain, Snow or Sandstorm)
+	weatherBlendTime = 8,
+	weatherRainR = 0.62, weatherRainG = 0.66, weatherRainB = 0.74,
+	weatherSnowR = 0.86, weatherSnowG = 0.91, weatherSnowB = 1,
+	weatherSandstormR = 1, weatherSandstormG = 0.82, weatherSandstormB = 0.6,
 	letterboxSize = 0.03,  -- fraction of screen height per bar
 	letterboxAlpha = 1,    -- bar opacity
 	-- The bars' look: the Style hub's Letterbox page (letterboxStyle: on; off,
@@ -121,7 +130,10 @@ local DEFAULTS = {
 	tintDriftAmount = 0.08, -- how far it wanders, as a fraction of the strength (0.08 = +/-8%)
 	mapDim = 0,            -- in CineMode the world map takes the tint's colour and goes this much darker (0 = off; Tint.lua)
 	mapDimFollowTint = false, -- Match the tint: mapDim is the most, scaled by how dark the tint is now (Tint.lua)
-	vignette = true,      -- darkened screen edges
+	-- Darkened screen edges: off to start with (2026-11-23). It never showed
+	-- till then (Step dropped its wanted), so on for everyone would have
+	-- brought it in unasked; Migrations.lua's vignetteOffV1 turns it off once.
+	vignette = false,
 	vignetteStrength = 0.1,
 	innGlow = true,        -- indoors in an inn: lift the outdoor tint and add a warm glow
 	innGlowAmount = 0.02,  -- light the inn glow adds at its brightest (0.1 = 10%)
@@ -1671,7 +1683,7 @@ for page, keys in pairs({
 		"cardProfessionOn", "cardQuestOn", "cardClearedOn", "cardRareOn", "cardBattlegroundOn", "cardStreakOn",
 		"cardBossDownOn", "cardFelledOn", "cardRevivedOn" },
 	cameraModes = { "shoulderCam", "skyrideCam" }, -- Cameras > General's Enable Cameras: Shoulder Cam, Skyriding Cam
-	visualEffects = { "letterboxPage", "tintPage", "graphicsPlus", "musicInCinematic" }, -- (the Atmosphere hub's pages' switches)
+	visualEffects = { "letterboxPage", "tintPage", "weatherPage", "graphicsPlus", "musicInCinematic" }, -- (the Atmosphere hub's pages' switches)
 	-- Style > General's Enable Style: the Style hub's pages' switches.
 	styleGeneral = { "ufStyle", "rfStyle", "abStyle", "prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle",
 		"plateCastStyle", "bubblesStyle", "irStyle", "minimapStyle", "combatTextStyle" },
@@ -1768,8 +1780,8 @@ end)
 -- (Atmosphere left out: Enable Visual Effects and each of its pages, the
 -- Letterbox's, Tint's, Graphics Boost's and Audio's, and their Style pages.)
 ns.ModuleLeftOut("atmosphere", function()
-	for _, key in ipairs({ "visualEffects", "letterboxPage", "tintPage", "graphicsPlus", "musicInCinematic",
-		"letterboxStyle", "tintStyle", "depthOfField" }) do
+	for _, key in ipairs({ "visualEffects", "letterboxPage", "tintPage", "weatherPage", "graphicsPlus", "musicInCinematic",
+		"letterboxStyle", "tintStyle", "weatherStyle", "depthOfField" }) do
 		LEFT_OUT[key] = true
 	end
 end)
@@ -2151,6 +2163,11 @@ do
 			local result = ConvertRow(row, function(key) return ns.OldGridDefault(key) and true or false end)
 			DEFAULTS[row.always] = result.always
 			for list, value in pairs(result.lists) do ns.LIST_DEFAULTS[list][row.key] = value end
+			-- (The vignette's row: nowhere to start with, as its switch. 2026-11-23.)
+			if row.key == "effect:vignette" then
+				DEFAULTS[row.always] = false
+				for _, list in pairs(ns.LIST_DEFAULTS) do list[row.key] = nil end
+			end
 			if result.rule then
 				-- (No default needs a rule: if one did, its ticks would stand in for it.)
 				geterrorhandler()("Cinematic: " .. row.key .. "'s default would need a rule: " .. result.rule)
@@ -2232,11 +2249,13 @@ DEFAULTS.taxiZoomPauseVary = 3
 -- per mode (0 is off there).
 DEFAULTS.depthOfField = true
 DEFAULTS.dofScale = 1 -- (Camera haze: times each mode's own strength)
-DEFAULTS.dofIdle = 0.025
-DEFAULTS.dofCozy = 0.025
-DEFAULTS.dofVista = 0.025
-DEFAULTS.dofFish = 0.025
-DEFAULTS.dofFlight = 0.025
+-- (15% since 2026-11-23: at 2.5% it couldn't be seen, even with Camera haze
+-- at 200%. Migrations.lua's dofStrengthV1 moves the old default along.)
+DEFAULTS.dofIdle = 0.15
+DEFAULTS.dofCozy = 0.15
+DEFAULTS.dofVista = 0.15
+DEFAULTS.dofFish = 0.15
+DEFAULTS.dofFlight = 0.15
 DEFAULTS.dofWalk = 0
 DEFAULTS.dofRun = 0
 
@@ -3861,19 +3880,22 @@ local TICK = 0.03
 -- Each step of the update runs protected: an error in one (the music, say)
 -- is logged and the rest carry on, and one that keeps repeating stops the
 -- addon for the session (see ns.ReportError in Diagnostics.lua).
-local stepFn, stepA, stepB, stepStack
+-- (Up to four values handed on: with two, the tint's call lost the
+-- vignette's and weather's wanted, 2026-10-13 to 11-23, so neither showed
+-- unless previewed; and LetterboxExtra its cinematic.)
+local stepFn, stepA, stepB, stepC, stepD, stepStack
 local function RunStep()
-	return stepFn(stepA, stepB)
+	return stepFn(stepA, stepB, stepC, stepD)
 end
 local function StepHandler(err)
 	stepStack = debugstack(2)
 	return err
 end
-local function Step(fn, a, b)
+local function Step(fn, a, b, c, d)
 	if ns.IsSuspended() then
 		return nil -- stopped by an earlier step this tick: leave the rest
 	end
-	stepFn, stepA, stepB = fn, a, b
+	stepFn, stepA, stepB, stepC, stepD = fn, a, b, c, d
 	local started, memory
 	if ns.profiling then
 		started, memory = ns.ProfileMark()
@@ -3882,7 +3904,7 @@ local function Step(fn, a, b)
 	if started then
 		ns.ProfileStep(fn, started, memory) -- (/cine debug cpu)
 	end
-	stepFn, stepA, stepB = nil, nil, nil
+	stepFn, stepA, stepB, stepC, stepD = nil, nil, nil, nil, nil
 	if not ok then
 		ns.ReportError(result, stepStack, true)
 		return nil
@@ -3939,6 +3961,7 @@ end
 local EFFECT_ROWS = {} -- (their Show in rows' keys, made once)
 for _, key in ipairs(GRID_EFFECTS) do EFFECT_ROWS[key] = "effect:" .. key end
 local effectWanted = {}
+ns.effectWanted = effectWanted -- (read only: /cine debug atmosphere's "live" step)
 local effectAsk = { at = -math.huge } -- (the effects' rows' answers, when last asked, and for what)
 local EFFECT_ASK = 0.1 -- (seconds, out of CineMode)
 local lastFightAt = -math.huge

@@ -71,6 +71,14 @@ local function SetVignette(pieces, size, alpha, r, g, b, w, h, sides)
 end
 -- (Also LowHealth.lua's.)
 ns.CreateVignette, ns.SetVignette = CreateVignette, SetVignette
+-- The vignette's darkness for its strength setting (0-1). Eased so the low
+-- end shows: drawn as-is, 5% was 5% black at the very corner and moving the
+-- slider there changed nothing you could see (the user, 2026-11-23). 5% is
+-- 17% now, 10% (the default) 25%, 50% 66%, 100% still all the way.
+ns.VignetteAlpha = function(strength)
+	strength = tonumber(strength) or 0
+	return strength > 0 and math.min(1, strength) ^ 0.6 or 0
+end
 
 -- VERTICAL "from" is the bottom, for HORIZONTAL the left.
 -- The two colour objects are made once and reused: CreateColor makes a new
@@ -309,7 +317,10 @@ local tintFrame, tintTexture, vignetteEdges
 local tintLevel = 0
 -- The vignette's and weather's own levels: they share the tint's overlay but
 -- have their own rows in the Visual Effects page's grid.
-local layerLevel = { vignette = 0, weather = 0 }
+-- (inn: the inn glow's own, wanted where the tint could show, CineMode or
+-- Allow outside CineMode, whatever the tint's own page and row say: the glow
+-- needed the tint itself showing, 2026-11-23.)
+local layerLevel = { vignette = 0, weather = 0, inn = 0 }
 local tintDirty = false
 local tintPreview = false
 -- /cine tinttest: each time of day in turn, its tint and its title.
@@ -776,7 +787,7 @@ local function ApplyTint(level, vignetteLevel, weatherLevel)
 		ns.mapDim.color[1], ns.mapDim.color[2], ns.mapDim.color[3] = 1, 1, 1
 	end
 
-	local glow = innLevel * level * (db.innGlowAmount or 0)
+	local glow = innLevel * layerLevel.inn * (db.innGlowAmount or 0)
 	if glow > 0 then
 		-- The zone's colour with its brightest channel at 1, so it shifts the
 		-- glow's hue without dimming it.
@@ -809,9 +820,15 @@ local function ApplyTint(level, vignetteLevel, weatherLevel)
 	ns.mapDim.level = level
 	ns.UpdateMapDim()
 
-	SetVignette(vignetteEdges, VIGNETTE_SIZE, db.vignette and db.vignetteStrength * vignetteLevel or 0)
+	local vignetteAlpha = db.vignette and ns.VignetteAlpha(db.vignetteStrength) * vignetteLevel or 0
+	SetVignette(vignetteEdges, VIGNETTE_SIZE, vignetteAlpha)
+	-- (What the vignette, glow and weather drew, for /cine debug atmosphere:
+	-- Dev/AtmosphereTest.lua. In ns.tintDrawn, set above.)
+	local drawn = ns.tintDrawn
+	drawn.vignette, drawn.glow = vignetteAlpha, glow
+	drawn.wr, drawn.wg, drawn.wb = weather[1], weather[2], weather[3]
 
-	tintFrame:SetShown(level > 0 or vignetteLevel > 0 or weatherLevel > 0)
+	tintFrame:SetShown(level > 0 or vignetteLevel > 0 or weatherLevel > 0 or glow > 0)
 end
 
 -- The washes off, whatever else went wrong (they aren't the tint frame's own
@@ -900,6 +917,8 @@ end
 -- Indoors in an inn: resting outside a capital, under a roof. (The rested area
 -- often spills out the door; the roof check keeps the street outside dark.)
 local function InInn()
+	-- (The Visual Effects page's inn preview: as if inside one.)
+	if db.innGlow and ns.EffectPreviewing("inn") then return true end
 	if not db.innGlow or ns.GetPlaceType() ~= "inn" then
 		return false
 	end
@@ -918,8 +937,9 @@ local function UpdateInnGlow(elapsed)
 	if innLevel == target then
 		return false
 	end
-	-- While the tint is hidden, just jump.
-	innLevel = tintLevel == 0 and target or Approach(innLevel, target, elapsed, INN_BLEND_TIME)
+	-- While the glow is hidden or previewed, just jump.
+	innLevel = (layerLevel.inn == 0 or ns.atmoPreview.kind == "inn") and target
+		or Approach(innLevel, target, elapsed, INN_BLEND_TIME)
 	return true
 end
 
@@ -965,14 +985,21 @@ end
 -- or in clear or unknown weather.
 local function WeatherTargetColor()
 	local kind, intensity
-	if db.weatherTint then
+	local strength = db.weatherTintStrength or 0
+	if db.weatherTint and ns.EffectPreviewing("weather") then
+		-- (The Visual Effects page's weather preview: that weather at its
+		-- heaviest, indoors too; at 50% while Weather strength is Off, so its
+		-- buttons show what it would look like.)
+		kind, intensity = ns.atmoPreview.weather, 1
+		if strength <= 0 then strength = 0.5 end
+	elseif db.weatherTint then
 		local ok, indoors = pcall(IsIndoors)
 		if not (ok and indoors) then
 			kind, intensity = CurrentWeather()
 		end
 	end
-	local color = kind and WEATHER_COLORS[kind]
-	local amount = color and intensity * (db.weatherTintStrength or 0) or 0
+	local color = kind and ns.WeatherColor(kind)
+	local amount = color and intensity * strength or 0
 	local target = { 1, 1, 1 }
 	for c = 1, 3 do
 		target[c] = color and 1 - (1 - color[c]) * amount or 1
@@ -990,9 +1017,9 @@ local function UpdateWeather(elapsed)
 	local changed = false
 	for c = 1, 3 do
 		if weatherColor[c] ~= weatherTarget[c] then
-			-- While the tint is hidden, just jump.
-			weatherColor[c] = layerLevel.weather == 0 and weatherTarget[c]
-				or Approach(weatherColor[c], weatherTarget[c], elapsed, WEATHER_BLEND_TIME)
+			-- While the tint is hidden or previewed, just jump.
+			weatherColor[c] = (layerLevel.weather == 0 or ns.atmoPreview.kind == "weather") and weatherTarget[c]
+				or Approach(weatherColor[c], weatherTarget[c], elapsed, ns.WeatherBlendTime())
 			changed = true
 		end
 	end
@@ -1032,7 +1059,10 @@ end
 -- A level (the tint's, vignette's or weather's) one step toward wanted (0 or 1).
 local function FadeLevel(level, wanted, elapsed)
 	local duration = wanted > level and ns.FadeOutTime() or ns.FadeInTime()
-	return Previewing() and wanted or Approach(level, wanted, elapsed, duration)
+	-- (A Visual Effects page preview comes in at once, so a slider's move
+	-- shows as you make it; it fades out as the effect would.)
+	return (Previewing() or (ns.atmoPreview.kind and wanted > level)) and wanted
+		or Approach(level, wanted, elapsed, duration)
 end
 
 -- cinematic, vignetteOn, weatherOn: whether each is wanted now (see Core).
@@ -1044,9 +1074,15 @@ ns.tintPace = { elapsed = 0, every = 0.2 }
 local function UpdateTint(cinematic, elapsed, vignetteOn, weatherOn)
 	local pace = ns.tintPace
 	pace.elapsed = pace.elapsed + elapsed
+	local preview = ns.atmoPreview
+	if preview.kind and GetTime() >= preview.untilT then
+		preview.kind = nil -- (its time is up: back to what's wanted, fading out)
+		tintDirty = true
+		innCheckedAt, weatherCheckedAt = 0, 0
+	end
 	if not pace.busy and not tintDirty and not daySweep and not (ns.DeathScreenBusy and ns.DeathScreenBusy())
 		and pace.tint == cinematic and pace.vignette == vignetteOn and pace.weather == weatherOn
-		and pace.elapsed < pace.every and not Previewing() then
+		and pace.elapsed < pace.every and not Previewing() and not preview.kind then
 		return
 	end
 	-- (This tick's own time, not the wait's: nothing was fading through it, and
@@ -1056,13 +1092,16 @@ local function UpdateTint(cinematic, elapsed, vignetteOn, weatherOn)
 	if not ns.mapDim.hooked then ns.HookMapDim() end
 	if ns.UpdateDeathVision then ns.UpdateDeathVision(elapsed) end -- (DeathVision.lua)
 	local target = TintWanted(cinematic) and 1 or 0
-	local vignetteWant = TintWanted(vignetteOn) and 1 or 0
-	local weatherWant = TintWanted(weatherOn) and 1 or 0
-	-- (None of the three wanted or showing, nothing to redraw: the colour's
+	-- (A Visual Effects page preview: its effect wanted now, CineMode or not.)
+	local vignetteWant = (TintWanted(vignetteOn) or preview.kind == "vignette") and 1 or 0
+	local weatherWant = (TintWanted(weatherOn) or preview.kind == "weather") and 1 or 0
+	local innWant = (TintWanted(cinematic or ns.lastCinematic) or preview.kind == "inn") and 1 or 0
+	-- (None of them wanted or showing, nothing to redraw: the colour's
 	-- inputs (the preset swap, an inn, the weather, the zone's mood) aren't
 	-- looked at. Picked up again as one's wanted: its checks are due by then.)
-	if target == 0 and vignetteWant == 0 and weatherWant == 0 and tintLevel == 0 and layerLevel.vignette == 0
-		and layerLevel.weather == 0 and not tintDirty and not daySweep then
+	if target == 0 and vignetteWant == 0 and weatherWant == 0 and innWant == 0 and tintLevel == 0
+		and layerLevel.vignette == 0 and layerLevel.weather == 0 and layerLevel.inn == 0
+		and not tintDirty and not daySweep then
 		return
 	end
 	if UpdatePresetSwap(elapsed) then
@@ -1103,7 +1142,7 @@ local function UpdateTint(cinematic, elapsed, vignetteOn, weatherOn)
 		end
 	end
 	if tintLevel == target and layerLevel.vignette == vignetteWant and layerLevel.weather == weatherWant
-		and not tintDirty then
+		and layerLevel.inn == innWant and not tintDirty then
 		return
 	end
 	tintDirty = false
@@ -1111,6 +1150,7 @@ local function UpdateTint(cinematic, elapsed, vignetteOn, weatherOn)
 	tintLevel = FadeLevel(tintLevel, target, elapsed)
 	layerLevel.vignette = FadeLevel(layerLevel.vignette, vignetteWant, elapsed)
 	layerLevel.weather = FadeLevel(layerLevel.weather, weatherWant, elapsed)
+	layerLevel.inn = FadeLevel(layerLevel.inn, innWant, elapsed)
 	ApplyTint(tintLevel, layerLevel.vignette, layerLevel.weather)
 end
 
@@ -1139,6 +1179,84 @@ function ns.CreateTint()
 end
 
 ns.UpdateTint = UpdateTint
+-- The Visual Effects page's previews (2026-11-23): a slider moved or a
+-- Preview button shows that effect over the world for a few seconds, in
+-- CineMode or out of it ("is it even on?": nothing showed outside CineMode,
+-- and there was no way to see weather or an inn's glow on demand).
+-- kind: "vignette", "weather" or "inn"; weather: the Enum.WeatherType to
+-- show (default: the Weather page's pick, weatherPreviewKind).
+-- (On ns: no more locals for this file's main chunk.)
+ns.atmoPreview = { kind = nil, untilT = 0, weather = nil }
+ns.EFFECT_PREVIEW_SECONDS = 3
+ns.EffectPreviewing = function(kind, weather)
+	local p = ns.atmoPreview
+	if not p.kind or GetTime() >= p.untilT then return false end
+	return (kind == nil or p.kind == kind) and (weather == nil or p.weather == weather)
+end
+ns.PreviewEffect = function(kind, seconds, weather)
+	db = db or ns.GetDB()
+	local p = ns.atmoPreview
+	if kind == "weather" then
+		-- (Else the Weather page's pick, Rain to start with.)
+		p.weather = weather or ns.WeatherTypeOf(db.weatherPreviewKind or "Rain")
+	end
+	p.kind, p.untilT = kind, GetTime() + (seconds or ns.EFFECT_PREVIEW_SECONDS)
+	tintDirty = true
+	innCheckedAt, weatherCheckedAt = 0, 0
+	-- (Out of CineMode the main tick waits a second at a time: at the full
+	-- pace now, and till it has faded out after.)
+	local idle = ns.idleTick
+	if idle then
+		idle.wake = true
+		idle.busyUntil = math.max(idle.busyUntil or 0, p.untilT + (ns.FadeOutTime() or 1) + 1)
+		idle.busyWhy = "effect preview"
+	end
+end
+ns.StopEffectPreview = function()
+	local p = ns.atmoPreview
+	if not p.kind then return end
+	p.untilT = 0 -- (UpdateTint lets it go, and it fades out)
+	if ns.idleTick then ns.idleTick.wake = true end
+end
+-- The weather types the Weather pages offer: { type, label, its colour now,
+-- name (Rain, Snow, Sandstorm: the Weather Style page's weather<Name>R/G/B
+-- and the preview's weatherPreviewKind) } each.
+ns.WEATHER_NAMES = { "Rain", "Snow", "Sandstorm" }
+ns.WeatherTypeOf = function(name)
+	local fallback = { Rain = 1, Snow = 2, Sandstorm = 3 }
+	return WEATHER_TYPE[name] or fallback[name] or fallback.Rain
+end
+ns.PreviewWeatherTypes = function()
+	local list = {}
+	for _, name in ipairs(ns.WEATHER_NAMES) do
+		local kind = ns.WeatherTypeOf(name)
+		list[#list + 1] = { kind, L[name], ns.WeatherColor(kind), name }
+	end
+	return list
+end
+-- A weather's colour: yours from the Weather Style page while it's on (Style
+-- loaded, Enable Style and the page's switch), else the built-in one.
+ns.WeatherColor = function(kind)
+	db = db or ns.GetDB()
+	local builtIn = WEATHER_COLORS[kind]
+	if not (builtIn and db and ns.StyleOn and ns.StyleOn("weatherStyle", db)) then return builtIn end
+	for _, name in ipairs(ns.WEATHER_NAMES) do
+		if ns.WeatherTypeOf(name) == kind then
+			local r, g, b = db["weather" .. name .. "R"], db["weather" .. name .. "G"], db["weather" .. name .. "B"]
+			if type(r) == "number" and type(g) == "number" and type(b) == "number" then return { r, g, b } end
+		end
+	end
+	return builtIn
+end
+-- Seconds the weather's tint takes to come in or go: the Weather Style
+-- page's while it's on, else WEATHER_BLEND_TIME.
+ns.WeatherBlendTime = function()
+	db = db or ns.GetDB()
+	if db and ns.StyleOn and ns.StyleOn("weatherStyle", db) and type(db.weatherBlendTime) == "number" then
+		return db.weatherBlendTime
+	end
+	return WEATHER_BLEND_TIME
+end
 ns.RefreshTint = function()
 	tintDirty = true
 	innCheckedAt = 0 -- pick up an inn glow setting change right away
