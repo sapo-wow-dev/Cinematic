@@ -297,6 +297,7 @@ Dev\PageCostTest.lua
 Dev\ProfilePartsTest.lua
 Dev\LevelEmoteTest.lua
 Dev\AuraPlateTest.lua
+Dev\RankDragonTest.lua
 Dev\FavLinesTest.lua
 Dev\FavoritesTest.lua
 Dev\FavStarsTest.lua

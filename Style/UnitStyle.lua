@@ -2262,6 +2262,64 @@ local function SizePortrait(frame, state, portrait, on)
 	end
 end
 
+-- The game's elite, rare or boss dragon round a theme's portrait. The game pins it to
+-- the frame's corner at its own size, drawn round its own 58 px ring; a theme's shape is
+-- bigger, so it sat small and off to the side under it. Here it's hung on the portrait's
+-- middle instead, as far off it as the game had it from its own, and grown with the shape.
+-- Each time the game places it (a new target) it's moved again; the game's spot goes back
+-- with the game's shape.
+local rankSpots = setmetatable({}, { __mode = "k" }) -- dragon -> { game's spot, its size, frame }
+local placingRank = false
+local function PlaceRank(rank, portrait, on, grow)
+	local spot = rankSpots[rank]
+	if not spot or not spot.point then return end
+	placingRank = true
+	if on then
+		-- (The game's portrait as it was, before a theme sized it: its middle, from the
+		-- container's corner the dragon hangs on.)
+		local first = SpotsOf(portrait)[1]
+		local wide, tall = FirstSize(portrait)
+		local now = portrait:GetWidth()
+		if first and first[1] == spot.point and first[2] == spot.rel and first[3] == spot.relPoint
+			and Readable(first[4]) and Readable(first[5])
+			and Readable(wide) and Readable(tall) and Readable(now) and type(wide) == "number" and wide > 0 then
+			local size = (now + 2 * (grow or 0)) / wide
+			local dx = spot.x - (first[4] - wide / 2)
+			local dy = spot.y - (first[5] - tall / 2)
+			rank:ClearAllPoints()
+			rank:SetPoint(spot.point, portrait, "CENTER", dx * size, dy * size)
+			rank:SetSize(spot.w * size, spot.h * size)
+			spot.moved = true
+		end
+	elseif spot.moved then
+		rank:ClearAllPoints()
+		rank:SetPoint(spot.point, spot.rel, spot.relPoint, spot.x, spot.y)
+		rank:SetSize(spot.w, spot.h)
+		spot.moved = nil
+	end
+	placingRank = false
+end
+local function WatchRank(rank, frame)
+	if rankSpots[rank] then return end
+	local spot = { frame = frame }
+	rankSpots[rank] = spot
+	local function Keep(point, rel, relPoint, x, y)
+		if not (Readable(point) and Readable(x) and Readable(y) and type(x) == "number" and type(y) == "number") then return end
+		local w, h = rank:GetSize()
+		if not (Readable(w) and Readable(h)) then return end
+		spot.point, spot.rel, spot.relPoint, spot.x, spot.y, spot.w, spot.h = point, rel, relPoint or point, x, y, w, h
+	end
+	-- (The game's own spot, read from the XML anchor before it ever moves it.)
+	local count = ns.NumPoints(rank)
+	if type(count) == "number" and Readable(count) and count > 0 then Keep(rank:GetPoint(1)) end
+	hooksecurefunc(rank, "SetPoint", function(_, point, rel, relPoint, x, y)
+		if placingRank then return end
+		-- (The game's call: with its atlas just set at atlas size.)
+		Keep(point, rel, relPoint, x, y)
+		if spot.on then PlaceRank(rank, spot.portrait, true, spot.grow) end
+	end)
+end
+
 -- (Each frame's ring worn its own way, in turn: player, target and the rest don't match.)
 local RING_WEARS, lastWear = 4, 0
 local function DressShape(frame, portrait, view, artOver)
@@ -2297,6 +2355,14 @@ local function DressShape(frame, portrait, view, artOver)
 	local grow = Readable(wide) and wide * (ns.ThemePortraitFit(shape) - 1) / 2 or 0
 	-- (The arch's point is narrow and the game's picture sits to the left of its square:
 	-- a touch closer in, moved right and down, puts the face under the point.)
+	-- (The dragon kept round it, moved to it and sized with it.)
+	if rank then
+		WatchRank(rank, frame)
+		local spot = rankSpots[rank]
+		spot.on = own and keepRank or false
+		spot.portrait, spot.grow = portrait, grow
+		PlaceRank(rank, portrait, spot.on, grow)
+	end
 	local arched = shape == "arch" and not OwnOf(portrait).iconed
 	if arched then
 		portrait:SetTexCoord(0, 0.9, 0, 0.92)
