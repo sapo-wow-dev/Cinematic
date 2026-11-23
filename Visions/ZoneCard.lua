@@ -30,15 +30,18 @@ local function On() return ns.CardOn("zone") end
 -- (Discovered's card playing for the place: the game's lines go for that
 -- showing too, Zone's card on or not. Asked again as the game next shows.)
 local discovered = false
--- (standing: no card for this showing after all (the Subzone row off, too
--- soon after the last card, a flight): the game's own lines show. Hidden
--- only for a card that replaces them, the user's call, audit 2026-11-22.)
+-- (standing: the game's own lines back, for a showing no card can ever
+-- take (no name to put on one). Not for a card the player kept away (the
+-- Subzone row off, Not again within, Not on flights): none at all then, as
+-- before bdb2e1d. Its "the game's lines when no card" put the game's own
+-- zone text on every flight ("it is set to default", a player, 2026-11-23;
+-- the user's call, fix card 2026-11-23-zone-card-hide-again.md).)
 local standing = false
 local function Hiding() return not standing and (On() or discovered) end
 -- The game's territory lines ("Contested Territory", "Sanctuary") go with
 -- the rest while a card plays, its Territory tick on or off: shown under or
 -- over the card's own words otherwise (release review 2026-11-22). The
--- game's lines show only when no card replaces them (standing, above).
+-- game's lines show only for a showing no card can take (standing, above).
 local function Covers() return true end
 
 -- A line's text, or "" (none, or one the game keeps secret).
@@ -114,19 +117,20 @@ local function Play(card)
 end
 
 -- The card for what the game showed, unless one came too soon before it.
+-- True when the game's lines stay hidden: a card played, or the player's own
+-- settings kept one away (none at all then, not the game's look).
 local function Card(zone, subzone, newArea)
 	local meta
 	if newArea and GetTime() < timeUntil and ns.TimeTitleNow then
 		meta, timeUntil = ns.TimeTitleNow(), 0
 	end
-	-- (On a flight path: none, the places flown over coming one after another.)
-	if ns.db.storyZoneNotFlying and ns.Flag(ns.OnTaxi()) then return false end
-	-- (Passing through places quickly: none until the gap since the last's up.
-	-- The last card still on screen covers the game's lines all the same: shown
-	-- under it they doubled the name, at Darrowmere Lake's border, 2026-11-23.)
-	if last and GetTime() - last.played < (tonumber(ns.db.storyZoneGap) or 0) then
-		return ns.Cards.Current() == last
-	end
+	-- (On a flight path: none, the places flown over coming one after another.
+	-- The Flight cards say where you're going: no game line either.)
+	if ns.db.storyZoneNotFlying and ns.Flag(ns.OnTaxi()) then return true end
+	-- (Passing through places quickly: none until the gap since the last's up,
+	-- and no game line in its place: shown under a card still up they doubled
+	-- the name, at Darrowmere Lake's border, 2026-11-23.)
+	if last and GetTime() - last.played < (tonumber(ns.db.storyZoneGap) or 0) then return true end
 	local card = ns.ZoneCardText(zone, subzone, nil, newArea, meta)
 	if card then
 		card.newArea = newArea
@@ -198,7 +202,8 @@ function Decide(newArea, sub)
 		newArea = false
 		sub = subzone ~= ""
 	end
-	if not newArea and not (sub and subzone ~= "" and ns.CardOn("subzone")) then return false end
+	-- (Nothing new, or a subzone with the Subzone row off: no card, and no game line.)
+	if not newArea and not (sub and subzone ~= "" and ns.CardOn("subzone")) then return true end
 	if newArea then lastZone = zone end
 	-- (A place new to you: Discovered's card in place of this one, so this
 	-- one waits, as the game's "Discovered:" line comes after its name.)

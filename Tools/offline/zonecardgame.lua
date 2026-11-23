@@ -6,7 +6,11 @@
 -- showed them, card or no card: the Subzone row off, a second place within
 -- the Wait between of the last card, and "Contested Territory" with the
 -- card's Territory tick off all showed nothing. Now they go only where a card
--- takes their place (territory too, while a card plays: release review). On stand-in zone text frames. PASS or FAIL per check.
+-- takes their place (territory too, while a card plays: release review).
+-- 2026-11-23, the user's call (fix card 2026-11-23-zone-card-hide-again.md):
+-- that put the game's own look on every flight, so checks 2 and 3 are back to
+-- hidden, as before: a card the player's settings keep away means none at all.
+-- On stand-in zone text frames. PASS or FAIL per check.
 
 local fails = 0
 local function Check(name, ok, detail)
@@ -70,22 +74,22 @@ Check(client .. ": 1 the game's zone line goes", Alpha("ZoneTextString") == 0, A
 Check(client .. ": 1 Contested Territory goes with the card (its Territory tick off)", Alpha("PVPInfoTextString") == 0,
 	Alpha("PVPInfoTextString"))
 
--- 2: into a subzone with the Subzone row off: no card, the game's line shows.
+-- 2: into a subzone with the Subzone row off: no card, and no game line.
 now = now + 30
 played = 0
 Show("SubZoneTextFrame", "Elwynn Forest", "Goldshire")
 Check(client .. ": 2 no card for the subzone", played == 0, played)
-Check(client .. ": 2 the game's subzone line shows", Alpha("SubZoneTextString") == 1, Alpha("SubZoneTextString"))
+Check(client .. ": 2 the game's subzone line stays hidden", Alpha("SubZoneTextString") == 0, Alpha("SubZoneTextString"))
 
--- 3: another zone within the Wait between: no card, the game's line shows.
+-- 3: another zone within the Wait between: no card, and no game line.
 now = now + 30
 Show("ZoneTextFrame", "Westfall", "")
 played = 0
 now = now + 2
 Show("ZoneTextFrame", "Duskwood", "")
 Check(client .. ": 3 no card so soon after the last", played == 0, played)
-Check(client .. ": 3 the game's zone line shows", Alpha("ZoneTextString") == 1, Alpha("ZoneTextString"))
-Check(client .. ": 3 and its territory line", Alpha("PVPInfoTextString") == 1, Alpha("PVPInfoTextString"))
+Check(client .. ": 3 the game's zone line stays hidden", Alpha("ZoneTextString") == 0, Alpha("ZoneTextString"))
+Check(client .. ": 3 and its territory line", Alpha("PVPInfoTextString") == 0, Alpha("PVPInfoTextString"))
 
 -- 3b: the same, but the last card still on screen: the game's line stays
 -- hidden under it (shown, it doubled the name, Darrowmere Lake 2026-11-23).

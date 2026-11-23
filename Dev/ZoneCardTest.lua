@@ -22,8 +22,10 @@
 --              the game shows them. A second zone within "Not again within"
 --              while the first card's still up: no new card, the game's zone
 --              line stays hidden under ours (2026-11-23: a player at
---              Darrowmere Lake saw both); the card gone, a third zone: the
---              game's line shows (PASS/FAIL)
+--              Darrowmere Lake saw both); the card gone, a third zone: still
+--              no game line; on a flight with Not on flights: no card, no
+--              game line ("it is set to default", a player, 2026-11-23), and
+--              off the flight a card again (PASS/FAIL)
 --   9 dungeon  (/cine debug zonecard 9) no walking, no click: made-up
 --              places read in place of yours a moment. Out of a dungeon seen
 --              before, the game's zone name still the dungeon's: no card
@@ -367,8 +369,9 @@ ns.TestKit.Define({
 			end
 			if #changes == 0 then r:Skip("no zone change in the walk") end
 		end },
-		{ key = "gap", title = "a zone within the gap, the last card still up",
-		proven = "zonecard run 1 2026-11-23 (Forever): 6 PASS, the game's line hidden under the card, shown once it went",
+		{ key = "gap", title = "a zone within the gap, and on a flight",
+		-- (Run 1 2026-11-23 (Forever) proved parts 1-2; part 3 now expects the
+		-- opposite, part 4 is new: fix card 2026-11-23-zone-card-hide-again.md.)
 		run = function(r)
 			-- (Only asked for by number, /cine debug zonecard 8: no DaylightUI,
 			-- no walking. The game's zone frame shown on made-up names, as its
@@ -383,11 +386,20 @@ ns.TestKit.Define({
 			r:Set("storyZoneNotFlying", false)
 			local zoneLine = _G.ZoneTextString
 			if not (zoneLine and _G.ZoneTextFrame) then return r:Skip("no ZoneTextFrame on this client") end
-			local function ShowZone(name)
+			-- (flying: ns.OnTaxi says true for the one frame the zone card reads
+			-- it, no longer: run 2, 2026-11-23, half a second of it woke the
+			-- flight camera, its CVars and a "Value out of range" line.)
+			local function ShowZone(name, flying)
+				local OnTaxi = ns.OnTaxi
+				if flying then ns.OnTaxi = function() return true end end
 				zoneLine:SetText(name)
 				if _G.SubZoneTextString then _G.SubZoneTextString:SetText("") end
 				if _G.PVPInfoTextString then _G.PVPInfoTextString:SetText("") end
 				if FadingFrame_Show then FadingFrame_Show(_G.ZoneTextFrame) else _G.ZoneTextFrame:Show() end
+				if flying then
+					r:Sleep(0) -- (the zone card's own next-frame look, queued first)
+					ns.OnTaxi = OnTaxi
+				end
 				r:Sleep(0.5)
 				local _, line = Look()
 				r:Log(("shown \"%s\": %s"):format(name, line))
@@ -413,8 +425,8 @@ ns.TestKit.Define({
 			r:Verdict(Hidden(), "the game's \"Cinematic Test Marsh\" stays hidden under our card (the fix): alpha "
 				.. Num(zoneLine:GetAlpha()))
 			r:Shot("one name: our card only", { behind = { _G.CinematicCard, _G.ZoneTextFrame } })
-			-- 3: the card cut, a third zone still within the gap: no card, so the
-			-- game's own line shows (the audit's rule, kept).
+			-- 3: the card cut, a third zone still within the gap: no card, and no
+			-- game line either (the user's call, 2026-11-23).
 			ns.Cards.Cut("zone")
 			for _ = 1, 25 do -- (its quick fade out: at most 5 s)
 				if not ns.Cards.Current() then break end
@@ -424,8 +436,23 @@ ns.TestKit.Define({
 			ShowZone("Cinematic Test Fen")
 			local none = ns.Cards.Current()
 			r:Verdict(first ~= nil and not none, "no card (after one played): " .. tostring(none and none.id))
-			r:Verdict(not Hidden(), "with no card up the game's line shows: alpha " .. Num(zoneLine:GetAlpha()))
-			r:Shot("no card: the game's line", { behind = _G.ZoneTextFrame })
+			r:Verdict(Hidden(), "with no card up the game's line still stays hidden: alpha " .. Num(zoneLine:GetAlpha()))
+			-- 4: on a flight path, Not on flights ticked, the gap out of the way:
+			-- no card and no game line. Then off the flight: a card (so 4's "no
+			-- card" is the flight's doing).
+			r:Set("storyZoneGap", 0)
+			r:Set("storyZoneNotFlying", true)
+			ShowZone("Cinematic Test Heath", true)
+			local flying = ns.Cards.Current()
+			r:Verdict(not flying, "on a flight, no card: " .. tostring(flying and flying.name))
+			r:Verdict(Hidden(), "on a flight, the game's \"Cinematic Test Heath\" stays hidden: alpha "
+				.. Num(zoneLine:GetAlpha()))
+			r:Shot("on a flight: no name", { behind = _G.ZoneTextFrame })
+			ShowZone("Cinematic Test Moor")
+			local landed = ns.Cards.Current()
+			r:Verdict(landed and landed.name == "Cinematic Test Moor",
+				"off the flight, its card plays: " .. tostring(landed and landed.name))
+			if landed then ns.Cards.Cut(landed.id) end
 			-- (The game's lines back to where you are.)
 			zoneLine:SetText(GetZoneText and GetZoneText() or "")
 			if _G.SubZoneTextString then _G.SubZoneTextString:SetText(GetSubZoneText and GetSubZoneText() or "") end
