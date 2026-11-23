@@ -1061,6 +1061,11 @@ function ns.ResetAddon(settingsOnly)
 	-- (What the game's floating text draws until a restart: not a setting.
 	-- Hide all floating text reset off still says "log out and back in to apply".)
 	kept.worldTextLive = ns.db.worldTextLive or nil
+	-- (A Skyriding probe's camera setting, mid-probe: yours, noted for the
+	-- next login to put back (SkyrideCam.lua). Wiped, the probe's stayed for
+	-- good. Audit 2026-11-23, Tools/audits/2026-11-23-skyride-probe-reset.md.)
+	kept.skyrideProbeRestore = type(ns.db.skyrideProbeRestore) == "table" and next(ns.db.skyrideProbeRestore) ~= nil
+		and ns.db.skyrideProbeRestore or nil
 	-- (The dev copy keeps the flight times learned, Reset Everything too: each
 	-- route takes a flight to learn again. The speed scale goes with them, as
 	-- the times are saved at it: Camera.lua's RecordFlightTime.)
