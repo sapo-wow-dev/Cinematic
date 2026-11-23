@@ -199,16 +199,19 @@ end
 
 -- Keeps your body's position while dead, and the vignette wanted once
 -- released (0-1; nil when not a ghost or not known).
-local function CorpseRunLevel(elapsed)
+local function CorpseRunLevel()
 	local ghost = ns.Flag(UnitIsGhost("player"))
-	corpse.checkedAt = corpse.checkedAt + elapsed
-	if corpse.checkedAt < CORPSE_CHECK and ghost == corpse.ghost then -- (released: check now)
+	-- (By the clock, not by adding up elapsed: the tint's loop looks only 5
+	-- times a second while nothing of it fades, and hands over one frame's
+	-- time, so the check came about 12 times late. Audit 2026-11-22.)
+	local now = GetTime()
+	if now - corpse.checkedAt < CORPSE_CHECK and ghost == corpse.ghost then -- (released: check now)
 		if corpse.waveEnd then
 			corpse.level = WaveLevel(GetTime()) or corpse.level
 		end
 		return corpse.level
 	end
-	corpse.checkedAt, corpse.ghost = 0, ghost
+	corpse.checkedAt, corpse.ghost = now, ghost
 	local dead = ns.Flag(UnitIsDead("player"))
 	if dead and not ghost then
 		corpse.x, corpse.y, corpse.instance = PlayerPosition()
@@ -264,7 +267,7 @@ local function UpdateDeathScreen(elapsed)
 		return
 	end
 	local want = db.enabled and db.deathScreen and ns.DeathCinematicWanted and ns.DeathCinematicWanted()
-	local run = CorpseRunLevel(elapsed)
+	local run = CorpseRunLevel()
 	-- (Death Vision's Test: as if just dead, until it ends or Stop.)
 	local test = ns.deathVisionTest
 	if test and GetTime() >= test.endsAt then

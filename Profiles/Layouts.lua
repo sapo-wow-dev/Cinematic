@@ -1013,6 +1013,8 @@ function ns.ApplyProfileLayout()
 	-- Shoulder Cam then Balanced, then Reload UI, went back to Shoulder Cam's
 	-- layout; found with the welcome audit 2026-11-22. A new one sets it again.)
 	ns.chardb.layoutPending = nil
+	-- (And its ask in the Reload box: one this switch needs asks again below.)
+	if ns.DropReloadReason then ns.DropReloadReason("layout") end
 	local name = ns.db.editModeLayout or ""
 	local info = C_EditMode.GetLayouts()
 	if name == "" then

@@ -404,11 +404,21 @@ ns.CanColorByHealth = CAN_BY_HEALTH
 local healthCurves = {}
 local function HealthCurve(view, scale)
 	scale = scale or 1
-	local points = {
-		{ 0, tonumber(view.ufHealthLowR) or 0.9, tonumber(view.ufHealthLowG) or 0.15, tonumber(view.ufHealthLowB) or 0.15 },
-		{ 0.5, tonumber(view.ufHealthMidR) or 1, tonumber(view.ufHealthMidG) or 0.8, tonumber(view.ufHealthMidB) or 0.1 },
-		{ 1, tonumber(view.ufHealthR) or 0.2, tonumber(view.ufHealthG) or 0.8, tonumber(view.ufHealthB) or 0.4 },
-	}
+	-- (Run on every health change of every styled frame, raid members' too:
+	-- the last curve per scale handed back while its nine colors are the same,
+	-- with nothing made. Audit 2026-11-22: tables, strings and a closure each
+	-- call.)
+	local lr, lg, lb = tonumber(view.ufHealthLowR) or 0.9, tonumber(view.ufHealthLowG) or 0.15,
+		tonumber(view.ufHealthLowB) or 0.15
+	local mr, mg, mb = tonumber(view.ufHealthMidR) or 1, tonumber(view.ufHealthMidG) or 0.8,
+		tonumber(view.ufHealthMidB) or 0.1
+	local hr, hg, hb = tonumber(view.ufHealthR) or 0.2, tonumber(view.ufHealthG) or 0.8, tonumber(view.ufHealthB) or 0.4
+	local last = healthCurves[scale] -- (a number key: the strings below are the curves by colors)
+	if last and last[1] == lr and last[2] == lg and last[3] == lb and last[4] == mr and last[5] == mg
+		and last[6] == mb and last[7] == hr and last[8] == hg and last[9] == hb then
+		return last.curve or nil
+	end
+	local points = { { 0, lr, lg, lb }, { 0.5, mr, mg, mb }, { 1, hr, hg, hb } }
 	local key = scale
 	for _, p in ipairs(points) do key = key .. (",%.3f,%.3f,%.3f"):format(p[2], p[3], p[4]) end
 	local made = healthCurves[key]
@@ -421,8 +431,11 @@ local function HealthCurve(view, scale)
 		made = ok and curve or false
 		healthCurves[key] = made
 	end
+	healthCurves[scale] = { lr, lg, lb, mr, mg, mb, hr, hg, hb, curve = made }
 	return made or nil
 end
+-- (A curve's color on a fill: pcall'd without a closure made each time.)
+local function PaintCurveColor(fill, color) fill:SetVertexColor(color:GetRGBA()) end
 -- (Counts, for /cine debug gradtest: curve colors made, drawn as a gradient,
 -- drawn flat, failed, and the last error.)
 local byHealthStats = { curve = 0, grad = 0, flat = 0, fail = 0 }
@@ -457,7 +470,7 @@ local function ByHealth(bar, view, unit, fade)
 		return
 	end
 	byHealthStats.curve = byHealthStats.curve + 1
-	local flat, err = pcall(function() fill:SetVertexColor(color:GetRGBA()) end)
+	local flat, err = pcall(PaintCurveColor, fill, color)
 	if flat then
 		HealthState(bar).byHealth = true
 		byHealthStats.flat = byHealthStats.flat + 1
@@ -1372,7 +1385,7 @@ local function PlaceBridge(bridge, plate, bottom, flip, portrait, under, shape, 
 		bridge.hole:ClearAllPoints()
 		bridge.hole:SetPoint("CENTER", portrait, "CENTER")
 		bridge.hole:SetSize(size, size)
-		bridge.hole:SetTexture(file, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		bridge.hole:SetTexture(file, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 	end
 	for _, texture in ipairs(bridge.parts) do
 		if file and not bridge.holed then texture:AddMaskTexture(bridge.hole) end
@@ -2303,7 +2316,7 @@ local function DressShape(frame, portrait, view, artOver)
 			ns.ThemeNoSnap(state.round)
 		end
 		if maskFile and state.round then
-			state.round:SetTexture(maskFile, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			state.round:SetTexture(maskFile, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 			state.round:ClearAllPoints()
 			state.round:SetPoint("TOPLEFT", portrait, "TOPLEFT", -grow, grow)
 			state.round:SetPoint("BOTTOMRIGHT", portrait, "BOTTOMRIGHT", grow, -grow)
@@ -2444,11 +2457,11 @@ local function DressShape(frame, portrait, view, artOver)
 				clip:SetPoint("CENTER", portrait, "CENTER")
 				clip:SetSize(size, size)
 			end
-			state.back.hole:SetTexture(ns.ThemePortraitOut(shape), "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			state.back.hole:SetTexture(ns.ThemePortraitOut(shape), "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 			state.back.hole:ClearAllPoints()
 			state.back.hole:SetPoint("CENTER", portrait, "CENTER")
 			state.back.hole:SetSize(wide * 2, wide * 2)
-			state.back.shape:SetTexture(backMask, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			state.back.shape:SetTexture(backMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 			state.back.shape:ClearAllPoints()
 			state.back.shape:SetAllPoints(state.back.art)
 			for i, mist in ipairs(state.back.mist) do
@@ -3313,8 +3326,8 @@ local function NewUnit(stage, id, key, onPick)
 	if unit.CreateMaskTexture then
 		local mask = unit:CreateMaskTexture()
 		mask:SetAllPoints(unit.portrait)
-		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL",
-			"CLAMPTOBLACKADDITIONAL")
+		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE",
+			"CLAMPTOBLACKADDITIVE")
 		unit.face:AddMaskTexture(mask)
 		unit.faceMask, unit.faceMasked = mask, true
 	end
@@ -3660,7 +3673,7 @@ local function DressUnit(unit, stage, editing)
 			unit.faceMask:ClearAllPoints()
 			unit.faceMask:SetPoint("TOPLEFT", unit.portrait, -grow, grow)
 			unit.faceMask:SetPoint("BOTTOMRIGHT", unit.portrait, grow, -grow)
-			unit.faceMask:SetTexture(shapeFile, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			unit.faceMask:SetTexture(shapeFile, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		end
 		if square then
 			unit.ring:SetColorTexture(ring[1], ring[2], ring[3], 1)

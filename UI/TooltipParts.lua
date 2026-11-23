@@ -292,6 +292,7 @@ end
 -- The lines taken out: line number -> true. An object in the world (object
 -- "object") has just its quest lines taken out, by their own row (ObjQuest);
 -- an item ("item") just its green click hints, by the Hint row.
+local NO_QUESTIE_LINES = {} -- (Questie not in: no lines of its own. Read only.)
 local function LinesToCut(tooltip, count, unit, object)
 	local cut = {}
 	local level = LEVEL or "Level"
@@ -329,8 +330,11 @@ local function LinesToCut(tooltip, count, unit, object)
 		end
 	end)
 	local questTitles, typed = QuestTitles(), TypedTexts(tooltip)
-	-- (Questie's own lines, as it gives them: Support/Questie.lua.)
-	local questie = ns.QuestieTooltipLines and not object and ns.QuestieTooltipLines(unit) or {}
+	-- (Questie's own lines, as it gives them: Support/Questie.lua. Only with
+	-- it in, its support on: asked on every tooltip before, a table and a
+	-- closure each time with no Questie. Audit 2026-11-22.)
+	local questie = not object and ns.QuestieTooltipLines and ns.AddonUp("Questie") and ns.QuestieTooltipLines(unit)
+		or NO_QUESTIE_LINES
 	local inQuest = false
 	for i = 2, count do
 		local text = Left(i) and Left(i):GetText()
@@ -984,7 +988,7 @@ local function SkipsWait(tooltip)
 	end
 	-- (Questie's too: it knows the mobs that drop a quest's items.)
 	return (ns.IsQuestMob ~= nil and ns.IsQuestMob(unit))
-		or (ns.QuestieObjectiveMob ~= nil and ns.QuestieObjectiveMob(unit)) or false
+		or (ns.QuestieObjectiveMob ~= nil and ns.AddonUp("Questie") and ns.QuestieObjectiveMob(unit)) or false
 end
 -- This tooltip's unit skips the wait (set as the unit is, before the tooltip
 -- shows: the show that follows then leaves its After look and starts no countdown).

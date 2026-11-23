@@ -771,7 +771,7 @@ local PANEL_ART = { round = "Round", chamfer = "Chamfer", blade = "Blade", notch
 local BAR_ART = { capsule = "Capsule", chisel = "Chisel", soft = "Soft", bevel = "Bevel" }
 local PORTRAIT_ART = { hex = "Hex", diamond = "Diamond", arch = "Arch", cut = "Cut", eye = "Eye",
 	octagon = "Octagon", shield = "Shield", petal = "Petal", crystal = "Crystal" }
-local CLAMP = "CLAMPTOBLACKADDITIONAL"
+local CLAMP = "CLAMPTOBLACKADDITIVE"
 
 function ns.ThemePortraitMask(shape)
 	return PORTRAIT_ART[shape] and SHAPES .. "Portrait" .. PORTRAIT_ART[shape]

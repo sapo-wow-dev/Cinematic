@@ -346,6 +346,11 @@ end
 local function Load(name)
 	local db, base = ns.db, ns.ProfileBase(name)
 	local saved = db.profiles[name] or {}
+	-- (A style demo's put-back is the old profile's look: dropped, or it
+	-- went onto this one as the demo ended, or as a fight that cut it off
+	-- ended. Audit 2026-11-22. SetProfile ends the demo before saving.)
+	if ns.StyleDemo and (ns.StyleDemoRunning() or db.styleDemoRestore) then ns.StyleDemo(nil) end
+	db.styleDemoRestore = nil
 	-- (The Style hub's Nameplates page's added rows: the built-in's and the
 	-- profile's, none else.)
 	EachRowSetting(db, function(k) db[k] = nil end)
@@ -609,6 +614,9 @@ function ns.SetProfile(name)
 	end
 	-- (How long it took, in the log: the settings pages' refresh is most of it.)
 	local started = debugprofilestop()
+	-- (A style demo on: yours back first, so the profile left keeps its own
+	-- look, not the demo's. Audit 2026-11-22.)
+	if ns.StyleDemo and (ns.StyleDemoRunning() or ns.db.styleDemoRestore) then ns.StyleDemo(nil) end
 	ns.SaveProfile()
 	Choose(name)
 	Load(name)
@@ -1188,7 +1196,7 @@ local WORD_OR_NUMBER = {
 function ns.KnownProfileSetting(key, value)
 	if type(key) ~= "string" then return false end
 	for _, k in ipairs(PROFILE_TABLES) do
-		if k == key then return type(value) == "table" end
+		if k == key then return type(value) == "table" and ns.ProfileTableShaped(key, value) end
 	end
 	local default = ns.DEFAULTS[key]
 	-- (An old grid's setting, from before they went over: kept, to go over as it's added.)
@@ -1198,6 +1206,35 @@ function ns.KnownProfileSetting(key, value)
 	if default == nil or not IsProfileKey(key) then return false end
 	if WORD_OR_NUMBER[key] then return type(value) == "string" or type(value) == "number" end
 	return type(value) == type(default)
+end
+
+-- The lists read entry by entry, from a shared string: each entry as the
+-- code reads it, or the whole list refused (it isn't one of ours). The
+-- Follow HUD's undo list is written back key by key: only profile settings.
+-- Mouseover groups: each a table (ns.PreviewProfile reads group.preset).
+-- (Audit 2026-11-22: any table was taken.)
+function ns.ProfileTableShaped(key, value)
+	if key == "followHud" then
+		if value.picks ~= nil and type(value.picks) ~= "table" then return false end
+		if value.undo == nil then return true end
+		if type(value.undo) ~= "table" then return false end
+		for _, entry in pairs(value.undo) do
+			if not ns.FollowHudEntryOk(entry) then return false end
+		end
+	elseif key == "hoverGroups" then
+		for _, group in pairs(value) do
+			if type(group) ~= "table" or (group.members ~= nil and type(group.members) ~= "table") then return false end
+		end
+	end
+	return true
+end
+-- One Follow HUD undo entry: a profile setting's key (a row's: a string or
+-- number), what was there and what it set.
+function ns.FollowHudEntryOk(entry)
+	if type(entry) ~= "table" or type(entry.key) ~= "string" then return false end
+	if entry.row ~= nil and type(entry.row) ~= "string" and type(entry.row) ~= "number" then return false end
+	if not IsProfileKey(entry.key) then return false end
+	return ns.DEFAULTS[entry.key] ~= nil or ns.IS_PROFILE_TABLE[entry.key] == true
 end
 
 -- A new profile of your own from shared settings (stored against the

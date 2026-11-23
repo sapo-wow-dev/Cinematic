@@ -131,7 +131,7 @@ function ns.StyleQuestItem(parts, look, size)
 		if not parts.mask then
 			parts.mask = parts.frame:CreateMaskTexture()
 			parts.mask:SetAllPoints()
-			parts.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			parts.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		end
 		for _, texture in ipairs(parts.round) do
 			if round then texture:AddMaskTexture(parts.mask) else texture:RemoveMaskTexture(parts.mask) end
@@ -177,7 +177,7 @@ function ns.StyleQuestItem(parts, look, size)
 			if not parts.glowMask then
 				parts.glowMask = parts.frame:CreateMaskTexture()
 				parts.glowMask:SetAllPoints(glow)
-				parts.glowMask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+				parts.glowMask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 			end
 			if round then glow:AddMaskTexture(parts.glowMask) else glow:RemoveMaskTexture(parts.glowMask) end
 			parts.glowMasked = round
@@ -571,7 +571,8 @@ function ns.RefreshQuestItemButton()
 		return
 	end
 	local quest = ns.QuestVisionSetting("questItemButton") and Nearest()
-	if not quest or ns.QuestieItemButton(quest.itemID) then
+	-- (Questie's button asked only with it in, its support on. Audit 2026-11-22.)
+	if not quest or (ns.AddonUp("Questie") and ns.QuestieItemButton(quest.itemID)) then
 		current = nil
 		button:SetAttribute("item", nil)
 		button:Hide()

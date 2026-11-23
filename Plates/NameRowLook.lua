@@ -324,20 +324,23 @@ end
 -- (Line2Match), else its own. S(setting): the row's value. Gives { font,
 -- outline, rim (an outline in a color of its own), colorSetting (the rim's:
 -- NameLookColor's), shadow, shadowAlpha, alpha }.
-function ns.NameLine2Look(S)
+-- (into: a table to fill and hand back instead of a new one, for a caller on
+-- a hot path that uses it at once: the plates' guild line, every frame of a
+-- fade. Audit 2026-11-22.)
+function ns.NameLine2Look(S, into)
 	local own = S("Line2Match") == false
 	local prefix = own and "Line2" or ""
 	local outline = tonumber(S(prefix .. "Outline")) or 0
-	return {
-		own = own,
-		font = S(prefix .. "Font"),
-		outline = outline,
-		rim = outline > 0 and S(prefix .. "OutlineColor") == "custom",
-		colorSetting = prefix .. "OutlineColor",
-		shadow = S(prefix .. "Shadow") == true,
-		shadowAlpha = tonumber(S(prefix .. "ShadowAlpha")) or 1,
-		alpha = tonumber(S("Line2Alpha")) or 1,
-	}
+	local look = into or {}
+	look.own = own
+	look.font = S(prefix .. "Font")
+	look.outline = outline
+	look.rim = outline > 0 and S(prefix .. "OutlineColor") == "custom"
+	look.colorSetting = prefix .. "OutlineColor"
+	look.shadow = S(prefix .. "Shadow") == true
+	look.shadowAlpha = tonumber(S(prefix .. "ShadowAlpha")) or 1
+	look.alpha = tonumber(S("Line2Alpha")) or 1
+	return look
 end
 
 -- A name's glow, band and the band's border, placed round its text (the

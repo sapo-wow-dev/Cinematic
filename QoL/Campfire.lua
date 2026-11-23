@@ -609,7 +609,7 @@ highlight:SetColorTexture(1, 0.85, 0.4, 0.25)
 if button.CreateMaskTexture then
 	local mask = button:CreateMaskTexture()
 	mask:SetAllPoints(icon)
-	mask:SetTexture(MASK, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+	mask:SetTexture(MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 	icon:AddMaskTexture(mask)
 	highlight:AddMaskTexture(mask)
 end

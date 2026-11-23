@@ -337,7 +337,7 @@ if wheel.CreateMaskTexture then
 	for _, texture in ipairs({ disc, hub }) do
 		local mask = wheel:CreateMaskTexture()
 		mask:SetAllPoints(texture)
-		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		texture:AddMaskTexture(mask)
 	end
 end
@@ -401,7 +401,7 @@ for i = 1, #BUTTONS do
 		for _, texture in ipairs({ glow, ring, under, icon }) do
 			local mask = art:CreateMaskTexture()
 			mask:SetAllPoints(texture)
-			mask:SetTexture(MASK, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			mask:SetTexture(MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 			texture:AddMaskTexture(mask)
 		end
 	end

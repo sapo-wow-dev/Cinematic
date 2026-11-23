@@ -968,7 +968,7 @@ function ns.RefreshTargetQuestIcon()
 	local on = db and ns.QuestVisionSetting("targetQuestIcon")
 	local ok, exists = pcall(UnitExists, "target")
 	local show = on and ok and Known(exists) and exists and ns.IsQuestMob("target")
-		and not ns.QuestieMarks("target", true)
+		and not (ns.AddonUp("Questie") and ns.QuestieMarks("target", true)) -- (audit 2026-11-22: gated)
 	if show then
 		local icon = TargetIcon()
 		if icon then

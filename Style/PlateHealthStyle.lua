@@ -66,6 +66,10 @@ end
 -- whether a color went on.
 local strips = setmetatable({}, { __mode = "k" })
 local stripColored = setmetatable({}, { __mode = "k" })
+-- (bar -> true: its fill whitened by a full-color texture, whether or not its
+-- strip got a color. Audit 2026-11-22: only a shown strip's bar got its color
+-- back, so a plate whose strip never got one stayed white after Sunset.)
+local whitened = setmetatable({}, { __mode = "k" })
 local STRIP = 2
 
 -- The style theme's own color for a reaction ("hostile", "neutral",
@@ -97,6 +101,7 @@ function ns.DressPlateFullColor(bar, on, r, g, b)
 	local strip = strips[bar]
 	if not on then
 		if strip then strip:Hide() end
+		whitened[bar] = nil
 		return
 	end
 	if not strip then
@@ -109,6 +114,7 @@ function ns.DressPlateFullColor(bar, on, r, g, b)
 	end
 	local fill = bar:GetStatusBarTexture()
 	if fill then pcall(fill.SetVertexColor, fill, 1, 1, 1, 1) end
+	whitened[bar] = true
 	local colored = false
 	if r ~= nil then colored = pcall(strip.SetVertexColor, strip, r, g, b, 1) end
 	if colored then stripColored[strip] = true end
@@ -231,7 +237,7 @@ end
 -- the unit's own reaction color. unit: the plate's, if known.
 local function Full(bar, state, unit)
 	if not (state.full and not state.gradient) then
-		if strips[bar] and strips[bar]:IsShown() then
+		if whitened[bar] or (strips[bar] and strips[bar]:IsShown()) then
 			ns.DressPlateFullColor(bar, false)
 			local color, fill = state.color, bar:GetStatusBarTexture()
 			if color and fill and not state.gradient then pcall(fill.SetVertexColor, fill, color[1], color[2], color[3], 1) end

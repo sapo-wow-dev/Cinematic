@@ -131,7 +131,7 @@ local function Round(frame, texture)
 	if frame.CreateMaskTexture then
 		local mask = frame:CreateMaskTexture()
 		mask:SetAllPoints(texture)
-		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		texture:AddMaskTexture(mask)
 		return mask
 	end
@@ -181,7 +181,7 @@ local function Preview(parent, title)
 		if button.CreateMaskTexture then
 			button.mask = button:CreateMaskTexture()
 			button.mask:SetAllPoints(icon)
-			button.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			button.mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		end
 		button:SetScript("OnEnter", function(self)
 			local entry = self.entry

@@ -61,5 +61,31 @@ Run(NAME, false, { saved = { mouseover = false } })
 Check("saved off in the profile: left alone", db.mouseover == false)
 db.profiles[NAME], db.offUntilPicked = nil, nil
 
+-- Its Cooldown Manager page: kept on for players who'd used the profile
+-- (their saved copy had nothing for it, the base had it on), once; off with
+-- a fresh pick. (The user, 2026-11-22: "keep it on for them".)
+db.profileResetPoints = db.profileResetPoints or {}
+local function RunCooldowns(saved, point)
+	db.autoHideCooldownsV1 = nil
+	db.profiles[NAME], db.profileResetPoints[NAME] = saved, point
+	ns.RunMigrations()
+end
+RunCooldowns({}, {})
+Check("used it: its saved copy keeps the Cooldown Manager", db.profiles[NAME].handleCooldowns == true)
+Check("and its reset point", db.profileResetPoints[NAME].handleCooldowns == true)
+Check("the cooldowns update runs once", db.autoHideCooldownsV1 == true)
+RunCooldowns({ handleCooldowns = false })
+Check("turned off yourself: left off", db.profiles[NAME].handleCooldowns == false)
+RunCooldowns(nil)
+Check("never used it: nothing saved", db.profiles[NAME] == nil)
+-- (Loaded, a saved value wins over the base (Profiles.lua's Load): the kept copy on, a fresh pick the base's off.)
+local function Loaded(saved)
+	if saved and saved.handleCooldowns ~= nil then return saved.handleCooldowns end
+	return ns.ProfileBase(NAME).handleCooldowns
+end
+RunCooldowns({}, nil)
+Check("loading the kept copy: on", Loaded(db.profiles[NAME]) == true)
+Check("a fresh pick: off", Loaded(nil) == false)
+
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
 if fails > 0 then os.exit(1) end

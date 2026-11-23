@@ -2802,22 +2802,36 @@ end
 -- Optionally the max zoom distance is raised meanwhile; on the way back it's
 -- only restored once the camera is inside the old limit again, or the game
 -- would clamp the zoom with a visible snap.
+-- (users: who has it raised, "idle" (the idle zoom, and the quest cam that
+-- takes its zoom over) or "script" (a camera script's Past max step). Put
+-- back only once neither does: one lowering it while the other's camera was
+-- still out past your max snapped that one in. Audit 2026-11-22.)
 local ZOOM_MAX_CVARS = ns.CVarSet("Max zoom raised", "a camera zooming out past your max",
 	{ values = { cameraDistanceMaxZoomFactor = "2.6" },
-	slack = 0.5 }) -- (yards past where a zoom started that still counts as inside it)
+	slack = 0.5, -- (yards past where a zoom started that still counts as inside it)
+	users = {} })
 -- Raised only: a max already past it (Graphics+) is left as it is.
-local function RaiseZoomMax()
-	if not ZOOM_MAX_CVARS.active and (tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or 0)
-		>= tonumber(ZOOM_MAX_CVARS.values.cameraDistanceMaxZoomFactor) then
-		return
+local function RaiseZoomMax(who)
+	if not ZOOM_MAX_CVARS.active then
+		wipe(ZOOM_MAX_CVARS.users) -- (let go meanwhile: a safety stop, a logout's)
+		if (tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or 0)
+			>= tonumber(ZOOM_MAX_CVARS.values.cameraDistanceMaxZoomFactor) then
+			return
+		end
 	end
+	ZOOM_MAX_CVARS.users[who or "idle"] = true
 	ns.ApplyCVarSet(ZOOM_MAX_CVARS, true)
 end
--- (Camera scripts' zoom steps with Past max: CameraScripts.lua.)
-ns.RaiseZoomMax = RaiseZoomMax
-function ns.LowerZoomMax()
-	ns.ApplyCVarSet(ZOOM_MAX_CVARS, false)
+-- who's let go of it: put back once nobody holds it.
+function ZOOM_MAX_CVARS.LetGo(who)
+	ZOOM_MAX_CVARS.users[who or "idle"] = nil
+	if not next(ZOOM_MAX_CVARS.users) then ns.ApplyCVarSet(ZOOM_MAX_CVARS, false) end
 end
+-- (Camera scripts' zoom steps with Past max: CameraScripts.lua.)
+function ns.RaiseZoomMax() RaiseZoomMax("script") end
+function ns.LowerZoomMax() ZOOM_MAX_CVARS.LetGo("script") end
+-- (/cine debug and the offline test: who holds it now.)
+function ns.ZoomMaxHolds() return ZOOM_MAX_CVARS.users, ZOOM_MAX_CVARS.active end
 local ZOOM_MIN_CHANGE = 1          -- yards: smallest random zoom worth making
 local ZOOM_CLOSEST = 1              -- yards: never zoom in past this
 
@@ -3339,7 +3353,7 @@ local function FinishRestore()
 		if ZOOM_MAX_CVARS.active and saved and GetCameraZoom and GetCameraZoom() > saved + ZOOM_MAX_CVARS.slack then
 			idleZoom.limitHeldTo = saved
 		else
-			ns.ApplyCVarSet(ZOOM_MAX_CVARS, false)
+			ZOOM_MAX_CVARS.LetGo("idle")
 		end
 	end
 end
@@ -3486,7 +3500,7 @@ function ns.TakeOverZoom()
 end
 function ns.RestoreZoomLimit()
 	if not idleZoom.active and not idleZoom.restoring and not idleZoom.limitHeldTo then
-		ns.ApplyCVarSet(ZOOM_MAX_CVARS, false)
+		ZOOM_MAX_CVARS.LetGo("idle")
 	end
 end
 
@@ -3501,6 +3515,7 @@ function ns.StopIdleZoomNow()
 		end
 	end
 	idleZoom.saved, idleZoom.limitHeldTo = nil, nil
+	wipe(ZOOM_MAX_CVARS.users) -- (logging out, a safety stop: back whoever holds it)
 	ns.ApplyCVarSet(ZOOM_MAX_CVARS, false)
 end
 
@@ -3512,7 +3527,7 @@ local function UpdateIdleZoom(cinematic, onTaxi, travel, now, elapsed)
 	if idleZoom.limitHeldTo and not idleZoom.active and not idleZoom.restoring
 		and GetCameraZoom() <= idleZoom.limitHeldTo + ZOOM_MAX_CVARS.slack then
 		idleZoom.limitHeldTo = nil
-		ns.ApplyCVarSet(ZOOM_MAX_CVARS, false)
+		ZOOM_MAX_CVARS.LetGo("idle")
 	end
 	local still = not onTaxi and ns.stillSince ~= nil and now - ns.stillSince >= ns.db.idleOrbitDelay
 	local context = onTaxi and "taxi" or travel or "idle"
@@ -5439,7 +5454,7 @@ function ns.UpdateTaxi()
 		end
 		ns.db.takeoffZoom, ns.db.takeoffInCity = nil, nil
 		if not idleZoom.active and not idleZoom.restoring and not idleZoom.limitHeldTo then
-			ns.ApplyCVarSet(ZOOM_MAX_CVARS, false) -- (held back on the flight: see FinishRestore)
+			ZOOM_MAX_CVARS.LetGo("idle") -- (held back on the flight: see FinishRestore)
 		end
 	end
 	ns.wasOnTaxi = onTaxi

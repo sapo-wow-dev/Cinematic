@@ -686,9 +686,12 @@ local function HandleSlash(msg)
 			local parts = { "on " .. (ok and tostring(focusName) or "?") }
 			for _, entry in ipairs(ns.managed) do
 				if entry.group == group then
-					parts[#parts + 1] = ("%s alpha=%.1f over=%s hovered=%s"):format(
-						entry.name or "?", entry.alpha, tostring(ns.Flag(entry.frame:IsMouseOver())),
-						tostring(ns.IsEntryHovered(entry)))
+					-- (An entry not faded yet has no alpha: "?", or %.1f errored
+					-- every 0.1 s on this unprotected ticker. Audit 2026-11-22.)
+					local alpha = type(entry.alpha) == "number" and ("%.1f"):format(entry.alpha) or "?"
+					local over = pcall(entry.frame.IsMouseOver, entry.frame) and ns.Flag(entry.frame:IsMouseOver())
+					parts[#parts + 1] = ("%s alpha=%s over=%s hovered=%s"):format(
+						entry.name or "?", alpha, tostring(over), tostring(ns.IsEntryHovered(entry)))
 				end
 			end
 			local line = table.concat(parts, " | ")
@@ -2536,16 +2539,31 @@ local function LeftOutNote(names, err)
 	ns.Print(L["That needs %s, which you've left out (its General page's Load box)."]:format(names) ..
 		" |cff909090(" .. tostring(err):match("^[^\n]*") .. ")|r")
 end
+-- (Only a call into ns that's missing is a left-out part's: ns.X not there.
+-- Any other error, a real bug, goes to the error handler as it happens, its
+-- stack whole: all "a nil value" errors were taken for a left-out part, and
+-- others raised again without their stack. Audit 2026-11-22.)
+local function LeftOutField(err)
+	if type(err) ~= "string" or (issecretvalue and issecretvalue(err)) then return false end
+	local field = err:match("field '([%w_]+)' %(a nil value%)")
+	return field ~= nil and rawget(ns, field) == nil
+end
+ns.SlashLeftOutField = LeftOutField -- (Tools/offline/auditsettings.lua)
 HandleSlash = function(msg)
 	local names = LeftOut()
 	if not names then return slashInner(msg) end
-	local results = { pcall(slashInner, msg) }
+	local missing
+	local results = { xpcall(function() return slashInner(msg) end, function(err)
+		if LeftOutField(err) then
+			missing = err
+		else
+			local handler = geterrorhandler and geterrorhandler()
+			if handler then pcall(handler, err) end
+		end
+		return err
+	end) }
 	if results[1] then return unpack(results, 2) end
-	if tostring(results[2]):find("a nil value", 1, true) then
-		LeftOutNote(names, results[2])
-	else
-		error(results[2], 0)
-	end
+	if missing then LeftOutNote(names, missing) end
 end
 
 function ns.HandleSlash(msg)

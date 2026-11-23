@@ -480,7 +480,7 @@ local function SetRound(button, part, round, own)
 		local art = round and ROUND_MASK or part.bevel and BEVEL_MASK or SQUARE_SWIPE
 		if own and part.maskArt ~= art then
 			part.maskArt = art
-			part.mask:SetTexture(art, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			part.mask:SetTexture(art, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		end
 		if own then
 			for _, texture in ipairs(RoundArt(button, part)) do
@@ -762,7 +762,7 @@ local function DressCdmIcon(item, icon, plan)
 		part.mask:SetAllPoints(icon)
 		-- (Ours, as the buttons': a soft edge just inside the ring. The game's
 		-- circle has a hard one, a stair step at icon size.)
-		part.mask:SetTexture(ROUND_MASK, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		part.mask:SetTexture(ROUND_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		cdmParts[item] = part
 	end
 	-- (Every texture of the icon's: its picture and any square border or overlay.
@@ -792,7 +792,7 @@ local function DressCdmIcon(item, icon, plan)
 			if not mask and plan.round then
 				mask = kid:CreateMaskTexture()
 				mask:SetAllPoints(icon)
-				mask:SetTexture(ROUND_MASK, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+				mask:SetTexture(ROUND_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 				part.kids[kid] = mask
 			end
 			if mask then Cut(kid, mask) end

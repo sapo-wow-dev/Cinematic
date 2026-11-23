@@ -4421,6 +4421,14 @@ local function RestoreEverything()
 		Try(ns.ApplyCVarSet, ns.FLIGHT_CVARS, false)
 		Try(ns.ApplyCVarSet, ns.RECENTER_CVARS, false)
 	end
+	-- (And every other set still holding game settings: the death camera's,
+	-- the fly-by's, the turn and script follows... Only those two were let go,
+	-- so a stop mid fly-by or while dead left camera follow at 0 for the
+	-- session; the rest skipped them as held. A secure one waits for the
+	-- fight's end, as ApplyCVarSet does. Audit 2026-11-22.)
+	for _, set in ipairs(ns.cvarSets) do
+		if set.active then Try(ns.ApplyCVarSet, set, false) end
+	end
 	-- The UI: every faded frame back, the bars and tint off (hidden outright
 	-- if their own update is what's failing).
 	for _, entry in ipairs(ns.managed or {}) do

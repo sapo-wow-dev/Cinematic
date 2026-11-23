@@ -194,7 +194,7 @@ local function Rounded(parent, texture)
 	if not parent.CreateMaskTexture then return end
 	local mask = parent:CreateMaskTexture()
 	mask:SetAllPoints(texture)
-	mask:SetTexture(MASK, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+	mask:SetTexture(MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 	texture:AddMaskTexture(mask)
 end
 

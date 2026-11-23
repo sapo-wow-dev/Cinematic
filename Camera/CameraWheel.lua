@@ -276,7 +276,7 @@ if face.CreateMaskTexture then
 	for _, texture in ipairs({ disc, hub }) do
 		local mask = face:CreateMaskTexture()
 		mask:SetAllPoints(texture)
-		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		texture:AddMaskTexture(mask)
 	end
 end
@@ -311,7 +311,7 @@ for i, camera in ipairs(CAMERAS) do
 		for _, texture in ipairs({ glow, ring, icon }) do
 			local mask = slot:CreateMaskTexture()
 			mask:SetAllPoints(texture)
-			mask:SetTexture(MASK, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			mask:SetTexture(MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 			texture:AddMaskTexture(mask)
 		end
 	end

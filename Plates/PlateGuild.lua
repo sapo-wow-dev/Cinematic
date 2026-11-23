@@ -571,6 +571,43 @@ function ns.PlateLine2Text(plate)
 	return line and line:IsShown() and line or nil
 end
 
+-- (Refresh runs every frame of a plate's fade (PlateParts' ApplyPlate): none
+-- of its pieces made anew each time. The row its S reads, its look table, and
+-- its colors set by a function of the file's, not a closure per call. Audit
+-- 2026-11-22.)
+local guildLine = { look = {} }
+function guildLine.S(setting)
+	return ns.NameLookValue and (ns.NameLookValue(guildLine.row, setting))
+end
+function guildLine.Dress(line, name, look, lineColor, row, isIcon)
+	if look and look.own then
+		if look.shadow then
+			line:SetShadowOffset(1, -1)
+			line:SetShadowColor(0, 0, 0, look.shadowAlpha)
+		else
+			line:SetShadowOffset(0, 0)
+		end
+	else
+		line:SetShadowOffset(name:GetShadowOffset())
+		line:SetShadowColor(name:GetShadowColor())
+	end
+	-- (With the name's health fill on, its own text is the grey part: the
+	-- colored copy's color instead.)
+	local source = ns.PlateNameLit and ns.PlateNameLit(name) or name
+	local r, g, b = source:GetTextColor()
+	-- (A color of the row's own: grey, gold or its own. An icon in its own colors.)
+	if lineColor == "grey" then
+		r, g, b = 0.72, 0.72, 0.72
+	elseif lineColor == "gold" then
+		r, g, b = 1, 0.82, 0
+	elseif lineColor == "custom" then
+		r, g, b = ns.NameLookColor(row, "Line2Color")
+	end
+	if isIcon then r, g, b = 1, 1, 1 end
+	line:SetTextColor(r, g, b)
+	if line.SetVertexColor then line:SetVertexColor(r, g, b) end
+	if name.GetScale then line:SetScale(name:GetScale()) end
+end
 local function Refresh(plate)
 	local share = shares[plate] or 0
 	local unitFrame = plate.UnitFrame
@@ -608,12 +645,13 @@ local function Refresh(plate)
 	local row = ns.NameRowOf and ns.NameRowOf(unitFrame, unit)
 	-- (Each value alone: NameLookValue's second, where it's from, would go into
 	-- tonumber() as a number base.)
-	local function S(setting) return ns.NameLookValue and (ns.NameLookValue(row, setting)) end
+	guildLine.row = row
+	local S = guildLine.S
 	local lineSize = tonumber(S("Line2Size")) or 1
 	local lineColor = S("Line2Color") or "name"
 	-- (Its letters: the name's while it matches the name, else its own font,
 	-- outline and shadow. NameRowLook's NameLine2Look, 2026-11-17.)
-	local look = ns.NameLine2Look and ns.NameLine2Look(S)
+	local look = ns.NameLine2Look and ns.NameLine2Look(S, guildLine.look)
 	local file, size, flags = name:GetFont()
 	if look and look.own and file and size and ns.SetPlateNameFont then
 		local base = object or _G.SystemFont_NamePlate or _G.GameFontNormal
@@ -641,35 +679,7 @@ local function Refresh(plate)
 			ns.SetTextRim(line, nil)
 		end
 	end
-	pcall(function()
-		if look and look.own then
-			if look.shadow then
-				line:SetShadowOffset(1, -1)
-				line:SetShadowColor(0, 0, 0, look.shadowAlpha)
-			else
-				line:SetShadowOffset(0, 0)
-			end
-		else
-			line:SetShadowOffset(name:GetShadowOffset())
-			line:SetShadowColor(name:GetShadowColor())
-		end
-		-- (With the name's health fill on, its own text is the grey part: the
-		-- colored copy's color instead.)
-		local source = ns.PlateNameLit and ns.PlateNameLit(name) or name
-		local r, g, b = source:GetTextColor()
-		-- (A color of the row's own: grey, gold or its own. An icon in its own colors.)
-		if lineColor == "grey" then
-			r, g, b = 0.72, 0.72, 0.72
-		elseif lineColor == "gold" then
-			r, g, b = 1, 0.82, 0
-		elseif lineColor == "custom" then
-			r, g, b = ns.NameLookColor(row, "Line2Color")
-		end
-		if isIcon then r, g, b = 1, 1, 1 end
-		line:SetTextColor(r, g, b)
-		if line.SetVertexColor then line:SetVertexColor(r, g, b) end
-		if name.GetScale then line:SetScale(name:GetScale()) end
-	end)
+	pcall(guildLine.Dress, line, name, look, lineColor, row, isIcon)
 	line:SetText(text)
 	line:SetAlpha(share * (look and look.alpha or 1))
 	line:Show()

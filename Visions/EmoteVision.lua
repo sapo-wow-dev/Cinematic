@@ -1417,8 +1417,8 @@ local function Create()
 		for _, texture in ipairs({ card.portrait, card.ring, card.disc, card.discEdge }) do
 			local mask = texture:GetParent():CreateMaskTexture()
 			mask:SetAllPoints(texture)
-			mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL",
-				"CLAMPTOBLACKADDITIONAL")
+			mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE",
+				"CLAMPTOBLACKADDITIVE")
 			texture:AddMaskTexture(mask)
 		end
 	end

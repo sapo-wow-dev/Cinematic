@@ -38,7 +38,12 @@ ns.ADDON_NOTES = {}
 do
 	local up, notUp = {}, {}
 	local isLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
+	-- (Its support switched off on the Addons page: as if it weren't in, so
+	-- no path of ours reaches into it, not only its setup (ns.AddonSupportOn).
+	-- Questie's plate marks, tooltip lines and item button still did. Audit
+	-- 2026-11-22.)
 	function ns.AddonUp(name)
+		if ns.AddonSupportOn and not ns.AddonSupportOn(name) then return false end
 		if up[name] then return true end
 		if notUp[name] or not isLoaded then return false end
 		local ok, loaded = pcall(isLoaded, name)

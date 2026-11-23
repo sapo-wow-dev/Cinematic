@@ -109,6 +109,33 @@ for _, client in ipairs({ "forever", "retail" }) do
 	fight = false
 	same, diff = Same(before, Snap())
 	Check(client .. ": in a fight: nothing changed", same, diff)
+	-- A profile picked mid-demo (the welcome window's cards): the profile left
+	-- keeps its own look, not the demo's, and the new one isn't given the old
+	-- one's when the demo would have ended; nor after a fight that cut one off.
+	-- (Audit 2026-11-22.)
+	ns.SwitchProfileLayout = function() end -- (the stand-in has no Edit Mode)
+	db.profileChosen = true
+	local from = ns.ActiveProfile()
+	local to = from == "Balanced" and "Auto-Hide UI" or "Balanced"
+	ns.StyleDemo("themes")
+	local demoTheme = db.styleTheme
+	ns.SetProfile(to)
+	Check(client .. ": profile picked mid-demo: the demo ends", not ns.StyleDemoRunning() and db.styleDemoRestore == nil)
+	local left = db.profiles[from] or {}
+	Check(client .. ": the profile left keeps its own theme", left.styleTheme ~= demoTheme or demoTheme == themeBefore,
+		tostring(left.styleTheme) .. " demo " .. tostring(demoTheme))
+	local loaded = db.styleTheme
+	ns.StyleDemo("themes")
+	fight = true
+	ns.StyleDemo(nil) -- (a fight cut it off: put back once it ends)
+	fight = false
+	db.profiles[from] = db.profiles[from] or {}
+	db.profiles[from].styleTheme = "forge" -- (a look of its own: told apart from the one put back)
+	ns.SetProfile(from)
+	local fromTheme = db.styleTheme
+	wow.Fire("PLAYER_REGEN_ENABLED")
+	Check(client .. ": after a fight: the new profile's look kept", db.styleTheme == fromTheme and db.styleDemoRestore == nil,
+		tostring(db.styleTheme) .. " / " .. tostring(fromTheme) .. " (other " .. tostring(loaded) .. ")")
 end
 
 -- Style left out: no demo offered.

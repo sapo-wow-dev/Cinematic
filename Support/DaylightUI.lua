@@ -273,18 +273,22 @@ end)
 -- character that said "not now" to its setup, on another layout, isn't
 -- kept: profiles' layouts work there as without it.
 ns.WhenAddonLoads("DaylightUI", function()
+	-- (Chained to a keeper set before it, as Leatrix Plus's is: its
+	-- ADDON_LOADED can come first (DaylightUI loaded late), and replaced, its
+	-- layout and a profile's took turns at every login. Audit 2026-11-22.)
+	local before = ns.layoutKeeper
 	ns.layoutKeeper = function()
 		local DUI = _G.DaylightUI
 		local editMode, installer = DUI and DUI.EditMode, DUI and DUI.Installer
 		if not editMode then
-			return nil
+			return before and before() or nil
 		end
 		local okSet, state = pcall(function() return installer and installer.State() end)
 		local okOn, on = pcall(editMode.AnyActive)
 		if (okSet and state == "installed") or (okOn and on) then
 			return "DaylightUI"
 		end
-		return nil
+		return before and before() or nil
 	end
 end)
 

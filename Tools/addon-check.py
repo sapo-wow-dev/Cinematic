@@ -54,7 +54,27 @@ EXTRA_PREFIXES = {
 }
 # Names a Support file mentions that are built in ways a text search can't
 # find (left out of check 1): "<Support file>": {names}.
-NOT_CHECKED = {}
+NOT_CHECKED = {
+    # (Its scroll areas: "BattleTextForever" .. def.label, the labels in its AREAS
+    # table, Core.lua. Read from v1.29.0, 2026-11-22.)
+    "BattleTextForever": {"BattleTextForeverIncoming", "BattleTextForeverHealing",
+                          "BattleTextForeverNotifications"},
+}
+# Names a Support file uses that came in a later version of the addon:
+# "<Support file>": {name: first version}. Not looked for in an older copy (a
+# client's can lag: DaylightUI retail 1.9.5, its flight welcome from 1.9.6).
+SINCE = {
+    "DaylightUI": {"DaylightUIFlightWelcome": "1.9.6"},
+}
+
+
+def older(version, than):
+    """Whether a version (\"v1.9.5\", \"1.29.0\") is before another; unknown: no."""
+    def parts(text):
+        found = re.findall(r"\d+", text or "")
+        return [int(n) for n in found] if found else None
+    a, b = parts(version), parts(than)
+    return a is not None and b is not None and a < b
 # Methods a hook names that are the game's (on its frames), not the addon's.
 GAME_METHOD = re.compile(r"^(Set|Get|Show|Hide|Clear|Enable|Disable|Is|Has|Register|Unregister|Hook|Create|"
                          r"Add|Remove|Release|Acquire)[A-Z]?|^On[A-Z]")
@@ -447,7 +467,9 @@ def main():
             # (Not the addon's bare name: "DaylightUI" .. key would match any name of it.)
             built = {b for t in texts for b in BUILT.findall(t)
                      if not any(b.startswith(p) and len(b) < len(p) + 3 for p in prefixes)}
-            missing = sorted(w for w in wants if not found(w, texts, built))
+            since = SINCE.get(support, {})
+            missing = sorted(w for w in wants if not found(w, texts, built)
+                             and not (w[1] in since and older(version, since[w[1]])))
             label = "%s on %s (v%s)" % (support, client, version)
             if missing:
                 failed += 1

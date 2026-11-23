@@ -5207,6 +5207,23 @@ STEPS[#STEPS + 1] = function()
 	ns.db.autoHideMouseoverV1 = true
 end
 
+-- Auto-Hide UI turns the Cooldown Manager page off from 2026-11-22. A saved
+-- profile keeps only what differs from its base, and the base had it on, so
+-- a player who'd used the profile saved nothing for it: loaded again, its
+-- Cooldown Manager would go off. Theirs kept on, in the saved copy and its
+-- reset point (the user, 2026-11-22: "keep it on for them"); the live switch
+-- is theirs already (saved as the profile at logout). A fresh pick gets it
+-- off. Once.
+STEPS[#STEPS + 1] = function()
+	if ns.db.autoHideCooldownsV1 then return end
+	local name = "Auto-Hide UI"
+	for _, store in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
+		local saved = store and store[name]
+		if type(saved) == "table" and saved.handleCooldowns == nil then saved.handleCooldowns = true end
+	end
+	ns.db.autoHideCooldownsV1 = true
+end
+
 -- (Step: Cooldown Manager lines to place groups, 2026-11-22.)
 STEPS[#STEPS + 1] = function()
 	-- The Cooldown Manager page's numbered lines are gone: the page is a grid

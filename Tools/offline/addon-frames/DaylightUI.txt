@@ -77,3 +77,6 @@ DaylightUISocialRaidTargets its social window's raid page buttons
 DaylightUISocialRaidTarget* its social window's raid page buttons
 DaylightUITrainAllButton a button on the trainer window
 DaylightUISweep its /dui sweep test label (a test command)
+DaylightUIBagUse its invisible use button laid over the bag slot under the pointer (v2.1): draws nothing
+DaylightUIRollStack its loot roll window stack, up only while you roll: a window you act on, as the game's roll frames
+DaylightUITooltipPill its tooltip's rich pill, shown only with a tooltip up (goes with the tooltip)

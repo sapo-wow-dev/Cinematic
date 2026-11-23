@@ -274,7 +274,7 @@ local function MakeWheel(spec)
 		if frame.CreateMaskTexture then
 			local mask = frame:CreateMaskTexture()
 			mask:SetAllPoints(texture)
-			mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			mask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 			texture:AddMaskTexture(mask)
 		end
 	end
@@ -338,7 +338,7 @@ local function MakeWheel(spec)
 		if art.CreateMaskTexture then
 			slot.iconMask = art:CreateMaskTexture()
 			slot.iconMask:SetAllPoints(icon)
-			slot.iconMask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			slot.iconMask:SetTexture(CIRCLE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		end
 		slot.art, slot.glow, slot.ring, slot.icon = art, glow, ring, icon
 		slot.ringLit, slot.ringTo, slot.colorLit, slot.colorTo = 0, 0, 1, 1

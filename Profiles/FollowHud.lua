@@ -97,9 +97,14 @@ end
 -- left as you've changed them since.
 local function Restore(undo)
 	local back, kept = 0, 0
+	if type(undo) ~= "table" then return back, kept end
 	for i = #undo, 1, -1 do
 		local entry = undo[i]
-		if Same(Read(entry.key, entry.row), entry.new) then
+		-- (Not a profile setting's entry: an imported profile's can be anything.
+		-- Skipped, never written. Audit 2026-11-22.)
+		if not ns.FollowHudEntryOk(entry) then
+			kept = kept + 1
+		elseif Same(Read(entry.key, entry.row), entry.new) then
 			Write(entry.key, entry.row, entry.old)
 			back = back + 1
 		else

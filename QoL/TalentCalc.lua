@@ -740,7 +740,7 @@ local function NewHeader(tab)
 		local mask = header:CreateMaskTexture()
 		mask:SetSize(40, 40)
 		mask:SetPoint("CENTER", -2, 2)
-		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		header.icon:AddMaskTexture(mask)
 	end
 	header.name = header:CreateFontString(nil, "OVERLAY", FirstFont("GameFontWhiteLarge", "GameFontHighlightLarge"))

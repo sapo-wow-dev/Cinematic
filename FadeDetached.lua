@@ -90,6 +90,10 @@ local Apply, Detached, Drain
 local function Release(region)
 	local info = taken[region]
 	if not info then return end
+	-- (Refusing our code now (a fight, Forever: ns.Reachable): kept taken,
+	-- given back on a later look once it's reachable, not a forbidden-object
+	-- error from our hook. Apply checked this, Release didn't. Audit 2026-11-22.)
+	if not Usable(region) then return end
 	taken[region] = nil
 	busy = true
 	region:SetAlpha(info.own)
@@ -205,10 +209,14 @@ function Drain()
 		spent = spent + (debugprofilestop() - start)
 	end
 	if not walker then walker = CreateFrame("Frame") end
-	if queue[1] then
-		ns.SetOnUpdate(walker, Drain)
-	else
-		ns.SetOnUpdate(walker, nil)
+	-- (Set once as the queue fills, cleared as it empties: set on every call,
+	-- each frame made a new protected wrapper and read the stack for its name,
+	-- and reset its error count so its breaker never tripped. Audit 2026-11-22.)
+	-- (By its script, not a flag: one its breaker cleared is set again by
+	-- the next root that needs it.)
+	local want = queue[1] ~= nil
+	if want ~= (walker:GetScript("OnUpdate") ~= nil) then
+		ns.SetOnUpdate(walker, want and Drain or nil)
 	end
 end
 

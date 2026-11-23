@@ -517,7 +517,14 @@ local function Slider(parent, key, label, minV, maxV, step, fmt, scale, onChange
 		if onChange then onChange(value) end
 	end)
 	slider.Refresh = function(self)
-		local value = (type(key) == "table" and key.get() or ns.GetDB()[key]) * scale
+		-- (No value saved (a key added since, a profile without it): its
+		-- default, else the slider's least, not an "arithmetic on nil" error
+		-- that broke the page's Refresh. Audit 2026-11-22.)
+		local raw = type(key) == "table" and key.get() or ns.GetDB()[key]
+		if type(raw) ~= "number" then
+			raw = tonumber(raw) or (type(key) ~= "table" and tonumber(ns.DEFAULTS[key])) or minV / scale
+		end
+		local value = raw * scale
 		self.refreshing = true
 		self:SetValue(value + offset)
 		self.refreshing = false

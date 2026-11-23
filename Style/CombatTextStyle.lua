@@ -185,14 +185,23 @@ end
 -- and it falls up and to the right, ~3 px each way on 64 px digits; an earlier
 -- look had mixed up which numbers were whose and thinned ours wrongly.)
 local EDGE, EDGE_ALPHA, DROP, SHADOW_ALPHA = 1 / 40, 0.35, 1 / 28, 0.8
+-- (The game's tallest font: a SetFont past it draws at 120. Size, Crit size
+-- and a long cast go to 300% x 300% x 150% of 36, so past it the font stays
+-- at 120 and the words are scaled the rest, as Combat Vision's. Audit
+-- 2026-11-22: big crits stopped growing at 120.)
+local FONT_MAX = 120
 local function SetSize(number, size)
 	local font = CT.Get(number.id or "all", "Font", number.via)
 	local file = font and font ~= "game" and ns.StyleFontFile(font) or GAME_FONT
 	local text = number.text
-	if not text:SetFont(file, size, "") then
+	local scale = text.SetTextScale and size > FONT_MAX and size / FONT_MAX or 1
+	local fontSize = math.min(size, FONT_MAX)
+	if not text:SetFont(file, fontSize, "") then
 		file = "Fonts\\FRIZQT__.TTF"
-		text:SetFont(file, size, "")
+		text:SetFont(file, fontSize, "")
 	end
+	if text.SetTextScale then text:SetTextScale(scale) end
+	number.textScale = scale
 	text:SetShadowOffset(0, 0)
 	local look = CT.Get(number.id or "all", "Edge", number.via) or "game"
 	-- (The game's: the shadow alone, no edge, the player saw side by side;
@@ -201,7 +210,8 @@ local function SetSize(number, size)
 	local shadow = look == "game" or look == "both" or look == "shadow"
 	local nudge, drop = math.max(1, size * EDGE), math.max(1, size * DROP)
 	for _, copy in ipairs(number.copies) do
-		copy:SetFont(file, size, "")
+		copy:SetFont(file, fontSize, "")
+		if copy.SetTextScale then copy:SetTextScale(scale) end
 		copy:SetShadowOffset(0, 0)
 		copy:ClearAllPoints()
 		if copy.angle then
@@ -214,7 +224,7 @@ local function SetSize(number, size)
 			copy:SetShown(shadow)
 		end
 	end
-	if number.tag then number.tag:SetFont(file, math.max(8, size * 0.5), "") end
+	if number.tag then number.tag:SetFont(file, math.min(FONT_MAX, math.max(8, size * 0.5)), "") end
 end
 
 -- The words on the number and its copies.
@@ -258,6 +268,8 @@ end
 
 -- All of it scaled for a moment (a crit's pop), without laying it out again.
 local function SetHeight(number, height)
+	-- (In the font's own size: the words' scale, past 120, is on top.)
+	height = height / (number.textScale or 1)
 	pcall(number.text.SetTextHeight, number.text, height)
 	for _, copy in ipairs(number.copies) do
 		if copy:IsShown() then pcall(copy.SetTextHeight, copy, height) end

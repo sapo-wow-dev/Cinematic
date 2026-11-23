@@ -102,8 +102,21 @@ end
 -- Players' yells: not in cities, where people yell their trade all day
 -- (user, 2026-11-17). NPCs' yells are the NPC speech row's.
 ns.RULE_DEFAULTS[PEEK_ROW.yell] = "not city"
+-- Each row's tab on the Chat page (Options.lua's tabs: Conversations 2, Game
+-- Messages 3, Channels 4): a tab switched off (a right-click on it) turns its
+-- rows off. They're list rows, not settings, so the switch tree never hung
+-- them under it: the tab did nothing. Audit 2026-11-22.
+local PEEK_TAB = {}
+for _, peekType in ipairs(ns.CHAT_PEEK_TYPES) do
+	PEEK_TAB[peekType.key] = peekType.section == "game" and "tabOn:Chat/page:3" or "tabOn:Chat/page:2"
+end
+ns.CHAT_CHANNELS_TAB = "tabOn:Chat/page:4"
+local function TabOff(key)
+	return key ~= nil and ns.db[key] == false
+end
 local function IsPeekTypeOn(key)
-	return PEEK_ROW[key] ~= nil and ns.RowOnNow(PEEK_ROW[key], ns.IsPeekTypeAlways(key))
+	return PEEK_ROW[key] ~= nil and not TabOff(PEEK_TAB[key])
+		and ns.RowOnNow(PEEK_ROW[key], ns.IsPeekTypeAlways(key))
 end
 
 -- The level-up line is a plain system message among many, and matching its
@@ -403,7 +416,7 @@ do
 	end
 end
 local function IsChannelPeekNow(name)
-	return ns.RowOnNow(CHANNEL_ROW[name], ns.IsChannelPeekOn(name))
+	return not TabOff(ns.CHAT_CHANNELS_TAB) and ns.RowOnNow(CHANNEL_ROW[name], ns.IsChannelPeekOn(name))
 end
 
 -- Channels the player has joined, by name (e.g. "General", "Trade"). Depending

@@ -1280,12 +1280,17 @@ events:SetScript("OnEvent", function(_, event, ...)
 		end
 	elseif event == "ENCOUNTER_START" then
 		local _, name = ...
-		encounter = name or true
+		encounter = (type(name) == "string" and not Secret(name)) and name or true
 		state.boss = true
 	elseif event == "ENCOUNTER_END" then
+		-- (Its name and result can come secret under the game's addon limits
+		-- (retail): looked at only when plain, as Recap's and Combat Vision's
+		-- are. A secret name: the recap titled Boss, its session not looked
+		-- up by name. Audit 2026-11-22.)
 		local _, name, _, _, success = ...
 		encounter = nil
-		if success == 1 then Queue("boss", name) end
+		if type(name) ~= "string" or Secret(name) then name = nil end
+		if not Secret(success) and success == 1 then Queue("boss", name) end
 	elseif event == "PLAYER_REGEN_DISABLED" then
 		state.boss = encounter and true or false
 		lastRank = nil

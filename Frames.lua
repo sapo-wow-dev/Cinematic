@@ -11293,7 +11293,7 @@ do
 		if mask and not flash.mask then
 			flash.mask = flash:CreateMaskTexture()
 			flash.mask:SetAllPoints()
-			flash.mask:SetTexture(mask, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+			flash.mask:SetTexture(mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 			flash.ring = flash:CreateTexture(nil, "OVERLAY", nil, 1)
 			flash.ring:SetAllPoints()
 		end
@@ -13332,8 +13332,13 @@ function ns.UpdateFrames(cinematic, elapsed)
 			end
 			entry.passTarget = target
 		end
-		if entry.alpha ~= target or (entry.backgroundAlpha and entry.backgroundAlpha > 0
-			and entry.backgroundAlpha < 1) then
+		-- (A background partway only counts while its window's wanted up: with
+		-- the window going to 0 it's held where it is (below), and it held
+		-- the pass unsettled every tick till the window came up again.
+		-- Audit 2026-11-22.)
+		local backgroundMoving = target > 0 and entry.backgroundAlpha and entry.backgroundAlpha > 0
+			and entry.backgroundAlpha < 1
+		if entry.alpha ~= target or backgroundMoving then
 			settled = false
 			-- (Only frames whose fade is their alpha and nothing else can fade on
 			-- in the passes in between: not a chat window while its background
@@ -13344,7 +13349,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 			-- message ran the whole pass every other frame for its fade, 93
 			-- passes in 20 s in a busy city, /cine debug framepass 2026-11-15.)
 			local group = entry.group
-			if group == "chat" and entry.backgroundAlpha and entry.backgroundAlpha > 0 and entry.backgroundAlpha < 1
+			if group == "chat" and backgroundMoving
 				or entry.shrinkWhenFaded or entry.shrunk or entry.parkedFullSize
 				or entry.frame == Minimap or entry.frame == artStandIn or entry.frame == personalPower.healthStandIn
 				or LOOSE_PART_GROUPS[group] or personalPower.GROUPS[group] or group == "prd"
@@ -13453,6 +13458,13 @@ function ns.UpdateFrames(cinematic, elapsed)
 					ns.FadeRelative(texture, entry.backgroundAlpha)
 				end
 			end
+		elseif entry.backgroundAlpha then
+			-- (An addon panel's backdrop link taken off (FrameLinks.lua): its
+			-- regions back, and nothing left partway to keep the pass going.)
+			for _, texture in ipairs(entry.backgroundTextures or NO_DEFAULTS) do
+				ns.FadeRelative(texture, 1)
+			end
+			entry.backgroundAlpha, entry.backgroundFaded, entry.backgroundTextures = nil, nil, nil
 		end
 		if entry.frame == personalPower.healthStandIn then
 			ns.SetPersonalPlateAlpha(entry.alpha)
@@ -14350,10 +14362,14 @@ do
 	function auraStandIns.Apply(standIn)
 		ns.ApplyCVarSet(standIn.cvarSet, (standIn:GetAlpha() < 0.5 and IsInGroup()) and true or false)
 	end
-	-- (Joining or leaving a group: switched to match at once.)
+	-- (Joining or leaving a group: switched to match at once. A fight's end
+	-- too: each switch has the game rebuild its secure raid frames, so it
+	-- waits out fights (secure sets, ApplyCVarSet), and is made then.
+	-- Audit 2026-11-22.)
 	do
 		local groupWatch = CreateFrame("Frame")
 		groupWatch:RegisterEvent("GROUP_ROSTER_UPDATE")
+		groupWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
 		groupWatch:SetScript("OnEvent", function()
 			for _, standIn in pairs(auraStandIns) do
 				if type(standIn) == "table" and standIn.cvarSet then auraStandIns.Apply(standIn) end
@@ -14367,7 +14383,7 @@ do
 		for group, cvar in pairs(AURA_CVAR_ROWS) do
 			if not auraStandIns[group] and GetCVar(cvar) ~= nil then
 				local set = ns.CVarSet("Raid " .. group .. " off", "Forever: raid frame auras faded by their row",
-					{ values = { [cvar] = "0" }, playerWins = true })
+					{ values = { [cvar] = "0" }, playerWins = true, secure = true })
 				local standIn = CreateFrame("Frame", nil, UIParent)
 				standIn:SetSize(1, 1)
 				standIn:SetPoint("TOPLEFT")

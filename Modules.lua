@@ -165,6 +165,18 @@ function ns.AskReload(key, phrase, alone)
 	reasons[key] = { phrase = phrase, alone = alone }
 	return ShowReloadBox()
 end
+-- A reason no longer true (a newer profile's layout needs no reload): out
+-- of the box, its words anew if it's up (gone with nothing left), and not
+-- counted by ns.ReloadBoxText (the welcome window came back after a reload
+-- nothing needed). Audit 2026-11-22.
+function ns.DropReloadReason(key)
+	if not reasons[key] then return end
+	reasons[key] = nil
+	for i = #reasonOrder, 1, -1 do
+		if reasonOrder[i] == key then table.remove(reasonOrder, i) end
+	end
+	if StaticPopup_Visible and StaticPopup_Visible(ns.MODULES_RELOAD_POPUP) then ShowReloadBox() end
+end
 
 local queue = {}
 local ran = false

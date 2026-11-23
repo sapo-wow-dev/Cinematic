@@ -30,7 +30,18 @@ local function On() return ns.CardOn("zone") end
 -- (Discovered's card playing for the place: the game's lines go for that
 -- showing too, Zone's card on or not. Asked again as the game next shows.)
 local discovered = false
-local function Hiding() return On() or discovered end
+-- (standing: no card for this showing after all (the Subzone row off, too
+-- soon after the last card, a flight): the game's own lines show. Hidden
+-- only for a card that replaces them, the user's call, audit 2026-11-22.)
+local standing = false
+local function Hiding() return not standing and (On() or discovered) end
+-- The game's territory lines ("Contested Territory", "Sanctuary"): hidden
+-- only where the card carries the territory (Zone's, with its row ticked),
+-- or Discovered's card has the place.
+local TERRITORY = { PVPInfoTextString = true, PVPArenaTextString = true }
+local function Covers(name)
+	return not TERRITORY[name] or discovered or (name == "PVPInfoTextString" and ns.db.storyZoneTerritory)
+end
 
 -- A line's text, or "" (none, or one the game keeps secret).
 local function Text(line)
@@ -51,7 +62,7 @@ end
 -- (DaylightUI's zone title, with our card standing aside, 2026-11-19).
 local hooked, fading, hidden = {}, false, {}
 local function Keep(line)
-	if fading or not Hiding() then return end
+	if fading or not Hiding() or not hidden[line] then return end
 	fading = true
 	line:SetAlpha(0)
 	fading = false
@@ -66,7 +77,7 @@ local function HideGame()
 				hooksecurefunc(line, "SetTextColor", Keep)
 				hooksecurefunc(line, "SetVertexColor", Keep)
 			end
-			if on then
+			if on and Covers(name) then
 				line:SetAlpha(0)
 				hidden[line] = true
 			elseif hidden[line] then
@@ -111,14 +122,21 @@ local function Card(zone, subzone, newArea)
 		meta, timeUntil = ns.TimeTitleNow(), 0
 	end
 	-- (On a flight path: none, the places flown over coming one after another.)
-	if ns.db.storyZoneNotFlying and ns.Flag(ns.OnTaxi()) then return end
+	if ns.db.storyZoneNotFlying and ns.Flag(ns.OnTaxi()) then return false end
 	-- (Passing through places quickly: none until the gap since the last's up.)
-	if last and GetTime() - last.played < (tonumber(ns.db.storyZoneGap) or 0) then return end
+	if last and GetTime() - last.played < (tonumber(ns.db.storyZoneGap) or 0) then return false end
 	local card = ns.ZoneCardText(zone, subzone, nil, newArea, meta)
 	if card then
 		card.newArea = newArea
 		Play(card)
+		return true
 	end
+	return false
+end
+-- No card for this showing: the game's lines back.
+local function Uncover()
+	standing = true
+	HideGame()
 end
 
 -- What the game just showed (a frame later, so both its frames are set).
@@ -137,9 +155,10 @@ local function Hold(place, seconds, zone, subzone, newArea)
 		holding = nil
 		if ns.DiscoverHasIt() then return end
 		ns.Log("card", ("no Discovered line for %s after %.1f sec: its Zone card plays"):format(place, seconds))
-		Card(zone, subzone, newArea)
+		if not Card(zone, subzone, newArea) then Uncover() end
 	end)
 end
+local Decide
 local function Shows()
 	waiting = false
 	local newArea, sub = zoneShown, subShown
@@ -148,6 +167,11 @@ local function Shows()
 	discovered = ns.DiscoverHasIt and ns.CardOn("discover") and ns.DiscoverHasIt() or false
 	HideGame()
 	if not On() then return end
+	if not Decide(newArea, sub) then Uncover() end
+end
+-- Whether a card's coming for this showing (played, waiting on Discovered's,
+-- or Discovered's own).
+function Decide(newArea, sub)
 	-- (On with another addon's zone title about: what its Addon Conflicts row
 	-- said, for the log. DaylightUI's and ours both played once, 2026-11-19.)
 	for _, row in ipairs(ns.CONFLICTS or {}) do
@@ -162,19 +186,19 @@ local function Shows()
 	if subzone == zone then subzone = "" end
 	local place = subzone ~= "" and subzone or zone
 	-- (The same name shown again keeps its wait going; any other ends it.)
-	if holding and holding.place == place then return end
+	if holding and holding.place == place then return true end
 	holding = nil
 	if newArea and zone ~= "" and zone == lastZone then
 		-- (The same zone's line again: a subzone's card if it's a new one.)
 		newArea = false
 		sub = subzone ~= ""
 	end
-	if not newArea and not (sub and subzone ~= "" and ns.CardOn("subzone")) then return end
+	if not newArea and not (sub and subzone ~= "" and ns.CardOn("subzone")) then return false end
 	if newArea then lastZone = zone end
 	-- (A place new to you: Discovered's card in place of this one, so this
 	-- one waits, as the game's "Discovered:" line comes after its name.)
 	if ns.DiscoverHasIt and ns.CardOn("discover") then
-		if ns.DiscoverHasIt() then return end
+		if ns.DiscoverHasIt() then return true end
 		-- (The game's own count first, its Exploration achievements: not yet
 		-- discovered, Discovered's card now; discovered, this one now.)
 		local explored = ns.PlaceExplored(place)
@@ -185,19 +209,18 @@ local function Shows()
 			if ns.DiscoverPlace(place, zone) then
 				discovered = true
 				HideGame()
-				return
+				return true
 			end
 		elseif explored then
 			ns.PlaceIsNew(zone, place)
-			Card(zone, subzone, newArea)
-			return
+			return Card(zone, subzone, newArea)
 		end
 		local new = ns.PlaceIsNew(zone, place)
 		ns.Log("card", ("%s shown (%s): Zone card waits for a Discovered line"):format(place, new and "new here" or "known"))
 		Hold(place, new and NEW_WAIT or KNOWN_WAIT, zone, subzone, newArea)
-		return
+		return true
 	end
-	Card(zone, subzone, newArea)
+	return Card(zone, subzone, newArea)
 end
 local function Showing(frame)
 	if frame == ZoneTextFrame then
@@ -207,6 +230,7 @@ local function Showing(frame)
 	else
 		return
 	end
+	if not waiting then standing = false end -- (a new showing: a card may come for it)
 	HideGame()
 	if not waiting then
 		waiting = true

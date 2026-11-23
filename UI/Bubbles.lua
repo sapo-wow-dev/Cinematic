@@ -702,17 +702,11 @@ local function LiftText(inside, state)
 	end
 end
 
-local function Lift(inside)
-	local text = inside.String
-	if text and text.GetPoint and select(2, inside:GetPoint(1)) == text then
-		local state = lifted[inside]
-		if not state then
-			state = { by = 0 }
-			lifted[inside] = state
-		end
-		LiftText(inside, state)
-		return
-	end
+-- A bubble's state, made once with its hook, wherever it's first needed:
+-- one first made text-anchored, or hidden off the screen, had no hook, so
+-- a pooled bubble used the other way later went back to a stale spot.
+-- Audit 2026-11-22.
+local function StateOf(inside)
 	local state = lifted[inside]
 	if not state then
 		state = { by = 0 }
@@ -723,6 +717,16 @@ local function Lift(inside)
 				state.points, state.by = nil, 0
 			end
 		end)
+	end
+	return state
+end
+
+local function Lift(inside)
+	local state = StateOf(inside)
+	local text = inside.String
+	if text and text.GetPoint and select(2, inside:GetPoint(1)) == text then
+		LiftText(inside, state)
+		return
 	end
 	local on = ns.db and ns.db.handleBubbles and not ns.MasterOff("handleBubbles") and ns.db.bubblesOffTop
 	if not on then
@@ -891,11 +895,7 @@ function ns.HideOffScreenBubble(text)
 	for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(false)) do
 		local inside = ns.Reachable(bubble) and bubble:GetChildren()
 		if inside and hooked[bubble] and SaysText(bubble, text) then
-			local state = lifted[inside]
-			if not state then
-				state = { by = 0 }
-				lifted[inside] = state
-			end
+			local state = StateOf(inside)
 			if state.copy then Release(inside, state) end
 			state.hidden = true
 			inside:SetAlpha(0)

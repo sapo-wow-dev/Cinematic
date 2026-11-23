@@ -41,7 +41,11 @@ Check("off again", (box.clock:GetText() or "") == "", box.clock:GetText())
 -- read over rough ground.)
 ns.TestPrompt("Target yourself", 4)
 local prompt
-for _, child in ipairs({ WorldFrame:GetChildren() }) do if child.text and child.panel then prompt = child end end
+-- (On UIParent while it's shown, so windows don't hide it; WorldFrame while
+-- the UI is hidden: either.)
+for _, parent in ipairs({ UIParent, WorldFrame }) do
+	for _, child in ipairs({ parent:GetChildren() }) do if child.text and child.panel then prompt = child end end
+end
 Check("a test prompt has its dark panel", prompt ~= nil and prompt.panel:IsShown())
 if prompt then
 	Check("the panel around the words", prompt.panel:GetWidth() > prompt.text:GetWidth()

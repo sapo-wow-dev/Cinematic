@@ -1155,7 +1155,7 @@ local MASK_CASES = {
 		owner:SetScale(0.8)
 	end },
 	{ "mask set again", function(box, _, mask)
-		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		mask:ClearAllPoints()
 		mask:SetAllPoints(box)
 	end },
@@ -1184,7 +1184,7 @@ local function MaskProbe()
 		face:SetTexture("Interface\\Icons\\INV_Misc_Head_Orc_01")
 		local mask = box:CreateMaskTexture()
 		mask:SetAllPoints()
-		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
+		mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 		face:AddMaskTexture(mask)
 		if case[2] then pcall(case[2], box, owner, mask) end
 		local label = cell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
