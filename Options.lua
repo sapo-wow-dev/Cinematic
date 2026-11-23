@@ -12659,7 +12659,12 @@ do
 			-- size. The row being edited glows; a plate clicked opens its row.
 			local previewed = "others"
 			preview = CreateFrame("Frame", nil, content)
+			-- (minHeight: the fitter (StylePages.lua) sizes a preview to the
+			-- screen's shape, ~200 on an ultrawide: room kept for the game's plate
+			-- with its debuffs over it and its lists under it.)
+			local gameCapable = not ns.isRetail and ns.MakeGamePlate ~= nil
 			preview:SetSize(560, 190)
+			preview.minHeight = gameCapable and 200 or nil
 			stack:Add(preview, "label")
 			ns.StylePopout(preview, Tooltip) -- (StylePages.lua)
 			if preview.SetClipsChildren then preview:SetClipsChildren(true) end
@@ -12675,6 +12680,22 @@ do
 			local WHO_COLORS = { Enemy = { 0.75, 0.1, 0.1 }, Neutral = { 0.85, 0.75, 0 }, Friendly = { 0, 0.6, 0.1 } }
 			local GAME_FILL = "Interface\\TargetingFrame\\UI-StatusBar"
 			local plates = {}
+			-- (The game's own plate (PlateCopy.lua) where it can be built: the
+			-- Look panel's previewer (PlateRowLook.lua), one big plate with its
+			-- Unit and State lists, the user 2026-11-23 ("the same previewer in
+			-- both"); it filled four plates before. The drawn plates stay for
+			-- retail and a plate that can't be built.)
+			local inner = gameCapable and ns.MakePlateRowLookPreview and ns.MakePlateRowLookPreview(preview, 560, "others") or nil
+			if inner then
+				inner:ClearAllPoints()
+				inner:SetAllPoints(preview)
+				inner.zoomSkip = true
+				inner:Hide()
+				-- (Its own Scene pill: the pop-out's backdrop button would sit on its Unit list.)
+				if preview.backButton then preview.backButton:Hide() end
+				preview.backButton = nil
+			end
+			preview.lookPreview = inner -- (the test reads it: /cine debug platematch)
 			local function MakeSample(n)
 				local plate = CreateFrame("Button", nil, preview)
 				plate:SetSize(BAR_W + 40, 44)
@@ -12931,6 +12952,27 @@ do
 					Dress(plate, kind, who)
 					used[n] = true
 				end
+				-- (The game's own plate where it can be built; else the drawn.)
+				local gameMode = inner and inner.gamePlate and ns.GamePlateReady(inner.gamePlate) and true or false
+				self.gameMode = gameMode
+				if inner then inner:SetShown(gameMode) end
+				caption:SetText(self.hoverTheme and L["Preview: not saved"] or L["Preview"])
+				caption:SetShown(not gameMode) -- (the previewer has its own "not saved")
+				if gameMode then
+					-- (As big as fits: its debuffs over it under the top, its lists
+					-- under it. Centered on its bar, as the game's (the user
+					-- 2026-11-23: moved left for the crowd control icon, it looked off
+					-- center); its crowd control icon, 180 right of the middle, kept inside.)
+					self.noAutoFit = true
+					local lift = inner.plateLift or 38
+					inner.gameShift = nil
+					inner.gameScale = math.max(0.6, math.min(1.6, (height - lift - 8) / 92, (width - 12) / 360))
+					inner.kind, inner.hoverTheme = previewed, self.hoverTheme
+					inner:Refresh()
+					for _, plate in pairs(plates) do plate:Hide() end
+					return
+				end
+				self.noAutoFit = nil
 				-- (The row picked (Default to start) on four plates, one in each
 				-- quarter of the scene, 2026-11-16: a hostile, a neutral, a friendly
 				-- unit and a player.)
@@ -13022,10 +13064,36 @@ do
 			-- have always been. PlateThemes.lua.
 			stack:Header(content, L["Plate theme"])
 			RecordKey(content, "plateTheme")
-			local plateStrip = stack:Add(ns.MakePartThemeStrip(ns.lowHealthKit, content, "plate", function()
+			-- (One row under the preview, 2026-11-23 (the user: the wall of theme
+			-- tiles was too much and Customize sat hidden at the bottom): the
+			-- Theme list (pointing at a theme shows it on the preview, not saved)
+			-- and Customize beside it, then a line on the pick. The tiles stay
+			-- where a client has no dropdown template.)
+			local function ThemeChanged()
 				if ns.RefreshPlateHealthStyle then ns.RefreshPlateHealthStyle() end
 				Changed()
-			end), "label")
+			end
+			local themeRow = CreateFrame("Frame", nil, content)
+			themeRow:SetSize(460, 26)
+			local themeDrop = ns.MakePlateThemeDropdown and ns.MakePlateThemeDropdown(themeRow, 260, ThemeChanged, function(key)
+				if not preview then return end
+				preview.hoverTheme = key
+				preview:Refresh()
+			end)
+			local plateStrip
+			if themeDrop then
+				themeDrop:SetPoint("LEFT", themeRow, "LEFT", 0, 0)
+				themeDrop.Refresh = function(self)
+					if self.GenerateMenu then pcall(self.GenerateMenu, self) end
+				end
+				Tooltip(themeDrop, L["The plates' bar: its texture and border, in one pick. Point at one to see it above."])
+				themeDrop.pageSwitch = false -- (as the tiles: a theme can be picked with the page off)
+				stack:Add(themeRow, "label")
+				controls[#controls + 1] = themeDrop
+			else
+				plateStrip = stack:Add(ns.MakePartThemeStrip(ns.lowHealthKit, content, "plate", ThemeChanged), "label")
+				controls[#controls + 1] = plateStrip
+			end
 			local plateThemeNow = stack:Note(content, "", 460)
 			plateThemeNow.searchSkip = true
 			plateThemeNow.Refresh = function(self)
@@ -13035,13 +13103,17 @@ do
 				self:SetTextColor(0.6, 0.6, 0.6)
 			end
 			controls[#controls + 1] = plateThemeNow
-			controls[#controls + 1] = plateStrip
 			-- Customize (2026-11-16): the Default row's Look panel (Smart Style's
 			-- last row): the plates' own look before any row of Smart Style.
-			local customize = ns.PanelButton(content)
+			-- Beside the Theme list (under the note where there's no list).
+			local customize = ns.PanelButton(themeDrop and themeRow or content)
 			customize:SetSize(140, 22)
 			customize:SetText(L["Customize"])
-			customize:SetPoint("TOPLEFT", plateThemeNow, "BOTTOMLEFT", 0, -12)
+			if themeDrop then
+				customize:SetPoint("LEFT", themeDrop, "RIGHT", 10, 0)
+			else
+				customize:SetPoint("TOPLEFT", plateThemeNow, "BOTTOMLEFT", 0, -12)
+			end
 			Tooltip(customize, L["Change the plates' basic look."])
 			customize:SetScript("OnClick", function()
 				local grid = content.markGrid
@@ -13053,6 +13125,7 @@ do
 				if preview and preview.Pick then preview:Pick(default) end
 				if button and button:GetScript("OnClick") then button:GetScript("OnClick")(button, "LeftButton") end
 			end)
+			content.plateThemeDropdown, content.plateCustomize = themeDrop, customize
 			customize.Refresh = function() end
 			customize.pageSwitch = false
 			controls[#controls + 1] = customize

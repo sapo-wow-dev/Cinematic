@@ -190,6 +190,7 @@ Style\PersonalManaCost.lua
 Style\PersonalManaText.lua
 Style\PlateCastStyle.lua
 Style\PlateHealthStyle.lua
+Plates\PlateCopy.lua
 Plates\PlateRowLook.lua
 Style\CombatTextTexts.lua
 Style\CombatTextStyle.lua

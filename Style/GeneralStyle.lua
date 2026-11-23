@@ -115,8 +115,29 @@ function ns.MakeGeneralPlatePreview(parent, width)
 		cast:SetPoint("TOP", health, "BOTTOM", 0, -3)
 		cast:SetWidth(health:GetWidth())
 	end
+	-- (The game's own plate where it can be built (PlateCopy.lua), dressed as
+	-- your plates are: the plate theme (General's while it follows it), the
+	-- Default row's look, the plates' cast bar. Else the drawn one above.)
+	local game = ns.MakeGamePlate and ns.MakeGamePlate(holder)
+	if game then
+		game:SetScale(1.3)
+		game:SetPoint("CENTER", holder, "CENTER", 0, 0)
+	end
 	function holder:Refresh()
 		ns.StyleScene(self, 0.55, 0.85)
+		-- (Built the first time it's drawn with the game's options complete.)
+		local live = game and ns.GamePlateReady(game)
+		plate:SetShown(not live)
+		if game then game:SetShown(live and true or false) end
+		if live then
+			local look = ns.PlateRowLookFor and ns.PlateRowLookFor("others") or nil
+			if ns.PlateNameLook then ns.PlateNameLook(game.UnitFrame.name, look) end
+			ns.SetGamePlateUnit(game, "hostile", L["Gnoll Brute"])
+			ns.SetGamePlateLevel(game, not (look and look.level == false))
+			ns.SetGamePlateStates(game, { target = true, casting = true })
+			if ns.StylePlateBar then ns.StylePlateBar(game, look) end
+			return
+		end
 		local db = ns.db
 		local on = db and db.styleGeneral
 		local general = on and db or ns.DEFAULTS

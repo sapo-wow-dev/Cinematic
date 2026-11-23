@@ -61,7 +61,8 @@ local SPECS = {
 		label = "Style",
 		-- (Its files bar the toolkit loaded either way: StyleFonts, StylePages,
 		-- ColorPalette, and the plates' name looks, NameRowLook.)
-		files = { "@Style/", "Plates/PlateThemes.lua", "Plates/NameThemes.lua", "Plates/PlateRowLook.lua" },
+		files = { "@Style/", "Plates/PlateThemes.lua", "Plates/NameThemes.lua", "Plates/PlateRowLook.lua",
+			"Plates/PlateCopy.lua" },
 		loadedFiles = { "Style/StyleFonts.lua", "Style/StylePages.lua", "Style/ColorPalette.lua" },
 		-- (Loaded either way, in Style files: the Atmosphere effect pages and
 		-- their tabs (LetterboxStyle.lua), Roll Vision's tabs (RollStyle.lua).)

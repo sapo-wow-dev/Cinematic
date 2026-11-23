@@ -53,10 +53,12 @@ function ns.PlateThemeByKey(key)
 	return byKey[key]
 end
 
--- The plate theme in use: nil while it follows General ("main").
-function ns.PlateThemeNow()
+-- The plate theme in use: nil while it follows General ("main"). key: a
+-- theme to show in its place (a preview's, a theme pointed at in the page's
+-- Theme list), the saved one left alone.
+function ns.PlateThemeNow(key)
 	local db = ns.db
-	local key = db and db.plateTheme or "main"
+	key = key or db and db.plateTheme or "main"
 	if key == "main" then return nil end
 	return ns.PlateThemeByKey(key)
 end
@@ -64,11 +66,11 @@ end
 -- A plate bar's look under the rows: its texture (nil: the game's), its
 -- border's kind, size and color. General's live ones while "main"; else
 -- the plate theme's. Nothing while the Style hub is off.
-function ns.PlateThemeBar()
+function ns.PlateThemeBar(key)
 	local db = ns.db
 	-- (Off with the Nameplates style icon's own switch too, Default's, 2026-11-17.)
 	if not (db and ns.StyleOn("handlePlateStyle", db)) then return nil, "game", 0, 0, 0, 0 end
-	local theme = ns.PlateThemeNow()
+	local theme = ns.PlateThemeNow(key)
 	if not theme then
 		local texture = db.styleTexture
 		if texture == "game" then texture = nil end
@@ -82,10 +84,10 @@ end
 -- A plate bar's shape ("bevel"..., nil: square) and the ground behind its
 -- fill ({ r, g, b, a }, nil: the game's), from a plate theme picked on the
 -- page: none while it follows General, as plates always have.
-function ns.PlateThemeExtras()
+function ns.PlateThemeExtras(key)
 	local db = ns.db
 	if not (db and db.styleGeneral) then return nil, nil end
-	local theme = ns.PlateThemeNow()
+	local theme = ns.PlateThemeNow(key)
 	if not theme then return nil, nil end
 	return theme.shape, theme.ground
 end
@@ -101,6 +103,65 @@ function ns.PlateThemeRowLook(key)
 		look.LookBorderR, look.LookBorderG, look.LookBorderB = theme.color[1], theme.color[2], theme.color[3]
 	end
 	return look
+end
+
+-- The plate theme as one dropdown (Nameplate Style's Default tab, the user
+-- 2026-11-23: the wall of tiles was too much and pushed Customize to the
+-- bottom): Follow General first, then The game's, then each theme, each
+-- with a strip of its bar's texture; the one in use ticked. Pointing at one:
+-- onHover(key) (nil when the pointer leaves), so the page's preview shows it
+-- before it's picked. changed() after a pick. nil without the dropdown template.
+function ns.MakePlateThemeDropdown(parent, width, changed, onHover)
+	local ok, drop = ns.MenuDropdown(parent)
+	if not (ok and drop and drop.SetupMenu) then return nil end
+	drop.searchSkip = true
+	drop:SetWidth(width)
+	local function Themes()
+		local themes = { { key = "main", name = L["Follow General"] } }
+		for _, theme in ipairs(ns.PlateThemeList()) do
+			if theme.key == "game" then table.insert(themes, 2, theme) else themes[#themes + 1] = theme end
+		end
+		return themes
+	end
+	local function NameOf(theme) return theme.key == "main" and theme.name or L[theme.name] end
+	local function Picked()
+		local db = ns.GetDB()
+		return db and db.plateTheme or "main"
+	end
+	drop:SetupMenu(function(_, root)
+		for _, theme in ipairs(Themes()) do
+			local radio = root:CreateRadio(NameOf(theme), function() return Picked() == theme.key end, function()
+				ns.GetDB().plateTheme = theme.key
+				if onHover then onHover(nil) end
+				changed()
+			end)
+			if radio and radio.AddInitializer then
+				radio:AddInitializer(function(button)
+					if not button.AttachTexture then return end
+					local strip = button:AttachTexture()
+					local texture = theme.key == "main" and (ns.GetDB() or ns.DEFAULTS).styleTexture or theme.texture
+					local path, atlas
+					if ns.StyleTexturePath then path, atlas = ns.StyleTexturePath(texture, true) end
+					if atlas then strip:SetAtlas(path) else strip:SetTexture(path or "Interface\\TargetingFrame\\UI-StatusBar") end
+					strip:SetVertexColor(0.85, 0.15, 0.1)
+					strip:SetSize(80, 10)
+					strip:SetPoint("RIGHT", button, "RIGHT", -6, 0)
+				end)
+			end
+			if radio and radio.SetOnEnter and onHover then
+				radio:SetOnEnter(function() onHover(theme.key) end)
+				if radio.SetOnLeave then radio:SetOnLeave(function() onHover(nil) end) end
+			end
+		end
+	end)
+	if drop.SetSelectionText then
+		drop:SetSelectionText(function()
+			local key = Picked()
+			local theme = key == "main" and { key = "main", name = L["Follow General"] } or ns.PlateThemeByKey(key)
+			return L["Theme: %s"]:format(theme and NameOf(theme) or key)
+		end)
+	end
+	return drop
 end
 
 -- A strip of theme tiles for a page: kind "plate" (Nameplate Style) or

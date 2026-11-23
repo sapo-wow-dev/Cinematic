@@ -1773,7 +1773,7 @@ end
 -- screen's shape (as the full-screen ones need). headHeight: room over the
 -- screen (General's, its name). A spot of its size holds where the stack put
 -- it (the stack places what's next from the spot: stackSpot), the preview on
--- its top left. Set again as it shows (and a frame later, once the page is
+-- its top left; never under its minHeight. Set again as it shows (and a frame later, once the page is
 -- laid out) and when the page is resized.
 local PREVIEW_W, PAGE_MARGIN = 480, 16
 function ns.StylePreviewHeight()
@@ -1786,7 +1786,9 @@ local function FitPreview(preview)
 	-- (Not laid out yet: left as it is, not shrunk back; OnShow fits it again.)
 	if not (left and right) then return end
 	local width = math.max(PREVIEW_W, math.floor(right - left - PAGE_MARGIN))
-	local height = ns.StylePreviewHeight() + (preview.headHeight or 0)
+	-- (minHeight: a preview that needs more room than the screen's shape gives,
+	-- Nameplate Style's two rows of game plates on an ultrawide.)
+	local height = math.max(preview.minHeight or 0, ns.StylePreviewHeight() + (preview.headHeight or 0))
 	if math.abs(preview:GetWidth() - width) < 0.5 and math.abs(preview:GetHeight() - height) < 0.5 then return end
 	preview:SetSize(width, height)
 	ns.RecutStyleScene(preview)

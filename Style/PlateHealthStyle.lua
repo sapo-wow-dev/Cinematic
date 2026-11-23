@@ -132,8 +132,9 @@ local overrides = setmetatable({}, { __mode = "k" })
 -- and color: General's while it follows General (PlateThemes.lua); a bar's
 -- row Look over them (bar: the one asked about).
 local function Look(bar)
-	local texture, kind, size, r, g, b = ns.PlateThemeBar()
 	local own = bar and overrides[bar]
+	-- (A preview's plate can show a theme pointed at, not saved: own.theme.)
+	local texture, kind, size, r, g, b = ns.PlateThemeBar(own and own.theme)
 	if own then
 		if own.texture ~= nil then texture = own.texture ~= "game" and own.texture or nil end
 		if own.border then kind, size, r, g, b = unpack(own.border) end
@@ -177,7 +178,8 @@ local function Dress(bar)
 	-- (A plate theme's ground behind the fill and its bar shape, PlateThemes.lua.
 	-- The shape masks the fill and the ground: the game's own rounding off
 	-- the fill first, ns.DressBarShape. Square again once it's left.)
-	local shape, ground = ns.PlateThemeExtras()
+	local own = overrides[bar]
+	local shape, ground = ns.PlateThemeExtras(own and own.theme)
 	if ground then
 		state.ground = state.ground or bar:CreateTexture(nil, "BACKGROUND", nil, -1)
 		state.ground:SetAllPoints()
@@ -354,6 +356,21 @@ function ns.SetPlateBarOverride(plate, look)
 	if not bar then return end
 	if not look and not overrides[bar] then return end
 	overrides[bar] = look and { texture = look.texture, border = look.border, gradient = look.gradient } or nil
+	TryPlate(plate)
+end
+
+-- A preview's plate (PlateCopy.lua's copy of the game's, in a frame standing
+-- in for a nameplate): dressed as a real plate is, with this look over the
+-- plate theme's (nil: none). Always drawn again: a preview's look changes as
+-- a choice is pointed at.
+-- theme: a plate theme's key to show in place of the saved one (the page's
+-- Theme list, pointed at).
+function ns.StylePlateBar(plate, look, theme)
+	local bar = BarOf(plate)
+	if not bar then return end
+	local has = look and (look.texture or look.border or look.gradient ~= nil)
+	overrides[bar] = (has or theme) and { texture = has and look.texture or nil, border = has and look.border or nil,
+		gradient = has and look.gradient or nil, theme = theme } or nil
 	TryPlate(plate)
 end
 

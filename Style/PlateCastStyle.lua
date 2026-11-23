@@ -1390,6 +1390,13 @@ local function StylePlate(plate)
 	end
 end
 
+-- A preview's plate (PlateCopy.lua: the game's own, in a frame standing in
+-- for a nameplate): its cast bar dressed as the plates' are.
+function ns.StylePlateCast(plate)
+	local ok, err = pcall(StylePlate, plate)
+	if not ok then ns.Log("plates", "preview cast style error: " .. tostring(err)) end
+end
+
 -- The game's other cast bars, by kind: yours (retail's, Classic's, the
 -- pet's for vehicles and mind control, WoW Forever's gamepad one), the
 -- target's and focus's (spellbar on every client; by its name too), and the

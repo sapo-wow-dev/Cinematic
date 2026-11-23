@@ -262,6 +262,10 @@ local function NameLook(name, look)
 	end
 end
 
+-- A preview's game plate name in a look (General's screen, PlateCopy.lua).
+function ns.PlateNameLook(name, look) pcall(NameLook, name, look) end
+
+
 -- The look a plate goes by now (nil: none), for PlateParts' level box and
 -- its own drawn names.
 function ns.PlateLookNow(plate)
@@ -334,6 +338,131 @@ local SAMPLES = {
 	{ "Player" },
 }
 local sampleNow = 1
+-- The game plate's states shown (PlateCopy.lua), picked on the second row of
+-- pills: kept for the next panel opened, as the unit pick is.
+local statesNow = { casting = true }
+-- { key, its name, its tooltip, its group (a heading in the list) }. The
+-- either/or sets below (EXCLUSIVE): one of a set at a time.
+local STATE_PILLS = {
+	{ "target", "Target", "As your target: the game's border round the bar.", "Selected" },
+	{ "focus", "Focus", "As your focus: the border in the focus color.", "Selected" },
+	{ "casting", "Casting", "Casting a spell.", "Cast" },
+	{ "locked", "Can't interrupt", "Casting a spell you can't interrupt.", "Cast" },
+	{ "channel", "Channeling", "Channeling a spell: the bar drains.", "Cast" },
+	{ "interrupted", "Interrupted", "A cast cut off, as the game shows it.", "Cast" },
+	{ "important", "Important cast", "An important spell: the game's glow, if your cast bar settings show it.", "Cast" },
+	{ "atyou", "Casting at you", "Its spell on you: your name and the game's glow, as your settings show them.", "Cast" },
+	{ "elite", "Elite", "An elite: the game's elite mark.", "Rank" },
+	{ "rare", "Rare", "A rare: the game's star.", "Rank" },
+	{ "rareelite", "Rare elite", "A rare elite: the silver mark.", "Rank" },
+	{ "boss", "Boss", "A boss: the gold mark and a skull for its level.", "Rank" },
+	{ "aggro", "Aggro", "Attacking you, as your threat setting shows it.", "Threat" },
+	{ "gaining", "Pulling threat", "About to turn on you, as your threat setting shows it.", "Threat" },
+	{ "marker", "Marker", "With a raid marker.", "More" },
+	{ "tapped", "Tapped", "Tapped by someone else: the game's grey bar.", "More" },
+	{ "debuffs", "Debuffs", "With your debuffs on it.", "More" },
+	{ "crowd", "Crowd control", "Rooted, stunned...: the game's row right of the level box.", "More" },
+	{ "quest", "Quest giver", "Your soft target's icon over it: the game's quest mark.", "More" },
+}
+local EXCLUSIVE = { { "target", "focus" }, { "locked", "channel", "interrupted" }, { "elite", "rare", "rareelite", "boss" },
+	{ "aggro", "gaining" } }
+local NEEDS_CAST = { locked = true, channel = true, interrupted = true, important = true, atyou = true }
+local function PickState(key)
+	local on = not statesNow[key]
+	statesNow[key] = on or nil
+	if on then
+		for _, set in ipairs(EXCLUSIVE) do
+			local inSet = false
+			for _, each in ipairs(set) do if each == key then inSet = true end end
+			if inSet then for _, each in ipairs(set) do if each ~= key then statesNow[each] = nil end end end
+		end
+		if NEEDS_CAST[key] then statesNow.casting = true end
+	elseif key == "casting" then
+		for cast in pairs(NEEDS_CAST) do statesNow[cast] = nil end
+	end
+end
+
+-- The game plate's states as the previews keep them (the next panel opened
+-- shows the same), and a State dropdown to tick them: onToggle() after each.
+-- nil on a client without the dropdown template.
+function ns.PlatePreviewStates() return statesNow end
+function ns.TogglePlatePreviewState(key) PickState(key) end -- (what the State list's ticks do)
+function ns.MakePlateStateDropdown(parent, width, onToggle)
+	local L = ns.L
+	local ok, drop = ns.MenuDropdown(parent)
+	if not (ok and drop and drop.SetupMenu) then return nil end
+	drop.zoomSkip, drop.searchSkip = true, true
+	drop:SetWidth(width)
+	drop:SetupMenu(function(_, root)
+		local group
+		for _, info in ipairs(STATE_PILLS) do
+			if info[4] ~= group then
+				group = info[4]
+				if root.CreateTitle then root:CreateTitle(L[group]) end
+			end
+			local box = root:CreateCheckbox(L[info[2]], function()
+				return statesNow[info[1]] or (info[1] == "casting" and statesNow.locked) or false
+			end, function()
+				PickState(info[1])
+				onToggle()
+				return MenuResponse and MenuResponse.Refresh -- (kept open: try one after another)
+			end)
+			local setTitle = _G.GameTooltip_SetTitle
+			if box and box.SetTooltip and setTitle then
+				box:SetTooltip(function(tooltip) setTitle(tooltip, L[info[3]]) end)
+			end
+		end
+	end)
+	if drop.SetSelectionText then
+		drop:SetSelectionText(function()
+			local on = {}
+			for _, info in ipairs(STATE_PILLS) do
+				if statesNow[info[1]] then on[#on + 1] = L[info[2]] end
+			end
+			return L["State: %s"]:format(#on > 0 and table.concat(on, ", ") or L["None"])
+		end)
+	end
+	ns.lowHealthKit.Tooltip(drop, L["What the plate shows: your target, a cast, a marker... Tick any."])
+	return drop
+end
+
+-- A game plate (PlateCopy.lua) dressed as a Smart Style row draws a plate, for
+-- Nameplate Style's preview: kind, the row; who, the unit ("hostile",
+-- "neutral", "friendly", "player") and name; theme, a plate theme pointed at
+-- (nil: the saved one). As the page's drawn plates did: the row's mark, its
+-- colors where it paints the name, bar or border (its Also colors), its Look
+-- (bar and name), your target's border on target and aggro rows; and the
+-- states picked in the State list.
+function ns.DressGamePlateForRow(plate, kind, who, name, theme)
+	local copy = plate and plate.gameCopy
+	if not copy then return end
+	local look = ns.PlateRowLookFor(kind)
+	local base = ns.MarkRowBase(kind)
+	local shown = ns.TargetMarkSetting("Show", kind) and true or false
+	local tintKind = ns.TargetMarkTintKind(kind)
+	local r, g, b = ns.TargetPlateColour(nil, tintKind)
+	local paint = shown and { r, g, b } or nil
+	local barColor = paint and ns.TargetMarkAlso("ColorBar", tintKind) and paint or nil
+	local nameColor = paint and ns.TargetMarkAlso("ColorName", tintKind) and paint or nil
+	pcall(NameLook, copy.name, look)
+	ns.SetGamePlateUnit(plate, who, name, barColor, nameColor)
+	ns.SetGamePlateLevel(plate, not (look and look.level == false))
+	local states = {}
+	for key, on in pairs(statesNow) do states[key] = on end
+	if base == "target" or base == "aggro" then states.target, states.focus = true, nil end
+	ns.SetGamePlateStates(plate, states)
+	local border = copy.HealthBarsContainer.healthBar.selectedBorder
+	if paint and ns.TargetMarkAlso("ColorBorder", tintKind) and border then border:SetVertexColor(r, g, b) end
+	if ns.StylePlateBar then ns.StylePlateBar(plate, look, theme) end
+	local bar = copy.HealthBarsContainer.healthBar
+	plate.rowMark = plate.rowMark or (ns.MakeTargetArrow and ns.MakeTargetArrow(bar, bar))
+	if plate.rowMark and ns.StyleTargetArrow then
+		ns.StyleTargetArrow(plate.rowMark, nil, kind)
+		plate.rowMark:SetShown(shown and ns.TargetMarkSetting("Style", kind) ~= "none")
+		plate.rowMark:SetAlpha(ns.TargetMarkSetting("Opacity", kind) or 1)
+	end
+	return shown
+end
 
 local function HasAtlas(name)
 	return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
@@ -466,9 +595,13 @@ local function Pill(parent, text, onClick)
 	return pill
 end
 
-function ns.MakePlateRowLookPreview(parent, width, kind)
+-- (holder.kind: the row it dresses, changed by Nameplate Style's page as a
+-- row is picked; holder.hoverTheme: a plate theme pointed at, not saved;
+-- holder.gameScale, gameShift: the game plate bigger (and moved left), that page's.)
+function ns.MakePlateRowLookPreview(parent, width, startKind)
 	local L = ns.L
 	local holder = CreateFrame("Frame", nil, parent)
+	holder.kind = startKind
 	holder:SetSize(width, 112)
 	if holder.SetClipsChildren then holder:SetClipsChildren(true) end
 	-- (Its plate sized here (1.6): not grown to fill the preview, only its zoom's - and +.)
@@ -520,32 +653,93 @@ function ns.MakePlateRowLookPreview(parent, width, kind)
 		cast:SetScale(0.75)
 		cast:SetWidth(health:GetWidth() / 0.75) -- (as wide as the plate's bar, under its scale)
 	end
+	-- (The game's own plate, PlateCopy.lua, where it can be built: dressed by
+	-- the code that dresses real plates. Else the drawn plate above.)
+	-- (Built the first time it's drawn with the game's options complete:
+	-- ns.GamePlateReady. Till then, and if it fails, the drawn plate.)
+	local game = ns.MakeGamePlate and ns.MakeGamePlate(holder)
 	local mark = ns.MakeTargetArrow and ns.MakeTargetArrow(health, health)
+	local gameMark -- (the row's mark on the game plate's bar, made with it)
 
-	local picks = {}
-	for i, sample in ipairs(SAMPLES) do
-		local pill = Pill(holder, L[sample[1]], function()
-			sampleNow = i
-			holder:Refresh()
-		end)
-		if i == 1 then
-			pill:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 6, 6)
-		else
-			pill:SetPoint("BOTTOMLEFT", picks[i - 1], "BOTTOMRIGHT", 4, 0)
-		end
-		picks[i] = pill
+	-- (The picks: what to show on the plate. Two dropdowns under it, Unit and
+	-- State (the user, 2026-11-23: the two rows of pills were ugly to see);
+	-- the pills only where the client has no dropdown template.)
+	local function PickSample(i)
+		sampleNow = i
+		holder:Refresh()
 	end
-	-- (Scene: the backdrop every preview shares, stylePreviewBack, the painted
-	-- scene or the dark panel; left of the zoom's - and +. Its own Closer gone,
-	-- 2026-11-17: the zoom does it.)
+	local function ToggleState(key)
+		PickState(key)
+		holder:Refresh()
+	end
+	holder.PickSample, holder.ToggleState = PickSample, ToggleState
+	local ROW_H = 28
+	local okUnit, unitDrop = ns.MenuDropdown(holder)
+	if not (okUnit and unitDrop and unitDrop.SetupMenu) then unitDrop = nil end
+	local stateDrop = unitDrop and game and ns.MakePlateStateDropdown(holder, 170, function() holder:Refresh() end) or nil
+	local picks = {}
 	local sceneButton = Pill(holder, L["Scene"], function()
 		if not ns.db then return end
 		ns.db.stylePreviewBack = ns.db.stylePreviewBack ~= "scene" and "scene" or nil
 		if ns.RecutStyleScene then ns.RecutStyleScene(holder) end
 		holder:Refresh()
 	end)
-	sceneButton:SetPoint("BOTTOMRIGHT", -90, 6)
+	-- (Sized to the room: one row with Scene at the usual width; a narrow one
+	-- squeezes State, and past that Scene takes the row above (confirm run 8:
+	-- at 300 wide State reached past the edge, at 480 Scene sat alone).)
+	local unitW, stateW = 130, 170
+	if stateDrop and unitW + 6 + stateW > width - 12 then
+		unitW = 120
+		stateW = math.max(120, width - 12 - unitW - 6)
+	end
+	local rowRight = 6
+	if unitDrop then
+		unitDrop.zoomSkip, unitDrop.searchSkip = true, true
+		unitDrop:SetWidth(unitW)
+		unitDrop:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 6, 6)
+		unitDrop:SetupMenu(function(_, root)
+			for i, sample in ipairs(SAMPLES) do
+				root:CreateRadio(L[sample[1]], function() return sampleNow == i end, function() PickSample(i) end)
+			end
+		end)
+		if unitDrop.SetSelectionText then
+			unitDrop:SetSelectionText(function() return L["Unit: %s"]:format(L[SAMPLES[sampleNow][1]]) end)
+		end
+		ns.lowHealthKit.Tooltip(unitDrop, L["The kind of unit the plate is for."])
+		rowRight = rowRight + unitW
+		if stateDrop then
+			stateDrop:SetWidth(stateW)
+			stateDrop:SetPoint("LEFT", unitDrop, "RIGHT", 6, 0)
+			rowRight = rowRight + 6 + stateW
+		end
+	else
+		-- (No dropdown on this client: the unit pills, as before.)
+		for i, sample in ipairs(SAMPLES) do
+			local pill = Pill(holder, L[sample[1]], function() PickSample(i) end)
+			if i == 1 then
+				pill:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 6, 6)
+			else
+				pill:SetPoint("BOTTOMLEFT", picks[i - 1], "BOTTOMRIGHT", 4, 0)
+			end
+			rowRight = rowRight + pill:GetWidth() + 4
+			picks[i] = pill
+		end
+	end
+	-- (Scene: the backdrop every preview shares, stylePreviewBack, the painted
+	-- scene or the dark panel; left of the zoom's - and +. A row of its own over
+	-- the picks where they'd reach it: a narrow preview.)
+	local sceneY = 6
+	if rowRight + 8 > width - 90 - sceneButton:GetWidth() then sceneY = 6 + ROW_H end
+	sceneButton:SetPoint("BOTTOMRIGHT", -90, sceneY + (unitDrop and 5 or 0))
 	ns.lowHealthKit.Tooltip(sceneButton, L["The lake behind the plate, or plain dark."])
+	-- (Where the plate's bottom sits: over the picks. Combat Text Style places
+	-- the plate itself by it.)
+	holder.plateLift = sceneY + (unitDrop and ROW_H or 20) + 4
+	if game then
+		holder:SetHeight(holder.plateLift + game:GetHeight() + 6)
+		game:SetPoint("BOTTOM", holder, "BOTTOM", 0, holder.plateLift)
+	end
+	holder.unitDropdown, holder.stateDropdown = unitDrop, stateDrop
 
 	-- (Over the scene's top right while a choice is only pointed at.)
 	local tag = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -555,6 +749,8 @@ function ns.MakePlateRowLookPreview(parent, width, kind)
 	-- (The settings page's own parts, for a preview shown away from it: the
 	-- welcome window's Combat Text demo hides them, CombatTextPage.lua.)
 	holder.pagePieces = { tag, sceneButton }
+	if unitDrop then holder.pagePieces[#holder.pagePieces + 1] = unitDrop end
+	if stateDrop then holder.pagePieces[#holder.pagePieces + 1] = stateDrop end
 	for _, pill in ipairs(picks) do holder.pagePieces[#holder.pagePieces + 1] = pill end
 
 	-- over: a choice pointed at in the panel ({ key = value }), shown, not saved;
@@ -562,7 +758,8 @@ function ns.MakePlateRowLookPreview(parent, width, kind)
 	function holder.Refresh(self, over, note)
 		local db = ns.db
 		if not db then return end
-		tag:SetShown(over ~= nil)
+		local kind = self.kind
+		tag:SetShown(over ~= nil or self.hoverTheme ~= nil)
 		tag:SetText(note or L["Preview: not saved"])
 		for i, pill in ipairs(picks) do pill:SetOn(i == sampleNow) end
 		sceneButton:SetOn(db.stylePreviewBack == "scene")
@@ -587,8 +784,46 @@ function ns.MakePlateRowLookPreview(parent, width, kind)
 		local paint = ns.TargetMarkOwn and ns.TargetMarkOwn("PlateColor", kind) == "custom"
 		local color = paint and { ns.TargetMarkOwn("PlateR", kind) or 1, ns.TargetMarkOwn("PlateG", kind) or 1,
 			ns.TargetMarkOwn("PlateB", kind) or 1 }
-		if color and ns.TargetMarkOwn("ColorBar", kind) then barColor = color end
-		if color and ns.TargetMarkOwn("ColorName", kind) then nameColor = color end
+		local paintBar = color and ns.TargetMarkOwn("ColorBar", kind) and color or nil
+		local paintName = color and ns.TargetMarkOwn("ColorName", kind) and color or nil
+		if paintBar then barColor = paintBar end
+		if paintName then nameColor = paintName end
+
+		-- The game's own plate: the unit and states with the game's calls, then
+		-- dressed by the plates' own code (PlateHealthStyle's bar, this file's
+		-- name, PlateCastStyle's cast bar). The font before the text (else
+		-- other alphabets show boxes).
+		local live = game and ns.GamePlateReady(game)
+		plate:SetShown(not live)
+		if game then game:SetShown(live and true or false) end
+		if stateDrop then stateDrop:SetShown(live and true or false) end
+		-- (Their shown words again: a pick changed them.)
+		for _, drop in ipairs({ unitDrop, stateDrop }) do
+			if drop and drop.GenerateMenu then pcall(drop.GenerateMenu, drop) end
+		end
+		if gameMark then gameMark:SetShown(false) end
+		if live then
+			if not gameMark and ns.MakeTargetArrow then
+				local bar = game.UnitFrame.HealthBarsContainer.healthBar
+				gameMark = ns.MakeTargetArrow(bar, bar)
+			end
+			pcall(NameLook, game.UnitFrame.name, look)
+			ns.SetGamePlateUnit(game, sample[1]:lower(), unitName, paintBar, paintName)
+			ns.SetGamePlateLevel(game, look.level ~= false)
+			ns.SetGamePlateStates(game, statesNow)
+			if ns.StylePlateBar then ns.StylePlateBar(game, look, self.hoverTheme) end
+			if self.gameScale then
+				game:SetScale(self.gameScale)
+				game:ClearAllPoints()
+				game:SetPoint("BOTTOM", self, "BOTTOM", -(self.gameShift or 0), self.plateLift / self.gameScale)
+			end
+			if gameMark and ns.StyleTargetArrow and ns.TargetMarkSetting then
+				ns.StyleTargetArrow(gameMark, nil, kind)
+				gameMark:SetShown((ns.TargetMarkSetting("Show", kind) and ns.TargetMarkSetting("Style", kind) ~= "none") and true or false)
+				gameMark:SetAlpha(ns.TargetMarkSetting("Opacity", kind) or 1)
+			end
+			return
+		end
 
 		-- Its fill: the row's texture, else the plate theme's (General's while
 		-- it follows it), else the game's.
@@ -693,7 +928,8 @@ function ns.MakePlateRowLookPreview(parent, width, kind)
 	holder:SetScript("OnShow", function(self) self:Refresh() end)
 	-- (For a page drawing over the plate, Combat Text Style's numbers: the
 	-- plate, and the unit picked under it, "Hostile", "Friendly"...)
-	holder.plate = plate
+	holder.plate = game or plate
+	holder.gamePlate = game
 	function holder.SampleKind() return SAMPLES[sampleNow][1] end
 	return holder
 end
