@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-23", page = "Vitals Vision", title = "Low mana in Vitals Vision",
+		text = "As your mana runs dry, the screen drains to a cold blue-gray and dark edges close in. " ..
+			"Right-click the new Mana tab on Vitals Vision to turn it on." },
 	{ date = "2026-11-23", page = "General", client = "forever", title = "Dressing room at the Auction House",
 		text = "Ctrl+Click an auction to see it on your character in a small dressing room beside the Auction House, " ..
 		"which now stays open. Turn it on in Quality of Life." },

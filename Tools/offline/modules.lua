@@ -29,7 +29,8 @@ local SPECS = {
 	visions = {
 		label = "Visions",
 		-- (Every Vision's code: Visions/, and in Atmosphere/ and Dev/ the ones there.)
-		files = { "@Visions/", "Atmosphere/LowHealth", "Atmosphere/VitalsSound.lua", "Atmosphere/TeleportVision.lua",
+		files = { "@Visions/", "Atmosphere/LowHealth", "Atmosphere/VitalsSound.lua", "Atmosphere/ManaVision.lua",
+			"Atmosphere/TeleportVision.lua",
 			"Atmosphere/DeathVision.lua", "Dev/WindGuide.lua" },
 		-- (Its one frame loaded either way: the ambience volume put back after a
 		-- cue cut short.)

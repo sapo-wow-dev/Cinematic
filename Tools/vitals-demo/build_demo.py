@@ -21,6 +21,8 @@ CROP = 118         # rows of a 1440-high shot under the reel's label box
 lua = lupa.LuaRuntime(unpack_returned_tuples=True)
 ns = lua.table()
 ns.isRetail = True  # (the page shows retail's menu: the game effects are retail's)
+# (A file inside a module (Modules.lua's ns.Module) runs its part at once here.)
+ns.Module = lua.eval("function(_, fn) fn() end")
 for name in ("Atmosphere/ScreenEffectsData.lua", "Atmosphere/LowHealthThemes.lua"):
     src = open(os.path.join(ADDON, name), encoding="utf-8").read()
     lua.eval("function(src, ns) local f = assert(load(src)) f('Cinematic', ns) end")(src, ns)

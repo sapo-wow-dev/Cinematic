@@ -110,6 +110,24 @@ input[type=checkbox] { accent-color: var(--gold); width: 16px; height: 16px; }
       <button type="button" id="reset">Reset to the theme's look</button>
       <p class="note">Each theme starts with its own look, as on the Style page: settings you haven't changed take the theme's when you switch.</p>
     </section>
+
+    <section class="panel" aria-labelledby="h-mana">
+      <h2 id="h-mana">Your mana</h2>
+      <label class="tick"><input type="checkbox" id="manaOn" checked> Low mana (the Mana tab)</label>
+      <div class="row"><label for="mana">Mana</label><input type="range" id="mana" min="0" max="100" step="1" value="100"><span id="manaV"></span></div>
+      <div class="row"><label for="manaStart">Starts</label><input type="range" id="manaStart" min="10" max="100" step="5"><span id="manaStartV"></span></div>
+      <div class="row"><label for="manaStrength">Strength</label><input type="range" id="manaStrength" min="10" max="100" step="5"><span id="manaStrengthV"></span></div>
+      <div class="row"><label for="manaReach">Edge reach</label><input type="range" id="manaReach" min="10" max="50" step="1"><span id="manaReachV"></span></div>
+      <div class="seg" role="group" aria-label="Look">
+        <button type="button" data-mana-look="drain">Drained</button>
+        <button type="button" data-mana-look="cold">Cold</button>
+        <button type="button" data-mana-look="dusk">Dusk</button>
+      </div>
+      <label class="tick"><input type="checkbox" id="manaEdges" checked> Dark edges</label>
+      <label class="tick"><input type="checkbox" id="manaCalm"> Out of combat</label>
+      <div class="seg"><button type="button" id="manaTest">Run the mana test</button></div>
+      <p class="note">A gray veil blended over the world (the game won't let it be faded as a multiply), faded in by your mana from Starts down to Full (5%). The test drains from just over Starts to nothing over 8 seconds.</p>
+    </section>
   </div>
 </div>
 
@@ -246,6 +264,40 @@ let reachNow = 0, reachSidesNow = 0;
 const sparks = [];
 const swirlAngles = [Math.random() * 2 * Math.PI, Math.random() * 2 * Math.PI];
 let swirlAt = null;
+// Low mana (ManaVision.lua): its defaults, looks and sums, kept in step.
+const MANA_LOOKS = {
+  drain: { veil: [0.42, 0.45, 0.52], edge: [0.03, 0.05, 0.1] },
+  cold: { veil: [0.2, 0.3, 0.52], edge: [0.01, 0.04, 0.14] },
+  dusk: { veil: [0.28, 0.24, 0.32], edge: [0.05, 0.02, 0.07] },
+};
+const MANA_VEIL_MOST = 0.55, MANA_EDGE_MOST = 0.95, MANA_TEST_TIME = 8, MANA_TEST_HOLD = 2;
+const M = { on: true, share: 1, start: 0.3, full: 0.05, calm: 0.6, look: "cold", strength: 0.7, edges: true, reach: 0.25, fighting: true, test: null };
+function manaLevel(share) {
+  const start = Math.min(1, Math.max(0.02, M.start)), full = Math.max(0, Math.min(start - 0.01, M.full));
+  if (share >= start) return 0;
+  if (share <= full) return 1;
+  const t = (start - share) / (start - full);
+  return t * t * (3 - 2 * t);
+}
+// Over all of Vitals (its own frame, one level up): the veil, then the edges.
+function drawMana(now) {
+  let share = M.share;
+  if (M.test) {
+    const t = now - M.test;
+    if (t > MANA_TEST_TIME + MANA_TEST_HOLD) M.test = null;
+    else share = Math.min(1, M.start + 0.05) * (1 - Math.min(1, t / MANA_TEST_TIME));
+  }
+  const a = (M.on || M.test) ? manaLevel(share) : 0;
+  if (a > 0) {
+    const colors = MANA_LOOKS[M.look] || MANA_LOOKS.cold;
+    const strength = M.strength * (M.fighting ? 1 : M.calm);
+    const v = colors.veil.map(c => Math.round(c * 255)).join(",");
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = `rgba(${v},${Math.min(1, strength * MANA_VEIL_MOST) * a})`; ctx.fillRect(0, 0, W, H);
+    if (M.edges) vignette(M.reach, M.reach, Math.min(1, strength * MANA_EDGE_MOST) * a, colors.edge);
+  }
+  return { share, level: a };
+}
 
 // A setting as drawn: Strength and Reach scaling it (LowHealth.lua's ThemeLook).
 function scaled(value, by, s) { return Math.min(s[0], value * (1 + (by * 2 - 1) * s[1])); }
@@ -416,8 +468,11 @@ function frame(nowMs) {
   }
   k = Math.max(k, flash * 0.35);
   apply(theme, k, heart, now);
+  const mana = drawMana(now);
   $("readout").innerHTML = `<span>health <b>${Math.round(share * 100)}%</b></span><span>edges in <b>${Math.round(level * 100)}%</b></span>` +
-    `<span>heartbeat <b>${bpm ? Math.round(bpm) + " bpm" : "off"}</b></span><span>${testing ? "<b>test running</b>" : ""}</span>`;
+    `<span>heartbeat <b>${bpm ? Math.round(bpm) + " bpm" : "off"}</b></span>` +
+    `<span>mana <b>${Math.round(mana.share * 100)}%</b>, drained <b>${Math.round(mana.level * 100)}%</b></span>` +
+    `<span>${testing || M.test ? "<b>test running</b>" : ""}</span>`;
   requestAnimationFrame(frame);
 }
 
@@ -638,6 +693,12 @@ function sync() {
     $(key).value = Math.round(db[key] * 100); $(key + "V").textContent = unit === "s" ? db[key].toFixed(1) + "s" : Math.round(db[key] * 100) + "%";
   }
   $("health").value = Math.round(S.health * 100); $("healthV").textContent = Math.round(S.health * 100) + "%";
+  for (const [id, key] of [["mana", "share"], ["manaStart", "start"], ["manaStrength", "strength"], ["manaReach", "reach"]]) {
+    $(id).value = Math.round(M[key] * 100); $(id + "V").textContent = Math.round(M[key] * 100) + "%";
+  }
+  for (const b of document.querySelectorAll("[data-mana-look]")) b.setAttribute("aria-pressed", b.dataset.manaLook === M.look);
+  $("manaOn").checked = M.on; $("manaEdges").checked = M.edges; $("manaCalm").checked = !M.fighting;
+  $("manaReach").closest(".row").classList.toggle("dim", !M.edges);
   for (const box of document.querySelectorAll("[data-key]")) box.checked = !!db[box.dataset.key];
   for (const [id, key] of [["pattern", "lowHealthGamePattern"], ["pattern2", "lowHealthGamePattern2"], ["mask", "lowHealthGameMask"], ["colors", "lowHealthGameColors"]]) {
     const sel = $(id), v = String(db[key]);
@@ -674,6 +735,13 @@ function bind() {
   $("test").onclick = () => { test = { start: performance.now() / 1000 }; lastHealth = db.lowHealthTestFrom; };
   $("hit").onclick = () => { test = null; S.health = Math.max(0, S.health - 0.15); sync(); };
   $("heal").onclick = () => { test = null; S.health = 1; sync(); };
+  for (const [id, key] of [["mana", "share"], ["manaStart", "start"], ["manaStrength", "strength"], ["manaReach", "reach"]])
+    $(id).oninput = e => { M[key] = e.target.value / 100; if (key === "share") M.test = null; sync(); };
+  for (const b of document.querySelectorAll("[data-mana-look]")) b.onclick = () => { M.look = b.dataset.manaLook; sync(); };
+  $("manaOn").onchange = e => { M.on = e.target.checked; sync(); };
+  $("manaEdges").onchange = e => { M.edges = e.target.checked; sync(); };
+  $("manaCalm").onchange = e => { M.fighting = !e.target.checked; sync(); };
+  $("manaTest").onclick = () => { M.test = performance.now() / 1000; };
   // (As the page's Reset: the defaults, then the theme's look over them.)
   $("reset").onclick = () => { Object.assign(db, DEF); from = { theme: null, values: {} }; useTheme(S.theme); };
 }

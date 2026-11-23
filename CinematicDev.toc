@@ -149,6 +149,7 @@ Atmosphere\ScreenEffects.lua
 Atmosphere\LowHealthThemes.lua
 Atmosphere\LowHealth.lua
 Atmosphere\VitalsSound.lua
+Atmosphere\ManaVision.lua
 Atmosphere\TeleportVision.lua
 Dev\PortalScout.lua
 Dev\ScreenEffectScout.lua
@@ -383,3 +384,4 @@ Dev\AddonListAllTest.lua
 Dev\LoosePartsSurvey.lua
 Dev\TooltipNoWaitTest.lua
 Dev\AhDressUpTest.lua
+Dev\ManaVisionTest.lua

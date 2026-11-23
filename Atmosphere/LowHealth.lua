@@ -204,11 +204,17 @@ local themed = {}
 -- Style page's: that one off is the theme as written, not no effect).
 -- (On ns: this file's main chunk is near Lua's 200 locals.)
 ns.VITALS_TABS = { general = "tabOn:Vitals:general", blizzard = "tabOn:Vitals:blizzard",
-	cinematic = "tabOn:Vitals:cinematic", swirl = "tabOn:Vitals:swirl", effect = "tabOn:Vitals:effect" }
+	cinematic = "tabOn:Vitals:cinematic", swirl = "tabOn:Vitals:swirl", effect = "tabOn:Vitals:effect",
+	mana = "tabOn:Vitals:mana" } -- (Mana: low mana's look, ManaVision.lua; under the Vision tab's Mana tab)
 for _, key in pairs(ns.VITALS_TABS) do
 	DEFAULTS[key] = true
 	ns.SetPageMaster({ key }, "lowHealth")
 end
+-- The Vision tab's tabs (2026-11-23): Health, the edges here, and Mana
+-- (ManaVision.lua's, off to start). Health off: no edges.
+ns.VITALS_HEALTH_TAB = "tabOn:VitalsVision:health"
+DEFAULTS[ns.VITALS_HEALTH_TAB] = true
+ns.SetPageMaster({ ns.VITALS_HEALTH_TAB }, "lowHealth")
 ns.VITALS_TAB_OFF = { lowHealthGameAlpha = "blizzard", lowHealthBloodAlpha = "cinematic", lowHealthPortalAlpha = "cinematic",
 	lowHealthSparks = "cinematic", lowHealthSwirlAlpha = "swirl", lowHealthDark = "general", lowHealthPulse = "general" }
 local function ThemeLook(base, wanted)
@@ -1577,7 +1583,7 @@ local function Wanted(now)
 			return test.from + (test.to - test.from) * progress, db.lowHealthEdges, true
 		end
 	end
-	if not ns.Setting("lowHealth") or not db.lowHealthEdges or GameSaysNoFlash() or not RowShows(now) then
+	if not ns.Setting(ns.VITALS_HEALTH_TAB) or not db.lowHealthEdges or GameSaysNoFlash() or not RowShows(now) then
 		return 1, false
 	end
 	if ns.Flag(UnitIsDeadOrGhost("player")) then
@@ -1751,6 +1757,7 @@ ns.RefreshLowHealth = function()
 	wipe(secretCurves) -- (their points follow the start and full settings)
 	if screen then screen.shown = nil end -- (set up again: the look may have changed)
 	Wake()
+	if ns.RefreshManaVision then ns.RefreshManaVision() end -- (low mana: the same pages)
 end
 
 -- The page's test: health from one share to another over seconds (then a
@@ -2132,7 +2139,7 @@ end)
 -- Is it showing now? (The minimap button's Minimap Glow Helper.) Only once your
 -- health is under Starts: secret health can't tell, so it stays dark.
 function ns.VitalsVisionActive()
-	return db ~= nil and ns.Setting("lowHealth") and db.lowHealthEdges and belowStart and level > 0
+	return db ~= nil and ns.Setting(ns.VITALS_HEALTH_TAB) and db.lowHealthEdges and belowStart and level > 0
 end
 
 -- /cine debug vitals: what the edges and the theme's art are doing now (run
@@ -2516,6 +2523,87 @@ local function VitalsTabs(content, title, picked)
 	ns.VisionTabs(content, title, "Vitals Vision", "Vitals Style", picked,
 		L["At what health the edges close in, and how fast."],
 		L["How it looks: the theme, our art and Blizzard's, the shadow and the heartbeat."])
+end
+
+-- Folder tabs on a Vitals page, both its tabs' (ns.FolderTabs, made once
+-- every section is): the picked one's settings on the panel under them.
+-- (section.body: what its tab made, hidden on the others: search still finds
+-- it, and picks its tab; section.foot: under its last row, the panel's
+-- bottom under it.) width: the page's narrowest. On ns: the main chunk's
+-- locals are near Lua's cap.
+function ns.VitalsTabbed(kit, content, stack, width)
+	local tabbed = { sections = {}, picked = 1, top = CreateFrame("Frame", nil, content) }
+	local room = CreateFrame("Frame", nil, content)
+	room:SetSize(width, ns.FOLDER_TAB_HEIGHT + 4)
+	stack:Add(room, "label")
+	tabbed.top:SetSize(1, 1)
+	tabbed.top:SetPoint("TOPLEFT", room, "BOTTOMLEFT", -10, 0)
+	local function Widgets()
+		local set = {}
+		for _, object in ipairs({ content:GetChildren() }) do set[object] = true end
+		for _, object in ipairs({ content:GetRegions() }) do set[object] = true end
+		return set
+	end
+	-- A section's start: what's added from here to its Finish is its own.
+	function tabbed.Begin()
+		local section = { body = CreateFrame("Frame", nil, content), before = nil }
+		section.body:SetPoint("TOPLEFT", tabbed.top)
+		section.body:SetSize(1, 1)
+		section.body.searchAlways = true
+		local start = CreateFrame("Frame", nil, section.body)
+		start:SetSize(1, 1)
+		start:SetPoint("TOPLEFT", tabbed.top, "TOPLEFT", 12, -6)
+		stack:Continue(start, "header")
+		section.before = Widgets()
+		return section
+	end
+	function tabbed.Finish(section)
+		for object in pairs(Widgets()) do
+			if not section.before[object] then object:SetParent(section.body) end
+		end
+		section.before = nil
+		section.foot = CreateFrame("Frame", nil, section.body)
+		section.foot:SetSize(1, 1)
+		stack:Add(section.foot, "label")
+		tabbed.sections[#tabbed.sections + 1] = section
+	end
+	-- Shows the picked tab's section, the panel down past it and across the page.
+	function tabbed.Layout()
+		if not tabbed.panel then return end
+		for i, section in ipairs(tabbed.sections) do section.body:SetShown(i == tabbed.picked) end
+		tabbed.Show(tabbed.picked)
+		local panel, left, right = tabbed.panel, tabbed.top:GetLeft(), content:GetRight()
+		panel:ClearAllPoints()
+		panel:SetPoint("TOPLEFT", tabbed.top)
+		panel:SetPoint("BOTTOMLEFT", tabbed.sections[tabbed.picked].foot, "BOTTOMLEFT", -12, -10)
+		panel:SetWidth(left and right and math.max(right - left - 16, width) or width + 140)
+		kit.FitContentHeight(content)
+	end
+	-- The tabs, once every section is made: tabs, one per section in order
+	-- ({ name, tip } each: the order's), each a container (ns.TabContainer)
+	-- with keys[i] under pageKeys[i]. What follows goes under the panel.
+	function tabbed.Tabs(order, tabs, keys, pageKeys)
+		local function Pick(i)
+			tabbed.picked = i
+			tabbed.Layout()
+		end
+		for i, section in ipairs(order) do
+			section.body.openSection = function() Pick(i) end
+		end
+		tabbed.sections = order
+		local panel, tabFrames, show, base = ns.FolderTabs(content, tabs, Pick)
+		tabbed.panel, tabbed.Show = panel, show
+		for i, section in ipairs(order) do
+			ns.TabContainer(tabFrames[i], section.body, keys[i], pageKeys[i])
+		end
+		base:SetPoint("TOPLEFT", tabbed.top)
+		local afterTabs = CreateFrame("Frame", nil, content)
+		afterTabs:SetSize(1, 1)
+		afterTabs:SetPoint("TOPLEFT", panel, "BOTTOMLEFT", 10, -10)
+		stack:Continue(afterTabs, "label")
+		tabbed.Layout()
+	end
+	return tabbed
 end
 
 function ns.CreateVitalsStylePanel(kit)
@@ -2964,54 +3052,7 @@ function ns.CreateVitalsStylePanel(kit)
 	-- panel under them. (section.body: what its tab made, hidden on the others:
 	-- search still finds it, and picks its tab; section.foot: under its last
 	-- row, the panel's bottom under it.)
-	local tabbed = { sections = {}, picked = 1, top = CreateFrame("Frame", nil, content) }
-	do
-		local room = CreateFrame("Frame", nil, content)
-		room:SetSize(PREVIEW_W, ns.FOLDER_TAB_HEIGHT + 4)
-		stack:Add(room, "label")
-		tabbed.top:SetSize(1, 1)
-		tabbed.top:SetPoint("TOPLEFT", room, "BOTTOMLEFT", -10, 0)
-	end
-	local function Widgets()
-		local set = {}
-		for _, object in ipairs({ content:GetChildren() }) do set[object] = true end
-		for _, object in ipairs({ content:GetRegions() }) do set[object] = true end
-		return set
-	end
-	-- A section's start: what's added from here to its Finish is its own.
-	function tabbed.Begin()
-		local section = { body = CreateFrame("Frame", nil, content), before = nil }
-		section.body:SetPoint("TOPLEFT", tabbed.top)
-		section.body:SetSize(1, 1)
-		section.body.searchAlways = true
-		local start = CreateFrame("Frame", nil, section.body)
-		start:SetSize(1, 1)
-		start:SetPoint("TOPLEFT", tabbed.top, "TOPLEFT", 12, -6)
-		stack:Continue(start, "header")
-		section.before = Widgets()
-		return section
-	end
-	function tabbed.Finish(section)
-		for object in pairs(Widgets()) do
-			if not section.before[object] then object:SetParent(section.body) end
-		end
-		section.before = nil
-		section.foot = CreateFrame("Frame", nil, section.body)
-		section.foot:SetSize(1, 1)
-		stack:Add(section.foot, "label")
-		tabbed.sections[#tabbed.sections + 1] = section
-	end
-	-- Shows the picked tab's section, the panel down past it and across the page.
-	function tabbed.Layout()
-		for i, section in ipairs(tabbed.sections) do section.body:SetShown(i == tabbed.picked) end
-		tabbed.Show(tabbed.picked)
-		local panel, left, right = tabbed.panel, tabbed.top:GetLeft(), content:GetRight()
-		panel:ClearAllPoints()
-		panel:SetPoint("TOPLEFT", tabbed.top)
-		panel:SetPoint("BOTTOMLEFT", tabbed.sections[tabbed.picked].foot, "BOTTOMLEFT", -12, -10)
-		panel:SetWidth(left and right and math.max(right - left - 16, PREVIEW_W) or PREVIEW_W + 140)
-		kit.FitContentHeight(content)
-	end
+	local tabbed = ns.VitalsTabbed(kit, content, stack, PREVIEW_W)
 
 	-- General: under the theme, the master controls: Strength, Reach, Brightness.
 	local general = tabbed.Begin()
@@ -3472,6 +3513,13 @@ function ns.CreateVitalsStylePanel(kit)
 
 	-- The tabs, in their order (made in another: Blizzard's art uses ours' helpers).
 	-- ("Blizzard" as it is: its L key is the frost spell's name.)
+	-- Mana: low mana's look (ManaVision.lua), its own section.
+	local manaTab
+	if ns.ManaVisionStyleRows then
+		manaTab = tabbed.Begin()
+		ns.ManaVisionStyleRows(kit, content, stack, rows)
+		tabbed.Finish(manaTab)
+	end
 	do
 		local order = { general, theirs, ours, swirlTab }
 		local list = {
@@ -3480,33 +3528,22 @@ function ns.CreateVitalsStylePanel(kit)
 			{ L["Cinematic"], L["The theme's own art and its sparks."] },
 			{ L["Swirl"], L["The theme's swirl: up to two layers turning over the screen."] },
 		}
+		-- (Each tab a container over its part, its layer off with it: ns.VITALS_TABS.)
+		local T = ns.VITALS_TABS
+		local keys = { T.general, T.blizzard, T.cinematic, T.swirl }
+		local masters = { "lowHealth", "lowHealth", "lowHealth", "lowHealth" }
 		if effectTab then
 			order[#order + 1] = effectTab
 			list[#list + 1] = { L["Game effect"], L["One of the game's own full-screen effects, moving, over all the rest."] }
+			keys[#keys + 1], masters[#masters + 1] = T.effect, "lowHealth"
 		end
-		local function Pick(i)
-			tabbed.picked = i
-			tabbed.Layout()
+		if manaTab then
+			order[#order + 1] = manaTab
+			list[#list + 1] = { L["Mana"], L["How the screen looks as your mana runs out."] }
+			keys[#keys + 1], masters[#masters + 1] = T.mana, ns.VITALS_MANA_TAB -- (off with the Vision tab's Mana)
 		end
-		for i, section in ipairs(order) do
-			section.body.openSection = function() Pick(i) end
-		end
-		tabbed.sections = order
-		local panel, tabFrames, show, base = ns.FolderTabs(content, list, Pick)
-		tabbed.panel, tabbed.Show = panel, show
-		-- (Each tab a container over its part, its layer off with it: ns.VITALS_TABS.)
-		local names = { "general", "blizzard", "cinematic", "swirl", "effect" }
-		for i, section in ipairs(order) do
-			ns.TabContainer(tabFrames[i], section.body, ns.VITALS_TABS[names[i]], "lowHealth")
-		end
-		base:SetPoint("TOPLEFT", tabbed.top)
+		tabbed.Tabs(order, list, keys, masters)
 	end
-	-- (What follows from under the panel.)
-	local afterTabs = CreateFrame("Frame", nil, content)
-	afterTabs:SetSize(1, 1)
-	afterTabs:SetPoint("TOPLEFT", tabbed.panel, "BOTTOMLEFT", 10, -10)
-	stack:Continue(afterTabs, "label")
-	tabbed.Layout()
 
 	-- (/cine debug vitalspage: the lowest shown widgets on this page and how
 	-- far down, to find what stretches its scroll: it scrolled far past the
@@ -3592,11 +3629,15 @@ function ns.CreateVitalsVisionPanel(kit)
 	end
 
 	local function Edges(d) return d.lowHealthEdges end
+	-- Two folder tabs, each a container (the user's pick, 2026-11-23): Health
+	-- (all below) and Mana (ManaVision.lua's rows).
+	local tabbed = ns.VitalsTabbed(kit, content, stack, 480)
+	local healthTab = tabbed.Begin()
 	-- Where and when the edges close in: a Show in row as the Cards page's rows.
 	local header = stack:Header(content, L["Show in"])
 	local lastRow = ns.ShowTable(content, header, {
 		opts = { anyFight = true }, underHeader = true,
-		{ key = ROW_KEY, label = L["Vitals Vision"], alwaysKey = "lowHealthAlways",
+		{ key = ROW_KEY, label = L["Low health"], alwaysKey = "lowHealthAlways",
 			alwaysOn = function() return ns.GetDB().lowHealthAlways end,
 			setAlways = function(value) ns.GetDB().lowHealthAlways = value Changed() end,
 			alwaysTip = L["Shows everywhere, so the other columns don't change anything."],
@@ -3660,8 +3701,25 @@ function ns.CreateVitalsVisionPanel(kit)
 			L["How much of your health one hit has to take to count as a big hit."], Edges },
 		{ "lowHealthFlashAdded", L["Or hits adding up to"], 5, 60, 1, "%d%%", 100,
 			L["Smaller hits that add up to this much of your health count as a big one."], Edges })
+	tabbed.Finish(healthTab)
 
-	canvas:SetScript("OnShow", kit.PageShown(kit.Refresh, content))
+	-- Mana: low mana (ManaVision.lua), off to start (its tab's right-click).
+	local order = { healthTab }
+	local list = { { L["Health"], L["As your health drops, the edges of the screen close in."] } }
+	local keys, masters = { ns.VITALS_HEALTH_TAB }, { "lowHealth" }
+	if ns.ManaVisionRows then
+		local manaTab = tabbed.Begin()
+		ns.ManaVisionRows(kit, content, stack, Changed)
+		tabbed.Finish(manaTab)
+		order[2], keys[2], masters[2] = manaTab, ns.VITALS_MANA_TAB, "lowHealth"
+		list[2] = { L["Mana"], L["As your mana runs out, the screen drains. Right-click the tab to turn it on."] }
+	end
+	tabbed.Tabs(order, list, keys, masters)
+
+	canvas:SetScript("OnShow", kit.PageShown(function()
+		kit.Refresh()
+		tabbed.Layout() -- (across the page, now it's sized)
+	end, content))
 	canvas:Hide()
 	kit.RegisterSubpage(canvas, "Vitals Vision")
 end

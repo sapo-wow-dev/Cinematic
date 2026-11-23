@@ -151,6 +151,7 @@ Atmosphere\ScreenEffects.lua
 Atmosphere\LowHealthThemes.lua
 Atmosphere\LowHealth.lua
 Atmosphere\VitalsSound.lua
+Atmosphere\ManaVision.lua
 Atmosphere\TeleportVision.lua
 UI\PersonalResources.lua
 Style\ColorPalette.lua
