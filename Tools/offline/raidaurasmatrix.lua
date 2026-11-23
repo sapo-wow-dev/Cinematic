@@ -13,6 +13,13 @@
 -- the row's faded in a group; never switched in a fight (each switch has the
 -- game rebuild its secure raid frames), switched as it ends. Retail fades the
 -- icons themselves: no stand-in. (bdb2e1d: switched in a fight.)
+-- The pull (raid-aura-pull, fix card 2026-11-23-frames-raid-aura-pull.md):
+-- the row faded before a fight, the fight starts (PLAYER_REGEN_DISABLED, the
+-- last free moment), the row comes up for it or stays faded, and fades again
+-- after. CineMode on or off, staying on in fights or not, the row's In combat
+-- (its rule) on or off. The rule: a row that shows in the fight has its auras
+-- on for the fight; one staying faded keeps them off. (bdb2e1d left them off
+-- all fight either way: card audit 2026-11-23.)
 
 local client = arg and arg[1] or "forever"
 local cvars = { raidFramesDisplayBuffs = "1", raidFramesDisplayDebuffs = "1" }
@@ -27,6 +34,14 @@ local function Install()
 	-- luacheck: pop
 end
 local ns, wow = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc", Install)
+local pull = { cine = false, stays = false, tick = false }
+ns.IsCineModeOn = function() return pull.cine end
+ns.StaysInCombat = function() return pull.stays end
+local RowOnNow = ns.RowOnNow
+ns.RowOnNow = function(key, ...)
+	if key == "raidbuffs" or key == "raiddebuffs" then return pull.tick end
+	return RowOnNow(key, ...)
+end
 ns.db.enabled = true
 
 -- (The stand-in: made by its scanner, found by its CVar set.)
@@ -93,6 +108,45 @@ Matrix.Run({
 		{ "fight=yes start=held row=faded group=yes", "during=0 after=0" },
 		{ "fight=yes start=free row=faded group=yes", "during=1 after=0" },
 		-- (Retail: the icons fade themselves, no stand-in.)
+		{ "client=retail", "no stand-in" },
+	},
+})
+
+Matrix.Run({
+	name = client == "retail" and "raid-aura-pull-retail" or "raid-aura-pull",
+	fixed = { client = client },
+	dims = {
+		{ "cine", { "on", "off" } },
+		{ "stays", { "yes", "no" } },
+		{ "tick", { "yes", "no" } },
+	},
+	cell = function(c)
+		if not standIn then return "no stand-in" end
+		pull.cine, pull.stays, pull.tick = c.cine == "on", c.stays == "yes", c.tick == "yes"
+		-- (Before: in a group, the row faded, out of a fight: auras off.)
+		fight, grouped, alpha = false, true, 0
+		wow.Fire("GROUP_ROSTER_UPDATE")
+		if cvars.raidFramesDisplayBuffs ~= "0" then return "start not set: " .. cvars.raidFramesDisplayBuffs end
+		-- (The pull: the event just before the lockdown, then the fight.)
+		wow.Fire("PLAYER_REGEN_DISABLED")
+		fight = true
+		local shows = not pull.cine or not pull.stays or pull.tick
+		alpha = shows and 1 or 0
+		wow.Fire("GROUP_ROSTER_UPDATE") -- (the row's change in the fight, as its SetAlpha hook would)
+		local during = cvars.raidFramesDisplayBuffs
+		-- (The fight over, the row faded again.)
+		fight, alpha = false, 0
+		wow.Fire("PLAYER_REGEN_ENABLED")
+		local out = ("during=%s after=%s"):format(during, cvars.raidFramesDisplayBuffs)
+		grouped, alpha = false, 1
+		wow.Fire("GROUP_ROSTER_UPDATE")
+		return out
+	end,
+	pins = {
+		-- (The row shows in the fight: auras on for it, off again after.)
+		{ "", "during=1 after=0" },
+		-- (CineMode on, staying on in fights, the row's In combat off: faded all fight, auras off.)
+		{ "cine=on stays=yes tick=no", "during=0 after=0" },
 		{ "client=retail", "no stand-in" },
 	},
 })
