@@ -5248,6 +5248,44 @@ STEPS[#STEPS + 1] = function()
 	ns.db.profileKeysOffV1 = true
 end
 
+-- Auto-Hide UI's and Blank Slate's Reset with no reset point went back to
+-- today's base: the Cooldown Manager page (Auto-Hide UI), every wheel key and
+-- the Keyboard Map off, though a player who'd had the profile since v2.1.23
+-- had them on (their base then; the steps above keep only saved copies and
+-- reset points). A reset point that keeps each of them you have on now: your
+-- live switches if you're on the profile, else its saved copy. A fresh pick
+-- has them off, so nothing's written for it. Once. (Card audit 2026-11-23,
+-- finding 3, the user's "Fix 1, 2, 3"; fix card 2026-11-23-profiles-reset-keep.md.)
+STEPS[#STEPS + 1] = function()
+	if ns.db.profileResetKeepV1 then return end
+	local wheels = ns.PROFILE_KEYS_OFF or { "wheelMasterOn", "wheelYoursOn", "wheelCameraOn", "wheelMenuOn",
+		"wheelMarkerOn", "wheelWorldOn", "wheelVisionOn", "keyboardMap" }
+	ns.db.profileResetPoints = ns.db.profileResetPoints or {}
+	local points = ns.db.profileResetPoints
+	for _, name in ipairs({ "Auto-Hide UI", "Blank Slate" }) do
+		if points[name] == nil then
+			local keys = {}
+			for _, key in ipairs(wheels) do keys[#keys + 1] = key end
+			if name == "Auto-Hide UI" then keys[#keys + 1] = "handleCooldowns" end
+			local live = ns.db.liveProfile == name and not ns.db.offUntilPicked
+			local saved = ns.db.profiles and ns.db.profiles[name]
+			local keep = {}
+			for _, key in ipairs(keys) do
+				local value
+				if live then
+					value = ns.db[key]
+				elseif type(saved) == "table" then
+					value = saved[key]
+					if value == nil and type(saved.settings) == "table" then value = saved.settings[key] end
+				end
+				if value == true then keep[key] = true end
+			end
+			if next(keep) then points[name] = keep end
+		end
+	end
+	ns.db.profileResetKeepV1 = true
+end
+
 -- (Step: Cooldown Manager lines to place groups, 2026-11-22.)
 -- The Cooldown Manager page's numbered lines are gone: the page is a grid of
 -- place groups ("scenes") across and rows down (CooldownRules.lua). One
@@ -5377,14 +5415,15 @@ do
 		for _, place in ipairs(PLACES) do
 			for _, combat in ipairs(COMBATS) do atoms[#atoms + 1] = { place = place, combat = combat } end
 		end
-		-- Every row's answer at one place and combat, with rule (or none) true.
-		local function Answers(atom, rule)
+		-- Every row's answer at one place and combat, with the rules in trueRules
+		-- (a set, or nil: none) true.
+		local function Answers(atom, trueRules)
 			local values, bar = {}, false
 			for r, row in ipairs(rows) do
 				for _, line in ipairs(row.lines) do
 					local fits
 					if line.cql then
-						fits = line.cql == rule
+						fits = trueRules ~= nil and trueRules[line.cql] == true
 					else
 						fits = (line.place == "any" or line.place == atom.place)
 							and (line.combat == "any" or line.combat == atom.combat)
@@ -5481,11 +5520,31 @@ do
 				plainScenes = plainScenes + (both and 1 or 0) + (onlyIn and 1 or 0) + (onlyOut and 1 or 0)
 			end
 		end
+		-- Scenes for the rules, built as specs first (rule set, the atoms each
+		-- covers, its answers) and added in the order the grid reads them.
+		local specs = {}
+		local function Covers(entry, atom)
+			return entry.count >= #atoms or (entry.places[atom.place] and entry.places[atom.place][atom.combat]) or false
+		end
+		local function RuleText(text, entry)
+			if entry.count >= #atoms then return text end
+			local parts = {}
+			for _, place in ipairs(PLACES) do
+				local combats = entry.places[place]
+				if combats and combats["in"] and combats.out then
+					parts[#parts + 1] = "(" .. PlaceWords(place) .. ")"
+				elseif combats then
+					parts[#parts + 1] = "(" .. PlaceWords(place) .. " and "
+						.. (combats["in"] and "not nocombat" or "nocombat") .. ")"
+				end
+			end
+			return "(" .. text .. ") and (" .. table.concat(parts, " or ") .. ")"
+		end
 		local used = 0
 		for index, rule in ipairs(rules) do
 			local changed = {}
 			for a, atom in ipairs(atoms) do
-				local values = Answers(atom, rule)
+				local values = Answers(atom, { [rule] = true })
 				if Sig(values) ~= plain[a].sig then changed[#changed + 1] = { atom = atom, values = values } end
 			end
 			local exact = Grouped(changed)
@@ -5506,23 +5565,74 @@ do
 			end
 			used = used + #exact
 			for _, entry in ipairs(exact) do
-				local text = rule
-				if entry.count < #atoms then
-					local parts = {}
-					for _, place in ipairs(PLACES) do
-						local combats = entry.places[place]
-						if combats and combats["in"] and combats.out then
-							parts[#parts + 1] = "(" .. PlaceWords(place) .. ")"
-						elseif combats then
-							parts[#parts + 1] = "(" .. PlaceWords(place) .. " and "
-								.. (combats["in"] and "not nocombat" or "nocombat") .. ")"
-						end
-					end
-					text = "(" .. rule .. ") and (" .. table.concat(parts, " or ") .. ")"
-				end
-				Add({ cql = text }, entry.values)
+				specs[#specs + 1] = { rules = { [rule] = true }, entry = entry, cql = RuleText(rule, entry) }
 			end
 		end
+		-- Two or more rules true at once (a boss fight is a fight too): v2.1.23
+		-- read each row's own first line that fits, but the grid uses only its
+		-- first scene that fits, so a scene per set of rules goes first, with
+		-- each row's answer for them all. Only where that set changes what the
+		-- scenes after it would give; the smallest sets first while the grid
+		-- has room. (Card audit 2026-11-23: one spell's "boss" rule lost to
+		-- another's "combat", fix card 2026-11-23-cooldown-rules-overlap.md.)
+		local combos = {}
+		if #rules >= 2 and #rules <= 4 then
+			for mask = 1, 2 ^ #rules - 1 do
+				local list, set = {}, {}
+				for i = 1, #rules do
+					if math.floor(mask / 2 ^ (i - 1)) % 2 == 1 then
+						list[#list + 1] = i
+						set[rules[i]] = true
+					end
+				end
+				if #list >= 2 then combos[#combos + 1] = { list = list, set = set } end
+			end
+			table.sort(combos, function(a, c)
+				if #a.list ~= #c.list then return #a.list < #c.list end
+				for i = 1, #a.list do
+					if a.list[i] ~= c.list[i] then return a.list[i] < c.list[i] end
+				end
+				return false
+			end)
+		end
+		-- What the scenes in `order` give at an atom with the rules in set true.
+		local function FirstFit(order, a, set)
+			for _, spec in ipairs(order) do
+				local fits = true
+				for rule in pairs(spec.rules) do fits = fits and set[rule] == true end
+				if fits and Covers(spec.entry, atoms[a]) then return spec.entry.values end
+			end
+			return plain[a].values
+		end
+		local comboSpecs = {} -- (each set's, smallest first; added largest first)
+		for _, combo in ipairs(combos) do
+			-- (After it in the grid: the larger sets' (never all true here), the
+			-- smaller ones' and the single rules'.)
+			local after = {}
+			for i = #comboSpecs, 1, -1 do after[#after + 1] = comboSpecs[i] end
+			for _, spec in ipairs(specs) do after[#after + 1] = spec end
+			local changed = {}
+			for a, atom in ipairs(atoms) do
+				local values = Answers(atom, combo.set)
+				if Sig(values) ~= Sig(FirstFit(after, a, combo.set)) then
+					changed[#changed + 1] = { atom = atom, values = values }
+				end
+			end
+			local exact = Grouped(changed)
+			if exact[1] and used + #exact + plainScenes <= LIMIT then
+				used = used + #exact
+				local words = {}
+				for _, i in ipairs(combo.list) do words[#words + 1] = "(" .. rules[i] .. ")" end
+				for _, entry in ipairs(exact) do
+					comboSpecs[#comboSpecs + 1] = { rules = combo.set, entry = entry,
+						cql = RuleText(table.concat(words, " and "), entry) }
+				end
+			elseif exact[1] then
+				dropped = dropped + #exact
+			end
+		end
+		for i = #comboSpecs, 1, -1 do Add({ cql = comboSpecs[i].cql }, comboSpecs[i].entry.values) end
+		for _, spec in ipairs(specs) do Add({ cql = spec.cql }, spec.entry.values) end
 		local withAnswers = {}
 		for _, each in ipairs(plain) do
 			if each.has then withAnswers[#withAnswers + 1] = each end

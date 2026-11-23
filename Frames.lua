@@ -14381,13 +14381,35 @@ do
 	-- too: each switch has the game rebuild its secure raid frames, so it
 	-- waits out fights (secure sets, ApplyCVarSet), and is made then.
 	-- Audit 2026-11-22.)
+	-- Whether a raid row shows in the fight just starting: CineMode off, or
+	-- leaving for the fight, or the row's own In combat (or its rule) on.
+	-- (Asked at PLAYER_REGEN_DISABLED, the last moment the switch is free:
+	-- bdb2e1d's wait left auras off all fight for a row that comes up for it,
+	-- card audit 2026-11-23, fix card 2026-11-23-frames-raid-aura-pull.md.)
+	function auraStandIns.ShowsInFight(group)
+		if not (ns.IsCineModeOn and ns.IsCineModeOn()) then return true end
+		if not ns.StaysInCombat() then return true end
+		if ns.db.exitByRow and ns.ExitRowOn and ns.ExitRowOn() then return true end
+		return ns.RowOnNow and ns.RowOnNow(group) and true or false
+	end
 	do
 		local groupWatch = CreateFrame("Frame")
 		groupWatch:RegisterEvent("GROUP_ROSTER_UPDATE")
 		groupWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
-		groupWatch:SetScript("OnEvent", function()
-			for _, standIn in pairs(auraStandIns) do
-				if type(standIn) == "table" and standIn.cvarSet then auraStandIns.Apply(standIn) end
+		groupWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
+		groupWatch:SetScript("OnEvent", function(_, event)
+			for group, standIn in pairs(auraStandIns) do
+				if type(standIn) == "table" and standIn.cvarSet then
+					if event == "PLAYER_REGEN_DISABLED" then
+						-- (A row showing in this fight: its auras on now, before
+						-- the lockdown; one staying faded is left as it is.)
+						if ns.Flag(IsInGroup()) and auraStandIns.ShowsInFight(group) then
+							ns.ApplyCVarSet(standIn.cvarSet, false)
+						end
+					else
+						auraStandIns.Apply(standIn)
+					end
+				end
 			end
 		end)
 	end
