@@ -122,6 +122,7 @@ read_globals = {
 	"GetNumClasses",
 	"GetClassInfo",
 	"GetSpellBaseCooldown",
+	"GetTotemInfo", "MAX_TOTEMS",
 	"GetSpellCooldown",
 	"GetSpellTexture",
 	"wipe",

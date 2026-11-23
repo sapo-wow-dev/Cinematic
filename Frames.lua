@@ -9850,6 +9850,10 @@ do
 		if ns.cooldownChargeSpells[id] then return nil, true end
 		-- (A DoT: its icon shows its time on the target, left to its group.)
 		if ns.cooldownAuraSpells[id] then return nil, true end
+		-- (A totem: its icon shows the totem's time, as a DoT's. Learned the
+		-- first time it's put down: a shaman's Searing Totem, no cooldown and
+		-- mana, was When it procs and never showed, 2026-11-23.)
+		if ns.IsTotemSpell(id) then return nil, true end
 		local ok, base = pcall(GetSpellBaseCooldown or error, id)
 		if not ok or Secret(base) then return nil, false end
 		if type(base) ~= "number" or base > 0 then return nil, true end
@@ -9891,6 +9895,33 @@ do
 	watcher:SetScript("OnEvent", function()
 		wipe(picks)
 		ns.ForgetCooldownNotes()
+	end)
+
+	-- Totems: no spell says it is one till it's down (the game's own Cooldown
+	-- Manager finds them the same way: PLAYER_TOTEM_UPDATE, GetTotemInfo). Kept
+	-- by character (CinematicCharDB.cooldownTotemSpells), so once is enough.
+	function ns.IsTotemSpell(id)
+		local known = CinematicCharDB and CinematicCharDB.cooldownTotemSpells
+		return type(id) == "number" and type(known) == "table" and known[id] == true
+	end
+	function ns.NoteTotemSlot(slot)
+		if not GetTotemInfo then return end
+		local ok, _, _, _, _, _, _, spellID = pcall(GetTotemInfo, slot)
+		if not ok or Secret(spellID) or type(spellID) ~= "number" or spellID <= 0 then return end
+		CinematicCharDB = CinematicCharDB or {}
+		local known = CinematicCharDB.cooldownTotemSpells or {}
+		CinematicCharDB.cooldownTotemSpells = known
+		local base = ns.BaseSpell and ns.BaseSpell(spellID) or spellID
+		if known[spellID] and known[base] then return end
+		known[spellID], known[base] = true, true
+		wipe(picks)
+	end
+	local totems = CreateFrame("Frame")
+	pcall(totems.RegisterEvent, totems, "PLAYER_TOTEM_UPDATE")
+	pcall(totems.RegisterEvent, totems, "PLAYER_ENTERING_WORLD") -- (ones already down at a /reload)
+	totems:SetScript("OnEvent", function(_, event, slot)
+		if event == "PLAYER_TOTEM_UPDATE" then return ns.NoteTotemSlot(slot) end
+		for each = 1, (MAX_TOTEMS or 4) do ns.NoteTotemSlot(each) end
 	end)
 
 	function ns.SmartCooldownMode(id)
@@ -9951,9 +9982,9 @@ do
 					Show(info.cooldownDuration))
 			end
 		end
-		print(("    smart set: %s (base cooldown %s, charges %s, manager says charges %s, DoT %s)"):format(
+		print(("    smart set: %s (base cooldown %s, charges %s, manager says charges %s, DoT %s, totem %s)"):format(
 			tostring(Pick(id)), ok and Show(base) or "?", charges, tostring(ns.cooldownChargeSpells[id] or false),
-			tostring(ns.cooldownAuraSpells[id] or false)))
+			tostring(ns.cooldownAuraSpells[id] or false), tostring(ns.IsTotemSpell(id))))
 	end
 end
 

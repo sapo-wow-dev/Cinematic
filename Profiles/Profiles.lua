@@ -1119,11 +1119,12 @@ function ns.ResetAddon(settingsOnly)
 	if next(kept) then kept.resetKept = true end
 	CinematicDB = next(kept) and kept or nil
 	-- (The character's memory of play stays: places Discovered's card has
-	-- shown, talking heads heard. Not settings, and losing them replays them.)
+	-- shown, talking heads heard, totems put down. Not settings, and losing
+	-- them replays them.)
 	-- Reset Settings: Edit Mode's side too (your own layout to go back to, the
 	-- action bars a layout of ours switched on), as its layouts stay.
 	local char = CinematicCharDB
-	local keepChar = { cardSeen = true, talkingHeadSeen = true }
+	local keepChar = { cardSeen = true, talkingHeadSeen = true, cooldownTotemSpells = true }
 	if settingsOnly then keepChar.layoutOwn, keepChar.layoutBarsOn = true, true end
 	local charKept = {}
 	if type(char) == "table" then
