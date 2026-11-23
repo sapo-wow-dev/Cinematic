@@ -325,10 +325,11 @@ function ns.LoopAuditAdd(label, ms)
 	row.calls, row.ms = row.calls + 1, row.ms + ms
 	if ms > row.worst then row.worst = ms end
 end
-local function Protect(fn, hooked, label)
+-- (state: a feature loop's own, so starting it over can bring it back: ns.FeatureLoop.)
+local function Protect(fn, hooked, label, state)
 	local self_, elapsed_
 	local function Run() return fn(self_, elapsed_) end
-	local state = { dead = false, windowStart = 0, inWindow = 0 }
+	state = state or { dead = false, windowStart = 0, inWindow = 0 }
 	local wrapped
 	wrapped = function(frame, elapsed)
 		if state.dead then return end
@@ -377,6 +378,13 @@ local function SyncFeatureLoop(loop)
 	if ns.featureLoopsForced then want = true end
 	if want ~= loop.on then
 		loop.on = want
+		-- (Turned off by its breaker, kept failing: the feature starting over
+		-- gets it back, as ns.SetOnUpdate's do. Its wrapper was made once, so
+		-- it stayed dead till a reload. Audit 2026-11-22.)
+		if want and loop.state.dead then
+			loop.state.dead, loop.state.inWindow = false, 0
+			ns.Log("safety", "an update loop turned off for failing starts again with its feature")
+		end
 		if not loop.every then
 			loop.frame:SetScript("OnUpdate", want and loop.run or nil)
 		elseif want then
@@ -393,7 +401,9 @@ end
 -- every (optional): fn runs every that many seconds, on a game timer, rather
 -- than every frame; fn(frame, seconds since its last run) as for an update loop.
 function ns.FeatureLoop(frame, fn, wanted, every)
-	local loop = { frame = frame, run = Protect(fn, false, LoopLabel()), wanted = wanted, on = nil, every = every }
+	local state = { dead = false, windowStart = 0, inWindow = 0 }
+	local loop = { frame = frame, run = Protect(fn, false, LoopLabel(), state), state = state, wanted = wanted, on = nil,
+		every = every }
 	if every then
 		loop.tick = function()
 			local now = GetTime()

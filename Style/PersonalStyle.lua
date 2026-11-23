@@ -583,12 +583,28 @@ function Apply()
 	end
 	if power and not powerHooked and power.SetStatusBarTexture then
 		powerHooked = true
-		hooksecurefunc(power, "SetStatusBarTexture", function(self)
+		hooksecurefunc(power, "SetStatusBarTexture", function(self, fill)
+			if dressing then return end
+			-- (The game's newest fill is the one to put back: a druid's form
+			-- swaps it. Only the first was kept, so Bear's rage bar got the
+			-- caster form's mana fill back. As UnitStyle's power bars. Audit
+			-- 2026-11-22.)
+			local saved = own[self]
+			if saved and (type(fill) == "string" or type(fill) == "number")
+				and not (issecretvalue and issecretvalue(fill)) then
+				saved.atlas, saved.file = fill, nil
+			end
 			local now = ns.StyleOn("prdStyle") and Look()
-			if dressing or not (now and ns.StyleTexturePath(now.prdTexture)) then return end
-			dressing = true
-			ns.SetBarTexture(self, now.prdTexture)
-			dressing = false
+			if not now then return end
+			if ns.StyleTexturePath(now.prdTexture) then
+				dressing = true
+				ns.SetBarTexture(self, now.prdTexture)
+				dressing = false
+			elseif PowerColor(now) then
+				-- (Our color on the game's new fill: grey under it, as Apply does.)
+				local newFill = self:GetStatusBarTexture()
+				if newFill and newFill.SetDesaturated then newFill:SetDesaturated(true) end
+			end
 		end)
 	end
 end

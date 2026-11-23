@@ -3150,13 +3150,34 @@ function ns.ApplyShoulderCam()
 		SyncGameEscape() -- (off: Escape the game's again)
 		poller:Hide()
 		if yours then
+			-- (The soft target and outlines are protected in fights: a SetCVar
+			-- there is an ADDON_ACTION_BLOCKED. Kept in yours and given back as
+			-- the fight ends, not dropped: the game saves them, so they'd stay
+			-- yours no more for good. Audit 2026-11-22.)
+			local fight = InCombatLockdown()
+			local left = false
 			for cvar, value in pairs(yours) do
-				if not Same(GetCVar(cvar), value) then
+				if Same(GetCVar(cvar), value) then
+					yours[cvar] = nil
+				elseif fight and (aim.soft[cvar] ~= nil or aim.outline[cvar] ~= nil) then
+					left = true
+				else
 					ns.Log("cvar", ("Shoulder Cam: %s back to %s"):format(cvar, value))
 					SetCVar(cvar, value)
+					yours[cvar] = nil
 				end
 			end
-			ns.db.shoulderCamYours = nil
+			if left then
+				ns.Log("cvar", "Shoulder Cam off in a fight: soft target given back once the fight ends")
+				aim.offWaiter = aim.offWaiter or CreateFrame("Frame")
+				aim.offWaiter:RegisterEvent("PLAYER_REGEN_ENABLED")
+				aim.offWaiter:SetScript("OnEvent", function(self)
+					self:UnregisterAllEvents()
+					if not ShoulderOn() then ns.ApplyShoulderCam() end
+				end)
+			else
+				ns.db.shoulderCamYours = nil
+			end
 		end
 	end
 	if UpdateFollow then UpdateFollow() end
@@ -3800,8 +3821,10 @@ local function GiveBackForLogout()
 	-- (The soft target too: a logout mid-glide mustn't keep it on.)
 	for _, set in ipairs({ aim.soft, aim.outline }) do
 		for cvar in pairs(set) do
-			if yours[cvar] ~= nil then
-				pcall(SetCVar, cvar, yours[cvar])
+			-- (Refused, in a fight: kept, given back at the next login's
+			-- ApplyShoulderCam rather than dropped. Audit 2026-11-22.)
+			if yours[cvar] ~= nil and not InCombatLockdown() and pcall(SetCVar, cvar, yours[cvar])
+				and Same(GetCVar(cvar), yours[cvar]) then
 				yours[cvar] = nil
 			end
 		end

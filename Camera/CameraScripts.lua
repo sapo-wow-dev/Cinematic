@@ -3560,6 +3560,9 @@ end
 function ns.PlayCameraScript(script)
 	if not ns.db.enabled then return false, L["Cinematic is off (/cine on turns it on)"] end
 	if InFight() then return false, L["not in combat"] end
+	-- (One playing: finished first, not just stopped (Start's StopAll), or its
+	-- raised zoom max, end music and key scene stayed on. Audit 2026-11-22.)
+	if run then Finish("replaced") end
 	stoppedFor = nil
 	Start(script, nil, nil)
 	return true

@@ -25,6 +25,8 @@ wow.Install(client)
 local toc = "Cinematic.toc"
 local addonName = "Cinematic"
 local ns = {}
+-- (LazyPageDefaults.lua's switch links not put in: the builds make them, and they're checked against it.)
+ns.lazyAuditNoLinks = true
 
 -- Where the code that called us lives (the first file outside the stand-in and this tool).
 local function Caller()
@@ -244,6 +246,18 @@ end
 missing = true
 local unbuilt = Everything()
 missing = false
+-- The switch-tree links the waiting pages' builds make (a setting under its tab's switch, a tab under its
+-- page's): each key's switch before, and after the builds and the tab mapping (a timer in game).
+local linkBefore = {}
+do
+	local SetPageMaster = ns.SetPageMaster
+	ns.SetPageMaster = function(keys, master)
+		for _, key in ipairs(keys) do
+			if linkBefore[key] == nil then linkBefore[key] = ns.PageSwitchOf(key) or false end
+		end
+		return SetPageMaster(keys, master)
+	end
+end
 -- The waiting pages made, each its own piece.
 recording = true
 for _, entry in ipairs(waiting) do
@@ -256,7 +270,13 @@ for _, entry in ipairs(waiting) do
 	FramesOf(p, p.firstFrame, p.lastFrame)
 	OwnHooks(p)
 end
+if ns.MapTabContainers then ns.MapTabContainers() end
 recording = false
+local linksMade = {}
+for key, before in pairs(linkBefore) do
+	local now = ns.PageSwitchOf(key)
+	if now ~= nil and now ~= (before or nil) then linksMade[key] = now end
+end
 local built = Everything()
 
 -- Who reads each key: files (outside Tools/) that name ns.<key>.
@@ -348,6 +368,16 @@ if write then
 	local s, e = text:find("\t%-%- " .. client .. ": start.-\t%-%- " .. client .. ": end")
 	assert(s, "no " .. client .. " block in " .. path)
 	text = text:sub(1, s - 1) .. block .. text:sub(e + 1)
+	local linkLines = {}
+	for _, key in ipairs(Sorted(linksMade)) do
+		linkLines[#linkLines + 1] = ("\t\t[%q] = %q,"):format(key, linksMade[key])
+	end
+	block = ("\t-- %s links: start\n\t%s = {\n%s\t},\n\t-- %s links: end"):format(client, client,
+		#linkLines > 0 and (table.concat(linkLines, "\n") .. "\n") or "", client)
+	s, e = text:find("\t%-%- " .. client .. " links: start.-\t%-%- " .. client .. " links: end")
+	assert(s, "no " .. client .. " links block in " .. path)
+	text = text:sub(1, s - 1) .. block .. text:sub(e + 1)
+	print(("wrote %d switch links for %s into %s"):format(#linkLines, client, path))
 	f = assert(io.open(path, "wb"))
 	f:write(text)
 	f:close()
@@ -359,6 +389,22 @@ for key, value in pairs(made) do
 		problems = problems + 1
 		print(("FAIL %s = %s made by a page made on first open, not in LazyPageDefaults.lua (%s): run with --write")
 			:format(key, tostring(value), listed[key] == nil and "missing" or "listed as " .. tostring(listed[key])))
+	end
+end
+-- And their switch links (else a tab switched off doesn't turn its settings off till its page is opened).
+local listedLinks = write and linksMade or ((ns.LAZY_PAGE_SWITCHES or {})[client] or {})
+for key, master in pairs(linksMade) do
+	if listedLinks[key] ~= master then
+		problems = problems + 1
+		print(("FAIL %s under %s by a page made on first open, not in LazyPageDefaults.lua's links (%s): run with --write")
+			:format(key, master, listedLinks[key] == nil and "missing" or "listed under " .. tostring(listedLinks[key])))
+	end
+end
+for key in pairs(listedLinks) do
+	if linksMade[key] == nil then
+		problems = problems + 1
+		print(("FAIL %s is in LazyPageDefaults.lua's links but no page made on first open links it: run with --write")
+			:format(key))
 	end
 end
 for key in pairs(listed) do

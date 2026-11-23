@@ -1144,13 +1144,28 @@ local function RemoveFrame(frame)
 			elseif entry.shrunk then
 				ns.FrameCall(frame, "SetScale", entry.savedScale or 1)
 				ns.UnparkShrunk(entry)
-			elseif entry.parkedFullSize and not ns.ScaleBlocked(frame) then
+			elseif entry.parkedFullSize and ns.ScaleBlocked(frame) then
+				-- (Parked off the screen full size, let go in a fight: back as
+				-- it ends, as a shrunk one. It had no waiter, and its saved
+				-- spot goes with the entry: off the screen till a reload.
+				-- Audit 2026-11-22.)
+				local waiter = CreateFrame("Frame")
+				waiter:RegisterEvent("PLAYER_REGEN_ENABLED")
+				waiter:SetScript("OnEvent", function(self)
+					self:UnregisterAllEvents()
+					if entry.parkedFullSize then ns.UnparkFullSize(entry) end
+				end)
+			elseif entry.parkedFullSize then
 				ns.UnparkFullSize(entry)
 			end
 			table.remove(ns.managed, i)
 			entry.removed = true -- (for script hooks still holding it: see HookPartyScripts)
 			-- (Its parts that ignored its alpha follow it again.)
 			ns.NoteEntryAlpha(entry, nil)
+			-- (Its parts a Hover group held hidden let go too: only the pass
+			-- over managed frames let go of them, so a portrait held as the
+			-- frame was let go stayed hidden till a reload. Audit 2026-11-22.)
+			if entry.name and ns.HoldUnitParts then ns.HoldUnitParts(entry.name, false, false) end
 			ns.Reattach(frame)
 			if entry.group == "raidmanager" then ns.Reattach(_G.CompactRaidFrameContainer) end
 			seen[frame] = nil

@@ -7506,6 +7506,7 @@ local function CreateGraphicsPanel()
 		"top of its new settings."])
 
 	local function Changed() ns.ApplyGraphicsPlus() end
+	ns.tabSwitchHooks["tabOn:Graphics+/tab:"] = Changed
 	local switch = PageSwitch(content, "graphicsPlus", L["Enable Page"],
 		L["Uses the settings below, or the game's own when turned off."],
 		subtitle, Changed)
@@ -15866,12 +15867,20 @@ end
 -- A tab that already has a switch of its own (flip, onRightClick) keeps it.
 -- (On ns: this file's main chunk is near Lua's 200 locals.)
 ns.tabContainers = {}
+ns.tabSwitchHooks = {}
 function ns.TabContainer(tab, host, key, pageKey)
 	if not (tab and host and key and tab.SetFlip) or tab.flipKey or tab.canFlip or pageSwitches[host] then return end
 	if ns.DEFAULTS[key] == nil then ns.DEFAULTS[key] = true end
 	local db = ns.GetDB()
 	if db and db[key] == nil then db[key] = ns.DEFAULTS[key] end -- (a tab starting off: Heal Vision's Nameplates)
-	PageSwitch(host, key, L["Enable Page"], L["Turns everything on this tab on or off."], host)
+	-- (A page whose settings are written once, not read as they're used
+	-- (Graphics+'s game settings), says so in ns.tabSwitchHooks[prefix]: run
+	-- as a tab of its flips. Audit 2026-11-22: its tabs did nothing.)
+	PageSwitch(host, key, L["Enable Page"], L["Turns everything on this tab on or off."], host, function(value)
+		for prefix, fn in pairs(ns.tabSwitchHooks) do
+			if key:sub(1, #prefix) == prefix then fn(value) end
+		end
+	end)
 	if pageKey then ns.SetPageMaster({ key }, pageKey) end
 	ns.tabContainers[#ns.tabContainers + 1] = { host = host, key = key, pageKey = pageKey }
 	tab.containerHost = host -- (/cine debug sweep: off, all on it reads off)

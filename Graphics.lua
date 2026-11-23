@@ -183,7 +183,10 @@ function ns.ApplyGraphicsPlus()
 	borrowed = false
 	for _, setting in ipairs(ns.GRAPHICS_PLUS) do
 		if Exists(setting.cvar) and not (setting.secure and InCombatLockdown()) then
-			local wanted = ns.Setting("graphicsPlus") and db[setting.key .. "On"] and db[setting.key] or nil
+			-- (Its tick through the switch tree: off with its tab on the page,
+			-- the page, or the Atmosphere hub. Audit 2026-11-22: a tab off did
+			-- nothing, only the page's switch was read.)
+			local wanted = ns.Setting("graphicsPlus") and ns.Setting(setting.key .. "On") and db[setting.key] or nil
 			ApplyOne(setting.cvar, wanted, false, saved, written, not setting.console and setting.menu or nil,
 				setting.max)
 			for _, cvar in ipairs(setting.also or {}) do
