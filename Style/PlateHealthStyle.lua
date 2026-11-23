@@ -261,6 +261,9 @@ local function Full(bar, state, unit)
 		local ok, rr, gg, bb = pcall(bar.GetStatusBarColor, bar)
 		if ok and Known(rr) and Known(gg) and Known(bb) and rr and not (rr > 0.99 and gg > 0.99 and bb > 0.99) then
 			r, g, b, from = rr, gg, bb, "read"
+			-- (Kept too: the way back puts state.color on the fill, and the game
+			-- may not set the bar's color again before the look's left.)
+			state.color = { rr, gg, bb }
 		else
 			from = ok and (Known(rr) and "read white" or "read secret") or "read error"
 		end
