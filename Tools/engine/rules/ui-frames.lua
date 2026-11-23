@@ -1452,4 +1452,18 @@ return {
     proof = "pasted blocked line (x2: Emote Vision's divider + title on the target menu) + Forever source MenuTemplates.lua:299/562/571, SecureHelper.lua:47-77; Tools/offline/menurows.lua",
     source = "Tools/errors/known.lua menu-row-smartnav-fight",
   },
+  {
+    id = "forever.dressup.side-frame-no-modelbackground",
+    area = "frames",
+    clients = { "forever" },
+    api = { "SideDressUpFrame", "SetUpSideDressUpFrame", "DressUpLink", "SetDressUpBackground", "DressUpFrames_UsesClassBackgrounds" },
+    when = "a dress-up while SideDressUpFrame is docked to a shown frame",
+    rule = "Forever (Camelot) overrides DressUpFrames_UsesClassBackgrounds to false, so SetDressUpBackground runs frame.ModelBackground:SetShown(false) (DressUpFrames.lua:316). SideDressUpFrame has no ModelBackground (only DressUpFrame does), so any dress-up routed to it errors there and the frame never shows. Docking itself works (SetUpSideDressUpFrame on AuctionHouseFrame, the AH stayed open, dress-ups went to the side frame) and taints only SideDressUpFrame.parentFrame/openWidth/closedWidth.",
+    works = { "give SideDressUpFrame a hidden ModelBackground texture before docking (QoL/AhDressUp.lua Fit)" },
+    fails = { "SetUpSideDressUpFrame alone, then DressUpLink" },
+    status = "tested",
+    tested = "2026-11-23",
+    proof = "/cine debug ahdress run 1 (Forever 71037): DressUpLink err DressUpFrames.lua:316 'ModelBackground' nil",
+    source = "Tools/tests/logs/2026-11-23-forever-testQueue_q52a0Log-74393c91.txt",
+  },
 }

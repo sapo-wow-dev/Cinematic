@@ -7077,3 +7077,5 @@ L["That isn't a scene or shot: profiles go on the Profiles page, wheels on Your 
 L["Triggers: %s"] = "Disparadores: %s"
 L["Weather page"] = "Página del clima"
 L["Rain, snow and sandstorms have their own page in Atmosphere. Preview each one, and pick its color and how fast it comes in on the Style tab."] = "La lluvia, la nieve y las tormentas de arena tienen su propia página en Atmósfera. Previsualiza cada una y elige su color y lo rápido que llega en la pestaña Estilo."
+L["Dressing room at the Auction House"] = "Probador en la casa de subastas"
+L["Ctrl+Click an auction to see it on your character in a small dressing room beside the Auction House, which now stays open. Turn it on in Quality of Life."] = "Haz Ctrl+clic en una subasta para verla en tu personaje en un pequeño probador junto a la casa de subastas, que ahora se queda abierta. Actívalo en Calidad de vida."

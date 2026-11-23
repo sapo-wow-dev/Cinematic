@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-23", page = "General", client = "forever", title = "Dressing room at the Auction House",
+		text = "Ctrl+Click an auction to see it on your character in a small dressing room beside the Auction House, " ..
+		"which now stays open. Turn it on in Quality of Life." },
 	{ date = "2026-11-23", page = "Weather", title = "Weather page",
 		text = "Rain, snow and sandstorms have their own page in Atmosphere. Preview each one, and pick its color " ..
 		"and how fast it comes in on the Style tab." },

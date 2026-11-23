@@ -393,6 +393,7 @@ local DEFAULTS = {
 	dragEquipCharacter = issecretvalue == nil,
 	talentLink = true,         -- Forever: inspecting someone, a button to their talents, and one back on the talents window (TalentLink.lua)
 	talentCalc = true,         -- Forever: a Talent calculator button on the talents window (TalentCalc.lua)
+	ahDressUp = false,         -- Forever: Ctrl+Click on an auction dresses you in a small dressing room beside the AH, which stays open (AhDressUp.lua)
 	talentCalcTalented = false, -- ...counting the Legacy Tree's Talented (points from level 5) for the level a build needs
 	editModeLayout = "",       -- the profile's Edit Mode layout, switched to when it's picked ("": the player's own; Layouts.lua)
 	cooldownManagerOn = false, -- the profile turns the game's Cooldown Manager on if it's off (the CDM part; Profiles.lua)
@@ -1669,7 +1670,7 @@ DEFAULTS.handleAddonSupport = true -- Addons > General (only built with one of i
 DEFAULTS.handleHealVision = true -- (read by ns.HealVisionHere; Quest Vision's switch is questVision)
 local PAGE_SWITCH = {}
 for page, keys in pairs({
-	handleQuality = { "dragEquipCharacter", "talentLink", "talentCalc",
+	handleQuality = { "dragEquipCharacter", "talentLink", "talentCalc", "ahDressUp",
 		"centerPanels", "centerPanelsMiddle", "dragPanels", "chatCopyButton", "chatHistory", "chatHistoryTime", "loginZoom",
 		"reloadButton", "reloadKeepWindows", "addonListAll", "xpLeft", "hideCombatText", "hideErrorsInCombat", "hideErrorsOutOfCombat" },
 	handleHunter = { "hunterRightClickShot", "hunterAmmoSort", "hunterQuiverFill", "petUnhappyShow" },

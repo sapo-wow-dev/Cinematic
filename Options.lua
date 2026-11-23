@@ -10077,6 +10077,7 @@ local function CreateQualityPanel()
 		L["Turns all the Quality of Life helpers on or off."], subtitle, function()
 		if ns.RefreshTalentLink then ns.RefreshTalentLink() end
 		if ns.RefreshTalentCalc then ns.RefreshTalentCalc() end
+		if ns.RefreshAhDressUp then ns.RefreshAhDressUp() end
 	end)
 
 	local stack = Stack(switch, "check")
@@ -10104,6 +10105,17 @@ local function CreateQualityPanel()
 	stack:Add(putBack, "label", 24)
 	stack:Add(Check(content, "reloadKeepWindows", L["Keep windows open across a reload"],
 		L["Reopens the windows you had open after a reload."]), "check")
+	-- (AhDressUp.lua; WoW Forever only.)
+	if not ns.isRetail then
+		stack:Add(Check(content, "ahDressUp", L["Dressing room beside the Auction House"],
+			L["Ctrl+Click an auction to see it on you without the Auction House closing."],
+			function(value)
+				ns.GetDB().ahDressUp = value
+				if ns.RefreshAhDressUp then
+					ns.RefreshAhDressUp()
+				end
+			end), "check")
+	end
 	stack:Header(content, L["Gear and talents"])
 	-- (DragEquip.lua.)
 	stack:Add(Check(content, "dragEquipCharacter", L["Open the character window when dragging gear out of your bags"],

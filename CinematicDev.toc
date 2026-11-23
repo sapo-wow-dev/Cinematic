@@ -96,6 +96,7 @@ QoL\DragEquip.lua
 QoL\TalentLink.lua
 QoL\TalentCalc.lua
 QoL\CenterPanels.lua
+QoL\AhDressUp.lua
 Visions\RollWindow.lua
 Camera\CameraWheel.lua
 QoL\MenuWheel.lua
@@ -379,3 +380,4 @@ Dev\ReloadCoverTest.lua
 Dev\AddonListAllTest.lua
 Dev\LoosePartsSurvey.lua
 Dev\TooltipNoWaitTest.lua
+Dev\AhDressUpTest.lua
