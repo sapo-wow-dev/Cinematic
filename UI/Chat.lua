@@ -545,7 +545,9 @@ end
 -- link (Questie turns [Quest] into [[32+] Quest]), the words stay as typed.
 local function PlainParts(text)
 	local parts = {}
-	for part in (StripCodes(text:gsub("|H.-|h.-|h", "\n")) .. "\n"):gmatch("([^\n]*)\n") do
+	-- (An achievement's text has "%s" where the window shows the player's
+	-- name: words on either side of it, like a link's.)
+	for part in (StripCodes((text:gsub("|H.-|h.-|h", "\n"):gsub("%%s", "\n"))) .. "\n"):gmatch("([^\n]*)\n") do
 		local words = part:match("^%s*(.-)%s*$")
 		if #words >= 2 then parts[#parts + 1] = words end
 	end
@@ -568,11 +570,16 @@ end
 -- A window's line as it drew it, with its color: the newest of its last
 -- lines with text in it, else (an addon rewrote its links) the newest one by
 -- its author with all its own words (nil if none, or it can't be read).
-local function FindWindowLine(chatFrame, text, author)
+-- since: how many lines came in since the message did (nil: not known), so
+-- an older line with its words is never taken for it (another addon's filter
+-- blocked it, audit 2026-11-23).
+local function FindWindowLine(chatFrame, text, author, since)
 	if not (chatFrame.GetNumMessages and chatFrame.GetMessageInfo) then return nil end
 	local count = chatFrame:GetNumMessages()
 	if not (type(count) == "number" and not (issecretvalue and issecretvalue(count))) then return nil end
 	local last = math.max(1, count - LINE_LOOKBACK + 1)
+	if since then last = math.max(last, count - since + 1) end
+	if last > count then return nil end
 	for i = count, last, -1 do
 		local line, r, g, b = chatFrame:GetMessageInfo(i)
 		if Plain(line) and line:find(text, 1, true) then
@@ -844,8 +851,11 @@ local function PeekLine(chatFrame, text, formatted, author)
 		ShowCopy(chatFrame, line or text, r, g, b, text)
 		return
 	end
+	-- (Where the window is up to before the game adds it: only lines after
+	-- that can be this message's.)
+	local mark = WindowMark(chatFrame)
 	C_Timer.After(0, function()
-		local line, r, g, b = FindWindowLine(chatFrame, text, author)
+		local line, r, g, b = FindWindowLine(chatFrame, text, author, LinesSince(chatFrame, mark))
 		if line then
 			ShowCopy(chatFrame, line, r, g, b, text)
 		else
