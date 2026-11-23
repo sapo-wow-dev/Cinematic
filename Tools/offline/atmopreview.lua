@@ -167,6 +167,30 @@ do
 	ns.RefreshTint()
 	Run(4)
 	Check("inn glow gone with its row off", (Drawn().glow or 0) == 0, Drawn().glow)
+	-- The tint lifts only where the Glow shows (in an inn to start with): it
+	-- lifted by the Glow's switch alone, every tint at 40% everywhere,
+	-- 2026-11-23 ("this zone looked a lot darker").
+	local preset, strength, drift = db.tintPreset, db.tintStrength, db.tintDrift
+	db.tintPreset, db.tintStrength, db.tintDrift = "warm", 1, false
+	local function TintRun(seconds)
+		for _ = 1, math.floor(seconds / 0.1 + 0.5) do
+			now = now + 0.1
+			ns.UpdateTint(true, 0.1, false, false)
+		end
+	end
+	ns.effectWanted.inn = false
+	ns.RefreshTint()
+	TintRun(6)
+	Check("the tint at full strength with the Glow's row off (out of an inn)", Near(Drawn().strength, 1),
+		Drawn().strength)
+	ns.effectWanted.inn = true
+	ns.RefreshTint()
+	TintRun(6)
+	Check("...lifted to 40% where the Glow's row shows (an inn)", Near(Drawn().strength, 0.4), Drawn().strength)
+	ns.effectWanted.inn = false
+	ns.RefreshTint()
+	TintRun(6)
+	db.tintPreset, db.tintStrength, db.tintDrift = preset, strength, drift
 	ns.effectWanted.inn = nil
 end
 

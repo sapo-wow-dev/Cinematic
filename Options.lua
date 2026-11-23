@@ -7550,7 +7550,7 @@ local function CreateEffectsPanel()
 		function(db) return db.depthOfField and (db.dofScale or 0) > 0 end,
 		function() return ns.FocusDemoRunning() end,
 		function() ns.FocusDemo(8, ns.GetDB().dofScale or 0) end,
-		function() ns.FocusDemo() end).previewFor = "haze"
+		function() ns.FocusDemoStop() end).previewFor = "haze"
 
 	local nameWidth = 0
 	for _, slider in ipairs(inlineRows) do

@@ -25,6 +25,7 @@
 --  15 weatherfx   the Weather page's frost, rain on the lens, lightning and heavier weather:
 --                 textures found, rows and sliders shown, each drawn at its slider's strength
 --                 in CineMode with its row on, the game's weatherDensity held and put back
+--  16 tintlift    the tint at its full strength out of an inn; with the Glow's row on, 40% of it
 -- Into CinematicDB.atmosphereTestLog. Dev copy only.
 local _, ns = ...
 
@@ -257,8 +258,11 @@ ns.TestKit.Define({
 				local frame = _G.CinematicFocus
 				return frame and frame:IsShown() and ns.FocusAlphaNow() or 0
 			end
-			ns.FocusDemo()
+			-- (Stopped, not ns.FocusDemo(): with none showing that starts a 30
+			-- second one, the haze left up after this step, run 3.)
+			ns.FocusDemoStop()
 			r:Sleep(1)
+			r:Verdict(not ns.FocusDemoRunning(), "no haze demo running after a stop")
 			r:Shot("no haze")
 			r:Set("dofScale", 0.6)
 			ns.FocusPreview(0.6)
@@ -267,7 +271,8 @@ ns.TestKit.Define({
 			r:Verdict(ns.FocusDemoRunning() and (ns.noRealLayout or Near(Edge(), 0.6)),
 				("previewing 60%%: haze drawn %.3f"):format(Edge()))
 			r:Shot("haze 60%")
-			ns.FocusDemo() -- (stops it)
+			ns.FocusDemoStop()
+			r:Verdict(not ns.FocusDemoRunning(), "stopped: no haze demo left running")
 		end },
 		{ key = "colors", title = "Weather Style colors and blend time", seconds = 4, run = function(r)
 			if not ns.CreateWeatherStylePanel then return r:Skip("Style isn't loaded") end
@@ -618,6 +623,37 @@ ns.TestKit.Define({
 			local back = GetCVar("weatherDensity")
 			r:Verdict(held == tostring(own == "1" and 3 or 1) and back == own,
 				("heavier weather: yours %s, held %s, back to %s"):format(tostring(own), tostring(held), tostring(back)))
+			CineOff(r)
+		end },
+		-- (The tint at its full strength out of an inn: it lifted by the Glow's
+		-- switch alone, every tint at 40% everywhere, ba78ba3 till fixed, the
+		-- user 2026-11-23: "this zone looked a lot darker". In CineMode where
+		-- you stand: its strength with the Glow's row as it starts, then the
+		-- row on (its rule cleared, Always), as in an inn: 40% of it.)
+		{ key = "tintlift", title = "the tint at full strength out of an inn", seconds = 14, run = function(r)
+			r:Set("visualEffects", true)
+			r:Set("tintPage", true)
+			r:Set("innGlow", true)
+			CineOn(r)
+			r:Sleep(4)
+			local inInn = ns.GetPlaceType() == "inn" and IsIndoors()
+			local before = ns.tintDrawn and ns.tintDrawn.strength or 0
+			r:Log(("here: %s, indoors %s; Glow's row wanted %s; tint %s, strength %.3f"):format(tostring(ns.GetPlaceType()),
+				tostring(IsIndoors()), tostring(ns.effectWanted and ns.effectWanted.inn),
+				tostring(ns.tintDrawn and ns.tintDrawn.preset), before))
+			r:Shot("tint, Glow's row as it starts")
+			SetRule(r, "effect:inn", "")
+			r:Set("innAlways", true)
+			ns.RefreshTint()
+			r:Sleep(4)
+			local lifted = ns.tintDrawn and ns.tintDrawn.strength or 0
+			r:Shot("tint, Glow's row on (as in an inn)")
+			r:Verdict(inInn or (before > 0.05 and Near(lifted, before * 0.4)),
+				("out of an inn the tint at %.3f; with the Glow's row on %.3f (wanted %.3f)%s"):format(before, lifted,
+				before * 0.4, inInn and " (you're in an inn: not judged)" or ""))
+			r:Set("innAlways", false)
+			SetRule(r, "effect:inn", ns.RULE_DEFAULTS["effect:inn"])
+			ns.RefreshTint()
 			CineOff(r)
 		end },
 	},

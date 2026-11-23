@@ -120,8 +120,15 @@ function ns.FocusAlphaNow()
 	return haze:IsShown() and haze:GetAlpha() or 0
 end
 
+-- Stops a demo or preview, if one's showing. (ns.FocusDemo() with nothing
+-- stops one too, but starts a 30 second one when none was: a Stop clicked
+-- as a preview ended, or a test clearing first, left the haze up, 2026-11-23.)
+function ns.FocusDemoStop()
+	stopAt = 0
+end
+
 -- Whether a demo or preview is showing (the Visual Effects page's Preview
--- button turns into Stop meanwhile; ns.FocusDemo() with nothing stops it).
+-- button turns into Stop meanwhile).
 function ns.FocusDemoRunning()
 	return GetTime() < stopAt
 end

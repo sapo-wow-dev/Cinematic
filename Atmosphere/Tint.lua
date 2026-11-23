@@ -726,8 +726,11 @@ local CLASSIC_BOOST = 1.4 -- the tint's strength with Classic boost on (classic 
 local function ApplyTint(level, vignetteLevel, weatherLevel)
 	local preset = PresetOf(shownPreset)
 	local isZone = preset.key == "zone" or preset.key == "zonetime"
+	-- (Lifted where the Glow shows, its row: in an inn to start with. Lifted by
+	-- innLevel alone, the switch since the Glow got its row, every tint was at
+	-- 40% everywhere, 2026-11-23 till fixed: "this zone looked a lot darker".)
 	local strength = math.min(1, (isZone and zoneStrength or db.tintStrength) * DriftFactor())
-		* level * presetFade * (1 - innLevel * INN_SOFTEN)
+		* level * presetFade * (1 - innLevel * layerLevel.inn * INN_SOFTEN)
 
 	if preset.mode and strength > 0 then
 		-- Classic's brighter, more saturated world shows the same tint less:
