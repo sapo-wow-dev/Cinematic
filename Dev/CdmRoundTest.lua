@@ -11,13 +11,14 @@
 --             second; one not round is logged once (its bar, spell, made /
 --             masked / cropped, the last dressing error), dressed again on the
 --             spot to see why it fails, and shot. Also each bar's layouts.
---             (proven for what it covered: no Tracked Buffs icon came up)
+--             A fight with no Tracked Buffs icon lit up SKIPs: the player's
+--             case wasn't covered.
 --   4 pandemic  Round, the game's refresh border (put up on a shown icon by
 --             the test, out of a fight; nothing to do): its square one
 --             hidden and our round glow shown (fix card
 --             Tools/audits/2026-11-23-style-cdm-round-pandemic.md), a shot;
 --             then Square for a moment: the game's own border back, a shot
---             to compare colors.
+--             to compare colors. (proven)
 -- Into CinematicDB.cdmRoundTestLog. Dev copy only.
 local _, ns = ...
 
@@ -155,14 +156,16 @@ ns.TestKit.Define({
 			Shape(nil)
 		end },
 		{ key = "fight", title = "Round through one fight",
-			proven = "2026-11-23 run (708 checks, 0 not round; no buff icon came up, log c5c54609)", run = function(r)
+			proven = "2026-11-23 run (3008 checks, 4 Tracked Buffs icons up, 0 not round, log 44510585)",
+			run = function(r)
 			if not ns.CdmIconState then return r:Fail("no ns.CdmIconState (Action Bar Style not loaded)") end
 			Shape("round")
 			HookLayouts()
 			layouts = {}
-			r:WaitFor("Fight a mob for about 20 seconds, using the spells and buffs on your Cooldown Manager.",
+			r:WaitFor("Fight a mob for about 20 seconds, so a Tracked Buffs icon lights up (a self-buff or a proc).",
 				{ check = function() return UnitAffectingCombat("player") end })
 			local started, checks, seen, bad = GetTime(), 0, {}, 0
+			local buffChecks, buffIcons = 0, {} -- (the player's case: Tracked Buffs icons up in a fight)
 			local stayed = {} -- (an icon still not round on a later check: dressing it again didn't take)
 			while UnitAffectingCombat("player") or GetTime() - started < 3 do
 				for _, name in ipairs(VIEWERS) do
@@ -171,6 +174,10 @@ ns.TestKit.Define({
 						local item = entry.item
 						if item:IsVisible() then
 							checks = checks + 1
+							if name == "BuffIconCooldownViewer" then
+								buffChecks = buffChecks + 1
+								buffIcons[item] = true
+							end
 							local made, masked, cropped, err = ns.CdmIconState(item)
 							if not (made and masked and cropped) then
 								if not seen[item] then
@@ -201,10 +208,17 @@ ns.TestKit.Define({
 			r:Log(("fight: %.0f s, %d icon checks, layouts %s"):format(GetTime() - started, checks,
 				table.concat(counts, ", ")))
 			layouts = nil
+			local buffCount = 0
+			for _ in pairs(buffIcons) do buffCount = buffCount + 1 end
+			r:Log(("Tracked Buffs: %d icon(s) up, %d checks of them"):format(buffCount, buffChecks))
 			r:Verdict(checks > 0 and bad == 0, ("fight: %d icon(s) seen not round in %d checks"):format(bad, checks))
+			if buffChecks == 0 then
+				r:Skip("no Tracked Buffs icon lit up in the fight: the player's case (buff icons square) not covered")
+			end
 			Shape(nil)
 		end },
-		{ key = "pandemic", title = "Round: the pandemic border round", run = function(r)
+		{ key = "pandemic", title = "Round: the pandemic border round",
+			proven = "2026-11-23 run (border hidden, red glow shown; square back, log eb08fa22)", run = function(r)
 			Shape("round")
 			-- (Few spells get a pandemic window (a druid's Moonfire, Rejuvenation and
 			-- Rake didn't: no pandemicStartTime, run fb33a03e), so the test puts the
