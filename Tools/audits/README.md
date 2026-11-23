@@ -10,7 +10,7 @@ skill (`.claude/skills/audit/SKILL.md`); start from `TEMPLATE.md`.
 the pre-commit hook checks a staged one against HEAD; `Tools/prerelease.py` checks all of them against the last
 tag, so a later change that flips a pinned cell fails there.
 
-- `2026-11-23-zone-card-gap.md`: the game's zone line under a Zone card still up (e202b4a); matrix
-  `Tools/offline/zonecardmatrix.lua`.
-- `2026-11-23-zone-card-subzone.md`: a subzone's game line over a Zone card still up, Subzone row off (found by
-  that matrix); same matrix.
+Each card's title line says what it covers (no list here: it went stale as cards were added). The 2026-11-22
+and the ae2cda8 2026-11-23 cards were written after the fact for the three code audits (7c3e0c1, bdb2e1d,
+ae2cda8), `Base:` the code before each; a card's **Open** section lists the cells pinned on a best reading that
+are the user's call.

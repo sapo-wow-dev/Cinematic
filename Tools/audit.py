@@ -39,6 +39,7 @@ live in Tools/audits/. From the repo root:
 
 Exit 1 on a FAIL (guard: the commit is refused). Needs lupa (run.py).
 """
+import filecmp
 import io
 import glob
 import os
@@ -129,6 +130,10 @@ def with_harness(code, test, harness_from):
         src = os.path.join(harness_from, rel)
         if os.path.exists(src):
             dst = os.path.join(code, rel)
+            # (Already there as it is: left alone, so runs side by side never
+            # rewrite a file another is reading.)
+            if os.path.exists(dst) and filecmp.cmp(src, dst, shallow=False):
+                continue
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy(src, dst)
     return code
@@ -263,7 +268,7 @@ def compare(base, new, changes, loose=False, pin_fails=()):
     return lines, fails
 
 
-def diff(test, args, base_ref="HEAD", new="worktree", changes=(), loose=False, quiet=False):
+def diff(test, args, base_ref="HEAD", new="worktree", changes=(), loose=False, pins=True):
     # (The harness and the test from the new tree, or the working tree when
     # the new code is an older commit: the same on both sides.)
     new_code = tree(new)
@@ -281,6 +286,12 @@ def diff(test, args, base_ref="HEAD", new="worktree", changes=(), loose=False, q
         tail = "\n      ".join(out_b.strip().splitlines()[-4:])
         print("NOTE %s: no CELL lines on %s (the test can't run there)\n      %s" % (label, base_ref, tail))
     pin_fails = [l.strip() for l in out_n.splitlines() if l.startswith("FAIL ")]
+    if not pins and pin_fails:
+        # (An old commit as the new side: the pins say what's right today, so
+        # a bug fixed later fails them there. Counted, not failed.)
+        print("NOTE %s %s: %d cells don't give today's pins at %s (fixed later, or still open)" % (
+            test, " ".join(args), len(pin_fails), new))
+        pin_fails = []
     for c in changes:
         c["hit"] = False
     lines, fails = compare(base, now, list(changes), loose, pin_fails)
@@ -628,9 +639,14 @@ def report(lines):
 def cmd_card(path, new, loose):
     card = read_card(path)
     base = card["base"] or "HEAD"
+    # (A landed fix's card, Base: <fix>^: against its own fix commit, so a
+    # later fix on the same cells isn't read as this one's. --new overrides.)
+    if new is None:
+        new = base[:-1] if base.endswith("^") else "worktree"
     fails = 0
     for test, args in card["tests"]:
-        lines, f = diff(test, args, base, new, card["changes"], loose)
+        lines, f = diff(test, args, base, new, card["changes"], loose,
+                        pins=new in ("worktree", "staged") or os.path.isdir(new))
         report(lines)
         fails += f
     if not card["tests"]:
@@ -725,11 +741,24 @@ def cmd_prerelease(ref):
         for t in card["tests"]:
             if t not in tests:
                 tests.append(t)
+    # (Side by side: about 6 minutes one after another at 59 runs. The old
+    # code exported and every test copied in first, so no two runs write a
+    # file at once; each run gets its own copy of the card rows it marks.)
+    import concurrent.futures
+    import copy
+    base_code = tree(ref)
+    for test, _ in tests:
+        with_harness(base_code, test, ROOT)
+
+    def one(item):
+        test, args = item
+        return diff(test, args, ref, "worktree", copy.deepcopy(changes), loose=True)
     fails = 0
-    for test, args in tests:
-        lines, f = diff(test, args, ref, "worktree", changes, loose=True)
-        report([l for l in lines if not l.startswith("PASS ") or "cells" in l])
-        fails += f
+    workers = max(2, min(8, (os.cpu_count() or 4) // 2))
+    with concurrent.futures.ThreadPoolExecutor(workers) as pool:
+        for lines, f in pool.map(one, tests):
+            report([l for l in lines if not l.startswith("PASS ") or "cells" in l])
+            fails += f
     print("audit matrices vs %s: %d tests, %d FAIL" % (ref, len(tests), fails))
     return fails
 
@@ -813,6 +842,12 @@ def selftest():
 
 
 def main():
+    # (Windows' console is cp1252: a hit with an arrow in it broke refs.)
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     argv = sys.argv[1:]
     if not argv:
         sys.exit(__doc__)
@@ -835,7 +870,7 @@ def main():
             report(lines)
             return 1 if fails else 0
         if cmd == "card":
-            new = opt(argv, "--new", "worktree")
+            new = opt(argv, "--new", None)
             return 1 if cmd_card(argv[0], new, "--loose" in argv) else 0
         if cmd == "oldtests":
             base = opt(argv, "--base", "HEAD")

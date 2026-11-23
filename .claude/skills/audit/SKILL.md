@@ -143,7 +143,7 @@ release review shows both.
 |---|---|
 | `audit.py refs <word>...` | who relies on a function, setting, frame, event |
 | `audit.py diff <test> [client] --base REF [--new REF\|staged\|DIR] [--card C]` | a matrix, old code vs new, cell by cell |
-| `audit.py card <card>` | every Test: of a card against its Base: |
+| `audit.py card <card>` | every Test: of a card against its Base: (a landed card, `Base: X^`, against X itself; its pins then only noted, as they say what's right today) |
 | `audit.py oldtests --base REF [tests]` | old tests on the new code |
 | `audit.py since [REF]` | expectations changed since a tag, with their OKs |
 | `audit.py guard <msgfile>` | the commit-msg check (Tools/hooks/commit-msg) |
