@@ -28,9 +28,14 @@ DEFAULTS.cdmStyle = true
 DEFAULTS.cdmRingStyle = "pips" -- pips, smooth, liquid, bar
 DEFAULTS.cdmRingScale = 1.36 -- the ring's size to the icon's
 DEFAULTS.cdmRingTrack = 0.75 -- how dark the spent part shows (0: hidden)
-DEFAULTS.cdmRingColor = "class" -- class, grad (green to red), custom, white
+DEFAULTS.cdmRingColor = "class" -- class, grad (Gradient: its two ends below), custom, white
 DEFAULTS.cdmRingR, DEFAULTS.cdmRingG, DEFAULTS.cdmRingB = 0.88, 0.75, 0.38
-DEFAULTS.cdmAmountPlace = "middle" -- middle, bottom
+-- (Gradient's ends, picked on the page, 2026-11-23: green full, red empty to start.)
+DEFAULTS.cdmGradFullR, DEFAULTS.cdmGradFullG, DEFAULTS.cdmGradFullB = 0.2, 0.85, 0.25
+DEFAULTS.cdmGradEmptyR, DEFAULTS.cdmGradEmptyG, DEFAULTS.cdmGradEmptyB = 0.95, 0.2, 0.15
+-- (The amount from the icon's middle, nudged by these: the user, 2026-11-23,
+-- "start in middle and add X/Y offset", in place of Middle / Bottom.)
+DEFAULTS.cdmAmountX, DEFAULTS.cdmAmountY = 0, 0
 DEFAULTS.cdmAmountSize = 13
 local function Look()
 	if ns.StyleLook then return ns.StyleLook("cdmStyle") end
@@ -40,16 +45,45 @@ end
 local function Secret(value) return issecretvalue and issecretvalue(value) or false end
 local function Plain(value) return type(value) == "number" and not Secret(value) and value or nil end
 
--- Red at the ring's start (12 o'clock) to green at its end: what's left after
--- a hit is the start, so it reddens as it drains.
-local function Hue(t)
-	return math.min(1, 2 * (1 - t)) * 0.95, math.min(1, 2 * t) * 0.85, 0.16
+-- Gradient: the empty end's color at the ring's start (12 o'clock) to the full
+-- end's at its end: what's left after a hit is the start, so it turns toward
+-- the empty color as it drains. Blended round the color wheel (green to red
+-- passes yellow, not brown).
+local function ToHSV(r, g, b)
+	local hi, lo = math.max(r, g, b), math.min(r, g, b)
+	local d = hi - lo
+	local h = 0
+	if d > 0 then
+		if hi == r then h = ((g - b) / d) % 6 elseif hi == g then h = (b - r) / d + 2 else h = (r - g) / d + 4 end
+		h = h / 6
+	end
+	return h, hi > 0 and d / hi or 0, hi
 end
+local function FromHSV(h, s, v)
+	local i = math.floor(h * 6) % 6
+	local f = h * 6 - math.floor(h * 6)
+	local p, q, u = v * (1 - s), v * (1 - f * s), v * (1 - (1 - f) * s)
+	if i == 0 then return v, u, p elseif i == 1 then return q, v, p elseif i == 2 then return p, v, u
+	elseif i == 3 then return p, q, v elseif i == 4 then return u, p, v end
+	return v, p, q
+end
+local function GradientAt(look, t)
+	local h1, s1, v1 = ToHSV(tonumber(look.cdmGradEmptyR) or 0.95, tonumber(look.cdmGradEmptyG) or 0.2,
+		tonumber(look.cdmGradEmptyB) or 0.15)
+	local h2, s2, v2 = ToHSV(tonumber(look.cdmGradFullR) or 0.2, tonumber(look.cdmGradFullG) or 0.85,
+		tonumber(look.cdmGradFullB) or 0.25)
+	-- (The short way round the wheel; a grey end keeps the other's hue.)
+	if s1 < 0.05 then h1 = h2 elseif s2 < 0.05 then h2 = h1 end
+	local dh = h2 - h1
+	if dh > 0.5 then dh = dh - 1 elseif dh < -0.5 then dh = dh + 1 end
+	return FromHSV((h1 + dh * t) % 1, s1 + (s2 - s1) * t, v1 + (v2 - v1) * t)
+end
+ns.CooldownRingGradientAt = GradientAt
 
 -- A piece's color at place t (0 the ring's start, 1 its end), by the page's Color.
 local function ColorAt(look, t)
 	local mode = look.cdmRingColor
-	if mode == "grad" then return Hue(t) end
+	if mode == "grad" then return GradientAt(look, t) end
 	if mode == "white" then return 0.95, 0.95, 0.95 end
 	if mode == "custom" or mode == "one" then -- ("one": its name before the Look panel)
 		return tonumber(look.cdmRingR) or 1, tonumber(look.cdmRingG) or 1, tonumber(look.cdmRingB) or 1
@@ -188,9 +222,15 @@ local function Make(icon, style)
 		back:SetPoint("TOPRIGHT", holder, "BOTTOMRIGHT", 0, -2)
 		back:SetHeight(5)
 		ring.back = back
-		local bar = Bar(holder, ART .. "CdmDrainGrad")
+		local bar = Bar(holder, WHITE)
 		bar:SetAllPoints(back)
-		ring.bar = bar
+		-- (Gradient: a second fill over it, a ramp see-through to solid in the
+		-- full end's color, set to the same amount: cropped alike, so each spot
+		-- keeps its own color.)
+		local ramp = Bar(holder, ART .. "CdmDrainRamp")
+		ramp:SetAllPoints(back)
+		ramp:SetFrameLevel(bar:GetFrameLevel() + 1)
+		ring.bar, ring.ramp = bar, ramp
 	elseif style == "liquid" then
 		-- (The icon dimmed; a bright copy of it fills from the bottom up to
 		-- what's left.)
@@ -216,9 +256,13 @@ end
 -- The page's look on a ring: colors, the spent part, size, the amount's text.
 -- (Set again only when the look changed.)
 local function Paint(ring, look)
-	local key = table.concat({ tostring(look.cdmRingColor), tostring(look.cdmRingR), tostring(look.cdmRingG),
-		tostring(look.cdmRingB), tostring(look.cdmRingTrack), tostring(look.cdmRingScale), tostring(look.cdmAmountPlace),
-		tostring(look.cdmAmountSize) }, ",")
+	local parts = {}
+	for i, k in ipairs({ "cdmRingColor", "cdmRingR", "cdmRingG", "cdmRingB", "cdmRingTrack", "cdmRingScale",
+		"cdmAmountX", "cdmAmountY", "cdmAmountSize", "cdmGradFullR", "cdmGradFullG", "cdmGradFullB", "cdmGradEmptyR",
+		"cdmGradEmptyG", "cdmGradEmptyB" }) do
+		parts[i] = tostring(look[k])
+	end
+	local key = table.concat(parts, ",")
 	if ring.painted == key then return end
 	ring.painted, ring.width = key, nil -- (width nil: sized again with the new scale)
 	local track = tonumber(look.cdmRingTrack) or 0.75
@@ -230,20 +274,17 @@ local function Paint(ring, look)
 	if ring.back then ring.back:SetColorTexture(0.1, 0.1, 0.12, track) end
 	if ring.bar and not ring.liquid then
 		if look.cdmRingColor == "grad" then
-			ring.bar:SetStatusBarTexture(ART .. "CdmDrainGrad")
-			ring.bar:SetStatusBarColor(1, 1, 1)
+			ring.bar:SetStatusBarColor(GradientAt(look, 0))
+			ring.ramp:SetStatusBarColor(GradientAt(look, 1))
+			ring.ramp:Show()
 		else
-			ring.bar:SetStatusBarTexture(WHITE)
 			ring.bar:SetStatusBarColor(ColorAt(look, 1))
+			ring.ramp:Hide()
 		end
 	end
 	local text = ring.text
 	text:ClearAllPoints()
-	if look.cdmAmountPlace == "bottom" then
-		text:SetPoint("BOTTOM", ring.holder, "BOTTOM", 0, 2)
-	else
-		text:SetPoint("CENTER", ring.holder, "CENTER", 0, 0)
-	end
+	text:SetPoint("CENTER", ring.holder, "CENTER", tonumber(look.cdmAmountX) or 0, tonumber(look.cdmAmountY) or 0)
 	if ring.font then pcall(text.SetFont, text, ring.font, tonumber(look.cdmAmountSize) or 13, "OUTLINE") end
 end
 
@@ -303,6 +344,10 @@ local function Draw(icon, style, look, size, amount, showAmount)
 		end
 		ring.bar:SetMinMaxValues(0, size)
 		ring.bar:SetValue(amount)
+		if ring.ramp then
+			ring.ramp:SetMinMaxValues(0, size)
+			ring.ramp:SetValue(amount)
+		end
 	end
 	if showAmount then
 		ring.text:SetText(amount)

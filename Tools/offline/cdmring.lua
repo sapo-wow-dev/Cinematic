@@ -119,6 +119,30 @@ PageLook("pips", "custom")
 ns.CooldownRingUpdate()
 Check("One color: the swatch's", ring.segs[3].r == 0.2 and ring.segs[3].b == 0.9)
 
+-- Gradient with ends of your own: blue empty, yellow full.
+db.cdmGradEmptyR, db.cdmGradEmptyG, db.cdmGradEmptyB = 0.1, 0.3, 1
+db.cdmGradFullR, db.cdmGradFullG, db.cdmGradFullB = 1, 0.9, 0.1
+PageLook("pips", "grad")
+ns.CooldownRingUpdate()
+Check("Gradient, own ends: the first segment bluish, the last yellowish",
+	ring.segs[1].b > ring.segs[1].r and ring.segs[8].r > ring.segs[8].b, ("%.2f %.2f"):format(ring.segs[1].b, ring.segs[8].r))
+local r0, g0, b0 = ns.CooldownRingGradientAt(ns.CooldownRingLook(), 0)
+Check("Gradient's start is the empty end's color", math.abs(r0 - 0.1) < 0.02 and math.abs(b0 - 1) < 0.02, r0 .. "," .. g0)
+db.cdmGradEmptyR, db.cdmGradEmptyG, db.cdmGradEmptyB = nil, nil, nil
+db.cdmGradFullR, db.cdmGradFullG, db.cdmGradFullB = nil, nil, nil
+local rm, gm = ns.CooldownRingGradientAt(ns.CooldownRingLook(), 0.5)
+Check("default Gradient's middle is yellowish (round the wheel, not brown)", rm > 0.6 and gm > 0.6, rm .. "," .. gm)
+
+-- The amount nudged from the middle.
+-- (The stand-in's GetPoint gives 0, 0 always: the text's SetPoint recorded.)
+ring.text.SetPoint = function(self, point, _, _, x, y) self.at = { point, x, y } end
+db.cdmAmountX, db.cdmAmountY = 5, -12
+ns.CooldownRingUpdate()
+local at = ring.text.at
+Check("Amount X/Y: from the middle, offset", at and at[1] == "CENTER" and at[2] == 5 and at[3] == -12,
+	at and (tostring(at[2]) .. "," .. tostring(at[3])))
+db.cdmAmountX, db.cdmAmountY = nil, nil
+
 -- A row saved with a style from before the page counts as On.
 ns.SetCooldownRow(17, "ring", "smooth")
 PageLook("pips")

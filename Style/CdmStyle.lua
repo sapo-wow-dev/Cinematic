@@ -120,18 +120,25 @@ function ns.CreateCdmStylePanel(kit)
 		color = function(look)
 			look.Choices(L["Color:"], "cdmRingColor", {
 				{ "class", L["Class"], L["The ring in your class's color."] },
-				{ "grad", L["Green to red"], L["Green at the full end to red at the empty end: what's left reddens as it drains."] },
+				{ "grad", L["Gradient"], L["From the full end's color to the empty end's: what's left turns toward the empty color as it drains."] },
 				{ "custom", L["Custom"], L["The color you pick below."] },
 				{ "white", L["White"], L["A plain white ring."] },
 			})
+			-- (Each color row greyed unless its pick is on.)
+			local function Is(mode) return function(db) return look.On(db) and db.cdmRingColor == mode end end
 			look.Color(L["Custom color"], { "cdmRingR", "cdmRingG", "cdmRingB" }, L["Click to choose the ring's color."],
-				function(db) return look.On(db) and db.cdmRingColor == "custom" end)
+				Is("custom"))
+			look.Color(L["Full end"], { "cdmGradFullR", "cdmGradFullG", "cdmGradFullB" },
+				L["The gradient's color where the shield is full."], Is("grad"))
+			look.Color(L["Empty end"], { "cdmGradEmptyR", "cdmGradEmptyG", "cdmGradEmptyB" },
+				L["The gradient's color where the shield runs out."], Is("grad"))
 		end,
 		amount = function(look)
-			look.Choices(L["Place:"], "cdmAmountPlace", {
-				{ "middle", L["Middle"], L["In the middle of the icon."] },
-				{ "bottom", L["Bottom"], L["At the bottom of the icon."] },
-			})
+			-- (From the middle, nudged: the user's pick over Middle / Bottom, 2026-11-23.)
+			look.Slider("cdmAmountX", L["Left / right"], -30, 30, 1, "%d", nil,
+				L["Moves the amount left or right from the icon's middle."])
+			look.Slider("cdmAmountY", L["Down / up"], -30, 30, 1, "%d", nil,
+				L["Moves the amount down or up from the icon's middle."])
 			look.Slider("cdmAmountSize", L["Size"], 8, 20, 1, "%d", nil, L["How big the amount's text is."])
 		end,
 	})

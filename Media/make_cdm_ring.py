@@ -59,3 +59,10 @@ for y in range(H):
         pixels.append((r, g, 40, 255))
 grad.putdata(pixels)
 grad.save(os.path.join(OUT, "CdmDrainGrad.tga"), compression="tga_rle")
+
+# CdmDrainRamp.tga: white, see-through on the left to solid on the right. The
+# bar's Gradient: a fill in the empty end's color under this one tinted the
+# full end's, both cropped alike, so each spot keeps its color as it drains.
+ramp = Image.new("RGBA", (W, H))
+ramp.putdata([(255, 255, 255, round(255 * x / (W - 1))) for y in range(H) for x in range(W)])
+ramp.save(os.path.join(OUT, "CdmDrainRamp.tga"), compression="tga_rle")

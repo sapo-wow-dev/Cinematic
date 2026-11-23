@@ -47,6 +47,28 @@ end
 
 local test = {}
 
+-- The shield's icon and spell for this run, found (waiting for you to track
+-- it if it isn't) without the verdicts: the later steps call it when step 1
+-- is proven and left out (run 10: styles skipped, "no shield icon").
+local function FindShield(r)
+	if test.item then return true end
+	local found = ShieldIcon()
+	if not found then
+		r:WaitFor("On your priest (or mage), add your shield (Power Word: Shield) to Tracked Buffs in the game's Cooldown Manager settings.", {
+			check = function() return ShieldIcon() and "tracked" end,
+			buttons = { { label = "Cooldown Manager settings", fn = function()
+				local settings = _G.CooldownViewerSettings
+				if settings then pcall(ShowUIPanel, settings) end
+			end } } })
+		found = ShieldIcon()
+		local settings = _G.CooldownViewerSettings
+		if settings and settings:IsShown() then pcall(HideUIPanel, settings) end
+	end
+	if not found then return false end
+	test.item, test.spell, test.name = found.item, found.spell, found.name
+	return true
+end
+
 -- The shield's row On, and the Style page's look (its switch on): style and color.
 local function SetRing(r, style, color)
 	local all = Copy(ns.db.cooldownRowSettings) or {}
@@ -70,7 +92,6 @@ ns.TestKit.Define({
 		{ key = "shield", proven = "cdmring runs 3-7 (2026-11-23, priest): PASS, size 44 after a /reload",
 			title = "your shield, tracked and cast", run = function(r)
 			if not ns.PageOn("handleCooldowns") then return r:Skip("the Cooldown Manager page is off") end
-			local found = ShieldIcon()
 			-- (Every tracked buff, what the ring reads of it: run 2's tracked
 			-- Power Word: Shield wasn't taken, no size after a /reload.)
 			ns.EachCooldownIcon(function(icon, id, bar)
@@ -81,18 +102,7 @@ ns.TestKit.Define({
 					tostring(spell and C_Spell.GetSpellName(spell)), okDesc and (desc and #tostring(desc) .. " chars" or "nil") or "error",
 					tostring(ns.CooldownRingSizeFor and ns.CooldownRingSizeFor(icon))))
 			end, true)
-			if not found then
-				r:WaitFor("On your priest (or mage), add your shield (Power Word: Shield) to Tracked Buffs in the game's Cooldown Manager settings.", {
-					check = function() return ShieldIcon() and "tracked" end,
-					buttons = { { label = "Cooldown Manager settings", fn = function()
-						local settings = _G.CooldownViewerSettings
-						if settings then pcall(ShowUIPanel, settings) end
-					end } } })
-				found = ShieldIcon()
-				local settings = _G.CooldownViewerSettings
-				if settings and settings:IsShown() then pcall(HideUIPanel, settings) end
-			end
-			test.item, test.spell, test.name = found.item, found.spell, found.name
+			if not FindShield(r) then return r:Fail("no shield icon tracked") end
 			r:Log(("  shield icon: %s (spell %s)"):format(tostring(test.name), tostring(test.spell)))
 			if type(test.item.auraInstanceID) == "nil" then
 				r:WaitFor("Cast " .. test.name .. " on yourself. Then attack a mob; the test does the rest.", {
@@ -104,9 +114,11 @@ ns.TestKit.Define({
 			r:Verdict(Plain(size) and size > 0, "the shield's size read: " .. tostring(size))
 		end },
 		-- (Proven in run 4 as row styles; from the Style page now, with its colors.)
-		{ key = "styles", proven = "cdmring run 7 (2026-11-23, priest): PASS 6/6 styles + colors from the page",
+		-- (Run 7 passed 6/6; the Gradient's own ends and the bar's two-layer
+		-- fill since, 2026-11-23: again.)
+		{ key = "styles", proven = "cdmring run 11 (2026-11-23, priest): PASS 6/6, shots: Gradient pips and bar red to green",
 			title = "the four styles, from the Style page, with its colors", run = function(r)
-			if not test.item then return r:Skip("no shield icon (step 1)") end
+			if not FindShield(r) then return r:Skip("no shield icon tracked") end
 			for _, pick in ipairs({ { "pips", "class" }, { "pips", "grad" }, { "smooth", "white" }, { "liquid", "class" },
 				{ "bar", "class" }, { "bar", "grad" } }) do
 				local style, color = pick[1], pick[2]
@@ -169,7 +181,9 @@ ns.TestKit.Define({
 		end },
 		-- The Style page (Style/CdmStyle.lua): opened from the Style hub, its
 		-- switch on and off (rows greyed), and the ring keeping its own look off.
-		{ key = "stylepage", proven = "cdmring run 9 (2026-11-23, priest): PASS, Look panel (tabs, pills, slider), preview centered",
+		-- (Run 9 passed; the Color tab's Gradient ends and the Amount tab's
+		-- X / Y sliders since, 2026-11-23: again.)
+		{ key = "stylepage", proven = "cdmring run 11 (2026-11-23, priest): PASS, Gradient ends + Amount X / Y on the page",
 			title = "Style > Cooldown Manager", run = function(r)
 			if InCombatLockdown() then return r:Skip("in a fight: the settings stay shut") end
 			if not ns.CreateCdmStylePanel then return r:Skip("Style left out (Modules): no page, the ring's own look") end
@@ -195,7 +209,7 @@ ns.TestKit.Define({
 		end },
 		{ key = "fight", proven = "cdmring run 5 (2026-11-23, priest): PASS, 58 sets for 6 hits, 0 errors, shot 36 left / 7 pips",
 			title = "Pips through a fight", run = function(r)
-			if not test.item then return r:Skip("no shield icon (step 1)") end
+			if not FindShield(r) then return r:Skip("no shield icon tracked") end
 			SetRing(r, "pips")
 			if type(test.item.auraInstanceID) == "nil" and not InCombatLockdown() then
 				r:WaitFor("Cast " .. test.name .. " again, then attack a mob.", {
