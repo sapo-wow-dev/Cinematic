@@ -471,19 +471,33 @@ do
 	end
 	-- (Gamepad mode has its own bar. Looked for again as casts start, in
 	-- case a bar is made after login.)
+	-- ElvUI's player cast bar too, with it loaded: an oUF bar has no OnEvent
+	-- of its own (its unit frame gets the events) and never sets its own
+	-- alpha, only Show(), so every hooked bar is checked again on each of
+	-- your casts here, which also covers a recast while it's still shown.
 	local hookedBars = {}
+	local GAME_BARS = { "PlayerCastingBarFrame", "CastingBarFrame", "GamepadPlayerCastingBarFrame" }
+	local function HookBar(bar)
+		if bar and bar.HookScript and not hookedBars[bar] then
+			hookedBars[bar] = true
+			bar:HookScript("OnEvent", ns.Profiled("Cast bar hook", UpdateCastBar))
+			bar:HookScript("OnShow", UpdateCastBar)
+		end
+	end
 	local castBarWatcher = CreateFrame("Frame")
 	castBarWatcher:RegisterEvent("PLAYER_LOGIN")
+	castBarWatcher:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
 	castBarWatcher:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
+	castBarWatcher:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
 	castBarWatcher:SetScript("OnEvent", function()
-		for _, name in ipairs({ "PlayerCastingBarFrame", "CastingBarFrame", "GamepadPlayerCastingBarFrame" }) do
-			local bar = _G[name]
-			if bar and bar.HookScript and not hookedBars[bar] then
-				hookedBars[bar] = true
-				bar:HookScript("OnEvent", ns.Profiled("Cast bar hook", UpdateCastBar))
-				bar:HookScript("OnShow", UpdateCastBar)
-				UpdateCastBar(bar)
-			end
+		for _, name in ipairs(GAME_BARS) do
+			HookBar(_G[name])
+		end
+		if ns.AddonUp and ns.AddonUp("ElvUI") then
+			HookBar(_G.ElvUF_Player_CastBar)
+		end
+		for bar in pairs(hookedBars) do
+			UpdateCastBar(bar)
 		end
 	end)
 

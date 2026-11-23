@@ -341,6 +341,7 @@ Dev\PetPlateTest.lua
 Dev\DuelTargetTest.lua
 Dev\EuiSwingTest.lua
 Dev\EuiCastTest.lua
+Dev\ElvFishBarTest.lua
 Dev\AddonTest.lua
 Dev\EuiCooldownTest.lua
 Dev\BuffFadeTest.lua
