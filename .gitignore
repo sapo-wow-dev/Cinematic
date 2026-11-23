@@ -29,6 +29,9 @@ out.html
 # Archived test logs (.claude/skills/test/read_log.py): game data from this PC, kept here
 Tools/tests/logs/
 
+# Discord threads saved for Claude (Tools/discord-bug-bot/claude_desk.py): players' posts and files
+Tools/discord-inbox/
+
 # Profiler recordings and reports (Tools/perf/analyze.py): game data from this PC
 Tools/perf/history/
 Tools/perf/reports/

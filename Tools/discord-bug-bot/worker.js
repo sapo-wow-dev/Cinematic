@@ -15,6 +15,9 @@
 //   DISCORD_BOT_TOKEN   secret: the Discord bot's token
 //   BUG_FORUM_ID        plain: the bug forum channel's ID (closed tag: Fixed)
 //   REQUEST_FORUM_ID    plain: the request forum channel's ID (closed tag: Done)
+// /claude: send a thread to Claude on your PC (optional, README step 7):
+//   CLAUDE_QUEUE_ID     plain: a private channel the Worker posts jobs in; your PC reads it
+//   CLAUDE_USERS        plain: Discord user IDs allowed to use /claude, comma separated
 
 const COOLDOWN_SECONDS = 300 // one report per player per 5 minutes
 const LABELS = ["bug", "from-discord"]
@@ -47,6 +50,11 @@ export default {
     if (interaction.type === 2 && interaction.data.name === "bug") {
       const client = interaction.data.options?.find((o) => o.name === "client")?.value || "other"
       return json({ type: 9, data: bugForm(client) })
+    }
+
+    // 2: /claude in a thread -> queue it for the PC (claude_desk.py)
+    if (interaction.type === 2 && interaction.data.name === "claude") {
+      return reply(await queueClaude(interaction, env))
     }
 
     // 5: the form was sent -> answer "working on it" now, file the issue after
@@ -125,13 +133,48 @@ async function tagNewBugPosts(env) {
   }
 }
 
-async function discord(env, method, path, body) {
+// ---- /claude: queue a thread for Claude on the author's PC ----
+// A Worker can't reach a PC, so it posts a "claude-job" line in a private
+// queue channel and the PC script (claude_desk.py) reads that channel. Jobs
+// wait there while the PC is off. Nothing is ever posted in the thread.
+const SKILLS = ["support", "feature"]
+
+async function queueClaude(interaction, env) {
+  const user = interaction.member?.user || interaction.user
+  const allowed = (env.CLAUDE_USERS || "").split(",").map((s) => s.trim()).filter(Boolean)
+  if (!allowed.includes(user.id)) return "Sorry, /claude is only for the addon's author."
+  if (!env.CLAUDE_QUEUE_ID || !env.DISCORD_BOT_TOKEN) return "/claude isn't set up: CLAUDE_QUEUE_ID or DISCORD_BOT_TOKEN is missing."
+
+  const channel = interaction.channel || {}
+  const isThread = [10, 11, 12].includes(channel.type)
+  if (!isThread) return "Use /claude inside a forum post or thread."
+  const parent = channel.parent_id
+  const chosen = interaction.data.options?.find((o) => o.name === "skill")?.value
+  const skill = SKILLS.includes(chosen) ? chosen
+    : parent && parent === env.BUG_FORUM_ID ? "support"
+    : parent && parent === env.REQUEST_FORUM_ID ? "feature"
+    : null
+  if (!skill) return "This thread isn't in the bug or request forum: run `/claude skill:` and pick support or feature."
+
+  const note = (interaction.data.options?.find((o) => o.name === "note")?.value || "").slice(0, 500)
+  const job = { thread: interaction.channel_id, skill, parent: parent || null, guild: interaction.guild_id, by: user.id, note }
+  try {
+    await discord(env, "POST", `/channels/${env.CLAUDE_QUEUE_ID}/messages`,
+      { content: `claude-job ${JSON.stringify(job)}`, allowed_mentions: { parse: [] } }, "Queue a thread for Claude")
+  } catch (err) {
+    console.log("Queueing /claude failed:", err.message)
+    return "Couldn't queue it (Worker > Logs says why)."
+  }
+  return `Queued for /${skill}. Your PC opens a Claude session for it (right away if it's on, otherwise when it is).`
+}
+
+async function discord(env, method, path, body, reason = "New bug post: Open tag") {
   const res = await fetch(`https://discord.com/api/v10${path}`, {
     method,
     headers: {
       Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
       "Content-Type": "application/json",
-      "X-Audit-Log-Reason": "New bug post: Open tag",
+      "X-Audit-Log-Reason": reason,
     },
     body: body ? JSON.stringify(body) : undefined,
   })

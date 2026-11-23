@@ -35,7 +35,35 @@ COMMANDS = [
                 ],
             }
         ],
-    }
+    },
+    {
+        # Sends the thread it's typed in to Claude on the author's PC
+        # (claude_desk.py). Hidden from everyone but admins; the Worker also
+        # checks CLAUDE_USERS.
+        "name": "claude",
+        "description": "Open a Claude session on Sapo's PC for this thread",
+        "contexts": [0],
+        "default_member_permissions": "0",
+        "options": [
+            {
+                "name": "skill",
+                "description": "Default: support in the bug forum, feature in the request forum",
+                "type": 3,
+                "required": False,
+                "choices": [
+                    {"name": "support (a player's problem)", "value": "support"},
+                    {"name": "feature (a player's wish)", "value": "feature"},
+                ],
+            },
+            {
+                "name": "note",
+                "description": "Anything to tell Claude along with the thread",
+                "type": 3,
+                "required": False,
+                "max_length": 500,
+            },
+        ],
+    },
 ]
 
 

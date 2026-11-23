@@ -41,7 +41,7 @@ It is not part of the addon (Tools/ is left out of the CurseForge package).
    python Tools/discord-bug-bot/register_commands.py
    ```
 
-   It should print `Registered: /bug`. (The application ID is in the script; for another app, set `DISCORD_APP_ID`.)
+   It should print `Registered: /bug, /claude`. (The application ID is in the script; for another app, set `DISCORD_APP_ID`.)
 
 Then type `/bug` in the server.
 
@@ -66,6 +66,48 @@ When you finish one, swap Open for Fixed/Done and it stays that way.
    Then **Edit code**, paste the new `worker.js`, Deploy.
 4. Worker > **Settings > Trigger Events > Add > Cron Triggers**: `*/2 * * * *`, save.
 5. Make a test post: within 2 minutes it shows **Open**. Worker > **Logs** shows why if not.
+
+### 7. `/claude`: open a thread in Claude on your PC (optional, needs step 6)
+Type `/claude` in a bug or request post. Your PC saves the whole thread (messages,
+pictures, videos as frames plus a transcript, posts it links to) to
+`Tools/discord-inbox/` (never committed) and opens Claude in the repo on it:
+`/support` for the bug forum, `/feature` for the request forum (or pick with
+`skill:`, add a `note:`). Claude starts in plan mode and nothing is posted in
+Discord: replies are drafts for you. Jobs wait in a private channel, so `/claude`
+from your phone works while the PC is off; it opens when the PC is back.
+
+1. Make a private text channel, e.g. `#claude-queue`: only you and the bot can see it.
+   In its permissions give the bot **View Channel**, **Send Messages**, **Read Message History**.
+   The bot must also be able to see the bug and request forums.
+   Discord app > **Bot > Privileged Gateway Intents**: turn on **Message Content Intent**
+   and save, or every message the bot reads comes back blank.
+2. Worker > **Settings > Variables and Secrets**, add as **Text**:
+   - `CLAUDE_QUEUE_ID`: right-click the channel > **Copy Channel ID**
+   - `CLAUDE_USERS`: your own Discord user ID (right-click your name > **Copy User ID**)
+   Then **Edit code**, paste the new `worker.js`, Deploy.
+3. Run `register_commands.py` again (step 4.2). `/claude` is only shown to admins.
+4. On the PC, once: copy the bot token, then run this in PowerShell (it reads the
+   token from the clipboard, asks for the queue channel ID, and saves both in
+   `%LOCALAPPDATA%\cinematic-desk\config.json`, not the repo):
+
+   ```powershell
+   $env:DISCORD_BOT_TOKEN = (Get-Clipboard).Trim(); python Tools/discord-bug-bot/claude_desk.py --setup
+   ```
+
+   The same works for `register_commands.py`. Never paste the token on its own at the
+   prompt: PowerShell keeps it in its history.
+
+5. For videos: `winget install ffmpeg` and `pip install faster-whisper` (uses the GPU
+   if it can, otherwise the CPU; the first video downloads the speech model, about 1.5 GB).
+6. Start it: `python Tools/discord-bug-bot/claude_desk.py` (Ctrl+C stops it). To have it
+   start with Windows, put a shortcut in the Startup folder (Win+R, `shell:startup`) with
+   the target `pythonw C:\dev\Cinematic\Tools\discord-bug-bot\claude_desk.py`.
+
+The queue channel shows each job's state: `claude-job` (waiting), `claude-taken`,
+`claude-done` (with its folder) or `claude-failed` (with why). To run a job again,
+`/claude` in the thread again. Settings in `config.json`: `"permission_mode"`
+(default `plan`), `"whisper_model"` (default `medium`), `"claude"` (path to
+`claude.exe` if it isn't found). Offline test: `python Tools/discord-bug-bot/test_desk.py`.
 
 ## Changing it
 - **The form or the issue text**: edit `worker.js`, paste it into the Worker editor again, Deploy.
