@@ -58,6 +58,10 @@ do
 	end
 	-- (Tools/offline/questiegate.lua: a reload, the box read again.)
 	function ns.ForgetAddonSupportAtLoad() offAtLoad = nil end
+	-- (The same record for a setup's gate (OnLoaded): an addon loading late
+	-- with its box changed since login ran its setup by the box as it is now,
+	-- our paths into it as it was. 2026-11-23, questiegatematrix.)
+	ns.AddonSupportOffAtLoad = OffAtLoad
 	function ns.AddonUp(name)
 		if OffAtLoad(name) then return false end
 		if up[name] then return true end
@@ -211,7 +215,7 @@ local function OnLoaded(addon)
 	end
 	local list = setups[addon]
 	setups[addon] = nil
-	if list and not ns.AddonSupportOn(addon) then
+	if list and ns.AddonSupportOffAtLoad(addon) then
 		ns.Log("support", ("support for %s is switched off (Addons page): its setup didn't run"):format(addon))
 		return
 	end
