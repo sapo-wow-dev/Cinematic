@@ -80,6 +80,8 @@ local DEFAULTS = {
 	offWhileMoving = false,   -- while walking, running (auto-run too) or riding about yourself (not RP walking or flights)
 	movingBackAfter = 15,     -- ...until you've kept moving this many seconds
 	movingStillAfter = 15,    -- ...or stood still this many seconds
+	exitByRow = false,        -- Exit CineMode by its Show in row (cine:exit) instead of the boxes above (and windows, NPCs)
+	cineExitAlways = false,   -- that row's Always: never in CineMode
 	fadeOutTime = 1.5,        -- every fade out, in fights and after them (once the Calm Timer is over) too
 	fadeInTime = 1.5,
 	combatFadeInTime = 0.2,   -- ...for fades in during a fight (the UI coming back as it starts)
@@ -2354,9 +2356,27 @@ function ns.WindowPausesCams()
 	return ns.NPCWindowOpen() or ns.MenuWindowOpen()
 end
 
+-- Exit CineMode's boxes set aside for its Show in row (exitByRow): none of
+-- them counts, CineMode staying on in fights unless the row says otherwise.
+function ns.StaysInCombat(db)
+	db = db or ns.db
+	return (db.exitByRow or db.stayInCombat) and true or false
+end
+-- (No locals of their own: this file's main chunk is near Lua's 200.)
+ns.EXIT_ROW = "cine:exit"
+function ns.ExitRowOn()
+	return ns.db.exitByRow and ns.RowOnNow and ns.RowOnNow(ns.EXIT_ROW, ns.db.cineExitAlways, true) or false
+end
+function ns.WindowsExit()
+	return not ns.db.exitByRow and not ns.db.stayWithWindows
+		and (AnyShown(REVEAL_WHILE_SHOWN) or AnyShown(REVEAL_ALSO)) or false
+end
+function ns.NPCsExit()
+	return not ns.db.exitByRow and ns.db.revealAtNPCs and AnyShown(REVEAL_AT_NPCS) or false
+end
+
 local function AnyRevealFrameShown()
-	return (not ns.db.stayWithWindows and (AnyShown(REVEAL_WHILE_SHOWN) or AnyShown(REVEAL_ALSO)))
-		or (ns.db.revealAtNPCs and AnyShown(REVEAL_AT_NPCS))
+	return ns.WindowsExit() or ns.NPCsExit()
 end
 
 -- Each file keeps its own "last fight" time for the Calm Timer. With
@@ -2537,7 +2557,7 @@ end
 -- (say, pressing forward) without stopping.
 local movingOffSince
 local function MovingFor()
-	if not ns.db.offWhileMoving or not ns.playerMoving or ns.OnTaxi()
+	if not ns.db.offWhileMoving or ns.db.exitByRow or not ns.playerMoving or ns.OnTaxi()
 		or (ns.IsRPWalking and ns.IsRPWalking()) then
 		movingOffSince = nil
 		return nil
@@ -2572,7 +2592,7 @@ local function IsBusy()
 	local inCombat = InCombatLockdown() or Flag(UnitAffectingCombat("player"))
 	-- (Off for fights: the Calm Timer after one is the fight still, CineMode
 	-- comes back once it runs out.)
-	if (inCombat or (ns.InCalm and ns.InCalm())) and not ns.db.stayInCombat then
+	if (inCombat or (ns.InCalm and ns.InCalm())) and not ns.StaysInCombat() then
 		return true
 	end
 	-- Targeting never brings the whole UI back; it shows the Standard Frames page's
@@ -2891,6 +2911,7 @@ end
 ns.IsMinimapKeptInZone = OncePerFrame(ns.IsMinimapKeptInZone)
 
 local function IsInDisabledZone()
+	if ns.db.exitByRow then return false end
 	local place = ns.GetOptionPlace()
 	if place == nil then
 		-- The open world (inns too). Flights still go cinematic, as they do leaving a city.
@@ -2916,6 +2937,7 @@ end
 
 -- "Turn off in" a party or raid group: who you're with, not where you are.
 local function IsInDisabledGroup()
+	if ns.db.exitByRow then return false end
 	if ns.InRaid() then
 		return ns.db.offInRaidGroup
 	end
@@ -2932,7 +2954,7 @@ local snoozeUntil = 0
 local switchedOn = false
 local OFF_IN_KEYS = {
 	"stayInCombat", "offInWorld", "offInCities", "offInDungeons", "offInRaids", "offInPvP", "offInBGs", "offInParty",
-	"offInRaidGroup", "offWhileMoving",
+	"offInRaidGroup", "offWhileMoving", "exitByRow",
 }
 local offInWas = {}
 local function OffInChanged()
@@ -2966,9 +2988,12 @@ local function ShouldBeCinematic(now)
 	-- (Asked once a tick: with Start in CineMode off, the Subtle profile, it's
 	-- asked every tick.)
 	local triggered = ns.db.enabled and (ns.db.fadeUI or ns.cineKeyOn or ns.TriggerStartsCine())
+	-- (Exit CineMode's Show in row, exitByRow: on here, off as a place is, and
+	-- straight back as it ends.)
+	local rowOff = triggered and ns.ExitRowOn()
 	if not triggered or not ns.ProfileChosen()
 		or GetTime() < snoozeUntil
-		or IsInDisabledZone() or IsInDisabledGroup() then
+		or rowOff or IsInDisabledZone() or IsInDisabledGroup() then
 		quickStart = false
 		-- (For the log: why CineMode is off. See OnUpdate. The no-trigger
 		-- one's details are worked out only when it's read.)
@@ -2976,15 +3001,24 @@ local function ShouldBeCinematic(now)
 			or (not triggered and noTriggerWhy)
 			or (GetTime() < snoozeUntil and "snoozed")
 			or (not ns.ProfileChosen() and "no profile chosen")
+			or (rowOff and "Exit CineMode's Show in row is on here")
 			or (IsInDisabledZone() and ("turned off here (" .. tostring(ns.GetOptionPlace() or "world") .. ")"))
 			or "turned off in this group"
 		ns.cineOffCode = (not ns.db.enabled and "off") or (not triggered and "notrigger")
 			or (not ns.ProfileChosen() and "profile") or (GetTime() < snoozeUntil and "snoozed")
-			or (IsInDisabledZone() and "place") or "group"
+			or (rowOff and "row") or (IsInDisabledZone() and "place") or "group"
+		ns.exitRowWasOn = rowOff and true or nil
 		return false
 	end
 	if changed then
 		switchedOn = true
+	end
+	-- (The row ended, by a change or by where you are: straight back and
+	-- staying, as after a fight, not after Back into CineMode after. switchedOn
+	-- lasts one tick only: just after a /reload the next tick waited again.)
+	if ns.exitRowWasOn then
+		ns.exitRowWasOn = nil
+		quickStart = true
 	end
 	if IsBusy() then
 		lastBusy = now
@@ -2994,7 +3028,7 @@ local function ShouldBeCinematic(now)
 		if fight then switchedProfile = false end
 		-- (The Calm Timer after it too: it was the wait already.)
 		quickStart = switchedProfile
-			or (not ns.db.stayInCombat and (fight or (ns.InCalm and ns.InCalm()))) and true or false
+			or (not ns.StaysInCombat() and (fight or (ns.InCalm and ns.InCalm()))) and true or false
 		ns.cineOffWhy = "busy (combat, cast, window or cursor)"
 		ns.cineOffCode = "busy"
 		return false
@@ -3016,7 +3050,7 @@ local function ShouldBeCinematic(now)
 		ns.cineOffCode = "moving"
 		return false
 	end
-	if instant or travelCine or not ns.db.offWhileMoving then
+	if instant or travelCine or not ns.db.offWhileMoving or ns.db.exitByRow then
 		lastMovingOff = -math.huge
 	elseif now - lastMovingOff < StillWait() then
 		ns.cineOffWhy = "just moved (Off while moving)"
@@ -3058,6 +3092,8 @@ function ns.CineOffReason()
 		local place = ns.GetOptionPlace()
 		local box = ns.GetPlaceType() == "pvp" and "In battlegrounds" or PLACE_BOX[place] or "In the open world"
 		return L["CineMode is set to stay off here."] .. " " .. exit:format(L[box])
+	elseif code == "row" then
+		return L["Exit CineMode's Show in row is on here."]
 	elseif code == "group" then
 		return L["CineMode is set to stay off in your group."] .. " "
 			.. exit:format(ns.InRaid() and L["In a raid group"] or L["In a party"])
@@ -3069,9 +3105,9 @@ function ns.CineOffReason()
 		return L["CineMode comes back in %d sec (Back into CineMode after)."]
 			:format(math.max(1, math.ceil(ns.cineOffLeft or 1))), "CineMode"
 	elseif code == "busy" then
-		if (InCombatLockdown() or Flag(UnitAffectingCombat("player"))) and not ns.db.stayInCombat then
+		if (InCombatLockdown() or Flag(UnitAffectingCombat("player"))) and not ns.StaysInCombat() then
 			return L["You're in combat."] .. " " .. exit:format(L["In combat"])
-		elseif ns.InCalm and ns.InCalm() and not ns.db.stayInCombat then
+		elseif ns.InCalm and ns.InCalm() and not ns.StaysInCombat() then
 			return L["A fight just ended: CineMode comes back once the Calm Timer runs out."], "CineMode"
 		elseif Flag(UnitIsDead("player")) and not Flag(UnitIsGhost("player")) then
 			return L["You're dead: the UI comes back until you release or get up."]
@@ -3080,9 +3116,9 @@ function ns.CineOffReason()
 		elseif CursorBusy() then
 			return L["You're holding something on the cursor."] .. " " .. exit:format(L["While dragging something"]),
 				"CineMode"
-		elseif not ns.db.stayWithWindows and (AnyShown(REVEAL_WHILE_SHOWN) or AnyShown(REVEAL_ALSO)) then
+		elseif ns.WindowsExit() then
 			return L["A game window is open."] .. " " .. exit:format(L["Opening windows"]), "CineMode"
-		elseif ns.db.revealAtNPCs and AnyShown(REVEAL_AT_NPCS) then
+		elseif ns.NPCsExit() then
 			return L["An NPC's window is open."] .. " " .. exit:format(L["Talking to NPCs"]), "CineMode"
 		end
 		return L["Something just brought the UI back (a fight, a cast or a window)."], "CineMode"
@@ -4613,7 +4649,7 @@ end
 -- On, but out of it for now as Exit CineMode's In combat has it: in a fight,
 -- or its Calm Timer after. (The minimap menu's tick shows it off then.)
 function ns.CineOutForFight()
-	if ns.lastCinematic or ns.cineOffCode ~= "busy" or ns.db.stayInCombat or not ns.IsCineModeOn() then
+	if ns.lastCinematic or ns.cineOffCode ~= "busy" or ns.StaysInCombat() or not ns.IsCineModeOn() then
 		return false
 	end
 	return (InCombatLockdown() or Flag(UnitAffectingCombat("player")) or (ns.InCalm and ns.InCalm())) and true
@@ -5568,7 +5604,7 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		-- to restore nameplate settings until the fight ends.
 		ns.ShowPlatesNow()
 		ns.StopOrbitNow()
-		if ns.db.stayInCombat then
+		if ns.StaysInCombat() then
 			ns.UpdateCVarsForFight()
 		else
 			lastBusy = GetTime()

@@ -4982,7 +4982,7 @@ do
 		local inCombat = fighting
 		local isOn
 		if fighting then
-			if ns.db.stayInCombat then
+			if ns.StaysInCombat() then
 				isOn = ns.IsCombatShowOn
 			end
 		elseif HasAnyTarget() then
@@ -4995,7 +4995,7 @@ do
 			end
 		end
 		-- (Casting at an enemy: the In combat rows as well, see ns.HostileCastLeft.)
-		if not fighting and ns.db.stayInCombat and ns.HostileCastLeft(GetTime()) then
+		if not fighting and ns.StaysInCombat() and ns.HostileCastLeft(GetTime()) then
 			targetIsOn = isOn
 			isOn = CastIsOn
 		end
@@ -5199,7 +5199,7 @@ do
 		end
 		-- (In combat counts while CineMode stays on in fights, for the rows of
 		-- the UI; anyFight: any fight, for the rest.)
-		local stays = anyFight or ns.db.stayInCombat
+		local stays = anyFight or ns.StaysInCombat()
 		-- (Two times: the fight with the Calm Timer after it, In combat; and the
 		-- rest, Out of combat.)
 		if fighting then
@@ -12787,7 +12787,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 	local fighting = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player"))
 	-- (Casting at an enemy: the rows it brings up fade in over what's left of
 	-- the cast, at the Combat fade in time just after it.)
-	local castLeft = cinematic and not fighting and ns.db.stayInCombat and ns.HostileCastLeft(now)
+	local castLeft = cinematic and not fighting and ns.StaysInCombat() and ns.HostileCastLeft(now)
 	if fighting then
 		lastCombatAt = now
 		-- (A buff peek from just before the fight doesn't outlast it; ones

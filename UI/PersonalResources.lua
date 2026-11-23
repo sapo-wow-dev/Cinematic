@@ -875,7 +875,7 @@ function ns.CreatePersonalResourcesPanel(kit)
 	-- combat, After combat, Out of combat. A link between two columns: the right one goes by the
 	-- left one's. A frame this client hasn't, no row.
 	stack:Header(content, L["Keep up"])
-	local function Fights(db) return db.stayInCombat end
+	local function Fights(db) return ns.StaysInCombat(db) end
 	local SHARES = L["Stays up while it's below this amount."]
 	local COLUMNS = {
 		{ L["In combat"], L["While you're in a fight."] .. " " .. SHARES .. " " ..

@@ -278,6 +278,7 @@ Dev\ListFoldTest.lua
 Dev\KitCheckTest.lua
 Dev\ReachFightTest.lua
 Dev\PrdKillTest.lua
+Dev\ExitRowTest.lua
 Dev\PerfTest.lua
 Dev\ResetPopupTest.lua
 Dev\KeybindSwitchTest.lua

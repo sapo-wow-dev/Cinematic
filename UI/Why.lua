@@ -396,7 +396,7 @@ function ColumnsOf(key, out, always, anyFight, page)
 		Add(out, on and "on" or "block", L["Rule: %s (the rule decides, not the ticks)"]:format(ColorRule(text, facts)), page)
 		return
 	end
-	local stays = anyFight or ns.db.stayInCombat
+	local stays = anyFight or ns.StaysInCombat()
 	local found = false
 	if always == nil then always = ns.IsCineShowOn(key) end
 	if always then

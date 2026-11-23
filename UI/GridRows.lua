@@ -1168,7 +1168,7 @@ function ns.ListRowParts(Key, columns, columnTips, setAlways, opts)
 	for c = 2, #columns do
 		if columns[c][3] == "combatShow" and not omit.combatShow then combatColumn = c end
 	end
-	local stays = function() return ns.GetDB().stayInCombat and true or false end
+	local stays = function() return ns.StaysInCombat(ns.GetDB()) end
 
 	local menus = { {}, {}, {} }
 	for c = 2, #columns do
@@ -1340,7 +1340,7 @@ function ns.GridTable(content, columnTop, rows, kit)
 				and L["Shows it whenever its frame shows, even in CineMode."]
 				or L["Shows it all through CineMode instead of hiding it."] },
 			changed = item.apply,
-			enabled = item.showKey and function() return kit.RowShown(item) end or nil,
+			enabled = (item.showKey or item.usable) and function() return kit.RowShown(item) end or nil,
 		}
 		if not item.alwaysOnly then
 			spec.menus = parts.menus

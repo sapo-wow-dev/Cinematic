@@ -5700,6 +5700,7 @@ local function CreateRevealPanel()
 		{ L["Exit CineMode"], L["What takes you out of CineMode: fights, places, groups, moving and windows."] },
 		{ L["General"], L["The minimap button, /cine hints, language and the menus' look."] },
 	}, "CineMode/settings")
+	ns.cineExitTab = subHosts[2] -- (Dev/ExitRowTest.lua: its openSection opens it)
 	-- (Search opens the nearest tab only: Settings first, then this one.)
 	for _, subHost in ipairs(subHosts) do
 		local open = subHost.openSection
@@ -5852,14 +5853,21 @@ local function CreateRevealPanel()
 	local hostileCast = Check(content, "fadeInOnHostileCast", L["Cast fade into combat"],
 		L["Casting at an enemy out of combat brings up your combat frames."])
 	stack:Add(hostileCast, "check")
-	GreyUnless(hostileCast, function(db) return db.stayInCombat end)
+	GreyUnless(hostileCast, function(db) return ns.StaysInCombat(db) end)
 
 	-- What takes you out of CineMode: fights, places, groups and moving (from
 	-- the main page, 2026-11-11), then windows (the rest of the section set
 	-- aside above): its own tab. (Windows and NPCs, made above, go with it.)
 	TakeInto(1)
 	for _, control in ipairs({ windows, npcs }) do control:SetParent(subHosts[2]) end
+	-- Two columns of boxes (2026-11-21): fights and places, When moving at
+	-- the bottom of the first with its sliders; the rest of the places,
+	-- groups, windows and NPCs in the second.
 	stack = Stack(TabTop(2), "label", true)
+	local column2Top = CreateFrame("Frame", nil, subHosts[2])
+	column2Top:SetSize(1, 1)
+	column2Top:SetPoint("TOPLEFT", subHosts[2], "TOPLEFT", 240, 0)
+	local stack2 = Stack(column2Top, "label", true)
 	SetSection(content, L["Exit CineMode"]) -- (no heading: the tab says it; for search and the modules)
 
 	-- Stored the other way round (stayInCombat), as the Standard Frames page's lists apply while staying.
@@ -5892,15 +5900,15 @@ local function CreateRevealPanel()
 	stack:Add(pvp, "check")
 
 	local bgs = Check(content, "offInBGs", L["In battlegrounds"], L["Battlegrounds and arenas."])
-	stack:Add(bgs, "check")
+	stack2:Add(bgs, "check")
 
 	local party = Check(content, "offInParty", L["In a party"],
 		L["Keep the normal UI while you're in a party (but not a raid group)."])
-	stack:Add(party, "check")
+	stack2:Add(party, "check")
 
 	local raidGroup = Check(content, "offInRaidGroup", L["In a raid group"],
 		L["Keep the normal UI while you're in a raid group, wherever you are."])
-	stack:Add(raidGroup, "check")
+	stack2:Add(raidGroup, "check")
 
 	local moving = Check(content, "offWhileMoving", L["When moving"],
 		L["Walking or riding around brings the UI back."],
@@ -5913,16 +5921,38 @@ local function CreateRevealPanel()
 	-- (Indented under Moving, as its sub-options.)
 	local movingStill = Slider(content, "movingStillAfter", L["Back after stopping"], 1, 60, 1, L["%d sec"])
 	Tooltip(movingStill, L["CineMode comes back once you've stood still this long."])
-	GreyUnless(movingStill, function(db) return db.offWhileMoving end)
+	GreyUnless(movingStill, function(db) return db.offWhileMoving and not db.exitByRow end)
 	stack:Add(movingStill, "slider", 16)
 
 	local movingBack = Slider(content, "movingBackAfter", L["Back after moving"], 1, 60, 1, L["%d sec"])
 	Tooltip(movingBack, L["CineMode comes back once you've kept moving this long."])
-	GreyUnless(movingBack, function(db) return db.offWhileMoving end)
+	GreyUnless(movingBack, function(db) return db.offWhileMoving and not db.exitByRow end)
 	stack:Add(movingBack, "slider", 16)
 
-	stack:Add(windows, "check")
-	stack:Add(npcs, "check")
+	stack2:Add(windows, "check")
+	stack2:Add(npcs, "check")
+
+	-- Or a Show in row instead (exitByRow): ticked, the boxes above grey and
+	-- count for nothing (Core.lua: ns.StaysInCombat, ns.ExitRowOn), the row
+	-- deciding where CineMode exits; unticked, the row greys.
+	local function BoxesUsed(db) return not db.exitByRow end
+	for _, box in ipairs({ combat, world, cities, dungeons, raids, pvp, bgs, party, raidGroup, moving, windows, npcs }) do
+		GreyUnless(box, BoxesUsed)
+	end
+	local useRow = Check(content, "exitByRow", L["Use a Show in row instead"],
+		L["The row below picks where CineMode exits, in place of the boxes above."], function(value)
+			ns.GetDB().exitByRow = value
+			Refresh()
+		end)
+	stack:Add(useRow, "check")
+	ns.ShowTable(content, useRow, {
+		opts = { quiet = true, anyFight = true },
+		{ key = ns.EXIT_ROW, label = L["Exit CineMode"], alwaysKey = "cineExitAlways",
+			alwaysOn = function() return ns.GetDB().cineExitAlways end,
+			setAlways = function(value) ns.GetDB().cineExitAlways = value end,
+			alwaysTip = L["Keeps CineMode off everywhere."],
+			usable = function() return ns.GetDB().exitByRow == true end },
+	}, L["Exit CineMode"])
 
 	-- Allow outside CineMode's ticks: set from each page's row on the hubs'
 	-- tabs now (2026-11-17), recorded here as this page's, in their section
@@ -7800,7 +7830,10 @@ end
 -- on unless false): a box before its name, the name moved over for it.
 -- Unticked, the row's other controls grey (RowShown).
 local SHOW_BOX_ROOM = 20
+-- (item.usable(): false greys the row too, with no box: Exit CineMode's
+-- row while its boxes are used instead.)
 local function RowShown(item)
+	if item.usable and not item.usable() then return false end
 	return not item.showKey or ns.GetDB()[item.showKey] ~= false
 end
 local function ShowBox(content, item, rowLabel)
@@ -8873,7 +8906,7 @@ local function ShowTable(content, anchor, rows, ...)
 				self:SetChecked(isOn(item.key))
 				-- (A row with a rule that reads: the rule decides, its ticks greyed.)
 				self:SetEnabled(RowShown(item) and not ns.RuleTest(item.key) and (c == 1
-					or (not alwaysOn(item.key) and (not needsStay or db.stayInCombat))))
+					or (not alwaysOn(item.key) and (not needsStay or ns.StaysInCombat(db)))))
 			end
 		end
 		lastLabel = rowLabel
