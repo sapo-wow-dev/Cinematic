@@ -687,12 +687,42 @@ local function WindowCount(chatFrame)
 	if type(count) == "number" and not (issecretvalue and issecretvalue(count)) then return count end
 end
 
+-- Where a window's lines are up to: its newest line and the one before it.
+-- Its line count alone can't tell a newer line came in once the window is
+-- full: the game keeps 128 lines per window, and the count stays 128 (audit
+-- 2026-11-23). (nil if it can't be read.)
+local function WindowMark(chatFrame)
+	local count = WindowCount(chatFrame)
+	if not (count and chatFrame.GetMessageInfo) then return nil end
+	local newest = count > 0 and chatFrame:GetMessageInfo(count) or nil
+	local prev = count > 1 and chatFrame:GetMessageInfo(count - 1) or nil
+	if (count > 0 and not Plain(newest)) or (count > 1 and not Plain(prev)) then return nil end
+	return { count = count, newest = newest, prev = prev }
+end
+
+-- How many lines came into a window since its mark: the mark's two lines
+-- found again, newest first (nil if it can't tell: unreadable, cleared, or
+-- more than LINE_LOOKBACK new ones).
+local function LinesSince(chatFrame, mark)
+	local count = mark and WindowCount(chatFrame)
+	if not count or count < mark.count then return nil end
+	if mark.count == 0 then return count end
+	local function Is(i, want)
+		local line = i >= 1 and chatFrame:GetMessageInfo(i) or nil
+		if want == nil then return line == nil end
+		return Plain(line) and line == want
+	end
+	for k = 0, math.min(LINE_LOOKBACK, count - 1) do
+		if Is(count - k, mark.newest) and Is(count - k - 1, mark.prev) then return k end
+	end
+	return nil
+end
+
 -- Whether the copy's lines still sit where the window draws its own: no
 -- line came into the window after the last one copied (loot, another
 -- channel) and it's scrolled to the bottom.
 local function CopyLinesUp(chatFrame, copy)
-	local count = WindowCount(chatFrame)
-	if not (count and copy.count == count) then return false end
+	if not (copy.mark and LinesSince(chatFrame, copy.mark) == 0) then return false end
 	if chatFrame.AtBottom and not ns.Flag(chatFrame:AtBottom()) then return false end
 	return true
 end
@@ -779,6 +809,7 @@ local function ShowCopy(chatFrame, line, r, g, b, text)
 	local count = WindowCount(chatFrame)
 	local newest = count and count > 0 and chatFrame.GetMessageInfo and chatFrame:GetMessageInfo(count)
 	copy.count = Plain(newest) and newest == line and count or nil
+	copy.mark = copy.count and WindowMark(chatFrame) or nil
 	ns.SetOnUpdate(copyWatch, OnCopyWatch)
 end
 
