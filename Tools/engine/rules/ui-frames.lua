@@ -1302,4 +1302,17 @@ return {
     proof = "_forever_\\Logs read 2026-11-23: FrameXML.log held 'Interface/AddOns/CinematicDev/Dev/PaceTest.lua:373: 'end' expected (to close 'function' at line 101)' from 11-21 07:50",
     source = "Tools/console-findings.md",
   },
+  {
+    id = "retail.savedvariables.global-swapped-before-reload",
+    area = "ui",
+    clients = { "retail", "forever" },
+    api = { "SavedVariables", "ReloadUI", "PLAYER_LOGOUT" },
+    when = "an addon assigns a new table to its SavedVariables global (CinematicDB = t) before a /reload",
+    rule = "The game saves whatever table the global names at logout: the new one comes back after the /reload, and writes made later to the old table (still held in other variables) are lost. PLAYER_LOGOUT handlers still run on the old session's state (the old table) before the save.",
+    works = { "swap the global, then reload: the reset's kept table, and putting a copy back the same way" },
+    status = "tested",
+    tested = "2026-11-23",
+    proof = "/cine debug resetcvars (Dev/ResetCvarsTest.lua) retail run 1: the reset's kept table came back after reload 1 (profiles 2, the copy in it), the copy put back as CinematicDB came back after reload 2 (profile Shoulder Cam, 63 game settings as before); forever run 2 the same (3 profiles, 64 game settings as before)",
+    source = "Tools/tests/reset-cvars.md",
+  },
 }

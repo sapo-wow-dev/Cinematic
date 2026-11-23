@@ -281,6 +281,7 @@ Dev\PrdKillTest.lua
 Dev\ExitRowTest.lua
 Dev\PerfTest.lua
 Dev\ResetPopupTest.lua
+Dev\ResetCvarsTest.lua
 Dev\KeybindSwitchTest.lua
 Dev\LoadPartsTest.lua
 Dev\PageCostTest.lua
