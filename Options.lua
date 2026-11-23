@@ -11516,10 +11516,21 @@ local function CreatePlatesPanel()
 			serviceShow:SetPoint("LEFT", serviceShowLabel, "LEFT", GRID_LABEL + 30, 0)
 			Tooltip(serviceShow, serviceShowTip)
 		end
+		-- Far, behind walls: past 28 yards how much of a dimmed (behind a wall,
+		-- the game says, often wrongly that far) Service NPCs name still shows.
+		-- 0 hides it. PlateParts' plateSightNear.service.
+		local serviceFarLabel = Label(content, "GameFontHighlight", L["Far, behind walls"])
+		serviceFarLabel:SetPoint("TOPLEFT", serviceShowLabel, "BOTTOMLEFT", 0, -24)
+		local serviceFar = Slider(content, "nameServiceFarDim", "", 0, 100, 5, L["%d%%"])
+		serviceFar:SetPoint("LEFT", serviceFarLabel, "LEFT", GRID_LABEL + 34, 0)
+		-- (Its value beside it, on the row's line, not above it under Show.)
+		serviceFar.title:ClearAllPoints()
+		serviceFar.title:SetPoint("LEFT", serviceFar, "RIGHT", 10, 0)
+		Tooltip(serviceFar, L["Past 28 yards, how much a title the game dims as behind a wall still shows."])
 		-- How their titles look (brackets, icons in place of titles): Name
 		-- Style's Service NPCs row, Second line tab. Its link here.
 		local serviceLookLabel = Label(content, "GameFontHighlight", L["Their look"])
-		serviceLookLabel:SetPoint("TOPLEFT", serviceShowLabel, "BOTTOMLEFT", 0, -22)
+		serviceLookLabel:SetPoint("TOPLEFT", serviceFarLabel, "BOTTOMLEFT", 0, -24)
 		local serviceLook = ns.StyleLink(content, serviceLookLabel, "Name Style",
 			L["Set brackets and icons for titles on the Name Style page."],
 			Tooltip, L["Name Style"], serviceLookLabel)

@@ -428,7 +428,23 @@ local SIGHT_CLEAR = 0.2 -- seconds (the fade itself: the page's Fade time)
 -- this file is near Lua's cap of locals.)
 -- back: [plate] = true while its name showed at once that way (for
 -- /cine debug npcnames).
-ns.plateSightNear = { is = {}, at = {}, left = {}, back = {}, RETURN = 1.5, pruneAt = 0 }
+-- service: [plate] = true while the Service NPCs row is what keeps its name.
+-- Past 28 yards those alone fade while dimmed, to the Friendly NPCs tab's
+-- "Far, behind walls" (nameServiceFarDim, 0 hides them): a knowing hack, the
+-- far dim is often wrong (a vendor in plain view can lose its title too), but
+-- titles showing through a whole building were worse (the user, 2026-11-23).
+-- far: [plate] = true while faded that way (for /cine debug npcnames).
+ns.plateSightNear = { is = {}, at = {}, left = {}, back = {}, service = {}, far = {}, RETURN = 1.5, pruneAt = 0 }
+
+-- How far down a plate's name fades while its plate is dimmed: 0 within 28
+-- yards; past them only a Service NPCs name (out of fights), to its setting;
+-- nil for none (shown dimmed or not). nearBy: plateSightNear.is[plate].
+function ns.PlateSightFloor(nearBy, service, fighting, setting)
+	if nearBy then return 0 end
+	if not service or fighting then return nil end
+	local value = tonumber(setting) or 0
+	return math.min(1, math.max(0, value / 100))
+end
 
 -- A name's size (times the plate's) and height at the camera's distance
 -- now, for a unit away yards from you (nil: UNIT_YARDS); retail's, as the
@@ -3337,6 +3353,7 @@ watcher:SetScript("OnEvent", function(_, event, unit)
 		if gone then gone.size, gone.px = nil, nil end
 		sight[plate], dimSince[plate], clearSince[plate] = nil, nil, nil
 		ns.plateSightNear.is[plate], ns.plateSightNear.at[plate] = nil, nil
+		ns.plateSightNear.service[plate], ns.plateSightNear.far[plate] = nil, nil
 		if Usable(plate.UnitFrame) then
 			CentreName(plate.UnitFrame, false)
 			OwnName(plate, nil)
@@ -3376,7 +3393,7 @@ end)
 -- From Effects, with each plate's alpha: how much of it the plate's parts
 -- other than the name get (body, 0 to 1) and the name at least (name), for a
 -- plate held up for its name alone (Names rows: see Effects' nameLevel).
-function ns.SetPlateBody(plate, body, name, mark, text)
+function ns.SetPlateBody(plate, body, name, mark, text, service)
 	if not plate then
 		return
 	end
@@ -3384,6 +3401,8 @@ function ns.SetPlateBody(plate, body, name, mark, text)
 	name = name > 0 and name or nil
 	mark = mark and mark > 0 and mark or nil
 	text = name and text and text < 1 and text or nil
+	-- (Kept by the Service NPCs row: see plateSightNear.service.)
+	ns.plateSightNear.service[plate] = name and service == 1 or nil
 	if bodyShare[plate] == body and nameShare[plate] == name and markShare[plate] == mark and textShare[plate] == text then
 		return
 	end
@@ -3439,8 +3458,12 @@ ns.SetOnUpdate(farWatch, ns.Profiled("Plate names", function(self, elapsed)
 			near.is[plate], near.at[plate] = close, now + FAR_CHECK
 		end
 		-- (The names test's no sight check step: never dimmed. NamesTest.lua.)
-		local dimmed = not ns.namesTestNoSight and near.is[plate] and (bodyShare[plate] or 1) < 0.5 and okAlpha
+		-- (floor: how far down it fades, nil for not at all: past 28 yards only
+		-- Service NPCs names. See plateSightNear.service.)
+		local floor = ns.PlateSightFloor(near.is[plate], near.service[plate], fighting, ns.db.nameServiceFarDim)
+		local dimmed = not ns.namesTestNoSight and floor and (bodyShare[plate] or 1) < 0.5 and okAlpha
 			and Known(alpha) and alpha < 0.99
+		near.far[plate] = dimmed and not near.is[plate] or nil
 		if dimmed then
 			dimSince[plate], clearSince[plate] = dimSince[plate] or now, nil
 		else
@@ -3450,7 +3473,8 @@ ns.SetOnUpdate(farWatch, ns.Profiled("Plate names", function(self, elapsed)
 			end
 		end
 		local since = dimSince[plate]
-		local target = (since and (level < 1 or now - since >= Style("plateNameHideDelay"))) and 0 or 1
+		local low = floor or 0
+		local target = (since and (level < 1 or now - since >= Style("plateNameHideDelay"))) and low or 1
 		if level ~= target then
 			level = ns.Approach(level, target, elapsed, Style("plateNameFadeTime"))
 			sight[plate] = level < 1 and level or nil
@@ -3490,9 +3514,10 @@ function ns.DescribePlateSight(plate)
 	local okAlpha, alpha = pcall(plate.GetAlpha, plate)
 	local text = plate.UnitFrame and texts[plate.UnitFrame]
 	local since = dimSince[plate]
-	return ("plateAlpha %s, sight %s, near %s, dimmed for %s, name share %s, body share %s, our text %s"):format(
+	return ("plateAlpha %s, sight %s, near %s, service %s, far fade %s, dimmed for %s, name share %s, body share %s, our text %s"):format(
 		okAlpha and Known(alpha) and ("%.2f"):format(alpha) or "?", tostring(sight[plate] or "clear"),
-		tostring(ns.plateSightNear.is[plate]), since and ("%.1fs"):format(GetTime() - since) or "no",
+		tostring(ns.plateSightNear.is[plate]), tostring(ns.plateSightNear.service[plate] or false),
+		tostring(ns.plateSightNear.far[plate] or false), since and ("%.1fs"):format(GetTime() - since) or "no",
 		tostring(nameShare[plate]), tostring(bodyShare[plate]),
 		text and (text:IsShown() and ("a%.2f"):format(text:GetAlpha()) or "hidden") or "none"),
 		-- (Not GetEffectiveAlpha: it errored on our text, 2026-11-15 run.)

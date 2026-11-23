@@ -82,6 +82,8 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `combattextkeep.lua`: Combat Text Style's game-number settings kept as its rows say: a reset of the game's options
   (an outside write) put back, Game's handing them over, the page off and Keep yours letting go; a plain "your
   change wins" set still lets go.
+- `servicefardim.lua [forever|retail]`: the Friendly NPCs tab's "Far, behind walls" slider (nameServiceFarDim):
+  past 28 yards only Service NPCs names fade to it while their plates are dimmed; near ones hide; none in fights.
 - `notchgap.lua <forever|retail>`: full-screen effects (ns.CoverWorld: letterbox, tint edges, death screen, Focus,
   low health, teleport) reach up over a Mac's camera notch strip above UIParent, at UI scale 1 and 0.8, and come back
   down when it goes.

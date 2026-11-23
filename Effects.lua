@@ -2875,7 +2875,9 @@ function PlateAlphas(unit, plate, besidesHeal)
 	-- (The Style hub's Nameplates page: its row's Opacity, over the whole plate;
 	-- Chat Cam's Ultra immersive fading every plate out.)
 	local opacity = (ns.PlateStyleOpacity and ns.PlateStyleOpacity(plate) or 1) * (1 - immersiveLevel)
-	return alpha * opacity, body / alpha, name / alpha, mark / alpha, text
+	-- (Last: 1 when the Service NPCs row is what keeps the name, for its far
+	-- behind-walls fade in PlateParts. A number: /cine debug names concats these.)
+	return alpha * opacity, body / alpha, name / alpha, mark / alpha, text, name > own and 1 or 0
 end
 
 -- (For /cine debug names: why a plate's name is kept or not.)
@@ -2894,10 +2896,10 @@ function ns.DescribePlateNameKept(unit, plate)
 		table.concat({ PlateAlphas(unit, plate) }, "/"))
 end
 
-local function SetPlateAlphas(plate, alpha, body, name, mark, text)
+local function SetPlateAlphas(plate, alpha, body, name, mark, text, service)
 	-- (Showing nothing: asleep, its parts' work skipped. PlateSleep.lua.)
 	ns.plateSleep.Decide(plate, alpha, name, mark)
-	ns.SetPlateBody(plate, body, name, mark, text)
+	ns.SetPlateBody(plate, body, name, mark, text, service)
 	ns.SetPlateAlpha(plate, alpha, alpha * body)
 	ns.plateSleep.After(plate)
 end
@@ -2933,9 +2935,9 @@ end
 
 -- Sets a plate's alpha as worked out now (or lets go of it at full).
 local function ApplyPlateAlpha(plate, unit)
-	local alpha, body, name, mark, text = PlateAlphas(unit, plate)
+	local alpha, body, name, mark, text, service = PlateAlphas(unit, plate)
 	if alpha < 1 or body < 1 or PlatesFiltered() then
-		SetPlateAlphas(plate, alpha, body, name, mark, text)
+		SetPlateAlphas(plate, alpha, body, name, mark, text, service)
 	else
 		ns.SetPlateBody(plate, 1, 0)
 		if plate.UnitFrame and plate.UnitFrame.cinematicAlpha and ns.Reachable(plate) then

@@ -1940,6 +1940,11 @@ DEFAULTS.nameServiceBrackets = false -- the < > round NPC titles under names
 DEFAULTS.nameServiceBracketsWithName = true -- ...kept while the NPC's name shows over its title
 -- Trainers: another class's trainer (<Hunter Trainer>) left out.
 DEFAULTS.nameServiceClassOnly = true
+-- Past 28 yards the game's out-of-sight dim can't be trusted (it dims units in
+-- plain view too), so names stay up there, showing through walls. This is how
+-- much (0 to 100) of a far Service NPCs name still shows while its plate is
+-- dimmed (PlateParts' far watch): 0 hides it, 100 leaves it as before.
+DEFAULTS.nameServiceFarDim = 0
 -- Each kind's icon in place of titles (PlateGuild's SERVICE_ICONS); Other's
 -- names instead.
 DEFAULTS.nameServiceIcons = false

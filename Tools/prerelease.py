@@ -82,6 +82,8 @@ OFFLINE_TESTS = [
     ("Cast Bars pages show the unit frame over their cast bars, retail", "Tools/offline/castframe.lua", "retail"),
     ("Mac notch covers, forever", "Tools/offline/notchgap.lua", "forever"),
     ("Mac notch covers, retail", "Tools/offline/notchgap.lua", "retail"),
+    ("Far Service NPCs names fade behind walls, forever", "Tools/offline/servicefardim.lua", "forever"),
+    ("Far Service NPCs names fade behind walls, retail", "Tools/offline/servicefardim.lua", "retail"),
     ("XP text font per character at login", "Tools/offline/xpfont.lua"),
     ("music volume never kept near 0", "Tools/offline/musicvolume.lua"),
     ("Shoulder Cam off in a fight: soft target given back after", "Tools/offline/shoulderfightoff.lua"),
