@@ -181,6 +181,26 @@ fresh.plateInCitiesFriends = true -- (an existing key: no __newindex, still read
 Check(p.FriendRowsTicked("Cities").plate.Friends == true, "ticked again: seen")
 Check(not p.FriendRowsTicked("Raids").plate.Friends, "another place's column: not here")
 Check(getmetatable(fresh) and rawget(fresh, "plateInCitiesFriends") == true, "the key is saved in the table itself")
+-- (Any other new key leaves the list as it is: a fight's sound cue adds and
+-- takes away combatHeldAmbience at every fight start and end, and relisting
+-- all the settings for it was a 3.8 ms hitch out of each fight.)
+local list = p.FriendRowsTicked("Cities").list
+for _ = 1, 3 do
+	fresh.combatHeldAmbience = "1"
+	p.FriendRowsTicked("Cities")
+	fresh.combatHeldAmbience = nil
+	p.FriendRowsTicked("Cities")
+end
+fresh.someOtherNewSetting = 5
+Check(p.FriendRowsTicked("Cities").list == list, "a new key that isn't plate.../name...: the list isn't made again")
+Check(p.FriendRowsTicked("Cities").plate.Friends == true, "and the answers still hold")
+fresh.nameInCitiesFriends = true -- (a new name... key: made again)
+local after = p.FriendRowsTicked("Cities")
+Check(after.list ~= list and after.name.Friends == true, "a new name... key: the list is made again and sees it")
+list = after.list
+fresh.plateInRaidsFriends = true -- (a new plate... key: made again)
+Check(p.FriendRowsTicked("Raids").list ~= list and p.FriendRowsTicked("Raids").plate.Friends == true,
+	"a new plate... key: the list is made again and sees it")
 ns.db = realDb
 
 -- Timing: one refresh's worth (the six row questions) old and new.

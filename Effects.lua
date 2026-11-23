@@ -4070,7 +4070,16 @@ end
 local BYTE_P, BYTE_N = ("p"):byte(), ("n"):byte()
 local function NewKey(t, key, value)
 	rawset(t, key, value)
-	friendScan.stale = true
+	-- (Only a plate.../name... key can be a row column, so only one of those
+	-- makes the list again. A fight's sound cue adds combatHeldAmbience at
+	-- every fight start and end: that relisted all ~8,300 keys, 3.8 ms, on the
+	-- first pass out of each fight. Tools/perf/ledger.md 2026-11-23.)
+	if not friendScan.stale and type(key) == "string" then
+		local first = key:byte(1)
+		if first == BYTE_P and key:find("^plate") or first == BYTE_N and key:find("^name") then
+			friendScan.stale = true
+		end
+	end
 end
 -- The row columns' keys: { key, head, row, place or false, pvp only }, flat.
 local function ListKeys(db)
