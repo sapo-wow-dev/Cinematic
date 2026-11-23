@@ -2553,6 +2553,50 @@ local hooked = setmetatable({}, { __mode = "k" })
 local Dress
 local HEALTH_GREEN = { 0, 0.8, 0 }
 
+-- A game set on a bar with nothing of ours on it (the game's fill, color and
+-- border there): its frame dressed once a moment later, not at once. The
+-- target of target's frame sets its power bar's fill and color again every
+-- frame it shows (TargetOfTargetMixin's OnUpdate, UnitFrameManaBar_UpdateType),
+-- and each set dressed all of the frame: twice a frame in fights, perf
+-- 2026-11-23. A bar with ours on it is still dressed at once (the game's set
+-- just covered ours). Fix card Tools/audits/2026-11-23-tot-redress.md.
+local later = { queued = {}, run = {}, WAIT = 0.2 }
+function later.Plain(bar)
+	local saved = own[bar]
+	if saved and (saved.ours or saved.colored or saved.shaded) then return false end
+	if skins[bar] and skins[bar]:IsShown() then return false end
+	local health = healthState[bar]
+	return not (health and health.byHealth)
+end
+function later.Dress(info)
+	if later.queued[info] then return end
+	later.queued[info] = true
+	local run = later.run[info]
+	if not run then
+		run = function()
+			later.queued[info] = nil
+			Dress(info)
+		end
+		later.run[info] = run
+	end
+	C_Timer.After(later.WAIT, run)
+end
+-- (Whether the frame still shows the unit it showed at its last set: a new one,
+-- or a name that can't be read, is dressed at once, its name color and the rest.)
+later.unit = setmetatable({}, { __mode = "k" })
+function later.SameUnit(frame)
+	local ok, name = pcall(UnitName, frame and frame.unit)
+	if not (ok and Readable(name) and name) then return false end
+	if later.unit[frame] == name then return true end
+	later.unit[frame] = name
+	return false
+end
+-- (The game's set on a bar: ours at once, or the plain bar's frame a moment later.)
+function later.GameSet(bar, info, frame)
+	if dressing then return end
+	if later.Plain(bar) and later.SameUnit(frame) then later.Dress(info) else Dress(info) end
+end
+
 -- Game frame -> its entry, as last dressed (the portrait hook's lookup, so
 -- it doesn't rebuild every list on each portrait update; refilled by
 -- ns.RefreshUnitStyle on the roster and Edit Mode events).
@@ -2634,11 +2678,11 @@ local function DressFrame(info)
 				local second = frame == _G.PlayerFrame and _G.AlternatePowerBar
 				for _, bar in ipairs({ health or false, power or false, second or false }) do
 					if bar and bar.SetStatusBarTexture then
-						hooksecurefunc(bar, "SetStatusBarTexture", function() if not dressing then Dress(info) end end)
+						hooksecurefunc(bar, "SetStatusBarTexture", function(self) later.GameSet(self, info, frame) end)
 					end
 				end
 				if health and health.SetStatusBarColor then
-					hooksecurefunc(health, "SetStatusBarColor", function() if not dressing then Dress(info) end end)
+					hooksecurefunc(health, "SetStatusBarColor", function(self) later.GameSet(self, info, frame) end)
 				end
 				-- (By health: its color again as its health changes.)
 				if health and health.SetValue then
@@ -2667,9 +2711,12 @@ local function DressFrame(info)
 							saved.color = { r, g, b }
 							if Readable(g) and Readable(b) and not (r > 0.95 and g > 0.95 and b > 0.95) and not PowerOwnColor(frame.unit, saved.color) then
 								ns.Log("style", ("power bar: game set %.2f %.2f %.2f, not the unit's power color"):format(r, g, b))
+								-- (Not its power's color, a green mana bar: ours at once.)
+								Dress(info)
+								return
 							end
 						end
-						Dress(info)
+						later.GameSet(power, info, frame)
 					end)
 					-- (And whatever else turns it: checked as the power changes.)
 					local function Keep() KeepColor(power, frame.unit, function() Dress(info) end) end

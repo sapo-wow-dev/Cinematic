@@ -26,6 +26,9 @@ Tools/perf/reports/.
 | 2026-11-22 | 5. A shown GameTooltip held the tick's full pace (56% of frames in a city), blocking fix 3 | Held only while the Tooltips page handles tooltips (idleTick.TooltipHolds + ns.TooltipsHandled; its ns.UpdateTooltip is the only tick step reading it); test idletick.lua (tooltip cases) | fix 3's saving: ~24 -> ~10-14 ticks/s standing still (moving still holds it, 20%) | - | 13:33 (open world): no "tooltip shown" busy reason left. Holds now: fight 48%, settling after PLAYER_TARGET_CHANGED 39% (expected) |
 | 2026-11-22 | 6. Calm Timer worked the fight frames list's rows out on every pass (4-6 ms, 8/s; 10 of 12 slow calls in the 13:33 fight run) | tickTables.fightTicks kept while `fighting` (fight or Calm Timer), made afresh once at PLAYER_REGEN_ENABLED, which now also stamps lastCombatAt (Frames.lua); test combatshownhold.lua: 298 rows -> 0 a Calm Timer pass | the 9-13 ms Calm Timer hitches down to ~5-8 ms (the list's ~4 ms gone; the rest is UpdateFrames' hidden 6 ms) | - | 14:11 (fights 79%): rows worked out down 85-92% (IsCineShowOn 4.13 -> 0.63/frame, IsCombatShowOn 3.21 -> 0.25), but GetCombatShownFrames 0.42 -> 0.46 ms a call, worst 6.3 -> 10.5. **No time saved**: the rows' ticks were not its cost. Kept (harmless, fewer calls) |
 | 2026-11-22 | 7. Quest walk (Show just that quest) walked the game's whole tracker every frames pass, ~0.8 ms, settled walks changing nothing | Walk only while the others fade, the tracker's own alpha changes, 2 s after a quest log/watch/zone/scenario change or a reveal (focus.watch, Focus), a timer / Close the gaps / others up, and once a second else; skipped passes reuse the last walk's answers (Frames.lua QuestFocusTick); test questwalkskip.lua; bench questwalk now settled with questRevealTime 60 | ~0.8 ms off each frames pass while a quest is shown alone (1.55 -> ~0.8 ms in the bench) | - | 15:31 perf: walked 47 of 47 passes, no gain: Close the gaps (questRevealCollapse, on for the user) kept every pass walking. Now its copies stay as drawn between walks too; walk reasons counted ("quest focus: walked for ..."); the perf test fails if settled passes don't mostly skip. **15:40 perf: quest walk 1.071 -> 0.035 ms a call (-97%); held 10 s it walked 10 of 56 passes (3 tracker changes, 7 once a second), the game putting back 0 of 200 parts. Confirmed.** |
+| 2026-11-23 | 8. Friendly rows' key list relisted (~8,300 keys, 3.8 ms) on the first plates pass out of every fight: the fight sound cue adds combatHeldAmbience, and ANY new key marked the list stale | Only a new plate.../name... key marks it (Effects.lua NewKey); test friendrows.lua (+4 checks: a cue's key 3 times, another new key: list kept; new name/plate keys: relisted and seen) | ~3.8 ms off the slow frame at each fight's end (6 in the 17:10 run) | - | 17:57 normal run (fixes 8-10 loaded, 17:41 reload): UpdatePlates worst 1.43 ms, UpdateCVars 3.89 (the name sets, lead 1). Only ONE fight end in it: likely, not confirmed |
+| 2026-11-23 | 9. Plates pass never quiet in the Calm Timer with a kind ticked for fights (~27 full passes a second, ~0.23 ms a frame deep) | Kinds held at 0 after a fight count as settled like a fight's; SameAsBefore has the Calm Timer in its inputs (its end brings a pass at once); card 2026-11-23-calm-plates-settle.md, test calmplatesmatrix.lua | ~0.08-0.15 ms a frame real in Calm Timers | - | - |
+| 2026-11-23 | 10. Target of target's frame dressed whole twice a frame (its OnUpdate resets the power bar's fill and color; ~38 StyleLook a frame) | A game set on a bar with nothing of ours dresses the frame once 0.2 s later (at once for a new unit, a green mana color, or a bar with ours); card 2026-11-23-tot-redress.md, test totredressmatrix.lua | est. 0.06-0.15 ms a frame real while a ToT shows (~0.48 deep) | - | Not measurable in a normal run (DressFrame untimed). Limit: an enemy ToT's name is secret in Forever fights (secrets-combat rule): then still dressed at once, no saving |
 | 2026-11-22 | 4. FindQuestieIcon closure + table per plate | Children as varargs (PickQuestieIcon); test questieicon.lua: 0 KB per 1000 looks | ~14 KB/s at 40 plates, with Questie loaded only (the sweep is gated on QuestieLoader; never ran without it) | - | - |
 
 ## Open leads
@@ -233,6 +236,30 @@ Expected: ~0.8 ms off each frames pass while a quest is shown alone.
 slower than 15:26 at 38 fps (one run each: noise between runs is that big;
 compare steps within a run, or several runs). Quest walk 0.933 ms, walked
 47/47: the fix above was held off by Close the gaps.
+
+2026-11-23 17:10 Forever, DEEP, open world, CineMode, fights + Calm Timer 100%
+(back-to-back pulls, the Calm Timer never ended), 70 fps: 1.105 ms/frame real,
+294 KB/s, 7.3% over 5 ms. /perf dig (5 agents, each checked in code):
+- 145 KB/s was the Cooldown Manager drain ring's tooltip build (Lightning
+  Shield, 4/s): fixed before the next run by TIP_RETRY (UI/CooldownRing.lua).
+- Fixes 8-10 above. Left as leads, ranked:
+  1. UnitName* name sets taken up at each fight's end and let go at the next
+     pull (Effects.lua NamesOnPlates' KindShown ignores the Calm Timer): 10
+     SetCVar a fight, ~8 ms. Behavior change (names through the Calm Timer):
+     the user's call. Also ApplyCVarSet writes unchanged values.
+  2. FadeDetached Walk: one root's whole tree in one frame (5.4 ms worst at
+     fight ends) + {GetRegions()}/{GetChildren()} per node: resumable walk.
+  3. QuestStandIn REBUILD 0.2 < the 0.24 s between calls: rebuilds every call
+     (~7 KB/s); minimap quest look ~20 KB/s; CenterCooldownIcons' PlaceBar
+     closures ~8 KB/s.
+  4. Quest walk on every quest event in fights; frames pass at 4/s through
+     the Calm Timer; Visual Effects rows asked every tick in CineMode (Core.lua
+     effectAsk bypass): ~0.025-0.04 ms a frame each.
+  5. Vitals: ~45 double-metatable look reads a frame (~0.03-0.05 ms).
+- Ruled out: WarmCombatShown's 4.5-8 ms deep spikes (~0.005 ms/frame real).
+- Analyzer bug: the "Vitals" section's source is found by the bare function
+  name ("Update"), first match wins (Effects.lua duels.Update); it's
+  Atmosphere/LowHealth.lua's Update.
 
 ## Ruled out
 
