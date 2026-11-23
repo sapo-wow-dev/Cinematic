@@ -23,7 +23,9 @@ Runs side by side, each a PASS or FAIL line, then one line for all of it:
   this one's on the same players' saved settings; what changes for existing
   players is listed (never a FAIL: the review judges it), only a version
   that doesn't load or an update that errors fails;
-- the offline tests of fixed bugs (OFFLINE_TESTS: no FAIL line);
+- the offline tests of fixed bugs (OFFLINE_TESTS: no FAIL line), and every
+  other offline test found in Tools/offline (found_tests: one printing PASS /
+  FAIL / ok lines that isn't an audit matrix), so none is left out;
 - other addons as installed against Support/ (Tools/addon-check.py: a name
   our support uses gone fails; what changed since its baseline is listed);
 - the audit kit (Tools/audit.py): its selftest, every fix card's matrix
@@ -41,6 +43,7 @@ The game's folder: CINE_WOW, else C:/Program Files (x86)/World of Warcraft.
 """
 import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -149,6 +152,39 @@ OFFLINE_TESTS = [
 ]
 
 
+PASS_PRINT = re.compile(r'"(PASS[ "%]|FAIL |ok  )')
+CLIENT_ARG = re.compile(r'client\w*\s*=\s*[^\n]*arg\s+and\s+arg\[1\]')
+# Offline files that print PASS/FAIL lines but aren't tests to run on their
+# own: run above with their own arguments (the sweep per client, the check,
+# the updates on your saved settings). A helper that matches goes here too.
+NOT_RUN = {"sweep.lua", "check.lua", "migrate-test.lua"}
+
+
+def found_tests():
+    """Every other offline test (prints PASS / FAIL / ok lines, not an audit matrix: those run through
+    Tools/audit.py prerelease), so a new test runs before a release without being listed by hand. Before
+    2026-11-23 only the hand list ran: 71 tests never did, 3 of them failing (prerelease audit). One whose
+    client comes from arg[1] runs on both. Its name: the file's first comment line."""
+    listed = {each[1] for each in OFFLINE_TESTS}
+    found = []
+    for path in sorted(glob.glob(os.path.join(ROOT, "Tools", "offline", "*.lua"))):
+        script = "Tools/offline/" + os.path.basename(path)
+        if script in listed or os.path.basename(path) in NOT_RUN:
+            continue
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        if "Matrix.Run" in text or not PASS_PRINT.search(text):
+            continue
+        head = next((l[3:].strip() for l in text.splitlines() if l.startswith("-- ")), script)
+        head = re.sub(r"\s*[(,]\s*(dev tool, )?(offline|Lua 5\.1)\b.*$", "", head).rstrip(" :,(") or script
+        name = "%s (%s)" % (head, os.path.basename(path))
+        if CLIENT_ARG.search(text):
+            found += [("%s, %s" % (name, client), script, client) for client in CLIENTS]
+        else:
+            found.append((name, script))
+    return found
+
+
 def lua_files():
     out = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.lua"],
                          cwd=ROOT, capture_output=True, text=True).stdout.split()
@@ -222,12 +258,19 @@ def judge_sweep(ok, output):
 
 
 def judge_test(ok, output):
+    # (PASS lines or "ok" ones (servicefardim's), or none but an all-passed end
+    # (enginerules' OK, shelforder's ALL PASS); any FAIL line or exit 1 fails.)
     lines = [l.strip() for l in output.splitlines()]
-    failed = [l for l in lines if l.startswith("FAIL ")]
-    passed = sum(1 for l in lines if l.startswith("PASS "))
+    failed = [l for l in lines if l.startswith("FAIL")]
+    passed = sum(1 for l in lines if l.startswith(("PASS ", "ok ")))
     if failed or not ok:
         return False, "; ".join(failed[:4]) or last_line(output)
-    return passed > 0, "%d checks passed" % passed
+    if passed:
+        return True, "%d checks passed" % passed
+    end = last_line(output)
+    if re.search(r"(?i)all passed|all pass$|^ok$", end):
+        return True, end
+    return False, "no PASS lines and no all-passed end: " + end
 
 
 def judge_audit(ok, output):
@@ -307,6 +350,21 @@ def selftest():
          False),
         ("--nogame: never a FAIL", "", "2026-11-23 10:00", True, True),
     ]
+    for name, ok, output, want in [
+        ("judge: ok lines pass (servicefardim's)", True, "ok   1 x\nok   2 y\nx: all passed\n", True),
+        ("judge: an OK end passes (enginerules')", True, "360 rules\nOK\n", True),
+        ("judge: ALL PASS end passes (shelforder's)", True, "shelf order: a\nALL PASS\n", True),
+        ("judge: no PASS lines and no all-passed end fails", True, "did something\n", False),
+        ("judge: a FAIL line fails, exit 0 or not", True, "PASS a\nFAIL b\n", False),
+        ("judge: exit 1 fails", False, "PASS a\n", False),
+    ]:
+        good = judge_test(ok, output)[0] == want
+        failed += 0 if good else 1
+        print("%s %s" % ("PASS" if good else "FAIL", name))
+    found = {script for _, script, *_ in found_tests()}
+    good = "Tools/offline/followhud.lua" in found and not any("matrix" in s for s in found)
+    failed += 0 if good else 1
+    print("%s found tests: a test not in the list is run (followhud), no audit matrix" % ("PASS" if good else "FAIL"))
     global last_code_change
     real_since = last_code_change
     try:
@@ -403,7 +461,7 @@ def main():
         jobs.append(Job("offline check (profiles, ids)", lua + ["Tools/offline/check.lua"], judge_check))
         for client in CLIENTS:
             jobs.append(Job("offline sweep, %s" % client, lua + ["Tools/offline/sweep.lua", client], judge_sweep))
-        for name, script, *args in OFFLINE_TESTS:
+        for name, script, *args in OFFLINE_TESTS + found_tests():
             jobs.append(Job(name, lua + [script] + args, judge_test))
         jobs.append(Job("prerelease's own checks (the in-game gate)", [PY, "-I", "Tools/prerelease.py", "--selftest"],
                         judge_test))
