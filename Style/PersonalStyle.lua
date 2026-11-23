@@ -573,11 +573,20 @@ function Apply()
 	if power and not powerHooked and power.SetStatusBarColor then
 		hooksecurefunc(power, "SetStatusBarColor", function(self, cr, cg, cb)
 			if dressing then return end
-			if Plain(cr) and Plain(cg) and Plain(cb) then gameColor[self] = { cr, cg, cb } end
+			if Plain(cr) and Plain(cg) and Plain(cb) then
+				gameColor[self], secretColor[self] = { cr, cg, cb }, nil
+			else
+				secretColor[self] = { cr, cg, cb } -- (Forever's secret: only handed back, as DressBar keeps it)
+			end
 			local now = ns.StyleOn("prdStyle") and Look()
 			local mr, mg, mb = PowerColor(now)
 			dressing = true
-			if mr then self:SetStatusBarColor(mr, mg, mb) end
+			-- (Marked as ours, so turning the page off puts the game's back:
+			-- unmarked, a form change's color stayed ours, 2026-11-23.)
+			if mr then
+				colored[self] = true
+				self:SetStatusBarColor(mr, mg, mb)
+			end
 			Shade(self, select(2, Fades(now)), mr and { mr, mg, mb } or nil)
 			dressing = false
 		end)
