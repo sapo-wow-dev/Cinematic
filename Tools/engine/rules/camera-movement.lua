@@ -847,4 +847,17 @@ return {
     proof = "/cine debug rulewords (2026-11-21, Forever, Westfall; CinematicDB.ruleWordsLog)",
     source = "Dev/RuleWordsTest.lua",
   },
+  {
+    id = "forever.actioncam.test-cvar-echo",
+    area = "camera",
+    clients = { "forever" },
+    api = { "test_cameraOverShoulder", "CONSOLE_MESSAGE", "CVAR_UPDATE", "SetCVar" },
+    when = "any write to a test_camera* CVar, from code or the console",
+    rule = "The engine writes a console line for each write to an ActionCam test CVar, with the new value and the default: \"Test CVar test_cameraOverShoulder has been set to 0.02 (default 0.000000)\" (CONSOLE_MESSAGE, color 0), one per write, so a camera that sets it every frame floods the console (194 lines in one saved history; ~80 in one test wait).",
+    works = { "Dev/TestKit.lua folds a CVar's writes and number-only console repeats into one line each, counted" },
+    status = "tested",
+    tested = "2026-11-23",
+    proof = "Forever's saved console history 2026-11-23 (194 such lines); /cine debug platematch run log 2026-11-23 06:00:50 (~80 test_cameraOverShoulder writes from Shoulder Cam in one wait, per the nameplate session)",
+    source = "Tools/console-findings.md",
+  },
 }

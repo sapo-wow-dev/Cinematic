@@ -3,7 +3,10 @@
 Searches, ranked by how many of the words each hit has:
   rules    Tools/engine/rules/*.lua (tested game rules: works / fails / status / proof)
   wiki     Tools/engine/wiki-api-tags.lua (retail restriction tags: protected, nocombat...)
-  apidocs  Tools/engine/api/<client>.txt (each client's own /api docs, when dumped)
+  apidocs  Tools/engine/api/<client>.txt (each client's own /api docs, from its code export or dumped) and
+           <client>-help.txt (the docs' help sentences, from the export)
+  source   the game's own UI code (<client>/BlizzardInterfaceCode, from the console's exportInterfaceFiles code):
+           file:line, and whether that file loads on the client (gamesource.py)
   logs     Tools/tests/logs/ (archived test logs) + every test log in the saved files now
   memory   the memory notes (name + description)
   ledgers  Tools/tests/*.md (per-feature test ledgers: questions, runs)
@@ -21,6 +24,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gamesource  # noqa: E402
 import savedlogs  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
@@ -80,8 +84,12 @@ def apidocs(words):
             if s:
                 hits.append((s, "%s: %s" % (client, line.strip()[:300])))
     if not glob.glob(os.path.join(REPO, "Tools", "engine", "api", "*.txt")):
-        hits.append((0, "(no api docs dumped yet: /cine debug apidocs once per client, then python -I Tools/engine/apidocs.py)"))
+        hits.append((0, "(no api docs yet: python -I Tools/engine/apidocs.py reads the game's code export, or /cine debug apidocs once per client first)"))
     return hits
+
+
+def source(words):
+    return gamesource.search(words, score)
 
 
 def logs(words):
@@ -158,7 +166,7 @@ def commits(words):
     return [(score(line, words), line[:250]) for line in out.splitlines() if score(line, words)]
 
 
-SOURCES = [("rules", rules), ("wiki", wiki), ("apidocs", apidocs), ("logs", logs), ("memory", memory),
+SOURCES = [("rules", rules), ("wiki", wiki), ("apidocs", apidocs), ("source", source), ("logs", logs), ("memory", memory),
            ("ledgers", ledgers), ("tests", tests), ("plans", plans), ("commits", commits)]
 
 

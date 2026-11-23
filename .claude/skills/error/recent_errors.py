@@ -17,6 +17,8 @@ import time
 WOW = r"C:\Program Files (x86)\World of Warcraft"
 # (Known errors and don'ts, Tools/errors: each error is matched against them.)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tools", "errors"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test"))
+import gamelogs  # noqa: E402
 try:
     import errors as known
     KNOWN = known.load()
@@ -72,6 +74,8 @@ def main():
     starts = [i for i, (_, text) in enumerate(entries) if text.startswith(SESSION)]
     first = starts[-sessions] if len(starts) >= sessions else 0
     print("looking at the last %d session(s), %d log lines\n" % (min(sessions, len(starts)), len(entries) - first))
+    client = path.split(os.sep + "WTF" + os.sep)[0]
+    client_name = gamelogs.savedlogs.CLIENTS.get(os.path.basename(client), os.path.basename(client))
 
     found = 0
     session = None
@@ -92,12 +96,13 @@ def main():
                     if not entries[j][1].startswith(SESSION):
                         print("  %s %s" % entries[j])
             print(">> %s %s" % (when, text))
+            # (A frame in Blizzard's code: that code, from the client's export.)
+            gamelogs.gamesource.explain(text, client_name)
             show_known(text)
     if not found:
         print("no errors in those sessions")
 
     # Game crashes (not Lua errors) leave reports beside the client's WTF.
-    client = path.split(os.sep + "WTF" + os.sep)[0]
     crashes = sorted(glob.glob(os.path.join(client, "Errors", "*")), key=os.path.getmtime)[-3:]
     recent = [c for c in crashes if time.time() - os.path.getmtime(c) < 86400]
     if recent:
@@ -109,6 +114,11 @@ def main():
                     show_known(f.read(200000))
             except OSError:
                 pass
+
+    # The game's own logs: the console's saved errors (Blizzard-side errors and ours, with stacks; saved even
+    # without -console) and FrameXML.log's load errors (a syntax error: the file never ran, so our log can't say it).
+    print()
+    gamelogs.report(client_name, client, sessions, saved - 86400, print, show_known)
 
 
 if __name__ == "__main__":

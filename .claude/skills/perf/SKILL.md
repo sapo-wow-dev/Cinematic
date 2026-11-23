@@ -31,6 +31,12 @@ fight's mix, many plates in a city, login), and say exactly what to do.
 1. `python Tools/perf/analyze.py --all` (saves each new recording to
    Tools/perf/history/, writes Tools/perf/reports/<client>-<date>.md). Read the
    whole report for the newest recording, and the older one(s) for trend.
+   The report's "Among your addons" section ranks Cinematic among the
+   addons loaded with it by the game's own figures (session average and
+   worst frame, ms), saved with the recording. Lead with that place when
+   telling the user where Cinematic stands. If it says both Cinematic and
+   CinematicDev were running, the recording counts Cinematic twice: ask for
+   one with only one copy enabled before trusting the totals.
 2. Read `Tools/perf/ledger.md`: past fixes, what each saved, leads still open,
    ideas already ruled out (don't suggest those again).
 3. Read memory `cpu-profiling.md` (the older hand-written history).

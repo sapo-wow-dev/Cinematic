@@ -76,6 +76,23 @@ the user says so.**
   never download it).
 - Memories (hubs: Forever quirks, retail quirks, addon support, WoW API
   pitfalls): use them to know where to look, then check the code still says so.
+- A stack (in their `/cine log`, a pasted error or a screenshot) with a
+  frame in Blizzard's code (`Blizzard_*/...lua:N`): read the game's own code
+  there before deciding it's ours, theirs or the game's:
+
+  ```
+  python -I .claude/skills/test/gamesource.py --at "<the stack>" --client <forever|retail>
+  ```
+
+  It prints each Blizzard file:line from that client's export
+  (`<client>/BlizzardInterfaceCode`), with whether that file loads there and
+  the lines around it. Use the player's client: a retail player's stack read
+  in Forever's export (or the reverse) can point at the wrong line. The
+  export is from the user's game build: a player on an older or newer build
+  may have other line numbers, so check the function is the one the stack
+  names. No export for their client: say so, read the code you can, and
+  ask the user to export it (start with `-console`, then
+  `exportInterfaceFiles code` at the character screen).
 
 ### 3. Find the cause
 

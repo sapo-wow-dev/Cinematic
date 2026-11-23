@@ -17,7 +17,8 @@
 --   * a context line first (client, build, zone, combat, group, addons,
 --     settings, CVars), a state line and the dev error / BLOCKED counts per
 --     step, probe lines (type, secret, value, error, rule id) and PASS /
---     FAIL / SKIP verdicts, paced screenshots (one a second at most: the
+--     FAIL / SKIP verdicts, the game console's lines and CVar changes as
+--     they come (console: / cvar: lines, repeats counted), paced screenshots (one a second at most: the
 --     file is named by the second), r:Shot(label, { behind = frame }) puts
 --     a solid background behind the frame(s) the shot is about, for that
 --     shot only: use it on every shot of a frame or text;
@@ -41,6 +42,8 @@
 --     about = "what it checks, one line",        -- /cine debug kit lists it
 --     settings = { "someSetting" },              -- ns.db keys it may change
 --     cvars = { "nameplateShowAll" },            -- logged in the context line
+--     consoleWords = { "camera" },               -- every CVar/command with the word: value, default, flags
+--     console = false,                           -- (only to leave out the live console: / cvar: lines)
 --     cineMode = true,                           -- (only to leave CineMode alone)
 --     context = function(run) return "..." end,  -- more for the context line
 --     putBack = function(extra) return "..." end, -- puts back run.undo.extra
@@ -144,6 +147,131 @@ local function Say(run, text)
 	local log = CinematicDB and CinematicDB[run.def.key .. "Log"]
 	if log then log[#log + 1] = date("%H:%M:%S") .. " " .. text end
 end
+
+-- The game's console, live: what the engine says while a run goes ------------
+-- (CONSOLE_MESSAGE: Lua errors with their stack, Blizzard's own too, warnings,
+-- "Test CVar test_cameraOverShoulder has been set to 0.02", "CVar ... failed
+-- validation"; CVAR_UPDATE: each CVar change) as console: / cvar: lines in
+-- the step they came in. Blizzard_Console gets them without -console too
+-- (retail's saved history held our errors, 2026-11-20). The same line again
+-- is counted, not logged (the counts at the end); at most CONSOLE_CAP lines a
+-- run. A test's console = false leaves it out. (Tools/console-findings.md)
+local CONSOLE_CAP = 150
+local CONSOLE_KIND = { [3] = "console error: ", [4] = "console warning: " }
+local consoleWatch = CreateFrame("Frame")
+
+local function Plain(value)
+	if IsSecret(value) then return "secret" end
+	local text = tostring(value):gsub("\r?\n+$", ""):gsub("\r?\n", " | ")
+	return #text > 400 and (text:sub(1, 400) .. "...") or text
+end
+
+-- (key: what makes two lines "the same". A CVar's changes are one key per
+-- CVar, a console line's one per its words with the numbers taken out: Shoulder
+-- Cam wrote test_cameraOverShoulder ~80 times in one wait (platematch,
+-- 2026-11-23), each value its own line before. The first is logged, the rest
+-- counted, the last kept for the end line.)
+local function ConsoleLine(run, text, key)
+	key = key or text
+	local seen = run.consoleSeen
+	run.consoleLast[key] = text
+	if seen[key] then
+		seen[key] = seen[key] + 1
+		run.consoleRepeats = run.consoleRepeats + 1
+		return
+	end
+	seen[key] = 1
+	if run.consoleLines >= CONSOLE_CAP then
+		run.consoleOver = run.consoleOver + 1
+		return
+	end
+	run.consoleLines = run.consoleLines + 1
+	Say(run, "  " .. text)
+end
+
+consoleWatch:SetScript("OnEvent", function(_, event, a, b)
+	local run = current
+	if not (run and run.consoleSeen and not run.stopped) then return end
+	if event == "CVAR_UPDATE" then
+		ConsoleLine(run, ("cvar: %s = %s"):format(Plain(a), Plain(b)), "cvar: " .. Plain(a))
+	else
+		local text = (CONSOLE_KIND[b] or "console: ") .. Plain(a)
+		ConsoleLine(run, text, (text:gsub("%-?%d+%.?%d*", "#")))
+	end
+end)
+
+local function ConsoleStart(run)
+	if run.def.console == false then return end
+	run.consoleSeen, run.consoleLast, run.consoleLines, run.consoleRepeats, run.consoleOver = {}, {}, 0, 0, 0
+	pcall(consoleWatch.RegisterEvent, consoleWatch, "CONSOLE_MESSAGE")
+	pcall(consoleWatch.RegisterEvent, consoleWatch, "CVAR_UPDATE")
+end
+
+-- The end: how many, and the lines that came more than once.
+local function ConsoleEnd(run)
+	consoleWatch:UnregisterAllEvents()
+	if not run.consoleSeen then return end
+	local text = ("console: %d line(s) logged, %d repeat(s) counted, %d over the cap"):format(run.consoleLines,
+		run.consoleRepeats, run.consoleOver)
+	local many = {}
+	for key, n in pairs(run.consoleSeen) do
+		if n > 1 then many[#many + 1] = { line = run.consoleLast[key] or key, n = n } end
+	end
+	table.sort(many, function(x, y) return x.n > y.n end)
+	-- (Each with its last value: "x80 cvar: test_cameraOverShoulder = 0.02".)
+	for i = 1, math.min(5, #many) do text = text .. ("; x%d %s"):format(many[i].n, many[i].line:sub(1, 120)) end
+	Say(run, text)
+end
+
+-- The console's own words for a test's consoleWords (context line): each
+-- CVar or command whose name has the word, a CVar with its value, default
+-- and flags (C_CVar.GetCVarInfo), its help line if it has one.
+local CONSOLE_WORD_CAP = 40
+local function ConsoleWords(words, parts)
+	local all = _G.ConsoleGetAllCommands
+	if not all then
+		parts[#parts + 1] = "console words: no ConsoleGetAllCommands on this client"
+		return
+	end
+	local ok, list = pcall(all)
+	if not ok or type(list) ~= "table" then
+		parts[#parts + 1] = "console words: ConsoleGetAllCommands failed: " .. tostring(list)
+		return
+	end
+	local info = (C_CVar and C_CVar.GetCVarInfo) or _G.GetCVarInfo
+	for _, word in ipairs(words) do
+		local want, found = tostring(word):lower(), {}
+		for _, c in ipairs(list) do
+			if type(c) == "table" and type(c.command) == "string" and c.command:lower():find(want, 1, true) then
+				found[#found + 1] = c
+			end
+		end
+		table.sort(found, function(x, y) return x.command:lower() < y.command:lower() end)
+		parts[#parts + 1] = ("console word %q: %d match(es)%s"):format(want, #found,
+			#found > CONSOLE_WORD_CAP and (", first " .. CONSOLE_WORD_CAP) or "")
+		for i = 1, math.min(#found, CONSOLE_WORD_CAP) do
+			local c = found[i]
+			local line
+			if c.commandType == 0 and info then
+				local got = { pcall(info, c.command) }
+				if got[1] then
+					local flags = {}
+					local names = { "account", "character", "locked", "secure", "read-only" }
+					for k = 4, 8 do if got[k] then flags[#flags + 1] = names[k - 3] end end
+					line = ("  %s = %s (default %s%s)"):format(c.command, Plain(got[2]), Plain(got[3]),
+						#flags > 0 and (", " .. table.concat(flags, ", ")) or "")
+				else
+					line = ("  %s (CVar, info failed)"):format(c.command)
+				end
+			else
+				line = ("  %s (%s)"):format(c.command, c.commandType == 0 and "CVar" or "command")
+			end
+			if type(c.help) == "string" and c.help ~= "" then line = line .. " " .. ("%q"):format(Plain(c.help)) end
+			parts[#parts + 1] = line
+		end
+	end
+end
+Kit.ConsoleWords = ConsoleWords
 
 -- Undo: saved before the first change, put back at the end or next login ---
 
@@ -661,6 +789,8 @@ function Kit.ContextLines(def, run)
 		for _, name in ipairs(def.cvars) do c[#c + 1] = name .. "=" .. Try(GetCVar, name) end
 		parts[#parts + 1] = "cvars " .. table.concat(c, " ")
 	end
+	if _G.ConsoleIsActive then parts[#parts + 1] = "console window open " .. Try(_G.ConsoleIsActive) end
+	if def.consoleWords then ConsoleWords(def.consoleWords, parts) end
 	if def.context then
 		local ok, text = pcall(def.context, run)
 		parts[#parts + 1] = ok and tostring(text) or ("own context failed: " .. tostring(text))
@@ -687,6 +817,7 @@ function Kit.Finish(run, done)
 		local ok, err = pcall(run.def.finish, run)
 		if not ok then Say(run, "  own finish failed: " .. tostring(err)) end
 	end
+	ConsoleEnd(run)
 	Say(run, "put back: " .. PutBack(run.def))
 	local errors, blocked = Counts()
 	local summary = ("%s: %d pass, %d fail, %d skip; errors +%d, blocked +%d"):format(done and "DONE" or "STOPPED",
@@ -856,6 +987,7 @@ function Kit.Start(name, arg, resume)
 		CinematicDB[UndoKey(def)] = { cineWas = run.cineWas or nil }
 	end
 	ContextLine(run)
+	ConsoleStart(run)
 	run.errors0, run.blocked0 = Counts()
 	-- (Each second: CineMode kept off, unless the test leaves it alone, and
 	-- the AFK camera's still timer fresh either way.)

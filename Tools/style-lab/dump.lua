@@ -2,17 +2,23 @@
 -- style theme, and writes what each frame drew as JSON, for build.py. From the
 -- repo root:
 --
---   python -I Tools/offline/run.py Tools/style-lab/dump.lua <client> <out.json>
+--   python -I Tools/offline/run.py Tools/style-lab/dump.lua <client> <out.json> [parts]
 --
 -- Nothing here draws a frame by hand: a change to a preview or a theme shows
 -- at the next build.
 
 local F = dofile("Tools/style-lab/frames.lua")
-local client, outPath = ...
+local client, outPath, mode = ...
 client, outPath = client or "retail", outPath or "Tools/style-lab/out/dump.json"
 
 local ns, wow = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc", function(w)
 	F.Install(w)
+	-- (build.py --game-parts: frames made from a game template get its real
+	-- parts, read from the game's code export: Tools/offline/templateparts.lua.)
+	if mode == "parts" then
+		local count, why = dofile("Tools/offline/templateparts.lua").Use(client)
+		print(count and ("game template parts: %d templates"):format(count) or ("game template parts: none, " .. why))
+	end
 	local M = w.Methods
 	-- (A scroll frame's child sits at its top left, as wide as it.)
 	M.SetScrollChild = function(self, child)

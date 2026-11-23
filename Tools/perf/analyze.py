@@ -5,6 +5,7 @@ ranks what costs the most, with the code behind each and what to try.
     python Tools/perf/analyze.py --client forever
     python Tools/perf/analyze.py --all            # every client's newest
     python Tools/perf/analyze.py --top 15 --no-save
+    python Tools/perf/analyze.py --selftest       # the addon ranking's parser, offline
 
 Reads CinematicDB.profiler (the Profiler page's / `/cine profiler` recording:
 `last`, `digest`, `samples`) from each client's SavedVariables, keeps every
@@ -14,7 +15,8 @@ overwriting `last`), and writes the report to Tools/perf/reports/.
 What it ranks (see ISSUE KINDS in the report): steady cost per frame, hitches
 (calls that take over a millisecond each), garbage, calls made too often,
 time no timer covers, and changes against earlier recordings of the same
-kind. Each issue carries the function's source, what in its body looks costly
+kind. It also ranks Cinematic among the addons loaded with it, from the
+game's own figures saved with the recording (CinematicDB.profiler.addons). Each issue carries the function's source, what in its body looks costly
 (tables, closures, strings, loops, game calls) and concrete things to try.
 The /perf skill (.claude/skills/perf) reads this and then the code in full.
 """
@@ -108,7 +110,51 @@ def recording_from(client, path, prof):
     rec["end"] = parse_state(last.get("endState"))
     rec["digest"] = prof.get("digest") if isinstance(prof.get("digest"), list) else []
     rec["samples"] = summarize_samples(prof.get("samples"))
+    rec["addons"] = parse_addons(prof.get("addons"))
     return rec
+
+
+ADDON_LINE = re.compile(r"^(.+?): now ([\d.]+), average ([\d.]+), worst ([\d.]+)$")
+OURS = ("Cinematic", "CinematicDev")
+
+
+def parse_addons(lines):
+    """The Profiler page's line per loaded addon (ProfilerPage.lua AddonLines: the game's own figures, in ms a
+    frame: now = RecentAverageTime, average = SessionAverageTime, worst = PeakTime) as dicts."""
+    out = []
+    for line in lines if isinstance(lines, list) else []:
+        m = ADDON_LINE.match(str(line).strip())
+        if m:
+            out.append({"name": m.group(1), "now": float(m.group(2)), "average": float(m.group(3)),
+                        "worst": float(m.group(4))})
+    return out
+
+
+def addon_rank(addons, top=5):
+    """Lines on where Cinematic stands among the addons loaded with it, by the game's session average and its
+    worst frame (ms, never %)."""
+    if not addons:
+        return []
+    out = []
+    by_avg = sorted(addons, key=lambda a: -a["average"])
+    by_worst = sorted(addons, key=lambda a: -a["worst"])
+    total = sum(a["average"] for a in addons)
+    ours = [a for a in addons if a["name"] in OURS]
+    for a in ours:
+        out.append("- **%s: #%d of %d by the game's session average (%.3f ms a frame), #%d by its worst frame "
+                   "(%.2f ms)**; all addons together %.3f ms a frame." % (
+                       a["name"], by_avg.index(a) + 1, len(addons), a["average"], by_worst.index(a) + 1, a["worst"],
+                       total))
+    if not ours:
+        out.append("- Cinematic isn't in the game's addon list for this recording.")
+    if len([a for a in ours if a["average"] > 0]) > 1:
+        out.append("- **Both Cinematic and CinematicDev were running**: each pays its own cost, so the figures "
+                   "above count Cinematic twice. Record with one of them only.")
+    out.append("- (The game's figures are over the whole session, not just this recording; a deep recording's "
+               "wrapper cost is in them.)")
+    out.append("- Top %d by session average: %s." % (min(top, len(by_avg)), ", ".join(
+        "%s %.3f" % (a["name"], a["average"]) for a in by_avg[:top])))
+    return out
 
 
 def summarize_samples(samples):
@@ -791,6 +837,13 @@ def report(rec, res, cov_missing, top):
         add("- Our frames over 1 / 5 / 10 ms (game's count): %d / %d / %d of %d (%.1f%% over 5)." % (
             sp[0], sp[1], sp[2], frames, sp[1] * 100 / frames if frames else 0))
     add("- Worst measured frame: %.2f ms." % (rec.get("worst") or 0))
+    rank = addon_rank(rec.get("addons"))
+    if rank:
+        add("")
+        add("## Among your addons (the game's own figures)")
+        add("")
+        out.extend(rank)
+        add("")
     if res["trend"]:
         prev, prev_real = res["trend"]
         add("- Last recording of this kind (%s): %.3f ms a frame, %.1f KB/s -> now %+.3f ms, %+.1f KB/s." % (
@@ -938,6 +991,31 @@ def bench_report(runs):
     return "\n".join(out)
 
 
+def selftest():
+    bad = []
+    lines = ["CinematicDev: now 2.182, average 1.696, worst 216.87", "Cinematic: now 3.879, average 0.809, worst 112.35",
+             "EllesmereUI: now 0.013, average 0.075, worst 85.79", "Bagnon: now 0.500, average 0.900, worst 300.00",
+             "not an addon line"]
+    got = parse_addons(lines)
+    if [a["name"] for a in got] != ["CinematicDev", "Cinematic", "EllesmereUI", "Bagnon"] or got[3]["worst"] != 300.0:
+        bad.append("parse %r" % got)
+    rank = addon_rank(got, top=2)
+    if not rank or "**CinematicDev: #1 of 4" not in rank[0] or "#2 by its worst frame (216.87 ms)" not in rank[0]:
+        bad.append("rank dev %r" % rank)
+    if "**Cinematic: #3 of 4" not in rank[1] or "all addons together 3.480 ms" not in rank[1]:
+        bad.append("rank release %r" % rank)
+    top = "Top 2 by session average: CinematicDev 1.696, Bagnon 0.900."
+    if not any("Both Cinematic and CinematicDev" in r for r in rank) or top not in rank[-1]:
+        bad.append("both / top %r" % rank)
+    one = addon_rank(parse_addons(lines[1:4]))
+    if any("Both" in r for r in one) or "#2 of 3" not in one[0]:
+        bad.append("one copy %r" % one)
+    if addon_rank([]) != [] or "isn't in" not in addon_rank(parse_addons(lines[2:3]))[0]:
+        bad.append("empty / missing")
+    print("selftest: %s" % ("PASS" if not bad else "FAIL\n  " + "\n  ".join(bad)))
+    return not bad
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--client", choices=list(CLIENTS))
@@ -947,7 +1025,10 @@ def main():
     ap.add_argument("--json", action="store_true", help="print the ranked issues as JSON")
     ap.add_argument("--history", help="analyze this history file instead of the newest recording")
     ap.add_argument("--bench", action="store_true", help="only the /cine debug perf benchmarks")
+    ap.add_argument("--selftest", action="store_true", help="check the addon ranking's parser")
     args = ap.parse_args()
+    if args.selftest:
+        sys.exit(0 if selftest() else 1)
 
     if args.bench:
         runs = []

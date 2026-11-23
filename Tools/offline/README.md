@@ -19,6 +19,17 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `lazysearch.lua`: settings pages made on first open, both clients: the main search shows Searching... and makes
   the waiting pages over frames, then the same matches as with every page made; a hub's General switch makes
   only its hub's pages, with the same page switches as with every page made.
+- `templateparts.lua` (opt-in, not on by default): frames made from a game template get the template's real parts.
+  - That means `frame.Icon`, `.Spark`, `.Text`, the child frames, and each part's atlas or file, size, layer,
+    anchors and hidden flag. Without it, the stand-in hands back a stub or nil.
+  - The parts come from the game's own XML: `Tools/engine/templates.py` makes
+    `Tools/engine/api/templates-<client>.lua` from the console's `exportInterfaceFiles code`. That file is
+    git-ignored, since it's Blizzard's data.
+  - To use it: `dofile("Tools/offline/templateparts.lua").Use(client)` in load.lua's onInstall. It returns nil and
+    why when there's no file.
+  - Check: `templatepartscheck.lua`. It covers a hand-made recipe, then the game's recipes when they're there (else
+    SKIP): TargetSpellBarTemplate's parts, and the addon's player, unit and plate cast samples built from their game
+    templates instead of the drawn fallback.
 - `check.lua`: `lua5.1 Tools/offline/check.lua` runs the profile modules' checks (ProfileModules.lua) on both clients
   and both builds. It exits 1 on any problem. CI runs it on every push (`.github/workflows/checks.yml`).
   It also compares each built-in profile's settings, retired ones too, with `profile-settings-<client>.txt`, so a

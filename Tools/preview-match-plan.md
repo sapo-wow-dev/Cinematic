@@ -268,6 +268,46 @@ Probe changes after the first run: bases that only exist to be built on (ClassPo
 are skipped, because the game warned about them; made frames get a name (action buttons and compact frames need one);
 the limit went from 120 to 250.
 
+### Step 0 from the game's code (Forever, 2026-11-23)
+
+Step 0.1 is done for Forever: the export is in `_forever_\BlizzardInterfaceCode`. Retail still needs its own export.
+Every line below comes from the export with no run, using
+`python -I .claude/skills/test/gamesource.py --template <names>`. For each template, that command prints where it's
+made, whether that file loads on Forever (game type `camelot`), its inherits and mixin, and the template in its chain
+that makes it secure.
+
+| Template | Made in (Forever) | Inherits, mixin | Secure |
+|---|---|---|---|
+| `CastingBarFrameTemplate` | Blizzard_UIPanels_Game/Mainline/CastingBarFrame.xml:397 | CastingBarFrameBaseTemplate (CastingBarMixin, :188), CastingBarFrameAnimsFXTemplate | no |
+| `SmallCastingBarFrameTemplate` | same file :399 | CastingBarFrameAnimsTemplate; CastingBarMixin | no |
+| `PlayerCastingBarFrameTemplate` | same file :468 | CastingBarFrameTemplate, EditModeCastBarSystemTemplate; PlayerCastingBarMixin | no (Edit Mode, skipped) |
+| `TargetSpellBarTemplate` | Blizzard_UnitFrame/Mainline/TargetFrame.xml:536 | SmallCastingBarFrameTemplate; TargetSpellBarMixin | no |
+| `NamePlateCastingBarTemplate` | Blizzard_NamePlates/Blizzard_NamePlateCastingBar.xml:4 | CastingBarFrameAnimsTemplate; NamePlateCastingBarMixin | no |
+| `ActionButtonTemplate` | Blizzard_ActionBar/Mainline/ActionButtonTemplate.xml:4 (and a glue stub, GlueStubs.xml:3) | ActionButtonSpellFXTemplate, FlyoutButtonTemplate, PingableActionButtonTemplate; BaseActionButtonMixin | no |
+| `GameTooltipTemplate` | Blizzard_GameTooltip/Mainline/GameTooltip.xml:4 | SharedTooltipTemplate; GameTooltipDataMixin | no |
+| `GroupLootFrameBaseTemplate` | Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml:291 | DefaultDialogPanelTemplate | no |
+| `TargetFrameTemplate` | Blizzard_UnitFrame/Mainline/TargetFrame.xml:52 | SecureUnitButtonTemplate; TargetFrameMixin | **yes** |
+| `BossTargetFrameTemplate` | same file :374 | TargetFrameTemplate | **yes, through TargetFrameTemplate** (the probe's skip missed it, see the note above) |
+| `TargetofTargetFrameTemplate` | same file :397 | SecureUnitButtonTemplate; TargetOfTargetMixin | **yes** |
+| `CompactUnitFrameTemplate` | Blizzard_UnitFrame/Shared/CompactUnitFrame.xml:3 | SecureUnitButtonTemplate | **yes** |
+| `NamePlatePreviewTemplate` (Settings' own plate preview) | Blizzard_SettingsDefinitions_Frame/Nameplates.xml:3, NamePlatePreviewMixin in Nameplates.lua | none | no |
+| `NamePlateUnitFrameTemplate` | Blizzard_NamePlates/Blizzard_NamePlates.xml:367 | BaseNamePlateUnitFrameTemplate (:93, NamePlateUnitFrameMixin) | no |
+
+This agrees with the probe's table above: every A row is not secure, and both B rows are secure.
+
+What the code adds:
+- **Forever loads the Mainline files.** Except for the nameplate constants and level frame, Forever has no
+  `Camelot\` copy of any of these templates. So retail's template code is Forever's too, and a difference between
+  the clients comes from engine values, not from different templates.
+- **The game's own nameplate preview isn't secure.** It's a script nameplate registered as unit `"preview"`, and
+  its look is set with `SetExplicitValues`. How that works, for the plate preview (Tools/tests/plate-preview-match.md):
+  `NamePlateDriverFrame:RegisterScriptNamePlate`, Blizzard_NamePlates.lua:93; `SetExplicitValues`,
+  Blizzard_NamePlateUnitFrame.lua:910.
+- **Not in any XML:** `PlayerFrameTemplate`, `FocusFrameTemplate`, `PetFrameTemplate` and `GroupLootFrameTemplate`.
+  Those frames are made in place or in Lua, so their recipe stays B (copy the live frame).
+- **Before a new A row:** run `--template` on it first. That shows whether it's secure and which mixin to read
+  (`known.py <Mixin> --only source`), before any probe.
+
 ## The match test (proves it, stays forever)
 
 ### In game: `/cine debug previewmatch [name]` (Dev copy)

@@ -4,7 +4,9 @@ usage:
   read_log.py                 every test log in each client's saved file (lines, PASS/FAIL counts), archived
   read_log.py <key> [client]  that log in full (key: mapPinLog, or just mapPin), then from the same session:
                               CinematicDB.log's deverror / BLOCKED / ERROR / chat lines, and the screenshots
-                              taken since the test started (paths, to open). Archived to Tools/tests/logs/.
+                              taken since the test started (paths, to open), and the game's own logs: the
+                              console's errors/warnings from the last UI session and FrameXML.log since the
+                              test started (gamelogs.py). Archived to Tools/tests/logs/.
   client: forever | retail | classic_era (default: the newest saved file that has the key)
 """
 import glob
@@ -14,6 +16,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gamelogs  # noqa: E402
 import savedlogs  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
@@ -54,6 +57,10 @@ def overview():
                 continue
             out, new = archive(client, path, key, lines)
             print("  %-28s %4d lines, %s%s" % (key, len(lines), counts(lines), "  (archived now)" if new else ""))
+        notes = gamelogs.console_notes(gamelogs.console_sessions(gamelogs.console_file(path.split(os.sep + "WTF")[0])))
+        errors = sum(1 for n in notes if n[0] == "error")
+        print("  console, last UI session: %d error(s), %d warning(s)%s" % (
+            errors, len(notes) - errors, "  (gamelogs.py %s shows them)" % client if notes else ""))
     print("\narchive: %s (%d files)" % (os.path.relpath(ARCHIVE, REPO), len(glob.glob(os.path.join(ARCHIVE, "*.txt")))))
 
 
@@ -107,6 +114,10 @@ def one(key, want):
         print("\n== screenshots since then: %d" % len(shots))
         for p in shots:
             print("  %s  %s" % (time.strftime("%H:%M:%S", time.localtime(os.path.getmtime(p))), p))
+
+        # The game's own logs: Blizzard-side errors and load errors our log never sees.
+        print()
+        gamelogs.report(client, os.path.dirname(path).split(os.sep + "WTF")[0], 1, since - 5)
 
         out, new = archive(client, path, key, lines)
         print("\narchived: %s%s" % (os.path.relpath(out, REPO), "" if new else " (already)"))

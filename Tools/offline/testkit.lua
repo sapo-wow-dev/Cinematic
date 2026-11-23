@@ -240,6 +240,100 @@ local function RunClient(client)
 	Check("full: the proven step runs", ranProven == true and Has(pLog, "full run") ~= nil)
 	Check("full: the proven check runs", checked == true and Has(pLog, "DONE: 2 pass") ~= nil, Has(pLog, "DONE"))
 
+	-- The console (2026-11-23): its lines and CVar changes logged live in the
+	-- step they came in, an error / warning named, repeats counted not logged,
+	-- secret text kept out, nothing after the run; consoleWords on the context
+	-- line with value, default and flags; console = false leaves it out.
+	ConsoleGetAllCommands = function()
+		return { { command = "test_cameraOverShoulder", commandType = 0, help = "" },
+			{ command = "cameraSmoothStyle", commandType = 0, help = "Camera follow style" },
+			{ command = "ActionCam", commandType = 1, help = "" },
+			{ command = "nameplateShowAll", commandType = 0, help = "" } }
+	end
+	ConsoleIsActive = function() return false end
+	C_CVar = C_CVar or {}
+	C_CVar.GetCVarInfo = function(name)
+		if name == "cameraSmoothStyle" then return "4", "0", true, false, false, true, false end
+		return "0", "0", false, false, false, false, false
+	end
+	ns.TestKit.Define({ name = "kitconsole", key = "kitConsoleTest", title = "Kit console", consoleWords = { "Camera" },
+		steps = {
+			{ key = "talk", title = "the console talks", run = function(r)
+				wow.Fire("CONSOLE_MESSAGE", "Test CVar test_cameraOverShoulder has been set to 0.02 (default 0.000000)", 0)
+				wow.Fire("CONSOLE_MESSAGE", "Test CVar test_cameraOverShoulder has been set to 0.02 (default 0.000000)", 0)
+				wow.Fire("CONSOLE_MESSAGE", "Lua Error: Blizzard_UnitFrame/CompactUnitFrame.lua:1557: bad argument\n[C]: in function 'UnitWidgetSet'\n", 3)
+				wow.Fire("CONSOLE_MESSAGE", "Overlay is disabled.", 4)
+				wow.Fire("CONSOLE_MESSAGE", SECRET, 0)
+				wow.Fire("CVAR_UPDATE", "cameraSmoothStyle", "4")
+				-- (One CVar written over and over with new values, the engine's
+				-- line for each too: one line each, the rest counted, the last kept.)
+				for i = 1, 4 do
+					wow.Fire("CVAR_UPDATE", "test_cameraOverShoulder", tostring(i / 10))
+					wow.Fire("CONSOLE_MESSAGE", ("Test CVar test_cameraOverShoulder has been set to %.2f (default 0.000000)"):format(i / 10), 0)
+				end
+				r:Pass("talked")
+			end },
+		} })
+	ns.HandleSlash("debug kitconsole")
+	Advance(3)
+	local cLog = CinematicDB.kitConsoleTestLog
+	Check("console: a plain line, in its step", Has(cLog, "^%S+   console: Test CVar test_cameraOverShoulder has been set to 0.02") ~= nil,
+		Has(cLog, "console: Test"))
+	local repeats = 0
+	for _, line in ipairs(cLog or {}) do if line:find("^%S+   console: Test CVar") then repeats = repeats + 1 end end
+	Check("console: the same line logged once", repeats == 1, repeats)
+	Check("console: an error named, its stack on one line",
+		Has(cLog, "console error: Lua Error: .*CompactUnitFrame.lua:1557: bad argument | %[C%]: in function 'UnitWidgetSet'$") ~= nil,
+		Has(cLog, "console error"))
+	Check("console: a warning named", Has(cLog, "console warning: Overlay is disabled%.") ~= nil)
+	Check("console: secret text kept out", Has(cLog, "console: secret$") ~= nil, Has(cLog, "console: s"))
+	Check("cvar: a CVar change", Has(cLog, "cvar: cameraSmoothStyle = 4") ~= nil, Has(cLog, "cvar:"))
+	Check("console: the end counts, the repeats named with their last value",
+		Has(cLog, "console: 6 line%(s%) logged, 8 repeat%(s%) counted, 0 over the cap; "
+			.. "x6 console: Test CVar test_cameraOverShoulder has been set to 0%.40 %(default 0%.000000%); "
+			.. "x4 cvar: test_cameraOverShoulder = 0%.4$") ~= nil,
+		Has(cLog, "line%(s%) logged"))
+	local cvarLines = 0
+	for _, line in ipairs(cLog or {}) do if line:find("^%S+   cvar: test_cameraOverShoulder") then cvarLines = cvarLines + 1 end end
+	Check("cvar: one CVar written 4 times, one line", cvarLines == 1 and Has(cLog, "cvar: test_cameraOverShoulder = 0%.1$") ~= nil,
+		cvarLines)
+	Check("console words: matches, case-blind", Has(cLog, "console word \"camera\": 2 match%(es%)") ~= nil,
+		Has(cLog, "console word"))
+	Check("console words: value, default, flags, help",
+		Has(cLog, "cameraSmoothStyle = 4 %(default 0, account, secure%) \"Camera follow style\"") ~= nil,
+		Has(cLog, "cameraSmoothStyle ="))
+	Check("console words: no non-matches", Has(cLog, "nameplateShowAll") == nil and Has(cLog, "  ActionCam") == nil)
+	Check("console window state in the context", Has(cLog, "console window open false") ~= nil)
+	local before = #cLog
+	wow.Fire("CONSOLE_MESSAGE", "after the run", 0)
+	Check("console: nothing logged after the run", #CinematicDB.kitConsoleTestLog == before)
+	ns.TestKit.Define({ name = "kitquiet", key = "kitQuietTest", title = "Kit quiet", console = false, steps = {
+		{ key = "talk", title = "talks", run = function(r)
+			wow.Fire("CONSOLE_MESSAGE", "not for this test", 0)
+			r:Pass("talked")
+		end },
+	} })
+	ns.HandleSlash("debug kitquiet")
+	Advance(3)
+	Check("console = false: no console lines", Has(CinematicDB.kitQuietTestLog, "console:") == nil
+		and Has(CinematicDB.kitQuietTestLog, "DONE: 1 pass") ~= nil)
+	-- (Over the cap: counted, not logged.)
+	local function Word(i) return "line " .. string.char(97 + math.floor(i / 26), 97 + i % 26) end
+	ns.TestKit.Define({ name = "kitflood", key = "kitFloodTest", title = "Kit flood", steps = {
+		{ key = "flood", title = "floods", run = function(r)
+			-- (Words, not numbers: lines that differ only by a number count as one.)
+			for i = 1, 160 do wow.Fire("CONSOLE_MESSAGE", Word(i), 0) end
+			r:Pass("flooded")
+		end },
+	} })
+	ns.HandleSlash("debug kitflood")
+	Advance(3)
+	Check("console: capped at 150, the rest counted", Has(CinematicDB.kitFloodTestLog, "console: " .. Word(150) .. "$") ~= nil
+		and Has(CinematicDB.kitFloodTestLog, "console: " .. Word(151) .. "$") == nil
+		and Has(CinematicDB.kitFloodTestLog, "150 line%(s%) logged, 0 repeat%(s%) counted, 10 over the cap") ~= nil,
+		Has(CinematicDB.kitFloodTestLog, "logged"))
+	ConsoleGetAllCommands, ConsoleIsActive = nil, nil
+
 	-- The list.
 	local printed = {}
 	local oldPrint = print

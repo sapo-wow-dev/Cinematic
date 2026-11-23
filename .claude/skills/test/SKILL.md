@@ -49,9 +49,28 @@ Q2 yes -> build the bar on the curve; then need: Q5. Q2 no -> way B (...); then 
    ```
 
    It searches the engine rules (Tools/engine/rules), the wiki's retail tags,
-   each client's /api docs (Tools/engine/api, if dumped), every archived and
-   saved test log, the memory notes, the per-feature ledgers, the Dev/ test
-   headers, the plans and the commit subjects. `--only rules,logs` narrows it.
+   each client's /api docs (Tools/engine/api, if dumped), the game's own UI
+   code (`source`: each client's BlizzardInterfaceCode export, file:line and
+   whether that file loads on the client), every archived and saved test log,
+   the memory notes, the per-feature ledgers, the Dev/ test headers, the plans
+   and the commit subjects. `--only rules,logs` narrows it.
+
+   **Read the game's code before planning a probe** about how a Blizzard frame,
+   template, mixin or slash command behaves (what it calls, which arguments,
+   which parts it has, what fills it): `known.py <name> --only source`, then
+   open the files it names in the export and read them in full. For a
+   template, `python -I .claude/skills/test/gamesource.py --template <Name>`
+   says where it's made, whether it loads, its inherits and mixin, and
+   whether anything in its chain makes it secure. The code
+   answers what it does; a probe is only for what code can't show (engine
+   calls, secret values, timing, what's on screen). Only trust a hit marked
+   `[loads]` for that client: one export holds every flavor (Forever is game
+   type `camelot`), and a `no:` file never runs there. `?:` means the .toc
+   doesn't list it (an .xml may include it: check). No export, or "Wow.exe is
+   newer", means ask the user to export again: start the game with `-console`,
+   at the character screen press `` ` `` and type `exportInterfaceFiles code`
+   (once per client). It's Blizzard's code: read it where it is, never copy it
+   into the repo.
 3. Write each question into the ledger with its answer:
    - **tested** on that client, still current: settled. Don't test it again.
    - **tested NO**: say it can't work, with the proof, and use the rule's
@@ -208,7 +227,12 @@ python -I .claude/skills/test/read_log.py <key> [client]
 ```
 
 Prints the test's log, the session's deverror / BLOCKED / ERROR / chat lines,
-the screenshots taken since it started (open every one), and archives the log
+the screenshots taken since it started (open every one), the game's own logs
+(the console's errors and warnings from the last UI session, saved even
+without `-console`, and Logs/FrameXML.log's load errors since the test
+started: errors in Blizzard's code and syntax errors show up there, never in
+our log; `(game code only)` marks a stack with no Cinematic file, which may
+still be ours through taint or a frame we made), and archives the log
 in Tools/tests/logs/ (git-ignored) so known.py finds it later. With no key it
 lists and archives every saved test log. The game writes the file on /reload
 or logout only: an old "saved" time means ask for a /reload, don't guess.

@@ -35,12 +35,37 @@ Run it after a client patch (the wiki's page says which patch it's up to date fo
 text is CC BY-SA and none is copied. The tags are retail's; Forever and Classic Era can differ (Forever's ReloadUI is
 blocked even from a click). Self-test: `python -I Tools/engine/wikiapi.py --selftest`.
 
+## The game's templates as parts recipes (per client)
+
+`python -I Tools/engine/templates.py` reads each client's code export (`<client>/BlizzardInterfaceCode`) and turns
+templates into recipes. It covers every template the addon's code names, the Preview Match plan's, and what they're
+built on. Only definitions that load on that client count. Each recipe has:
+- kind, size, mixins and scripts, key values, a status bar's fill;
+- every part: parentKey or name, layer, atlas or file, size, anchors, hidden, alpha, font;
+- child frames as recipes of their own.
+
+Inherited templates are merged in the inherits order, then the template's own XML, the way the game builds it. It
+writes `api/templates-<client>.lua`, git-ignored with the rest of `api/`. `--show <Name> [client]` prints one recipe.
+`Tools/offline/templateparts.lua` puts these recipes on the offline stand-in (opt-in). The Style Lab uses them too,
+with `build.py --game-parts`. Check: `--selftest`.
+
 ## The game's own API docs (per client)
 
-`/cine debug apidocs` (Dev/ApiDocsDump.lua, dev copy) saves the docs behind the game's `/api` command for the
-client you're on into `CinematicDB.apiDocs`, one line per function, event and table, every extra field Blizzard puts
-on an entry kept (secret flags and the like), then asks for a reload. Run it once per client. Then
-`python -I Tools/engine/apidocs.py` reads every client's saved copy and:
+The docs behind the game's `/api` command come from either of two places:
+
+- **The game's code export (no game run).** Start the game with `-console`, then at the character screen press
+  `` ` `` and type `exportInterfaceFiles code`, once per client and again after a patch. It writes
+  `<client>/BlizzardInterfaceCode`.
+  - apidocs.py runs its `Blizzard_APIDocumentationGenerated` files, walked by Dev/ApiDocsDump.lua's own code. So the
+    lines are the in-game dump's to the letter: on Forever, 2026-11-23, all 9241 lines were the same.
+  - It also adds the tables outside any system that the dump never reached (`T - ...`, most Enums with their values)
+    and the docs' help sentences (`api/<client>-help.txt`).
+- **`/cine debug apidocs`** (Dev/ApiDocsDump.lua, dev copy) saves the same docs for the client you're on into
+  `CinematicDB.apiDocs`, then asks for a reload.
+
+Each line is one function, event or table, with every extra field Blizzard puts on an entry kept (secret flags and the
+like). `python -I Tools/engine/apidocs.py` reads both for every client, uses the newer one, compares the two when both
+are there (lines found only in one are listed), and then:
 
 - writes `api/<client>.txt` (git-ignored: Blizzard's data stays on this PC). Look a call up there for its exact
   arguments and returns on that client;

@@ -134,8 +134,11 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     dump = os.path.join(OUT, "cdm.json" if cdm else "dump.json")
     script = "Tools/style-lab/cdm_dump.lua" if cdm else "Tools/style-lab/dump.lua"
+    # (--game-parts: frames from a game template get its real parts, from the game's code export:
+    # Tools/engine/templates.py, Tools/offline/templateparts.lua.)
+    extra = ["parts"] if "--game-parts" in sys.argv and not cdm else []
     run = subprocess.run([sys.executable, "-I", "Tools/offline/run.py", script, client,
-                          dump.replace("\\", "/")], cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+                          dump.replace("\\", "/")] + extra, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
                          stdin=subprocess.DEVNULL)
     print(run.stdout.strip())
     if run.returncode != 0:

@@ -18,6 +18,20 @@ The user hit an error in game. The aim is never "make this line go away": it's t
    its session, a few log lines before it, and its stack, plus `errors: Nx` repeat counts and crash reports from the
    last day. Under each one: `KNOWN <id> [status]` with its why and don't, or `NEW`.
 
+   It ends with the game's own logs for that client: the console's saved errors and warnings
+   (`WTF/SavedVariables/Blizzard_Console.lua`, the same number of UI sessions back; saved even without `-console`) and
+   `Logs/FrameXML.log` from the last day. These catch what our log can't: errors raised in Blizzard's code (marked
+   `(game code only)`: no Cinematic file in the stack, which can still be ours through taint or a frame we made) and
+   load errors (a syntax error means the file never ran). They're matched against the known errors too.
+
+   Under every error with a frame in Blizzard's code (ours or the console's), a `game code:` block shows that file
+   and line from the client's own export, `[loads]` or not, with two lines either side: up to two frames, the error's
+   own line first. Read it before guessing at the cause. Open the whole function in the export when the cause isn't
+   in those lines. A pasted stack works too: `python -I .claude/skills/test/gamesource.py --at "<stack>"`. For more of
+   that function: `python -I .claude/skills/test/known.py <function> --only source`. No `game code:` block under a
+   Blizzard frame means no export for that client, or the game patched since: ask for one (start with `-console`,
+   then `exportInterfaceFiles code` at the character screen).
+
 2. The game only writes the log on /reload or logout. If the "saved" time is older than the user's error (or no error
    shows up), tell them to /reload and run /error again, rather than guessing.
 

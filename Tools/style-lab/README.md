@@ -29,6 +29,16 @@ version. To look at it, start the `style-lab` server from `.claude/launch.json`.
 - A theme: add it to `THEMES` in `StyleThemes.lua`, and its art to `Media/make_theme_art.py`. `check.lua` tests that a
   pick and Undo work and that every setting it writes is real.
 
+## The game's template parts (opt-in)
+
+`python Tools/style-lab/build.py forever --game-parts` builds a frame made from a game template on that template's
+real parts, read from the game's own XML (`Tools/engine/templates.py`, then `Tools/offline/templateparts.lua`). The
+parts are its textures, font strings and child frames, with their atlases, sizes and anchors. Without the flag, such a
+frame takes the code's fallback, such as the cast samples' drawn bar.
+- It needs the client's code export and `python -I Tools/engine/templates.py` run once.
+- It changes many shots: plates, cast bars, check boxes and edit boxes.
+- The art is still the stand-ins: the atlas names are the game's, the pictures are not.
+
 ## What it can't show
 
 - The game's own art isn't ours to copy, so it's a stand-in (`standin()` in `build.py`): icons, portraits, bars and
