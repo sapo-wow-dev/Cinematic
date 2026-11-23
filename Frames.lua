@@ -12204,6 +12204,16 @@ local function GroupFadeTime(group, fadeIn)
 	end
 	return fadeIn and ns.FadeInTime() or ns.FadeOutTime()
 end
+-- Chat you hover comes up in this many seconds, not the Fade in time: a slow
+-- fade left the window's lines and the Show just those messages copy over
+-- them half see-through together, two layers of text (user, 2026-11-23).
+-- The copy stays whole till the window is up (Chat.lua). (In ns: this file is
+-- at the 200-local cap.)
+ns.CHAT_HOVER_FADE_IN = 0.1
+-- Whether a row is the chat window or one of its parts (tabs, buttons, background).
+function ns.IsChatRow(row)
+	return row == "chat" or ROW_FALLBACK[row] == "chat"
+end
 -- The portrait shown while health or power recovers (addons' can stand in
 -- for the game's: see ns.AddPortraitFrame), and the personal resource
 -- display: each with the setting that keeps it up.
@@ -13432,13 +13442,21 @@ function ns.UpdateFrames(cinematic, elapsed)
 				if castLeft and listShown and not hovered[row] then
 					-- (The time for a whole fade at the pace that ends with the cast.)
 					duration = castLeft > 0 and castLeft / (1 - entry.alpha) or ns.db.combatFadeInTime
+				elseif hovered[row] and ns.IsChatRow(row) then
+					duration = ns.CHAT_HOVER_FADE_IN
 				else
 					duration = GroupFadeTime(entry.group, true)
 				end
 			else
 				duration = deathFade and DEATH_FADE_TIME or GroupFadeTime(entry.group, false)
 			end
-			ns.SetEntryAlpha(entry, ns.Approach(entry.alpha, target, elapsed, duration))
+			-- (A hovered chat's first step a quarter of its fade at most: the
+			-- mouse crossing nothing faded skips the pass (Core.lua, HoverProbe),
+			-- and the skipped time, up to 0.25 s, came in this step: the whole
+			-- 0.1 s fade in one jump, chatlines run q4ac4.)
+			ns.SetEntryAlpha(entry, ns.Approach(entry.alpha, target,
+				duration == ns.CHAT_HOVER_FADE_IN and entry.fadeTarget ~= target and math.min(elapsed, duration / 4)
+					or elapsed, duration))
 			if entry.alpha ~= target then
 				local fading = tickTables.fading
 				fading[#fading + 1] = entry
@@ -13481,7 +13499,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 						and (peeking or fightingShown)
 						and not (peeking and ns.db.chatPeekBackground)
 						and not (fightingShown and combatShown and combatShown[GROUP_KEY.chatbackground])) and 0 or 1,
-					elapsed, GroupFadeTime(entry.group, false))
+					elapsed, hovered[row] and ns.CHAT_HOVER_FADE_IN or GroupFadeTime(entry.group, false))
 			end
 			if (entry.backgroundAlpha or 1) < 1 or entry.backgroundFaded then
 				entry.backgroundFaded = entry.backgroundAlpha < 1

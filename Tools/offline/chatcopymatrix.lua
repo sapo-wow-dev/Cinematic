@@ -9,9 +9,11 @@
 -- bottom or not, and the window has a few lines or is full (the game keeps
 -- 128 per window: its line count stops growing). Then the window starts to
 -- come up (moused over). Each cell: whether the copy showed, and as the window
--- rises, whether the copy fades across it ("crossing": its line sits on the
--- window's own) or goes in a quick fade ("gone": the window's newest line is
--- another one now, or it's scrolled up).
+-- rises, whether the copy stays whole on it ("held": its line sits on the
+-- window's own, and it goes once the window is up: "then gone") or goes in a
+-- quick fade ("gone": the window's newest line is another one now, or it's
+-- scrolled up). (Until 2026-11-23 it faded across the window, "crossing":
+-- two half see-through layers of the same text, the user asked for none.)
 -- (Before 2026-11-23 a full window never told a newer line came in: its count
 -- stayed 128, and the copy crossed over a different line, two texts on top
 -- of each other, only after a long session.)
@@ -99,11 +101,17 @@ Matrix.Run({
 		local rise
 		if not (st and st.shown) then
 			rise = "gone"
-		elseif math.abs((st.alpha or 0) - 0.5) < 0.01 then
-			rise = "crossing"
+		elseif math.abs((st.alpha or 0) - 1) < 0.01 then
+			rise = "held"
 		else
 			rise = ("alpha %.2f"):format(st.alpha or -1)
 		end
+		-- (The window all the way up: the copy goes.)
+		cf._fade = 1
+		now = now + 0.05
+		Watch()
+		st = ns.ChatCopyState(cf)
+		if rise == "held" then rise = (st and st.shown) and "held, still up" or "held, then gone" end
 		now = now + 100
 		Watch()
 		return ("first=%s rise=%s"):format(first, rise)
@@ -113,6 +121,6 @@ Matrix.Run({
 		-- newest on screen, so it goes as the window comes up.)
 		{ "", "first=shown rise=gone" },
 		-- (Nothing newer, at the bottom: it sits on the window's own line.)
-		{ "newer=none bottom=yes", "first=shown rise=crossing" },
+		{ "newer=none bottom=yes", "first=shown rise=held, then gone" },
 	},
 })

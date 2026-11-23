@@ -9,7 +9,8 @@
 --   2 full       a full test window (128 lines): a line's copy shows; another
 --                line comes in under it; the window comes up halfway: the copy
 --                goes in the quick fade (Q4). Then the same with nothing newer:
---                the copy crosses over the window's own line (stays, ~half)
+--                the copy stays whole on the window's own line, and goes once
+--                the window is all the way up (no cross-fade, 2026-11-23)
 --   3 achieve    an achievement as the game sends it ("%s has earned...", the
 --                window shows the name): the copy shows its line, the whole
 --                window doesn't come up (Q5). With a screenshot
@@ -17,6 +18,10 @@
 --                window: landed, the copy shows the new line; blocked by a filter
 --                after ours (never added), no older line shows, the whole
 --                window peeks instead (Q6)
+--   5 hover      YOUR ONE ACTION: mouse over your chat window. A copy of its
+--                newest line shows first; then, frame by frame: the window comes
+--                up in ~0.1 s (ns.CHAT_HOVER_FADE_IN, not the 1.5 s Fade in time),
+--                and the copy is never part see-through while it's up (Q8)
 -- Into CinematicDB.chatLinesTestLog. Dev copy only.
 local _, ns = ...
 
@@ -74,6 +79,9 @@ local function WindowPeeking(w) return (ns.chatPeekUntil[w] or 0) > GetTime() en
 ns.TestKit.Define({
 	name = "chatlines",
 	key = "chatLinesTest",
+	-- (CineMode left alone: the hover step needs it on, chat faded. The kit
+	-- turned it off under the step, and timed that fade in, run q78a8.)
+	cineMode = true,
 	title = "Chat: just those messages",
 	about = "Show just those messages on a test chat window: full window, achievements, blocked lines; nothing to do",
 	settings = { "handleFrames", "handleChat", "chatPeek", "chatPeekLinesOnly", "chatHideOwn", "tabOn:Chat/page:2", "tabOn:Chat/page:3" },
@@ -89,7 +97,10 @@ ns.TestKit.Define({
 			end
 		end
 		if tf then tf:Clear() tf:Hide() ns.chatPeekUntil[tf] = nil end
-		return "Achievements and Whispers rows put back, test window gone"
+		if extra.cineOff == "true" and ns.IsCineModeOn and ns.IsCineModeOn() and Cinematic_ToggleCineMode then
+			Cinematic_ToggleCineMode()
+		end
+		return "Achievements and Whispers rows put back, test window gone, CineMode as it was"
 	end,
 	steps = {
 		{ key = "setup", title = "your chat, and the test window", run = function(r)
@@ -122,7 +133,7 @@ ns.TestKit.Define({
 			r:Probe("test window: newest line", function() return w:GetMessageInfo(w:GetNumMessages()) end)
 		end },
 		{ key = "full", title = "full window: a newer line under the copy",
-			proven = "chatlines run 1 (qd892, Forever): quick fade with another or the same line, crossing with none", run = function(r)
+			proven = "chatlines run q78a8 (Forever): quick fade with another or the same line; with none, whole then gone", run = function(r)
 			if not Ready(r) then return end
 			for _, round in ipairs({ { "other", true }, { "same", true }, { "none", false } }) do
 				local w = Fresh(140)
@@ -143,8 +154,14 @@ ns.TestKit.Define({
 					r:Verdict(up and not (st and st.shown),
 						("full window, %s line under it: copy showed, then went in the quick fade (%s)"):format(round[1], text))
 				else
-					r:Verdict(up and st and st.shown and math.abs((st.alpha or 0) - 0.5) < 0.15,
-						"full window, nothing newer: copy crosses over the window's own line (" .. text .. ")")
+					local held = up and st and st.shown and math.abs((st.alpha or 0) - 1) < 0.01
+					w:SetAlpha(1) -- (all the way up)
+					r:Sleep(0.3)
+					local after, st2 = State(w)
+					r:Log("round none, window at 1: " .. after)
+					r:Verdict(held and not (st2 and st2.shown),
+						"full window, nothing newer: copy stays whole on the window's own line, then goes once it's up ("
+							.. text .. " / " .. after .. ")")
 				end
 				w:Hide() -- (its copy goes with it: a clean start for the next round)
 				r:Sleep(0.3)
@@ -200,6 +217,87 @@ ns.TestKit.Define({
 				"blocked: no older line shows, the whole window peeks as for any line not found: " .. state)
 			ns.chatPeekUntil[w] = nil
 			w:Hide()
+		end },
+		{ key = "hover", title = "hover your chat: quick fade, no cross-fade",
+			proven = "chatlines run qfba7 (Forever): 0.075 s over 8 frames (0.25 0.64 1.00), copy whole then gone", run = function(r)
+			if not Ready(r) then return end
+			local cf = DEFAULT_CHAT_FRAME or _G.ChatFrame1
+			if not (ns.ChatTestAlpha and ns.CHAT_HOVER_FADE_IN and ns.IsCineModeOn and Cinematic_ToggleCineMode) then
+				r:Skip("no hover fade hooks (ns.CHAT_HOVER_FADE_IN, ns.ChatTestAlpha) or no CineMode toggle")
+				return
+			end
+			if not ns.IsCineModeOn() then
+				r:Keep("cineOff", "true")
+				Cinematic_ToggleCineMode()
+				r:Log("CineMode turned on for the step (put back at the end)")
+			end
+			-- (Chat faded first: up to the hold and fade out, mouse elsewhere.)
+			local start = GetTime()
+			while (ns.ChatTestAlpha(cf) or 1) > 0.001 and GetTime() - start < 15 do r:Sleep(0.2) end
+			local base = ns.ChatTestAlpha(cf)
+			r:Log(("chat window alpha before: %s, hover fade in %s s, Fade in time %s s"):format(tostring(base),
+				tostring(ns.CHAT_HOVER_FADE_IN), tostring(ns.FadeInTime())))
+			if (base or 1) > 0.02 then
+				r:Skip("your chat window never faded (alpha " .. tostring(base) .. "): nothing to fade in")
+				return
+			end
+			-- A line of ours in your chat, and its copy, as a message peeking would show.
+			local line = ("|cff999999[Cinematic test] hover your chat: this line's copy stays whole as the window comes up|r")
+			cf:AddMessage(line)
+			ns.ChatTestPeek(cf, line)
+			local copyUp = ns.ChatCopyState(cf)
+			copyUp = copyUp and copyUp.shown
+			r:Log("copy of the newest line up: " .. tostring(copyUp))
+			-- Frame by frame from here: when the window starts up and gets there,
+			-- and the copy's alpha while it's up.
+			local rec = { partial = 0, frames = 0 }
+			local watcher = CreateFrame("Frame")
+			watcher:SetScript("OnUpdate", function()
+				local now, a = GetTime(), ns.ChatTestAlpha(cf) or 0
+				-- (Timed from the rise: up from where it lay, not a fade out's
+				-- tail. Run q7384 started at 0.03 still fading out, and timed
+				-- your reaction too.)
+				if a > 0.02 and rec.last and rec.last <= 0.02 and not rec.from then
+					rec.from = now
+					-- (What brought it up: run qda7e went 0 to 1 in one frame, after 6
+					-- minutes. The mouse on it, or typing, which shows it at once.)
+					rec.cause = ("mouse over it %s, typing %s, alpha before %.2f"):format(
+						tostring(ns.Flag(cf:IsMouseOver())), tostring(ns.IsChatActive and ns.IsChatActive()), rec.last or -1)
+					rec.trail = {}
+				end
+				if rec.trail and #rec.trail < 12 then rec.trail[#rec.trail + 1] = ("%.2f"):format(a) end
+				rec.last = a
+				if a >= 0.99 and rec.from and not rec.to then rec.to = now end
+				if rec.from and not rec.to then
+					rec.frames = rec.frames + 1
+					local st = ns.ChatCopyState(cf)
+					-- (A quick fade is right when a newer line came in under it: its
+					-- line no longer sits on the window's. Run q78a8 had one.)
+					if st and st.quick then rec.quick = true end
+					if st and st.shown and not st.quick and (st.alpha or 1) > 0.02 and (st.alpha or 1) < 0.98 then
+						rec.partial = rec.partial + 1
+						rec.partialAt = rec.partialAt or ("copy a=%.2f window a=%.2f quick=%s"):format(st.alpha, a, tostring(st.quick))
+					end
+				end
+			end)
+			r:WaitFor("Move your mouse over your chat window.", { check = function() return rec.to end })
+			watcher:SetScript("OnUpdate", nil)
+			local took = rec.to - rec.from
+			r:Log(("came up: %s; alpha frame by frame: %s"):format(tostring(rec.cause),
+				table.concat(rec.trail or {}, " ")))
+			local st = ns.ChatCopyState(cf)
+			r:Log(("window up in %.3f s over %d frames; copy part see-through on %d frame(s) %s; quick fade %s; copy now %s"):format(
+				took, rec.frames, rec.partial, tostring(rec.partialAt or ""), tostring(rec.quick or false), tostring(st and st.shown)))
+			-- (Smooth, not a jump: at 60 fps a 0.1 s fade is ~6 frames.)
+			r:Verdict(rec.frames >= 2, ("the window faded in over %d frame(s), not in one jump"):format(rec.frames))
+			r:Verdict(took <= ns.CHAT_HOVER_FADE_IN + 0.1,
+				("hovered chat comes up in about %.1f s, not the Fade in time: %.3f s"):format(ns.CHAT_HOVER_FADE_IN, took))
+			if copyUp then
+				r:Verdict(rec.partial == 0 and not (st and st.shown),
+					("no cross-fade: the copy was never part see-through (%d frame(s)), and it's gone with the window up"):format(rec.partial))
+			else
+				r:Log("no copy showed (newest line unreadable?): cross-fade not checked")
+			end
 		end },
 	},
 })

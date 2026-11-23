@@ -734,14 +734,16 @@ local function CopyLinesUp(chatFrame, copy)
 	return true
 end
 
-local QUICK_FADE = 0.15 -- seconds a copy takes to go when its lines don't match the window's
+local QUICK_FADE = 0.1 -- seconds a copy takes to go when its lines don't match the window's
+local SWAP_AT = 0.98 -- how far up the window is when a copy on its lines goes
 
 -- While copies are up: gone once their time is over, or when the window
--- itself comes up (hovered, typed in). When their lines sit on the window's
--- own they fade out as it fades in, from how far up it was when they showed
--- (copy.base), so its lines and theirs cross over each other; when they
--- don't (a newer line came in under the copied one) they go at once, in a
--- quick fade, as soon as the window starts coming up.
+-- itself comes up (hovered, typed in). No cross-fade (two half see-through
+-- layers of the same text, user 2026-11-23): when their lines sit on the
+-- window's own they stay whole while it comes up under them (hovered: in
+-- ns.CHAT_HOVER_FADE_IN, Frames.lua) and go once it's up, so the words never
+-- dim; when they don't (a newer line came in under the copied one) they go
+-- in a quick fade as soon as the window starts coming up.
 local function WatchCopies()
 	local now, any = GetTime(), false
 	for chatFrame, copy in pairs(lineCopies) do
@@ -749,15 +751,15 @@ local function WatchCopies()
 			local alpha = WindowAlpha(chatFrame) or 1
 			local base = copy.base or 0
 			local rise = (alpha - base) / math.max(0.05, 1 - base)
-			local fade = 1 - math.max(0, rise)
+			local fade = 1
 			if not copy.quickFrom and rise > 0.02 and not CopyLinesUp(chatFrame, copy) then
 				copy.quickFrom, copy.quickAlpha = now, copy.frame:GetAlpha()
 			end
 			if copy.quickFrom then
-				fade = math.min(fade, (copy.quickAlpha or 1) * (1 - (now - copy.quickFrom) / QUICK_FADE))
+				fade = (copy.quickAlpha or 1) * (1 - (now - copy.quickFrom) / QUICK_FADE)
 			end
 			local seen = not ns.ChatPeekLinesOnly() or now >= copy.untilTime
-				or not ns.ChatWindowShown(chatFrame) or rise >= 0.9 or fade <= 0
+				or not ns.ChatWindowShown(chatFrame) or alpha >= SWAP_AT or fade <= 0
 			if seen then
 				copy.frame:Clear()
 				copy.frame:Hide()
