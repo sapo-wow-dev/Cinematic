@@ -2548,21 +2548,39 @@ end
 -- Any other error, a real bug, goes to the error handler as it happens, its
 -- stack whole: all "a nil value" errors were taken for a left-out part, and
 -- others raised again without their stack. Audit 2026-11-22.)
-local function LeftOutField(err)
+-- (misses: the keys the command read on ns and found nothing, key -> true.
+-- An index ("ns.X.y") counts only when ns was read for that name: the text
+-- alone can't tell it from another table's missing field, entry.frame.x,
+-- a real bug shown as left out before. Audit 2026-11-23.)
+local function LeftOutField(err, misses)
 	if type(err) ~= "string" or (issecretvalue and issecretvalue(err)) then return false end
 	-- (Lua 5.1 names some calls' field "?" (an elseif's call, Forever: /cine
 	-- doftest with Atmosphere left out said nothing). Not known: a left-out
 	-- part's, as before the audit; a named one only when ns lacks it.)
-	local field = err:match("field '([%w_?]+)' %(a nil value%)")
-	return field ~= nil and (field == "?" or rawget(ns, field) == nil)
+	local how, field = err:match("attempt to (%a+) field '([%w_?]+)' %(a nil value%)")
+	if field == nil then return false end
+	if field == "?" then return true end
+	if rawget(ns, field) ~= nil then return false end
+	if how == "index" then return misses ~= nil and misses[field] == true end
+	return true
 end
 ns.SlashLeftOutField = LeftOutField -- (Tools/offline/auditsettings.lua)
+-- (While a command runs with a part left out: every ns read that finds
+-- nothing noted. Only when ns has no metatable of its own; a command inside
+-- a command shares the outer one's.)
+local nsMisses
+local MISS_WATCH = { __index = function(_, key) if nsMisses and type(key) == "string" then nsMisses[key] = true end end }
 HandleSlash = function(msg)
 	local names = LeftOut()
 	if not names then return slashInner(msg) end
 	local missing
+	local watch = getmetatable(ns) == nil
+	if watch then
+		nsMisses = {}
+		setmetatable(ns, MISS_WATCH)
+	end
 	local results = { xpcall(function() return slashInner(msg) end, function(err)
-		if LeftOutField(err) then
+		if LeftOutField(err, nsMisses) then
 			missing = err
 		else
 			local handler = geterrorhandler and geterrorhandler()
@@ -2570,6 +2588,10 @@ HandleSlash = function(msg)
 		end
 		return err
 	end) }
+	if watch then
+		setmetatable(ns, nil)
+		nsMisses = nil
+	end
 	if results[1] then return unpack(results, 2) end
 	if missing then LeftOutNote(names, missing) end
 end
