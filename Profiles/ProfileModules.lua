@@ -60,6 +60,22 @@ end
 local MUSIC_EVENTS = { "AFK", "Still", "Chair", "Kneel", "Sleep", "Dance", "Weapon", "Campfire",
 	"SitButton", "Fishing", "Hearth", "Teleport", "Logout", "Quest" }
 
+-- The Wheels pages' and the Keyboard Map's switches (and their pages, for a
+-- module's scope): off on Blank Slate and Auto-Hide UI, the user 2026-11-22.
+local KEYS_OFF = { "wheelMasterOn", "wheelYoursOn", "wheelCameraOn", "wheelMenuOn", "wheelMarkerOn",
+	"wheelWorldOn", "wheelVisionOn", "keyboardMap" }
+local KEYS_OFF_SCOPE = { "Master wheel/top", "Your wheels/top", "Camera wheel/top", "Menu wheel/top",
+	"Marker wheel/top", "Ground marker wheel/top", "Vision wheel/top", "Keyboard Map/top" }
+local function WithKeysOff(scope)
+	for _, entry in ipairs(KEYS_OFF_SCOPE) do scope[#scope + 1] = entry end
+	return scope
+end
+local function KeysOff(set)
+	for _, key in ipairs(KEYS_OFF) do
+		if ns.DEFAULTS[key] ~= nil and ns.DEFAULTS[key] ~= false then set(key, false) end
+	end
+end
+
 -- A list's rows, all given value.
 local function All(rows, value)
 	local list = {}
@@ -534,32 +550,33 @@ ns.PROFILE_MODULES = {
 	-- (The Blank Slate profile's: every page's switch off, as before a
 	-- profile's picked (ns.OFF_UNTIL_PICKED, Profiles.lua), for players who
 	-- turn on just the pages they want.)
-	{ key = "all-pages-off", name = "Every page off", scope = { "Action Style/top", "Advanced Frames/Supported addons",
+	{ key = "all-pages-off", name = "Every page off", scope = WithKeysOff({ "Action Style/top", "Advanced Frames/Supported addons",
 		"Audio/top", "Bubble Style/top", "Buffs/debuffs/top", "Cameras/top", "Card Vision/top", "Cast Bar Style/top",
 		"Chat/top", "Cooldown Manager/top", "Death Vision/top", "Duel Vision/top", "Effects/top", "Fishing/top", "Gamepad/top",
 		"General/top", "Graphics+/top", "Heal Vision/top", "Hunter/top", "Letterbox/top", "Minimap/top",
 		"Interface Recolor/top", "Mouseover groups/top", "Name Style/top", "Nameplate Style/top", "Nameplates/top", "Personal Resources/top",
 		"Personal Style/top", "Quest Vision/top", "Quest tracker/top", "Raid Style/top", "Roll Vision/top",
 		"Skyriding Cam/top", "Standard Frames/top", "Style General/top", "Swing timer/top", "Tint/top",
-		"Tooltip Style/top", "Unit Style/top" },
+		"Tooltip Style/top", "Unit Style/top" }),
 		tip = "Every page's Enable switch off: Cinematic does nothing until you turn a page on.",
 		apply = function(set)
 			for _, key in ipairs(ns.OFF_UNTIL_PICKED or {}) do
 				if ns.DEFAULTS[key] ~= nil and ns.DEFAULTS[key] ~= false then set(key, false) end
 			end
+			KeysOff(set) -- (the wheels and Keyboard Map too)
 		end },
 	-- (The Auto-Hide UI profile's: every page that isn't about your UI off,
 	-- the cameras, effects, styles, Visions, cards, music and the rest, so
 	-- only the fading and the frame pages are left.)
-	{ key = "ui-pages-only", name = "Only the UI pages", scope = { "Cameras/top", "Shoulder Cam",
+	{ key = "ui-pages-only", name = "Only the UI pages", scope = WithKeysOff({ "Cameras/top", "Shoulder Cam",
 		"Skyriding Cam/top", "Effects/top", "Letterbox/top", "Tint/top", "Graphics+/top", "General/top",
 		"Style General/top", "Unit Style/top", "Raid Style/top", "Action Style/top", "Personal Style/top",
 		"Tooltip Style/top", "Nameplate Style/top", "Name Style/top", "Cast Bar Style/top", "Bubble Style/top",
 		"Interface Recolor/top", "Heal Vision/top", "Damage Vision", "Vitals Vision", "Quest Vision/top",
 		"Roll Vision/top", "Teleport Vision", "Death Vision/top", "Duel Vision/top", "Emote Vision",
-		"Card Vision/top", "Fishing/top", "Hunter/top", "Cooldown Manager/top" },
-		tip = "Turns off every page that isn't about your UI: no cameras, effects, styles, Visions or cards, " ..
-			"and the Cooldown Manager page. Music goes by the Sound choice.",
+		"Card Vision/top", "Fishing/top", "Hunter/top", "Cooldown Manager/top" }),
+		tip = "Turns off every page that isn't about your UI: no cameras, effects, styles, Visions, cards, " ..
+			"wheels or Keyboard Map, and the Cooldown Manager page. Music goes by the Sound choice.",
 		apply = function(set)
 			for _, key in ipairs({ "cameraModes", "shoulderCam", "skyrideCam", "visualEffects", "letterboxPage",
 				"tintPage", "graphicsPlus", "styleGeneral", "ufStyle", "rfStyle", "abStyle",
@@ -571,6 +588,7 @@ ns.PROFILE_MODULES = {
 				"handleCooldowns" }) do
 				if ns.DEFAULTS[key] ~= nil and ns.DEFAULTS[key] ~= false then set(key, false) end
 			end
+			KeysOff(set) -- (the wheels and Keyboard Map too, the user 2026-11-22)
 		end },
 	{ key = "no-custom-bubbles", name = "No custom bubbles", scope = { "Chat bubbles/Custom bubbles" },
 		tip = "Only the game's own chat bubbles: no off-screen ones, and none brought down from the top of the screen.",

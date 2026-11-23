@@ -26,6 +26,11 @@
 --   4 back     after it: both loaded, the copy gone, on Balanced; then
 --              /cine profile blank slate (the box, no welcome window) and
 --              /cine profile balanced (no box: nothing to reload)
+--   5 offswitches  nothing to click (run alone: /cine debug profileparts 5):
+--              Balanced, then Auto-Hide UI's card and /cine profile blank
+--              slate: every wheel switch and the Keyboard Map's off, the
+--              shelf's two links drawn off, the menu wheel's key dead, an
+--              open map closed and not opening again (Balanced: all on)
 -- Your profile and both Load boxes put back at the end. (Stopped while
 -- they're out: wanted again, from your next /reload.)
 -- Into CinematicDB.profilePartsTestLog. Dev copy only.
@@ -597,6 +602,112 @@ ns.TestKit.Define({
 			end
 			BoxesMatch(r)
 			if welcome then welcome:Hide() end
+		end },
+		-- (2026-11-22, the user: Blank Slate and Auto-Hide UI had Wheels and
+		-- Keyboard Map on. Nothing to click: run alone with "5".)
+		{ key = "offswitches", title = "Auto-Hide UI and Blank Slate: wheels + Keyboard Map off",
+			proven = "profileparts 5 run 1 (Forever, 2026-11-22): 23 pass, 0 fail", run = function(r)
+			r:Keep("profile", ns.ActiveProfile())
+			for _, part in ipairs(PARTS) do r:Keep("wanted:" .. part, ns.ModuleWanted(part)) end
+			for _, name in ipairs(TOUCHED) do
+				local saved = ns.db.profiles and ns.db.profiles[name]
+				r:Keep("saved:" .. name, saved and Copy(saved) or false)
+			end
+			if not ns.ProfileChosen() then
+				r:Fail("no profile picked yet on this character: the first pick asks about game settings first")
+				return
+			end
+			local KEYS = { "wheelMasterOn", "wheelYoursOn", "wheelCameraOn", "wheelMenuOn", "wheelMarkerOn",
+				"wheelWorldOn", "wheelVisionOn", "keyboardMap" }
+			local function Keys(want, what)
+				local wrong = {}
+				for _, key in ipairs(KEYS) do
+					if (ns.db[key] ~= false) ~= want then wrong[#wrong + 1] = key .. "=" .. tostring(ns.db[key]) end
+				end
+				r:Verdict(#wrong == 0, ("%s: all 8 %s (wrong: %s)"):format(what, want and "on" or "off",
+					#wrong > 0 and table.concat(wrong, ", ") or "none"))
+			end
+			-- The shelf's two links' switches, as drawn, and as ShowMe reads them.
+			local function Links(want, what)
+				for _, page in ipairs({ "Your wheels", "Keyboard Map" }) do
+					local sw
+					local function Find(f)
+						if sw or not f then return end
+						if f.link and f.link.page == page and f.switch then sw = f.switch return end
+						for _, child in ipairs({ f:GetChildren() }) do Find(child) end
+					end
+					Find(rawget(_G, "CinematicWelcome"))
+					local on = ns.ShowMeOn("page:" .. page)
+					r:Verdict(on == want, ("%s: %s link reads %s"):format(what, page, on and "on" or "off"))
+					-- (Painted while the shelf shows: a hidden one isn't judged.)
+					if sw and sw:IsVisible() then
+						r:Verdict(sw.on == want, ("%s: %s link's switch drawn %s"):format(what, page, sw.on and "on" or "off"))
+					else
+						r:Log(("%s: %s link's switch not on screen (built %s)"):format(what, page, tostring(sw ~= nil)))
+					end
+				end
+			end
+			local function Wheel(off, what)
+				local menu = rawget(_G, "CinematicMenuWheel")
+				if menu then
+					r:Verdict((menu:GetAttribute("cineoff") == true) == off, ("%s: the menu wheel's key %s (cineoff %s)"):format(
+						what, off and "does nothing" or "opens it", tostring(menu:GetAttribute("cineoff"))))
+				else
+					r:Log(what .. ": no menu wheel frame")
+				end
+			end
+			local function Map(what)
+				ns.KeyboardMapOpen()
+				r:Verdict(not ns.KeyboardMapShown(), what .. ": the Keyboard Map won't open")
+				if ns.KeyboardMapShown() then ns.KeyboardMapClose() end
+			end
+			local function Pick(name, how)
+				if how == "card" then
+					local card = Cards()[name]
+					if not card then
+						r:Fail("no " .. name .. " card on the welcome window")
+						return false
+					end
+					card:Click()
+				else
+					ns.HandleSlash("profile " .. name:lower())
+				end
+				ns.db.fadeUI = false
+				r:Sleep(0.5)
+				r:Verdict(ns.ActiveProfile() == name, name .. " picked: " .. tostring(ns.ActiveProfile()))
+				return ns.ActiveProfile() == name
+			end
+			ns.ShowWelcome()
+			r:Sleep(0.5)
+			-- (Balanced first: the starting point with them on, and the next click a real pick.)
+			if Pick("Balanced", "card") then
+				Keys(true, "Balanced")
+				Links(true, "Balanced")
+				Wheel(false, "Balanced")
+			end
+			-- An open map closes when a profile turns its page off (Profiles.lua).
+			ns.KeyboardMapOpen(true)
+			r:Verdict(ns.KeyboardMapShown(), "Balanced: the Keyboard Map opens")
+			if Pick("Auto-Hide UI", "card") then
+				r:Verdict(not ns.KeyboardMapShown(), "Auto-Hide UI: the open Keyboard Map closed")
+				Keys(false, "Auto-Hide UI")
+				Links(false, "Auto-Hide UI")
+				Wheel(true, "Auto-Hide UI")
+				Map("Auto-Hide UI")
+				local welcome = rawget(_G, "CinematicWelcome")
+				if welcome then r:Shot("Auto-Hide UI: the shelf's Wheels and Keyboard Map off", { behind = welcome }) end
+			end
+			if ns.KeyboardMapShown() then ns.KeyboardMapClose() end
+			local welcome = rawget(_G, "CinematicWelcome")
+			if welcome and welcome:IsShown() then welcome:Hide() end
+			if Pick("Blank Slate", "slash") then
+				Keys(false, "Blank Slate")
+				Links(false, "Blank Slate")
+				Wheel(true, "Blank Slate")
+				Map("Blank Slate")
+			end
+			-- (Never reloaded: the parts' box hidden, the rest put back at the end.)
+			if StaticPopup_Hide then StaticPopup_Hide(ns.MODULES_RELOAD_POPUP) end
 		end },
 	},
 })

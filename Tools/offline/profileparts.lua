@@ -147,6 +147,40 @@ for _, client in ipairs({ "forever", "retail" }) do
 	local w = rawget(_G, "CinematicWelcome")
 	Check("welcome window one layer under the game's boxes", w:GetFrameStrata() == "HIGH", w:GetFrameStrata())
 	Check("nothing moves it under a box", rawget(w, "KeepUnderBoxes") == nil)
+	w:Hide()
+
+	-- Step 5 alone: Auto-Hide UI and Blank Slate turn every wheel and the
+	-- Keyboard Map off, Balanced has them on; nothing to click, done, put back.
+	CinematicDB.profilePartsTestResume = nil
+	-- (The Keyboard Map built: no keys bound, no stances.)
+	GetNumShapeshiftForms = function() return 0 end
+	GetBindingAction = function() return "" end
+	GetBindingKey = function() return nil end
+	-- (The wheels' "cineoff", kept: the stand-in's attributes read nil.)
+	wow.Methods.SetAttribute = function(self, key, value)
+		local attrs = rawget(self, "_attrs") or {}
+		rawset(self, "_attrs", attrs)
+		attrs[key] = value
+	end
+	wow.Methods.GetAttribute = function(self, key)
+		local attrs = rawget(self, "_attrs")
+		return attrs and attrs[key]
+	end
+	local before = ns.ActiveProfile()
+	ns.HandleSlash("debug profileparts 5")
+	Advance(10)
+	log = CinematicDB.profilePartsTestLog
+	for _, line in ipairs(log or {}) do
+		if line:find("verdict FAIL") then Check("step 5 verdict", false, line) end
+	end
+	for _, what in ipairs({ "Auto%-Hide UI: all 8 off", "Blank Slate: all 8 off", "Balanced: all 8 on",
+		"Auto%-Hide UI: Your wheels link reads off", "Blank Slate: Keyboard Map link reads off",
+		"Auto%-Hide UI: the open Keyboard Map closed", "Blank Slate: the Keyboard Map won't open" }) do
+		Check("step 5: " .. what:gsub("%%", ""), Has(log, "PASS offswitches: " .. what) ~= nil)
+	end
+	Check("step 5: done, nothing to click", Has(log, "DONE: ") ~= nil and Has(log, "asked: ") == nil, Has(log, "DONE: "))
+	Check("step 5: profile put back", ns.ActiveProfile() == before, ns.ActiveProfile())
+	Check("step 5: no box left up", next(popups) == nil)
 end
 print(fails == 0 and "profileparts: all ok" or ("profileparts: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
