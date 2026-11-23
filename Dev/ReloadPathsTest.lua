@@ -12,7 +12,8 @@
 --   6 turn off   Turn off and reload (Cinematic is kept on for the test)
 --   7 reset      Reset Cinematic > Reset Settings (nothing reset for the test)
 --   8 ask        the "Reload now?" popup (/cine debug solo's)
--- 3-8: PASS when the UI reloads. Each step logs any ADDON_ACTION_BLOCKED and
+-- 3-8: PASS when the UI reloads. A step proven on a client (proven[client],
+-- the log that showed it) is left out there unless the run is "full". Each step logs any ADDON_ACTION_BLOCKED and
 -- the "Type /reload" fallback. Into CinematicDB.reloadPathsLog, with the
 -- client, ActionButtonUseKeyDown and the key used. CineMode off for the
 -- run, back after; the Reload button and the test key put back. Run again to
@@ -124,7 +125,8 @@ local function PopupStep(id, title, which, show, button, patch)
 end
 
 local STEPS = {
-	{ id = "timer", title = "ReloadUI from a timer (the old way)", info = true, run = function()
+	{ id = "timer", title = "ReloadUI from a timer (the old way)", info = true,
+		proven = { forever = "run 1 (2026-11-23): blocked, ADDON_ACTION_BLOCKED UNKNOWN()" }, run = function()
 		Prompt("step 1: ReloadUI from a timer, no click. Just watch.")
 		C_Timer.After(1, function()
 			Clicked("(none: a timer)")
@@ -138,7 +140,8 @@ local STEPS = {
 		}
 		StaticPopup_Show("CINEMATIC_RELOADTEST_OLD")
 	end, 1),
-	{ id = "button", title = "the Reload button", run = function(step)
+	{ id = "button", title = "the Reload button", proven = { forever = "run 1 (2026-11-23): reloaded" },
+		run = function(step)
 		ns.reloadTestShowButton = true -- (QoL/Reload.lua: up whatever its setting and page say)
 		step.undo = function() ns.reloadTestShowButton = nil end
 		local button = _G.CinematicReloadButton
@@ -151,7 +154,8 @@ local STEPS = {
 			Prompt("step 3: click the Reload button at the top of the screen.")
 		end)
 	end },
-	{ id = "key", title = "the Reload key", run = function(step)
+	{ id = "key", title = "the Reload key", proven = { forever = "run 1 (2026-11-23): reloaded (SHIFT-/)" },
+		run = function(step)
 		local state = State()
 		local key = GetBindingKey("CINEMATIC_RELOAD")
 		if not key then
@@ -195,6 +199,15 @@ local STEPS = {
 		function() ns.ReloadOrAsk("Reload test: click Reload.") end, 1),
 }
 
+-- (The popups' steps, proven on Forever by the same run.)
+for _, step in ipairs(STEPS) do
+	if step.id == "oldpopup" then
+		step.proven = { forever = "run 1 (2026-11-23): reloaded; the game's popup click lets ReloadUI through" }
+	elseif not step.proven then
+		step.proven = { forever = "run 1 (2026-11-23): reloaded through the secure Reload over the popup" }
+	end
+end
+
 local function CineOff()
 	if ns.IsCineModeOn and ns.IsCineModeOn() and Cinematic_ToggleCineMode then Cinematic_ToggleCineMode() end
 end
@@ -222,6 +235,12 @@ function ns.ReloadPathsNext()
 	local state = State()
 	if not state then return end
 	local step = STEPS[state.pos]
+	local client = ns.isRetail and "retail" or "forever"
+	while step and step.proven and step.proven[client] and not state.full do
+		Say(("step %d %s: proven, not checked again (%s)"):format(state.pos, step.id, step.proven[client]))
+		state.pos = state.pos + 1
+		step = STEPS[state.pos]
+	end
 	if not step then return Finish("DONE") end
 	if InCombatLockdown() then
 		Prompt("end the fight first; the test waits.")
@@ -271,13 +290,13 @@ hooksecurefunc(ns, "ReloadFallback", function()
 	Say("  fallback: \"Type /reload to finish.\" said")
 end)
 
-function ns.ReloadPathsTest()
+function ns.ReloadPathsTest(words)
 	if State() then return Finish("stopped") end
 	if not CinematicDB then return end
 	if InCombatLockdown() then return ns.Print("/cine debug reloadpaths: not in a fight.") end
 	CinematicDB.reloadPathsLog = {}
 	CinematicDB.reloadPathsTest = { pos = 1, pass = 0, fail = 0, loads = 0,
-		cineWasOn = ns.IsCineModeOn and ns.IsCineModeOn() or false }
+		cineWasOn = ns.IsCineModeOn and ns.IsCineModeOn() or false, full = words == "full" or nil }
 	local build, _, _, toc = GetBuildInfo()
 	Say(("start: client %s (build %s, toc %s), reloadBlocked %s, ActionButtonUseKeyDown %s, Reload key %s, " ..
 		"Reload button %s, CineMode %s"):format(ns.isRetail and "retail" or ns.isClassicEra and "Classic Era" or "Forever",

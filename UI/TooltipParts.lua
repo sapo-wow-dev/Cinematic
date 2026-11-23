@@ -1145,6 +1145,19 @@ function ns.TestPrompt(msg, seconds)
 			promptFrame:SetFrameStrata("TOOLTIP")
 		end
 		promptFrame.text:SetText(msg)
+		-- (Below any of the game's popups that are up, not over its buttons: a
+		-- test asking to click one hid it, the user, 2026-11-23.)
+		local y = -promptFrame:GetHeight() * 0.2
+		local scale, top = promptFrame:GetEffectiveScale(), promptFrame:GetTop()
+		for i = 1, (_G.STATICPOPUP_NUMDIALOGS or 4) do
+			local popup = _G["StaticPopup" .. i]
+			local bottom = popup and popup:IsShown() and popup:GetBottom()
+			if bottom and top and scale > 0 then
+				y = math.min(y, bottom * popup:GetEffectiveScale() / scale - top - 40)
+			end
+		end
+		promptFrame.text:ClearAllPoints()
+		promptFrame.text:SetPoint("TOP", promptFrame, "TOP", 0, y)
 		promptFrame:Show()
 		local shown = msg
 		C_Timer.After(seconds or 4, function()
