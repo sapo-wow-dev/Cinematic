@@ -1973,6 +1973,28 @@ function ns.CooldownGrid(parent, opts)
 		local headH = (compact or noted) and HEAD_H or HEAD_H - 10
 		local _, nowIndex = ns.CooldownGroupNow()
 		local trouble, otherDead = ns.CooldownGroupTrouble()
+		-- (Narrow columns and a name longer than they hold: every scene by its
+		-- number, its name in its tooltip. A player's nine scenes from the old
+		-- lines read "gr...", "Cit...", one over another, 2026-11-23.)
+		local numbered = false
+		if compact and not state.look and groups[1] then
+			local probe = Head(1).text
+			probe:SetWordWrap(false)
+			local room = colW - 8
+			for _, group in ipairs(groups) do
+				local name = ns.CooldownGroupName(group)
+				probe:SetText(name)
+				local whole, longest = probe:GetStringWidth() or 0, 0
+				for word in name:gmatch("%S+") do
+					probe:SetText(word)
+					longest = math.max(longest, probe:GetStringWidth() or 0)
+				end
+				if longest > room or whole > room * 2 - 8 then
+					numbered = true
+					break
+				end
+			end
+		end
 		local bandsTop = y
 		for j, col in ipairs(cols) do
 			local head = Head(j)
@@ -1995,10 +2017,12 @@ function ns.CooldownGrid(parent, opts)
 				r, g, b = GREY[1], GREY[2], GREY[3]
 				-- (In use: said only once there's a group it could be told from.)
 				dot = groups[1] ~= nil and nowIndex == nil and not otherDead
-				if otherDead then r, g, b, sub = AMBER[1], AMBER[2], AMBER[3], L["never applies"] end
+				-- (Narrow: no note under it, as the scenes'; the warning line says it.
+				-- "never appli..." under "Everywhere...", the player's shot 2026-11-23.)
+				if otherDead then r, g, b, sub = AMBER[1], AMBER[2], AMBER[3], compact and "" or L["never applies"] end
 			else
 				-- (Its places in its tooltip: under every name they cluttered the headings.)
-				name = ns.CooldownGroupName(col.group)
+				name = numbered and tostring(col.index) or ns.CooldownGroupName(col.group)
 				dot = nowIndex == col.index
 				local t = trouble[col.index]
 				if t then
@@ -2051,6 +2075,19 @@ function ns.CooldownGrid(parent, opts)
 			end
 			head.under:SetShown(col.id ~= nil and state.editing == col.id)
 			head:Show()
+		end
+		-- (The row as tall as its tallest heading: a two-line name and its note
+		-- ran past it, and the warning lines under the row lay on them, 2026-11-23.)
+		local needH = headH
+		for j = 1, n do
+			local head = heads[j]
+			local h = 6 + (head.text:GetStringHeight() or 12) + 4
+			if head.sub:IsShown() then h = h + (head.sub:GetStringHeight() or 10) + 7 end
+			needH = math.max(needH, math.ceil(h))
+		end
+		if needH > headH then
+			headH = needH
+			for j = 1, n do heads[j]:SetHeight(headH) end
 		end
 		for j = n + 1, #heads do heads[j]:Hide() end
 		plus:SetShown(plusShown)

@@ -270,6 +270,23 @@ local STATES = {
 		Cell("spell", 1978, 1, "ready")
 		Cell("spell", 3044, 2, "never")
 	end },
+	-- (A player's shot, 2026-11-23: nine scenes from the old lines, no names of
+	-- their own (their places and rules are the names), covering every place:
+	-- names cut to "gr...", "Cit...", and the warning line on the headings.)
+	{ id = "s19", name = "19 Nine unnamed scenes, Everywhere else never applies", set = function()
+		Reset()
+		local list = db.cooldownPlaceGroups
+		list[#list + 1] = { id = 1, name = "", cql = "group and combat" }
+		list[#list + 1] = { id = 2, name = "", cql = "group and nocombat" }
+		Scene(3, "", { world = true }, "in")
+		Scene(4, "", { city = true }, "any")
+		Scene(5, "", { city = true }, "out")
+		Scene(6, "", { inn = true, bg = true }, "any")
+		Scene(7, "", { dungeon = true }, "in")
+		Scene(8, "", { dungeon = true, raid = true }, "out")
+		Scene(9, "", { world = true, dungeon = true, raid = true, bg = true }, "any")
+		Cell("spell", 1978, 1, "ready")
+	end },
 	-- (Five scenes, none where you are: Everywhere else in use, its dot by its
 	-- name. The user's shot cut it to "Everywh...", 2026-11-22; no state had it.)
 	{ id = "s18", name = "18 Five scenes, Everywhere else in use", set = function()

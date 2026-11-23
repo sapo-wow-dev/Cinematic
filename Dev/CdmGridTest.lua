@@ -526,6 +526,50 @@ ns.TestKit.Define({
 			probe:Hide()
 			r:Pass("gallery shot; look at the screenshots")
 		end },
+		{ key = "nine", proven = "cdmgrid run 2026-11-23 (retail): PASS, headings 1-9, words inside, warning line under, audit clean, shot", title = "nine unnamed scenes: numbered headings, warning lines under them", run = function(r)
+			-- (A player's shot, 2026-11-23: nine scenes from the old lines, named by
+			-- their places, covering every place: "gr...", "Cit..." over each other,
+			-- the warning lines on the headings. CDM lab state 19.)
+			if not test.here and not Setup(r) then return end
+			local grid, panel = OpenPage(r)
+			if not grid then return end
+			local db = ns.db
+			wipe(db.cooldownSpellCells)
+			wipe(db.cooldownGroupCells)
+			grid.state.open, grid.state.editing, grid.state.look = nil, nil, false
+			local function S(id, places, combat) return { id = id, name = "", places = places, combat = combat } end
+			db.cooldownPlaceGroups = {
+				{ id = 1, name = "", cql = "group and combat" }, { id = 2, name = "", cql = "group and nocombat" },
+				S(3, { world = true }, "in"), S(4, { city = true }, "any"), S(5, { city = true }, "out"),
+				S(6, { inn = true, bg = true }, "any"), S(7, { dungeon = true }, "in"),
+				S(8, { dungeon = true, raid = true }, "out"),
+				S(9, { world = true, dungeon = true, raid = true, bg = true }, "any"),
+			}
+			ns.CooldownRuleFactsStale()
+			grid.Changed()
+			r:Sleep(0.4)
+			local heads, names, lowest = {}, {}, nil
+			for _, child in ipairs({ grid:GetChildren() }) do
+				if child.col and child.sub and child:IsShown() then heads[#heads + 1] = child end
+			end
+			table.sort(heads, function(a, b) return (a:GetLeft() or 0) < (b:GetLeft() or 0) end)
+			local inside = true
+			for _, head in ipairs(heads) do
+				names[#names + 1] = tostring(head.text:GetText())
+				local bottom = head.text:GetBottom()
+				if head.sub:IsShown() then bottom = math.min(bottom or 0, head.sub:GetBottom() or 0) end
+				if bottom and head:GetBottom() and bottom < head:GetBottom() - 1 then inside = false end
+				lowest = math.min(lowest or math.huge, head:GetBottom() or math.huge)
+			end
+			r:Verdict(names[1] == "1" and names[9] == "9", "headings: " .. table.concat(names, ", "))
+			r:Verdict(inside, "every heading's words inside its heading")
+			local line = grid.troubleLines[1]
+			local top = line and line:IsShown() and line:GetTop()
+			r:Verdict(top and lowest and top <= lowest + 1,
+				("first warning line's top %s, headings' bottom %s"):format(tostring(top), tostring(lowest)))
+			Audit(r, "nine unnamed scenes", grid:GetParent())
+			r:Shot("nine unnamed scenes", { behind = panel })
+		end },
 		{ key = "preview", proven = "cdmgrid run 35 (2026-11-22): PASS, Where/When picker, faded, banner, back to shown", title = "the previewer: a dungeon fight from here, your icon follows", seconds = 6, run = function(r)
 			if not test.here and not Setup(r) then return end
 			-- (A scene for dungeon fights, the spell Never in it; you're not in one.)
