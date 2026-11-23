@@ -8,17 +8,23 @@
 -- combat text off holding it too or not, Keep yours on the Game Settings page
 -- or not, your own value on or off; then Reset Settings or Reset Everything,
 -- and the setting read in the same frame (the reload done there) and a frame
--- later (the reload not yet done: "Type /reload to finish"). The rule: after
--- a reset the setting is yours, always.
+-- later (the reload not yet done: "Type /reload to finish"), and after the
+-- reload's logout (the page's two-second refresh first, as a frame or more
+-- may pass). The rule: after a reset the setting is yours, always.
 -- (Before the fix, the reset's own write looked like an outside change to the
--- page's kept set, which wrote its value back a frame later: yours lost.)
+-- page's kept set, which wrote its value back a frame later: yours lost.
+-- And with two sets holding it, the reload's logout let go of one, which
+-- wrote the other's value, and the last found nothing of yours to put back:
+-- Tools/audits/2026-11-23-reset-let-go-sets.md.)
 
 local client = arg and arg[1] or "forever"
 local DAMAGE = "floatingCombatTextCombatDamage_v2"
 local cvars = { Sound_MusicVolume = "1", Sound_EnableMusic = "1" }
 local timers = {}
 
-local function Install()
+local W
+local function Install(wow)
+	W = wow
 	-- luacheck: push ignore 111 112 113 121 122
 	C_CVar = {
 		SetCVar = function(name, value) if cvars[name] ~= nil then cvars[name] = tostring(value) end end,
@@ -71,7 +77,7 @@ Matrix.Run({
 		{ "yours", { "on", "off" } },
 		{ "cinemode", { "held", "free" } },
 		{ "keepYours", { "no", "yes" } },
-		{ "read", { "sameframe", "framelater" } },
+		{ "read", { "sameframe", "framelater", "afterlogout" } },
 	},
 	cell = function(c)
 		-- (Every set let go and the db back, from the last cell's reset.)
@@ -98,6 +104,12 @@ Matrix.Run({
 		local ok, err = pcall(ns.ResetAddon, c.reset == "settings")
 		if not ok then return "error: " .. tostring(err) end
 		if c.read == "framelater" then RunTimers() end
+		if c.read == "afterlogout" then
+			RunTimers()
+			ns.RefreshCombatTextStyle()
+			W.Fire("PLAYER_LOGOUT")
+			RunTimers()
+		end
 		return cvars[DAMAGE] == yours and "damage=yours" or ("damage=" .. tostring(cvars[DAMAGE]) .. " (not yours)")
 	end,
 	pins = {

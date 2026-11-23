@@ -1037,6 +1037,14 @@ function ns.ResetAddon(settingsOnly)
 	-- a feature (savedCVars). Wiped unrestored, ours stayed written for good
 	-- and Graphics+ took them for the game's own.
 	if ns.GraphicsPlusPutBack then ns.GraphicsPlusPutBack() end
+	-- (Every set holding one let go first, as the safety stop does: the
+	-- last to let go writes yours. Left held, the reload's logout let go of
+	-- them one by one: the first wrote the other's value, and the last found
+	-- yours wiped, so CineMode's and Combat Text Style's Damage numbers
+	-- stayed off. Audit 2026-11-23, Tools/audits/2026-11-23-reset-let-go-sets.md.)
+	for _, set in ipairs(ns.cvarSets or {}) do
+		if set.active then pcall(ns.ApplyCVarSet, set, false) end
+	end
 	if ns.db.savedCVars then
 		local held = {}
 		for cvar in pairs(ns.db.savedCVars) do held[#held + 1] = cvar end
