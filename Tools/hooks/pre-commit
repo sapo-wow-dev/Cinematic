@@ -13,6 +13,9 @@
 [ -n "$CINE_SKIP_CHECKS" ] && { echo "pre-commit: checks skipped (CINE_SKIP_CHECKS)"; exit 0; }
 
 root=$(git rev-parse --show-toplevel) || exit 1
+# (HEAD as the checks start: commit-msg refuses the commit if another
+# session's commit lands meanwhile, as this index would undo it.)
+git rev-parse HEAD > "$(git rev-parse --git-path cine-precommit-head)" 2>/dev/null
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/cine-precommit.XXXXXX") || exit 1
 trap 'rm -rf "$tmp"' EXIT
 

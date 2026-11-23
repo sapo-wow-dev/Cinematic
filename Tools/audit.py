@@ -511,6 +511,23 @@ def cmd_guard(msgfile):
     gitdir = git("rev-parse", "--git-dir").stdout.strip()
     if os.path.exists(os.path.join(ROOT, gitdir, "MERGE_HEAD")) or git("rev-parse", "-q", "--verify", "HEAD").returncode:
         return 0
+    # (HEAD moved while pre-commit's checks ran: another session committed, and
+    # this index was built on the HEAD before, so committing it would undo
+    # their commit. Seen 2026-11-23: three commits landed in a 4-minute check.)
+    mark = os.path.join(ROOT, git("rev-parse", "--git-path", "cine-precommit-head").stdout.strip())
+    if os.path.exists(mark):
+        with open(mark, encoding="utf-8") as f:
+            was = f.read().strip()
+        try:
+            os.remove(mark)
+        except OSError:
+            pass
+        now = git("rev-parse", "HEAD").stdout.strip()
+        if was and now and was != now:
+            print("commit-msg: HEAD moved from %s to %s while the checks ran (another session committed).\n"
+                  "This index was built on %s, so the commit would undo what landed since. Build the index again\n"
+                  "on the new HEAD (only your files) and commit again. Nothing committed." % (was[:8], now[:8], was[:8]))
+            return 1
     with open(msgfile, encoding="utf-8", errors="replace") as f:
         message = f.read()
     diff_text = git("diff", "--cached", "-U0", "--no-color", "-M", "HEAD").stdout
@@ -724,11 +741,25 @@ def cmd_precommit(staged_dir):
         changes += card["changes"]
         if is_staged:
             tests += [t for t in card["tests"] if t not in tests]
+    # (Side by side, as in prerelease: a long check is a long window for
+    # another session's commit to land under this one, which commit-msg then
+    # refuses.)
+    import concurrent.futures
+    import copy
+    base_code = tree("HEAD")
+    for test, _ in tests:
+        with_harness(base_code, test, staged_dir)
+        with_harness(staged_dir, test, staged_dir)
+
+    def one(item):
+        test, args = item
+        return diff(test, args, "HEAD", staged_dir, copy.deepcopy(changes))
     fails = 0
-    for test, args in tests:
-        lines, f = diff(test, args, "HEAD", staged_dir, changes)
-        report(["audit: " + l for l in lines if not l.startswith("PASS ") or " cells, " in l])
-        fails += f
+    workers = max(2, min(8, (os.cpu_count() or 4) // 2))
+    with concurrent.futures.ThreadPoolExecutor(workers) as pool:
+        for lines, f in pool.map(one, tests):
+            report(["audit: " + l for l in lines if not l.startswith("PASS ") or " cells, " in l])
+            fails += f
     return fails
 
 
