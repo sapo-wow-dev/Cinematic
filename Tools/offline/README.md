@@ -53,6 +53,9 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `tooltiplocation.lua`: the Tooltips page's Location row. A party member's zone on their short tooltip goes
   by it, apart from Spec and class, and a full tooltip's faction line under the class isn't taken for the zone; the
   update starts Location as Spec was set.
+- `tooltipnowait.lua`: the Tooltips page's No wait for list (Quest objective mobs) with the tooltip's unit
+  secret, as in a fight on WoW Forever: by the unit frame's unit, else the mouseover and the target or plate
+  that is the same unit; nothing taken from an unreadable UnitIsUnit.
 - `testkit.lua`: the test kit (Dev/TestKit.lua) through `/cine debug kitcheck` with pretend time, both clients: every
   step passes, context and probe lines (mana secret on Forever), the undo put back at the end, on a stop and at the
   next login after a cut-off run, CineMode kept off and back after. Copy it for a kit test's own offline run.

@@ -977,22 +977,100 @@ end
 -- The slider's No wait for list (Tooltips page): whether this unit's tooltip
 -- skips the wait and takes the After column's look as it appears. Quest
 -- objective mobs (tooltipNoWaitQuest): a unit you still need for a quest.
+local function QuestUnit(unit)
+	-- (Questie's too: it knows the mobs that drop a quest's items.)
+	return (ns.IsQuestMob ~= nil and ns.IsQuestMob(unit))
+		or (ns.QuestieObjectiveMob ~= nil and ns.AddonUp("Questie") and ns.QuestieObjectiveMob(unit)) or false
+end
+-- Whether two unit tokens are the same unit: false when it can't be read.
+local function IsUnit(a, b)
+	local ok, same = pcall(UnitIsUnit, a, b)
+	return ok and not (issecretvalue and issecretvalue(same)) and same == true
+end
+-- The tokens that may be this tooltip's unit, most sure first. In a fight on
+-- WoW Forever the tooltip's own unit reads secret (a mob you hit showed the
+-- wait, 2026-11-23): then the unit frame's, else, for a mob in the world, the
+-- mouseover token and the target or nameplate that is the same unit (their
+-- answers read before the fight are kept by token).
+local function CandidateUnits(tooltip)
+	local list = {}
+	local unit = TooltipUnit(tooltip)
+	if unit then
+		list[1] = { unit, "tooltip" }
+		return list
+	end
+	unit = FrameUnit(tooltip)
+	if unit then
+		list[1] = { unit, "frame" }
+		return list
+	end
+	local okExists, exists = pcall(UnitExists, "mouseover")
+	if not (okExists and not (issecretvalue and issecretvalue(exists)) and exists) then
+		return list
+	end
+	list[1] = { "mouseover", "mouseover" }
+	if IsUnit("mouseover", "target") then
+		list[#list + 1] = { "target", "target" }
+	end
+	local okPlates, plates = pcall(C_NamePlate.GetNamePlates)
+	for _, plate in ipairs(okPlates and type(plates) == "table" and plates or {}) do
+		local token = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+		if type(token) == "string" and IsUnit("mouseover", token) then
+			list[#list + 1] = { token, "plate" }
+			break
+		end
+	end
+	return list
+end
+-- The last answer, for /cine debug tooltipnowait: { yes, route, tried, at, fight, calls }.
+ns.tooltipNoWaitLast = nil
 local function SkipsWait(tooltip)
 	local db = ns.db
 	if not (db and db.enabled and db.handleTooltips and db.tooltipNoWaitQuest) or (db.tooltipFullAfter or 0) <= 0 then
 		return false
 	end
-	local unit = TooltipUnit(tooltip)
-	if not unit then
-		return false
+	local tried, yes, route = {}, false, nil
+	for _, each in ipairs(CandidateUnits(tooltip)) do
+		local answer = QuestUnit(each[1])
+		tried[#tried + 1] = each[2] .. ":" .. each[1] .. "=" .. tostring(answer)
+		if answer then
+			yes, route = true, each[2]
+			break
+		end
 	end
-	-- (Questie's too: it knows the mobs that drop a quest's items.)
-	return (ns.IsQuestMob ~= nil and ns.IsQuestMob(unit))
-		or (ns.QuestieObjectiveMob ~= nil and ns.AddonUp("Questie") and ns.QuestieObjectiveMob(unit)) or false
+	-- (Dev copy: a no for a unit whose tooltip lines say quest mob, or no unit
+	-- to ask at all, goes in the log with why: a player saw a quest mob wait
+	-- in a fight on WoW Forever, 2026-11-23, and staged runs never did.)
+	if not yes and ns.isDev and ns.DescribeQuestMob then
+		local units = CandidateUnits(tooltip)
+		local said = {}
+		for _, each in ipairs(units) do
+			local ok, text = pcall(ns.DescribeQuestMob, each[1])
+			if ok and type(text) == "string" and text:find("tooltip=true", 1, true) then
+				said[#said + 1] = each[1] .. ": " .. text
+			end
+		end
+		if #said > 0 or #units == 0 then
+			local okName, name = pcall(function() return Left(1):GetText() end)
+			ns.Log("tooltip", ("No wait said no: %s | tried %s | %s | in fight %s"):format(
+				okName and not (issecretvalue and issecretvalue(name)) and tostring(name) or "?",
+				#tried > 0 and table.concat(tried, " ") or "no unit to ask",
+				#said > 0 and table.concat(said, "; ") or "-", tostring(InCombatLockdown())))
+		end
+	end
+	local last = ns.tooltipNoWaitLast
+	ns.tooltipNoWaitLast = { yes = yes, route = route, tried = table.concat(tried, " "), at = GetTime(),
+		fight = InCombatLockdown(), calls = (last and GetTime() - last.at < 1 and last.calls or 0) + 1 }
+	return yes
 end
+ns.TooltipSkipsWait = SkipsWait -- (/cine debug tooltipnowait asks it too)
 -- This tooltip's unit skips the wait (set as the unit is, before the tooltip
 -- shows: the show that follows then leaves its After look and starts no countdown).
 local noWait = false
+-- (For /cine debug tooltipnowait: the After look showing, no wait, countdown running.)
+function ns.TooltipWaitState()
+	return revealed, noWait, fullTimer ~= nil
+end
 
 -- A hide followed at once by a show from the same owner is the game setting
 -- the tooltip again, not a new one: a unit frame does it every moment while

@@ -376,3 +376,4 @@ Dev\ReloadPathsTest.lua
 Dev\ReloadCoverTest.lua
 Dev\AddonListAllTest.lua
 Dev\LoosePartsSurvey.lua
+Dev\TooltipNoWaitTest.lua

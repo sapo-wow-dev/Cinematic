@@ -68,6 +68,7 @@ OFFLINE_TESTS = [
     ("loops off with their page off; page building waits for /cine debug loops", "Tools/offline/loopsoff.lua"),
     ("Heal Vision: its own Show in for unit frames and for nameplates", "Tools/offline/healtworules.lua"),
     ("tooltip Location row (zone apart from class)", "Tools/offline/tooltiplocation.lua"),
+    ("tooltip No wait for quest mobs with a secret unit (fights)", "Tools/offline/tooltipnowait.lua"),
     ("You level up card: Cheer, Congratulate, Commend", "Tools/offline/youlevelemotes.lua"),
     ("Auto-Hide UI: Mouseover groups on, and back on for players on it", "Tools/offline/autohidemouseover.lua"),
     ("Cooldown Manager grid: place groups and cells", "Tools/offline/cooldowngrid.lua"),
