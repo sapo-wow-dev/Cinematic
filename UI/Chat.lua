@@ -1130,18 +1130,50 @@ local function PeekOwnLine(chatFrame, event, text, author, guid, bubbleCVar)
 	ns.SetOnUpdate(bubbleWatch, OnBubbleWatch)
 end
 
--- Message filters run once per chat window that will show the message, which
--- tells us exactly which window to reveal. Never filters anything out.
-local function ChatPeekFilter(chatFrame, event, text, author, _, channelString, _, _, _, channelNumber, channelBaseName,
-		_, _, guid)
+-- Whether a chat window shows a channel's line. Every window gets every
+-- channel line, and the game runs the filters before it drops the line from a
+-- window without that channel (ChatFrameOverrides.lua, the channelList loop
+-- after ProcessMessageEventFilters): a tab with the channels taken out came
+-- up for each General line, with nothing new in it (player report,
+-- 2026-11-23). The game's own match: the zone channel's number, else the
+-- name. Anything unreadable (no list, a secret value) counts as shown.
+local function ShowsChannel(chatFrame, channelString, zoneChannelID, channelBaseName)
+	local list, zones = rawget(chatFrame, "channelList"), rawget(chatFrame, "zoneChannelList")
+	if type(list) ~= "table" then return true end
+	local function Secret(v) return issecretvalue and issecretvalue(v) end
+	if Secret(channelString) or Secret(zoneChannelID) or Secret(channelBaseName) then return true end
+	local length = type(channelString) == "string" and #channelString or nil
+	local zoneID = type(zoneChannelID) == "number" and zoneChannelID or 0
+	local name = type(channelBaseName) == "string" and channelBaseName:upper() or nil
+	for index, value in pairs(list) do
+		if type(value) == "string" and (not length or length > #value) then
+			if (zoneID > 0 and type(zones) == "table" and zones[index] == zoneID) or (name and value:upper() == name) then
+				return true
+			end
+		end
+	end
+	return false
+end
+-- For the offline checks.
+ns.ChatShowsChannel = ShowsChannel
+
+-- Message filters run once per chat window that gets the message, which tells
+-- us which window to reveal (a channel's line: every window, see ShowsChannel).
+-- Never filters anything out.
+local function ChatPeekFilter(chatFrame, event, text, author, _, channelString, _, _, zoneChannelID, channelNumber,
+		channelBaseName, _, _, guid)
 	-- (WIM runs the filters with its own table, not a chat window: nothing to peek.)
 	if type(chatFrame) ~= "table" or not chatFrame.IsShown then return false end
 	if not ns.db.chatPeek or not ns.PageOn("handleChat") then
 		if BUBBLE_SPEECH[event] then SpeechTrace("\"Show chat when a message arrives\" or the Chat page is off") end
 		return false
 	end
+	-- (A window without the channel never draws the line, yours included.)
+	if event == "CHAT_MSG_CHANNEL" and not ShowsChannel(chatFrame, channelString, zoneChannelID, channelBaseName) then
+		return false
+	end
 	local wanted
-	local hiddenOwn = ns.db.chatHideOwn and (SENT_LINES[event] or IsFromPlayer(author, guid))
+	local hiddenOwn =ns.db.chatHideOwn and (SENT_LINES[event] or IsFromPlayer(author, guid))
 	local typedOwn = hiddenOwn and ns.db.chatOwnNoBubble and TYPED_LINES[event]
 	if typedOwn then
 		wanted = true -- (rows that are off are for other people's lines)

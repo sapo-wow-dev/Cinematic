@@ -785,6 +785,20 @@ return {
 
   -- Chat frames ------------------------------------------------------------
   {
+    id = "forever.chat.channel-filters-every-window",
+    area = "chat",
+    clients = { "forever" },
+    api = { "ChatFrame_AddMessageEventFilter", "CHAT_MSG_CHANNEL", "channelList", "zoneChannelList" },
+    when = "a chat channel line (General, Trade...)",
+    rule = "Every chat window has CHAT_MSG_CHANNEL registered, and the message handler runs addon message filters (ProcessMessageEventFilters) BEFORE it checks the window's channelList / zoneChannelList and drops the line. So a filter is called for windows that will never show a channel's line (a tab with the channels taken out). Other message types are registered per window by its message groups, so their filters only run where the line shows.",
+    works = { "match the window's channelList (by name, upper-cased) or zoneChannelList (by zone channel id arg7 > 0) before acting on a channel line" },
+    fails = { "treating the filter's chatFrame as a window that shows the line" },
+    status = "tested",
+    tested = "2026-11-23",
+    proof = "Forever export Blizzard_ChatFrameBase/Mainline/ChatFrameOverrides.lua:324 (filters) then :347-368 (channelList check); player report 2026-11-23 (questing tab with no channels came up on General lines); /cine debug chattab 2026-11-23: E (General line for the Combat Log tab, no channels) stays down, F (for General) comes up, A-D unchanged",
+    source = "UI/Chat.lua ShowsChannel",
+  },
+  {
     id = "forever.chat.alert-flash-hooks",
     area = "chat",
     clients = { "forever" },

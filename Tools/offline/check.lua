@@ -168,6 +168,30 @@ if arg[1] and not update then
 			frame.isDocked = nil
 			_G.GENERAL_CHAT_DOCK, _G.FCFDock_GetSelectedWindow = keptDock, keptGet
 		end
+		-- (A channel's line reaches every window, the filters run before the
+		-- game drops it from one without the channel: only one with it shows
+		-- chat. Player report, 2026-11-23: a questing tab with no channels.)
+		do
+			local function ChannelPeeks(list, zones, zoneID, baseName, author)
+				frame.channelList, frame.zoneChannelList = list, zones
+				ns.chatPeekUntil[frame] = nil
+				filters.CHAT_MSG_CHANNEL(frame, "CHAT_MSG_CHANNEL", "hello", author or "Someone", "",
+					"1. General - Elwynn Forest", "", "", zoneID, 1, baseName)
+				frame.channelList, frame.zoneChannelList = nil, nil
+				return ns.chatPeekUntil[frame] ~= nil
+			end
+			local keptChannels2 = db.chatPeekChannels
+			db.chatPeekChannels = true
+			if ChannelPeeks({}, {}, 1, "General") then Problem("a General line showed chat on a tab with no channels") end
+			if ChannelPeeks({ "Trade" }, { 2 }, 1, "General") then Problem("a General line showed chat on a Trade-only tab") end
+			if not ChannelPeeks({ "General" }, { 1 }, 1, "General") then Problem("a General line didn't show chat on its tab") end
+			if not ChannelPeeks({ "General" }, { 0 }, 0, "general") then Problem("a channel matched by name didn't show chat") end
+			if not ChannelPeeks({ "Mychan" }, { 0 }, 0, "Mychan") then Problem("a custom channel line didn't show chat") end
+			db.chatOwnNoBubble, db.chatHideOwn = true, true
+			if ChannelPeeks({}, {}, 1, "General", me) then Problem("your own General line showed chat on a tab with no channels") end
+			db.chatOwnNoBubble, db.chatHideOwn = false, false
+			db.chatPeekChannels = keptChannels2
+		end
 		db.chatHideOwn = false
 		if not Peeks("CHAT_MSG_WHISPER_INFORM", "Someone") then Problem("a sent whisper hid with Hide your messages off") end
 		db.chatPeek, db.handleChat, db.chatHideOwn, db.chatOwnNoBubble = kept[1], kept[2], kept[3], kept[4]

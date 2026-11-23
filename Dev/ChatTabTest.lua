@@ -10,6 +10,12 @@
 --   D: General selected, a real whisper to a name no one has: the game's
 --      "No player named" line comes up through the game (and Glass): chat
 --      comes up.
+--   E: Combat Log selected, a General channel line for it: the game runs the
+--      filters for every window before it drops a channel's line from one
+--      without the channel, so this tab (no channels) gets it: chat stays down
+--      (player report, 2026-11-23: a questing tab with no channels; UI/Chat.lua
+--      ShowsChannel).
+--   F: General selected, the same channel line for General: chat comes up.
 -- Before the rounds every chat window's state is logged (shown, docked, the
 -- dock's selected tab, crafting lines going there), and every real crafting
 -- line that comes in during the run too. Other players' crafting is ticked
@@ -118,7 +124,9 @@ local function Stop(why)
 	run = nil
 	ns.db.chatPeekTypes.tradeskill = r.keptTick
 	if r.keptSelected then Select(r.keptSelected) end
-	Log("tab and Other players' crafting tick put back (" .. tostring(r.keptTick) .. ")")
+	if r.channel then ns.db.chatPeekChannelList[r.channel] = r.keptChannel end
+	Log("tab, Other players' crafting tick and channel row put back (" .. tostring(r.keptTick) .. ", "
+		.. tostring(r.channel) .. " " .. tostring(r.keptChannel) .. ")")
 	local verdicts = {}
 	for _, round in ipairs(r.rounds) do
 		verdicts[#verdicts + 1] = round.name .. " " .. (round.verdict or "not run")
@@ -154,8 +162,8 @@ local function Step()
 		Select(round.select)
 		round.phase, round.from = "fade", now
 		round.shows = round.select or round.target
-		Prompt(("Round %s of 4: %s selected. Stand still, hands off the mouse and chat, while chat fades")
-			:format(round.name, tostring(round.select and round.select.name or "?")))
+		Prompt(("Round %s of %d: %s selected. Stand still, hands off the mouse and chat, while chat fades")
+			:format(round.name, #r.rounds, tostring(round.select and round.select.name or "?")))
 		Log(("round %s: selected %s (dock says %s)"):format(round.name, tostring(round.select and round.select:GetName()),
 			tostring(Selected() and Selected():GetName())))
 		Log("round " .. round.name .. " windows: " .. WindowsText())
@@ -175,13 +183,15 @@ local function Step()
 				local ok, err = pcall(Send, round.text, "WHISPER", nil, round.whisperTo)
 				Log(("round %s: real whisper to %s sent %s"):format(round.name, round.whisperTo,
 					ok and "ok" or ("FAILED: " .. tostring(err))))
+			elseif round.args then
+				ns.ChatTestFilter(round.target, round.event, round.text, unpack(round.args))
 			else
 				ns.ChatTestFilter(round.target, round.event, round.text, "Cinetest", "", "", "", 0, "", 0, "", 0, 0, "")
 			end
 			Log(("round %s: pretend %s line through the filter for %s (counts as shown %s)"):format(round.name,
 				round.event, round.target:GetName(), tostring(round.countsShown)))
 			round.phase = "watch"
-			Prompt(("Round %s of 4: watching chat"):format(round.name))
+			Prompt(("Round %s of %d: watching chat"):format(round.name, #r.rounds))
 		end
 	elseif round.phase == "watch" then
 		if not round.nextLog or now >= round.nextLog then
@@ -217,12 +227,21 @@ function ns.ChatTabTest()
 	end
 	general.name = general.name or "General"
 	combat.name = combat.name or "Combat Log"
+	-- (A channel General has, as the game lists it: "General" first.)
+	local channel, zoneID
+	for index, value in pairs(general.channelList or {}) do
+		if type(value) == "string" and (not channel or value == "General") then
+			channel, zoneID = value, (general.zoneChannelList or {})[index] or 0
+		end
+	end
 	ns.debugNoCopyWindow = true
-	ns.Print("chattab: running, about 1-2 minutes. The steps show in big text; again to stop.")
+	ns.Print("chattab: running, about 2-3 minutes. The steps show in big text; again to stop.")
 	run = {
 		index = 1,
 		keptTick = ns.db.chatPeekTypes.tradeskill,
 		keptSelected = Selected(),
+		channel = channel,
+		keptChannel = channel and ns.db.chatPeekChannelList[channel],
 		rounds = {
 			{ name = "A", select = general, target = combat, event = "CHAT_MSG_TRADESKILLS",
 				text = "Cinetest creates Copper Bar.", wantUp = false },
@@ -234,6 +253,21 @@ function ns.ChatTabTest()
 				whisperTo = "Zzqxcinetest", text = "Cinematic chat test", wantUp = true },
 		},
 	}
+	if channel then
+		local args = { "Cinetest", "", "1. " .. channel, "", "", zoneID, 1, channel, 0, 0, "" }
+		local rounds = run.rounds
+		rounds[#rounds + 1] = { name = "E", select = combat, target = combat, event = "CHAT_MSG_CHANNEL",
+			text = "Cinetest General line", args = args, wantUp = false }
+		rounds[#rounds + 1] = { name = "F", select = general, target = general, event = "CHAT_MSG_CHANNEL",
+			text = "Cinetest General line", args = args, wantUp = true }
+		ns.db.chatPeekChannelList[channel] = true
+	end
+	local combatChannels = {}
+	for _, value in pairs(combat.channelList or {}) do combatChannels[#combatChannels + 1] = tostring(value) end
+	Log(("channel rounds: General's channel %s (zone id %s), Combat Log's channels [%s], counts as shown there %s")
+		:format(tostring(channel or "none: rounds E and F left out"), tostring(zoneID),
+		table.concat(combatChannels, ", "),
+		tostring(channel and ns.ChatShowsChannel(combat, "1. " .. channel, zoneID, channel))))
 	ns.db.chatPeekTypes.tradeskill = true
 	Log(("start: client %s, chat page %s, show chat on message %s, lines only %s, CineMode %s, in combat %s,"
 		.. " other addons: %s"):format(ns.isRetail and "retail" or "Forever/classic",
