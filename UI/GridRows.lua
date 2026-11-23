@@ -69,9 +69,24 @@ function ns.RulePieces()
 		ranges[#ranges + 1] = { band.field, (L["Within %s*"]):format(band.label) }
 	end
 	-- (Gliding: retail's skyriding only.)
+	-- (Under water and fast since 2026-11-23: Frames.lua's RULE_WORDS.)
 	local travel = { { "moving", L["Moving"] }, { "autorun", L["Auto-run"] }, { "rpwalk", L["RP Walk"] },
-		{ "swimming", L["Swimming"] }, { "flying", L["Flying"] } }
+		{ "swimming", L["Swimming"] }, { "underwater", L["Under water"] }, { "flying", L["Flying"] },
+		{ "fast", L["Moving fast"] } }
 	if ns.isRetail then travel[#travel + 1] = { "gliding", L["Gliding"] } end
+	-- (The weather here, outdoors, and the time of day by the tint's clock,
+	-- 2026-11-23: for the Atmosphere effects' rows, and any other.)
+	local world = { { "rain", L["Rain"] }, { "snow", L["Snow"] } }
+	if C_Weather and C_Weather.GetCurrentWeather then
+		world[#world + 1] = { "sandstorm", L["Sandstorm"] }
+		world[#world + 1] = { "storm", L["Storm (heavy rain or snow)"] }
+		world[#world + 1] = { "weather", L["Any weather"] }
+	else
+		world = {} -- (no weather on this client: the time of day only)
+	end
+	for _, piece in ipairs({ { "dawn", L["Dawn"] }, { "day", L["Day"] }, { "dusk", L["Dusk"] }, { "night", L["Night"] } }) do
+		world[#world + 1] = piece
+	end
 	-- (The classes this client has, by the game's names for them.)
 	local classes = {}
 	for id = 1, (GetNumClasses and GetNumClasses() or 0) do
@@ -100,6 +115,7 @@ function ns.RulePieces()
 			{ "resting", L["Resting (an inn or a city)"] }, { "stealthed", L["Stealthed"] }, { "sitting", L["Sit"] },
 			{ "npc", L["At an NPC"] } } },
 		{ L["Travel"], { 0.6, 0.85, 1 }, travel },
+		{ L["World"], { 0.55, 0.9, 0.7 }, world },
 		{ L["Role"], { 0.4, 0.85, 0.5 }, { { "tank", L["Tank"] }, { "healer", L["Healer"] }, { "damage", L["Damage"] } } },
 		{ L["Class"], { 0.85, 0.75, 0.6 }, classes },
 		-- (Last: the editor shows it only for the Tooltips row, tooltip:All.)

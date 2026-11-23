@@ -750,6 +750,11 @@ DEFAULTS.letterboxOnDiscover = false -- the bars for a while on a place new to y
 DEFAULTS.letterboxDiscoverTime = 8   -- ...this many seconds
 DEFAULTS.tintOffInCombat = false
 DEFAULTS.vignetteOffInCombat = false
+-- The Glow's and Haze's Show in rows (2026-11-23): not Always, their own
+-- rules instead (ns.RULE_DEFAULTS below): in an inn, under its roof; in the
+-- camera modes.
+DEFAULTS.innAlways = false
+DEFAULTS.hazeAlways = false
 -- The grid's Always column: the letterbox, vignette and weather have their own
 -- switches (letterbox, vignette, weatherTint); the tint has this one.
 DEFAULTS.tintOffAlways = false
@@ -2018,6 +2023,11 @@ ns.RULE_DEFAULTS["name:ServiceNPCs"] = "not camera"
 ns.HEAL_VISION_PLATE_ROW = "healVisionNameplates"
 ns.RULE_DEFAULTS.healVision = "(dungeon or raid) and not dead"
 ns.RULE_DEFAULTS[ns.HEAL_VISION_PLATE_ROW] = "not city and not dead"
+-- The Visual Effects page's Glow and Haze (2026-11-23, the user: "just call it
+-- glow and make the default show in only in Inns, same thing with camera
+-- haze"): where they showed before they had rows, now rules you can change.
+ns.RULE_DEFAULTS["effect:inn"] = "inn and indoors"
+ns.RULE_DEFAULTS["effect:haze"] = "camera"
 do
 	local OFF_GRID_ROWS, OLD_GRID_DEFAULTS = {}, {}
 
@@ -2127,7 +2137,9 @@ do
 				offAlways = "tooltipHideElse", offCombat = "tooltipHideCombatElse" }
 			-- (The letterbox, vignette and weather: off altogether by their own
 			-- switches, which stay, kept on while their rows show anywhere.)
-			local SWITCHES = { letterbox = "letterbox", vignette = "vignette", weather = "weatherTint" }
+			-- (And the inn glow's and haze's rows, 2026-11-23: their switches as their sliders' Off had them.)
+			local SWITCHES = { letterbox = "letterbox", vignette = "vignette", weather = "weatherTint", inn = "innGlow",
+				haze = "depthOfField" }
 			for _, effect in ipairs(ns.EFFECT_GRID) do
 				OFF_GRID_ROWS[#OFF_GRID_ROWS + 1] = { key = "effect:" .. effect, always = effect .. "Always",
 					offAlways = effect .. "OffAlways", switch = SWITCHES[effect], places = Places(effect .. "OffIn"),
@@ -2245,20 +2257,13 @@ for _, prefix in ipairs({ "idleZoom", "taxiZoom", "walkZoom", "runZoom", "cozyZo
 	DEFAULTS[prefix .. "PauseVary"] = 0
 end
 DEFAULTS.taxiZoomPauseVary = 3
--- Depth of field (faked): a soft haze round the screen edges in the camera
--- modes. One switch for all (on the Visual Effects page), then a strength
--- per mode (0 is off there).
+-- Depth of field (faked): a soft pale mist round the screen edges, the
+-- Visual Effects page's Haze (its row: the camera modes to start with). One
+-- switch (depthOfField) and one strength for every camera since 2026-11-23,
+-- dofScale 0-1 (it was 0-2 times each mode's own dof<Mode>, 2.5% then 15%:
+-- the haze could hardly be seen). Migrations.lua's dofScaleV2 sets it once.
 DEFAULTS.depthOfField = true
-DEFAULTS.dofScale = 1 -- (Camera haze: times each mode's own strength)
--- (15% since 2026-11-23: at 2.5% it couldn't be seen, even with Camera haze
--- at 200%. Migrations.lua's dofStrengthV1 moves the old default along.)
-DEFAULTS.dofIdle = 0.15
-DEFAULTS.dofCozy = 0.15
-DEFAULTS.dofVista = 0.15
-DEFAULTS.dofFish = 0.15
-DEFAULTS.dofFlight = 0.15
-DEFAULTS.dofWalk = 0
-DEFAULTS.dofRun = 0
+DEFAULTS.dofScale = 0.3
 
 -- While any of these windows is open, keep the UI visible.
 local REVEAL_WHILE_SHOWN = {
@@ -3945,7 +3950,10 @@ local snapRound = 0
 -- The effects in the Visual Effects page's grid: off where ticked, off in
 -- fights (and until the Calm Timer, db.calmTime, has run out after one), or
 -- only while a camera mode runs.
-local GRID_EFFECTS = { "letterbox", "tint", "vignette", "weather" }
+-- (inn and haze, the inn glow's and camera haze's rows on the Visual Effects
+-- page since 2026-11-23: the inn glow out of CineMode as the tint's tick says,
+-- the haze in CineMode only, as Focus.lua has it.)
+local GRID_EFFECTS = { "letterbox", "tint", "vignette", "weather", "inn", "haze" }
 -- Allow outside CineMode's tick for each (CineMode page; off: CineMode only).
 local OUTSIDE_EFFECT = { letterbox = "outsideCineLetterbox", tint = "outsideCineTint",
 	vignette = "outsideCineVignette", weather = "outsideCineWeather" }
@@ -4236,7 +4244,7 @@ local function OnUpdate(_, elapsed)
 				if ns.effectsDemo then
 					effectAsk[key] = ns.effectsDemo[key] or false
 				else
-					effectAsk[key] = (cinematic or ns.db[OUTSIDE_EFFECT[key]] == true)
+					effectAsk[key] = (cinematic or ns.db[key == "inn" and "outsideCineTint" or OUTSIDE_EFFECT[key]] == true)
 						and ns.db.visualEffects and ns.db[key .. "Page"] ~= false
 						and ns.RowOnNow(EFFECT_ROWS[key], ns.db[key .. "Always"], true) or false
 				end
@@ -4977,6 +4985,54 @@ function ns.GlidingSpeed()
 		return nil
 	end
 	return type(speed) == "number" and speed or 0
+end
+
+-- Your speed now, yards a second (a glide's, skyriding), or 0 when the game
+-- won't say (a secret value in restricted stats). For the rules' fast.
+function ns.PlayerSpeedNow()
+	local glide = ns.GlidingSpeed()
+	if glide then return glide end
+	local ok, speed = pcall(GetUnitSpeed, "player")
+	if not ok or type(speed) ~= "number" or (issecretvalue and issecretvalue(speed)) then return 0 end
+	return speed
+end
+
+-- The weather here (2026-11-23, the rules' weather words): "rain", "snow" or
+-- "sandstorm" and its intensity (0-1), as the tint reads it (C_Weather);
+-- nil under a roof, in clear or other weather, or when the game won't say.
+local WEATHER_WORD = {}
+do
+	local kinds = Enum and Enum.WeatherType or {}
+	WEATHER_WORD[kinds.Rain or 1], WEATHER_WORD[kinds.Snow or 2], WEATHER_WORD[kinds.Sandstorm or 3] =
+		"rain", "snow", "sandstorm"
+end
+function ns.WeatherNow()
+	if not (C_Weather and C_Weather.GetCurrentWeather) then return nil end
+	local inside = IsIndoors and ns.Flag(IsIndoors())
+	if inside then return nil end
+	local ok, info = pcall(C_Weather.GetCurrentWeather)
+	if not ok or type(info) ~= "table" or (issecretvalue and issecretvalue(info)) then return nil end
+	local kind, intensity = info.type, info.intensity
+	if (issecretvalue and (issecretvalue(kind) or issecretvalue(intensity))) or type(intensity) ~= "number" then
+		return nil
+	end
+	local word = WEATHER_WORD[kind]
+	if not word or intensity <= 0 then return nil end
+	return word, math.min(1, intensity)
+end
+
+-- The time of day's word by the tint's clock (Game or Local, the Tint Style
+-- page's tintClock), as its phases go: "dawn" 5:00-8:00, "day" to 17:30,
+-- "dusk" to 21:30 (golden hour too), "night" the rest. (The rules' words.)
+function ns.TimeOfDayWord()
+	local clock = ns.TintParts and ns.TintParts.GetClockTime
+	local hour, minute = 12, 0
+	if clock then hour, minute = clock() end
+	local at = (tonumber(hour) or 12) * 60 + (tonumber(minute) or 0)
+	if at >= 300 and at < 480 then return "dawn" end
+	if at >= 480 and at < 1050 then return "day" end
+	if at >= 1050 and at < 1290 then return "dusk" end
+	return "night"
 end
 
 -- Skyriding (retail): gliding, or able to (on the ground on a mount that can).

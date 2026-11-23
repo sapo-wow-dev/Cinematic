@@ -914,16 +914,12 @@ T.Hour = function()
 	return hour
 end
 
--- Indoors in an inn: resting outside a capital, under a roof. (The rested area
--- often spills out the door; the roof check keeps the street outside dark.)
+-- The Glow switched on. Where it shows is its Show in row's (effect:inn,
+-- layerLevel.inn): since 2026-11-23 the row's rule, "inn and indoors" to
+-- start with, does what this did (resting outside a capital, under a roof:
+-- the rested area often spills out the door), and can be changed.
 local function InInn()
-	-- (The Visual Effects page's inn preview: as if inside one.)
-	if db.innGlow and ns.EffectPreviewing("inn") then return true end
-	if not db.innGlow or ns.GetPlaceType() ~= "inn" then
-		return false
-	end
-	local ok, indoors = pcall(IsIndoors)
-	return ok and indoors == true
+	return db.innGlow and true or false
 end
 
 -- Moves the inn glow toward in or out. True while it changed.
@@ -1095,7 +1091,8 @@ local function UpdateTint(cinematic, elapsed, vignetteOn, weatherOn)
 	-- (A Visual Effects page preview: its effect wanted now, CineMode or not.)
 	local vignetteWant = (TintWanted(vignetteOn) or preview.kind == "vignette") and 1 or 0
 	local weatherWant = (TintWanted(weatherOn) or preview.kind == "weather") and 1 or 0
-	local innWant = (TintWanted(cinematic or ns.lastCinematic) or preview.kind == "inn") and 1 or 0
+	-- (Its own Show in row since 2026-11-23, effect:inn: Core's effectWanted.)
+	local innWant = (TintWanted(ns.effectWanted and ns.effectWanted.inn) or preview.kind == "inn") and 1 or 0
 	-- (None of them wanted or showing, nothing to redraw: the colour's
 	-- inputs (the preset swap, an inn, the weather, the zone's mood) aren't
 	-- looked at. Picked up again as one's wanted: its checks are due by then.)

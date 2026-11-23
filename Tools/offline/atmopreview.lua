@@ -136,14 +136,81 @@ do
 		and old.camShow["effect:tint"] == true and old.frameRules["effect:vignette"] == nil)
 end
 
--- The camera haze's default, and the old one moved along (Migrations.lua).
-Check("camera haze 15% by default", ns.DEFAULTS.dofIdle == 0.15 and ns.FocusScaledStrength(1) >= 0.15,
-	ns.FocusScaledStrength(1))
+-- The Glow's and Haze's Show in rows (2026-11-23): not Always, their own
+-- rules to start with (in an inn, the camera modes), in every built-in
+-- profile; an old save with either off has its row nowhere (Migrations.lua);
+-- the glow drawn by its row and slider alone, no preview and nothing about
+-- inns left in the code (the row's rule says where), gone with its row off.
+Check("Glow and Haze rows start from their rules", ns.DEFAULTS.innAlways == false and ns.DEFAULTS.hazeAlways == false
+	and ns.RULE_DEFAULTS["effect:inn"] == "inn and indoors" and ns.RULE_DEFAULTS["effect:haze"] == "camera")
 do
-	local old = { dofIdle = 0.025, dofCozy = 0.05, dofVista = 0, dofFlight = 0.025 }
-	ns.RaiseOldHaze(old)
-	Check("old 2.5% haze raised, hand-picked kept", old.dofIdle == 0.15 and old.dofFlight == 0.15
-		and old.dofCozy == 0.05 and old.dofVista == 0)
+	local wrong = {}
+	for _, name in ipairs(ns.ProfileNames()) do
+		if ns.IsBuiltinProfile(name) then
+			local rules = (ns.ProfileBase(name) or {}).frameRules or {}
+			if rules["effect:inn"] ~= "inn and indoors" or rules["effect:haze"] ~= "camera" then wrong[#wrong + 1] = name end
+		end
+	end
+	Check("every built-in profile has Glow in inns and Haze in the camera modes", #wrong == 0, table.concat(wrong, ", "))
+	local old = { innGlow = false, depthOfField = true }
+	ns.EffectRowsFromSwitches(old)
+	Check("an old save's Off glow: its row nowhere (rule cleared), the haze's left", old.innAlways == false
+		and old.frameRules["effect:inn"] == "" and old.hazeAlways == nil and old.frameRules["effect:haze"] == nil)
+	db.innGlow, db.innGlowAmount, db.tintPage = true, 0.3, true
+	ns.StopEffectPreview()
+	Run(4)
+	ns.effectWanted.inn = true
+	ns.RefreshTint()
+	Run(4)
+	Check("inn glow drawn by its row and slider, no preview", Near(Drawn().glow, 0.3), Drawn().glow)
+	ns.effectWanted.inn = false
+	ns.RefreshTint()
+	Run(4)
+	Check("inn glow gone with its row off", (Drawn().glow or 0) == 0, Drawn().glow)
+	ns.effectWanted.inn = nil
+end
+
+-- The haze: one strength, 0-100%, 30% to start with (2026-11-23: "haze seems
+-- to be doing nothing"); an old save's 0-200% scale and the camera modes' own
+-- strengths gone (Migrations.lua); the built-in cameras' haze is Haze
+-- strength's, shown on their script page as that setting; a pale mist.
+Check("Haze strength 30% to start with, the modes' own gone", ns.DEFAULTS.dofScale == 0.3
+	and ns.DEFAULTS.dofIdle == nil and ns.DEFAULTS.dofFlight == nil)
+do
+	local old = { dofScale = 2, dofIdle = 0.15, dofWalk = 0, depthOfField = true }
+	ns.HazeToOneStrength(old)
+	Check("an old save's haze: 30%, the modes' own gone, its switch kept", old.dofScale == 0.3 and old.dofIdle == nil
+		and old.dofWalk == nil and old.depthOfField == true)
+	local file = io.open("Camera/CameraScripts.lua")
+	local text = file:read("*a")
+	file:close()
+	local own, set = 0, 0
+	for _ in text:gmatch("haze = Db%(") do own = own + 1 end
+	for _ in text:gmatch('haze = { "dofScale" }') do set = set + 1 end
+	Check("built-in cameras: no haze of their own, Haze strength's instead", own == 0 and set == 4,
+		("%d own, %d set by Haze strength"):format(own, set))
+	file = io.open("Media/make_focus.py")
+	local maker = file:read("*a")
+	file:close()
+	Check("the haze is a pale mist (its maker's grey 0.8 or more)", (tonumber(maker:match("g = ([%d.]+) %+")) or 0) >= 0.8)
+end
+
+-- No file names the addon's folder outright: "Interface\AddOns\Cinematic\"
+-- found nothing in the dev copy (folder CinematicDev), so the haze's texture
+-- never loaded there and it drew nothing (2026-11-23). ADDON_NAME instead.
+do
+	local pipe = io.popen('git ls-files "*.lua"')
+	local hits = {}
+	for path in pipe:lines() do
+		local file = io.open(path)
+		if file then
+			local text = file:read("*a")
+			file:close()
+			if text:find("AddOns\\\\Cinematic\\\\", 1, true) and not path:find("^Tools/") then hits[#hits + 1] = path end
+		end
+	end
+	pipe:close()
+	Check("no file names the addon's folder outright (ADDON_NAME)", #hits == 0, table.concat(hits, ", "))
 end
 
 -- Core.lua's Step hands on only so many values: a call giving more lost the
@@ -178,13 +245,81 @@ do
 	Check("the check catches a Step that takes two", not StepFits(old))
 end
 
+-- The rules' world words (2026-11-23, for the Atmosphere effects' rows):
+-- each read from the game's answers, set by hand here and turned on and off
+-- (rain, snow, sandstorm, storm, weather, outdoors only; dawn, day, dusk,
+-- night by the tint's clock; underwater; fast), every word on the rule
+-- editor's lines, and a rule using them compiled and read.
+do
+	local g = { kind = 0, intensity = 0, indoors = false, hour = 12, minute = 0, submerged = false, speed = 0 }
+	-- luacheck: push ignore 121 122
+	C_Weather = { GetCurrentWeather = function() return { type = g.kind, intensity = g.intensity } end }
+	IsIndoors = function() return g.indoors end
+	IsSubmerged = function() return g.submerged end
+	GetUnitSpeed = function() return g.speed end
+	GetGameTime = function() return g.hour, g.minute end
+	-- (The stand-in's stub said "gliding at 0", and stands in for any name it
+	-- hasn't: not gliding, said outright.)
+	if C_PlayerInfo then C_PlayerInfo.GetGlidingInfo = function() return false, false, 0 end end
+	local onTaxi = ns.OnTaxi
+	ns.OnTaxi = function() return false end -- (its stub said yes: fast is never on a flight path)
+	-- luacheck: pop
+	db.tintClock = "game"
+	local function Facts()
+		now = now + 1 -- (past the facts' hold: worked out again)
+		return ns.RuleFacts(false)
+	end
+	local function Expect(label, set, want)
+		for k, v in pairs(set) do g[k] = v end
+		local f = Facts()
+		local wrong = {}
+		for word, value in pairs(want) do
+			if f[word] ~= value then wrong[#wrong + 1] = word .. "=" .. tostring(f[word]) end
+		end
+		if #wrong > 0 then
+			wrong[#wrong + 1] = ("speed %s, taxi %s"):format(tostring(ns.PlayerSpeedNow()), tostring(f.taxi))
+		end
+		Check("world words: " .. label, #wrong == 0, table.concat(wrong, ", "))
+	end
+	Expect("clear day", { kind = 0, intensity = 0, hour = 12 }, { rain = false, snow = false, weather = false,
+		storm = false, day = true, night = false, dawn = false, dusk = false })
+	Expect("light rain", { kind = 1, intensity = 0.3 }, { rain = true, weather = true, storm = false, snow = false })
+	Expect("heavy rain: storm", { kind = 1, intensity = 0.9 }, { rain = true, storm = true })
+	Expect("rain under a roof: none", { indoors = true }, { rain = false, weather = false, storm = false })
+	Expect("snow", { indoors = false, kind = 2, intensity = 0.7 }, { snow = true, storm = true, rain = false })
+	Expect("sandstorm: no storm", { kind = 3, intensity = 1 }, { sandstorm = true, weather = true, storm = false })
+	Expect("dawn 6:00", { kind = 0, hour = 6 }, { dawn = true, day = false, weather = false })
+	Expect("dusk 18:30", { hour = 18, minute = 30 }, { dusk = true, day = false })
+	Expect("night 23:00", { hour = 23, minute = 0 }, { night = true, dusk = false })
+	Expect("night 2:00", { hour = 2 }, { night = true })
+	Expect("under water", { submerged = true }, { underwater = true })
+	Expect("fast at 14", { submerged = false, speed = 14 }, { fast = true, underwater = false })
+	Expect("not fast at 7 (running)", { speed = 7 }, { fast = false })
+	local missing = {}
+	local onLines = {}
+	for _, group in ipairs(ns.RulePieces()) do
+		for _, piece in ipairs(group[3]) do onLines[piece[1]] = true end
+	end
+	for _, word in ipairs({ "rain", "snow", "sandstorm", "storm", "weather", "dawn", "day", "dusk", "night",
+		"underwater", "fast" }) do
+		if not (ns.RULE_WORDS[word] and onLines[word]) then missing[#missing + 1] = word end
+	end
+	Check("every world word a rule word and on the editor's lines", #missing == 0, table.concat(missing, ", "))
+	local test = ns.CompileRule("(rain or snow) and not night")
+	Expect("a rule with them compiles", { kind = 1, intensity = 0.5, hour = 12 }, {})
+	Check("(rain or snow) and not night reads true in daytime rain", test ~= nil and test(Facts()) == true)
+	g.kind = 0
+	Facts()
+	ns.OnTaxi = onTaxi
+end
+
 -- /cine debug atmosphere on the stand-in. (Its page opened first, so the
 -- buttons are made: a click runs its OnClick, as the game's does.)
 ns.OpenOptions("Effects")
 for _, button in ipairs(ns.effectPreviewButtons or {}) do
 	button.Click = function(self) self:GetScript("OnClick")(self) end
 end
-ns.HandleSlash("debug atmosphere 1 2 3 4 5 6 7 8 9 10") -- (11, live: needs the game's CineMode tick)
+ns.HandleSlash("debug atmosphere 1 2 3 4 5 6 7 8 9 10 14") -- (11-13: need the game's CineMode tick)
 Run(80)
 local done
 for _, line in ipairs(CinematicDB.atmosphereTestLog or {}) do

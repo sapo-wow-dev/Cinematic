@@ -6747,13 +6747,8 @@ local function CreateCameraModePanel(opts)
 	if opts.extras then
 		opts.extras(content, stack)
 	end
-
-	stack:Header(content, L["Depth of field"])
-	local dof = stack:Add(Slider(content, opts.dofKey, L["Edge haze"], 0, 100, 2.5, "%.1f%%", 100, function(value)
-		if ns.FocusPreview then ns.FocusPreview(value / 100) end
-	end), "slider")
-	Tooltip(dof, L["A light haze around the edges of the screen in this camera mode."])
-	GreyUnless(dof, function(db) return db.visualEffects and db.depthOfField end)
+	-- (Its Depth of field section's Edge haze gone 2026-11-23: one Haze
+	-- strength on the Visual Effects page for every camera.)
 end
 
 -- The "Height" section of a camera mode's page: how far it lowers the camera.
@@ -6851,7 +6846,7 @@ local function CreateFlightPanel()
 				L["%d sec before landing"]), "slider")
 			Tooltip(settleLead, L["How long before landing the camera has settled."])
 		end,
-		zoomPrefix = "taxiZoom", dofKey = "dofFlight",
+		zoomPrefix = "taxiZoom",
 	})
 end
 
@@ -6864,7 +6859,6 @@ local function CreateStandingPanel()
 		rotateLabel = L["Sweep around you"],
 		rotateTip = L["The camera sweeps around your character, pausing between sweeps."],
 		zoomPrefix = "idleZoom",
-		dofKey = "dofIdle",
 	})
 end
 
@@ -6878,7 +6872,6 @@ local function CreateAutoRunPanel()
 		rotateTip = L["The camera sways slowly from side to side around where it started, pausing between moves."],
 		zoomPrefix = "runZoom",
 		zoomTip = L["The camera eases out a little, then drifts in and out."],
-		dofKey = "dofRun",
 	})
 end
 
@@ -6898,7 +6891,6 @@ local function CreateCozyPanel()
 				L["%.1f yards"]), "slider")
 			Tooltip(close, L["The close-up distance the cozy camera zooms in to."])
 		end,
-		dofKey = "dofCozy",
 	})
 end
 
@@ -6913,7 +6905,6 @@ local function CreateVistaPanel()
 		extras = HeightExtras("vistaLevel", -30, 45, L["How much lower the camera sways, to look out across the view."]),
 		zoomPrefix = "vistaZoom",
 		zoomTip = L["The camera eases out a little, then drifts slowly in and out."],
-		dofKey = "dofVista",
 	})
 end
 
@@ -6928,7 +6919,6 @@ local function CreateFishPanel()
 		extras = HeightExtras("fishLevel", -30, 45, L["How much lower the camera sways, to look out across the water."]),
 		zoomPrefix = "fishZoom",
 		zoomTip = L["The camera eases out a little, then drifts slowly in and out."],
-		dofKey = "dofFish",
 	})
 end
 
@@ -6943,7 +6933,6 @@ local function CreateWalkPanel()
 		rotateTip = L["The camera sways slowly from side to side around where it started, pausing between moves."],
 		zoomPrefix = "walkZoom",
 		zoomTip = L["The camera eases out a little, then drifts in and out."],
-		dofKey = "dofWalk",
 	})
 end
 
@@ -7456,11 +7445,14 @@ local function CreateEffectsPanel()
 	gridHeader:SetPoint("TOPLEFT", master, "BOTTOMLEFT", 2, -18)
 	PageIntro(content, gridHeader,
 		L["Pick where and when each effect shows in CineMode."])
-	local EFFECT_LABELS = { vignette = L["Vignette"] }
+	-- (The Glow's and Haze's rows since 2026-11-23: each slider below sets how
+	-- much, its row where and when, as the vignette's. Their rules to start
+	-- with: in an inn, the camera modes, Core.lua's RULE_DEFAULTS.)
+	local EFFECT_LABELS = { vignette = L["Vignette"], inn = L["Glow"], haze = L["Haze"] }
 	-- (No CineMode column: the effects only show in CineMode, so Always says it all.)
 	local effectRows = { opts = { quiet = true, cam = true, anyFight = true }, underHeader = true }
-	for _, effect in ipairs(ns.EFFECT_GRID) do
-		if EFFECT_LABELS[effect] then
+	for _, effect in ipairs({ "vignette", "inn", "haze" }) do
+		do
 			local key, alwaysKey = "effect:" .. effect, effect .. "Always"
 			effectRows[#effectRows + 1] = { key = key, label = EFFECT_LABELS[effect], alwaysKey = alwaysKey,
 				alwaysOn = function() return ns.GetDB()[alwaysKey] end,
@@ -7522,56 +7514,38 @@ local function CreateEffectsPanel()
 		L["Shows the vignette for a few seconds, in CineMode or not."],
 		function(db) return db.vignette and (db.vignetteStrength or 0) > 0 end)
 
-	-- Inns: Off is the inn glow switched off (its amount kept for next time).
-	local innGlowStrength = InlineSlider(vignetteStrength.rowName, 18, {
-		key = "innGlowAmount",
-		get = function()
-			local db = ns.GetDB()
-			return db.innGlow and db.innGlowAmount or 0
-		end,
-		set = function(value)
-			local db = ns.GetDB()
-			db.innGlow = value > 0
-			if value > 0 then db.innGlowAmount = value end
-		end,
-	}, L["Inn glow amount"], 100, 1, function() ns.RefreshTint() ns.PreviewEffect("inn") end)
+	-- Glow: how much (its row above says where and when, innGlow; in an inn
+	-- to start with).
+	local innGlowStrength = InlineSlider(vignetteStrength.rowName, 18, "innGlowAmount", L["Glow strength"], 100, 1,
+		function() ns.RefreshTint() ns.PreviewEffect("inn") end)
+	GreyRow(innGlowStrength, function(db) return db.innGlow end)
 	RecordKey(content, "innGlow") -- (for Reset page)
-	RecordKey(content, "innGlowAmount")
-	Tooltip(innGlowStrength, L["Inside an inn, a firelight glow replaces the outdoor tint."] .. " " ..
-		L["How much light the glow adds at its brightest, low on the screen."])
+	Tooltip(innGlowStrength, L["A warm firelight glow, brightest low on the screen."])
 	ns.TintPreviewButton(kit, content, innGlowStrength, "inn", L["Preview"], 80,
-		L["Shows the glow for a few seconds as if you were inside an inn."],
+		L["Shows the glow for a few seconds, in CineMode or not."],
 		function(db) return db.innGlow and (db.innGlowAmount or 0) > 0 end)
 
 	-- (The weather's strength and the view distance in bad weather: the
 	-- Weather icon's page since 2026-11-23, LetterboxStyle.lua.)
 	local lastRow = innGlowStrength
 
-	-- Camera haze (depth of field): each camera mode's page sets its own
-	-- strength, this scales them all. Off is the haze switched off (the
-	-- scale kept for next time).
-	local cameraHaze = InlineSlider(lastRow.rowName, 18, {
-		key = "dofScale",
-		get = function()
-			local db = ns.GetDB()
-			return db.depthOfField and (db.dofScale or 1) or 0
-		end,
-		set = function(value)
-			local db = ns.GetDB()
-			db.depthOfField = value > 0
-			if value > 0 then db.dofScale = value end
-		end,
-	}, L["Camera haze"], 200, 5, function(value)
-		if value > 0 then ns.FocusPreview(ns.FocusScaledStrength(value / 100)) end
+	-- Haze (depth of field): how thick the mist is at the screen's edges, one
+	-- strength everywhere (2026-11-23: the camera pages' own Edge haze gone;
+	-- it was 0-200% of theirs before). Its row above says where and when
+	-- (depthOfField; the camera modes to start with).
+	local cameraHaze = InlineSlider(lastRow.rowName, 18, "dofScale", L["Haze strength"], 100, 5, function(value)
+		if value > 0 then ns.FocusPreview(value / 100) end
 	end)
+	GreyRow(cameraHaze, function(db) return db.depthOfField end)
 	RecordKey(content, "depthOfField") -- (for Reset page)
-	RecordKey(content, "dofScale")
-	Tooltip(cameraHaze, L["A light haze around the edges of the screen in the camera modes."])
+	-- (For /cine debug atmosphere: the sliders, moved as a drag does.)
+	ns.effectSliders = { vignette = vignetteStrength, inn = innGlowStrength, haze = cameraHaze }
+	Tooltip(cameraHaze, L["A light haze around the edges of the screen."])
 	ns.EffectPreviewButton(kit, content, cameraHaze, L["Preview"], 80,
-		L["Shows the camera modes' haze at this scale for a few seconds."],
+		L["Shows the haze at this strength for a few seconds, in CineMode or not."],
 		function(db) return db.depthOfField and (db.dofScale or 0) > 0 end,
 		function() return ns.FocusDemoRunning() end,
-		function() ns.FocusDemo(8, ns.FocusScaledStrength(ns.GetDB().dofScale or 1)) end,
+		function() ns.FocusDemo(8, ns.GetDB().dofScale or 0.3) end,
 		function() ns.FocusDemo() end).previewFor = "haze"
 
 	local nameWidth = 0

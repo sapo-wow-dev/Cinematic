@@ -1,12 +1,15 @@
--- Cinematic depth of field (faked): a soft haze around the screen edges, as if
--- the camera had pulled focus onto you. Shown in the camera modes while
--- cinematic mode is on (depthOfField, under visualEffects), at each mode's own strength (dof*,
--- set on its page, times Camera haze's dofScale; a camera script's own Edge
--- haze while one runs). /cine doftest shows it on demand.
-local _, ns = ...
+-- Cinematic depth of field (faked): a soft pale mist around the screen edges,
+-- as if the camera had pulled focus onto you. Shown in CineMode where the
+-- Visual Effects page's Haze row says (depthOfField, under visualEffects; its
+-- rule to start with: the camera modes), at Haze strength (dofScale, 0-1: one
+-- strength everywhere since 2026-11-23, the camera pages' own Edge haze gone),
+-- or a script of your own's Edge haze while it runs. /cine doftest shows it on demand.
+local ADDON_NAME, ns = ...
 ns.Module("atmosphere", function() -- (the rest of this file: only with Atmosphere loaded, Modules.lua)
 
-local FOCUS_TEXTURE = "Interface\\AddOns\\Cinematic\\Textures\\Focus"
+-- (The addon's own folder: "Cinematic" hard-coded drew nothing in the dev
+-- copy, folder CinematicDev, 2026-11-23: the haze was never seen there.)
+local FOCUS_TEXTURE = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\Focus"
 local FOCUS_IN_TIME = 3    -- seconds to pull focus in: slow, like a focus pull
 local FOCUS_OUT_TIME = 0.8 -- ...and to clear again once you move
 local BLEND_TIME = 1.5     -- seconds to go from no haze to full, changing modes
@@ -14,15 +17,11 @@ local DEMO_STRENGTH = 0.3  -- /cine doftest's strength, unless told another
 local DEFAULT_SECONDS = 30
 local PREVIEW_SECONDS = 3  -- shown this long after a strength slider moves
 
--- The strength setting for each camera mode (ns.CameraMode()).
-local MODE_KEY = { idle = "dofIdle", cozy = "dofCozy", vista = "dofVista", fish = "dofFish",
-	flight = "dofFlight", walk = "dofWalk", run = "dofRun" }
-
 local frame, haze
 local level, strength = 0, 0 -- how far in the focus pull is, and the haze it pulls to
 local stopAt, demoStrength = 0, nil
 
--- The strength wanted now: the demo's, else the current camera mode's.
+-- The strength wanted now: the demo's, else Haze strength where its row has it.
 local function WantedStrength()
 	if GetTime() < stopAt then
 		return demoStrength or DEMO_STRENGTH
@@ -32,11 +31,14 @@ local function WantedStrength()
 		or not ns.lastCinematic then
 		return 0
 	end
-	-- (A camera script running: its own Edge haze.)
+	-- (Its Show in row since 2026-11-23, effect:haze: Core's effectWanted.
+	-- Its rule to start with, "camera", has it in the camera modes only.)
+	if not (ns.effectWanted and ns.effectWanted.haze) then return 0 end
+	-- (A script of your own running with an Edge haze of its own: that. The
+	-- built-in cameras have none: Haze strength.)
 	local scripted = ns.CameraScriptHaze and ns.CameraScriptHaze()
-	if scripted then return math.min(1, scripted * (db.dofScale or 1)) end
-	local mode = ns.CameraMode()
-	return mode and math.min(1, (db[MODE_KEY[mode]] or 0) * (db.dofScale or 1)) or 0
+	if scripted then return math.min(1, scripted) end
+	return math.max(0, math.min(1, tonumber(db.dofScale) or 0))
 end
 
 local function OnUpdate(_, elapsed)
@@ -76,7 +78,8 @@ ns.AddOverlay(frame)
 
 haze = frame:CreateTexture(nil, "ARTWORK", nil, 1)
 haze:SetAllPoints()
-haze:SetTexture(FOCUS_TEXTURE)
+-- (Whether the game found the file: /cine debug atmosphere checks it.)
+ns.focusTextureLoaded = haze:SetTexture(FOCUS_TEXTURE)
 haze:SetBlendMode("BLEND")
 haze:SetAlpha(0)
 haze:Hide()
@@ -112,18 +115,15 @@ function ns.FocusPreview(value)
 	level = 1 -- straight in, so you see the value now
 end
 
+-- The haze as drawn now (0-1), for /cine debug atmosphere.
+function ns.FocusAlphaNow()
+	return haze:IsShown() and haze:GetAlpha() or 0
+end
+
 -- Whether a demo or preview is showing (the Visual Effects page's Preview
 -- button turns into Stop meanwhile; ns.FocusDemo() with nothing stops it).
 function ns.FocusDemoRunning()
 	return GetTime() < stopAt
-end
-
--- The haze the camera modes would show at Camera haze's scale (0-2): the
--- strongest mode's, for the Visual Effects page's preview.
-function ns.FocusScaledStrength(scale)
-	local db, most = ns.db or {}, 0
-	for _, key in pairs(MODE_KEY) do most = math.max(most, tonumber(db[key]) or 0) end
-	return math.min(1, most * (scale or 1))
 end
 
 -- The demo's strength (for /cine doftest's message).

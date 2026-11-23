@@ -17,6 +17,11 @@
 --  10 buttons     the vignette's Preview button clicked: Stop while it runs, again stops it
 --  11 live        your vignette as you set it, no preview, out of CineMode then in it:
 --                 wanted, drawn, its frame and pieces; a preview in CineMode too
+--  12 innslider   Glow, in CineMode, its row on Always: the slider at 10% then 40% draws that glow;
+--                 Always off, its rule (in an inn): none out of an inn
+--  13 hazeslider  Haze, the same: 30% then 80% draws that haze; Always off, its rule (camera): none
+--  14 worldwords  the rules' new words (rain, snow, sandstorm, storm, weather, dawn, day, dusk, night,
+--                 underwater, fast) against the game's own answers; the editor's World line shown
 -- Into CinematicDB.atmosphereTestLog. Dev copy only.
 local _, ns = ...
 
@@ -33,6 +38,27 @@ local function Until(r, seconds, test)
 		left = left - 0.2
 	end
 	return test() and true or false
+end
+
+-- A row's rule set for the test (your own kept, put back at the end by the
+-- def's putBack, or at the next login after a /reload mid-run).
+local function SetRule(r, row, rule)
+	ns.db.frameRules = ns.db.frameRules or {}
+	r:Keep("rule:" .. row, ns.db.frameRules[row])
+	ns.db.frameRules[row] = rule
+	r:Log(("  rule %s = %q"):format(row, tostring(rule)))
+end
+
+-- CineMode on for a step (the kit keeps it off: left alone meanwhile), and back off.
+local function CineOn(r)
+	r.def.cineMode = true
+	if not (ns.IsCineModeOn and ns.IsCineModeOn()) and Cinematic_ToggleCineMode then pcall(Cinematic_ToggleCineMode) end
+	Until(r, 6, function() return ns.lastCinematic end)
+	r:Sleep(1)
+end
+local function CineOff(r)
+	if ns.IsCineModeOn and ns.IsCineModeOn() and Cinematic_ToggleCineMode then pcall(Cinematic_ToggleCineMode) end
+	r.def.cineMode = nil
 end
 
 local function Button(kind)
@@ -78,8 +104,22 @@ ns.TestKit.Define({
 	about = "Visual Effects page: each slider's and button's preview drawn out of CineMode, nothing to do",
 	settings = { "visualEffects", "vignette", "vignetteStrength", "weatherTint", "weatherTintStrength", "innGlow",
 		"innGlowAmount", "tintPage", "rainViewScale", "depthOfField", "dofScale", "styleGeneral", "weatherStyle",
-		"weatherRainR", "weatherRainG", "weatherRainB", "weatherBlendTime" },
+		"weatherRainR", "weatherRainG", "weatherRainB", "weatherBlendTime", "innAlways", "hazeAlways" },
 	cvars = { "horizonStart", "farclip" },
+	-- (The rows' rules SetRule changed: yours back. "<nil>": the kit's mark for none.)
+	putBack = function(extra)
+		local n = 0
+		for key, rule in pairs(extra) do
+			local row = type(key) == "string" and key:match("^rule:(.+)$")
+			if row then
+				ns.db.frameRules = ns.db.frameRules or {}
+				ns.db.frameRules[row] = rule ~= "<nil>" and rule or nil
+				n = n + 1
+			end
+		end
+		if ns.RefreshTint then ns.RefreshTint() end
+		return n .. " row rule(s) put back"
+	end,
 	context = function()
 		local w = ns.GetWeatherDebug and ns.GetWeatherDebug() or {}
 		return ("atmosphere loaded %s, weather here %s (%s), indoors %s, place %s"):format(
@@ -192,16 +232,30 @@ ns.TestKit.Define({
 			local back = Until(r, 6, function() return tonumber(GetCVar("horizonStart")) == before end)
 			r:Verdict(back, "back to " .. tostring(before) .. ": " .. tostring(GetCVar("horizonStart")))
 		end },
-		{ key = "haze", title = "camera haze preview", seconds = 4, run = function(r)
-			r:Set("dofScale", 1)
-			local strength = ns.FocusScaledStrength(1)
-			-- (15% by default since 2026-11-23: at 2.5% even 200% showed nothing.)
-			r:Verdict(strength >= 0.1, ("the camera modes' strongest haze at 100%%: %.3f (15%% by default)"):format(strength))
-			ns.FocusPreview(strength)
-			r:Sleep(0.3)
-			local frame = _G.CinematicFocus
-			r:Verdict(ns.FocusDemoRunning() and frame and frame:IsShown(), "haze frame up while previewing")
-			r:Shot("camera haze")
+		{ key = "haze", title = "haze preview: one strength, a pale mist you can see", seconds = 5, run = function(r)
+			-- (One Haze strength, 0-100%, 30% to start with, since 2026-11-23:
+			-- "haze seems to be doing nothing". And a pale mist, not mid-grey: the
+			-- screen's edge measured brighter with it than without.)
+			r:Verdict(ns.DEFAULTS.dofScale == 0.3, "Haze strength 30% to start with: " .. tostring(ns.DEFAULTS.dofScale))
+			-- (Its file found: a path naming "Cinematic" found nothing in the dev
+			-- copy's CinematicDev folder, and the haze drew nothing at any strength
+			-- while its alpha read right, 2026-11-23.)
+			r:Verdict(ns.noRealLayout or ns.focusTextureLoaded == true,
+				"the haze's texture loaded: " .. tostring(ns.focusTextureLoaded))
+			local function Edge()
+				local frame = _G.CinematicFocus
+				return frame and frame:IsShown() and ns.FocusAlphaNow() or 0
+			end
+			ns.FocusDemo()
+			r:Sleep(1)
+			r:Shot("no haze")
+			r:Set("dofScale", 0.6)
+			ns.FocusPreview(0.6)
+			r:Sleep(0.4)
+			-- (Offline its loop doesn't tick: only the preview's start judged there.)
+			r:Verdict(ns.FocusDemoRunning() and (ns.noRealLayout or Near(Edge(), 0.6)),
+				("previewing 60%%: haze drawn %.3f"):format(Edge()))
+			r:Shot("haze 60%")
 			ns.FocusDemo() -- (stops it)
 		end },
 		{ key = "colors", title = "Weather Style colors and blend time", seconds = 4, run = function(r)
@@ -311,6 +365,156 @@ ns.TestKit.Define({
 			ns.StopEffectPreview()
 			if ns.IsCineModeOn and ns.IsCineModeOn() and Cinematic_ToggleCineMode then pcall(Cinematic_ToggleCineMode) end
 			r.def.cineMode = nil
+		end },
+		-- (The user, 2026-11-23: "the inn glow and camera haze effects also need
+		-- to be tested to make sure the slider works", and each got a Show in
+		-- row. Then (the user: "just call it glow and make the default show in
+		-- only in Inns, same thing with camera haze") Glow and Haze, their rows
+		-- starting from rules: in an inn, the camera modes. In CineMode, no
+		-- preview, nothing faked: the row's Always on, each slider moved as a
+		-- drag moves it, drawn where you stand; Always off, the row's own rule:
+		-- gone, out of an inn and a camera mode.)
+		{ key = "innslider", title = "Glow slider and row, in CineMode", seconds = 20, run = function(r)
+			r:Set("visualEffects", true)
+			r:Set("innGlow", true)
+			local rule = ns.db.frameRules and ns.db.frameRules["effect:inn"]
+			r:Log(("Glow's rule: %q (to start with %q); here: %s, indoors %s"):format(tostring(rule),
+				tostring(ns.RULE_DEFAULTS["effect:inn"]), tostring(ns.GetPlaceType()), tostring(IsIndoors())))
+			-- (A rule decides over the row's ticks: cleared, as a player would, for
+			-- Always to show it everywhere; put back after, putBack below.)
+			SetRule(r, "effect:inn", "")
+			r:Set("innAlways", true)
+			CineOn(r)
+			ns.OpenOptions("Effects")
+			r:Sleep(0.5)
+			local slider = ns.effectSliders and ns.effectSliders.inn
+			if not slider then return r:Fail("no Glow slider") end
+			for _, value in ipairs({ 10, 40 }) do
+				slider:SetValue(value) -- (as a drag: its preview starts, then ends here)
+				ns.StopEffectPreview()
+				local seen = Until(r, 6, function() return Near(Drawn().glow, value / 100) end)
+				r:Verdict(seen, ("Always, slider at %d%%: glow drawn %s, wanted %.2f (row wanted %s)"):format(value,
+					tostring(Drawn().glow), value / 100, tostring(ns.effectWanted and ns.effectWanted.inn)))
+				r:Shot(("glow %d%%"):format(value))
+			end
+			r:Set("innAlways", false)
+			SetRule(r, "effect:inn", ns.RULE_DEFAULTS["effect:inn"])
+			ns.RefreshTint()
+			local inInn = ns.GetPlaceType() == "inn" and IsIndoors()
+			local gone = Until(r, 6, function() return (Drawn().glow or 0) == 0 end)
+			r:Verdict(inInn or (gone and ns.effectWanted.inn == false),
+				("Always off, its rule out of an inn: glow drawn %s, row wanted %s%s"):format(tostring(Drawn().glow),
+				tostring(ns.effectWanted.inn), inInn and " (you're in an inn: not judged)" or ""))
+			CineOff(r)
+		end },
+		{ key = "hazeslider", title = "Haze slider and row, in CineMode", seconds = 20, run = function(r)
+			r:Set("visualEffects", true)
+			r:Set("depthOfField", true)
+			r:Log(("Haze's rule: %q (to start with %q); camera mode now %s"):format(
+				tostring(ns.db.frameRules and ns.db.frameRules["effect:haze"]), tostring(ns.RULE_DEFAULTS["effect:haze"]),
+				tostring(ns.CameraMode())))
+			SetRule(r, "effect:haze", "")
+			r:Set("hazeAlways", true)
+			CineOn(r)
+			ns.OpenOptions("Effects")
+			r:Sleep(0.5)
+			local slider = ns.effectSliders and ns.effectSliders.haze
+			if not slider then return r:Fail("no Haze slider") end
+			for _, value in ipairs({ 30, 80 }) do
+				slider:SetValue(value) -- (as a drag: its 3 second preview, then the row's own)
+				local want = value / 100 -- (one strength everywhere since 2026-11-23)
+				r:Sleep(3.5)
+				local seen = Until(r, 4, function() return Near(ns.FocusAlphaNow(), want) end)
+				r:Verdict(seen and not ns.FocusDemoRunning(), ("Always, slider at %d%%: haze drawn %.3f, wanted %.3f (camera mode %s, row wanted %s)"):format(
+					value, ns.FocusAlphaNow(), want, tostring(ns.CameraMode()), tostring(ns.effectWanted and ns.effectWanted.haze)))
+				r:Shot(("haze %d%%"):format(value))
+			end
+			r:Set("hazeAlways", false)
+			SetRule(r, "effect:haze", ns.RULE_DEFAULTS["effect:haze"])
+			local gone = Until(r, 4, function() return ns.FocusAlphaNow() == 0 end)
+			r:Verdict(gone and ns.effectWanted.haze == false, ("Always off, its rule out of a camera mode: haze drawn %.3f, row wanted %s"):format(
+				ns.FocusAlphaNow(), tostring(ns.effectWanted.haze)))
+			CineOff(r)
+		end },
+		-- (The rules' world words, 2026-11-23: each as the rules read it now
+		-- against the game's own answers, nothing to do; then the rule editor
+		-- opened on the Haze row (its rule kept: Close saves nothing here), the
+		-- World and Travel lines' buttons there, inside it, none on another.)
+		{ key = "worldwords", title = "world words: weather, time, under water, fast", seconds = 5, run = function(r)
+			local f = ns.RuleFacts(false)
+			local raw = C_Weather and C_Weather.GetCurrentWeather and C_Weather.GetCurrentWeather()
+			local hour, minute = ns.TintParts.GetClockTime()
+			local speed = ns.PlayerSpeedNow()
+			r:Log(("game: weather type %s, intensity %s, indoors %s, submerged %s, speed %.1f, clock %s:%02d (%s)"):format(
+				tostring(raw and raw.type), tostring(raw and raw.intensity), tostring(IsIndoors()), tostring(IsSubmerged()),
+				speed, tostring(hour), tonumber(minute) or 0, tostring(ns.db.tintClock or "game")))
+			local words = {}
+			for _, word in ipairs({ "rain", "snow", "sandstorm", "storm", "weather", "dawn", "day", "dusk", "night",
+				"underwater", "fast" }) do
+				words[#words + 1] = word .. "=" .. tostring(f[word])
+			end
+			r:Log("words: " .. table.concat(words, " "))
+			local kind, intensity = ns.WeatherNow()
+			local time = ns.TimeOfDayWord()
+			local ok = f.rain == (kind == "rain") and f.snow == (kind == "snow") and f.sandstorm == (kind == "sandstorm")
+				and f.weather == (kind ~= nil) and f.storm == ((kind == "rain" or kind == "snow") and intensity >= 0.6)
+				and f[time] == true and f.underwater == (IsSubmerged() and true or false)
+				and f.fast == (not f.taxi and speed >= 12)
+			local times = (f.dawn and 1 or 0) + (f.day and 1 or 0) + (f.dusk and 1 or 0) + (f.night and 1 or 0)
+			r:Verdict(ok and times == 1, ("the words match the game's answers (weather %s, time %s)"):format(
+				tostring(kind), tostring(time)))
+			-- The editor: opened on the Haze row with a stand-in that saves nothing.
+			ns.OpenOptions("Effects")
+			r:Sleep(0.5)
+			local rule = ns.db.frameRules and ns.db.frameRules["effect:haze"] or ""
+			-- (A stand-in row: what the editor asks of one, each doing nothing.
+			-- Without SetText, typing focus calling it raised an error, run 1.)
+			ns.OpenRuleEditor({ key = "effect:haze", label = ns.L["Haze"], Text = function() return rule end,
+				SetText = function() end, ResetToGrid = function() end, Close = function() end })
+			r:Sleep(0.6)
+			local editor = _G.CinematicRuleEditor
+			if not editor or not editor:IsShown() then return r:Fail("the rule editor didn't open") end
+			local byLabel, lines = {}, {}
+			for _, group in ipairs(ns.RulePieces()) do
+				if group[1] == ns.L["World"] or group[1] == ns.L["Travel"] then
+					for _, piece in ipairs(group[3]) do
+						byLabel[piece[2]] = piece[1]
+						lines[#lines + 1] = piece[1]
+					end
+				end
+			end
+			local found = {}
+			local function Walk(frame, depth)
+				if depth > 6 then return end
+				for _, child in ipairs({ frame:GetChildren() }) do
+					if child.dot and child.GetText then
+						local text = tostring(child:GetText() or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+						if byLabel[text] and child:IsVisible() then found[byLabel[text]] = child end
+					end
+					Walk(child, depth + 1)
+				end
+			end
+			Walk(editor, 0)
+			local missing, cut, covered = {}, 0, 0
+			for _, word in ipairs(lines) do
+				local button = found[word]
+				if not button then
+					missing[#missing + 1] = word
+				else
+					local text = button.GetFontString and button:GetFontString()
+					if text and not ns.noRealLayout and text:IsTruncated() == true then cut = cut + 1 end
+					local hits = r:Overlaps(button, editor)
+					if #hits > 0 then
+						covered = covered + 1
+						r:Log(word .. " covers: " .. table.concat(hits, ", "))
+					end
+				end
+			end
+			r:Verdict(#missing == 0 and cut == 0 and covered == 0,
+				("editor's World and Travel lines: %d of %d buttons, %d cut short, %d with something over them%s"):format(
+				#lines - #missing, #lines, cut, covered, #missing > 0 and (" (missing " .. table.concat(missing, ", ") .. ")") or ""))
+			r:Shot("rule editor: World line", { behind = editor })
+			editor:Hide()
 		end },
 	},
 })

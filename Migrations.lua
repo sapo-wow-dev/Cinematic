@@ -5751,25 +5751,25 @@ STEPS[#STEPS + 1] = function()
 	ns.MinimapPageFromRecolor(ns.db)
 	ns.db.minimapPageV1 = true
 end
--- The camera modes' Edge haze raised from 2.5% to 15% by default
--- (2026-11-23: it couldn't be seen). Where a mode's haze is still the old
--- default, here and in every saved profile and reset point, it moves to the
--- new one; one picked by hand (any other value, 0 included) stays. Once.
-ns.DOF_STRENGTH_KEYS = { "dofIdle", "dofCozy", "dofVista", "dofFish", "dofFlight" }
-function ns.RaiseOldHaze(t)
+-- The haze: one strength for every camera, 0-100% (2026-11-23, the user:
+-- "haze seems to be doing nothing", "a scale from 0-100"). Haze strength was
+-- a 0-200% scale on each camera mode's own Edge haze (2.5% by default, the
+-- haze hardly seen at any setting): it's the new default here and in every
+-- saved profile and reset point, and the modes' own strengths go. Once.
+-- (Before it, dofStrengthV1 raised the modes' 2.5% to 15%: dropped with them.)
+ns.OLD_DOF_MODE_KEYS = { "dofIdle", "dofCozy", "dofVista", "dofFish", "dofFlight", "dofWalk", "dofRun" }
+function ns.HazeToOneStrength(t)
 	if type(t) ~= "table" then return end
-	for _, key in ipairs(ns.DOF_STRENGTH_KEYS) do
-		local value = tonumber(t[key])
-		if value and math.abs(value - 0.025) < 0.0001 then t[key] = 0.15 end
-	end
+	t.dofScale = ns.DEFAULTS.dofScale -- (30%: set, not nil, as the live settings aren't filled again)
+	for _, key in ipairs(ns.OLD_DOF_MODE_KEYS) do t[key] = nil end
 end
 STEPS[#STEPS + 1] = function()
-	if ns.db.dofStrengthV1 then return end
-	ns.RaiseOldHaze(ns.db)
+	if ns.db.dofScaleV2 then return end
+	ns.HazeToOneStrength(ns.db)
 	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
-		for _, saved in pairs(type(list) == "table" and list or {}) do ns.RaiseOldHaze(saved) end
+		for _, saved in pairs(type(list) == "table" and list or {}) do ns.HazeToOneStrength(saved) end
 	end
-	ns.db.dofStrengthV1 = true
+	ns.db.dofScaleV2 = true
 end
 -- The vignette off everywhere, once (2026-11-23): Core's Step dropped its
 -- wanted from 2026-10-13, so it never showed whatever was set; with that
@@ -5792,6 +5792,29 @@ STEPS[#STEPS + 1] = function()
 		for _, saved in pairs(type(list) == "table" and list or {}) do ns.VignetteOff(saved) end
 	end
 	ns.db.vignetteOffV1 = true
+end
+-- The Glow's and Haze's Show in rows (2026-11-23): their rules to start with
+-- (Core.lua's RULE_DEFAULTS: in an inn, the camera modes), but nowhere where
+-- the glow or haze was off (their sliders' Off then): the rule cleared ("",
+-- so the default isn't put back) and Always off, here and in every saved
+-- profile and reset point. Once.
+function ns.EffectRowsFromSwitches(t)
+	if type(t) ~= "table" then return end
+	for switch, row in pairs({ innGlow = "inn", depthOfField = "haze" }) do
+		if t[switch] == false then
+			t[row .. "Always"] = false
+			if type(t.frameRules) ~= "table" then t.frameRules = {} end
+			t.frameRules["effect:" .. row] = ""
+		end
+	end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.effectRowsV1 then return end
+	ns.EffectRowsFromSwitches(ns.db)
+	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do ns.EffectRowsFromSwitches(saved) end
+	end
+	ns.db.effectRowsV1 = true
 end
 -- The New zone card off, once (2026-11-23): it was on to start with, so a
 -- whole new zone (Dun Morogh) got the big headline card where the user

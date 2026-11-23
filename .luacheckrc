@@ -212,6 +212,7 @@ read_globals = {
 	"IsControlKeyDown",
 	"IsFalling",
 	"IsSwimming",
+	"IsSubmerged",
 	"C_PetBattles",
 	"HasFullControl",
 	"IsFlying",

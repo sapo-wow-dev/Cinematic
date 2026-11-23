@@ -3733,6 +3733,14 @@ ns.RULE_WORDS = {
 	-- follows it; gliding, retail's skyriding in the air; npc, at an NPC's or a
 	-- mailbox's window, or talking to one.)
 	sitting = "sitting", sit = "sitting", gliding = "gliding", skyriding = "gliding", npc = "npc",
+	-- (2026-11-23, for the Atmosphere effects' rows: fully under water, not
+	-- swimming on top (IsSubmerged); faster than a 60% mount, 12 yards a
+	-- second (a glide's speed skyriding). The weather here, outdoors only:
+	-- rain, snow, sandstorm, storm (rain or snow at 60% or more), weather
+	-- (any of them). The time of day by the tint's clock: dawn, day, dusk, night.)
+	underwater = "underwater", submerged = "underwater", fast = "fast",
+	rain = "rain", raining = "rain", snow = "snow", snowing = "snow", sandstorm = "sandstorm", sand = "sandstorm",
+	storm = "storm", weather = "weather", dawn = "dawn", day = "day", daytime = "day", dusk = "dusk", night = "night",
 	dead = "dead", ghost = "dead", casting = "casting", cast = "casting", channeling = "casting",
 	-- (A fight starting or ending: only the Cards page's fight rows are read then.)
 	entering = "entering", enter = "entering", leaving = "leaving", leave = "leaving",
@@ -4609,7 +4617,7 @@ do
 			"ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE",
 			"PLAYER_FLAGS_CHANGED", "UNIT_FACTION", "ENCOUNTER_START", "ENCOUNTER_END",
 			"INSTANCE_ENCOUNTER_ENGAGE_UNIT", "PLAYER_ROLES_ASSIGNED", "PLAYER_SPECIALIZATION_CHANGED",
-			"PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED" }) do
+			"PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED", "WEATHER_CHANGED" }) do
 			pcall(factsWatch.RegisterEvent, factsWatch, event)
 		end
 		for _, event in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START",
@@ -4765,6 +4773,15 @@ do
 		facts.sitting = ns.IsSitting ~= nil and ns.IsSitting() and true or false
 		facts.gliding = ns.isRetail and ns.GlidingSpeed() ~= nil or false
 		facts.npc = ns.NPCWindowOpen() or ns.Flag(UnitExists("npc")) and true or false
+		-- (Under water, speed, weather and the time of day: RULE_WORDS above.)
+		facts.underwater = IsSubmerged and ns.Flag(IsSubmerged()) and true or false
+		facts.fast = not facts.taxi and ns.PlayerSpeedNow() >= 12 or false
+		local weather, intensity = ns.WeatherNow()
+		facts.rain, facts.snow, facts.sandstorm = weather == "rain", weather == "snow", weather == "sandstorm"
+		facts.weather = weather ~= nil
+		facts.storm = (weather == "rain" or weather == "snow") and intensity >= 0.6 or false
+		local time = ns.TimeOfDayWord()
+		facts.dawn, facts.day, facts.dusk, facts.night = time == "dawn", time == "day", time == "dusk", time == "night"
 		-- (Casting or channeling. Secret in a fight on some clients, so false there.)
 		facts.casting = ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player"))
 		-- (A boss fight: an encounter on, the game's boss frames up, or a boss

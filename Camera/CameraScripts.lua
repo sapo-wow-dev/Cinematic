@@ -575,14 +575,14 @@ function RestCamera(cam)
 		-- while you stand still, so it was only a wait.)
 		steps = { S("together", { steps = { OpeningSways(o, loop), ZoomGroup(z) } }) }
 	end
-	local dof = "dof" .. cam:sub(1, 1):upper() .. cam:sub(2)
+	-- (No haze of its own since 2026-11-23: the Visual Effects page's one Haze
+	-- strength, Focus.lua, for every built-in camera; its page shows that.)
 	return {
 		steps = steps,
 		ending = { On(Set(S("zoom", { to = 0, secs = 2, of = "yours" }), z), Switch(z)) },
 		rules = { camera = "pause", cameraSecs = Db(cam .. "InputPause", 2), fight = "stop", walk = "putback",
 			zoom = "ignore", ends = "putback" },
-		haze = Db(dof, 0),
-		ruleSet = { camera = { cam .. "InputPause" }, haze = { dof } },
+		ruleSet = { camera = { cam .. "InputPause" }, haze = { "dofScale" } },
 	}
 end
 
@@ -609,8 +609,7 @@ function MovingCamera(cam)
 		ending = { On(Set(S("zoom", { to = 0, secs = 2, of = "yours" }), cam .. "Zoom"), Switch(cam .. "Zoom")) },
 		rules = { camera = "pause", cameraSecs = Db(cam .. "InputPause", 2), fight = "stop", walk = "ignore", zoom = "ignore",
 			ends = "putback" },
-		haze = Db(cam == "run" and "dofRun" or "dofWalk", 0),
-		ruleSet = { camera = { cam .. "InputPause" }, haze = { cam == "run" and "dofRun" or "dofWalk" } },
+		ruleSet = { camera = { cam .. "InputPause" }, haze = { "dofScale" } },
 	}
 end
 
@@ -675,8 +674,7 @@ local BUILT_IN = {
 			ending = { S("putback", { secs = 4 }) },
 			rules = { camera = "pause", cameraSecs = Db("idleInputPause", 15), fight = "putback", walk = "putback",
 				zoom = "ignore", ends = "putback" },
-			haze = Db("dofIdle", 0),
-			ruleSet = { camera = { "idleInputPause" }, haze = { "dofIdle" } },
+			ruleSet = { camera = { "idleInputPause" }, haze = { "dofScale" } },
 		}
 	end },
 	-- The vista, fish and cozy cameras (Camera.lua's vistaOrbit, fishOrbit and
@@ -745,8 +743,7 @@ local BUILT_IN = {
 			ending = { On(Set(S("zoom", { to = 0, secs = 3, of = "yours" }), "taxiLandZoom"), Switch("taxiLandZoom")) },
 			rules = { camera = "pause", cameraSecs = Db("taxiInputPause", 15), fight = "stop", walk = "ignore", zoom = "ignore",
 				ends = "putback" },
-			haze = Db("dofFlight", 0),
-			ruleSet = { camera = { "taxiInputPause" }, haze = { "dofFlight" } },
+			ruleSet = { camera = { "taxiInputPause" }, haze = { "dofScale" } },
 		}
 	end },
 	{ id = "walk", name = "RP walk camera", make = function() return MovingCamera("walk") end },

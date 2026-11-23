@@ -1,5 +1,5 @@
 """Depth-of-field haze for Cinematic: 512x512, stretched over the whole screen.
-Clear in the middle, rising to a soft milky haze toward the edges and corners.
+Clear in the middle, rising to a soft pale mist toward the edges and corners.
 The haze is lumpy, low-frequency noise, so over the scene it flattens the
 contrast unevenly and reads as out of focus rather than as a plain darkening."""
 import math, random, sys
@@ -32,8 +32,9 @@ for y in range(N):
         lump = lumps[y * N + x]
         mask = smooth((r - CLEAR) / (FULL - CLEAR))
         alpha = mask * (0.7 + 0.3 * lump)
-        # A soft, slightly cool mid-grey: lifts the darks, dims the lights.
-        g = 0.42 + 0.16 * lump
+        # A soft, slightly cool pale mist (2026-11-23: the old mid-grey, 0.42-0.58,
+        # barely changed the pixels over most scenes, so the haze looked like nothing).
+        g = 0.84 + 0.12 * lump
         data.append((int(g * 245), int(g * 250), int(g * 255), int(alpha * 255)))
 
 img = Image.new("RGBA", (N, N))
