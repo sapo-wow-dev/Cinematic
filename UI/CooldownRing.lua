@@ -19,6 +19,7 @@ local ADDON_NAME, ns = ...
 
 local ART = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\"
 local STYLES = { pips = 8, smooth = 24 } -- ring styles: their segment counts
+local PIPS_MOST = 20 -- one pip per charge up to this many (CdmRing2_* to CdmRing20_*)
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 
 -- The look: Style > Cooldown Manager (Style/CdmStyle.lua; its switch cdmStyle).
@@ -106,8 +107,17 @@ end
 -- forever.spell.description-needs-tooltip; cdmring run 2: Power Word: Shield
 -- tracked, no size). A hidden tooltip set to the spell gives its text for
 -- many (spellscan run 3: Power Word: Shield's "absorbing 48" came that way).
+-- (Charges, 2026-11-23: Lightning Shield's "3 charges", the ring then drains
+-- by the charges left, the aura's count. Planned in the ledger, built now.)
+local function ChargesNumber(text)
+	if type(text) ~= "string" or Secret(text) then return nil end
+	local number = text:match("(%d+)%s+[Cc]harges?")
+	return number and tonumber(number) or nil
+end
+
 local tip
-local function TooltipSize(id)
+local function TooltipSize(id, parse)
+	parse = parse or AbsorbNumber
 	if not tip then
 		local ok, made = pcall(CreateFrame, "GameTooltip", "CinematicRingTip", nil, "GameTooltipTemplate")
 		if not ok then return nil end
@@ -119,7 +129,7 @@ local function TooltipSize(id)
 	local size
 	for i = 2, math.min(tip:NumLines() or 0, 12) do
 		local line = _G["CinematicRingTipTextLeft" .. i]
-		size = size or AbsorbNumber(line and line:GetText())
+		size = size or parse(line and line:GetText())
 	end
 	tip:Hide()
 	return size
@@ -128,20 +138,39 @@ end
 -- A spell's first "absorb... N" number, plain (nil if none): its description,
 -- else its tooltip. Kept per spell once found (a talent changing it shows on
 -- the next /reload).
-local sizes = {}
-local function DescriptionSize(id)
-	if not id then return nil end
-	if sizes[id] then return sizes[id] end
-	local size
-	if C_Spell and C_Spell.GetSpellDescription then
-		local ok, text = pcall(C_Spell.GetSpellDescription, id)
-		size = ok and AbsorbNumber(text) or nil
+-- (A spell whose tooltip had none: tried again after TIP_RETRY seconds, not
+-- on every tick and hit; a Ring on a buff with no shield rebuilt the hidden
+-- tooltip 4 times a second, release review 2026-11-23, fix card
+-- 2026-11-23-cdm-ring-size-miss.md. Not kept for good: the text can come late.)
+local TIP_RETRY = 10
+-- (One reader per kind of number: the absorb, the charges. Each its own kept
+-- numbers and tooltip misses.)
+local function Reader(parse)
+	local sizes, tipMissed = {}, {} -- spell ID -> its number / GetTime() of its last empty tooltip
+	return function(id)
+		if not id then return nil end
+		if sizes[id] then return sizes[id] end
+		local size
+		if C_Spell and C_Spell.GetSpellDescription then
+			local ok, text = pcall(C_Spell.GetSpellDescription, id)
+			size = ok and parse(text) or nil
+		end
+		if not size and not InCombatLockdown() then
+			local missed = tipMissed[id]
+			if not missed or GetTime() - missed >= TIP_RETRY then
+				local okTip, found = pcall(TooltipSize, id, parse)
+				size = okTip and found or nil
+				tipMissed[id] = not size and GetTime() or nil
+			end
+		end
+		if size then sizes[id] = size end
+		return size
 	end
-	if not size and not InCombatLockdown() then size = TooltipSize(id) end
-	if size then sizes[id] = size end
-	return size
 end
+local DescriptionSize = Reader(AbsorbNumber)
+local DescriptionCharges = Reader(ChargesNumber)
 ns.CooldownRingDescriptionSize = DescriptionSize
+ns.CooldownRingDescriptionCharges = DescriptionCharges
 
 -- The spell IDs an icon stands for (its own and its ranks), plain only.
 local function IconSpells(icon)
@@ -161,25 +190,109 @@ end
 
 -- The last cast of each icon's spell (any rank): its size is the ring's full.
 local lastCast = {} -- spell ID cast -> GetTime()
-local function SizeFor(icon)
+local function SizeFor(icon, read)
+	read = read or DescriptionSize
 	local ids, own = IconSpells(icon)
 	local best, bestAt
 	for id in pairs(ids) do
 		if lastCast[id] and (not bestAt or lastCast[id] > bestAt) then best, bestAt = id, lastCast[id] end
 	end
-	local size = best and DescriptionSize(best)
-	if not size and own then size = DescriptionSize(own) end
+	local size = best and read(best)
+	if not size and own then size = read(own) end
 	if not size then
 		-- (No cast seen since login: the highest rank you know.)
 		for id in pairs(ids) do
 			local known = C_SpellBook and C_SpellBook.IsSpellKnown and select(2, pcall(C_SpellBook.IsSpellKnown, id))
-			local s = known == true and DescriptionSize(id)
+			local s = known == true and read(id)
 			if s and (not size or s > size) then size = s end
 		end
 	end
 	return size
 end
 ns.CooldownRingSizeFor = SizeFor
+
+-- A charges buff's count now: the aura the game's icon keeps
+-- (icon.auraDataCached, Blizzard_CooldownViewer's item data; its own number
+-- in the corner comes from it). Secret in a fight maybe: a StatusBar and
+-- SetText take it as the absorb. The most seen out of fights is kept per
+-- icon spell, for a description with no "N charges".
+local mostSeen = {} -- spell ID -> the highest plain count seen
+local function Charges(icon)
+	local ok, data = pcall(function() return icon.auraDataCached end)
+	if not ok or type(data) ~= "table" then return nil end
+	local okCount, count = pcall(function() return data.applications end)
+	if not okCount or count == nil then return nil end
+	if not Secret(count) and type(count) ~= "number" then return nil end
+	return count
+end
+ns.CooldownRingCharges = Charges
+
+-- The most charges an icon's buff has: its description's "N charges", else
+-- the most seen.
+-- (The most seen kept in the saved data, db.cdmRingCharges, out of profiles:
+-- Lightning Shield's description has no "3 charges", and the count seen was
+-- lost on /reload, the page hiding its Ring again, cdmring q5af4. Recorded
+-- whenever it reads plain, ring set or not.)
+local function Saved()
+	local db = ns.db
+	if not db then return nil end
+	db.cdmRingCharges = type(db.cdmRingCharges) == "table" and db.cdmRingCharges or {}
+	return db.cdmRingCharges
+end
+local function Seen(id, count)
+	count = Plain(count)
+	if not (id and count and count > 1) then return end
+	if count > (mostSeen[id] or 0) then mostSeen[id] = count end
+	local saved = Saved()
+	if saved and count > (saved[id] or 0) then saved[id] = count end
+end
+local function MostCharges(icon, id)
+	if icon then
+		Seen(id, Charges(icon))
+		local most = SizeFor(icon, DescriptionCharges)
+		if most then return most end
+	end
+	local saved = Saved()
+	return id and (mostSeen[id] or saved and saved[id]) or nil
+end
+ns.CooldownRingMostCharges = MostCharges
+
+-- Whether a tracked buff (by its base spell) can have a ring: a shield (an
+-- "absorb... N" in its description or a rank's) or a buff with charges ("N
+-- charges", or more than one seen on its aura: Lightning Shield). Others get
+-- no Ring on the page (2026-11-23). Unreadable in a fight: counts as fitting.
+-- Only yes is kept (a description can come late).
+local fits = {}
+function ns.CooldownRingFits(id)
+	id = Plain(id)
+	if not id then return true end
+	if fits[id] then return true end
+	local found
+	if ns.EachCooldownIcon then
+		ns.EachCooldownIcon(function(icon, iconId, bar)
+			if found or bar ~= "BuffIconCooldownViewer" then return end
+			local plain = Plain(iconId)
+			if plain and (ns.BaseSpell and ns.BaseSpell(plain) or plain) == id then found = icon end
+		end, true)
+	end
+	local ok, size = true, nil
+	if found then ok, size = pcall(SizeFor, found) end
+	if not (ok and size) and found then ok, size = pcall(MostCharges, found, id) end
+	if not (ok and size) then
+		ok, size = pcall(DescriptionSize, id)
+		if not ok then return true end -- (unreadable: left shown)
+	end
+	if not size then
+		ok, size = pcall(DescriptionCharges, id)
+		if not ok then return true end
+		size = size or MostCharges(nil, id)
+	end
+	if size then
+		fits[id] = true
+		return true
+	end
+	return InCombatLockdown() and true or false
+end
 
 local rings = setmetatable({}, { __mode = "k" }) -- icon -> its pieces
 
@@ -192,16 +305,16 @@ local function Bar(parent, texture)
 end
 
 -- Builds (once per icon and style) what a style draws.
-local function Make(icon, style)
+local function Make(icon, style, pips)
 	local ring = rings[icon]
-	if ring and ring.style == style then return ring end
+	if ring and ring.style == style and ring.pips == pips then return ring end
 	if ring then ring.holder:Hide() end
 	local art = type(icon.Icon) == "table" and type(icon.Icon.GetObjectType) == "function" and icon.Icon or icon
 	local holder = CreateFrame("Frame", nil, icon)
 	holder:SetAllPoints(art)
 	holder:SetFrameLevel(icon:GetFrameLevel() + 8)
-	ring = { holder = holder, style = style, segs = {}, tracks = {} }
-	local count = STYLES[style]
+	ring = { holder = holder, style = style, pips = pips, segs = {}, tracks = {} }
+	local count = pips or STYLES[style]
 	if count then
 		local box = CreateFrame("Frame", nil, holder)
 		box:SetPoint("CENTER")
@@ -288,8 +401,27 @@ local function Paint(ring, look)
 	if ring.font then pcall(text.SetFont, text, ring.font, tonumber(look.cdmAmountSize) or 13, "OUTLINE") end
 end
 
+-- (The game's own count in the icon's corner, hidden while ours shows the
+-- charges in the middle: "3" twice, the user 2026-11-23. Ours shows the last
+-- charge too, the game's doesn't. Back when the ring goes; Amount on Hide keeps
+-- it hidden: no number at all.)
+local function GameCount(ring, hide)
+	local apps = ring.icon and ring.icon.Applications
+	if type(apps) ~= "table" or type(apps.SetAlpha) ~= "function" then return end
+	if hide then
+		if not ring.hidGame then pcall(apps.SetAlpha, apps, 0) end
+		ring.hidGame = true
+	elseif ring.hidGame then
+		pcall(apps.SetAlpha, apps, 1)
+		ring.hidGame = nil
+	end
+end
+
 local function HideRing(ring)
-	if ring then ring.holder:Hide() end
+	if ring then
+		ring.holder:Hide()
+		GameCount(ring, false)
+	end
 end
 
 local function On()
@@ -298,8 +430,15 @@ end
 
 -- A row's Ring: on or off (its style is the page's; a row saved with a style
 -- of its own from before the page, "pips" and the rest, counts as on).
-local function StyleOf(id, look)
+-- (A buff counted as one with others: its group lead's row, the grid's one
+-- row for them, ns.CooldownBuffKey; release review 2026-11-23, fix card
+-- 2026-11-23-cdm-ring-groups.md.)
+local function RowKey(id)
 	local base = ns.BaseSpell and ns.BaseSpell(id) or id
+	return ns.CooldownBuffKey and ns.CooldownBuffKey(base) or base
+end
+local function StyleOf(id, look)
+	local base = RowKey(id)
 	local row = ns.CooldownRowSetting and ns.CooldownRowSetting("ring", base, "buffs")
 	if row == nil or row == "off" or row == false then return false end
 	local style = look.cdmRingStyle
@@ -318,8 +457,10 @@ ns.CooldownRingStats = stats
 -- A ring on an icon (a real one, or the Style page's preview's), set to an
 -- amount out of size: secret in game (only StatusBars and SetText take it),
 -- plain in the preview.
-local function Draw(icon, style, look, size, amount, showAmount)
-	local ring = Make(icon, style)
+-- (whole: charges, each pip filled by a whole charge, in even runs: 3 charges
+-- on 8 pips = 3, 3, 2.)
+local function Draw(icon, style, look, size, amount, showAmount, whole, pips)
+	local ring = Make(icon, style, pips)
 	Paint(ring, look)
 	if ring.box then
 		-- (The icon's width is secret in a fight: math on it errored on every
@@ -334,6 +475,7 @@ local function Draw(icon, style, look, size, amount, showAmount)
 		local n = #ring.segs
 		for i, seg in ipairs(ring.segs) do
 			local low = (i - 1) / n * size
+			if whole then low = math.floor(low) + 0.5 end -- (full at that many charges and up)
 			seg:SetMinMaxValues(low, low + 0.01)
 			seg:SetValue(amount)
 		end
@@ -377,15 +519,42 @@ local function Show(icon, id)
 	local wanted, style = StyleOf(spell, look)
 	if not wanted then return HideRing(rings[icon]) end
 	if type(icon.auraInstanceID) == "nil" or not ns.Reachable(icon) then return HideRing(rings[icon]) end
-	local size = SizeFor(icon)
-	if size then iconSize[icon] = size else size = iconSize[icon] end
+	-- A shield: its absorb out of its size. Else charges: the aura's count
+	-- out of the most (2026-11-23, Lightning Shield).
+	-- (Each kept as { size, charges? } for when it can't be read: a fight.)
+	local size, amount, whole = SizeFor(icon), nil, false
+	if size then
+		iconSize[icon] = { size, false }
+	else
+		local count = Charges(icon)
+		local most = MostCharges(icon, spell) -- (records the count seen too)
+		if most then
+			size, whole = most, true
+			iconSize[icon] = { most, true }
+		elseif iconSize[icon] then
+			size, whole = iconSize[icon][1], iconSize[icon][2]
+		end
+		if whole then amount = count end
+	end
 	if not size or size <= 0 then return HideRing(rings[icon]) end
-	local ok, amount = pcall(UnitGetTotalAbsorbs, "player")
-	if not ok then return HideRing(rings[icon]) end
+	if not whole then
+		local ok, absorbs = pcall(UnitGetTotalAbsorbs, "player")
+		if not ok then return HideRing(rings[icon]) end
+		amount = absorbs
+	end
+	if amount == nil then return HideRing(rings[icon]) end
+	stats.charges = whole and (stats.charges or 0) + 1 or stats.charges
 	-- (The Amount column: hidden on rows set so.)
-	local base = ns.BaseSpell and ns.BaseSpell(spell) or spell
+	local base = RowKey(spell)
 	local showAmount = ns.CooldownRowSetting("ringAmount", base, "buffs") ~= false
-	Draw(icon, style, look, size, amount, showAmount)
+	-- (Pips on a charges buff: one per charge, 2 to 20 (art CdmRing<n>_*,
+	-- Media/make_cdm_ring.py); the user 2026-11-23, "automatic". More: 8.)
+	local pips = whole and style == "pips" and Plain(size) and size >= 2 and size <= PIPS_MOST
+		and size == math.floor(size) and size or nil
+	local ring = Draw(icon, style, look, size, amount, showAmount, whole, pips)
+	ring.icon = icon
+	-- (Hidden with Amount on Hide too: Hide = no number, the user 2026-11-23.)
+	GameCount(ring, whole)
 	stats.shown = stats.shown + 1
 end
 
@@ -433,6 +602,7 @@ function ns.ApplyCooldownRing()
 	local any = ns.CooldownRowAny and ns.CooldownRowAny("ring", function(v) return v ~= nil and v ~= "off" end)
 	if any then
 		pcall(watcher.RegisterUnitEvent, watcher, "UNIT_ABSORB_AMOUNT_CHANGED", "player")
+		pcall(watcher.RegisterUnitEvent, watcher, "UNIT_AURA", "player") -- (a charge used)
 		pcall(watcher.RegisterUnitEvent, watcher, "UNIT_SPELLCAST_SUCCEEDED", "player")
 		watcher:Show()
 	else

@@ -24,6 +24,7 @@ local GLOBAL_KEYS = {
 	slashComplete = true, slashUsage = true, -- (SlashComplete.lua: the account's)
 	masterWheelOrder = true, masterWheelOff = true, customWheels = true, wheelExtras = true, -- (Wheels pages)
 	cameraScripts = true, -- (CameraScripts.lua: your scripts, the same in every profile)
+	cdmRingCharges = true, -- (UI/CooldownRing.lua: the most charges seen per buff, a fact, not a setting)
 	stylePreviewPos = true, -- (StylePages.lua: where you dragged the Style preview window)
 	stylePreviewBack = true, stylePreviewFolded = true, stylePreviewOut = true, -- (StylePages.lua: the previews' backdrop pick, their sticky fold)
 	dockSpots = true, -- (Skin.lua's DockBeside: where you dragged popped-out windows)

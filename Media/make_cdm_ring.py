@@ -4,6 +4,7 @@ Each segment is its own StatusBar fill turned fully on or off by the shield's
 amount (an addon can't do math on the secret amount; the bar's range does it),
 so segment i sits alone on a canvas the size of the whole ring.
   CdmRing8_<i>.tga   8 chunky pips (gaps between)
+  CdmRing<n>_<i>.tga 2 to 20 pips: one per charge on a charges buff
   CdmRing24_<i>.tga  24 thin steps, read as one smooth ring
   CdmDrainGrad.tga   a red-to-green gradient for the bar and liquid fills
 Our own, made from scratch here; usage: make_cdm_ring.py Textures"""
@@ -18,6 +19,14 @@ SOFT = 1.2  # texture pixels each edge fades over
 OUTER = N / 2 - 1.0
 WIDTH = {8: 6.0, 24: 4.0}  # band thickness, texture pixels
 GAP = {8: 9.0, 24: 0.6}  # degrees left empty between segments
+# One pip per charge (2026-11-23, the user: "automatic"): CdmRing<n>_<i> for 2
+# to 20 pips, Pips' band, the gap shrinking with more pips so 20 still reads
+# as a ring (8 keeps its own).
+PIPS = range(2, 21)
+for n in PIPS:
+    if n not in WIDTH:
+        WIDTH[n] = 6.0
+        GAP[n] = max(3.0, min(14.0, 72.0 / n))
 
 
 def segment(count, index):
@@ -42,7 +51,7 @@ def segment(count, index):
     image.save(os.path.join(OUT, "CdmRing%d_%d.tga" % (count, index + 1)), compression="tga_rle")
 
 
-for count in (8, 24):
+for count in sorted(set(PIPS) | {8, 24}):
     for i in range(count):
         segment(count, i)
 

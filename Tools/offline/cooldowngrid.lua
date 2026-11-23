@@ -624,6 +624,78 @@ do
 		Check("clicked again: shut, Open CDM", not window:IsShown() and button:GetText() == ns.L["Open CDM"], button:GetText())
 		_G.CooldownViewerSettings = nil
 	end
+	-- A tracked buff with a Ring set (the rows' looks: one table for spells and
+	-- buffs) isn't "Not in the Cooldown Manager" too; a buff that's no shield
+	-- has no Ring or Amount cell (Lightning Shield, 2026-11-23).
+	do
+		local SHIELD, PWS, ARMOR = 324, 17, 8071 -- (charges, an absorb, neither)
+		ns.CooldownManagerSpells = function()
+			return { { id = IMMOLATE, group = "essential" }, { id = SHIELD, group = "buffs" }, { id = PWS, group = "buffs" },
+				{ id = ARMOR, group = "buffs" } }
+		end
+		db.cooldownRowSettings = db.cooldownRowSettings or {}
+		db.cooldownRowSettings[SHIELD] = { ring = "on" }
+		db.cooldownRowSettings[CORRUPTION] = { numbers = "hide" } -- (a spell gone from the CDM: Other still)
+		wipe(db.cooldownSpellCells) -- (the grid checks' cells above, not gone spells)
+		local spellApi = C_Spell
+		local lockdown = InCombatLockdown
+		-- (The ring's hidden tooltip: no lines, as for a spell with no absorb.)
+		local make = CreateFrame
+		CreateFrame = function(kind, name, ...) -- luacheck: ignore 121
+			local frame = make(kind, name, ...)
+			if name == "CinematicRingTip" then
+				frame.NumLines = function() return 0 end
+				frame.SetSpellByID = function() end
+			end
+			return frame
+		end
+		InCombatLockdown = function() return false end -- luacheck: ignore 121
+		C_Spell = setmetatable({ GetSpellDescription = function(id) -- luacheck: ignore 121
+			if id == PWS then return "Shields the target, absorbing 44 damage." end
+			if id == SHIELD then return "Surrounds you with lightning. 3 charges." end
+			return "Increases your armor by 50."
+		end }, { __index = spellApi })
+		ns.CdmShowSpells("buffs")
+		local grid2, _, _, tabs = ns.CdmPageGrid()
+		local otherTab = tabs and tabs[5]
+		Check("the Other tab shows for the spell gone", grid2.state.tab == "buffs" and otherTab and otherTab:IsShown())
+		ns.CdmShowSpells("other")
+		local inOther = {}
+		for _, row in ipairs(grid2.rows) do if row.key ~= nil then inOther[row.key] = true end end
+		Check("Other: the gone spell, not the tracked buff", grid2.state.tab == "other" and inOther[CORRUPTION]
+			and not inOther[SHIELD], grid2.state.tab)
+		db.cooldownRowSettings[CORRUPTION] = nil
+		ns.CdmShowSpells("buffs")
+		local left = {}
+		for _, name in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow",
+			"cooldownAlwaysShow", "cooldownNeedsPower", "cooldownFlashReady", "cooldownRowSettings", "cooldownSpellCells" }) do
+			for id in pairs(db[name] or {}) do
+				if type(id) == "number" and id ~= IMMOLATE then left[#left + 1] = name .. "." .. id end
+			end
+		end
+		Check("no Other tab with nothing gone", not otherTab:IsShown(), table.concat(left, " "))
+		if not grid2.state.look then Click(grid2.lookSwitch) end
+		local ringAt
+		for j, col in ipairs(grid2.Columns()) do if col.look == "ring" then ringAt = j end end
+		local function RowOf2(key)
+			for _, row in ipairs(grid2.rows) do if row.key == key then return row end end
+		end
+		local shieldRow, pwsRow, barRow, armorRow = RowOf2(SHIELD), RowOf2(PWS), RowOf2("buffs"), RowOf2(ARMOR)
+		Check("no absorb, no charges: no Ring or Amount cell", ringAt and armorRow and not armorRow.cells[ringAt]:IsShown()
+			and not armorRow.cells[ringAt + 1]:IsShown())
+		Check("charges (Lightning Shield): its Ring and Amount", ringAt and shieldRow and shieldRow.cells[ringAt]:IsShown()
+			and shieldRow.cells[ringAt + 1]:IsShown())
+		Check("a shield keeps its Ring and Amount", ringAt and pwsRow and pwsRow.cells[ringAt]:IsShown()
+			and pwsRow.cells[ringAt + 1]:IsShown())
+		Check("the bar's row keeps its Ring", ringAt and barRow and barRow.cells[ringAt]:IsShown())
+		InCombatLockdown = function() return true end -- luacheck: ignore 121
+		Check("unreadable in a fight: counts as a shield", ns.CooldownRingFits(SHIELD) == true)
+		Click(grid2.showsSwitch)
+		InCombatLockdown = lockdown -- luacheck: ignore 121
+		C_Spell = spellApi -- luacheck: ignore 121
+		CreateFrame = make -- luacheck: ignore 121
+		db.cooldownRowSettings[SHIELD] = nil
+	end
 	ns.CooldownManagerSpells = cdmSpells
 	for _, name in ipairs({ "cooldownSpellCells", "cooldownGroupCells" }) do wipe(db[name]) end
 	db.cooldownNeedsPower[IMMOLATE], db.cooldownEarlyOn[IMMOLATE], db.cooldownReadyEarly[IMMOLATE] = nil, nil, nil

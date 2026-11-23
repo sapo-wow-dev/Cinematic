@@ -185,13 +185,14 @@ local LOOK = {
 		Text = function(value) return value == "after" and L["After combat"] or value == "on" and L["On"] or L["Off"] end },
 	stacks = { label = L["Stacks and time left"], tip = L["Shows stacks and time left on tracked buff icons."],
 		values = { true, false }, Text = ShowHide, bar = true },
-	-- (UI/CooldownRing.lua, 2026-11-23: any row, not only shields.)
+	-- (UI/CooldownRing.lua, 2026-11-23: a buff row's cells only on shields and
+	-- buffs with charges, ns.CooldownRingFits; the bar's row always.)
 	-- (On or off; its look on Style > Cooldown Manager, Style/CdmStyle.lua. A
 	-- row saved with a style from before reads On.)
-	ring = { label = L["Ring"], tip = L["A ring round the icon that drains as your shields take damage. Its look: Style > Cooldown Manager."],
+	ring = { label = L["Ring"], tip = L["A ring round the icon that drains as your shield takes damage or its charges are used. Its look: Style > Cooldown Manager."],
 		values = { "off", "on" },
 		Text = function(value) return (value == nil or value == "off" or value == false) and L["Off"] or L["On"] end },
-	ringAmount = { label = L["Amount"], tip = L["The amount your shields can still absorb, in the middle of the ring."],
+	ringAmount = { label = L["Amount"], tip = L["What's left in the middle of the ring: the amount your shield can still absorb, or its charges."],
 		values = { true, false }, Text = ShowHide },
 }
 local LOOK_COLUMNS = { essential = { "numbers", "keybinds", "notBuff", "flash" }, utility = { "numbers", "keybinds", "notBuff", "flash" },
@@ -2416,7 +2417,11 @@ function ns.CooldownGrid(parent, opts)
 				cell.mode, cell.compact = mode or value, compact and mode ~= nil
 				if open then openCell, openX, openBottom = cell, ColX(j), y - rowH end
 				cell:SetAlpha((col.index and trouble[col.index] and trouble[col.index].kind == "dead") and 0.45 or 1)
-				cell:Show()
+				-- (A buff that's no shield can't have a ring: its Ring and Amount
+				-- hidden, not left to set and never draw. Lightning Shield, 2026-11-23.)
+				local noRing = not isBar and (col.look == "ring" or col.look == "ringAmount")
+					and ns.CooldownRingFits and not ns.CooldownRingFits(key)
+				cell:SetShown(not noRing)
 			end
 			for j = n + 1, #row.cells do row.cells[j]:Hide() end
 			y = y - rowH

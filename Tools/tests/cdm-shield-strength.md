@@ -33,9 +33,17 @@ built (charges need the in-fight count probe; time left: GetAuraDuration in figh
 Tools/offline/cdmring.lua ALL PASS (18). Game: /cine debug cdmring (Dev/CdmRingTest.lua).
 Open for run 4: StatusBar takes the secret absorb (retail-tested only), RLE TGAs load, the ring look, Q8 n/a (timer kept).
 
+## Charges (2026-11-23, the user: "do the charges")
+A buff with no absorb but charges (Lightning Shield) drains by its charges: size = the description's "N charges"
+(else the most seen out of fights), amount = the game icon's aura (icon.auraDataCached.applications, what its own
+corner number comes from), pips filled per whole charge. The page offers Ring / Amount only on shields and charges
+buffs (ns.CooldownRingFits). Open: the count in a fight (secret? still on the icon?). Queue q33f1 cdmring charges
+noshield. Offline: cdmring.lua charges block, cooldowngrid.lua.
+
 ## Runs
 | Run | Date | Command | Answered | Still open, and why this run couldn't |
 |-----|------|---------|----------|---------------------------------------|
+| charges 1 | 2026-11-23 | queue q33f1 cdmring charges noshield | 6/6 PASS on the shaman: Lightning Shield (rank 325, no "N charges" in its description: most 3 from the count seen); the count SECRET in the fight but still on the icon, the ring drew it (42 draws, 0 errors); shots: 8 pips at 3, 3 pips + "1" after hits | the test's lit-pip count read 0 (compared low + 0.01, a float hair over): now value > low. Our middle number doubles the game's corner one at 2+ charges (Amount column can hide ours) |
 | 1 | 2026-11-23 | queue q6c3e shieldprobe | Q1: absorb read secret even out of a fight | everything else: ran on a level 6 mage (no shield), all 3 steps skipped. Not the test's fault; the prompt now says so when no shield is tracked. Tracked items read spell nil: now logs cooldownID + info too |
 | 2 | 2026-11-23 | queue q0f7e shieldprobe | Q2 secret in fights, Q6 event fires per hit, Q9 calculator all secret | Q3/Q4/Q5: the test drew nothing without a shield icon (the test's fault: it made the label only on the icon). Run 3 draws on a stand-in square when no icon, takes the description from your own cast, reads the Tracked Buffs catalog (Q11) |
 | scan 1-3 | 2026-11-23 | queues q9a36, q6334, qd1cc spellscan | a whole-game description scan can't work on Forever (rule forever.spell.description-needs-tooltip); the Tracked Buffs catalog per class reads fine (priest 35, shaman 28) | the shield / charges spell list comes from each class's catalog + the user's check, not from descriptions. Scan budget used: 3 runs, stopped there |

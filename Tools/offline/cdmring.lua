@@ -258,6 +258,89 @@ else
 	Check("preview: Style loaded offline", false, "ns.MakeCdmStylePreview missing")
 end
 
+-- Charges (2026-11-23): Lightning Shield, "3 charges", no absorb: the ring
+-- drains by the aura's count (the game icon's auraDataCached.applications),
+-- whole pips per charge; one with no "N charges" takes the most seen.
+do
+	local describe = C_Spell.GetSpellDescription
+	C_Spell.GetSpellDescription = function(id) -- luacheck: ignore 122
+		if id == 324 then return "Surrounds the caster with balls of lightning. The shield has 3 charges. Lasts 10 min." end
+		return describe(id)
+	end
+	local ls = Icon(324, { 324 }, true)
+	ls.auraDataCached = { applications = 3 }
+	local quiet = Icon(325, { 325 }, true) -- (no description: charges seen)
+	quiet.auraDataCached = { applications = 4 }
+	local plainBuff = Icon(326, { 326 }, true) -- (neither)
+	plainBuff.auraDataCached = { applications = 0 }
+	icons[#icons + 1], icons[#icons + 2], icons[#icons + 3] = ls, quiet, plainBuff
+	PageLook("pips", "class")
+	db.handleCooldowns = true
+	for _, id in ipairs({ 324, 325, 326 }) do ns.SetCooldownRow(id, "ring", "on") end
+	ns.ApplyCooldownRing()
+	ring = ns.CooldownRingOf(ls)
+	Check("charges: a ring, size 3 from the description", ring and ring.holder:IsShown() and ring.size == 3,
+		ring and ring.size)
+	-- (One pip per charge, 2026-11-23: Lightning Shield 3 pips, not 8.)
+	Check("charges: 3 pips, one per charge", ring and #ring.segs == 3, ring and #ring.segs)
+	Check("charges: 3 of 3, all lit, the number 3", ring and Lit(ring) == 3 and ring.text:GetText() == 3,
+		ring and Lit(ring))
+	-- (The game's corner count hidden while ours shows: "3" twice, 2026-11-23.)
+	ls.Applications = CreateFrame("Frame", nil, ls)
+	-- (The stand-in's GetAlpha is always 1: this one keeps it.)
+	ls.Applications.SetAlpha = function(self, a) self.alpha = a end
+	ls.Applications.GetAlpha = function(self) return self.alpha or 1 end
+	ns.CooldownRingUpdate()
+	Check("charges: the game's corner count hidden", ls.Applications:GetAlpha() == 0, ls.Applications:GetAlpha())
+	ns.SetCooldownRow(324, "ringAmount", false)
+	ns.CooldownRingUpdate()
+	Check("Amount Hide: no number, the game's stays hidden too", ls.Applications:GetAlpha() == 0
+		and not ns.CooldownRingOf(ls).text:IsShown(), ls.Applications:GetAlpha())
+	ns.SetCooldownRow(324, "ringAmount", nil)
+	ls.auraDataCached.applications = 2
+	ns.CooldownRingUpdate()
+	Check("charges: 2 left, 2 of 3 lit", Lit(ring) == 2 and ring.text:GetText() == 2, Lit(ring))
+	ls.auraDataCached.applications = 1
+	ns.CooldownRingUpdate()
+	Check("charges: 1 left, 1 of 3 lit", Lit(ring) == 1, Lit(ring))
+	PageLook("smooth")
+	ns.CooldownRingUpdate()
+	Check("Smooth on charges: its 24 steps still", #ns.CooldownRingOf(ls).segs == 24, #ns.CooldownRingOf(ls).segs)
+	PageLook("pips")
+	ns.CooldownRingUpdate()
+	ring = ns.CooldownRingOf(ls)
+	ls.auraInstanceID = nil
+	ns.CooldownRingUpdate()
+	Check("charges: the buff gone, hidden", not ring.holder:IsShown())
+	Check("the ring gone: the game's count back", ls.Applications:GetAlpha() == 1, ls.Applications:GetAlpha())
+	local q = ns.CooldownRingOf(quiet)
+	Check("no \"N charges\": the most seen (4) is its size, 4 pips", q and q.holder:IsShown() and q.size == 4
+		and #q.segs == 4, q and q.size)
+	-- (The most seen kept in the saved data: after a /reload, with the buff
+	-- not on you, the page still offers its Ring. cdmring q5af4.)
+	Check("the most seen saved (4)", type(db.cdmRingCharges) == "table" and db.cdmRingCharges[325] == 4,
+		db.cdmRingCharges and db.cdmRingCharges[325])
+	db.cdmRingCharges[777] = 5 -- (as if seen before a /reload: no icon, no description)
+	Check("saved count only: it fits, its most is 5", ns.CooldownRingFits(777) == true
+		and ns.CooldownRingMostCharges(nil, 777) == 5)
+	db.cdmRingCharges[777] = nil
+	-- (Inner Fire, 20 charges: 20 pips; more than 20: the 8.)
+	fire.auraDataCached = { applications = 20 }
+	ns.SetCooldownRow(588, "ring", "on")
+	ns.CooldownRingUpdate()
+	local f = ns.CooldownRingOf(fire)
+	Check("20 charges: 20 pips, all lit", f and #f.segs == 20 and Lit(f) == 20, f and #f.segs)
+	ns.SetCooldownRow(588, "ring", nil)
+	fire.auraDataCached = nil
+	local p = ns.CooldownRingOf(plainBuff)
+	Check("no absorb, no charges: no ring", not p or not p.holder:IsShown())
+	Check("Fits: the charges buff yes, the plain one no", ns.CooldownRingFits(324) == true and ns.CooldownRingFits(326) == false)
+	Check("Fits: still the shield", ns.CooldownRingFits(17) == true)
+	for _, id in ipairs({ 324, 325, 326 }) do ns.SetCooldownRow(id, "ring", nil) end
+	for _ = 1, 3 do table.remove(icons) end
+	C_Spell.GetSpellDescription = describe -- luacheck: ignore 122
+end
+
 -- The page off.
 db.handleCooldowns = false
 ns.CooldownRingUpdate()

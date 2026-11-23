@@ -16854,13 +16854,21 @@ local function CreateCooldownPanel()
 				-- (Its When ready parts, Flash or looks alone kept it unlisted, so they
 				-- couldn't be undone. Audit, 2026-11-22.)
 				db.cooldownNeedsPower, db.cooldownEarlyOn, db.cooldownReadyEarly, db.cooldownReadyAnyTime,
-				db.cooldownFlashReady, db.cooldownRowSettings } },
+				db.cooldownFlashReady }, { db.cooldownRowSettings } },
 			{ "otherbuffs", "buff", { db.cooldownBuffMode, db.cooldownBuffCells } },
 		}) do
 			local group, seen, missing = set[1], listed[set[2]], {}
-			for _, own in ipairs(set[3]) do
+			-- (The rows' looks are one table for spells and buffs: a tracked buff's
+			-- Ring landed it in Other as a spell too, 2026-11-23. Listed either
+			-- way, it isn't missing.)
+			local both = {}
+			for _, own in ipairs(set[4] or {}) do both[own] = true end
+			local tables = {}
+			for _, own in ipairs(set[3]) do tables[#tables + 1] = own end
+			for _, own in ipairs(set[4] or {}) do tables[#tables + 1] = own end
+			for _, own in ipairs(tables) do
 				for id in pairs(type(own) == "table" and own or {}) do
-					if type(id) == "number" and not seen[id] then
+					if type(id) == "number" and not seen[id] and not (both[own] and (listed.spell[id] or listed.buff[id])) then
 						seen[id] = true
 						missing[#missing + 1] = id
 					end
