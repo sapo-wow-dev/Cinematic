@@ -309,6 +309,7 @@ Dev\NameScaleTest.lua
 Dev\NpcTitleTest.lua
 Dev\ThemeArtTest.lua
 Dev\FindTabsTest.lua
+Dev\FindResultsTest.lua
 Dev\ReadyAnyTimeTest.lua
 Dev\CdmGridTest.lua
 Dev\DotNumbersTest.lua
@@ -347,6 +348,7 @@ Camera\CameraScriptsPage.lua
 Camera\CameraManager.lua
 LazyPageDefaults.lua
 Options.lua
+UI\Find.lua
 UI\Favorites.lua
 Changelog.lua
 ChangelogCommits.lua

@@ -96,7 +96,12 @@ function Methods:UnregisterEvent(event) self._events[event] = nil end
 function Methods:UnregisterAllEvents() self._events = {} end
 function Methods:IsEventRegistered(event) return self._events[event] == true end
 function Methods:SetText(text) self._text = text end
-function Methods:GetText() return self._text end
+-- (A font string set to "" reads nil, as in the game: engine rule
+-- all.fontstring.empty-text-nil. An edit box gives "".)
+function Methods:GetText()
+	if self._text == "" and self._kind == "FontString" then return nil end
+	return self._text
+end
 function Methods:SetFormattedText(fmt, ...) self._text = fmt:format(...) end
 function Methods:CreateTexture() local r = NewObject("Texture", nil, self) table.insert(self._regions, r) return r end
 function Methods:CreateFontString() local r = NewObject("FontString", nil, self) table.insert(self._regions, r) return r end
@@ -254,8 +259,13 @@ function M.Install(client)
 	for k, v in pairs(env) do _G[k] = v end
 	-- (the saved settings: none yet, a fresh install)
 	local unset = { CinematicDB = true, CinematicCharDB = true }
+	-- (The game's font objects, GameFontNormal: a file and size from GetFont,
+	-- as the game gives. The stub gave no size, and a Refresh that sizes a
+	-- preview's name by it errored: /cine find letterbox, 2026-11-23.)
+	local fontObject = setmetatable({ GetFont = function() return "font", 12, "" end }, stubMeta)
 	setmetatable(_G, { __index = function(_, key)
 		if unset[key] then return nil end
+		if type(key) == "string" and (key:find("^GameFont") or key:find("^SystemFont")) then return fontObject end
 		-- (CamelCase: the API's functions and frames; ALL_CAPS constants: none.)
 		if type(key) == "string" and key:find("^%u") and key:find("%l") then return Stub end
 		return nil

@@ -1955,6 +1955,10 @@ function ns.MakeLazyPagesSoon(why, pages, done)
 	return true
 end
 ns.searchPrepare[#ns.searchPrepare + 1] = function(pages) ns.MakeLazyPages("search", pages) end
+-- What's new pages (WhatsNew.lua): their notes name every feature, so a match
+-- there comes after every other (/cine find heal vision opened New Features
+-- on its "Heal Vision" line, 2026-11-23).
+local NEWS_PAGES = { ["New features"] = true, ["All changes"] = true }
 local function BuildSearchIndex(pages)
 	Refresh() -- (slider titles and some rows are only filled in on refresh)
 	for _, prepare in ipairs(ns.searchPrepare) do prepare(pages) end
@@ -1962,20 +1966,26 @@ local function BuildSearchIndex(pages)
 	local named = not pages or #pages > 1 -- (pages to pick among: their names count too)
 	for _, page in ipairs(pages or searchPages) do
 		local seen = {}
-		local function add(text, tip, rank, edges)
+		-- (frame: the control the text is on, for its kind and setting in the
+		-- results window, UI/Find.lua. buried: in a tab or section not open.)
+		local function add(text, tip, rank, edges, frame, buried)
 			text = SearchText(text)
 			if not text or seen[text] then return end
 			seen[text] = true
 			tip = SearchText(tip)
+			local kind = frame and frame.GetObjectType and frame:GetObjectType() or nil
 			entries[#entries + 1] = { page = page, text = text, lower = text:lower(),
-				tip = tip and tip:lower(), rank = rank, edges = edges, order = #entries }
+				tip = tip and tip:lower(), tipText = tip, rank = rank, edges = edges, order = #entries,
+				news = NEWS_PAGES[page.key], kind = kind, buried = buried or nil,
+				settingKey = frame and type(frame.settingKey) == "string" and frame.settingKey or nil }
 		end
 		if named then add(page.name or "Cinematic", nil, 0) end
-		local function walk(frame)
+		local function walk(frame, buried)
 			-- (IsShown: the frame's own flag, so hidden rows are left out even on
 			-- pages that aren't open)
 			-- (A closed section's settings count: finding one opens it.)
 			if frame.searchSkip or not (frame:IsShown() or frame.searchAlways) then return end
+			buried = buried or frame.openSection ~= nil or not frame:IsShown()
 			-- (A Show in grid row: row:<its rule's key>, GridRows.lua.)
 			if frame.RowId then
 				local ok, id = pcall(frame.RowId)
@@ -1990,24 +2000,34 @@ local function BuildSearchIndex(pages)
 					edges = frame.searchEdges or { top = frame, bottom = frame, left = frame, right = frame } }
 			end
 			if frame.searchNote then -- (a page intro behind its "?")
-				add(frame.searchNote, nil, 3, frame.searchEdges)
+				add(frame.searchNote, nil, 3, frame.searchEdges, nil, buried)
 				return
 			end
 			if frame.searchLabel then
-				add(frame.searchLabel, frame.searchTip, 1, frame.searchEdges)
+				add(frame.searchLabel, frame.searchTip, 1, frame.searchEdges, frame, buried)
 				return
 			end
 			local tip = frame.searchTip -- (a button's or box's tooltip goes with its text)
+			local texts = false
 			for _, region in ipairs({ frame:GetRegions() }) do
 				if region:GetObjectType() == "FontString" and not region.searchSkip and region:IsShown() then
 					local text = region:GetText()
 					local rank = (type(text) == "string" and #text <= 40) and 1 or 3
-					add(text, tip, rank, { top = region, bottom = region, left = region, right = region })
-					tip = nil
+					add(text, tip, rank, { top = region, bottom = region, left = region, right = region }, frame, buried)
+					tip, texts = nil, true
+				end
+			end
+			-- (A button's own text with no text of its own among its parts: the
+			-- offline stand-in's. In the game it's one of them, found above.)
+			if not texts and frame.GetObjectType and frame:GetObjectType() == "Button" and frame.GetText then
+				local text = frame:GetText()
+				if type(text) == "string" and text ~= "" then
+					add(text, tip, #text <= 40 and 1 or 3,
+						{ top = frame, bottom = frame, left = frame, right = frame }, frame, buried)
 				end
 			end
 			for _, child in ipairs({ frame:GetChildren() }) do
-				walk(child)
+				walk(child, buried)
 			end
 		end
 		walk(page.canvas.content)
@@ -2052,32 +2072,10 @@ local function BuildSearchIndex(pages)
 	return entries, keyed
 end
 
--- The best matches for what's typed (every word in the label, or in the
--- label and tooltip together).
+-- The best matches for what's typed, best first: UI/Find.lua's ns.SearchRank
+-- (whole words, plurals, typos, the page's path, what kind of thing it is).
 local function SearchMatches(index, query)
-	local words = {}
-	for word in query:lower():gmatch("%S+") do words[#words + 1] = word end
-	local function has(text)
-		for _, word in ipairs(words) do
-			if not text:find(word, 1, true) then return false end
-		end
-		return true
-	end
-	local matches = {}
-	for _, entry in ipairs(index) do
-		if has(entry.lower) then
-			entry.score = entry.rank
-			matches[#matches + 1] = entry
-		elseif entry.tip and has(entry.lower .. " " .. entry.tip) then
-			entry.score = math.max(entry.rank, 2)
-			matches[#matches + 1] = entry
-		end
-	end
-	table.sort(matches, function(a, b)
-		if a.score ~= b.score then return a.score < b.score end
-		return a.order < b.order
-	end)
-	return matches
+	return ns.SearchRank(index, query)
 end
 
 -- A brief glow over a found setting.
@@ -2198,14 +2196,21 @@ local function ShowMatch(entry, onPage)
 	end)
 end
 
--- /cine find <words>: the settings search's best match for them, opened as
--- clicking it would (its page, scrolled to it, glowing). Returns its text and
--- its page's name, or nil with nothing found. Page|Page|words looks only on
+-- (For the results window, UI/Find.lua: a match opened as a click on it in
+-- the search box would, and the index it ranks.)
+ns.ShowSearchMatch = ShowMatch
+ns.BuildSearchIndex = BuildSearchIndex
+
+-- /cine find <words>: the settings search's matches for them, best first,
+-- in the results window (a click opens one as clicking it in the search box
+-- would: its page, scrolled to it, glowing). Returns the best's text, its
+-- page's name ("page" for a page itself) and every match, or nil with
+-- nothing found. Page|Page|words looks only on
 -- pages with all those names (ns.PageOnPath), as the same words are on many
 -- pages: Style|Names|fade time. After a pipe, the first word can be a page
 -- too: Style|Names fade time (tried first, then as all words). (Pipes come
 -- from the chat box doubled: any run of them splits.)
-function ns.FindSetting(query)
+function ns.FindSetting(query, quiet)
 	-- A setting's id (/cine find nfHealthPlayer), or a Show in row's
 	-- (/cine find row:player): straight to its control.
 	-- (A game setting's row on Help > Game Settings too: /cine find cvar:nameplateStyle.)
@@ -2218,6 +2223,7 @@ function ns.FindSetting(query)
 		local text, pageName = ns.OpenSettingByKey(id)
 		if text then return text, pageName end
 	end
+	if type(query) ~= "string" then return nil end
 	local parts = {}
 	for part in (type(query) == "string" and query or ""):gmatch("[^|]+") do
 		part = part:match("^%s*(.-)%s*$"):lower()
@@ -2225,51 +2231,33 @@ function ns.FindSetting(query)
 	end
 	local words = table.remove(parts)
 	if not words then return nil end
-	-- Only page names (ui visibility minimap): that page opened, at its top.
-	-- The words name the page's path in menu order, top down, and the page
-	-- with the most of them in its own name wins (the first listed on a tie).
-	if #parts == 0 then
-		local list = {}
-		for word in words:gmatch("%S+") do list[#list + 1] = word end
-		local bestPage, bestScore = nil, 0
-		for _, page in ipairs(searchPages) do
-			if ns.PageOnPathInOrder(page.key, list) then
-				local own = ((page.key or "Cinematic") .. " " .. (page.name or "") .. " "
-					.. (ns.PageLabel(page.key or "Cinematic") or "")):lower()
-				local score = 0
-				for _, word in ipairs(list) do
-					if own:find(word, 1, true) then score = score + 1 end
-				end
-				if score > bestScore then bestPage, bestScore = page, score end
-			end
-		end
-		if bestPage then
-			ShowMatch({ page = bestPage })
-			return bestPage.name or "Cinematic", L["page"]
-		end
-	end
-	local function Best(text)
+	-- Every match, ranked (ns.SearchRank), listed in the results window
+	-- (UI/Find.lua) to pick from, the best first. (quiet: ranked only, no
+	-- window: the offline checks.)
+	local function Ranked(text)
 		local pages
 		if #parts > 0 then
 			pages = {}
 			for _, page in ipairs(searchPages) do
 				if ns.PageOnPath(page.key, parts) then pages[#pages + 1] = page end
 			end
-			if #pages == 0 then return nil end
+			if #pages == 0 then return {} end
 		end
-		return SearchMatches(BuildSearchIndex(pages), text)[1]
+		return ns.SearchRank(BuildSearchIndex(pages), text)
 	end
-	local best
+	local results
 	local first, rest = words:match("^(%S+)%s+(.+)$")
 	if first and #parts > 0 then
 		parts[#parts + 1] = first
-		best = Best(rest)
+		results = Ranked(rest)
 		parts[#parts] = nil
+		if not results[1] then results = nil end
 	end
-	best = best or Best(words)
+	results = results or Ranked(words)
+	if not quiet and ns.ShowFindResults then ns.ShowFindResults(query, results) end
+	local best = results[1]
 	if not best then return nil end
-	ShowMatch(best)
-	return best.text, best.page.name or "Cinematic"
+	return best.title or best.text, best.rank == 0 and L["page"] or best.page.name or "Cinematic", results
 end
 
 local SEARCH_ROWS = 12
@@ -2341,7 +2329,7 @@ local function CreateSearch(canvas, parent, pages)
 		local shown = math.min(#matches - offset, SEARCH_ROWS)
 		for i = 1, shown do
 			local entry, row = matches[offset + i], Row(i)
-			local text = entry.text
+			local text = entry.title or entry.text -- (a page's own name: UI/Find.lua)
 			if #text > 70 then text = text:sub(1, 67) .. "..." end
 			row.entry = entry
 			row.text:SetText(not named and text or
@@ -2402,7 +2390,13 @@ local function CreateSearch(canvas, parent, pages)
 	end)
 	box:HookScript("OnEnterPressed", function(self)
 		self:ClearFocus()
-		if matches[1] and list:IsShown() then
+		-- (The main box: every match in the results window, UI/Find.lua, to
+		-- pick from. A page's or hub's own box: its best, as before.)
+		local query = (self:GetText() or ""):match("^%s*(.-)%s*$")
+		if not page and query ~= "" and ns.ShowFindResults and index then
+			list:Hide()
+			ns.ShowFindResults(query, matches)
+		elseif matches[1] and list:IsShown() then
 			list:Hide()
 			ShowMatch(matches[1], page)
 		end
@@ -4642,6 +4636,45 @@ do
 			if not found then return false end
 		end
 		return true
+	end
+
+	-- A page's place in the menu, for /cine find's results (UI/Find.lua):
+	-- crumbs, the names shown top down (Visions, Heal Vision; a tab's page
+	-- before it), words, all of them in English and as shown, lower case,
+	-- dev, a dev copy's page (dev = true in HUBS), and icon, its menu icon.
+	local pathCache = {}
+	function ns.PagePath(name)
+		local key = name or "Cinematic"
+		if pathCache[key] then return pathCache[key] end
+		local path = { crumbs = {}, words = {}, dev = false }
+		local function addWords(text)
+			if type(text) ~= "string" then return end
+			path.words[#path.words + 1] = text:lower()
+			path.words[#path.words + 1] = L[text]:lower()
+		end
+		local function crumb(text, shown)
+			if type(text) ~= "string" then return end
+			addWords(text)
+			local label = shown or L[text]
+			if path.crumbs[#path.crumbs] ~= label then path.crumbs[#path.crumbs + 1] = label end
+		end
+		for _, hub in ipairs(HUBS) do
+			for _, page in ipairs(hub.pages) do
+				if page[1] == name and #path.crumbs == 0 then
+					for _, each in ipairs(HUBS) do
+						if each.name == hub.under then crumb(each.label or each.name) end
+					end
+					crumb(hub.label or hub.name)
+					if page.tabOf then crumb(page.tabOf, ns.PageLabel(page.tabOf)) end
+					addWords(page.label)
+					path.dev = page.dev and true or false
+					path.icon = page[2] -- (its menu icon: the results window's rows)
+				end
+			end
+		end
+		crumb(key, ns.PageLabel(key))
+		pathCache[key] = path
+		return path
 	end
 
 	-- Whether words (lower case) name a page (its English name; nil: the main

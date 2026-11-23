@@ -403,8 +403,13 @@ local function HandleSlash(msg)
 		if words == "" then
 			ns.Print(L["type what to find after it, e.g. /cine find minimap"])
 		else
-			local found, page = ns.FindSetting(words)
-			if found then
+			-- (Words: every match in the results window, UI/Find.lua; an id:
+			-- straight to its control.)
+			local found, page, results = ns.FindSetting(words)
+			if found and results then
+				ns.Print(L["%d matches for \"%s\", best: \"%s\" (%s). Pick one in the results window."]:format(
+					#results, words, found, page))
+			elseif found then
 				ns.Print(L["found \"%s\" (%s)"]:format(found, page))
 			else
 				ns.Print(L["nothing in the settings matches \"%s\""]:format(words))

@@ -316,7 +316,20 @@ function ns.DockBeside(frame, key)
 		if spot then
 			frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", spot.x, spot.y)
 		elseif settings and settings:IsShown() then
-			frame:SetPoint("TOPLEFT", settings, "TOPRIGHT", 4, 0)
+			-- (No room on their right, the settings moved right of the middle
+			-- on a wide screen: on their left, or kept on screen it sat over
+			-- them. /cine debug findresults run 2, 2026-11-23.)
+			local right, width = settings:GetRight(), frame:GetWidth()
+			local left, screen = settings:GetLeft(), UIParent:GetRight()
+			local scale = settings:GetEffectiveScale()
+			local own, ui = frame:GetEffectiveScale(), UIParent:GetEffectiveScale()
+			local fitsRight = not (right and width and screen) or right * scale + (width + 4) * own <= screen * ui
+			local fitsLeft = left and width and left * scale - (width + 4) * own >= 0
+			if not fitsRight and fitsLeft then
+				frame:SetPoint("TOPRIGHT", settings, "TOPLEFT", -4, 0)
+			else
+				frame:SetPoint("TOPLEFT", settings, "TOPRIGHT", 4, 0)
+			end
 		elseif home[1] then
 			frame:SetPoint(unpack(home))
 		end
