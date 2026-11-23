@@ -224,7 +224,13 @@ local function SetSize(number, size)
 			copy:SetShown(shadow)
 		end
 	end
-	if number.tag then number.tag:SetFont(file, math.min(FONT_MAX, math.max(8, size * 0.5)), "") end
+	-- (Its tag, half the number at every size: past 120 its font stops, the
+	-- rest scaled as the number's. It stayed at 120 under a 486 crit, 2026-11-23.)
+	if number.tag then
+		local want = math.max(8, size * 0.5)
+		number.tag:SetFont(file, math.min(FONT_MAX, want), "")
+		if number.tag.SetTextScale then number.tag:SetTextScale(want > FONT_MAX and want / FONT_MAX or 1) end
+	end
 end
 
 -- The words on the number and its copies.
