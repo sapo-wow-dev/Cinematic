@@ -2,8 +2,8 @@
 -- CombatVision.lua's FightCard) plays in place of Entering combat's when a
 -- fight against a player starts. Steps:
 --   1 page    the Card Vision page open: its row "Entering a PvP fight" on the
---             Events tab, opened in Entering combat's card type group (the tab
---             groups by card type, each folded shut) under it, nothing over
+--             Events tab's Combat tab (a tab per situation since 2026-11-23),
+--             with Entering combat's card type, under its row, nothing over
 --             it; a screenshot
 --   2 duel    nothing to do: a pretend duel starts (the fight's check
 --             handed pretend unit reads: your target an enemy player, a
@@ -104,8 +104,8 @@ ns.TestKit.Define({
 			ns.OpenOptions("Card Vision")
 			r:Sleep(0.8)
 			local panel = SettingsPanel or UIParent
-			-- (The Events tab lists events by card type, each type folded shut:
-			-- its row opened and scrolled to, as the page's search does.)
+			-- (The Events tab has a folder tab per situation: its row's tab
+			-- picked and the row scrolled to, as the page's search does.)
 			if not ns.CardEventFlash then return r:Fail("no ns.CardEventFlash: the Events tab wasn't built") end
 			ns.CardEventFlash("combatPvp")
 			r:Sleep(0.8)
@@ -117,7 +117,7 @@ ns.TestKit.Define({
 			local before = FindText(panel, ns.L["Entering combat"])
 			r:Log(("card type: %s (Entering combat's %s)"):format(ns.CardBase("combatPvp"), ns.CardBase("combatIn")))
 			r:Verdict(ns.CardBase("combatPvp") == ns.CardBase("combatIn") and before and before:GetTop() > label:GetTop(),
-				"under Entering combat, in its card type's group")
+				"under Entering combat, with its card type")
 			local hits = r:Overlaps(label:GetParent(), panel) -- (its row: the name with its tick and +)
 			r:Verdict(#hits == 0, "nothing over its row")
 			r:Shot("Card Vision Events tab: the PvP row", { behind = panel })

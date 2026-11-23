@@ -1779,16 +1779,24 @@ local PREVIEW_W, PAGE_MARGIN = 480, 16
 function ns.StylePreviewHeight()
 	return math.floor(PREVIEW_W * UIParent:GetHeight() / math.max(UIParent:GetWidth(), 1) + 0.5)
 end
+-- A preview's screen height: the screen's shape at its fixed width (a small
+-- one beside other settings: Card Vision's Events tab, 2026-11-23), else as
+-- every Style preview's.
+function ns.StyleScreenHeight(preview)
+	local fixed = preview and preview.fixedWidth
+	if not fixed then return ns.StylePreviewHeight() end
+	return math.floor(fixed * UIParent:GetHeight() / math.max(UIParent:GetWidth(), 1) + 0.5)
+end
 -- Gives true if it was resized and refreshed.
 local function FitPreview(preview)
 	if popped == preview or not preview.stackSpot then return end
 	local left, right = preview.stackSpot:GetLeft(), preview.stackSpot:GetParent():GetRight()
 	-- (Not laid out yet: left as it is, not shrunk back; OnShow fits it again.)
 	if not (left and right) then return end
-	local width = math.max(PREVIEW_W, math.floor(right - left - PAGE_MARGIN))
+	local width = preview.fixedWidth or math.max(PREVIEW_W, math.floor(right - left - PAGE_MARGIN))
 	-- (minHeight: a preview that needs more room than the screen's shape gives,
 	-- Nameplate Style's two rows of game plates on an ultrawide.)
-	local height = math.max(preview.minHeight or 0, ns.StylePreviewHeight() + (preview.headHeight or 0))
+	local height = math.max(preview.minHeight or 0, ns.StyleScreenHeight(preview) + (preview.headHeight or 0))
 	if math.abs(preview:GetWidth() - width) < 0.5 and math.abs(preview:GetHeight() - height) < 0.5 then return end
 	preview:SetSize(width, height)
 	ns.RecutStyleScene(preview)

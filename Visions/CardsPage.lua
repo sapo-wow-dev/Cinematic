@@ -1011,13 +1011,138 @@ local function TypeSample(style)
 	return "zone"
 end
 
--- Events: a section for each card type (TypeSections), its preview zoomed in
--- on the card, then a row for each event using it, as the Scenes page's: its
--- tick, name and chips (its own settings over the type, and where it shows
--- when not everywhere), an arrow to move it to another type, and its settings
--- in a drawer under it (When: its Show in row; Style: the one it starts from,
--- Style, Sounds and Test).
-local LIST_W_RIGHT = 500 -- (a type's line's width, in its section)
+-- The Events tab's card type tiles (2026-11-23, the user's pick from three
+-- mockups): each type a small screen with a mark where its words go, in their
+-- color, its name and how many cards use it. A click picks it.
+local TILE_W, TILE_H, TILE_GAP, TILE_COLS = 112, 60, 6, 5
+local SCREEN_W, SCREEN_H = 64, 36
+-- (Its words' color a touch lighter: the dark red of Death reads on the dark tile.)
+local function Lift(value)
+	value = tonumber(value) or 1
+	return value + (1 - value) * 0.25
+end
+local function TypeColor(style)
+	local look = ns.CardStyleLook(style)
+	return Lift(look.combatInR), Lift(look.combatInG), Lift(look.combatInB)
+end
+-- A row's chip naming its card type, in that type's color.
+local function TypeChip(style)
+	local r, g, b = TypeColor(style)
+	return { 0.1, 0.1, 0.11, r, g, b }
+end
+-- Where a type's words go, as shares of the screen: left, top, width, height,
+-- then whether the top bar, the bottom bar and a banner's band are drawn.
+local function TypeSpot(style)
+	local look = ns.CardStyleLook(style)
+	local place, align = look.combatPlace, look.combatAlign
+	if look.combatStyle == "banner" then return 0.2, 0.45, 0.6, 0.1, false, false, true end
+	if place == "top" or place == "bottom" then
+		local x = align == "left" and 0.06 or align == "right" and 0.7 or 0.38
+		return x, place == "top" and 0.05 or 0.87, 0.24, 0.08, place == "top", place == "bottom", false
+	end
+	if place == "third" then return 0.08, 0.74, 0.34, 0.08, false, false, false end
+	local size = tonumber(look.combatSize) or 36
+	local h = math.min(0.44, math.max(0.08, size / 220))
+	local w = math.min(0.7, 0.2 + size / 250)
+	return (1 - w) / 2, 0.5 - h / 2, w, h, false, false, false
+end
+local function TypeTile(parent, onClick)
+	local tile = CreateFrame("Button", nil, parent)
+	tile:SetSize(TILE_W, TILE_H)
+	tile.searchSkip = true
+	tile.back = tile:CreateTexture(nil, "BACKGROUND")
+	tile.back:SetAllPoints()
+	local hover = tile:CreateTexture(nil, "HIGHLIGHT")
+	hover:SetAllPoints()
+	hover:SetColorTexture(1, 1, 1, 0.06)
+	tile.edges = {}
+	for n, side in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" },
+		{ "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+		local edge = tile:CreateTexture(nil, "BORDER")
+		edge:SetPoint(side[1])
+		edge:SetPoint(side[2])
+		if n <= 2 then edge:SetHeight(1) else edge:SetWidth(1) end
+		tile.edges[n] = edge
+	end
+	local screen = CreateFrame("Frame", nil, tile)
+	screen:SetSize(SCREEN_W, SCREEN_H)
+	screen:SetPoint("TOP", tile, "TOP", 0, -5)
+	tile.screen = screen
+	local function Layer(level, r, g, b, a)
+		local texture = screen:CreateTexture(nil, "ARTWORK", nil, level)
+		texture:SetColorTexture(r, g, b, a)
+		return texture
+	end
+	local sky = Layer(0, 0.27, 0.31, 0.37, 1)
+	sky:SetPoint("TOPLEFT")
+	sky:SetPoint("TOPRIGHT")
+	sky:SetHeight(SCREEN_H * 0.55)
+	local ground = Layer(0, 0.12, 0.13, 0.15, 1)
+	ground:SetPoint("BOTTOMLEFT")
+	ground:SetPoint("BOTTOMRIGHT")
+	ground:SetHeight(SCREEN_H * 0.45)
+	tile.top = Layer(1, 0, 0, 0, 1)
+	tile.top:SetPoint("TOPLEFT")
+	tile.top:SetPoint("TOPRIGHT")
+	tile.top:SetHeight(SCREEN_H * 0.18)
+	tile.bottom = Layer(1, 0, 0, 0, 1)
+	tile.bottom:SetPoint("BOTTOMLEFT")
+	tile.bottom:SetPoint("BOTTOMRIGHT")
+	tile.bottom:SetHeight(SCREEN_H * 0.18)
+	tile.band = Layer(1, 0, 0, 0, 0.65)
+	tile.band:SetPoint("TOPLEFT", screen, "TOPLEFT", 0, -SCREEN_H * 0.36)
+	tile.band:SetPoint("TOPRIGHT", screen, "TOPRIGHT", 0, -SCREEN_H * 0.36)
+	tile.band:SetHeight(SCREEN_H * 0.28)
+	tile.mark = Layer(2, 1, 1, 1, 1)
+	tile.name = tile:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	tile.name:SetPoint("TOP", screen, "BOTTOM", 0, -4)
+	tile.name.searchSkip = true
+	tile:SetScript("OnClick", function(self) onClick(self.style) end)
+	tile:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		local info = ns.CARD_STYLE_BY_ID[self.style]
+		GameTooltip:SetText(info and L[info.name] or tostring(self.style), 1, 1, 1)
+		if TYPE_LINES[self.style] then GameTooltip:AddLine(L[TYPE_LINES[self.style]], 0.8, 0.8, 0.8, true) end
+		local names = {}
+		for _, event in ipairs(ns.CardStyleUsers(self.style)) do names[#names + 1] = L[event.name] end
+		if #names > 0 then GameTooltip:AddLine(table.concat(names, ", "), 1, 0.82, 0, true) end
+		GameTooltip:AddLine(L["Click to preview it and light up its cards below."], 0.6, 0.6, 0.6, true)
+		GameTooltip:Show()
+	end)
+	tile:SetScript("OnLeave", GameTooltip_Hide)
+	return tile
+end
+local function PaintTile(tile, style, on, count)
+	tile.style = style
+	if on then tile.back:SetColorTexture(0.3, 0.25, 0.05, 0.9) else tile.back:SetColorTexture(0.08, 0.08, 0.09, 0.9) end
+	for _, edge in ipairs(tile.edges) do
+		if on then edge:SetColorTexture(1, 0.82, 0, 1) else edge:SetColorTexture(0.25, 0.25, 0.25, 1) end
+	end
+	local info = ns.CARD_STYLE_BY_ID[style]
+	tile.name:SetText(("%s |cff999999%d|r"):format(info and L[info.name] or tostring(style), count))
+	if on then tile.name:SetTextColor(1, 0.82, 0) else tile.name:SetTextColor(0.9, 0.9, 0.9) end
+	local x, y, w, h, top, bottom, band = TypeSpot(style)
+	tile.top:SetShown(top)
+	tile.bottom:SetShown(bottom)
+	tile.band:SetShown(band)
+	tile.mark:ClearAllPoints()
+	tile.mark:SetPoint("TOPLEFT", tile.screen, "TOPLEFT", x * SCREEN_W, -y * SCREEN_H)
+	tile.mark:SetSize(math.max(1, w * SCREEN_W), math.max(1, h * SCREEN_H))
+	tile.mark:SetColorTexture(TypeColor(style))
+end
+
+-- Events (2026-11-23): the card type tiles, the preview turned to the one
+-- picked with its Size, Test and Edit under it, then a folder tab for each
+-- situation (Cards.lua's groups: Combat, Places and travel...), each a
+-- container (right-click: its cards off), a row for each event on it as the
+-- Scenes page's: its tick, name and chips (its card type in that type's
+-- color, its own settings over the type, and where it shows when not
+-- everywhere), an arrow to give it another type, and its settings in a
+-- drawer under it (When: its Show in row; Style: the one it starts from,
+-- Style, Sounds and Test). The picked type's cards are lit gold, and each
+-- tab says how many of them it holds. (Before: a section per card type.)
+local LIST_W_RIGHT = 500 -- (a tab's frame's width, past its rows' edge)
+local PREVIEW_W, TYPE_BOX_W = 300, 260 -- (the preview's screen, and the picked type's settings right of it)
 function ns.CreateCardsPanel(kit)
 	local canvas, content = kit.CreateScrollPage()
 	local title = kit.Label(content, "GameFontNormalLarge", L["Card Vision"])
@@ -1031,22 +1156,30 @@ function ns.CreateCardsPanel(kit)
 		local stack = kit.Stack(switch, "check")
 		kit.RecordKey(content, "cardThirdX") -- (the lower third's spot, moved in Edit Mode: Reset puts it back)
 		kit.RecordKey(content, "cardThirdY")
-		stack:Header(content, L["Events"])
+		stack:Header(content, L["Card Types"])
 		local grid = ns.GRID_KIT
 		local columns = ns.FRAME_COLUMNS
-		local items = {}
-		local rowList
-		-- (An event given another type: its row moves to that section, scrolled
-		-- to and flashed.)
+		-- (Each situation's events, a folder tab each; tabOf: an event's tab.)
+		local groups, tabOf, lists = {}, {}, {}
+		local PickTab, tabFrames
+		local Repaint -- (the tiles, the tabs' counts and the rows lit, after a type's picked or given)
+		-- (An event given another type: the tiles and lights follow, its row flashed.)
 		local function Moved(id)
 			kit.Refresh()
-			if rowList then rowList:Flash(id) end
+			Repaint()
+			if tabOf[id] and lists[tabOf[id]] then lists[tabOf[id]]:Flash(id) end
 		end
 		local function SetBase(id, value)
 			ns.GetDB()["cardBase_" .. id] = value
 			Moved(id)
 		end
-		for i, event in ipairs(ns.CardEventsGrouped()) do
+		for _, event in ipairs(ns.CardEventsGrouped()) do
+			local group = groups[#groups]
+			if not group or group.name ~= event.group then
+				group = { name = event.group, items = {} }
+				groups[#groups + 1] = group
+			end
+			tabOf[event.id] = #groups
 			local id, key, alwaysKey = event.id, "card:" .. event.id, "cardAlways_" .. event.id
 			local opts = event.fight and FIGHT_OPTS or STORY_OPTS
 			local function Key() return key end
@@ -1059,8 +1192,16 @@ function ns.CreateCardsPanel(kit)
 				kit.RecordKey(content, list)
 				grid.RecordRow(content, list, key)
 			end
-			items[i] = {
-				id = id, label = L[event.name], tip = L[TIPS[id]], on = event.on, group = L[event.group],
+			group.items[#group.items + 1] = {
+				id = id, label = L[event.name], on = event.on,
+				-- (Its own settings over its type named in its tip: the "+2 own" chip's meaning.)
+				tip = function()
+					local own, tip = OwnNames(id), L[TIPS[id]]
+					if #own > 0 then
+						tip = tip .. "\n\n" .. L["Its own settings over its card type: %s."]:format(table.concat(own, ", "))
+					end
+					return tip
+				end,
 				onTip = L["Shows this card."],
 				dim = function()
 					return not (ns.GetDB()[event.on] and (not event.needs or ns.GetDB()[ns.CARD_BY_ID[event.needs].on]))
@@ -1077,9 +1218,11 @@ function ns.CreateCardsPanel(kit)
 				chips = function()
 					local db = ns.GetDB()
 					local own = #OwnNames(id)
-					-- (Its type is its section's title; a chip only for a follower, and
-					-- for its own settings over the type.)
-					local list = {}
+					-- (Its card type first, in the type's color; then for a follower
+					-- whose it follows, and its own settings over the type.)
+					local base = ns.CardBase(id)
+					local style = ns.CARD_STYLE_BY_ID[base]
+					local list = { { style and L[style.name] or L["Lower third"], TypeChip(base) } }
 					if event.parent and (db["cardBase_" .. id] or "follow") == "follow" then
 						list[#list + 1] = { BaseName(id), ns.ROW_CHIP.plain }
 					end
@@ -1149,13 +1292,22 @@ function ns.CreateCardsPanel(kit)
 				},
 			}
 		end
-		-- The jumbotron at the top (2026-11-18, in place of a small preview in
-		-- each type's section): one big screen playing each card type's card in
-		-- turn, as the Style hub's General page's (GeneralStyle.lua's
-		-- ns.MakeStyleJumbotron), its arrows and lock with it; opening a type's
-		-- section, or changing its Size, turns it to that type. Zoomed in on the
-		-- card as it comes (up to 6 times, till it's 70% of the screen), so a
-		-- Size changed shows bigger or smaller.
+		-- The card type tiles, a row of five at a time (TypeTile); the one
+		-- picked is kept while the game runs (CARD.pick).
+		local picked = CARD.pick or "danger"
+		local tiles = {}
+		local tileBox = CreateFrame("Frame", nil, content)
+		tileBox:SetSize(TILE_COLS * (TILE_W + TILE_GAP) - TILE_GAP, TILE_H)
+		tileBox.pageSwitch = false
+		stack:Add(tileBox, "label")
+		local Pick
+		-- The jumbotron under them (2026-11-18): one big screen with each card
+		-- type's card, as the Style hub's General page's (GeneralStyle.lua's
+		-- ns.MakeStyleJumbotron), its arrows and lock with it. Held on the type
+		-- picked (2026-11-23): its arrows pick the next; unlocked, it turns
+		-- through them and the picked type follows. Zoomed in on the card as it
+		-- comes (up to 6 times, till it's 70% of the screen), so a Size changed
+		-- shows bigger or smaller.
 		local jumbo
 		local cells, screens = {}, {}
 		for _, section in ipairs(TypeSections()) do
@@ -1167,8 +1319,18 @@ function ns.CreateCardsPanel(kit)
 				return screens[#screens]
 			end }
 		end
-		jumbo = ns.MakeStyleJumbotron(kit, content, stack, 480, cells)
+		-- (A small screen, PREVIEW_W wide, the picked type's settings beside it:
+		-- the user, 2026-11-23, its full width pushed every row below the window.)
+		jumbo = ns.MakeStyleJumbotron(kit, content, stack, 480, cells, PREVIEW_W)
 		jumbo.pageSwitch = false
+		jumbo:SetLocked(true)
+		jumbo.onStep = function(style)
+			if style and style ~= picked then
+				picked = style
+				CARD.pick = style
+				Repaint()
+			end
+		end
 		local function Show(style)
 			if not jumbo then return end
 			jumbo:Jump(style)
@@ -1177,13 +1339,13 @@ function ns.CreateCardsPanel(kit)
 		-- Each type's header: its line, saying where it shows; Test, Edit and
 		-- its Size (the Card Types tab's Size, 2026-11-18: in place of the one
 		-- Card size for all).
-		local HEADER_H = 100
+		local HEADER_H = 110
 		local function TypeHeader(style, header)
 			local sizeKey = ns.CardStyleKey("Size", style)
 			kit.RecordKey(content, sizeKey)
 			local line = kit.Label(header, "GameFontHighlightSmall", L[TYPE_LINES[style] or "A ready-made card type."])
-			line:SetPoint("TOPLEFT", header, "TOPLEFT", 16, -4)
-			line:SetWidth(LIST_W_RIGHT)
+			line:SetPoint("TOPLEFT", header, "TOPLEFT", 0, -2)
+			line:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, -2)
 			line:SetJustifyH("LEFT")
 			line.searchSkip = true
 			local test = ns.PanelButton(header)
@@ -1217,16 +1379,118 @@ function ns.CreateCardsPanel(kit)
 			size:SetPoint("TOPLEFT", test, "BOTTOMLEFT", 2, -24)
 			kit.Tooltip(size, L["How big the words are on every card of this type."])
 		end
-		rowList = ns.RowList(kit, content, items, { sections = TypeSections, header = TypeHeader, headerH = HEADER_H,
-			empty = L["No events use this card type."], collapsible = true, onOpen = Show,
-			count = function(n) return n == 1 and L["1 card"] or L["%d cards"]:format(n) end })
-		stack:Add(rowList, "label")
-		-- (An event's row opened, scrolled to and flashed: Dev/PvpCardTest.lua.)
-		function ns.CardEventFlash(id) rowList:Flash(id) end
-		stack:Note(content, L["+2 own means the card has two settings of its own on top of its card type (gold dots mark them " ..
-			"on the Style tab). The arrow on a row moves it to another card type."], NOTE_W)
+		-- The picked type's line, Test, Edit and Size, right of the preview's
+		-- screen: each type's on a frame of its own, the picked one's shown.
+		-- (Found by page search: that type picked.) As tall as the screen, or
+		-- its settings if taller; kept so while the preview's docked away, the
+		-- tabs under it staying put. (Anchored to the preview: docked, what
+		-- held to it holds to its slot left on the page.)
+		local headers = {}
+		local typeBox = CreateFrame("Frame", nil, content)
+		typeBox:SetSize(TYPE_BOX_W, HEADER_H)
+		typeBox:SetPoint("TOPLEFT", jumbo, "TOPRIGHT", 16, -jumbo.headHeight)
+		local function FitTypeBox()
+			if jumbo:GetParent() ~= content then return end
+			typeBox:SetHeight(math.max(HEADER_H, jumbo:GetHeight() - jumbo.headHeight))
+		end
+		jumbo:HookScript("OnSizeChanged", FitTypeBox)
+		FitTypeBox()
+		local under = CreateFrame("Frame", nil, content)
+		under:SetSize(1, 1)
+		under:SetPoint("TOP", typeBox, "BOTTOM")
+		under:SetPoint("LEFT", jumbo, "LEFT")
+		-- (Made for each type listed now, and for one an event takes later.)
+		local function HeaderOf(style)
+			if headers[style] then return end
+			local header = CreateFrame("Frame", nil, typeBox)
+			header:SetAllPoints()
+			TypeHeader(style, header)
+			header.searchAlways = true
+			header.openSection = function() Pick(style) end
+			header:Hide()
+			headers[style] = header
+		end
+		for _, section in ipairs(TypeSections()) do HeaderOf(section.key) end
+		function Pick(style)
+			if not style then return end
+			picked = style
+			CARD.pick = style
+			Show(style)
+			Repaint()
+		end
 
-		canvas:SetScript("OnShow", kit.PageShown(kit.Refresh, content))
+		-- The situation tabs under it, each a container (ns.PageTabsBelow:
+		-- right-click turns all its cards off), a row list on each.
+		local tabList = {}
+		for g, group in ipairs(groups) do
+			tabList[g] = { L[group.name], L["Its cards on or off, and where each shows."] }
+		end
+		local current = 1
+		local hosts, TabPick, TabsShown, _, _, _, frames = ns.PageTabsBelow(content, under, tabList,
+			"Card Vision/events", nil, nil, nil, function(i) current = i end)
+		PickTab, tabFrames = TabPick, frames
+		for g, group in ipairs(groups) do
+			local host = hosts[g]
+			host:SetSize(LIST_W_RIGHT + 90, 1)
+			local list = ns.RowList(kit, host, group.items, { fitTo = content,
+				reveal = function() if current ~= g then PickTab(g) end end,
+				highlight = function(id) return ns.CardBase(id) == picked end })
+			list:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+			lists[g] = list
+		end
+
+		function Repaint()
+			-- (A type no event uses any more has no tile: the first one picked.)
+			local sections, found = TypeSections(), false
+			for _, section in ipairs(sections) do
+				if section.key == picked then found = true end
+			end
+			if not found and sections[1] then
+				picked = sections[1].key
+				CARD.pick = picked
+			end
+			for n, section in ipairs(sections) do
+				local tile = tiles[n] or TypeTile(tileBox, function(style) Pick(style) end)
+				tiles[n] = tile
+				tile:ClearAllPoints()
+				tile:SetPoint("TOPLEFT", tileBox, "TOPLEFT", ((n - 1) % TILE_COLS) * (TILE_W + TILE_GAP),
+					-math.floor((n - 1) / TILE_COLS) * (TILE_H + TILE_GAP))
+				PaintTile(tile, section.key, section.key == picked, #section.ids)
+				tile:Show()
+			end
+			for n = #sections + 1, #tiles do tiles[n]:Hide() end
+			tileBox:SetHeight(math.max(1, math.ceil(#sections / TILE_COLS) * (TILE_H + TILE_GAP) - TILE_GAP))
+			HeaderOf(picked)
+			for style, header in pairs(headers) do header:SetShown(style == picked) end
+			-- (Each tab's name with how many of the picked type's cards it holds.)
+			for g, tab in ipairs(tabFrames or {}) do
+				local n = 0
+				for _, item in ipairs(groups[g].items) do
+					if ns.CardBase(item.id) == picked then n = n + 1 end
+				end
+				tab:SetText(n > 0 and ("%s |cffffd100(%d)|r"):format(L[groups[g].name], n) or L[groups[g].name])
+			end
+			for _, list in ipairs(lists) do list.Refresh() end
+			if PickTab then PickTab(current) end -- (the tabs measured and laid out again for their new names)
+		end
+		-- (An event's row shown on its tab, opened, scrolled to and flashed:
+		-- Dev/PvpCardTest.lua, Dev/CardPageTest.lua.)
+		function ns.CardEventFlash(id)
+			if tabOf[id] then lists[tabOf[id]]:Flash(id) end
+		end
+		-- (What the page test reads: the tiles, tabs, lists and the type picked.)
+		ns.cardEventsPage = { tiles = tiles, tabs = frames, lists = lists, groups = groups, tabOf = tabOf,
+			jumbo = jumbo, typeBox = typeBox, Pick = function(style) Pick(style) end,
+			Picked = function() return picked end, Current = function() return current end }
+
+		canvas:SetScript("OnShow", kit.PageShown(function()
+			kit.Refresh()
+			TabsShown()
+			Repaint()
+		end, content))
+		TabsShown()
+		Show(picked)
+		Repaint()
 
 		-- (/cine debug cardpage: its height, the scroll, and the lowest shown
 		-- widgets, to find what stretches its scroll: 600 past its last row in
@@ -1262,7 +1526,7 @@ function ns.CreateCardsPanel(kit)
 			local scroll = content:GetParent()
 			local pin = jumbo and jumbo.pin
 			Say(("Card Vision: content %.0f tall, list %.0f, scroll %s of %s, view %s; jumbotron on %s %.0fx%.0f, held %s; %d shown")
-				:format(content:GetHeight(), rowList:GetHeight(),
+				:format(content:GetHeight(), lists[current] and lists[current]:GetHeight() or 0,
 				scroll.GetVerticalScroll and ("%.0f"):format(scroll:GetVerticalScroll()) or "-",
 				scroll.GetVerticalScrollRange and ("%.0f"):format(scroll:GetVerticalScrollRange()) or "-",
 				scroll.GetHeight and ("%.0f"):format(scroll:GetHeight()) or "-",

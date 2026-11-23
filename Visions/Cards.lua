@@ -557,7 +557,15 @@ function ns.CardAllowed(id, edge)
 	-- (The second return: what stops it, for the Why window, and whether
 	-- another addon's version is what does: "yield".)
 	if not ns.Setting("cards") then return false, L["Card Vision is off"] end
-	if not ns.Setting(event.on) then return false, L["%s is unticked"]:format(L[event.name]) end
+	if not ns.Setting(event.on) then
+		-- (Ticked, but its situation's tab on the Events page is switched off:
+		-- that tab is a container, 2026-11-23.)
+		local db = ns.GetDB()
+		if db and db[event.on] then
+			return false, L["%s is ticked, but its tab on Card Vision's Events page is off"]:format(L[event.name])
+		end
+		return false, L["%s is unticked"]:format(L[event.name])
+	end
 	if ns.CardPartOff(id, "settings") then return false, L["Card Vision's Settings tab is off"] end
 	local other = ns.FeatureYieldReason("card:" .. id)
 	if other then return false, other, "yield" end

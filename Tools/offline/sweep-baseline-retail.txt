@@ -15,6 +15,8 @@ FAIL aggroMarkStyle | Nameplate Style | Aggro on you Style: Lua error setting: P
 FAIL cards | Card Vision | Enable Page: Lua error putting it back: Style/StylePages.lua:#: stack overflow
 FAIL cards | Card Vision | Enable Page: Lua error setting true: Style/StylePages.lua:#: stack overflow
 FAIL cards | Card Vision | Enable Page: Lua error setting true: Visions/CardsPage.lua:#: stack overflow
+FAIL cards | Card Vision | Enable Page: Lua error setting true: Tools/offline/wow.lua:#: stack overflow
+FAIL cards | Card Vision | Enable Page: Lua error putting it back: Tools/offline/wow.lua:#: stack overflow
 FAIL focusMarkAlpha | Nameplate Style | Focus Opacity: Lua error setting #: Plates/PlateParts.lua:#: attempt to perform arithmetic on local 'size' (a nil value)
 FAIL focusMarkBob | Nameplate Style | Focus Moving: Lua error putting it back: Plates/PlateParts.lua:#: attempt to perform arithmetic on local 'size' (a nil value)
 FAIL focusMarkBob | Nameplate Style | Focus Moving: Lua error setting true: Plates/PlateParts.lua:#: attempt to perform arithmetic on local 'size' (a nil value)

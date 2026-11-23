@@ -1398,7 +1398,11 @@ end
 -- to that row and flashes it. collapsible = true: each section's title a bar
 -- that folds it (header, rows) open or shut, all shut to start (page search
 -- and Flash open one), count(n) giving the words after its title, onOpen(key)
--- called as a click opens one.
+-- called as a click opens one. highlight(id): true lights that row gold
+-- (Card Vision's picked card type, 2026-11-23). reveal(): shows what holds the
+-- list (its folder tab) before a row is opened, found or flashed. fitTo: the
+-- page's content, when parent is a tab's frame on it (its height fitted, and
+-- Flash's scroll read off it). item.tip may be a function giving the tip.
 ns.ROW_CHIP = {
 	plain = { 0.18, 0.18, 0.18, 0.8, 0.8, 0.8 },     -- (back r, g, b, then text r, g, b)
 	when = { 0.08, 0.2, 0.35, 0.55, 0.8, 1 },
@@ -1573,7 +1577,11 @@ function ns.RowList(kit, parent, items, opts)
 				row:ClearAllPoints()
 				row:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -y)
 				row:Show()
-				row.band:SetColorTexture(1, 1, 1, band % 2 == 1 and 0.04 or 0)
+				if opts.highlight and opts.highlight(item.id) then
+					row.band:SetColorTexture(1, 0.82, 0, 0.12)
+				else
+					row.band:SetColorTexture(1, 1, 1, band % 2 == 1 and 0.04 or 0)
+				end
 				y = y + LIST_ROW_H
 				row.toggle:SetNormalTexture(opened[item.id] and "Interface\\Buttons\\UI-MinusButton-Up"
 					or "Interface\\Buttons\\UI-PlusButton-Up")
@@ -1596,7 +1604,10 @@ function ns.RowList(kit, parent, items, opts)
 		-- (The page's scroll length fitted to it again: a section or drawer
 		-- shut left empty room at the page's bottom, 2026-11-18.)
 		local fit = ns.GRID_KIT and ns.GRID_KIT.FitContentHeight
-		if fit and list:IsVisible() then fit(parent) end
+		if fit and list:IsVisible() then fit(opts.fitTo or parent) end
+	end
+	local function Reveal()
+		if opts.reveal then opts.reveal() end
 	end
 	-- A section folded open (by its key; nothing without opts.collapsible).
 	function list:OpenSection(key)
@@ -1684,7 +1695,9 @@ function ns.RowList(kit, parent, items, opts)
 		row:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			GameTooltip:SetText(item.label, 1, 1, 1)
-			if item.tip then GameTooltip:AddLine(item.tip, 0.8, 0.8, 0.8, true) end
+			local tip = item.tip
+			if type(tip) == "function" then tip = tip() end
+			if tip then GameTooltip:AddLine(tip, 0.8, 0.8, 0.8, true) end
 			for _, chip in ipairs(self.chipList or {}) do
 				GameTooltip:AddLine("- " .. chip[1], 1, 0.82, 0)
 			end
@@ -1714,6 +1727,7 @@ function ns.RowList(kit, parent, items, opts)
 		drawer:SetSize(LIST_ROW_W - LIST_DRAWER_X, #lines * LIST_LINE_H + 8)
 		drawer:Hide()
 		drawer.openSection = function()
+			Reveal()
 			opened[item.id] = true
 			if sectionOf[item.id] then folded[sectionOf[item.id]] = false end
 			Layout()
@@ -1721,6 +1735,7 @@ function ns.RowList(kit, parent, items, opts)
 		drawers[i] = drawer
 		-- (Its tick found by page search: its section folded open first.)
 		rows[i].openSection = function()
+			Reveal()
 			if sectionOf[item.id] then folded[sectionOf[item.id]] = false end
 			Layout()
 		end
@@ -1742,6 +1757,7 @@ function ns.RowList(kit, parent, items, opts)
 	list.Refresh = function() Layout() end
 	kit.AddControl(list)
 	function list:Open(id)
+		Reveal()
 		opened[id] = true
 		if sectionOf[id] then folded[sectionOf[id]] = false end
 		Layout()
@@ -1751,6 +1767,7 @@ function ns.RowList(kit, parent, items, opts)
 	function list:Flash(id)
 		local row = rows[indexOf[id] or 0]
 		if not row then return end
+		Reveal()
 		Layout()
 		if sectionOf[id] and Folded(sectionOf[id]) then
 			folded[sectionOf[id]] = false
@@ -1770,7 +1787,7 @@ function ns.RowList(kit, parent, items, opts)
 			row.flash.fade = fade
 		end
 		C_Timer.After(0.05, function() -- (once the page has fit its height)
-			local content = list:GetParent()
+			local content = opts.fitTo or list:GetParent()
 			local scroll = content and content:GetParent()
 			local top, rowTop = content and content:GetTop(), row:GetTop()
 			if scroll and scroll.SetVerticalScroll and top and rowTop then

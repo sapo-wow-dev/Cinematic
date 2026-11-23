@@ -202,9 +202,13 @@ local CELLS = {
 local ROTATE_SECONDS, FADE_SECONDS = 6, 0.6
 local NAME_H = 24 -- (the page's name over the screen; the screen as high as every Style preview's)
 
-local function MakePreview(parent, width, list)
+-- (fixed: the preview held to that width, its screen the screen's shape at
+-- it, in place of the page's whole width: ns.StyleScreenHeight.)
+local function MakePreview(parent, width, list, fixed)
 	local holder = CreateFrame("Frame", nil, parent)
-	holder:SetSize(width, NAME_H + ns.StylePreviewHeight())
+	holder.fixedWidth = fixed
+	if fixed then width = fixed end
+	holder:SetSize(width, NAME_H + ns.StyleScreenHeight(holder))
 	local name = holder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	name:SetPoint("TOPLEFT", 0, -5)
 	name.searchSkip = true
@@ -217,7 +221,7 @@ local function MakePreview(parent, width, list)
 		-- Vision's, a card type each.)
 		local make = info.make or ns[info[2]]
 		if make then
-			local cell = make(holder, width, info.sized and ns.StylePreviewHeight() or nil)
+			local cell = make(holder, width, info.sized and ns.StyleScreenHeight(holder) or nil)
 			cell:SetScript("OnShow", nil) -- (drawn by holder:Refresh)
 			cell:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, -NAME_H)
 			cell:SetPoint("TOPRIGHT", holder, "TOPRIGHT", 0, -NAME_H) -- (as wide as the page makes it)
@@ -227,7 +231,7 @@ local function MakePreview(parent, width, list)
 			local own = cell.Refresh
 			function cell:Refresh(...)
 				if own then own(self, ...) end
-				local height = ns.StylePreviewHeight()
+				local height = ns.StyleScreenHeight(holder)
 				if math.abs(self:GetHeight() - height) > 0.5 then
 					self:SetHeight(height)
 				end
@@ -268,6 +272,9 @@ local function MakePreview(parent, width, list)
 		local was = current
 		current = (current - 1 + by) % #cells + 1
 		waited = 0
+		-- (holder.onStep(key): told as it turns, by itself or an arrow: Card
+		-- Vision's type tiles follow it.)
+		if holder.onStep then holder.onStep(cells[current].key) end
 		if now then
 			cells[was].frame:Hide()
 			cells[current].frame:SetAlpha(1)
@@ -342,6 +349,12 @@ local function MakePreview(parent, width, list)
 	lock:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	ShowLock()
 	holder.lockButton = lock
+	-- (Locked from code: Card Vision's Events tab holds it on the type picked.)
+	function holder:SetLocked(on)
+		locked = on and true or false
+		waited = 0
+		ShowLock()
+	end
 	holder:SetScript("OnShow", function(self) EndFade(); waited = 0; self:Refresh() end)
 	ns.SetOnUpdate(holder, function(_, elapsed)
 		if fading then
@@ -361,9 +374,10 @@ end
 
 -- A page's rotating preview of the given cells ({ name, maker, sized = },
 -- or make = function(parent, width, height) and key = for holder:Jump),
--- with Pop out left of its arrows, on the page's stack.
-function ns.MakeStyleJumbotron(kit, content, stack, width, list)
-	local preview = MakePreview(content, width, list)
+-- with Pop out left of its arrows, on the page's stack. fixed: held to that
+-- width (MakePreview's).
+function ns.MakeStyleJumbotron(kit, content, stack, width, list, fixed)
+	local preview = MakePreview(content, width, list, fixed)
 	preview.headHeight = NAME_H -- (its name over the screen: StylePages.lua)
 	stack:Add(preview, "label")
 	local pop = ns.StylePopout(preview, kit.Tooltip) -- (StylePages.lua)

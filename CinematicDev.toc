@@ -283,6 +283,7 @@ Dev\PrdKillTest.lua
 Dev\PlateMatchTest.lua
 Dev\ExitRowTest.lua
 Dev\PvpCardTest.lua
+Dev\CardEventsTest.lua
 Dev\PerfTest.lua
 Dev\ResetPopupTest.lua
 Dev\ResetCvarsTest.lua
