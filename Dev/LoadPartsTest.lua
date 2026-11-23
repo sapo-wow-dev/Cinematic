@@ -188,7 +188,9 @@ local function Flip(r, wanted, only)
 	if type(text) ~= "string" then text = "" end
 	local named = 0
 	for _, p in ipairs(list) do
-		if (not only or only[p.part]) and text:find(({ visions = "Visions", cameras = "cameras", style = "Style", atmosphere = "Atmosphere" })[p.part], 1, true) then
+		-- (Each part by the name the box gives it, its label: "cameras" in
+		-- lowercase matched no box since it says "Cameras".)
+		if (not only or only[p.part]) and text:find(p.label, 1, true) then
 			named = named + 1
 		end
 	end
