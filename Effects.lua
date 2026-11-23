@@ -3913,6 +3913,23 @@ for kind, cvars in pairs(PLATE_KIND_CVARS) do
 		end
 	end
 end
+-- Far names smaller (WoW Forever, names over heads on: the Name Style page):
+-- ours are sized by the camera's zoom only, as big far off as at 16 yards,
+-- where the game's own shrink (2026-11-23). The game can shrink plates by
+-- their distance from the camera itself (rule forever.plate.no-distance-scale,
+-- changed: /cine debug nameconsole), and our names on them shrink too. Set as
+-- ONE step, not a gradual scale (each size change pops a whole pixel: rule
+-- all.fontstring.scale-steps-by-font-size; the user won't have names
+-- resizing as they walk): full size out to 40 yards from the camera, MIN
+-- past it (min scale reached at nameplateMaxDistance less 5, so the two
+-- distances cross and the game jumps). Held with every plate on; kept
+-- through fights (plate settings can't change in one, and a let go then
+-- would shrink every far name at once). /cine debug farnames.
+ns.plates.FAR_NAME_CVARS = ns.CVarSet("Far names smaller", "Forever names over heads: plates past 40 yards from the "
+	.. "camera at 0.65 size, in one step", { secure = true, playerWins = true, values = {
+		nameplateMinScale = "0.65", nameplateMaxScale = "1", nameplateMaxScaleDistance = "41",
+		nameplateMinScaleDistance = "5",
+	} })
 -- Two parts of it only where a row can show them here: friendly players'
 -- whole plates (else their plates stay names only, as your setting says),
 -- and their pets', guardians', totems' and minions' plates (else as your
@@ -4243,6 +4260,7 @@ local function ReleasePlates()
 	platesActive = false
 	platesForced = false
 	ns.ApplyCVarSet(FORCED_PLATE_CVARS, false)
+	ns.ApplyCVarSet(ns.plates.FAR_NAME_CVARS, false)
 	ns.ApplyCVarSet(ns.plates.FRIEND_BODY_CVARS, false)
 	ns.ApplyCVarSet(ns.plates.FRIEND_MINION_CVARS, false)
 	ns.ApplyCVarSet(ns.plates.FRIEND_PLAYER_CVARS, false)
@@ -4354,6 +4372,8 @@ function ns.UpdatePlates(cinematic, elapsed)
 	platesForced = ns.PlatesForcedHere(cinematic)
 	-- (Let go before the other plate switches take hold, and taken up after
 	-- they let go: they share settings, and each puts back what it saved.)
+	-- (Far names smaller: with every plate on, names over heads styled, Forever.)
+	ns.ApplyCVarSet(ns.plates.FAR_NAME_CVARS, platesForced and not ns.isRetail and ns.db.plateNameStyle and true or false)
 	if not platesForced then
 		ns.ApplyCVarSet(FORCED_PLATE_CVARS, false)
 		ns.ApplyCVarSet(ns.plates.FRIEND_BODY_CVARS, false)
