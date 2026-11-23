@@ -5248,6 +5248,44 @@ STEPS[#STEPS + 1] = function()
 	ns.db.profileKeysOffV1 = true
 end
 
+-- Auto-Hide UI's and Blank Slate's Reset with no reset point went back to
+-- today's base: the Cooldown Manager page (Auto-Hide UI), every wheel key and
+-- the Keyboard Map off, though a player who'd had the profile since v2.1.23
+-- had them on (their base then; the steps above keep only saved copies and
+-- reset points). A reset point that keeps each of them you have on now: your
+-- live switches if you're on the profile, else its saved copy. A fresh pick
+-- has them off, so nothing's written for it. Once. (Card audit 2026-11-23,
+-- finding 3, the user's "Fix 1, 2, 3"; fix card 2026-11-23-profiles-reset-keep.md.)
+STEPS[#STEPS + 1] = function()
+	if ns.db.profileResetKeepV1 then return end
+	local wheels = ns.PROFILE_KEYS_OFF or { "wheelMasterOn", "wheelYoursOn", "wheelCameraOn", "wheelMenuOn",
+		"wheelMarkerOn", "wheelWorldOn", "wheelVisionOn", "keyboardMap" }
+	ns.db.profileResetPoints = ns.db.profileResetPoints or {}
+	local points = ns.db.profileResetPoints
+	for _, name in ipairs({ "Auto-Hide UI", "Blank Slate" }) do
+		if points[name] == nil then
+			local keys = {}
+			for _, key in ipairs(wheels) do keys[#keys + 1] = key end
+			if name == "Auto-Hide UI" then keys[#keys + 1] = "handleCooldowns" end
+			local live = ns.db.liveProfile == name and not ns.db.offUntilPicked
+			local saved = ns.db.profiles and ns.db.profiles[name]
+			local keep = {}
+			for _, key in ipairs(keys) do
+				local value
+				if live then
+					value = ns.db[key]
+				elseif type(saved) == "table" then
+					value = saved[key]
+					if value == nil and type(saved.settings) == "table" then value = saved.settings[key] end
+				end
+				if value == true then keep[key] = true end
+			end
+			if next(keep) then points[name] = keep end
+		end
+	end
+	ns.db.profileResetKeepV1 = true
+end
+
 -- (Step: Cooldown Manager lines to place groups, 2026-11-22.)
 -- The Cooldown Manager page's numbered lines are gone: the page is a grid of
 -- place groups ("scenes") across and rows down (CooldownRules.lua). One

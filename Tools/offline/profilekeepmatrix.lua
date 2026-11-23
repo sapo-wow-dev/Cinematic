@@ -14,7 +14,9 @@
 -- its reset point (none, nothing for the key, off), and whether you're on that
 -- profile at login. Each cell: the switch now, after switching to the profile,
 -- and after Reset profile. The rule: what you had stays what you had; a fresh
--- pick (or a Reset with no reset point) gets the built-in's values as they are.
+-- pick (or a Reset with no reset point) gets the built-in's values as they are,
+-- except a key you have on in Auto-Hide UI or Blank Slate: kept on through a
+-- Reset (the profileResetKeepV1 step, 2026-11-23).
 
 local client = arg and arg[1] or "forever"
 local which = arg and arg[2] or "cooldowns"
@@ -80,6 +82,10 @@ local dims = {
 	{ "live", { "it", "other" } },
 }
 
+local RESET_KEEPS = {
+	["Auto-Hide UI"] = { handleCooldowns = true, wheelMasterOn = true, keyboardMap = true },
+	["Blank Slate"] = { wheelMasterOn = true, keyboardMap = true },
+}
 -- What's right, per key: the value you had; never saved (a fresh pick) or a
 -- Reset with no reset point: today's base.
 local function Right(c)
@@ -99,6 +105,13 @@ local function Right(c)
 		local reset
 		if c.point == "none" then
 			reset = NewBase(NAMES[c.profile] or c.profile, key)
+			-- (Auto-Hide UI and Blank Slate: a key you have on keeps on through a
+			-- Reset, the update writing it a reset point: the user, 2026-11-23,
+			-- fix card 2026-11-23-profiles-reset-keep.md.)
+			if load == true and RESET_KEEPS[NAMES[c.profile] or c.profile]
+				and RESET_KEEPS[NAMES[c.profile] or c.profile][key] then
+				reset = true
+			end
 		else
 			reset = Had(c, c.point, key)
 		end
@@ -156,6 +169,9 @@ Matrix.Run({
 			db.profiles[name] = Stored(c.saved)
 		end
 		db[FLAG] = c.from ~= "v2.1.23" or nil
+		-- (The reset point step, 2026-11-23: new, so it runs for everyone, those
+		-- updated before it too.)
+		db.profileResetKeepV1 = nil
 		ns.RunMigrations()
 		if c.live == "it" then
 			now = Read()

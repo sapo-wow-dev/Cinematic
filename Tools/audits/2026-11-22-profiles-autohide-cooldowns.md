@@ -46,9 +46,9 @@ Test: Tools/offline/profilekeepmatrix.lua retail cooldowns
 | none (autohidemouseover.lua's cooldowns checks were added with the fix) | | | | |
 
 ## Open (user's call)
-- Reset with no reset point on a profile you'd used on v2.1.23 gives today's base (off), pinned so: Reset means
-  "the built-in's values as they are now". If Reset should keep v2.1.23's on, the step would also need to write a
-  reset point, which nothing does today.
+- Settled 2026-11-23 (the user: "Fix 1, 2, 3", then "Yes, commit it"): Reset with no reset point keeps the page on
+  when you have it on; the profileResetKeepV1 step writes the reset point (2026-11-23-profiles-reset-keep.md).
+  Was: today's base (off), pinned so.
 - A copy saved on v2.1.23 with nothing for the page but a point with nothing either: both on now (pinned).
 
 ## Risk

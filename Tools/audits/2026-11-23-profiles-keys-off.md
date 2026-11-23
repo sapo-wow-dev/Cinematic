@@ -45,7 +45,8 @@ Test: Tools/offline/profilekeepmatrix.lua retail keysoff
 | none | | | | |
 
 ## Open (user's call)
-- As in the Cooldown Manager card: a Reset with no reset point gives the built-in's off (pinned so).
+- Settled 2026-11-23: a Reset with no reset point keeps each key you have on (profileResetKeepV1,
+  2026-11-23-profiles-reset-keep.md); was the built-in's off.
 - The step writes the defaults (on) into the v2.1.23 copies: a later change to a wheel's default won't reach them.
 
 ## Risk
