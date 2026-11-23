@@ -137,9 +137,40 @@ def main():
 
         launcher = open(os.path.join(folder, "start.cmd"), encoding="utf-8").read()
         rel = os.path.relpath(md, desk.REPO).replace("\\", "/")
-        check(f'--permission-mode plan "/feature {rel}"' in launcher, "launcher runs /feature on the saved thread in plan mode")
+        check(f'--name "/feature: Combat Cards" --permission-mode plan "/feature {rel}"' in launcher,
+              "launcher runs /feature on the saved thread in plan mode, named after the post")
+        check(" -p --session-id " in launcher and " --desktop --resume " in launcher,
+              "desktop launcher: first turn without a window, then opens that session in the app")
         check(f'cd /d "{desk.REPO}"' in launcher, "launcher starts in the repo")
-        check(queue[0]["content"].startswith("claude-done ") and '"folder"' in queue[0]["content"], "queue line marked done")
+        check(queue[0]["content"].startswith("claude-done ") and '"folder"' in queue[0]["content"]
+              and '"session"' in queue[0]["content"], "queue line marked done with its folder and session")
+
+        # Desktop launch, with a fake subprocess: what it runs and in what order.
+        plan = desk.write_launcher(md, "feature", "LET'S ROCK! & <calc>", cfg)
+        check(plan["name"] == "/feature: LET'S ROCK  calc", "session name keeps nothing cmd could run")
+        calls, results = [], []
+        real_run = desk.subprocess.run
+        desk.subprocess.run = lambda args, **kw: calls.append((args, kw))
+        try:
+            desk.launch(plan, results.append)
+            for t in desk.threading.enumerate():
+                if t is not desk.threading.current_thread() and not t.daemon:
+                    t.join(10)
+        finally:
+            desk.subprocess.run = real_run
+        check(len(calls) == 2 and calls[0][0] == desk.first_turn_args(plan) and "-p" in calls[0][0],
+              "desktop: the first turn runs first, without a window")
+        check(calls[0][1].get("stdin") is desk.subprocess.DEVNULL and calls[0][1].get("cwd") == desk.REPO,
+              "first turn reads no input and runs in the repo")
+        check(len(calls) == 2 and calls[1][0][1:] == ["--desktop", "--resume", plan["session"]]
+              and calls[1][1].get("creationflags") == desk.subprocess.CREATE_NEW_CONSOLE,
+              "then that session opens in the app, from a console of its own")
+        check(results == [None], "the job is marked done once it opened")
+
+        term = desk.write_launcher(md, "support", "Combat Cards", dict(cfg, open_in="terminal"))
+        tcmd = open(term["cmd"], encoding="utf-8").read()
+        check(" -p " not in tcmd and f'--name "/support: Combat Cards" "/support {rel}"' in tcmd,
+              "open_in terminal: one interactive session in a terminal")
         check(api.patches[0][1].startswith("claude-taken "), "job claimed before the work")
 
         try:

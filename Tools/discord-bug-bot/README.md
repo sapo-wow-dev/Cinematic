@@ -70,9 +70,11 @@ When you finish one, swap Open for Fixed/Done and it stays that way.
 ### 7. `/claude`: open a thread in Claude on your PC (optional, needs step 6)
 Type `/claude` in a bug or request post. Your PC saves the whole thread (messages,
 pictures, videos as frames plus a transcript, posts it links to) to
-`Tools/discord-inbox/` (never committed) and opens Claude in the repo on it:
+`Tools/discord-inbox/` (never committed) and runs Claude in the repo on it:
 `/support` for the bug forum, `/feature` for the request forum (or pick with
-`skill:`, add a `note:`). Claude starts in plan mode and nothing is posted in
+`skill:`, add a `note:`). That first turn runs in the background in plan mode;
+when it's done the session opens in the Claude desktop app's sidebar, titled
+`/feature: <post title>`, with the answer waiting. Nothing is posted in
 Discord: replies are drafts for you. Jobs wait in a private channel, so `/claude`
 from your phone works while the PC is off; it opens when the PC is back.
 
@@ -104,10 +106,12 @@ from your phone works while the PC is off; it opens when the PC is back.
    the target `pythonw C:\dev\Cinematic\Tools\discord-bug-bot\claude_desk.py`.
 
 The queue channel shows each job's state: `claude-job` (waiting), `claude-taken`,
-`claude-done` (with its folder) or `claude-failed` (with why). To run a job again,
-`/claude` in the thread again. Settings in `config.json`: `"permission_mode"`
-(default `plan`), `"whisper_model"` (default `medium`), `"claude"` (path to
-`claude.exe` if it isn't found). Offline test: `python Tools/discord-bug-bot/test_desk.py`.
+`claude-running` (first turn going), `claude-done` (with its folder and session) or
+`claude-failed` (with why). To run a job again, `/claude` in the thread again. The
+first turn's output is in `first-turn.txt` in the thread's folder; `start.cmd` there
+does the same launch by hand. Settings in `config.json`: `"open_in"` (`desktop`,
+the default, or `terminal`), `"permission_mode"` (default `plan`), `"whisper_model"`
+(default `medium`), `"claude"` (path to `claude.exe` if it isn't found). Offline test: `python Tools/discord-bug-bot/test_desk.py`.
 
 ## Changing it
 - **The form or the issue text**: edit `worker.js`, paste it into the Worker editor again, Deploy.

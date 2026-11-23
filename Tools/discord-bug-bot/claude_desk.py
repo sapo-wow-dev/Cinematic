@@ -4,9 +4,10 @@
 /claude in a forum post makes the Worker post a "claude-job" line in a private
 queue channel. This script reads that channel, saves the whole thread
 (messages, pictures, videos as frames + a transcript, linked posts) to
-Tools/discord-inbox/<date>-<title>/, and opens Claude in the repo running
-/support (bug forum) or /feature (request forum) on it. It never posts in
-the thread. Setup: README.md step 7.
+Tools/discord-inbox/<date>-<title>/, runs /support (bug forum) or /feature
+(request forum) on it, and opens that session in the Claude desktop app,
+titled "/feature: <post title>" (config "open_in": "terminal" for a terminal
+tab instead). It never posts in the thread. Setup: README.md step 7.
 
     python Tools/discord-bug-bot/claude_desk.py --setup   # once: token + queue channel
     python Tools/discord-bug-bot/claude_desk.py           # keep running (polls every 10 s)
@@ -25,10 +26,12 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 INBOX = os.path.join(REPO, "Tools", "discord-inbox")
@@ -378,27 +381,89 @@ def find_claude(cfg):
     return max(copies, key=os.path.getmtime) if copies else None
 
 
+FIRST_TURN_TIMEOUT = 60 * 60  # a first turn running longer than this is stopped, then opened anyway
+
+
 def write_launcher(thread_md, skill, title, cfg):
+    """How to open Claude on the thread; also writes start.cmd, which does the same by hand.
+
+    "open_in": "desktop" (default) runs the first turn (/feature or /support)
+    without a window under a fixed session ID, then opens that session in the
+    Claude desktop app, titled "/feature: <post title>". The desktop app can't
+    take a prompt itself yet (claude --desktop only opens existing sessions).
+    "open_in": "terminal" opens Claude in a Windows Terminal tab instead.
+    """
     claude = find_claude(cfg)
     if not claude:
         raise RuntimeError("couldn't find claude.exe: set \"claude\" in " + CONFIG)
     rel = os.path.relpath(thread_md, REPO).replace("\\", "/")
-    mode = cfg.get("permission_mode", "plan")
-    label = re.sub(r"[^A-Za-z0-9 .,'-]", "", title)[:50]  # nothing cmd could read as a command
-    cmd = os.path.join(os.path.dirname(thread_md), "start.cmd")
-    with open(cmd, "w", encoding="utf-8", newline="\r\n") as f:
+    label = re.sub(r"[^A-Za-z0-9 .,'-]", "", title).strip()[:50] or "thread"  # nothing cmd could read as a command
+    folder = os.path.dirname(thread_md)
+    plan = {
+        "claude": claude, "mode": cfg.get("permission_mode", "plan"), "open_in": cfg.get("open_in", "desktop"),
+        "session": str(uuid.uuid4()), "name": f"/{skill}: {label}", "prompt": f"/{skill} {rel}",
+        "first_turn": os.path.join(folder, "first-turn.txt"), "cmd": os.path.join(folder, "start.cmd"),
+    }
+    with open(plan["cmd"], "w", encoding="utf-8", newline="\r\n") as f:
         f.write("@echo off\n")
-        f.write(f"title Claude /{skill}: {label}\n")
+        f.write(f"title Claude {plan['name']}\n")
         f.write(f'cd /d "{REPO}"\n')
-        f.write(f'"{claude}" --permission-mode {mode} "/{skill} {rel}"\n')
-    return cmd
+        if plan["open_in"] == "desktop":
+            f.write(f'"{claude}" -p --session-id {plan["session"]} --name "{plan["name"]}" '
+                    f'--permission-mode {plan["mode"]} "{plan["prompt"]}" > "{plan["first_turn"]}"\n')
+            f.write(f'"{claude}" --desktop --resume {plan["session"]}\n')
+        else:
+            f.write(f'"{claude}" --permission-mode {plan["mode"]} --name "{plan["name"]}" "{plan["prompt"]}"\n')
+    return plan
 
 
-def launch(cmd):
-    if shutil.which("wt"):
-        subprocess.Popen(["wt", "-w", "0", "nt", "-d", REPO, "cmd", "/k", cmd])
-    else:
-        subprocess.Popen(["cmd", "/k", cmd], cwd=REPO, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+def first_turn_args(plan):
+    return [plan["claude"], "-p", "--session-id", plan["session"], "--name", plan["name"],
+            "--permission-mode", plan["mode"], plan["prompt"]]
+
+
+def open_in_desktop(plan):
+    # --desktop refuses to run without a console (it checks for redirected
+    # output), so it gets its own small window, minimized, that closes itself.
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = 7  # SW_SHOWMINNOACTIVE
+    subprocess.run([plan["claude"], "--desktop", "--resume", plan["session"]], cwd=REPO,
+                   creationflags=subprocess.CREATE_NEW_CONSOLE, startupinfo=si, timeout=120)
+
+
+def launch(plan, on_open=None):
+    """Opens Claude. In desktop mode the first turn runs on its own thread, so
+    the queue keeps moving; on_open(error) is called once the session opens."""
+    if plan["open_in"] != "desktop":
+        if shutil.which("wt"):
+            subprocess.Popen(["wt", "-w", "0", "nt", "-d", REPO, "cmd", "/k", plan["cmd"]])
+        else:
+            subprocess.Popen(["cmd", "/k", plan["cmd"]], cwd=REPO, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        if on_open:
+            on_open(None)
+        return
+
+    def work():
+        error = None
+        try:
+            log(f"{plan['name']}: first turn running ({plan['session']})")
+            with open(plan["first_turn"], "w", encoding="utf-8") as out:
+                try:
+                    subprocess.run(first_turn_args(plan), cwd=REPO, stdout=out, stderr=subprocess.STDOUT,
+                                   stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                                   timeout=FIRST_TURN_TIMEOUT)
+                except subprocess.TimeoutExpired:
+                    error = "first turn ran over an hour; stopped"
+            open_in_desktop(plan)
+            log(f"{plan['name']}: opened in the desktop app")
+        except Exception as err:
+            error = str(err)
+            log(f"{plan['name']}: couldn't open: {err} (start.cmd in its folder does it by hand)")
+        if on_open:
+            on_open(error)
+
+    threading.Thread(target=work, daemon=False).start()
 
 
 # ---------------------------------------------------------------- the queue
@@ -423,12 +488,23 @@ def run_job(api, queue, msg_id, job, cfg, do_launch=True, inbox=INBOX):
     api.patch(f"/channels/{queue}/messages/{msg_id}", {"content": "claude-taken " + json.dumps(job)})
     try:
         thread_md, title = save_thread(api, job, cfg, inbox)
-        cmd = write_launcher(thread_md, job["skill"], title, cfg)
-        if do_launch:
-            launch(cmd)
-        done = dict(job, folder=os.path.relpath(os.path.dirname(thread_md), REPO).replace("\\", "/"))
-        api.patch(f"/channels/{queue}/messages/{msg_id}", {"content": "claude-done " + json.dumps(done)})
+        plan = write_launcher(thread_md, job["skill"], title, cfg)
+        info = dict(job, folder=os.path.relpath(os.path.dirname(thread_md), REPO).replace("\\", "/"), session=plan["session"])
+        path = f"/channels/{queue}/messages/{msg_id}"
+
+        def opened(error):
+            state = "claude-failed " + json.dumps(dict(info, error=error[:300])) if error else "claude-done " + json.dumps(info)
+            try:
+                api.patch(path, {"content": state})
+            except Exception as err:
+                log(f"couldn't mark job {job['thread']}: {err}")
+
         log(f"/{job['skill']} {title}: {thread_md}")
+        if do_launch:
+            api.patch(path, {"content": "claude-running " + json.dumps(info)})
+            launch(plan, opened)
+        else:
+            opened(None)
         return thread_md
     except Exception as err:
         api.patch(f"/channels/{queue}/messages/{msg_id}",
@@ -491,4 +567,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:  # Ctrl+C: a first turn already running still opens
+        log("stopped")
