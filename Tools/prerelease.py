@@ -306,12 +306,38 @@ def judge_migrate(ok, output):
     return ok, line.split(" lines written")[0] + " lines" if " lines written" in line else line
 
 
+UPGRADE_FILE = os.path.join(tempfile.gettempdir(), "cine-upgrade-check.txt")
+# (What an existing player gets changed: every one shown. Before 2026-11-23
+# the first 30 of ~200 lines were, mostly dropped settings, so a changed
+# default (planted: tooltipFadeTime 0.2 -> 2) never reached the review.)
+UPGRADE_SHOWN = ("FAIL", "  CHANGED", "  DEFAULT", "  TYPE", "  RELOAD", "  FALLBACK", "  NEW ON")
+UPGRADE_COUNTED = (("  DROPPED", "dropped"), ("  NEW ", "new"))
+
+
 def judge_upgrade(ok, output):
     lines = output.splitlines()
-    shown = [l.strip() for l in lines if l.startswith(("  CHANGED", "  NEW ON", "  NEW ", "  DROPPED", "  DEFAULT",
-                                                        "  TYPE", "  RELOAD", "  FALLBACK", "FAIL"))]
-    detail = last_line(output, "upgrade check:")
-    return ok, detail + "".join("\n      " + l[:220] for l in shown[:30])
+    try:
+        with open(UPGRADE_FILE, "w", encoding="utf-8") as f:
+            f.write(output)
+    except OSError:
+        pass
+    # (Each once, with how many of its runs, both clients and each kind of
+    # player, it came up in.)
+    seen = {}
+    for l in lines:
+        if l.startswith(UPGRADE_SHOWN):
+            seen[l.strip()] = seen.get(l.strip(), 0) + 1
+    shown = [k + ("   (x%d)" % n if n > 1 else "") for k, n in seen.items()]
+    counted = []
+    for prefix, word in UPGRADE_COUNTED:
+        unique = {l.strip() for l in lines if l.startswith(prefix) and not l.startswith(UPGRADE_SHOWN)}
+        if unique:
+            counted.append("%d %s" % (len(unique), word))
+    detail = last_line(output, "upgrade check:") + " (all of it: %s)" % UPGRADE_FILE
+    detail += "".join("\n      " + l[:220] for l in shown)
+    if counted:
+        detail += "\n      and " + ", ".join(counted) + " settings (in the file)"
+    return ok, detail
 
 
 def last_code_change():
@@ -361,6 +387,15 @@ def selftest():
         good = judge_test(ok, output)[0] == want
         failed += 0 if good else 1
         print("%s %s" % ("PASS" if good else "FAIL", name))
+    sample = ("  DROPPED [\"a\"] (was 1)\n" * 40 + "  CHANGED [\"x\"]: 1 -> 2\n  CHANGED [\"x\"]: 1 -> 2\n"
+              "  DEFAULT [\"tooltipFadeTime\"]: 0.2 -> 2 (existing players keep 0.2)\n  NEW     [\"n\"] = false\n"
+              "upgrade check: 44 things change for existing players\n")
+    _, shown = judge_upgrade(True, sample)
+    good = ("DEFAULT [\"tooltipFadeTime\"]" in shown and "CHANGED [\"x\"]: 1 -> 2   (x2)" in shown
+            and "DROPPED" not in shown and "1 dropped, 1 new" in shown)
+    failed += 0 if good else 1
+    print("%s judge: a changed default shown past 40 dropped lines; repeats once; dropped/new counted" % (
+        "PASS" if good else "FAIL"))
     found = {script for _, script, *_ in found_tests()}
     good = "Tools/offline/followhud.lua" in found and not any("matrix" in s for s in found)
     failed += 0 if good else 1
