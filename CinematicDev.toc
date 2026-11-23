@@ -284,6 +284,7 @@ Dev\PlateMatchTest.lua
 Dev\ExitRowTest.lua
 Dev\PvpCardTest.lua
 Dev\MinimapSquareTest.lua
+Dev\WindowSpotsTest.lua
 Dev\CardEventsTest.lua
 Dev\PerfTest.lua
 Dev\ResetPopupTest.lua

@@ -13,6 +13,9 @@
 -- own): in the middle it only covers your character, and to the side it
 -- leaves the world in view. A row to the side is centered top to bottom too.
 -- Wide rows sit to the right, near the top (WIDE_RIGHT, WIDE_TOP).
+-- centerPanelsMiddle: every row dead center instead, both ways (but a talking
+-- row with Quest Vision's Opposite clicked); one that would cover a window you
+-- dropped there goes beside it (BesideDropped).
 --
 -- dragPanels: drag a window to move it. It opens where it was last dropped
 -- from then on, saved in the profile (panelSpots, window name -> where; the
@@ -434,11 +437,88 @@ local function OpenPanels()
 	return open, row
 end
 
+-- The edges of the open windows that aren't in the row (dropped somewhere:
+-- Spot), in UIParent's units: { left, right, top, bottom } each.
+local function DroppedEdges(uiScale)
+	local edges = {}
+	for _, frame in ipairs(open) do
+		local inRow = false
+		for _, each in ipairs(row) do
+			inRow = inRow or each == frame
+		end
+		local left, right = Number(frame:GetLeft()), Number(frame:GetRight())
+		local top, bottom, scale = Number(frame:GetTop()), Number(frame:GetBottom()), Number(frame:GetEffectiveScale())
+		if not inRow and left and right and top and bottom and scale then
+			local toUI = scale / uiScale
+			edges[#edges + 1] = { left * toUI, right * toUI, top * toUI, bottom * toUI }
+		end
+	end
+	return edges
+end
+
+-- Dead center (centerPanelsMiddle) and a window you dropped there: the row
+-- would open on top of it. It goes beside the dropped windows it would cover
+-- instead (right of them if it fits, else left, else it stays put).
+local function BesideDropped(target, width, top, bottom, screenWidth, dropped)
+	local spanLeft, spanRight
+	for _, edge in ipairs(dropped or {}) do
+		if edge[1] < target + width and edge[2] > target and edge[4] < top and edge[3] > bottom then
+			spanLeft = spanLeft and math.min(spanLeft, edge[1]) or edge[1]
+			spanRight = spanRight and math.max(spanRight, edge[2]) or edge[2]
+		end
+	end
+	if not spanLeft then
+		return target
+	end
+	if spanRight + EDGE + width <= screenWidth - EDGE then
+		return spanRight + EDGE
+	elseif spanLeft - EDGE - width >= EDGE then
+		return spanLeft - EDGE - width
+	end
+	return target
+end
+
+-- How far to move a row (shift right, rise up), all in UIParent's units: r
+-- is the row's edges (left, right, top, bottom) and whether it has a talk
+-- window (talk); screen its width and height; dropped the edges of windows
+-- dropped elsewhere (DroppedEdges). keepClear, center, middle as CenterRow.
+-- Pure, for Tools/offline/panelspots.lua.
+function ns.PanelRowMove(r, screenWidth, screenHeight, keepClear, center, middle, dropped)
+	local rowLeft, rowRight, rowTop, rowBottom, talk = r.left, r.right, r.top, r.bottom, r.talk
+	middle = center and middle and not (talk and keepClear) and true or false
+	local side = talk or rowRight - rowLeft < NARROW
+	local target = not center and rowLeft or (middle and (screenWidth - (rowRight - rowLeft)) / 2)
+		or (talk and screenWidth * TALK_LEFT) or (side and screenWidth * NARROW_LEFT)
+		or screenWidth * (1 - WIDE_RIGHT) - (rowRight - rowLeft)
+	if talk and keepClear and (target + (rowRight - rowLeft) / 2 > screenWidth / 2) == (keepClear == "right") then
+		target = screenWidth - target - (rowRight - rowLeft)
+	end
+	-- To the side, centered top to bottom (a row taller than the screen keeps
+	-- its top on it).
+	local rise
+	if not center then
+		rise = 0
+	elseif side or middle then
+		rise = math.min((screenHeight + rowTop - rowBottom) / 2, screenHeight) - rowTop
+	else
+		-- (A row too tall for that keeps its bottom on the screen, and its top.)
+		local top = math.min(screenHeight - EDGE, math.max(screenHeight * (1 - WIDE_TOP), rowTop - rowBottom + EDGE))
+		rise = top - rowTop
+	end
+	if middle then
+		target = BesideDropped(target, rowRight - rowLeft, rowTop + rise, rowBottom + rise, screenWidth, dropped)
+	end
+	-- A row wider than the screen keeps its left edge on it.
+	return math.max(target - rowLeft, -rowLeft), rise
+end
+
 -- keepClear: Quest Vision's Opposite clicked (Custom dialogue frames off),
 -- the half of the screen the NPC's on ("left" or "right"): a talking row on
 -- it goes to the mirror of its spot on the other half. center: centerPanels
--- (else the row stays where the game put it, but for that).
-local function CenterRow(keepClear, center)
+-- (else the row stays where the game put it, but for that). middle:
+-- centerPanelsMiddle, every row dead center (a talking row with Opposite
+-- clicked still keeps clear of the NPC: that's what Opposite is for).
+local function CenterRow(keepClear, center, middle)
 	if #row == 0 then
 		return
 	end
@@ -469,26 +549,8 @@ local function CenterRow(keepClear, center)
 		rowTop = rowTop and math.max(rowTop, top) or top
 		rowBottom = rowBottom and math.min(rowBottom, bottom) or bottom
 	end
-	local side = talk or rowRight - rowLeft < NARROW
-	local target = not center and rowLeft or (talk and screenWidth * TALK_LEFT) or (side and screenWidth * NARROW_LEFT)
-		or screenWidth * (1 - WIDE_RIGHT) - (rowRight - rowLeft)
-	if talk and keepClear and (target + (rowRight - rowLeft) / 2 > screenWidth / 2) == (keepClear == "right") then
-		target = screenWidth - target - (rowRight - rowLeft)
-	end
-	-- A row wider than the screen keeps its left edge on it.
-	local shift = math.max(target - rowLeft, -rowLeft)
-	-- To the side, centered top to bottom (a row taller than the screen keeps
-	-- its top on it).
-	local rise
-	if not center then
-		rise = 0
-	elseif side then
-		rise = math.min((screenHeight + rowTop - rowBottom) / 2, screenHeight) - rowTop
-	else
-		-- (A row too tall for that keeps its bottom on the screen, and its top.)
-		local top = math.min(screenHeight - EDGE, math.max(screenHeight * (1 - WIDE_TOP), rowTop - rowBottom + EDGE))
-		rise = top - rowTop
-	end
+	local shift, rise = ns.PanelRowMove({ left = rowLeft, right = rowRight, top = rowTop, bottom = rowBottom,
+		talk = talk }, screenWidth, screenHeight, keepClear, center, middle, middle and DroppedEdges(uiScale))
 	if math.abs(shift) < 1 and math.abs(rise) < 1 then
 		return
 	end
@@ -618,7 +680,7 @@ local function Arrange()
 		end
 	end
 	if ns.Setting("centerPanels") or keepClear then
-		CenterRow(keepClear, ns.Setting("centerPanels"))
+		CenterRow(keepClear, ns.Setting("centerPanels"), ns.Setting("centerPanelsMiddle"))
 	end
 	-- (after the row: it's placed on its own)
 	if shop and shopFrame then
@@ -776,8 +838,8 @@ end
 -- it can be dragged; then what's under the mouse.
 function ns.PrintPanelsDebug()
 	local db = ns.db or {}
-	ns.Print(("windows: centering %s, dragging %s, screen %s x %s"):format(db.centerPanels and "on" or "off",
-		db.dragPanels and "on" or "off", tostring(Number(UIParent:GetWidth())), tostring(Number(UIParent:GetHeight()))))
+	ns.Print(("windows: centering %s (dead center %s), dragging %s, screen %s x %s"):format(
+		db.centerPanels and "on" or "off", db.centerPanelsMiddle and "on" or "off", db.dragPanels and "on" or "off", tostring(Number(UIParent:GetWidth())), tostring(Number(UIParent:GetHeight()))))
 	ns.Print(("talk windows (Quest Vision, custom frames %s): placed %s, keep clear %s, talking %s"):format(
 		db.questTalk and "on" or "off", tostring(ns.TalkWindowPlace and ns.TalkWindowPlace()),
 		tostring(ns.TalkWindowSide and ns.TalkWindowSide()), tostring(talking)))

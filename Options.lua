@@ -10045,6 +10045,31 @@ local function CreateQualityPanel()
 	end)
 
 	local stack = Stack(switch, "check")
+	-- (Grouped 2026-11-23: was one long list.)
+	stack:Header(content, L["Windows"])
+	-- (CenterPanels.lua.)
+	local centerPanels = stack:Add(Check(content, "centerPanels", L["Open windows clear of your character"],
+		L["Moves game windows away from the left edge so your character stays in view."]), "check")
+	centerPanels:HookScript("OnClick", Refresh) -- grey out / enable the option below
+	local middle = stack:Add(Check(content, "centerPanelsMiddle", L["Dead center instead"],
+		L["Opens them in the very middle of the screen."]), "check", 24)
+	GreyUnless(middle, function(db) return db.centerPanels end)
+	stack:Add(Check(content, "dragPanels", L["Drag windows to move them"],
+		L["Lets you drag the game's windows to move them."]), "check")
+	local putBack = ns.PanelButton(content)
+	putBack:SetSize(160, 22)
+	putBack:SetText(L["Put windows back"])
+	Tooltip(putBack, L["Forget where you dragged the windows, so each opens in its usual place again."]
+		.. " " .. L["Quest Vision's list of replies and its bubble too."])
+	putBack:SetScript("OnClick", function()
+		if ns.ForgetPanelSpots then
+			ns.ForgetPanelSpots()
+		end
+	end)
+	stack:Add(putBack, "label", 24)
+	stack:Add(Check(content, "reloadKeepWindows", L["Keep windows open across a reload"],
+		L["Reopens the windows you had open after a reload."]), "check")
+	stack:Header(content, L["Gear and talents"])
 	-- (DragEquip.lua.)
 	stack:Add(Check(content, "dragEquipCharacter", L["Open the character window when dragging gear out of your bags"],
 		L["Opens the character window when you drag gear out of your bags."]
@@ -10069,22 +10094,7 @@ local function CreateQualityPanel()
 				end
 			end), "check")
 	end
-	-- (CenterPanels.lua.)
-	stack:Add(Check(content, "centerPanels", L["Open windows in the middle of the screen"],
-		L["Moves game windows away from the left edge so your character stays in view."]), "check")
-	stack:Add(Check(content, "dragPanels", L["Drag windows to move them"],
-		L["Lets you drag the game's windows to move them."]), "check")
-	local putBack = ns.PanelButton(content)
-	putBack:SetSize(160, 22)
-	putBack:SetText(L["Put windows back"])
-	Tooltip(putBack, L["Forget where you dragged the windows, so each opens in its usual place again."]
-		.. " " .. L["Quest Vision's list of replies and its bubble too."])
-	putBack:SetScript("OnClick", function()
-		if ns.ForgetPanelSpots then
-			ns.ForgetPanelSpots()
-		end
-	end)
-	stack:Add(putBack, "label", 24)
+	stack:Header(content, L["Chat"])
 	-- (ChatCopy.lua.)
 	stack:Add(Check(content, "chatCopyButton", L["Copy chat button"],
 		L["Adds an icon to chat windows to copy their text."]), "check")
@@ -10094,13 +10104,7 @@ local function CreateQualityPanel()
 	local chatTime = stack:Add(Check(content, "chatHistoryTime", L["Show the time on those lines"],
 		L["Puts the time at the start of brought-back lines."]), "check", 24)
 	GreyUnless(chatTime, function(db) return db.chatHistory end)
-	-- (XpLeft.lua.)
-	stack:Add(Check(content, "xpLeft", L["Show XP left to level"],
-		L["Shows how much XP you still need for the next level."],
-		function(value)
-			KeyPut("xpLeft", value)
-			if ns.RefreshXpLeft then ns.RefreshXpLeft() end
-		end), "check")
+	stack:Header(content, L["Login and reload"])
 	-- (Camera.lua.)
 	local loginZoom = stack:Add(Check(content, "loginZoom", L["Reset the zoom on login and /reload"],
 		L["The camera zooms to the distance below when you log in or reload."]), "check")
@@ -10112,14 +10116,18 @@ local function CreateQualityPanel()
 	-- (Reload.lua.)
 	stack:Add(Check(content, "reloadButton", L["Reload button on the screen"],
 		L["A button at the top of the screen that reloads the UI in one click."]), "check")
-	stack:Add(Check(content, "reloadKeepWindows", L["Keep windows open across a reload"],
-		L["Reopens the windows you had open after a reload."]), "check")
 	-- (AddonListAll.lua.)
-	stack:Add(Check(content, "addonListAll", L["Default Addon list opening to All"],
+	stack:Add(Check(content, "addonListAll", L["Open the AddOns list on All"],
 		L["The game's AddOns list starts on All instead of just this character."]), "check")
+	stack:Header(content, L["Text on screen"])
+	-- (XpLeft.lua.)
+	stack:Add(Check(content, "xpLeft", L["Show XP left to level"],
+		L["Shows how much XP you still need for the next level."],
+		function(value)
+			KeyPut("xpLeft", value)
+			if ns.RefreshXpLeft then ns.RefreshXpLeft() end
+		end), "check")
 	-- (On the CineMode page until 2026-11-13.)
-	stack:Header(content, L["Combat text"])
-
 	local combatText = Check(content, "hideCombatText", L["Hide combat text out of combat"],
 		L["Hides floating damage and healing numbers in CineMode out of combat."])
 	stack:Add(combatText, "check")

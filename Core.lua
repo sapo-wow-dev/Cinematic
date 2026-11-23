@@ -386,7 +386,8 @@ local DEFAULTS = {
 	cooldownManagerOn = false, -- the profile turns the game's Cooldown Manager on if it's off (the CDM part; Profiles.lua)
 	prdOn = false,             -- ...and the personal resource display (the Personal Resource Centered layout)
 	prdOnFights = false,       -- ...the same for fights that show it (Cinema's frames)
-	centerPanels = false,     -- windows the game opens on the left open in the middle of the screen (CenterPanels.lua)
+	centerPanels = false,     -- windows the game opens on the left move off it, clear of your character (CenterPanels.lua)
+	centerPanelsMiddle = false, -- ...dead center instead (CenterPanels.lua)
 	dragPanels = true,         -- ...and drag them to move them; they open where last dropped (panelSpots, CenterPanels.lua)
 	chatCopyButton = ADDON_NAME == "CinematicDev", -- an icon on each chat window opens its lines to copy (ChatCopy.lua; off for players, on in the dev copy)
 	chatCopyColours = true,    -- ...its lines in their chat colours (the Colours tick in that window)
@@ -1657,7 +1658,7 @@ DEFAULTS.handleHealVision = true -- (read by ns.HealVisionHere; Quest Vision's s
 local PAGE_SWITCH = {}
 for page, keys in pairs({
 	handleQuality = { "dragEquipCharacter", "talentLink", "talentCalc",
-		"centerPanels", "dragPanels", "chatCopyButton", "chatHistory", "chatHistoryTime", "loginZoom",
+		"centerPanels", "centerPanelsMiddle", "dragPanels", "chatCopyButton", "chatHistory", "chatHistoryTime", "loginZoom",
 		"reloadButton", "reloadKeepWindows", "addonListAll", "xpLeft", "hideCombatText", "hideErrorsInCombat", "hideErrorsOutOfCombat" },
 	handleHunter = { "hunterRightClickShot", "hunterAmmoSort", "hunterQuiverFill", "petUnhappyShow" },
 	handleAddonSupport = { "questieMoveIcons", "eqolMoveIcons" },
