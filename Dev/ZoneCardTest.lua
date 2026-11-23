@@ -18,6 +18,12 @@
 --              game's zone lines, DaylightUI's zone title, our card), ONE or
 --              BOTH per change (2026-11-19: at the Lion's Pride Inn
 --              DaylightUI's zone title and ours showed at once)
+--   8 gap      (/cine debug zonecard 8) no walking: made-up zones shown as
+--              the game shows them. A second zone within "Not again within"
+--              while the first card's still up: no new card, the game's zone
+--              line stays hidden under ours (2026-11-23: a player at
+--              Darrowmere Lake saw both); the card gone, a third zone: the
+--              game's line shows (PASS/FAIL)
 -- The places in 3-6 are made up ("Cinematic Test Glade 1"...), so nothing of
 -- yours is counted as discovered. Into CinematicDB.zoneCardTestLog. Dev copy
 -- only.
@@ -163,7 +169,7 @@ ns.TestKit.Define({
 	key = "zoneCardTest",
 	title = "Zone card test",
 	about = "a place's name once: DaylightUI's Discovered line goes with our card (1-6 run themselves; 7 = walk)",
-	settings = { "cards", "cardDiscoverOn" },
+	settings = { "cards", "cardDiscoverOn", "storyZoneCard", "storyZoneGap", "storyZoneNotFlying" },
 	-- (What step 1 turned on, off again: DaylightUI as it was (off for this
 	-- character, or for all where only that turned it on), Visions left out.)
 	putBack = function(extra)
@@ -354,6 +360,69 @@ ns.TestKit.Define({
 					#who == 0 and "nothing drew" or table.concat(who, " + "), change.together and " at once" or ""))
 			end
 			if #changes == 0 then r:Skip("no zone change in the walk") end
+		end },
+		{ key = "gap", title = "a zone within the gap, the last card still up",
+		proven = "zonecard run 1 2026-11-23 (Forever): 6 PASS, the game's line hidden under the card, shown once it went",
+		run = function(r)
+			-- (Only asked for by number, /cine debug zonecard 8: no DaylightUI,
+			-- no walking. The game's zone frame shown on made-up names, as its
+			-- own ZONE_CHANGED_NEW_AREA shows it.)
+			if ns.ModuleLoaded and not ns.ModuleLoaded("visions") then
+				return r:Skip("Visions aren't loaded (Load Visions off): no Zone card")
+			end
+			r:Set("cards", true)
+			r:Set("storyZoneCard", true)
+			r:Set("cardDiscoverOn", false) -- (made-up places: no Discovered wait)
+			r:Set("storyZoneGap", 10)
+			r:Set("storyZoneNotFlying", false)
+			local zoneLine = _G.ZoneTextString
+			if not (zoneLine and _G.ZoneTextFrame) then return r:Skip("no ZoneTextFrame on this client") end
+			local function ShowZone(name)
+				zoneLine:SetText(name)
+				if _G.SubZoneTextString then _G.SubZoneTextString:SetText("") end
+				if _G.PVPInfoTextString then _G.PVPInfoTextString:SetText("") end
+				if FadingFrame_Show then FadingFrame_Show(_G.ZoneTextFrame) else _G.ZoneTextFrame:Show() end
+				r:Sleep(0.5)
+				local _, line = Look()
+				r:Log(("shown \"%s\": %s"):format(name, line))
+			end
+			local function Hidden() return Plain(zoneLine:GetAlpha()) and zoneLine:GetAlpha() <= 0.05 end
+			local current = ns.Cards.Current()
+			if current then ns.Cards.Cut(current.id) r:Sleep(1.5) end
+			local allowed, why = ns.CardAllowed("zone")
+			r:Log(("Zone card allowed now: %s%s"):format(tostring(allowed), why and (" (" .. tostring(why) .. ")") or ""))
+			if not allowed then return r:Skip("no Zone card can play here and now: " .. tostring(why)) end
+			-- 1: a new zone: our card, the game's line hidden.
+			ShowZone("Cinematic Test Vale")
+			local first = ns.Cards.Current()
+			r:Verdict(first and first.id == "zone" and first.name == "Cinematic Test Vale",
+				("our Zone card for it: %s \"%s\""):format(tostring(first and first.id), tostring(first and first.name)))
+			r:Verdict(Hidden(), "the game's zone line hidden under it: alpha " .. Num(zoneLine:GetAlpha()))
+			-- 2: another zone 1.5 s on, within the gap, the first card still up.
+			r:Sleep(1)
+			ShowZone("Cinematic Test Marsh")
+			local still = ns.Cards.Current()
+			r:Verdict(first ~= nil and still == first, ("no new card, the first still up: %s \"%s\""):format(
+				tostring(still and still.id), tostring(still and still.name)))
+			r:Verdict(Hidden(), "the game's \"Cinematic Test Marsh\" stays hidden under our card (the fix): alpha "
+				.. Num(zoneLine:GetAlpha()))
+			r:Shot("one name: our card only", { behind = { _G.CinematicCard, _G.ZoneTextFrame } })
+			-- 3: the card cut, a third zone still within the gap: no card, so the
+			-- game's own line shows (the audit's rule, kept).
+			ns.Cards.Cut("zone")
+			for _ = 1, 25 do -- (its quick fade out: at most 5 s)
+				if not ns.Cards.Current() then break end
+				r:Sleep(0.2)
+			end
+			r:Log("first card gone: " .. tostring(not ns.Cards.Current()))
+			ShowZone("Cinematic Test Fen")
+			local none = ns.Cards.Current()
+			r:Verdict(first ~= nil and not none, "no card (after one played): " .. tostring(none and none.id))
+			r:Verdict(not Hidden(), "with no card up the game's line shows: alpha " .. Num(zoneLine:GetAlpha()))
+			r:Shot("no card: the game's line", { behind = _G.ZoneTextFrame })
+			-- (The game's lines back to where you are.)
+			zoneLine:SetText(GetZoneText and GetZoneText() or "")
+			if _G.SubZoneTextString then _G.SubZoneTextString:SetText(GetSubZoneText and GetSubZoneText() or "") end
 		end },
 	},
 })
