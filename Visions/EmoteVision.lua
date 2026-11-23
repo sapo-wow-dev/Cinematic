@@ -3607,8 +3607,8 @@ do
 		local who, why = MenuPlayer(context)
 		last = tag .. ": " .. (who and ("added for " .. tostring(who.unit)) or tostring(why))
 		if not who then return end
-		root:CreateDivider()
-		root:CreateTitle(L["Emote"])
+		ns.MenuDivider(root)
+		ns.MenuTitle(root, L["Emote"])
 		local quick = {}
 		for _, token in ipairs(ParseEmotes(ns.EmoteOpt("emoteVisionMenuEmotes"))) do
 			quick[token] = true

@@ -99,6 +99,7 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `loosesurvey.lua`: `/cine debug loose` (Dev/LoosePartsSurvey.lua, step A of Tools/loose-parts-plan.md) on the
   dev copy: finds exactly the parts under faded frames that ignore their alpha (regions, children, deeper ones),
   not frames with a row of their own or our own detached parts, counts secret answers apart, changes no alpha.
+- `menurows.lua`: menu title/divider rows our code adds (ns.MenuTitle / ns.MenuDivider) aren't blocked in a fight on Forever (gamepad mode on or off), and stay the game's own rows on other clients
 - `quietblock.lua`: Settings opened in a fight with Forever's gamepad UI: its blocked lines are known by their stack
   (our pick + SetSecureValue) and kept out of the dev error box, a pick from any caller marks the fight, and the
   game's own Escape > Options still shows (Tools/errors/known.lua `settings-pick-in-fight-gamepad`).

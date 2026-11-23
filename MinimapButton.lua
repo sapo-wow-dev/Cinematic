@@ -209,7 +209,7 @@ local function ShowMenu(owner)
 		return
 	end
 	local menu = ns.ContextMenu(owner, function(_, root)
-		root:CreateTitle("Cinematic")
+		ns.MenuTitle(root, "Cinematic")
 		-- (Ticked while on, not while a fight has you out of it, Exit CineMode:
 		-- In combat; a click then just says so, rather than switching it off.)
 		root:CreateCheckbox(L["CineMode"],

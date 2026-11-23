@@ -551,6 +551,47 @@ function ns.ScrollMenu(description)
 	for _, child in ipairs(list) do ns.ScrollMenu(child) end
 end
 
+-- A menu title or divider row. Use these, never root:CreateTitle /
+-- CreateDivider / CreateSpacer (errors/known.lua menu-row-smartnav-fight).
+-- On Forever the game's rows call (whether or not gamepad mode is on: the
+-- game's own gamepad code always loads there, and its menus always call it)
+-- SmartNavigation_MarkFrameIgnored -> SetSecureValue, blocked in a fight
+-- when our code made the row (one "Interface action failed" line each, e.g.
+-- Emote Vision's rows on the target menu). Here the same row is built by
+-- our own initializer, marked only out of a fight. Other clients (no such
+-- call): the game's own rows.
+local function QuietRow(root, attach)
+	local row = root:CreateFrame()
+	row:AddInitializer(function(frame)
+		attach(frame)
+		local mark = _G.SmartNavigation_MarkFrameIgnored
+		if mark and not InCombatLockdown() then mark(frame) end
+	end)
+	return row
+end
+function ns.MenuTitle(root, text, color)
+	if not root then return end
+	if not (_G.SmartNavigation_MarkFrameIgnored and root.CreateFrame) then
+		return root.CreateTitle and root:CreateTitle(text, color)
+	end
+	local useColor = color or _G.NORMAL_FONT_COLOR
+	return QuietRow(root, function(frame)
+		local fontString = _G.MenuVariants.CreateFontString(frame)
+		frame.fontString = fontString
+		fontString:SetTextToFit(text)
+		if useColor then fontString:SetTextColor(useColor:GetRGBA()) end
+	end)
+end
+function ns.MenuDivider(root)
+	if not root then return end
+	if not (_G.SmartNavigation_MarkFrameIgnored and root.CreateFrame) then
+		return root.CreateDivider and root:CreateDivider()
+	end
+	return QuietRow(root, function(frame)
+		frame.divider = _G.MenuVariants.CreateDivider(frame)
+	end)
+end
+
 -- A right-click menu (MenuUtil.CreateContextMenu's), its long lists
 -- scrolling.
 function ns.ContextMenu(owner, generator)

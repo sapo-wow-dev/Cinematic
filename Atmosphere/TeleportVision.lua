@@ -537,7 +537,7 @@ function ns.CreateTeleportVisionPanel(kit)
 				kit.Refresh()
 			end
 			root:CreateRadio(AutoText(), function() return Picked("spec") end, function() Pick("spec") end)
-			root:CreateDivider()
+			ns.MenuDivider(root)
 			for _, class in ipairs(ns.LOW_HEALTH_MENU or {}) do
 				local menu = root:CreateButton(ClassName(class))
 				for _, spec in ipairs(class[3]) do
@@ -548,7 +548,7 @@ function ns.CreateTeleportVisionPanel(kit)
 					end
 				end
 			end
-			root:CreateDivider()
+			ns.MenuDivider(root)
 			root:CreateRadio(L["Your own color"], function() return Picked("custom") end, function() Pick("custom") end)
 		end)
 	end

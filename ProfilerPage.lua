@@ -845,7 +845,7 @@ function ns.CreateProfilerPanel(kit)
 				wipe(addonFilter)
 				DrawAddons()
 			end)
-			root:CreateDivider()
+			ns.MenuDivider(root)
 			local names = {}
 			for _, addon in ipairs(ReadAddons()) do
 				names[#names + 1] = addon.name

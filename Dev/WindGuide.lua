@@ -653,7 +653,7 @@ function ns.CreateWindGuidePanel(kit)
 			for _, key in ipairs(ns.WIND_GUIDE_PLAIN) do
 				root:CreateRadio(StyleName(key), function() return Picked(key) end, function() Pick(key) end)
 			end
-			root:CreateDivider()
+			ns.MenuDivider(root)
 			for _, class in ipairs(ns.LOW_HEALTH_MENU or {}) do
 				local menu = root:CreateButton(ClassName(class))
 				for _, spec in ipairs(class[3]) do

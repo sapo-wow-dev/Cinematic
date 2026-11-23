@@ -429,7 +429,7 @@ function ns.CameraManager(kit, canvas, content, title, intro, switch, helper)
 		if not (MenuUtil and MenuUtil.CreateContextMenu) then return end
 		local mine = ns.MyCameraScript(script.id) and true or false
 		ns.ContextMenu(owner, function(_, root)
-			root:CreateTitle(script.name)
+			ns.MenuTitle(root, script.name)
 			root:CreateButton(L["Open"], function() Pick(2, script.id) end)
 			root:CreateButton(L["Copy"], function() CopyCamera(script) end)
 			if mine then
@@ -440,7 +440,7 @@ function ns.CameraManager(kit, canvas, content, title, intro, switch, helper)
 					StaticPopup_Show("CINEMATIC_CAMERA_DESC", nil, nil, script.id)
 				end)
 				root:CreateButton(L["Change icon"], function() picker:Open(owner, script.id, IconOf(script)) end)
-				root:CreateDivider()
+				ns.MenuDivider(root)
 				root:CreateButton("|cffff4040" .. L["Delete"] .. "|r", function()
 					StaticPopup_Show("CINEMATIC_CAMERA_DELETE", script.name, nil, script.id)
 				end)

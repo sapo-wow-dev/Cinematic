@@ -2,6 +2,36 @@
 -- our code that keeps it from coming back. Format and workflow: README.md.
 -- Check after editing: python -I Tools/errors/errors.py selftest
 return {
+  -- Menus -----------------------------------------------------------------
+  {
+    id = "menu-row-smartnav-fight",
+    status = "fixed",
+    title = "A menu opened in a fight: one blocked line per title/divider row our code added (Forever, gamepad mode on or off)",
+    match = {
+      all = { "SmartNavigation_MarkFrameIgnored", "SetSecureValue" },
+      any = { "MenuTemplates.lua" },
+    },
+    why = {
+      call = "SetAttribute(\"setkeyvalue\") from SmartNavigation_MarkFrameIgnored -> SecureHelper:SetSecureValue; its validate (issecure() or no combat restriction) fails, so DisplayInterfaceActionBlockedMessage",
+      caller = "Emote Vision's Menu.ModifyMenu hook on MENU_UNIT_TARGET (AddSection: root:CreateDivider + root:CreateTitle(\"Emote\")); x2 = the divider + the title",
+      path = "right-clicking the target frame in a fight opens the game's unit menu; our hook adds the Emote section; the game runs each row's initializer, and the title/divider initializers we created run under our taint",
+      rule = "Forever's Blizzard_Menu (MenuTemplates CreateTitle/CreateDivider/CreateSpacer) always marks those rows, gamepad mode on or off (Blizzard_GamepadSmartNavigation always loads; most other game gamepad calls are behind InputUtil.IsGamepadUIEnabled(), these are not), with SmartNavigation_MarkFrameIgnored; from insecure code that goes through SetAttribute, refused in combat. Buttons only read SmartNavigation, so they're fine",
+      pattern = "any root:CreateTitle / CreateDivider / CreateSpacer from our code (27 places, our own dropdowns too) on a menu that can open in a fight",
+    },
+    dont = "Don't call root:CreateTitle / CreateDivider / CreateSpacer: use ns.MenuTitle(root, text) / ns.MenuDivider(root) (Skin.lua), which build the same row with our own initializer and mark it only out of a fight.",
+    check = { pattern = [[:Create(Title|Divider|Spacer)\(]], allow = { "Skin.lua" } },
+    fix = "2026-11-23: ns.MenuTitle / ns.MenuDivider (Skin.lua); every call site moved. With SmartNavigation_MarkFrameIgnored (Forever) the row is root:CreateFrame() + our initializer (MenuVariants font string / divider, mark skipped in a fight); else the game's own row (retail unchanged). Tools/offline/menurows.lua",
+    engine = { "forever.menu.title-divider-smartnav-combat" },
+    seen = { "2026-11-23" },
+    example = [[blocked (no event): Interface action failed line, (in combat)
+[Blizzard_GamepadSmartNavigation/SecureHelper.lua]:156: in function 'SetSecureValue'
+[Blizzard_GamepadSmartNavigation/Utility.lua]:50: in function 'SmartNavigation_MarkFrameIgnored'
+[Blizzard_Menu/MenuTemplates.lua]:299: in function 'initializer'
+[Blizzard_Menu/Menu.lua]:1034: in function <Blizzard_Menu/Menu.lua:1031>
+[Blizzard_UnitPopupShared/UnitPopupShared.lua]:109: in function <.../AddOns/Blizzard_UnitPopupShared/UnitPopupShared.lua:22>
+[Blizzard_UnitFrame/Mainline/TargetFrame.lua]:674: in function <...e/AddOns/Blizzard_UnitFrame/Mainline/TargetFrame.lua:624>]],
+    source = "pasted 2026-11-23 (right-click target frame in a fight, Forever)",
+  },
   -- Settings window -------------------------------------------------------
   {
     id = "settings-pick-in-fight-gamepad",

@@ -878,12 +878,12 @@ function ns.CreateTintStylePanel(kit)
 			root:CreateRadio(L["Where you are"], function() return editing == nil end, function() Edit(nil) end)
 			local changed = ChangedPlaces()
 			if #changed > 0 then
-				if root.CreateTitle then root:CreateTitle(L["Places you've changed"]) end
+				ns.MenuTitle(root, L["Places you've changed"])
 				for _, name in ipairs(changed) do
 					root:CreateRadio(name, function() return editing == name end, function() Edit(name) end)
 				end
 			end
-			if root.CreateTitle then root:CreateTitle(L["All zones"]) end
+			ns.MenuTitle(root, L["All zones"])
 			for _, zone in ipairs(ns.GetMoodZones()) do
 				root:CreateRadio(zone.name, function() return editing == zone.name end,
 					function() Edit(zone.name) end)

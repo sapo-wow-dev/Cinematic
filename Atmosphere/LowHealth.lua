@@ -2745,7 +2745,7 @@ function ns.CreateVitalsStylePanel(kit)
 		end
 		themePicker:SetupMenu(function(_, root)
 			root:CreateRadio(AutoText(), function() return Picked("auto") end, function() PickTheme("auto") end)
-			root:CreateDivider()
+			ns.MenuDivider(root)
 			for _, class in ipairs(ns.LOW_HEALTH_MENU) do
 				local menu = root:CreateButton(ThemeClassName(class))
 				for _, spec in ipairs(class[3]) do
@@ -2760,7 +2760,7 @@ function ns.CreateVitalsStylePanel(kit)
 				more:CreateRadio(ThemeName(key), function() return Picked(key) end, function() PickTheme(key) end)
 			end
 			-- Theirs, then a new one from the theme shown.
-			root:CreateDivider()
+			ns.MenuDivider(root)
 			if #ns.LOW_HEALTH_MY_THEMES > 0 then
 				local menu = root:CreateButton(L["Your themes"])
 				for _, info in ipairs(ns.LOW_HEALTH_MY_THEMES) do
@@ -2907,7 +2907,7 @@ function ns.CreateVitalsStylePanel(kit)
 			local choices = ns.VitalsSoundChoices()
 			Radio(root, choices[1].text, "auto")
 			Radio(root, choices[2].text, "off")
-			root:CreateDivider()
+			ns.MenuDivider(root)
 			for _, class in ipairs(ns.LOW_HEALTH_MENU) do
 				local menu = root:CreateButton(ThemeClassName(class))
 				Radio(menu, L[class.soundName], class.sound)

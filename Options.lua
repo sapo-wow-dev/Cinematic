@@ -13754,7 +13754,7 @@ do
 					dropdown:SetupMenu(function(_, root)
 						if ticks then
 							for _, item in ipairs(ticks.Items()) do
-								if item.divider then root:CreateDivider() end
+								if item.divider then ns.MenuDivider(root) end
 								root:CreateCheckbox(item.text, function() return ticks.On(item.value) end, function()
 									if ticks.Toggle(item.value) then Refresh() end
 									return MenuResponse and MenuResponse.Refresh
@@ -15515,7 +15515,7 @@ local function CreateMinimapPanel()
 				SetParts({})
 				return MenuResponse and MenuResponse.Refresh
 			end)
-			if root.CreateDivider then root:CreateDivider() end
+			ns.MenuDivider(root)
 			for _, part in ipairs(PartsHere()) do
 				root:CreateCheckbox(part[2], function() return PartShown(part[1]) end, function()
 					TogglePart(part[1])
@@ -21007,7 +21007,7 @@ local function CreateProfilesPanel()
 		local name = cell.name
 		local own = not ns.IsBuiltinProfile(name)
 		ns.ContextMenu(cell, function(_, root)
-			root:CreateTitle(ns.ProfileLabel(name))
+			ns.MenuTitle(root, ns.ProfileLabel(name))
 			if name ~= active then
 				root:CreateButton(L["Switch to it"], function() cell:Click("LeftButton") end)
 			end
@@ -21034,7 +21034,7 @@ local function CreateProfilesPanel()
 			root:CreateButton(L["Save"], function() SaveResetPoint(name) end)
 			root:CreateButton(L["Backups"], function() ns.ShowBackups(name) end)
 			if own then
-				root:CreateDivider()
+				ns.MenuDivider(root)
 				root:CreateButton("|cffff4040" .. L["Delete"] .. "|r", function()
 					StaticPopup_Show("CINEMATIC_PROFILE_DELETE", name, nil, name)
 				end)
@@ -21555,7 +21555,7 @@ local function CreateMouseoverPanel()
 					SetRowOff(menu.index, menu.key, nil)
 					return MenuResponse and MenuResponse.Refresh
 				end)
-				if root.CreateDivider then root:CreateDivider() end
+				ns.MenuDivider(root)
 				for _, part in ipairs(RowParts(menu.key) or {}) do
 					root:CreateCheckbox(part[2], function() return not PartOff(menu.index, menu.key, part[1]) end, function()
 						TogglePart(menu.index, menu.key, part[1])

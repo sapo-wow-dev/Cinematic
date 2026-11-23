@@ -398,7 +398,7 @@ function ns.MakePlateStateDropdown(parent, width, onToggle)
 		for _, info in ipairs(STATE_PILLS) do
 			if info[4] ~= group then
 				group = info[4]
-				if root.CreateTitle then root:CreateTitle(L[group]) end
+				ns.MenuTitle(root, L[group])
 			end
 			local box = root:CreateCheckbox(L[info[2]], function()
 				return statesNow[info[1]] or (info[1] == "casting" and statesNow.locked) or false

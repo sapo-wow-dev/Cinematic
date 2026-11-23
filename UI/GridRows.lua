@@ -250,7 +250,7 @@ function ns.TickMenu(owner, entries, changed, plain)
 					if text then text:SetText(AllOn() and L["Clear"] or L["All"]) end
 				end)
 			end
-			root:CreateDivider()
+			ns.MenuDivider(root)
 		end
 		for _, entry in ipairs(entries) do
 			local box = root:CreateCheckbox(entry[1], entry[2], function()
@@ -555,11 +555,11 @@ local function BuildEditor()
 		local follow = target and target.follow
 		if not follow then return end
 		ns.ContextMenu(self, function(_, root)
-			root:CreateTitle(L["Follow another row"])
+			ns.MenuTitle(root, L["Follow another row"])
 			root:CreateRadio(L["None: its own settings"], function() return not follow.leader() end, function()
 				follow.set(nil)
 			end)
-			root:CreateDivider()
+			ns.MenuDivider(root)
 			for _, choice in ipairs(follow.choices()) do
 				local key = choice[1]
 				if key ~= follow.key then

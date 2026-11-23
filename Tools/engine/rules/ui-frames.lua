@@ -1438,4 +1438,18 @@ return {
     proof = "/cine debug cdmgrid step missingfight run 3 (Forever 71037)",
     source = "Tools/tests/cdm-missing-buff.md run 3",
   },
+  {
+    id = "forever.menu.title-divider-smartnav-combat",
+    area = "menus",
+    clients = { "forever" },
+    api = { "MenuTemplates.CreateTitle", "MenuTemplates.CreateDivider", "MenuTemplates.CreateSpacer", "SmartNavigation_MarkFrameIgnored", "SetSecureValue", "Menu.ModifyMenu" },
+    when = "a menu with title/divider/spacer rows made by addon code opens in combat (also the game's unit menu with a Menu.ModifyMenu row of ours)",
+    rule = "Forever's Blizzard_Menu title, divider and spacer initializers always call SmartNavigation_MarkFrameIgnored (no InputUtil.IsGamepadUIEnabled() check; the gamepad code always loads), so gamepad mode off doesn't help. It goes to SecureHelper:SetSecureValue. Run from addon code (a row we created) that goes through SetAttribute(\"setkeyvalue\"), whose validate is issecure() or no combat restriction: refused in combat, one \"Interface action failed\" line (no event) per row. Button rows only read SmartNavigation:GetCurrentButton. Retail's Blizzard_Menu has no SmartNavigation calls. A row of our own (root:CreateFrame + AddInitializer with MenuVariants.CreateFontString / CreateDivider) without the mark is not blocked.",
+    works = { "root:CreateFrame() + our initializer, mark only out of combat (ns.MenuTitle / ns.MenuDivider)" },
+    fails = { "root:CreateTitle / CreateDivider / CreateSpacer from addon code, menu opened in combat" },
+    status = "inferred",
+    tested = "2026-11-23",
+    proof = "pasted blocked line (x2: Emote Vision's divider + title on the target menu) + Forever source MenuTemplates.lua:299/562/571, SecureHelper.lua:47-77; Tools/offline/menurows.lua",
+    source = "Tools/errors/known.lua menu-row-smartnav-fight",
+  },
 }

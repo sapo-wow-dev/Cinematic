@@ -2354,7 +2354,7 @@ function ns.MakeThemePicker(kit, parent, width, changed)
 		local using = now ~= nil and now.key == theme.key
 		local edited = using and ns.StyleThemeEdited()
 		ns.ContextMenu(card, function(_, root)
-			root:CreateTitle(NameOf(theme))
+			ns.MenuTitle(root, NameOf(theme))
 			if not using then root:CreateButton(L["Use"], function() Pick(theme.key) end) end
 			root:CreateButton(L["Copy to yours"], function() New(theme.key, false) end)
 			if edited then
@@ -2376,7 +2376,7 @@ function ns.MakeThemePicker(kit, parent, width, changed)
 			root:CreateButton(L["Share"], function() Share(theme) end)
 			if theme.mine then
 				root:CreateButton(L["Backups"], function() Backups(theme) end)
-				root:CreateDivider()
+				ns.MenuDivider(root)
 				root:CreateButton("|cffff4040" .. L["Delete"] .. "|r", function() Delete(theme) end)
 			end
 		end)

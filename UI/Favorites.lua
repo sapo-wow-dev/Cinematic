@@ -531,9 +531,9 @@ function ns.CreateFavoritesPage(kit)
 			end
 			local place = self.place
 			self.menu = ns.ContextMenu(self, function(_, root)
-				root:CreateTitle(ns.FavoriteName(place))
+				ns.MenuTitle(root, ns.FavoriteName(place))
 				for _, item in ipairs(ns.FavoriteMenuItems(place)) do -- (Move left/right where it can)
-					if item.red then root:CreateDivider() end
+					if item.red then ns.MenuDivider(root) end
 					local run, owner = item[2], self
 					root:CreateButton(item.red and ("|cffff4040" .. item[1] .. "|r") or item[1], function() run(owner) end)
 				end
