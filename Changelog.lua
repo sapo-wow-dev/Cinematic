@@ -11,6 +11,10 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-23", page = "Cooldown Manager Style", client = "forever", title = "Shield drain ring",
+		text = "Tracked buffs that absorb damage, like Power Word: Shield, can show a ring that drains as the shield " ..
+			"takes hits, with the amount left in the middle. Turn it on per buff in the Cooldown Manager's Look, and " ..
+			"pick its style and color on the new Cooldown Manager page in Style." },
 	{ date = "2026-11-23", page = "Vitals Vision", title = "Low mana in Vitals Vision",
 		text = "As your mana runs dry, the screen drains to a cold blue-gray and dark edges close in. " ..
 			"Right-click the new Mana tab on Vitals Vision to turn it on." },

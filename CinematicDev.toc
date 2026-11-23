@@ -77,6 +77,7 @@ Support\ShamanPower.lua
 Frames.lua
 UI\QuestStandIn.lua
 UI\CooldownStacks.lua
+UI\CooldownRing.lua
 UI\CooldownMissing.lua
 UI\CooldownRules.lua
 UI\CooldownGrid.lua
@@ -181,6 +182,7 @@ Style\BubbleStyle.lua
 Style\TooltipStyle.lua
 Style\ActionBarStyle.lua
 Style\MinimapStyle.lua
+Style\CdmStyle.lua
 Style\QuestTrackerStyle.lua
 Style\SwingTimerStyle.lua
 Style\XpBarStyle.lua
@@ -280,6 +282,9 @@ Dev\DetachedFadeTest.lua
 Dev\XpRelogTest.lua
 Dev\ListFoldTest.lua
 Dev\KitCheckTest.lua
+Dev\ShieldProbeTest.lua
+Dev\SpellScanTest.lua
+Dev\CdmRingTest.lua
 Dev\ReachFightTest.lua
 Dev\PrdKillTest.lua
 Dev\PlateMatchTest.lua

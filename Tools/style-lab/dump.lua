@@ -122,6 +122,7 @@ local PAGES = {
 	{ id = "page-prd", name = "Interface: Personal Resources page", group = "Menu", page = "Style > Interface > Personal Resource Style", pageName = "Personal Style" },
 	{ id = "page-bubble", name = "Interface: Chat Bubbles page", group = "Menu", page = "Style > Interface > Chat Bubble Style", pageName = "Bubble Style" },
 	{ id = "page-action", name = "Interface: Action Bars page", group = "Menu", page = "Style > Interface > Action Bar Style", pageName = "Action Style" },
+	{ id = "page-cdm", name = "Interface: Cooldown Manager page", group = "Menu", page = "Style > Interface > Cooldown Manager Style", pageName = "Cooldown Manager Style" },
 	{ id = "page-combattext", name = "Interface: Combat Text page", group = "Menu", page = "Style > Interface > Combat Text Style", pageName = "Combat Text Style" },
 	{ id = "page-cast", name = "Style: Cast Bars page", group = "Menu", page = "Style > Interface > Cast Bar Style", pageName = "Cast Bar Style" },
 	{ id = "page-names", name = "Style: Name Style page", group = "Menu", page = "Style > Interface > Name Style", pageName = "Name Style" },

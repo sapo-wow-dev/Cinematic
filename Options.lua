@@ -3172,6 +3172,9 @@ do
 				sub = "Combat" },
 			{ "Action Style", "Interface\\Icons\\Ability_DualWield", label = "Action Bars", section = "Interface",
 				sub = "Combat" },
+			-- (The drain ring's look, 2026-11-23: Style/CdmStyle.lua.)
+			{ "Cooldown Manager Style", "Interface\\Icons\\Spell_Holy_PowerWordShield", label = "Cooldown Manager",
+				section = "Interface", sub = "Combat" },
 			-- (Combat Text in Combat, the fight's numbers, 2026-11-19, user.)
 			{ "Combat Text Style", "Interface\\Icons\\Ability_Warrior_Riposte", label = "Combat Text",
 				section = "Interface", sub = "Combat" },
@@ -22152,6 +22155,10 @@ ns.OnLanguage(function()
 	if ns.CreateActionBarStylePanel then -- (ActionBarStyle.lua)
 		ns.CreateActionBarStylePanel(ns.lowHealthKit)
 		Lap("CreateActionBarStylePanel")
+	end
+	if ns.CreateCdmStylePanel then -- (CdmStyle.lua)
+		ns.CreateCdmStylePanel(ns.lowHealthKit)
+		Lap("CreateCdmStylePanel")
 	end
 	if ns.CreateMinimapStylePanel then -- (MinimapStyle.lua)
 		ns.CreateMinimapStylePanel(ns.lowHealthKit)

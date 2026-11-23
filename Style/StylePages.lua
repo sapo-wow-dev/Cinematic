@@ -580,6 +580,7 @@ local SHOW_IN_TABS = {
 		-- title before: CDM, its spells' icons, and Settings, the rest.)
 		{ "CDM", "Cooldown Manager", "Each bar's and spell's icons: when they show, numbers, keybinds and more." },
 		{ "Settings", "Cooldown Settings", "Smart set, and how icons flash when a cooldown ends." },
+		{ "Cooldown Manager Style", "Cooldown Manager Style", "How the drain ring on your tracked buffs looks." }, -- (CdmStyle.lua)
 	},
 	swing = {
 		{ "Show", "HUD:swingtimer", "CineMode hides your swing timer: pick when it shows." },

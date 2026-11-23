@@ -329,6 +329,7 @@ read_globals = {
 	"AnchorUtil",
 	"UnitHealthMissing",
 	"UnitHealthPercent", "UnitPowerPercent",
+	"UnitGetTotalAbsorbs", "UnitGetDetailedHealPrediction", "CreateUnitHealPredictionCalculator",
 	"UnitGroupRolesAssigned",
 	"GetSpecialization",
 	"GetSpecializationRole",

@@ -82,6 +82,7 @@ Support\ShamanPower.lua
 Frames.lua
 UI\QuestStandIn.lua
 UI\CooldownStacks.lua
+UI\CooldownRing.lua
 UI\CooldownMissing.lua
 UI\CooldownRules.lua
 UI\CooldownGrid.lua
@@ -180,6 +181,7 @@ Style\BubbleStyle.lua
 Style\TooltipStyle.lua
 Style\ActionBarStyle.lua
 Style\MinimapStyle.lua
+Style\CdmStyle.lua
 Style\QuestTrackerStyle.lua
 Style\SwingTimerStyle.lua
 Style\XpBarStyle.lua

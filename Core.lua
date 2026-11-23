@@ -1692,7 +1692,7 @@ for page, keys in pairs({
 	visualEffects = { "letterboxPage", "tintPage", "weatherPage", "graphicsPlus", "musicInCinematic" }, -- (the Atmosphere hub's pages' switches)
 	-- Style > General's Enable Style: the Style hub's pages' switches.
 	styleGeneral = { "ufStyle", "rfStyle", "abStyle", "prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle",
-		"plateCastStyle", "bubblesStyle", "irStyle", "minimapStyle", "combatTextStyle" },
+		"plateCastStyle", "bubblesStyle", "irStyle", "minimapStyle", "combatTextStyle", "cdmStyle" },
 }) do
 	for _, key in ipairs(keys) do PAGE_SWITCH[key] = page end
 end

@@ -10062,6 +10062,10 @@ do
 			return db.cooldownKeybinds and true or false
 		elseif what == "notBuff" then
 			return db.cooldownSpellNotBuff and true or false
+		elseif what == "ring" then
+			return "off" -- (UI/CooldownRing.lua: set per row, none to start)
+		elseif what == "ringAmount" then
+			return true -- (the amount in the ring's middle, shown to start)
 		end
 	end
 	ns.CooldownRowBase = Base

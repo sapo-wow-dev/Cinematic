@@ -185,9 +185,17 @@ local LOOK = {
 		Text = function(value) return value == "after" and L["After combat"] or value == "on" and L["On"] or L["Off"] end },
 	stacks = { label = L["Stacks and time left"], tip = L["Shows stacks and time left on tracked buff icons."],
 		values = { true, false }, Text = ShowHide, bar = true },
+	-- (UI/CooldownRing.lua, 2026-11-23: any row, not only shields.)
+	-- (On or off; its look on Style > Cooldown Manager, Style/CdmStyle.lua. A
+	-- row saved with a style from before reads On.)
+	ring = { label = L["Ring"], tip = L["A ring round the icon that drains as your shields take damage. Its look: Style > Cooldown Manager."],
+		values = { "off", "on" },
+		Text = function(value) return (value == nil or value == "off" or value == false) and L["Off"] or L["On"] end },
+	ringAmount = { label = L["Amount"], tip = L["The amount your shields can still absorb, in the middle of the ring."],
+		values = { true, false }, Text = ShowHide },
 }
 local LOOK_COLUMNS = { essential = { "numbers", "keybinds", "notBuff", "flash" }, utility = { "numbers", "keybinds", "notBuff", "flash" },
-	buffs = { "numbers" }, bars = { "numbers" } }
+	buffs = { "numbers", "ring", "ringAmount" }, bars = { "numbers" } }
 local BAR_EXTRAS = { essential = { "center", "stayUp" }, utility = { "center", "stayUp" }, buffs = { "center", "stacks" } }
 local RECHARGE = { essential = "cooldown", utility = "cooldownUtility" }
 ns.COOLDOWN_LOOK = LOOK
@@ -238,6 +246,7 @@ local function LookSet(what, kind, key, value, opts)
 	end
 	if ns.ApplyCooldownNumbers then ns.ApplyCooldownNumbers() end
 	if ns.ApplyCooldownKeybinds then ns.ApplyCooldownKeybinds() end
+	if (what == "ring" or what == "ringAmount") and ns.ApplyCooldownRing then ns.ApplyCooldownRing() end
 end
 -- A look's choices for a row, in order (a bar's numbers with the base first when it's none of them).
 local function LookValues(what, kind)
