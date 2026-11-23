@@ -150,11 +150,26 @@ local function NewZoneCard(name)
 	return { meta = L["Discovered"], name = name, sub = "" }
 end
 -- whole: the place is a zone (Westfall), not a subzone or an instance.
-local function Discovered(name, sub, whole)
+-- from: what said it's new, for the log ("zone entered", "game's line",
+-- "explore count").
+-- (Once a place per character, whichever says it: 2026-11-23, Redridge
+-- Mountains carded twice 57 s apart, the game's line and then a border
+-- crossing back in, each new to the other.)
+local function Discovered(name, sub, whole, from)
 	-- (30 sec: the game's "Discovered:" line can come seconds after its card.)
 	if name == "" or (name == lastFound and GetTime() - lastFoundAt < 30) then return end
+	local seen = Seen()
+	if seen then
+		seen.found = seen.found or {}
+		if seen.found[name] then
+			ns.Log("card", ("Discovered: %s again (%s): skipped, its card was had before"):format(name, from or "?"))
+			return
+		end
+		seen.found[name] = true
+		if whole then seen.zones[name] = true end
+	end
 	lastFound, lastFoundAt = name, GetTime()
-	ns.Log("card", "Discovered: " .. name .. (whole and " (a zone)" or ""))
+	ns.Log("card", "Discovered: " .. name .. (whole and " (a zone)" or "") .. " (" .. (from or "?") .. ")")
 	if ns.AchievementProgress then ns.AchievementProgress.Discovered(name) end
 	if ns.LetterboxOnDiscover then ns.LetterboxOnDiscover() end
 	if not ns.CardOn("discover") then return end
@@ -191,7 +206,7 @@ local function ZoneEntered()
 			seen.instances[key] = true
 			if Wanted() and name then
 				zoneFoundAt = GetTime()
-				Discovered(name, kind == "raid" and L["Raid"] or L["Dungeon"])
+				Discovered(name, kind == "raid" and L["Raid"] or L["Dungeon"], nil, "instance entered")
 			end
 		end
 		return
@@ -205,9 +220,15 @@ local function ZoneEntered()
 	local new
 	-- (0: a map with no explorable areas at all, as cities: no answer there.)
 	if count and count > 0 then new = count <= 1 else new = not first end
+	-- (The game's Exploration achievements first, where they have the zone:
+	-- discovered there, no card.)
+	if new and ns.PlaceExplored and ns.PlaceExplored(zone) == true then
+		ns.Log("card", ("%s: map count says new, the game's explore count says discovered: no card"):format(zone))
+		new = false
+	end
 	if new and Wanted() then
 		zoneFoundAt = GetTime()
-		Discovered(zone, nil, true)
+		Discovered(zone, nil, true, "zone entered")
 	end
 end
 -- True if Discovered's card has this place: one just shown, or shown for it
@@ -239,7 +260,7 @@ local function InfoLine(text)
 			else
 				local zone = Zone()
 				Discovered(place, zone ~= place and zone or "",
-					place == zone and not ns.Flag(reads.instance()) and not StaleInstanceName(zone))
+					place == zone and not ns.Flag(reads.instance()) and not StaleInstanceName(zone), "game's line")
 			end
 			if ns.CardOn("discover") and Carded(place) then HideOtherLines(text) end
 			return
@@ -382,8 +403,16 @@ end
 -- place: skipped, and the game's yellow text goes).
 function ns.DiscoverPlace(place, zone)
 	if not ns.CardOn("discover") then return false end
-	Discovered(place, zone ~= place and zone or "", place == zone and not ns.Flag(IsInInstance()))
+	Discovered(place, zone ~= place and zone or "", place == zone and not ns.Flag(IsInInstance()), "explore count")
 	return GetTime() - shownAt < 1
+end
+-- The tests: their made-up places out of what's had a card, so a run after
+-- a reload (the same names again) gets its cards.
+function ns.ForgetDiscovered(place)
+	local seen = Seen()
+	if seen and seen.found then seen.found[place] = nil end
+	if seen then seen.zones[place] = nil end
+	if lastFound == place then lastFound = nil end
 end
 -- /cine debug explore: what the game's count says about where you are.
 function ns.DebugExplore()

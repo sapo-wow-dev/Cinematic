@@ -81,7 +81,10 @@ end
 local count = 0
 local function Place()
 	count = count + 1
-	return ("Cinematic Test Glade %d"):format(count)
+	local place = ("Cinematic Test Glade %d"):format(count)
+	-- (A place gets its Discovered card once: the same made-up names after a reload.)
+	if ns.ForgetDiscovered then ns.ForgetDiscovered(place) end
+	return place
 end
 local function LineFor(place) return (ERR_ZONE_EXPLORED or "Discovered: %s"):format(place) end
 
@@ -482,6 +485,9 @@ ns.TestKit.Define({
 			local saved = { zone = reads.zone, instance = reads.instance, instanceInfo = reads.instanceInfo,
 				explored = reads.explored }
 			local hadZones = next(seen.zones) ~= nil
+			if ns.ForgetDiscovered then
+				for _, place in ipairs({ DUNGEON, NEW }) do ns.ForgetDiscovered(place) end
+			end
 			seen.instances[ID] = true
 			if not hadZones then seen.zones["Cinematic Test Field"] = true end
 			reads.zone = function() return zone end
@@ -561,6 +567,7 @@ ns.TestKit.Define({
 				explored = reads.explored }
 			local hadZones = next(seen.zones) ~= nil
 			local function Enter(place)
+				if ns.ForgetDiscovered then ns.ForgetDiscovered(place) end
 				if not hadZones then seen.zones["Cinematic Test Field"] = true end
 				reads.zone = function() return place end
 				reads.instance = function() return false, "none" end
