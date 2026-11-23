@@ -1,0 +1,43 @@
+name: Feature request
+description: An idea for something Cinematic could do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea!
+
+        Before you send it, you can check whether Cinematic already does it: in game,
+        type **/cine find** and a word or two (like `/cine find minimap`).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like?
+      description: What you'd like to see or do in game, and when (in a fight, while flying, in a city, ...).
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why?
+      description: What it would help with, or what bothers you now. Screenshots or videos are welcome.
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: Game client
+      options:
+        - Retail
+        - WoW Forever
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Cinematic log (optional)
+      description: Type /cine log in game, press Ctrl+C and paste it here. It shows your version and other addons.
+      render: text
