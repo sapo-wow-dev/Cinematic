@@ -2064,9 +2064,9 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "npcnames" then
 		-- (Dev copy: NPC names with no Service NPCs match flashing up as you turn, NpcNamesTest.lua.)
 		if ns.NpcNamesTest then ns.NpcNamesTest() else ns.Print("/cine debug npcnames is in the dev copy only.") end
-	elseif cmd == "debug" and arg == "namescale" then
+	elseif cmd == "debug" and arg:find("^namescale") then
 		-- (Dev copy: names over heads walking up to an NPC, the game's vs ours, NameScaleTest.lua.)
-		if ns.NameScaleTest then ns.NameScaleTest() else ns.Print("/cine debug namescale is in the dev copy only.") end
+		if ns.NameScaleTest then ns.NameScaleTest(arg:match("^namescale%s*(.*)$")) else ns.Print("/cine debug namescale is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "npctitle" then
 		-- (Dev copy: NPC titles going away up close, by plate settings, NpcTitleTest.lua.)
 		if ns.NpcTitleTest then ns.NpcTitleTest() else ns.Print("/cine debug npctitle is in the dev copy only.") end

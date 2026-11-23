@@ -1214,12 +1214,15 @@ DEFAULTS.plateNameY = 0 -- up from where the game puts it (retail)
 DEFAULTS.plateNameFixedSize = true -- one size at any distance (retail: Forever's plates don't scale)
 DEFAULTS.plateNameHideDelay = 1.5 -- seconds a plate stays dimmed (out of sight) before its name hides
 DEFAULTS.plateNameFadeTime = 0.4 -- seconds a name takes to fade out or in as its unit leaves or comes into sight
--- Forever: size and height with the camera zoomed all the way in, and about
--- 34 yards out (see PlateParts' Look)
-DEFAULTS.plateNameCloseSize = 1.6
-DEFAULTS.plateNameCloseY = -9
-DEFAULTS.plateNameFarSize = 0.3
-DEFAULTS.plateNameFarY = -35
+-- Forever: size and height close and far (see PlateParts' Look), measured
+-- off the game's own names (2026-11-23, at UI scale 0.64): a unit 8 yards
+-- away with the camera right in, and 50 yards from the camera. (Heights by
+-- the name's gap over the unit's head, run 3: nearly the same at any
+-- distance.)
+DEFAULTS.plateNameCloseSize = 1.3
+DEFAULTS.plateNameCloseY = -45
+DEFAULTS.plateNameFarSize = 0.27
+DEFAULTS.plateNameFarY = -38
 DEFAULTS.plateNameShadow = "inherit" -- (the game's: off, it barely shows)
 DEFAULTS.plateNameShadowX = 1
 DEFAULTS.plateNameShadowY = -1
@@ -4521,6 +4524,12 @@ function ns.Suspend(reason)
 	if InCombatLockdown() then
 		combatRetry:RegisterEvent("PLAYER_REGEN_ENABLED")
 	end
+	-- (A dev test pausing on purpose, ns.suspendQuiet: logged as a test
+	-- line, no red chat line or dev error window. NameScaleTest.lua.)
+	if ns.suspendQuiet then
+		ns.Log("test", "paused: " .. reason)
+		return
+	end
 	ns.Log("safety", "stopped: " .. reason)
 	ns.Print(L["|cffff4040stopped for this session|r (%s) and put your UI and settings back. " ..
 		"/cine log has the details for a bug report; /cine resume starts it again."]:format(reason))
@@ -4550,7 +4559,7 @@ function ns.Resume()
 		if ns.ModuleLoaded("cameras") then ns.orbitFrame:SetScript("OnUpdate", OnOrbitUpdate) end
 		if ns.SetDirectorRunning then ns.SetDirectorRunning(true) end
 	end
-	ns.Log("safety", "resumed")
+	ns.Log(ns.suspendQuiet and "test" or "safety", "resumed")
 	return true
 end
 

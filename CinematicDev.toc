@@ -307,6 +307,7 @@ Dev\OffscreenIconTest.lua
 Dev\OffscreenHoldTest.lua
 Dev\NpcNamesTest.lua
 Dev\NameScaleTest.lua
+Dev\FontStepTest.lua
 Dev\NpcTitleTest.lua
 Dev\ThemeArtTest.lua
 Dev\FindTabsTest.lua

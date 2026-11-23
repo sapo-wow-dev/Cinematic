@@ -362,27 +362,36 @@ local function SetNameFont(text, object, file, size, scale, flags)
 end
 ns.SetPlateNameFont = SetNameFont
 
--- Further in, bigger and higher: the game's names over heads are drawn in
--- the world, so they shrink with their distance from the camera (and take
--- over from the plate's at the edge of nameplate range). WoW Forever's
--- plates don't scale, so ours are sized and placed by the camera's distance
--- from you (exact) plus a fixed guess at the unit's from you (UNIT_YARDS):
--- every name the same at a given zoom. (Bands by interact distance, 11 and
--- 28 yards, were tried and dropped: indoors neighbors got different sizes
--- and names jumped as you walked, seen on video.) Size and height follow
--- perspective (one over the distance) through the Name Style page's two
--- points, close and far, never past close; zooming changes them in small
--- steps. Not on retail, whose plates scale with distance themselves.
--- (bandOf, swaps and the ghosts are left from the bands, unused for now:
--- bandOf stays nil, no swap starts.)
+-- Further in, bigger: the game's names over heads are drawn in the world, so
+-- they shrink with their distance from the camera. WoW Forever's plates
+-- don't scale, so ours are sized by the camera's zoom plus a fixed guess at
+-- the unit's distance from you (UNIT_YARDS), the size following the game's
+-- own names, measured (/cine debug namescale, 2026-11-23, Tools/tests/name-
+-- scale.md): one over (camera to unit + PAD yards), through the Name Style
+-- page's two points (close and far, never past close). Every name the same
+-- size at a zoom: walking never resizes one. (Sizing each by its own distance
+-- was built and dropped the same day, the user: "if I have to see the text go
+-- from font size to font size every second I will throw this out". The game
+-- draws whole-pixel heights only, so each change pops; a crossfade of two
+-- heights showed doubled.) Zooming changes the size a whole pixel at a time,
+-- held past the half way so it doesn't flicker (UpdateLook). The height:
+-- through the same points (nearly the same at any distance, run 3). Both
+-- measured at UI scale REF_SCALE, kept the same on screen at any other (the
+-- game's names don't follow the UI scale, plates do: run 3). Not on retail,
+-- whose plates scale with distance themselves.
+-- (swaps and the ghosts are left from the old bands, unused: no swap starts.)
 local FAR_USED = not ns.isRetail
 local FAR_CHECK, FAR_SWAP = 0.25, 0.6 -- seconds
 local UNIT_YARDS = 16 -- a unit's guessed distance from you
 -- (The page's two points, from the camera: close is the camera right in,
 -- far about 34 yards out, so both can be reached.)
-local CLOSE_YARDS, FAR_YARDS = UNIT_YARDS, 50
-local SIZE_STEP = 0.05 -- size changes in steps (text sized smoothly wobbles)
-local bandOf = {}
+local FAR_YARDS = 50
+local SIZE_STEP = 0.04 -- size changes in steps of 4% (text sized smoothly wobbles)
+local bandOf = {} -- (unused: left from the old bands, no band is set)
+-- The size's curve (yards; size close: SIZE_CLOSE from you, camera right in;
+-- far: FAR_YARDS from the camera), the UI scale it was measured at, and the
+-- pixel hold. (On ns: this file's main chunk is at Lua's cap of 200 locals.)
+ns.PLATE_NAME_REACH = { PAD = 3.4, SIZE_CLOSE = 8, REF_SCALE = 0.64, PIXEL_HOLD = 0.35 }
 local swaps = {} -- [plate] = { started = time, to = band }
 local zoom = 0 -- the camera's distance from you, this frame
 
@@ -420,22 +429,38 @@ local SIGHT_CLEAR = 0.2 -- seconds (the fade itself: the page's Fade time)
 ns.plateSightNear = { is = {}, at = {}, left = {}, back = {}, RETURN = 1.5, pruneAt = 0 }
 
 -- A name's size (times the plate's) and height at the camera's distance
--- now; retail's, as the page says. (band: unused, see above.)
-local function Look(band) -- luacheck: no unused args
+-- now, for a unit away yards from you (nil: UNIT_YARDS); retail's, as the
+-- page says. smooth: the size as it is (eased in UpdateLook), else in steps.
+local function Look(away, smooth)
 	if not FAR_USED then
 		return 1, Style("plateNameY") -- (the size: the row's, in DrawName)
 	end
-	local yards = math.max(1, zoom + UNIT_YARDS)
+	local camera = math.max(1, zoom + (away or UNIT_YARDS)) + ns.PLATE_NAME_REACH.PAD
+	local far = FAR_YARDS + ns.PLATE_NAME_REACH.PAD
 	-- (No bigger or higher than the close point: with the camera pushed in by
 	-- a wall, perspective past it grew names to the size cap, seen on video.)
-	local t = math.min(1, (1 / yards - 1 / FAR_YARDS) / (1 / CLOSE_YARDS - 1 / FAR_YARDS))
+	local t = math.min(1, (1 / camera - 1 / far) / (1 / (ns.PLATE_NAME_REACH.SIZE_CLOSE + ns.PLATE_NAME_REACH.PAD) - 1 / far))
 	local size = Style("plateNameFarSize") + t * (Style("plateNameCloseSize") - Style("plateNameFarSize"))
 	local y = Style("plateNameFarY") + t * (Style("plateNameCloseY") - Style("plateNameFarY"))
+	-- (The same on screen at any UI scale: see above.)
+	local ui = UIParent:GetEffectiveScale()
+	if ns.plateNameNoUiFix or not (Known(ui) and ui > 0) then ui = ns.PLATE_NAME_REACH.REF_SCALE end
+	size = size * ns.PLATE_NAME_REACH.REF_SCALE / ui
+	y = y * ns.PLATE_NAME_REACH.REF_SCALE / ui
 	size = math.min(3, math.max(0.2, size))
-	return math.floor(size / SIZE_STEP + 0.5) * SIZE_STEP, math.floor(math.min(80, math.max(-80, y)) + 0.5)
+	-- (Steps even in proportion: 4% at any size.)
+	if not smooth then size = math.exp(math.floor(math.log(size) / SIZE_STEP + 0.5) * SIZE_STEP) end
+	return math.floor(size * 1000 + 0.5) / 1000, math.floor(math.min(150, math.max(-150, y)) + 0.5)
 end
 
-ns.PlateNameLook = Look -- (for /cine debug namescale, NameScaleTest.lua)
+-- A plate's name as sized now: its band, eased yards, size and height (for
+-- /cine debug namescale, NameScaleTest.lua).
+function ns.PlateNameState(plate)
+	local text = plate and plate.UnitFrame and texts[plate.UnitFrame]
+	return bandOf[plate], text and text.yards, text and text.size, text and text.y, text
+end
+
+ns.PlateNameSizeAt = Look -- (for /cine debug namescale, NameScaleTest.lua)
 
 -- How far a plate's name is through swapping to its new look: 0 to 1 (1:
 -- none under way).
@@ -651,6 +676,14 @@ local function DrawName(text, name, unit)
 		local rim = outline > 0 and NameStyle(row, "OutlineColor") == "custom"
 		local scale = text.size * (tonumber(NameStyle(row, "Size")) or 1) * (look and look.size or 1)
 		SetNameFont(text, object, file, size, scale, Outlined(flags, rim and 0 or outline))
+		-- (Pixels of letter height per unit of text.size: the game draws
+		-- whole-pixel heights only, UpdateLook.)
+		local _, screenHigh = GetPhysicalScreenSize()
+		local okScale, effective = pcall(text.GetEffectiveScale, text)
+		if okScale and Known(effective) and screenHigh then
+			text.pxPer = size * (scale / text.size) * effective * screenHigh / 768
+		end
+		if text.SetTextScale then text:SetTextScale(1) end
 		if rim then
 			ns.SetTextRim(text, outline, ns.NameLookColor(row, "OutlineColor"))
 		elseif text.cineRim then
@@ -669,6 +702,7 @@ local function DrawName(text, name, unit)
 		-- shows under both.)
 		if fill then
 			SetNameFont(fill.lit, object, file, size, scale, Outlined(flags, rim and 0 or outline))
+			if fill.lit.SetTextScale then fill.lit:SetTextScale(1) end
 			fill.lit:SetShadowOffset(0, 0)
 		end
 		-- (Further off, lower: a plate's name sits a fixed height over the unit's
@@ -752,14 +786,36 @@ local function DrawName(text, name, unit)
 	end
 end
 
--- A text's size and height as its band and the camera have them now
--- (dirty when they changed).
-local function UpdateLook(text, band)
-	local size, y = Look(band)
-	if text.size ~= size or text.y ~= y then
-		text.size, text.y, text.dirty = size, y, true
+-- A text's size and height as the camera's zoom has them now (dirty when
+-- they changed), on whole-pixel heights (see below). ns.plateNameSteps: the
+-- old 4% steps; ns.plateNameSizeTest(text): a size forced (tests).
+local function UpdateLook(text)
+	local smooth = FAR_USED and not ns.plateNameSteps
+	local size, y = Look(nil, smooth)
+	if ns.plateNameSizeTest then size = ns.plateNameSizeTest(text, smooth) or size end
+	-- Whole pixels: the game draws letters at whole-pixel heights only (rule
+	-- all.fontstring.scale-steps-by-font-size, /cine debug fontstep), so the
+	-- size is set on one (every font set is one that shows) and held there
+	-- till the size is PIXEL_HOLD past the half way to the next, so a size
+	-- hovering at the line doesn't flip between two heights. (A crossfade of
+	-- two heights a pixel apart was tried, 2026-11-23: the taller is ~5%
+	-- wider too, so the name showed doubled.)
+	local px = smooth and text.pxPer and text.pxPer > 0 and size * text.pxPer
+	if px then
+		local held = text.px
+		if not (held and math.abs(px - held) < 0.5 + ns.PLATE_NAME_REACH.PIXEL_HOLD) then
+			held = math.max(1, math.floor(px + 0.5))
+		end
+		text.px = held
+		size = held / text.pxPer
+	else
+		text.px = nil
 	end
+	if text.size == size and text.y == y then return end
+	text.size, text.y, text.dirty = size, y, true
 end
+ns.PlateNameUpdateLook = UpdateLook -- (Tools/offline/namescale.lua)
+function ns.PlateNameZoom(yards) zoom = yards end -- (the same: the camera's zoom, which farWatch reads in game)
 
 -- Shows or hides our text for a plate, at alpha (nil: hidden), and while
 -- its band swaps, its copy in the old look fading out under it.
@@ -790,8 +846,7 @@ local function OwnName(plate, alpha, lineAlpha)
 	end
 	local share = SwapFade(plate)
 	local into, out = SwapShares(share)
-	text.band = bandOf[plate] or 2
-	UpdateLook(text, text.band)
+	UpdateLook(text)
 	DrawName(text, name, unit)
 	text:SetAlpha(alpha * into)
 	text:Show()
@@ -807,8 +862,7 @@ local function OwnName(plate, alpha, lineAlpha)
 			ghost.dirty = true
 			ghosts[unitFrame] = ghost
 		end
-		ghost.band = swap.from
-		UpdateLook(ghost, ghost.band)
+		UpdateLook(ghost)
 		DrawName(ghost, name, unit)
 		ghost:SetAlpha(alpha * out)
 		ghost:Show()
@@ -3270,6 +3324,8 @@ watcher:SetScript("OnEvent", function(_, event, unit)
 		kindParts.kinds[plate] = nil
 		bodyShare[plate], nameShare[plate], markShare[plate], textShare[plate] = nil, nil, nil, nil
 		bandOf[plate], swaps[plate] = nil, nil
+		local gone = plate.UnitFrame and texts[plate.UnitFrame]
+		if gone then gone.size, gone.px = nil, nil end
 		sight[plate], dimSince[plate], clearSince[plate] = nil, nil, nil
 		ns.plateSightNear.is[plate], ns.plateSightNear.at[plate] = nil, nil
 		if Usable(plate.UnitFrame) then
@@ -3351,7 +3407,7 @@ ns.SetOnUpdate(farWatch, ns.Profiled("Plate names", function(self, elapsed)
 		zoom = nowZoom
 		for unitFrame, text in pairs(texts) do
 			if text:IsShown() and Usable(unitFrame.name) and unitFrame.unit then
-				UpdateLook(text, text.band)
+				UpdateLook(text)
 				if text.dirty then
 					DrawName(text, unitFrame.name, unitFrame.unit)
 				end

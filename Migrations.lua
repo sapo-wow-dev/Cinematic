@@ -5688,6 +5688,27 @@ STEPS[#STEPS + 1] = function()
 	ns.db.cooldownGridV1 = true
 end
 
+-- Names over heads (Forever) sized on a new curve, measured off the game's
+-- own names (2026-11-23, PlateParts' Look): a close and far size and
+-- height saved for the old one goes, everywhere, so the new defaults hold.
+-- (The boxes for them have been hidden since 2026-11-16. V2: the heights
+-- too, measured in a second run; V3: the heights measured again, by the gap
+-- over the unit's head.) Once.
+STEPS[#STEPS + 1] = function()
+	if ns.db.nameScaleV3 then return end
+	local function Clear(store)
+		if type(store) == "table" then
+			store.plateNameCloseSize, store.plateNameFarSize = nil, nil
+			store.plateNameCloseY, store.plateNameFarY = nil, nil
+		end
+	end
+	Clear(ns.db)
+	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do Clear(saved) end
+	end
+	ns.db.nameScaleV1, ns.db.nameScaleV2, ns.db.nameScaleV3 = nil, nil, true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only
