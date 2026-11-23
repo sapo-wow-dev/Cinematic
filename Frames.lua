@@ -9551,7 +9551,9 @@ function ns.CdmTabOff(group)
 	return key ~= nil and not ns.PageOn(key)
 end
 function ns.CooldownSpellMode(id, group, own)
-	if ns.CdmTabOff(group) then return "always", false end
+	-- (Not for the page's own read (own false): with the tab off it showed and
+	-- copied Always for every Otherwise. Audit, 2026-11-22.)
+	if own ~= false and ns.CdmTabOff(group) then return "always", false end
 	local db = ns.db
 	-- (A cell of its own for the group in use: When ready with its own When
 	-- ready parts if it has them, else its bar's. None: its bar's cell for it,
@@ -9606,7 +9608,7 @@ end
 -- by spell ID), else its group's. Each goes by whether you're in a fight
 -- only: the game keeps your buffs secret in fights.
 function ns.CooldownBuffMode(id, group, ownOnly)
-	if ns.CdmTabOff(group) then return "always", false end
+	if ownOnly ~= false and ns.CdmTabOff(group) then return "always", false end
 	local ruled = ownOnly ~= false and ns.CooldownRuleMode("buff", id)
 	if ruled then return ruled, true end
 	-- (Its bar's cell for the group in use, before its own Otherwise.)

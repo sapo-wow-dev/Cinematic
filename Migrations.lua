@@ -5210,59 +5210,237 @@ end
 -- (Step: Cooldown Manager lines to place groups, 2026-11-22.)
 STEPS[#STEPS + 1] = function()
 	-- The Cooldown Manager page's numbered lines are gone: the page is a grid
-	-- of place groups across and rows down (CooldownRules.lua). Each line's
-	-- where (its place and combat, or its CQL rule) becomes a group, one per
-	-- different where, in the order they're first met (bars' lines, then
-	-- spells', then buffs'); the line's Icon shows goes in its row's cell for
-	-- it (a row's first line for a where wins, as it did). Unfinished lines
-	-- add nothing. Here, in saved profiles and reset points. Once.
+	-- of place groups ("scenes") across and rows down (CooldownRules.lua).
+	-- Done exactly (audit, 2026-11-22: a line per scene in first-met order
+	-- broke each row's own line order, and the old order put a spell's own
+	-- setting before its bar's lines, the new its bar's cell first):
+	--   * every place and combat (6 places x in/out of a fight) worked out for
+	--     each row as its lines decided it (its first line that fits);
+	--   * a spell or buff with a setting of its own gets it where a bar's line
+	--     would now win over it (it beat them before);
+	--   * the places with the same answers on every row become one scene (a
+	--     scene's places with both, one, or the other combat);
+	--   * a line written as a CQL rule keeps a scene of its own, first.
+	-- Unfinished lines add nothing; more scenes than the grid draws (9) are
+	-- left out and said. Here, in saved profiles and reset points. Once.
 	if ns.db.cooldownGridV1 then return end
-	local KINDS = { { "cooldownGroupRules", "cooldownGroupCells" }, { "cooldownSpellRules", "cooldownSpellCells" },
-		{ "cooldownBuffRules", "cooldownBuffCells" } }
+	local dropped = 0
+	local LIMIT = ns.COOLDOWN_GROUP_LIMIT or 9
+	local PLACES = { "world", "city", "inn", "dungeon", "raid", "bg" }
+	local COMBATS = { "in", "out" }
+	local KINDS = { { "cooldownGroupRules", "cooldownGroupCells", "group" },
+		{ "cooldownSpellRules", "cooldownSpellCells", "spell" }, { "cooldownBuffRules", "cooldownBuffCells", "buff" } }
+	local OWN = { { "cooldownReadyOnly", "ready" }, { "cooldownRechargeOnly", "recharge" },
+		{ "cooldownProcOnly", "proc" }, { "cooldownAlwaysShow", "always" }, { "cooldownNeverShow", "never" } }
 	local function Convert(t)
 		if type(t) ~= "table" then return end
-		local groups, byWhere = {}, {}
-		local cells = {}
-		local any = false
+		local rows = {} -- { kind, key, cellsName, lines }
 		for _, kind in ipairs(KINDS) do
 			local all = t[kind[1]]
 			t[kind[1]] = nil
-			-- (Keys in order, so the groups come out the same each time.)
 			local keys = {}
 			for key in pairs(type(all) == "table" and all or {}) do keys[#keys + 1] = key end
-			table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+			table.sort(keys, function(a, c) return tostring(a) < tostring(c) end)
 			for _, key in ipairs(keys) do
-				local list = all[key]
-				for _, line in ipairs(type(list) == "table" and list or {}) do
+				local lines = {}
+				for _, line in ipairs(type(all[key]) == "table" and all[key] or {}) do
 					if type(line) == "table" and type(line.show) == "string" and line.show ~= "" then
-						local where, group
 						if type(line.cql) == "string" and line.cql:find("%S") then
-							where = "cql:" .. line.cql
-							group = { cql = line.cql }
+							lines[#lines + 1] = { show = line.show, cql = line.cql }
 						elseif type(line.place) == "string" and line.place ~= "none" then
 							local combat = (line.combat == "in" or line.combat == "out") and line.combat or "any"
-							where = line.place .. "|" .. combat
-							group = { places = { [line.place] = true }, combat = combat }
+							lines[#lines + 1] = { show = line.show, place = line.place, combat = combat }
 						end
-						if where then
-							if not byWhere[where] then
-								group.id, group.name = #groups + 1, ""
-								groups[#groups + 1] = group
-								byWhere[where] = group.id
+					end
+				end
+				if lines[1] then rows[#rows + 1] = { kind = kind[3], key = key, cells = kind[2], lines = lines } end
+			end
+		end
+		if not rows[1] then return end
+		-- A row's own setting (its Otherwise): a spell's mode, a buff's.
+		local function OwnOf(row)
+			if row.kind == "spell" then
+				for _, own in ipairs(OWN) do
+					if type(t[own[1]]) == "table" and t[own[1]][row.key] then return own[2] end
+				end
+			elseif row.kind == "buff" then
+				return type(t.cooldownBuffMode) == "table" and t.cooldownBuffMode[row.key] or nil
+			end
+		end
+		-- (Spells and buffs with a setting of their own and no lines: rows too,
+		-- when a bar has lines, so they keep beating them.)
+		local hasBar, isRow = false, { spell = {}, buff = {} }
+		for _, row in ipairs(rows) do
+			hasBar = hasBar or row.kind == "group"
+			if isRow[row.kind] then isRow[row.kind][row.key] = true end
+		end
+		if hasBar then
+			local extra = {}
+			for _, own in ipairs(OWN) do
+				for key, on in pairs(type(t[own[1]]) == "table" and t[own[1]] or {}) do
+					if on and not isRow.spell[key] then
+						isRow.spell[key] = true
+						extra[#extra + 1] = { kind = "spell", key = key, cells = "cooldownSpellCells", lines = {} }
+					end
+				end
+			end
+			for key, mode in pairs(type(t.cooldownBuffMode) == "table" and t.cooldownBuffMode or {}) do
+				if mode and not isRow.buff[key] then
+					isRow.buff[key] = true
+					extra[#extra + 1] = { kind = "buff", key = key, cells = "cooldownBuffCells", lines = {} }
+				end
+			end
+			table.sort(extra, function(a, c) return tostring(a.key) < tostring(c.key) end)
+			for _, row in ipairs(extra) do rows[#rows + 1] = row end
+		end
+		-- Each row's answer for each place and combat (CQL lines aside).
+		local atoms = {}
+		for _, place in ipairs(PLACES) do
+			for _, combat in ipairs(COMBATS) do atoms[#atoms + 1] = { place = place, combat = combat, values = {} } end
+		end
+		local barAt = {}
+		for r, row in ipairs(rows) do
+			for a, atom in ipairs(atoms) do
+				for _, line in ipairs(row.lines) do
+					if not line.cql and (line.place == "any" or line.place == atom.place)
+						and (line.combat == "any" or line.combat == atom.combat) then
+						atom.values[r] = line.show
+						break
+					end
+				end
+				if row.kind == "group" and atom.values[r] then barAt[a] = true end
+			end
+		end
+		-- Where a bar's line would now beat a row's own setting: the setting.
+		for r, row in ipairs(rows) do
+			local own = row.kind ~= "group" and OwnOf(row)
+			if own then
+				for a, atom in ipairs(atoms) do
+					if barAt[a] and atom.values[r] == nil then atom.values[r] = own end
+				end
+			end
+		end
+		-- Places with the same answers on every row: one scene (its places
+		-- with both combats, with only In combat, with only Out of combat).
+		local bySig, sigOrder = {}, {}
+		for _, atom in ipairs(atoms) do
+			local parts, has = {}, false
+			for r = 1, #rows do
+				parts[r] = atom.values[r] or "-"
+				has = has or atom.values[r] ~= nil
+			end
+			if has then
+				local sig = table.concat(parts, "\1")
+				if not bySig[sig] then
+					bySig[sig] = { values = atom.values, places = {} }
+					sigOrder[#sigOrder + 1] = sig
+				end
+				local entry = bySig[sig]
+				entry.places[atom.place] = entry.places[atom.place] or {}
+				entry.places[atom.place][atom.combat] = true
+			end
+		end
+		local groups, cells = {}, {}
+		local function Add(group, values)
+			if #groups >= LIMIT then
+				dropped = dropped + 1
+				return
+			end
+			group.id, group.name = #groups + 1, ""
+			groups[#groups + 1] = group
+			for r, row in ipairs(rows) do
+				local value = values[r]
+				if value then
+					cells[row.cells] = cells[row.cells] or {}
+					cells[row.cells][row.key] = cells[row.cells][row.key] or {}
+					cells[row.cells][row.key][group.id] = value
+				end
+			end
+		end
+		-- CQL lines first, a scene each (the same rule shared). A row's own
+		-- line order kept (audit, 2026-11-22): where a place line came before
+		-- the rule on its row ("Dungeons, in combat: Never", then a rule's
+		-- Always), the rule's scene leaves that place and combat out (CQL's
+		-- own place and combat words), so the place's scene decides there, as
+		-- the earlier line did. (One rule shared by rows that disagree there:
+		-- the place line's row wins, the scene being shared.)
+		local cqlGroups = {}
+		for r, row in ipairs(rows) do
+			for i, line in ipairs(row.lines) do
+				if line.cql then
+					local entry = cqlGroups[line.cql]
+					if not entry then
+						entry = { cql = line.cql, values = {}, before = {} }
+						cqlGroups[line.cql] = entry
+						cqlGroups[#cqlGroups + 1] = entry
+					end
+					if entry.values[r] == nil then
+						entry.values[r] = line.show
+						for a, atom in ipairs(atoms) do
+							for j = 1, i - 1 do
+								local earlier = row.lines[j]
+								if not earlier.cql and (earlier.place == "any" or earlier.place == atom.place)
+									and (earlier.combat == "any" or earlier.combat == atom.combat) then
+									entry.before[a] = true
+									break
+								end
 							end
-							cells[kind[2]] = cells[kind[2]] or {}
-							local row = cells[kind[2]][key] or {}
-							cells[kind[2]][key] = row
-							if row[byWhere[where]] == nil then row[byWhere[where]] = line.show end
-							any = true
 						end
 					end
 				end
 			end
 		end
-		if not any then return end
+		-- A place and combat in CQL words, as the page's Spot works them out
+		-- (a moment is in one place: a battleground first, then dungeon...).
+		local ORDER = { "bg", "dungeon", "raid", "city", "inn" }
+		local function PlaceWords(place)
+			local out = {}
+			for _, each in ipairs(ORDER) do
+				if each == place then
+					out[#out + 1] = each
+					break
+				end
+				out[#out + 1] = "not " .. each
+			end
+			return table.concat(out, " and ")
+		end
+		for _, entry in ipairs(cqlGroups) do
+			local cut = {}
+			for a, atom in ipairs(atoms) do
+				if entry.before[a] then
+					local other = atoms[a + (atom.combat == "in" and 1 or -1)]
+					if other and other.place == atom.place and entry.before[a + (atom.combat == "in" and 1 or -1)] then
+						if atom.combat == "in" then cut[#cut + 1] = "(" .. PlaceWords(atom.place) .. ")" end
+					else
+						cut[#cut + 1] = "(" .. PlaceWords(atom.place) .. " and "
+							.. (atom.combat == "in" and "not nocombat" or "nocombat") .. ")"
+					end
+				end
+			end
+			local rule = entry.cql
+			if cut[1] then rule = "(" .. entry.cql .. ") and not (" .. table.concat(cut, " or ") .. ")" end
+			Add({ cql = rule }, entry.values)
+		end
+		for _, sig in ipairs(sigOrder) do
+			local entry = bySig[sig]
+			local both, onlyIn, onlyOut = {}, {}, {}
+			for place, combats in pairs(entry.places) do
+				if combats["in"] and combats.out then both[place] = true
+				elseif combats["in"] then onlyIn[place] = true
+				else onlyOut[place] = true end
+			end
+			local function Places(set)
+				local all = true
+				for _, place in ipairs(PLACES) do all = all and set[place] end
+				if all then return { any = true } end
+				return set
+			end
+			if next(both) then Add({ places = Places(both), combat = "any" }, entry.values) end
+			if next(onlyIn) then Add({ places = Places(onlyIn), combat = "in" }, entry.values) end
+			if next(onlyOut) then Add({ places = Places(onlyOut), combat = "out" }, entry.values) end
+		end
 		t.cooldownPlaceGroups = groups
-		for name, rows in pairs(cells) do t[name] = rows end
+		for name, rowCells in pairs(cells) do t[name] = rowCells end
 	end
 	Convert(ns.db)
 	for _, saved in pairs(ns.db.profiles or {}) do
@@ -5272,6 +5450,10 @@ STEPS[#STEPS + 1] = function()
 		end
 	end
 	for _, point in pairs(ns.db.profileResetPoints or {}) do Convert(point) end
+	if dropped > 0 and ns.Print then
+		ns.Print(("Cooldown Manager: your old lines needed more scenes than the page shows (%d); %d were left out."):format(
+			LIMIT, dropped))
+	end
 	ns.db.cooldownGridV1 = true
 end
 

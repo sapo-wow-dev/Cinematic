@@ -45,6 +45,7 @@ local PROFILE_TABLES = {
 	"cooldownFlashReady",
 	-- (the place groups and the rows' cells for them: CooldownRules.lua)
 	"cooldownPlaceGroups", "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells",
+	"cooldownRowSettings", -- (the grid's Look: profiles skipped it, audit 2026-11-22)
 	"frameRules", -- (none in any built-in profile: each starts with no Custom Visibility Rules)
 	"rowFollow", -- (the grids' Follow: which row each follows; Cinema's mana bar its resource bar)
 	"tankHide", "healerHide", "damageHide", -- (the old Roles column's: loaded to become rules, ns.MigrateRoleHides)

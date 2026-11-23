@@ -122,6 +122,19 @@ ns.BaseSpell = function(id) return id == 99348 and IMMOLATE or baseSpell(id) end
 ns.SetCooldownCell("spell", IMMOLATE, g1.id, "never")
 Check("override reads its base's cells", (ns.CooldownSpellMode(99348, "essential")) == "never")
 ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
+-- (Moved onto the base as the page lists spells: with both holding cells, the
+-- override's the base hasn't got kept, not dropped. Audit 2026-11-22.)
+db.cooldownSpellCells[IMMOLATE] = { [g1.id] = "never" }
+db.cooldownSpellCells[99348] = { [g1.id] = "always", [g2.id] = "proc" }
+db.cooldownRowSettings = db.cooldownRowSettings or {}
+db.cooldownRowSettings[99348] = { numbers = "hide" }
+ns.CooldownKeysToBase()
+local cellsNow = db.cooldownSpellCells[IMMOLATE] or {}
+Check("keys to base: the base's own cell wins", cellsNow[g1.id] == "never", tostring(cellsNow[g1.id]))
+Check("keys to base: the override's other cell kept", cellsNow[g2.id] == "proc", tostring(cellsNow[g2.id]))
+Check("keys to base: the override's row setting moved", db.cooldownRowSettings[IMMOLATE]
+	and db.cooldownRowSettings[IMMOLATE].numbers == "hide" and db.cooldownSpellCells[99348] == nil)
+db.cooldownSpellCells[IMMOLATE], db.cooldownRowSettings[IMMOLATE] = nil, nil
 ns.BaseSpell = baseSpell
 
 -- When ready parts: its own (set from the grid's strip) or its bar's.
@@ -213,12 +226,13 @@ do
 		local bar, im = RowOf("essential"), RowOf(IMMOLATE)
 		Check("the bar's row first, then the spells", grid.rows[1] == bar and grid.rows[2] == im and RowOf(AGONY) ~= nil)
 		Check("no tick box on the bar's row", not bar.check:IsShown() and im.check:IsShown())
-		Check("a spell's cell follows (grey) until set", im.cells[1].style == "follow", im.cells[1].style)
+		-- (Ghost cells since 2026-11-22: a following cell shows faint.)
+		Check("a spell's cell follows (a ghost) until set", im.cells[1].style == "ghost", im.cells[1].style)
 		-- The look, 2026-11-22: the bar's Otherwise gold, columns no wider than
 		-- 120 from the left, the add column before Otherwise, the bar's row by a
 		-- short name, ticks only under the pointer or while one's ticked.
 		Check("the bar's Otherwise looks like the bar (gold), its default too", bar.cells[3].style == "bar", bar.cells[3].style)
-		Check("columns 120 at most", grid.layout.colW <= 120, grid.layout.colW)
+		Check("columns 190 at most", grid.layout.colW <= 190, grid.layout.colW)
 		-- The bar's tab warns when a cell on it never takes effect (2026-11-22).
 		do
 			local tabs = select(4, ns.CdmPageGrid())
@@ -248,11 +262,12 @@ do
 			grid.Layout()
 			return ok
 		end)())
-		Check("a following cell: blank (no band, no icon, no word)", not im.cells[1].band.mid:IsShown()
-			and not im.cells[1].icon:IsShown() and not im.cells[1].text:IsShown())
+		Check("a following cell: a ghost (its icon faint in an outline, no band, no word)", not im.cells[1].band.mid:IsShown()
+			and im.cells[1].icon:IsShown() and not im.cells[1].text:IsShown() and im.cells[1].ring.mid:IsShown())
 		Check("the bar on a card of its own, no SPELLS label", grid.barCard:IsShown() and not grid.spellsLabel:IsShown())
-		Check("the bar's row: what it is under its name", bar.sub:IsShown() and not im.sub:IsShown())
-		Check("bar's row: Essential bar", bar.label:GetText() == ns.L["%s bar"]:format(ns.L["Essential"]), bar.label:GetText())
+		Check("the bar's row: its name alone", not bar.sub:IsShown())
+		-- (The tab's name, no "bar": the user, 2026-11-22.)
+		Check("bar's row: Essentials", bar.label:GetText() == ns.L["Essentials"], bar.label:GetText())
 		local function NotOver(row)
 			for _, frame in ipairs({ row.name, row.check, unpack(row.cells) }) do
 				frame.IsMouseOver = function() return false end
@@ -260,12 +275,59 @@ do
 		end
 		NotOver(im)
 		im.ShowTick()
-		Check("tick box unseen with no pointer and none ticked", im.tickSeen == false)
-		im.name.IsMouseOver = function() return true end
-		im.ShowTick()
-		Check("seen under the pointer", im.tickSeen == true)
-		im.name.IsMouseOver = function() return false end
-		im.ShowTick()
+		-- The previewer: a dungeon fight from anywhere; the grid rings what decides; back to live.
+		do
+			-- (The stand-in is in a fight at load: the previewer won't start in one.)
+			local lockdown = InCombatLockdown
+			InCombatLockdown = function() return false end -- luacheck: ignore 121
+			Be("city", false)
+			ns.SetCooldownCell("spell", IMMOLATE, g1.id, "proc")
+			ns.SetCooldownPreview("dungeonFight")
+			grid.Layout()
+			local _, at = ns.CooldownGroupNow()
+			Check("previewing a dungeon fight: Group content in use, though we're in a city", at == 1, at)
+			Check("the CDM reads it too", (ns.CooldownSpellMode(IMMOLATE, "essential")) == "proc")
+			Check("the banner shows, Immolate's Group content cell decides", grid.banner:IsShown() and im.cells[1].decides == true
+				and not im.cells[2].decides)
+			Check("a following spell: Otherwise rings, filled faint", RowOf(CORRUPTION).cells[3].ringed == true
+				and RowOf(CORRUPTION).cells[3].style == "inherited")
+			ns.SetCooldownPreview(nil)
+			grid.Layout()
+			local _, live = ns.CooldownGroupNow()
+			Check("back to live: the city again, no banner, no rings", live ~= 1 and not grid.banner:IsShown() and not im.cells[1].ringed)
+			ns.SetCooldownPreview("dungeonFight")
+			grid:GetScript("OnHide")(grid)
+			Check("the page hidden: back to live", ns.cdmPreview == nil)
+			InCombatLockdown = function() return true end -- luacheck: ignore 121
+			ns.SetCooldownPreview("dungeonFight")
+			Check("no preview in a fight", ns.cdmPreview == nil)
+			InCombatLockdown = lockdown -- luacheck: ignore 121
+			ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
+			Be("dungeon", true)
+			grid.Layout()
+		end
+		Check("tick boxes hidden till Select", im.tickSeen == false)
+		Click(grid.selectButton)
+		Check("Select shows the tick boxes (not the bar's)", im.tickSeen == true and grid.rows[1].tickSeen == false)
+		Click(grid.selectButton)
+		Check("Done hides them again", im.tickSeen == false)
+		-- When ready's label says it's the spell's everywhere; Out of fights too only while on.
+		ns.SetCooldownCell("spell", IMMOLATE, g1.id, "ready")
+		grid.Layout()
+		Click(im.cells[1])
+		Check("When ready parts say for this spell everywhere", grid.readyParts.power:IsShown()
+			and not grid.readyParts.anyTime:IsShown())
+		Click(im.cells[1])
+		ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
+		grid.Layout()
+		Check("the editor says every bar uses a scene", (function()
+			grid.state.editing = g1.id
+			grid.Layout()
+			local ok = grid.editor:IsShown()
+			grid.state.editing = nil
+			grid.Layout()
+			return ok
+		end)())
 		do
 			local kept = db.cooldownPlaceGroups
 			db.cooldownPlaceGroups = {}
@@ -293,8 +355,9 @@ do
 		-- A cell: click opens its choices under the row; a choice sets it.
 		Click(im.cells[1])
 		Check("click opens its choices", grid.chooser:IsShown() and grid.state.open and grid.state.open.key == IMMOLATE)
-		Check("first choice: Same as bar", grid.choices[1].value == nil
-			and grid.choices[1].text:GetText():find(ns.L["Same as bar (%s)"]:match("^[^(]+"), 1, true) ~= nil,
+		-- (Names what it really follows: the bar has no cell here, so its own Otherwise. Audit, 2026-11-22.)
+		Check("first choice: what it follows (no bar cell: Same as everywhere else)", grid.choices[1].value == nil
+			and grid.choices[1].text:GetText():find(ns.L["As everywhere else (%s)"]:match("^[^(]+"), 1, true) ~= nil,
 			grid.choices[1].text:GetText())
 		local readyChoice
 		for _, box in ipairs(grid.choices) do
@@ -308,7 +371,7 @@ do
 		Click(grid.readyParts.power)
 		Check("Wait for resources sets its own part", db.cooldownNeedsPower[IMMOLATE] == true)
 		Click(im.cells[1], "RightButton")
-		Check("right-click: back to following", ns.CooldownCell("spell", IMMOLATE, g1.id) == nil and im.cells[1].style == "follow")
+		Check("right-click: back to following", ns.CooldownCell("spell", IMMOLATE, g1.id) == nil and im.cells[1].style == "ghost")
 		Click(im.cells[1])
 		Click(im.cells[1])
 		Check("clicking the open cell shuts it", not grid.chooser:IsShown())
@@ -356,8 +419,8 @@ do
 		-- (A following cell: its faint icon alone; a set one: its word too.)
 		ns.SetCooldownCell("spell", IMMOLATE, g1.id, "proc")
 		grid.Layout()
-		Check("a set cell shows its word, a following one nothing", im.cells[1].text:IsShown()
-			and not im.cells[2].text:IsShown() and not im.cells[2].icon:IsShown())
+		Check("a set cell shows its word, a following one its faint icon alone", im.cells[1].text:IsShown()
+			and not im.cells[2].text:IsShown() and im.cells[2].icon:IsShown())
 		ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
 		grid.Layout()
 		-- The bar's Otherwise has no "follow": its first choice is the built-in default.
@@ -374,31 +437,66 @@ do
 		if head then
 			Click(head)
 			Check("heading opens the editor", grid.editor:IsShown() and grid.state.editing == g2.id)
-			local function PlaceButton(place)
-				for _, b in ipairs(grid.placeButtons) do
-					if b.place == place then return b end
+			-- (The standard Show in row since 2026-11-22: Combat and Location
+			-- dropdowns of ticks, the pen for a rule.)
+			local function Tick(entries, field, value)
+				for _, entry in ipairs(entries) do
+					if entry[field] == value then entry[3]() end
+				end
+				grid.Layout()
+			end
+			local function On(entries, field, value)
+				for _, entry in ipairs(entries) do
+					if entry[field] == value then return entry[2]() end
 				end
 			end
-			Click(PlaceButton("world"))
-			Check("a place added (any number)", g2.places.world and g2.places.city and g2.places.inn)
-			Click(PlaceButton("world"))
-			Check("and taken out", not g2.places.world and g2.places.city)
-			Click(PlaceButton("any"))
-			Check("Anywhere alone", g2.places.any and not g2.places.city)
-			Click(PlaceButton("raid"))
-			Check("a place off Anywhere: the other chips' places, no towns", g2.places.world and g2.places.dungeon
-				and not g2.places.raid and not g2.places.city and not g2.places.any)
-			Click(PlaceButton("raid"))
-			Check("all the chips: Anywhere again", g2.places.any == true)
-			-- No Cities or Inns chips (2026-11-22), but on a scene that has them already.
-			Check("no town chips on a scene without towns", not PlaceButton("city"):IsShown() and not PlaceButton("inn"):IsShown())
-			g2.places = { city = true, inn = true }
-			grid.Layout()
-			Check("a scene with towns shows them", PlaceButton("city"):IsShown() and PlaceButton("inn"):IsShown())
-			for _, b in ipairs(grid.combatButtons) do
-				if b.combat == "in" then Click(b) end
+			Check("the standard row shown, no rule", grid.whenRow:IsShown() and not grid.cqlButton:IsShown())
+			-- (The Location list, 2026-11-22: Open world takes cities and inns
+			-- with it, Instances is dungeons and raids, no Cities or Inns but on
+			-- an old scene that has them without the open world.)
+			local function Names()
+				local out = {}
+				for _, entry in ipairs(grid.placeEntries) do out[#out + 1] = entry.place end
+				return table.concat(out, " ")
 			end
+			Check("a town scene still lists its towns", Names() == "world instance dungeon raid bg city inn", Names())
+			Tick(grid.placeEntries, "place", "world")
+			Check("Open world: the open world, cities and inns", g2.places.world and g2.places.city and g2.places.inn)
+			Check("no town items once the open world has them", Names() == "world instance dungeon raid bg", Names())
+			Check("its name says Open world alone", ns.CooldownGroupWhere(g2):find("^" .. ns.L["Open world"] .. " ·") ~= nil or ns.CooldownGroupWhere(g2) == ns.L["Open world"], ns.CooldownGroupWhere(g2))
+			Tick(grid.placeEntries, "place", "world")
+			Check("and taken out, towns with it", not g2.places.world and not g2.places.city and not g2.places.inn)
+			Tick(grid.placeEntries, "place", "instance")
+			Check("Instances: dungeons and raids", g2.places.dungeon and g2.places.raid and not g2.places.bg)
+			Check("Dungeons and Raids show ticked with it", On(grid.placeEntries, "place", "dungeon") and On(grid.placeEntries, "place", "raid"))
+			Tick(grid.placeEntries, "place", "raid")
+			Check("Raids off: Instances off, Dungeons kept", not On(grid.placeEntries, "place", "instance") and g2.places.dungeon and not g2.places.raid)
+			Tick(grid.placeEntries, "place", "world")
+			Tick(grid.placeEntries, "place", "instance")
+			Tick(grid.placeEntries, "place", "bg")
+			Check("every item ticked: Anywhere", g2.places.any == true)
+			Tick(grid.placeEntries, "place", "raid")
+			Check("one off Anywhere: the rest", g2.places.world and g2.places.city and g2.places.dungeon and not g2.places.raid and not g2.places.any)
+			Tick(grid.placeEntries, "place", "raid")
+			Check("back to Anywhere", g2.places.any == true)
+			g2.places = { city = true, inn = true }
+			g2.combat = "any"
+			grid.Layout()
+			Check("any time: both ticked", On(grid.combatEntries, "combat", "in") and On(grid.combatEntries, "combat", "out"))
+			Tick(grid.combatEntries, "combat", "out")
+			Check("Out of combat off: In combat", g2.combat == "in")
+			Tick(grid.combatEntries, "combat", "in")
+			Check("the last one ticked stays", g2.combat == "in")
+			Tick(grid.combatEntries, "combat", "out")
+			Check("both again: any time", g2.combat == "any")
+			Tick(grid.combatEntries, "combat", "out")
 			Check("combat picked", g2.combat == "in")
+			ns.SetCooldownGroupText(g2, "boss")
+			grid.Layout()
+			Check("a rule: its words in the dropdowns' place", grid.cqlButton:IsShown() and not grid.whenRow:IsShown())
+			Click(grid.penButton)
+			Check("the pen on a rule: back to the dropdowns", g2.cql == nil and grid.whenRow:IsShown())
+			g2.places = { city = true, inn = true }
 			g2.combat = "out"
 			Click(grid.moveButtons[1])
 			Check("moved left", ns.CooldownPlaceGroups()[1] == g2)
@@ -427,8 +525,26 @@ do
 		Click(RowOf(AGONY).check)
 		Check("two ticked: the bar shows", grid.bulk:IsShown() and grid.state.selected[CORRUPTION] and grid.state.selected[AGONY])
 		local b = grid.bulkButtons
-		Click(b.value)
-		Click(b.value)
+		-- (Lists to pick from, not the next each click: the user, 2026-11-22.)
+		local function Menu(button)
+			local kept, radios = ns.ContextMenu, {}
+			ns.ContextMenu = function(_, make)
+				make(nil, { CreateRadio = function(_, text, isOn, set)
+					radios[#radios + 1] = { text = text, isOn = isOn, set = set }
+				end })
+			end
+			Click(button)
+			ns.ContextMenu = kept
+			return radios
+		end
+		local function Pick(button, text)
+			for _, radio in ipairs(Menu(button)) do
+				if radio.text == text then radio.set() return true end
+			end
+		end
+		local colWas = grid.state.bulkCol
+		Check("the column chip opens a list of the columns", #Menu(b.col) == #grid.Columns() and grid.state.bulkCol == colWas)
+		Check("the value chip: a list, picked from", Pick(b.value, ns.L["Ready"]))
 		Click(b.set)
 		Check("Set: both get When ready in Group content", ns.CooldownCell("spell", CORRUPTION, g1.id) == "ready"
 			and ns.CooldownCell("spell", AGONY, g1.id) == "ready")
@@ -436,11 +552,19 @@ do
 		Click(RowOf(AGONY).check)
 		ns.SetCooldownCell("spell", CORRUPTION, g2.id, "never")
 		Click(b.copy)
+		-- (Something shows it happened: the user, 2026-11-22.)
+		Check("Copy says Copied, its row lit", b.copy.text:GetText() == ns.L["Copied"] and RowOf(CORRUPTION).flash:IsShown(),
+			b.copy.text:GetText())
+		Check("no Paste while only the copied row is ticked", not b.paste:IsShown())
 		Click(RowOf(CORRUPTION).check)
 		Click(RowOf(IMMOLATE).check)
+		Check("Paste names what it puts", b.paste:IsShown() and b.paste.text:GetText():find("Paste", 1, true) ~= nil
+			and b.paste.text:GetText():find(grid.state.clip.name:sub(1, 6), 1, true) ~= nil, b.paste.text:GetText())
 		Click(b.paste)
 		Check("Paste row: its cells copied", ns.CooldownCell("spell", IMMOLATE, g1.id) == "ready"
 			and ns.CooldownCell("spell", IMMOLATE, g2.id) == "never")
+		Check("Paste says how many, the row lit", b.paste.text:GetText() == ns.L["Pasted on %d"]:format(1)
+			and RowOf(IMMOLATE).flash:IsShown(), b.paste.text:GetText())
 		Click(b.clear)
 		Check("x unticks all", not grid.bulk:IsShown() and next(grid.state.selected) == nil)
 		-- Look: each click the next value, a spell's round to following.
@@ -449,16 +573,20 @@ do
 		Check("Look columns", cols[1].look == "numbers" and cols[4].look == "flash" and #cols == 4)
 		im = RowOf(IMMOLATE)
 		db.cooldownFlashReady[IMMOLATE] = nil
-		local seen = {}
-		for i = 1, 3 do
-			Click(im.cells[4])
-			seen[i] = tostring(db.cooldownFlashReady[IMMOLATE])
-		end
-		Check("Flash steps following -> On -> Off -> following", table.concat(seen, " ") == "true false nil", table.concat(seen, " "))
+		local flashMenu = Menu(im.cells[4])
+		Check("Flash: a list, following first, then its choices", #flashMenu == 3 and flashMenu[1].isOn(), #flashMenu)
+		flashMenu[2].set()
+		local picked = db.cooldownFlashReady[IMMOLATE]
+		Check("Flash picked from the list", picked ~= nil, tostring(picked))
 		Check("the bar's own looks under the grid", grid.extraParts.center and grid.extraParts.center.box:IsShown())
 		local was = ns.CooldownGroupCentered("essential")
-		Click(grid.extraParts.center.box)
-		Check("Close the gaps steps", ns.CooldownGroupCentered("essential") ~= was)
+		local gaps = Menu(grid.extraParts.center.box)
+		if #gaps > 0 then
+			for _, radio in ipairs(gaps) do
+				if not radio.isOn() then radio.set() break end
+			end
+		end
+		Check("Close the gaps changed (a switch or a list)", ns.CooldownGroupCentered("essential") ~= was)
 		Click(grid.extraParts.center.box)
 		Click(grid.showsSwitch)
 		Check("back to When it shows", not grid.state.look)
@@ -520,36 +648,82 @@ pc = Pass()
 Check("ready pass: in the open world, its own Always", pc and pc.target ~= 0, pc and tostring(pc.target))
 ns.SetCooldownCell("spell", CORRUPTION, g1.id, nil)
 
--- The update: numbered lines into groups and cells (here and in a saved profile).
+-- The update: numbered lines into scenes, done exactly (audit, 2026-11-22):
+-- each spell decides in every place as its old lines did.
 local function Lines()
 	return {
-		cooldownGroupRules = { utility = { { show = "ready", combat = "in", place = "dungeon" } } },
+		-- (The audit's: a bar's line, and a spell with a setting of its own.)
+		cooldownGroupRules = { essential = { { show = "never", combat = "in", place = "dungeon" } } },
+		cooldownAlwaysShow = { [IMMOLATE] = true },
 		cooldownSpellRules = {
-			[IMMOLATE] = { { show = "proc", combat = "in", place = "dungeon" }, { show = "always", cql = "raid and boss" },
-				{ show = "never", combat = "in", place = "dungeon" } },
+			-- (The audit's: each row's line order kept.)
+			[100] = { { show = "ready", combat = "in", place = "any" } },
+			[200] = { { show = "never", combat = "any", place = "dungeon" }, { show = "always", combat = "in", place = "any" } },
+			[300] = { { show = "proc", cql = "boss" } },
+			-- (The audit's: a place line before a CQL line beats it there, as before.)
+			[400] = { { show = "never", combat = "in", place = "dungeon" }, { show = "always", cql = "group" } },
 			[CORRUPTION] = { { show = "", combat = "any", place = "none" } },
 		},
 		cooldownBuffRules = { [1126] = { { show = "hidden", combat = "out", place = "city" } } },
 	}
 end
+local function Fresh()
+	for _, name in ipairs({ "cooldownPlaceGroups", "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells",
+		"cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow",
+		"cooldownBuffMode", "cooldownGroupDefaults" }) do db[name] = {} end
+end
+Fresh()
 for k, v in pairs(Lines()) do db[k] = v end
 db.profiles = db.profiles or {}
 db.profiles.GridTest = Lines()
 db.cooldownGridV1 = nil
 ns.RunMigrations()
-local groups = db.cooldownPlaceGroups
 Check("lines dropped", db.cooldownSpellRules == nil and db.cooldownGroupRules == nil and db.profiles.GridTest.cooldownSpellRules == nil)
-Check("three wheres, three groups (the bar's first)", #groups == 3 and groups[1].places.dungeon and groups[1].combat == "in"
-	and groups[2].cql == "raid and boss" and groups[3].places.city and groups[3].combat == "out", #groups)
-Check("bar's cell", db.cooldownGroupCells.utility and db.cooldownGroupCells.utility[1] == "ready")
-Check("a row's first line for a where wins", db.cooldownSpellCells[IMMOLATE][1] == "proc"
-	and db.cooldownSpellCells[IMMOLATE][2] == "always")
+local function In(place, fight, extra) Be(place, fight, extra) end
+In("dungeon", true)
+Check("old order kept: spell 200 Never in a dungeon fight", (ns.CooldownSpellMode(200, "utility")) == "never",
+	(ns.CooldownSpellMode(200, "utility")))
+Check("spell 100 When ready in a dungeon fight", (ns.CooldownSpellMode(100, "utility")) == "ready")
+Check("a spell's own Always beats its bar's old line, as before", (ns.CooldownSpellMode(IMMOLATE, "essential")) == "always",
+	(ns.CooldownSpellMode(IMMOLATE, "essential")))
+Check("a spell with nothing of its own takes its bar's line", (ns.CooldownSpellMode(AGONY, "essential")) == "never",
+	(ns.CooldownSpellMode(AGONY, "essential")))
+In("world", true)
+Check("spell 200 Always in an open-world fight", (ns.CooldownSpellMode(200, "utility")) == "always")
+In("world", false)
+Check("spell 200 no line out of fights in the open world: its default", (ns.CooldownSpellMode(200, "utility")) ~= "always"
+	and (ns.CooldownSpellMode(200, "utility")) ~= "never")
+In("city", false)
+Check("the buff hidden in a city out of fights", (ns.CooldownBuffMode(1126, "buffs")) == "hidden")
+local hasCql = false
+for _, group in ipairs(db.cooldownPlaceGroups) do hasCql = hasCql or group.cql == "boss" end
+Check("a CQL line keeps a scene of its own", hasCql)
+In("dungeon", true, { group = true })
+Check("a place line before a rule still wins there: 400 Never in a dungeon fight in a group",
+	(ns.CooldownSpellMode(400, "utility")) == "never", (ns.CooldownSpellMode(400, "utility")))
+In("world", true, { group = true })
+Check("the rule elsewhere: 400 Always in an open-world fight in a group",
+	(ns.CooldownSpellMode(400, "utility")) == "always", (ns.CooldownSpellMode(400, "utility")))
+In("dungeon", false, { group = true })
+Check("and in a dungeon out of fights", (ns.CooldownSpellMode(400, "utility")) == "always",
+	(ns.CooldownSpellMode(400, "utility")))
 Check("an unfinished line adds nothing", db.cooldownSpellCells[CORRUPTION] == nil)
-Check("buff's cell", db.cooldownBuffCells[1126] and db.cooldownBuffCells[1126][3] == "hidden")
+Check("no more scenes than the grid draws", #db.cooldownPlaceGroups <= ns.COOLDOWN_GROUP_LIMIT, #db.cooldownPlaceGroups)
 local saved = db.profiles.GridTest
-Check("saved profile converted too", saved.cooldownPlaceGroups and #saved.cooldownPlaceGroups == 3
-	and saved.cooldownSpellCells[IMMOLATE][1] == "proc")
+Check("saved profile converted too", saved.cooldownPlaceGroups and #saved.cooldownPlaceGroups == #db.cooldownPlaceGroups)
 Check("done flag set", db.cooldownGridV1 == true)
+
+-- More different wheres than the grid draws: the first nine kept, the rest left out.
+do
+	local many = {}
+	for i = 1, 12 do many[i] = { show = "never", cql = "level > " .. i } end
+	Fresh()
+	db.cooldownSpellRules = { [IMMOLATE] = many }
+	db.cooldownGroupRules, db.cooldownBuffRules = nil, nil
+	db.cooldownGridV1 = nil
+	ns.RunMigrations()
+	Check("twelve wheres: nine scenes kept", #db.cooldownPlaceGroups == ns.COOLDOWN_GROUP_LIMIT, #db.cooldownPlaceGroups)
+end
 
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

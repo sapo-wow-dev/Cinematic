@@ -2,7 +2,7 @@
 drawn from scratch here: one strip, 256x32, eight white 32x32 icons on a
 see-through background, tinted in game by each choice's color:
   0 eye (Always)  1 check (When ready)  2 clock (While recharging)
-  3 spark (When it procs)  4 slashed circle (Never / Hidden)
+  3 lightning bolt (When it procs)  4 slashed circle (Never / Hidden)
   5 crossed swords (In combat)  6 moon (Out of combat)  7 plus (Add group)
 And a white 32x32 disc (the pills' round ends: its left and right halves).
 usage: make_cdm_icons.py Textures/CdmIcons.tga Textures/CdmDisc.tga"""
@@ -44,14 +44,9 @@ def clock(d):
 
 
 def spark(d):
-    pts = []
-    for i in range(16):
-        r = 12 if i % 2 == 0 else 3.2
-        a = math.pi / 2 + i * math.pi / 8
-        if i % 4 == 2:
-            r = 7.5
-        pts.append(p(16 + r * math.cos(a), 16 - r * math.sin(a)))
-    d.polygon(pts, fill=WHITE)
+    # A bold lightning bolt, filled. (An 8-point star till 2026-11-22: its
+    # thin points shrank to an "x" at pill size, "looks broken", the user.)
+    d.polygon([p(19, 3), p(7, 18), p(15, 18), p(12, 29), p(25, 13), p(17, 13), p(21, 3)], fill=WHITE)
 
 
 def never(d):

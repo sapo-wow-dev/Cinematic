@@ -690,10 +690,11 @@ local GRID_ICON = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\GridIcon"
 ns.GRID_DOT_ROOM = 18
 
 -- What a dropdown says: -, the one ticked, All or how many.
-local function Summary(names, total, color)
+-- (allText: a list's own word for all ticked, the CDM scene's "Any time".)
+local function Summary(names, total, color, allText)
 	if #names == 0 then return "|cff808080-|r" end
 	if #names == 1 then return Colored(color, names[1]) end
-	if #names == total then return Colored(color, L["All"]) end
+	if #names == total then return Colored(color, allText or L["All"]) end
 	return Colored(color, (L["%d of %d"]):format(#names, total))
 end
 
@@ -872,7 +873,7 @@ function ns.GridRow(kit, parent, labelWidth, layout, spec)
 				for _, entry in ipairs(entries) do
 					if entry[2]() then on[#on + 1] = entry[1] end
 				end
-				self:SetText(Summary(on, #entries, color))
+				self:SetText(Summary(on, #entries, color, entries.allText))
 				self.tip = #on > 0 and table.concat(on, ", ") or L["Nothing ticked"]
 			end
 			button:SetScript("OnEnter", function(self)

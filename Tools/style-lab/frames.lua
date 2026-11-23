@@ -31,8 +31,25 @@ local FONTS = {
 local gen = 0 -- (layout changed: every worked-out rect is stale)
 local function Dirty() gen = gen + 1 end
 
--- How wide text is, near enough, without its font.
+-- How wide text is, near enough, without its font. (Measured in game on
+-- Forever, FRIZQT, CDM grid run 25, 2026-11-22: "Open world" 63.3 at 10, 70 at
+-- 12; 10 M 109.2/125.8; 10 i 34.2/35. The old flat guess ran ~20% short, so
+-- the lab passed chips the game cut. Within ~5% now; sizes past 10 grow
+-- slower than the number says.)
+local function CharWidth(c)
+	if c:find("[il%.,'!|:;j]") then return 0.34
+	elseif c:find("[frt]") then return 0.42
+	elseif c == " " then return 0.32
+	elseif c:find("[MW]") then return 1.09
+	elseif c:find("[mw]") then return 0.95
+	elseif c:find("[OQDGC]") then return 0.86
+	elseif c:find("%u") then return 0.72
+	elseif c:find("[bdghnopqu]") then return 0.62
+	end
+	return 0.56
+end
 local function TextWidth(text, size)
+	size = size <= 10 and size or 10 + (size - 10) * 0.75
 	text = tostring(text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "  ")
 	local width, line = 0, 0
 	for i = 1, #text do
@@ -41,7 +58,7 @@ local function TextWidth(text, size)
 			width = math.max(width, line)
 			line = 0
 		elseif c:byte() < 128 or c:byte() >= 192 then
-			line = line + size * (c:find("[ilj%.,'!t]") and 0.3 or c:find("[MWmw]") and 0.8 or 0.52)
+			line = line + size * 1.06 * CharWidth(c) -- (1.06: a little wide, so a cut shows here first)
 		end
 	end
 	return math.max(width, line)

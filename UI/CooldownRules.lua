@@ -31,6 +31,9 @@ ns.COOLDOWN_RULE_PLACES, ns.COOLDOWN_RULE_COMBATS = PLACES, COMBATS
 ns.COOLDOWN_PLACE_NAME, ns.COOLDOWN_COMBAT_NAME = PLACE_NAME, COMBAT_NAME
 -- (More than this and the grid's columns are too narrow to read.)
 ns.COOLDOWN_GROUP_MAX = 5
+-- (The most an update from the old lines makes: the grid draws up to this,
+-- icons alone; above, the rest are left out and said in chat. 2026-11-22.)
+ns.COOLDOWN_GROUP_LIMIT = 9
 
 local CELLS = { spell = "cooldownSpellCells", buff = "cooldownBuffCells", group = "cooldownGroupCells" }
 ns.COOLDOWN_CELL_TABLES = CELLS
@@ -79,8 +82,11 @@ end
 function ns.AddCooldownGroup()
 	local list = ns.CooldownPlaceGroups()
 	if #list >= ns.COOLDOWN_GROUP_MAX then return nil end
-	local id = 0
+	-- (Ids never reused: a deleted scene's cells, copied or imported, came
+	-- back with the next one. Audit, 2026-11-22.)
+	local id = tonumber(ns.db.cooldownGroupNextId) or 0
 	for _, group in ipairs(list) do id = math.max(id, group.id) end
+	ns.db.cooldownGroupNextId = id + 1
 	-- (A name of its own, "Scene 2": four new ones all read "No place yet", 2026-11-22.)
 	local taken, n = {}, 1
 	for _, other in ipairs(list) do taken[other.name] = true end
@@ -138,7 +144,11 @@ function ns.CooldownGroupWhere(group)
 	local places = PlacesOf(group)
 	if #places == 0 then return L["No place yet"] end
 	local names = {}
-	for i, place in ipairs(places) do names[i] = PLACE_NAME[place] end
+	-- (Cities and inns come with the open world on the page: not named again.)
+	local world = group.places.world
+	for _, place in ipairs(places) do
+		if not (world and (place == "city" or place == "inn")) then names[#names + 1] = PLACE_NAME[place] end
+	end
 	local text = table.concat(names, ", ")
 	if group.combat ~= "any" then text = text .. " · " .. COMBAT_NAME[group.combat] end
 	return text
@@ -191,12 +201,57 @@ ns.CooldownSpot = Spot
 -- The facts the groups are read against, once per moment (each icon of each
 -- bar asks, every pass).
 local factsAt, factsNow, nowAt, nowGroup, nowIndex
+-- The page's previewer (2026-11-22): while a place is picked, the CDM reads
+-- its scenes as if you were there, its real bars too. Only the place and the
+-- combat are pretended: the other facts (a CQL scene's words) stay real.
+-- Back to live as the page hides and as a real fight starts.
+ns.COOLDOWN_PREVIEWS = {
+	{ "worldFight", L["Open world fight"], {}, true },
+	{ "worldCalm", L["Open world, calm"], {}, false },
+	{ "dungeonFight", L["Dungeon fight"], { dungeon = true }, true },
+	{ "raidFight", L["Raid fight"], { raid = true }, true },
+	{ "town", L["Town"], { city = true }, false },
+	{ "bg", L["BG or arena"], { bg = true }, true },
+}
+local PREVIEW_BY = {}
+for _, each in ipairs(ns.COOLDOWN_PREVIEWS) do PREVIEW_BY[each[1]] = each end
+local PLACE_FACTS = { "bg", "dungeon", "raid", "city", "inn" }
+local previewFacts, previewFrom
+function ns.CooldownPreview() return ns.cdmPreview and PREVIEW_BY[ns.cdmPreview] or nil end
+function ns.SetCooldownPreview(key)
+	if InCombatLockdown and InCombatLockdown() then key = nil end
+	ns.cdmPreview = PREVIEW_BY[key] and key or nil
+	previewFrom = nil
+	ns.CooldownRuleFactsStale()
+	if ns.readyPace then ns.readyPace.due = true end
+end
 function ns.CooldownRuleFacts()
 	local now = GetTime()
 	if factsAt ~= now or not factsNow then
 		factsAt, factsNow = now, ns.RuleFactsNow()
 	end
-	return factsNow
+	local pick = ns.CooldownPreview()
+	if not pick then return factsNow end
+	if previewFrom ~= factsNow then
+		previewFrom = factsNow
+		previewFacts = {}
+		for k, v in pairs(factsNow) do previewFacts[k] = v end
+		for _, k in ipairs(PLACE_FACTS) do previewFacts[k] = nil end
+		for k, v in pairs(pick[3]) do previewFacts[k] = v end
+		previewFacts.combat, previewFacts.calm, previewFacts.nocombat = pick[4], false, not pick[4]
+	end
+	return previewFacts
+end
+do
+	-- (A real fight: back to live.)
+	local watch = CreateFrame("Frame")
+	watch:RegisterEvent("PLAYER_REGEN_DISABLED")
+	watch:SetScript("OnEvent", function()
+		if ns.cdmPreview then
+			ns.SetCooldownPreview(nil)
+			if ns.CooldownPreviewChanged then ns.CooldownPreviewChanged() end
+		end
+	end)
 end
 -- (A change on the page, or a test faking a place: read again at once.)
 function ns.CooldownRuleFactsStale()

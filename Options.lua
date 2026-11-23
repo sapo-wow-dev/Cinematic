@@ -16508,7 +16508,8 @@ local function CreateCooldownPanel()
 	}
 	-- (Their tabs' names: the full name is the bar's row in the grid.)
 	local TAB_NAMES = {
-		essential = L["Essential"], utility = L["Utility"], buffs = L["Buffs"], bars = L["Bars"],
+		-- ("Essentials", as its row says: the user, 2026-11-22.)
+		essential = L["Essentials"], utility = L["Utility"], buffs = L["Buffs"], bars = L["Bars"],
 		other = L["Other"], otherbuffs = L["Other buffs"],
 	}
 	-- The groups of tracked buffs and bars, with modes of their own (ns.CooldownBuffMode).
@@ -16538,12 +16539,10 @@ local function CreateCooldownPanel()
 		end,
 		KeyGet = KeyGet,
 		KeyPut = KeyPut,
-		-- (Short: the tab says which bar; "Essential Cooldowns" was cut short in it.)
+		-- (The tab's own name: "Essential bar" read badly and "bar" meant
+		-- nothing, the user 2026-11-22: "just call it Essentials".)
 		BarName = function(group)
-			if group == "other" then return L["All spells here"] end
-			if group == "otherbuffs" then return L["All buffs here"] end
-			if group == "bars" then return L["All tracked bars"] end
-			return L["%s bar"]:format(TAB_NAMES[group] or tostring(group))
+			return TAB_NAMES[group] or tostring(group)
 		end,
 	})
 	grid.Refresh = function()
@@ -16615,6 +16614,7 @@ local function CreateCooldownPanel()
 	-- Every group's spells, then those set on their own that aren't in the
 	-- Cooldown Manager now (spells, then buffs).
 	function ListSpells()
+		if ns.CooldownKeysToBase then ns.CooldownKeysToBase() end
 		local db, store = ns.GetDB(), ns.GetDB()
 		local list = ns.CooldownManagerSpells()
 		local listed = { spell = {}, buff = {} }
@@ -16623,7 +16623,11 @@ local function CreateCooldownPanel()
 		end
 		for _, set in ipairs({
 			{ "other", "spell", { db.cooldownReadyOnly, db.cooldownRechargeOnly, db.cooldownProcOnly, db.cooldownNeverShow,
-				store.cooldownAlwaysShow, db.cooldownSpellCells } },
+				store.cooldownAlwaysShow, db.cooldownSpellCells,
+				-- (Its When ready parts, Flash or looks alone kept it unlisted, so they
+				-- couldn't be undone. Audit, 2026-11-22.)
+				db.cooldownNeedsPower, db.cooldownEarlyOn, db.cooldownReadyEarly, db.cooldownReadyAnyTime,
+				db.cooldownFlashReady, db.cooldownRowSettings } },
 			{ "otherbuffs", "buff", { db.cooldownBuffMode, db.cooldownBuffCells } },
 		}) do
 			local group, seen, missing = set[1], listed[set[2]], {}

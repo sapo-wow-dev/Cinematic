@@ -37,6 +37,7 @@ local ns, wow = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc", fun
 	_G.C_Spell.GetSpellTexture = function(id) return ICON[id] or 134400 end
 	_G.C_Spell.GetSpellInfo = function(id) return { name = NAME[id] or "Spell", iconID = ICON[id] or 134400 } end
 	_G.GetTime = function() return F.now or 0 end
+	_G.InCombatLockdown = function() return false end
 end)
 
 -- JSON, as dump.lua writes it.
@@ -152,6 +153,7 @@ local function Reset(tab)
 	end
 	wipe(grid.state.selected)
 	grid.state.open, grid.state.editing, grid.state.look, grid.state.sure = nil, nil, false, nil
+	grid.state.selecting = nil
 	ns.CdmShowSpells(tab or "essential")
 end
 local function Scene(id, name, places, combat)
@@ -241,14 +243,50 @@ local STATES = {
 		Cell("buff", 1126, 1, "combat")
 		Cell("buff", 5487, 1, "hidden")
 	end },
-	{ id = "s13", name = "13 Page switched off", set = function()
+	{ id = "s14", name = "14 Previewing a dungeon fight", set = function()
+		Reset()
+		DUNGEON() TOWN() PVP()
+		Cell("spell", 1978, 1, "ready")
+		Cell("spell", 3044, 1, "never")
+		Cell("group", "essential", 2, "never")
+		Own(2973, "proc")
+		ns.SetCooldownPreview("dungeonFight")
+	end },
+	{ id = "s15", name = "15 The preview picker open", set = function()
+		Reset()
+		DUNGEON() TOWN()
+		ns.CdmShowSpells("essential")
+		Click(grid.previewButton)
+	end },
+	{ id = "s16", name = "16 Select on, one ticked", set = function()
+		Reset()
+		DUNGEON()
+		grid.state.selecting = true
+		grid.state.selected[3044] = true
+	end },
+	{ id = "s17", name = "17 Nine scenes (an old profile)", set = function()
+		Reset()
+		for i = 1, 9 do Scene(i, "Scene " .. i, { dungeon = true }, i % 2 == 0 and "out" or "in") end
+		Cell("spell", 1978, 1, "ready")
+		Cell("spell", 3044, 2, "never")
+	end },
+	-- (Five scenes, none where you are: Everywhere else in use, its dot by its
+	-- name. The user's shot cut it to "Everywh...", 2026-11-22; no state had it.)
+	{ id = "s18", name = "18 Five scenes, Everywhere else in use", set = function()
+		Reset()
+		TOWN() PVP()
+		Scene(4, "Raid bosses", { raid = true }, "in")
+		Scene(5, "Scene 5", {})
+		Scene(6, "Scene 6", {})
+		Cell("spell", 1978, 2, "proc")
+	end },
+	{ id = "s13", name = "13 Page switched off", dim = true, set = function()
 		Reset()
 		DUNGEON()
 		Cell("spell", 1978, 1, "ready")
 		db.handleCooldowns = false
 	end },
 }
-
 -- The look audit: text cut short (its width over its room), gold text,
 -- shown buttons overlapping each other on one parent, square boxes (a
 -- framed EditBox other than the name box, a checkbox shown by itself).
@@ -256,15 +294,37 @@ local function Audit()
 	local found = {}
 	local function Note(text) found[#found + 1] = text end
 	local boxes, texts = {}, {}
-	local function Walk(frame, depth, inGrid)
+	local function Walk(frame, depth, inGrid, popup)
 		if depth > 14 or not F.Visible(frame) then return end
 		inGrid = inGrid or frame == grid
+		popup = popup or rawget(frame, "cdmPopup") or false
 		for _, region in ipairs(frame._regions or {}) do
 			if region._kind == "FontString" and F.Visible(region) then
 				local text = region._text
 				if type(text) == "string" and text ~= "" then
 					local sw, w = region:GetStringWidth(), region:GetWidth()
 					if rawget(region, "_wrap") == false and w and w > 4 and sw > w + 2 then Note("cut: " .. text) end
+					-- (Wrapping text: one word wider than its room is cut in game all
+					-- the same. "Everywhere" beside a dot came out "Everywh...", the
+					-- lab drew two lines, 2026-11-22.)
+					if rawget(region, "_wrap") ~= false and w and w > 4 then
+						for word in text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gmatch("%S+") do
+							rawset(region, "_text", word)
+							local ww = region:GetStringWidth()
+							rawset(region, "_text", text)
+							if ww > w then Note(("word too wide: %s (%d > %d)"):format(word, ww, w)) break end
+						end
+					end
+					-- (Words past the edge of the frame they're in: "When ready, for
+					-- this spell everywhere:" ran out of its pop-up, 2026-11-22.)
+					local fl, _, fw = frame:GetRect()
+					local tl, _, rw = region:GetRect()
+					if fl and tl and fw and fw > 20 and frame ~= host then
+						local justify = rawget(region, "_justH") or "LEFT"
+						local x0 = justify == "CENTER" and tl + (rw - math.min(sw, rw)) / 2 or justify == "RIGHT" and tl + rw - sw or tl
+						local x1 = x0 + ((rawget(region, "_wrap") == false or not (rw and rw > 4)) and sw or math.min(sw, rw))
+						if x1 > fl + fw + 1 or x0 < fl - 1 then Note("spills out of its box: " .. text) end
+					end
 					local r, g, b = region:GetTextColor()
 					-- (Gold only in the grid: the page title and the bar tabs are the game's own.)
 					if inGrid and r and r > 0.95 and g > 0.75 and g < 0.88 and b < 0.15 then Note("gold: " .. text) end
@@ -276,7 +336,7 @@ local function Audit()
 						local x0 = justify == "CENTER" and l + (tw - sw) / 2 or justify == "RIGHT" and l + tw - sw or l
 						local lines = math.max(1, math.floor((region:GetStringHeight() or th) / math.max(th, 1) + 0.5))
 						texts[#texts + 1] = { text, x0, bt + th / 2 - (region:GetStringHeight() or th) / 2, math.min(sw, tw),
-							region:GetStringHeight() or th, lines }
+							region:GetStringHeight() or th, lines, popup }
 					end
 				end
 			end
@@ -285,13 +345,14 @@ local function Audit()
 			local left, bottom, width, height = frame:GetRect()
 			if left then boxes[#boxes + 1] = { frame, left, bottom, width, height } end
 		end
-		for _, child in ipairs(frame._children or {}) do Walk(child, depth + 1, inGrid) end
+		for _, child in ipairs(frame._children or {}) do Walk(child, depth + 1, inGrid, popup) end
 	end
 	Walk(host, 0, false)
 	for i = 1, #texts do
 		for j = i + 1, #texts do
 			local a, c = texts[i], texts[j]
-			if a[2] < c[2] + c[4] - 1 and c[2] < a[2] + a[4] - 1 and a[3] < c[3] + c[5] - 2 and c[3] < a[3] + a[5] - 2 then
+			-- (A pop-up covers what's under it: only its own words count against each other.)
+			if a[7] == c[7] and a[2] < c[2] + c[4] - 1 and c[2] < a[2] + a[4] - 1 and a[3] < c[3] + c[5] - 2 and c[3] < a[3] + a[5] - 2 then
 				Note(("text on text: %s / %s"):format(a[1], c[1]))
 			end
 		end
@@ -313,6 +374,8 @@ local result = { frames = {}, themes = { { key = "game", name = "Cooldown Manage
 local report = {}
 for _, state in ipairs(STATES) do
 	db.handleCooldowns = true
+	ns.SetCooldownPreview(nil)
+	if grid.previewMenu then grid.previewMenu:Hide() end
 	local ok, err = pcall(state.set)
 	if not ok then wow.Warn(state.id .. ": " .. tostring(err)) end
 	pcall(grid.Changed)
@@ -322,6 +385,41 @@ for _, state in ipairs(STATES) do
 	end
 	local issues = Audit()
 	local items = F.Dump(host)
+	-- Contrast (2026-11-22: red "Never" on a blue preview band passed every
+	-- check): each text's color against what's drawn behind its middle, the
+	-- page's dark ground under all, by the WCAG ratio. Below 3 is flagged.
+	local function Lum(c)
+		local function ch(v) v = math.max(0, math.min(1, v)) return v <= 0.03928 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4 end
+		return 0.2126 * ch(c[1]) + 0.7152 * ch(c[2]) + 0.0722 * ch(c[3])
+	end
+	local function Over(top, a, under)
+		return { top[1] * a + under[1] * (1 - a), top[2] * a + under[2] * (1 - a), top[3] * a + under[3] * (1 - a) }
+	end
+	if not state.dim then
+		for i, item in ipairs(items) do
+			if item.k == "text" and item.text:find("%w") then
+				local cx, cy = item.x + item.w / 2, item.y + item.h / 2
+				local bg = { 0.09, 0.09, 0.095 }
+				for j = 1, i - 1 do
+					local under = items[j]
+					if under.k == "tex" and cx >= under.x and cx <= under.x + under.w and cy >= under.y and cy <= under.y + under.h then
+						local c, a
+						if under.color and not under.grad then
+							c, a = under.color, (under.color[4] or 1)
+						elseif under.vc and under.file and (under.file:find("WHITE8X8") or under.file:find("CdmDisc")) then
+							c, a = under.vc, (under.vc[4] or 1)
+						end
+						if c then bg = Over(c, a * (under.a or 1), bg) end
+					end
+				end
+				local tc = item.color or { 1, 1, 1, 1 }
+				local text = Over(tc, (tc[4] or 1) * (item.a or 1), bg)
+				local l1, l2 = Lum(text), Lum(bg)
+				local ratio = (math.max(l1, l2) + 0.05) / (math.min(l1, l2) + 0.05)
+				if ratio < 3 then issues[#issues + 1] = ("contrast %.1f: %s"):format(ratio, item.text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+			end
+		end
+	end
 	-- (Its size from what it drew: the tab frame itself is 1 px.)
 	local w, h = 0, 0
 	for _, item in ipairs(items) do

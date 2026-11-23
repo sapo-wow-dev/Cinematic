@@ -140,7 +140,10 @@ local function Setup(r)
 	ns.db.cooldownAlwaysShow[id] = true
 	test.place = PlaceNow()
 	test.here = ns.AddCooldownGroup()
-	test.here.places, test.here.name = { [test.place] = true }, "Test: here"
+	-- (As the page makes it: a city or inn comes with the open world, 2026-11-22.)
+	local town = test.place == "city" or test.place == "inn" or test.place == "world"
+	test.here.places = town and { world = true, city = true, inn = true } or { [test.place] = true }
+	test.here.name = "Test: here"
 	ns.SetCooldownCell("spell", id, test.here.id, "never")
 	Fresh()
 	r:Log(("spell %s %d (%s), here %s"):format(test.name, id, test.group, test.place))
@@ -154,8 +157,10 @@ end
 local function Audit(r, label, root)
 	local cut, gold, boxes = {}, {}, {}
 	local function Shown(region) return region.IsVisible and region:IsVisible() end
-	local function Walk(frame, depth)
-		if depth > 12 or not Shown(frame) then return end
+	local grid = Grid()
+	local function Walk(frame, depth, inGrid)
+		if depth > 14 or not Shown(frame) then return end
+		inGrid = inGrid or frame == grid
 		for _, region in ipairs({ frame:GetRegions() }) do
 			if region.GetText and region:GetObjectType() == "FontString" and Shown(region) then
 				local text = region:GetText()
@@ -164,18 +169,26 @@ local function Audit(r, label, root)
 					local sw, w = region:GetStringWidth(), region:GetWidth()
 					local wide = type(sw) == "number" and type(w) == "number" and w > 0 and not region:CanWordWrap() and sw > w + 1
 					if (region.IsTruncated and region:IsTruncated()) or wide then cut[#cut + 1] = text end
+					-- (Past the right edge of the frame it's in: the pop-up's label, 2026-11-22.)
+					local left, right = region:GetLeft(), frame:GetRight()
+					local fleft = frame:GetLeft()
+					if left and right and fleft and type(sw) == "number" and frame:GetWidth() > 20 and frame ~= root
+						and left + math.min(sw, (w and w > 4 and region:CanWordWrap()) and w or sw) > right + 1 then
+						cut[#cut + 1] = text .. " (spills out)"
+					end
 					local cr, cg, cb = region:GetTextColor()
-					if cr and cr > 0.95 and cg > 0.75 and cg < 0.88 and cb < 0.15 then gold[#gold + 1] = text end
+					-- (Gold only in the grid: the page's title and the bar tabs are the game's own.)
+					if inGrid and cr and cr > 0.95 and cg > 0.75 and cg < 0.88 and cb < 0.15 then gold[#gold + 1] = text end
 				end
 			end
 		end
-		if frame:GetObjectType() == "Button" and frame ~= root and frame:GetWidth() > 4 then
+		if frame:GetObjectType() == "Button" and frame ~= root and not frame.cdmCatcher and frame:GetWidth() > 4 then
 			local left, bottom, width, height = frame:GetRect()
 			if left then boxes[#boxes + 1] = { frame, left, bottom, width, height } end
 		end
-		for _, child in ipairs({ frame:GetChildren() }) do Walk(child, depth + 1) end
+		for _, child in ipairs({ frame:GetChildren() }) do Walk(child, depth + 1, inGrid) end
 	end
-	Walk(root, 0)
+	Walk(root, 0, false)
 	local overlaps = {}
 	for i = 1, #boxes do
 		for j = i + 1, #boxes do
@@ -235,7 +248,7 @@ ns.TestKit.Define({
 				("here's group never used %s, Otherwise never used %s"):format(tostring(trouble[2] and trouble[2].kind),
 				tostring(otherDead)))
 		end },
-		{ key = "page", title = "the page: the grid on the spell's bar", run = function(r)
+		{ key = "page", proven = "cdmgrid run 29 (2026-11-22): PASS, grid, Essentials row, Shows column", title = "the page: the grid on the spell's bar", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -251,8 +264,8 @@ ns.TestKit.Define({
 			-- The look (the user, 2026-11-22: "something about it doesn't look right").
 			local barRow = grid.rows[1]
 			local other = #cols
-			r:Verdict(grid.layout.colW <= 120 and barRow.cells[other].style == "bar"
-				and barRow.label:GetText() == ns.L["%s bar"]:format(ns.L[test.group == "utility" and "Utility" or "Essential"]),
+			r:Verdict(grid.layout.colW <= 190 and barRow.cells[other].style == "bar"
+				and barRow.label:GetText() == ns.L[test.group == "utility" and "Utility" or "Essentials"],
 				("columns %d wide, bar's Otherwise %s, bar's row %s"):format(grid.layout.colW,
 				tostring(barRow.cells[other].style), tostring(barRow.label:GetText())))
 			-- (With no groups: the add column wide and saying what a group is, no dot.)
@@ -269,7 +282,7 @@ ns.TestKit.Define({
 			ns.CooldownRuleFactsStale()
 			grid.Changed()
 		end },
-		{ key = "choices", proven = "cdmgrid run 9 (2026-11-22): PASS, the pop-up in the shot", title = "a cell's choices", run = function(r)
+		{ key = "choices", proven = "cdmgrid run 29 (2026-11-22): PASS, pop-up, When ready parts", title = "a cell's choices", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -294,7 +307,7 @@ ns.TestKit.Define({
 			r:Shot("the choices, When ready picked", { behind = panel })
 			Click(row.cells[j])
 		end },
-		{ key = "editor", proven = "cdmgrid run 9 (2026-11-22): PASS, editor pills in the shot", title = "a group's editor", run = function(r)
+		{ key = "editor", proven = "cdmgrid run 33 (2026-11-22): PASS, Location list Open world/Instances/Dungeons/Raids/BGs, opens, shot", title = "a group's editor, its Location list open", run = function(r)
 			if not test.here and not Setup(r) then return end
 			local grid, panel = OpenPage(r)
 			if not grid then return end
@@ -306,9 +319,31 @@ ns.TestKit.Define({
 			r:Sleep(0.3)
 			r:Verdict(grid.editor:IsVisible() and grid.state.editing == test.here.id, "editor open under the headings")
 			r:Shot("the group editor", { behind = panel })
+			-- (The Location list as the player sees it: Open world, Instances,
+			-- Dungeons, Raids, BGs & arenas; Cities or Inns only on a scene that has
+			-- them without the open world, as the test's own does in a city. 2026-11-22.)
+			local names = {}
+			for _, entry in ipairs(grid.placeEntries) do names[#names + 1] = entry[1] end
+			r:Verdict(#grid.placeEntries >= 5 and grid.placeEntries[1].place == "world" and grid.placeEntries[2].place == "instance",
+				"Location list: " .. table.concat(names, ", "))
+			local locationButton
+			for _, child in ipairs({ grid.whenRow:GetChildren() }) do
+				if child.sweepTicks == grid.placeEntries then locationButton = child end
+			end
+			if locationButton and locationButton:IsVisible() then
+				locationButton:Click()
+				r:Sleep(0.3)
+				local manager = _G.Menu and _G.Menu.GetManager and _G.Menu.GetManager()
+				local menu = manager and manager.GetOpenMenu and manager:GetOpenMenu()
+				r:Verdict(menu ~= nil, "the Location list opens")
+				r:Shot("the Location list open", { behind = panel })
+				if manager and manager.CloseMenus then manager:CloseMenus() end
+			else
+				r:Fail("no Location dropdown found in the editor")
+			end
 			Click(head)
 		end },
-		{ key = "ticked", proven = "cdmgrid run 9 (2026-11-22): PASS, bar pills in the shot", title = "ticked rows: set them all", run = function(r)
+		{ key = "ticked", proven = "cdmgrid run 29 (2026-11-22): PASS, Set/to/Apply bar, Copy row", title = "ticked rows: set them all", run = function(r)
 			local grid, panel = OpenPage(r)
 			if not grid then return end
 			local row = RowOf(grid, test.spell)
@@ -318,7 +353,7 @@ ns.TestKit.Define({
 			r:Shot("one row ticked", { behind = panel })
 			Click(grid.bulkButtons.clear)
 		end },
-		{ key = "look", proven = "cdmgrid run 9 (2026-11-22): PASS, Look in the shot", title = "Look", run = function(r)
+		{ key = "look", proven = "cdmgrid run 29 (2026-11-22): PASS, Look columns and the tab's own looks", title = "Look", run = function(r)
 			local grid, panel = OpenPage(r)
 			if not grid then return end
 			Click(grid.lookSwitch)
@@ -334,7 +369,7 @@ ns.TestKit.Define({
 			r:Verdict(not grid.extras:IsShown(), "back to When it shows: the bar's looks line gone")
 			r:Shot("back from Look", { behind = panel })
 		end },
-		{ key = "gallery", title = "the look, setup by setup (screenshots)", run = function(r)
+		{ key = "gallery", proven = "cdmgrid run 33 (2026-11-22): PASS, ghost cells + column bands, 8 setups, audits clean, shots looked at", title = "the look, setup by setup (screenshots)", run = function(r)
 			-- (The user, 2026-11-22: "evaluate the look for all possible combinations,
 			-- generate a few rows with different options". Each setup on your own bar,
 			-- a screenshot each; everything's put back after.)
@@ -367,7 +402,9 @@ ns.TestKit.Define({
 				r:Log(("%s: columns %s wide, icons only %s, card %s, + Add scene %s, height %d"):format(label,
 					tostring(L2.colW), tostring(L2.compact), tostring(L2.cardShown), tostring(L2.plusShown),
 					math.floor(grid:GetHeight() + 0.5)))
-				Audit(r, label, panel)
+				-- (The grid's own frame: the panel is its background, it held none of it;
+				-- every check passed on an empty frame, 2026-11-22.)
+				Audit(r, label, grid:GetParent())
 				r:Shot(label, { behind = panel })
 			end
 			local DUNGEON = { id = 1, name = "Dungeon fights", places = { dungeon = true, raid = true }, combat = "in" }
@@ -428,12 +465,12 @@ ns.TestKit.Define({
 				Click(rowA.cells[1])
 				r:Sleep(0.4)
 				r:Verdict(grid.chooser:IsVisible(), "pop-up open under the first column's cell")
-				Audit(r, "5 pop-up, When ready parts", panel)
+				Audit(r, "5 pop-up, When ready parts", grid:GetParent())
 				r:Shot("5 pop-up, When ready parts", { behind = panel })
 				Click(rowA.cells[1])
 				Click(rowA.cells[4])
 				r:Sleep(0.4)
-				Audit(r, "5b pop-up at the right edge (Otherwise)", panel)
+				Audit(r, "5b pop-up at the right edge (Otherwise)", grid:GetParent())
 				r:Shot("5b pop-up at the right edge (Otherwise)", { behind = panel })
 				Click(rowA.cells[4])
 			end
@@ -472,7 +509,58 @@ ns.TestKit.Define({
 			else
 				r:Log("9 no tracked buffs in the Cooldown Manager: buffs bar not shown")
 			end
+			-- (Real text widths, to match the CDM lab's guesses to: it guessed
+			-- narrow and missed cut chips, 2026-11-22.)
+			local probe = grid:CreateFontString(nil, "OVERLAY")
+			for _, font in ipairs({ "GameFontHighlightSmall", "GameFontDisableSmall", "GameFontHighlight", "GameFontNormalSmall" }) do
+				probe:SetFontObject(font)
+				local file, size = probe:GetFont()
+				local parts = {}
+				for _, words in ipairs({ "Open world", "In combat", "Out of combat", "When ready, for this spell everywhere:",
+					"Dungeon fights", "MMMMMMMMMM", "iiiiiiiiii" }) do
+					probe:SetText(words)
+					parts[#parts + 1] = ("%s=%.1f"):format(words, probe:GetStringWidth() or -1)
+				end
+				r:Log(("text widths %s (%s %s): %s"):format(font, tostring(file), tostring(size), table.concat(parts, "; ")))
+			end
+			probe:Hide()
 			r:Pass("gallery shot; look at the screenshots")
+		end },
+		{ key = "preview", proven = "cdmgrid run 31 (2026-11-22): PASS, faded while previewing, banner, back to shown", title = "the previewer: a dungeon fight from here, your icon follows", seconds = 6, run = function(r)
+			if not test.here and not Setup(r) then return end
+			-- (A scene for dungeon fights, the spell Never in it; you're not in one.)
+			if test.place == "dungeon" then return r:Skip("you're in a dungeon: stand outside one for this step") end
+			ns.db.cooldownPlaceGroups = {}
+			local scene = ns.AddCooldownGroup()
+			scene.places, scene.combat, scene.name = { dungeon = true }, "in", "Test: dungeon fights"
+			ns.SetCooldownCell("spell", test.spell, scene.id, "never")
+			-- (Always of its own, set here: the gallery before clears it, and a
+			-- spell whose default is When it procs stayed hidden, a shaman's
+			-- Searing Totem, cdmgrid run 29.)
+			for _, name in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow" }) do
+				ns.db[name][test.spell] = nil
+			end
+			ns.db.cooldownAlwaysShow[test.spell] = true
+			Fresh()
+			r:Sleep(1.5)
+			Look(r, "shown")
+			-- (The page open first, as a player has it: it goes back to live as
+			-- it hides, and run alone this step opened it after, cdmgrid run 30.)
+			local grid, panel = OpenPage(r)
+			r:Sleep(0.5)
+			ns.SetCooldownPreview("dungeonFight")
+			if grid then grid.Changed() end
+			r:Sleep(1.5)
+			Look(r, "faded")
+			if grid then
+				r:Verdict(grid.banner:IsVisible(), "the blue banner shows while previewing")
+				r:Shot("previewing a dungeon fight", { behind = panel })
+			end
+			ns.SetCooldownPreview(nil)
+			if grid then grid.Changed() end
+			Fresh()
+			r:Sleep(1.5)
+			Look(r, "shown")
 		end },
 		{ key = "button", proven = "cdmgrid run 2 (2026-11-22): PASS, Close CDM and the window in the shot", title = "Open CDM", run = function(r)
 			local grid = OpenPage(r)
