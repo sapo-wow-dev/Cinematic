@@ -790,10 +790,8 @@ ns.PROFILE_MODULES = {
 	{ key = "tint-medium", name = "Medium tint", scope = { "Tint/How strong" },
 		tip = "The tint at two thirds of its strength (Strength 66%).",
 		apply = function(set) set("tintStrength", 0.66) end },
-	{ key = "weather-view-distance", name = "View distance in bad weather", scope = { "Weather/View distance" },
-		tip = "In rain, snow or a sandstorm the view distance comes all the way in (Reduce view distance in bad " ..
-			"weather at 100%).",
-		apply = function(set) set("rainViewScale", 1) end },
+	-- (weather-view-distance, Cinema's and Shoulder Cam's, gone 2026-11-23: no
+	-- profile changes your graphics, the user's call.)
 	{ key = "vitals-vision", name = "Vitals Vision on", scope = { "Vitals Vision" },
 		tip = "Your health shows at the screen's edges, and the screen turns grayer as it drops.",
 		-- (Its health bars fading in, Keep up's Fade to since 2026-11-17: Off

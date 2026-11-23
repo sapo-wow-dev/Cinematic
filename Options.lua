@@ -7536,7 +7536,8 @@ local function CreateEffectsPanel()
 	-- strength everywhere (2026-11-23: the camera pages' own Edge haze gone;
 	-- it was 0-200% of theirs before). Its row above says where and when
 	-- (depthOfField; the camera modes to start with).
-	local cameraHaze = InlineSlider(lastRow.rowName, 18, "dofScale", L["Haze strength"], 100, 5, function(value)
+	-- (1% steps, the user 2026-11-23.)
+	local cameraHaze = InlineSlider(lastRow.rowName, 18, "dofScale", L["Haze strength"], 100, 1, function(value)
 		if value > 0 then ns.FocusPreview(value / 100) end
 	end)
 	GreyRow(cameraHaze, function(db) return db.depthOfField end)
@@ -7548,7 +7549,7 @@ local function CreateEffectsPanel()
 		L["Shows the haze at this strength for a few seconds, in CineMode or not."],
 		function(db) return db.depthOfField and (db.dofScale or 0) > 0 end,
 		function() return ns.FocusDemoRunning() end,
-		function() ns.FocusDemo(8, ns.GetDB().dofScale or 0.3) end,
+		function() ns.FocusDemo(8, ns.GetDB().dofScale or 0) end,
 		function() ns.FocusDemo() end).previewFor = "haze"
 
 	local nameWidth = 0

@@ -22,6 +22,9 @@
 --  13 hazeslider  Haze, the same: 30% then 80% draws that haze; Always off, its rule (camera): none
 --  14 worldwords  the rules' new words (rain, snow, sandstorm, storm, weather, dawn, day, dusk, night,
 --                 underwater, fast) against the game's own answers; the editor's World line shown
+--  15 weatherfx   the Weather page's frost, rain on the lens, lightning and heavier weather:
+--                 textures found, rows and sliders shown, each drawn at its slider's strength
+--                 in CineMode with its row on, the game's weatherDensity held and put back
 -- Into CinematicDB.atmosphereTestLog. Dev copy only.
 local _, ns = ...
 
@@ -104,8 +107,10 @@ ns.TestKit.Define({
 	about = "Visual Effects page: each slider's and button's preview drawn out of CineMode, nothing to do",
 	settings = { "visualEffects", "vignette", "vignetteStrength", "weatherTint", "weatherTintStrength", "innGlow",
 		"innGlowAmount", "tintPage", "rainViewScale", "depthOfField", "dofScale", "styleGeneral", "weatherStyle",
-		"weatherRainR", "weatherRainG", "weatherRainB", "weatherBlendTime", "innAlways", "hazeAlways" },
-	cvars = { "horizonStart", "farclip" },
+		"weatherRainR", "weatherRainG", "weatherRainB", "weatherBlendTime", "innAlways", "hazeAlways", "weatherPage",
+		"frostAlways", "rainlensAlways", "densityAlways", "weatherFrost", "weatherRainLens", "weatherDensityOn",
+		"weatherFrostStrength", "weatherRainLensStrength", "weatherLightningStrength", "weatherDensityLevel" },
+	cvars = { "horizonStart", "farclip", "weatherDensity" },
 	-- (The rows' rules SetRule changed: yours back. "<nil>": the kit's mark for none.)
 	putBack = function(extra)
 		local n = 0
@@ -233,10 +238,16 @@ ns.TestKit.Define({
 			r:Verdict(back, "back to " .. tostring(before) .. ": " .. tostring(GetCVar("horizonStart")))
 		end },
 		{ key = "haze", title = "haze preview: one strength, a pale mist you can see", seconds = 5, run = function(r)
-			-- (One Haze strength, 0-100%, 30% to start with, since 2026-11-23:
-			-- "haze seems to be doing nothing". And a pale mist, not mid-grey: the
-			-- screen's edge measured brighter with it than without.)
-			r:Verdict(ns.DEFAULTS.dofScale == 0.3, "Haze strength 30% to start with: " .. tostring(ns.DEFAULTS.dofScale))
+			-- (One Haze strength, 0-100% in 1% steps, 0 to start with, since
+			-- 2026-11-23: "haze seems to be doing nothing", "increments of 1%",
+			-- "default should be 0". And a pale mist, not mid-grey: the screen's
+			-- edge measured brighter with it than without.)
+			r:Verdict(ns.DEFAULTS.dofScale == 0, "Haze strength 0 to start with: " .. tostring(ns.DEFAULTS.dofScale))
+			ns.OpenOptions("Effects")
+			r:Sleep(0.3)
+			local slider = ns.effectSliders and ns.effectSliders.haze
+			local step = slider and slider.GetValueStep and slider:GetValueStep()
+			r:Verdict(ns.noRealLayout or step == 1, "Haze strength moves in 1% steps: " .. tostring(step))
 			-- (Its file found: a path naming "Cinematic" found nothing in the dev
 			-- copy's CinematicDev folder, and the haze drew nothing at any strength
 			-- while its alpha read right, 2026-11-23.)
@@ -515,6 +526,99 @@ ns.TestKit.Define({
 				#lines - #missing, #lines, cut, covered, #missing > 0 and (" (missing " .. table.concat(missing, ", ") .. ")") or ""))
 			r:Shot("rule editor: World line", { behind = editor })
 			editor:Hide()
+		end },
+		-- (The Weather page's screen effects, 2026-11-23, WeatherFX.lua: their
+		-- textures found, the page's new rows and sliders shown whole; then in
+		-- CineMode each row's rule cleared and Always on, as a player would to
+		-- have it now, its slider moved as a drag does: frost and rain drawn at
+		-- that strength, lightning flashing (with thunder, if one is known),
+		-- the game's weatherDensity held at its level, and put back after.)
+		{ key = "weatherfx", title = "Weather page: frost, rain on the lens, lightning, heavier weather", seconds = 30,
+			run = function(r)
+			-- (First: none of it on screen with every strength 0, as after a
+			-- /reload or a reset: textures left shown as made covered the screen,
+			-- the user 2026-11-23, Reset Settings didn't clear them.)
+			local on = {}
+			for name, tex in pairs(ns.weatherFxTextures or {}) do
+				if tex:IsShown() and (tex:GetAlpha() or 0) > 0 then on[#on + 1] = name end
+			end
+			local db0 = ns.db
+			local zero = (db0.weatherFrostStrength or 0) == 0 and (db0.weatherRainLensStrength or 0) == 0
+				and (db0.weatherLightningStrength or 0) == 0
+			if zero then
+				r:Verdict(#on == 0, ("strengths 0: nothing of it on screen (%s)"):format(#on == 0 and "none" or table.concat(on, ", ")))
+				r:Shot("no weather effects")
+			else
+				r:Log(("strengths set (yours): on screen %s"):format(#on == 0 and "none" or table.concat(on, ", ")))
+			end
+			local loaded = ns.weatherFxLoaded or {}
+			r:Verdict(ns.noRealLayout or (loaded.frost == true and loaded.drops == true and loaded.streaks == true),
+				("textures found: frost %s, drops %s, trails %s"):format(tostring(loaded.frost), tostring(loaded.drops),
+				tostring(loaded.streaks)))
+			r:Set("visualEffects", true)
+			r:Set("weatherPage", true)
+			local wanted = {}
+			ns.OpenOptions("Weather")
+			r:Sleep(0.8)
+			for _, fx in ipairs({ "frost", "rainlens", "lightning", "density" }) do
+				local slider = ns.weatherFxSliders and ns.weatherFxSliders[fx]
+				if slider then wanted[#wanted + 1] = { fx .. " slider", slider } end
+				if fx ~= "density" then wanted[#wanted + 1] = { fx } end
+			end
+			Page(r, "Weather", "Weather page", wanted)
+			CineOn(r)
+			local drawn = ns.weatherFxDrawn or {}
+			for _, fx in ipairs({ { "frost", "weatherFrost", 0.6 }, { "rainlens", "weatherRainLens", 0.5 } }) do
+				SetRule(r, "effect:" .. fx[1], "")
+				r:Set(fx[1] .. "Always", true)
+				r:Set(fx[2], true)
+				local slider = ns.weatherFxSliders and ns.weatherFxSliders[fx[1]]
+				-- (As a drag: its 3 second preview first. From 0, so it's a change:
+				-- left at 60 by run 1, setting 60 again did nothing, run 2.)
+				if slider then
+					slider:SetValue(0)
+					slider:SetValue(fx[3] * 100)
+				end
+				r:Sleep(4)
+				local value = fx[1] == "frost" and drawn.frost or drawn.streaks / 0.45
+				r:Verdict(Near(value, fx[3]), ("%s at %d%%: drawn %.2f (row wanted %s)"):format(fx[1], fx[3] * 100,
+					value or -1, tostring(ns.effectWanted and ns.effectWanted[fx[1]])))
+				r:Shot(fx[1] .. " " .. fx[3] * 100 .. "%")
+				r:Set(fx[1] .. "Always", false)
+				SetRule(r, "effect:" .. fx[1], ns.RULE_DEFAULTS["effect:" .. fx[1]])
+				r:Set(fx[1] == "frost" and "weatherFrostStrength" or "weatherRainLensStrength", 0)
+				r:Sleep(fx[1] == "frost" and 5.5 or 5.5)
+			end
+			-- Lightning: its preview flashes every few seconds.
+			r:Set("weatherLightningStrength", 0.8)
+			local before = ns.lightningFlashes or 0
+			ns.WeatherFxPreview("lightning", 6)
+			local brightest = 0
+			for _ = 1, 30 do
+				r:Sleep(0.2)
+				brightest = math.max(brightest, drawn.flash or 0)
+			end
+			local thunder = ns.thunderPlayed
+			r:Verdict((ns.lightningFlashes or 0) - before >= 2 and brightest > 0.3,
+				("lightning: %d flashes in 6 seconds, brightest %.2f; thunder %s"):format((ns.lightningFlashes or 0) - before,
+				brightest, thunder and ("file " .. tostring(thunder.file) .. ", played " .. tostring(thunder.willPlay)) or "none known"))
+			r:Set("weatherLightningStrength", 0)
+			-- Heavier weather: the game's density held at its level, put back after.
+			local own = GetCVar("weatherDensity")
+			SetRule(r, "effect:density", "")
+			r:Set("densityAlways", true)
+			r:Set("weatherDensityOn", true)
+			r:Set("weatherDensityLevel", own == "1" and 3 or 1)
+			r:Sleep(2.5)
+			local held = GetCVar("weatherDensity")
+			r:Set("densityAlways", false)
+			SetRule(r, "effect:density", ns.RULE_DEFAULTS["effect:density"])
+			r:Set("weatherDensityLevel", 0)
+			r:Sleep(2.5)
+			local back = GetCVar("weatherDensity")
+			r:Verdict(held == tostring(own == "1" and 3 or 1) and back == own,
+				("heavier weather: yours %s, held %s, back to %s"):format(tostring(own), tostring(held), tostring(back)))
+			CineOff(r)
 		end },
 	},
 })

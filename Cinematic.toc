@@ -217,6 +217,7 @@ Visions\EmoteVision.lua
 Visions\DamageVision.lua
 Visions\DamageReport.lua
 Atmosphere\Focus.lua
+Atmosphere\WeatherFX.lua
 UI\Tracking.lua
 UI\NodeSweep.lua
 Support\QuestieMinimap.lua

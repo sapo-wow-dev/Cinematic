@@ -170,16 +170,16 @@ do
 	ns.effectWanted.inn = nil
 end
 
--- The haze: one strength, 0-100%, 30% to start with (2026-11-23: "haze seems
+-- The haze: one strength, 0-100% in 1% steps, 0 to start with (2026-11-23: "haze seems
 -- to be doing nothing"); an old save's 0-200% scale and the camera modes' own
 -- strengths gone (Migrations.lua); the built-in cameras' haze is Haze
 -- strength's, shown on their script page as that setting; a pale mist.
-Check("Haze strength 30% to start with, the modes' own gone", ns.DEFAULTS.dofScale == 0.3
+Check("Haze strength 0 to start with, the modes' own gone", ns.DEFAULTS.dofScale == 0
 	and ns.DEFAULTS.dofIdle == nil and ns.DEFAULTS.dofFlight == nil)
 do
 	local old = { dofScale = 2, dofIdle = 0.15, dofWalk = 0, depthOfField = true }
 	ns.HazeToOneStrength(old)
-	Check("an old save's haze: 30%, the modes' own gone, its switch kept", old.dofScale == 0.3 and old.dofIdle == nil
+	Check("an old save's haze: 0, the modes' own gone, its switch kept", old.dofScale == 0 and old.dofIdle == nil
 		and old.dofWalk == nil and old.depthOfField == true)
 	local file = io.open("Camera/CameraScripts.lua")
 	local text = file:read("*a")
@@ -311,6 +311,107 @@ do
 	g.kind = 0
 	Facts()
 	ns.OnTaxi = onTaxi
+end
+
+-- View distance in bad weather: 0 to start with and in every built-in
+-- profile (2026-11-23, the user: no graphics changed by default); an old
+-- save at the 100% Cinema and Shoulder Cam gave it goes to 0, a hand-picked
+-- value stays (Migrations.lua).
+do
+	local on = {}
+	for _, name in ipairs(ns.ProfileNames()) do
+		if ns.IsBuiltinProfile(name) then
+			local value = (ns.ProfileBase(name) or {}).rainViewScale
+			if value == nil then value = ns.DEFAULTS.rainViewScale end
+			if (tonumber(value) or 0) > 0 then on[#on + 1] = name end
+		end
+	end
+	Check("view distance in bad weather: 0 to start with and in every built-in profile",
+		ns.DEFAULTS.rainViewScale == 0 and #on == 0, table.concat(on, ", "))
+	local full, picked = { rainViewScale = 1 }, { rainViewScale = 0.4 }
+	ns.RainViewOff(full)
+	ns.RainViewOff(picked)
+	Check("an old save's 100% goes to 0, a hand-picked 40% stays", full.rainViewScale == 0 and picked.rainViewScale == 0.4)
+end
+
+-- The Weather page's screen effects (WeatherFX.lua, 2026-11-23): nothing to
+-- start with (strengths 0, rows by their weather's rules); each wanted by
+-- its row at a strength draws it (frost creeping in, drops and trails,
+-- flashes over time, the density held), gone with its row off; a preview at
+-- Off shows half.
+do
+	Check("weather effects: nothing to start with", ns.DEFAULTS.weatherFrostStrength == 0
+		and ns.DEFAULTS.weatherRainLensStrength == 0 and ns.DEFAULTS.weatherLightningStrength == 0
+		and ns.DEFAULTS.weatherDensityLevel == 0 and ns.RULE_DEFAULTS["effect:frost"] == "snow"
+		and ns.RULE_DEFAULTS["effect:rainlens"] == "rain" and ns.RULE_DEFAULTS["effect:lightning"] == "storm"
+		and ns.RULE_DEFAULTS["effect:density"] == "weather")
+	local fx = _G.CinematicWeatherFX
+	local drawn = ns.weatherFxDrawn
+	local function Tick(seconds)
+		for _ = 1, math.floor(seconds / 0.1 + 0.5) do
+			now = now + 0.1
+			ns.WakeFeatureLoop(fx)
+			local update = fx:GetScript("OnUpdate")
+			if update then update(fx, 0.1) end
+		end
+	end
+	Check("weather effects' frame and drawing there", fx ~= nil and drawn ~= nil)
+	-- (Nothing on screen as loaded, every strength 0: textures left shown as
+	-- made covered the screen from login, the user 2026-11-23, even after
+	-- Reset Settings: the update never ran to hide them.)
+	local function Showing()
+		local on = {}
+		for name, tex in pairs(ns.weatherFxTextures or {}) do
+			if tex:IsShown() then on[#on + 1] = name end
+		end
+		table.sort(on)
+		return table.concat(on, ", ")
+	end
+	Check("nothing of the weather effects shown as loaded", ns.weatherFxTextures ~= nil and Showing() == "", Showing())
+	-- (Its update runs only while it's shown: hidden till something drew,
+	-- nothing ever did, in game run 1. Here the update's called by hand.)
+	Check("weather effects' frame stays shown (a hidden frame's update never runs)", fx and fx:IsShown())
+	db.enabled, db.visualEffects, db.weatherPage = true, true, true
+	db.weatherFrostStrength, db.weatherRainLensStrength, db.weatherLightningStrength = 0.6, 0.5, 0.8
+	db.weatherDensityLevel = 2
+	ns.effectWanted.frost = true
+	Tick(14)
+	Check("frost creeps in to its strength", Near(drawn.frost, 0.6), drawn.frost)
+	ns.effectWanted.frost = false
+	Tick(6)
+	Check("frost melts with its row off", drawn.frost == 0, drawn.frost)
+	ns.effectWanted.rainlens = true
+	Tick(3)
+	Check("rain on the lens: drops and trails", (drawn.drops or 0) > 0 and Near(drawn.streaks, 0.5 * 0.45),
+		("drops %s, streaks %s"):format(tostring(drawn.drops), tostring(drawn.streaks)))
+	ns.effectWanted.rainlens = false
+	Tick(6)
+	Check("rain on the lens dries with its row off", drawn.drops == 0 and drawn.streaks == 0)
+	ns.effectWanted.lightning = true
+	local flashes, brightest = ns.lightningFlashes or 0, 0
+	for _ = 1, 600 do
+		Tick(0.1)
+		brightest = math.max(brightest, drawn.flash or 0)
+	end
+	Check("lightning flashes in a storm (60 seconds)", (ns.lightningFlashes or 0) - flashes >= 2 and Near(brightest, 0.8 * 0.6),
+		("%d flashes, brightest %.2f"):format((ns.lightningFlashes or 0) - flashes, brightest))
+	ns.effectWanted.lightning = false
+	Tick(2)
+	ns.effectWanted.density = true
+	Tick(0.2)
+	Check("heavier weather holds the game's density at its level", drawn.density == 2, drawn.density)
+	ns.effectWanted.density = false
+	Tick(0.2)
+	Check("...and lets it go with its row off", drawn.density == nil, drawn.density)
+	db.weatherFrostStrength = 0
+	ns.WeatherFxPreview("frost", 3)
+	Tick(1)
+	Check("a frost preview at Off shows half", Near(drawn.frost, 0.5), drawn.frost)
+	ns.WeatherFxPreview(nil)
+	Tick(6)
+	Check("...gone after it", drawn.frost == 0, drawn.frost)
+	Check("nothing of the weather effects shown with none wanted", Showing() == "", Showing())
+	db.weatherRainLensStrength, db.weatherLightningStrength, db.weatherDensityLevel = 0, 0, 0
 end
 
 -- /cine debug atmosphere on the stand-in. (Its page opened first, so the

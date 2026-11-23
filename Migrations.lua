@@ -5760,7 +5760,7 @@ end
 ns.OLD_DOF_MODE_KEYS = { "dofIdle", "dofCozy", "dofVista", "dofFish", "dofFlight", "dofWalk", "dofRun" }
 function ns.HazeToOneStrength(t)
 	if type(t) ~= "table" then return end
-	t.dofScale = ns.DEFAULTS.dofScale -- (30%: set, not nil, as the live settings aren't filled again)
+	t.dofScale = ns.DEFAULTS.dofScale -- (0, the default: set, not nil, as the live settings aren't filled again)
 	for _, key in ipairs(ns.OLD_DOF_MODE_KEYS) do t[key] = nil end
 end
 STEPS[#STEPS + 1] = function()
@@ -5815,6 +5815,23 @@ STEPS[#STEPS + 1] = function()
 		for _, saved in pairs(type(list) == "table" and list or {}) do ns.EffectRowsFromSwitches(saved) end
 	end
 	ns.db.effectRowsV1 = true
+end
+-- View distance in bad weather off, once (2026-11-23, the user: "I don't want
+-- to mess with anyone's graphics settings by default"): Cinema and Shoulder
+-- Cam set it to 100%, and no profile does now. Where it's still the 100% they
+-- gave it, here and in every saved profile and reset point, it goes to 0;
+-- another value (picked by hand) stays. (Graphics.lua puts the view
+-- distance back on its next look.)
+function ns.RainViewOff(t)
+	if type(t) == "table" and tonumber(t.rainViewScale) == 1 then t.rainViewScale = 0 end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.rainViewOffV1 then return end
+	ns.RainViewOff(ns.db)
+	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do ns.RainViewOff(saved) end
+	end
+	ns.db.rainViewOffV1 = true
 end
 -- The New zone card off, once (2026-11-23): it was on to start with, so a
 -- whole new zone (Dun Morogh) got the big headline card where the user

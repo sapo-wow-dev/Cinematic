@@ -139,7 +139,7 @@ local DEFAULTS = {
 	innGlowAmount = 0.02,  -- light the inn glow adds at its brightest (0.1 = 10%)
 	weatherTint = true,    -- rain, snow and sandstorms grey or colour the scene (clients with C_Weather)
 	weatherTintStrength = 0, -- (off to start with since 2026-11-12: Core.lua's weatherStrengthV2)
-	rainViewScale = 0,     -- in rain, the view distance comes in from yours (Graphics.lua); Cinema: 100% (weather-view-distance)
+	rainViewScale = 0,     -- in rain, the view distance comes in from yours (Graphics.lua); 0 in every profile since 2026-11-23
 	tintClock = "game",    -- time-of-day tint follows "game" (realm) time or "local" (computer) time
 	timeTintStrength = 1,  -- how strongly the time-of-day colour applies (both time presets)
 	tintPreviewHour = -2,  -- options-page preview of the time-of-day tint at this hour (-1 = now, -2 = not picked)
@@ -755,6 +755,14 @@ DEFAULTS.vignetteOffInCombat = false
 -- camera modes.
 DEFAULTS.innAlways = false
 DEFAULTS.hazeAlways = false
+-- The Weather page's screen effects (2026-11-23, WeatherFX.lua): Frost, Rain
+-- on the lens, Lightning and Heavier weather. Their rows start from rules
+-- (RULE_DEFAULTS below: snow, rain, storm, weather), their switches on, and
+-- their strengths 0: nothing shows till you set one.
+for _, fx in ipairs({ "frost", "rainlens", "lightning", "density" }) do DEFAULTS[fx .. "Always"] = false end
+DEFAULTS.weatherFrost, DEFAULTS.weatherRainLens, DEFAULTS.weatherLightning, DEFAULTS.weatherDensityOn = true, true, true, true
+DEFAULTS.weatherFrostStrength, DEFAULTS.weatherRainLensStrength, DEFAULTS.weatherLightningStrength = 0, 0, 0
+DEFAULTS.weatherDensityLevel = 0 -- (the game's weatherDensity held at this, 1-3, while its row is on; 0 off)
 -- The grid's Always column: the letterbox, vignette and weather have their own
 -- switches (letterbox, vignette, weatherTint); the tint has this one.
 DEFAULTS.tintOffAlways = false
@@ -2028,6 +2036,11 @@ ns.RULE_DEFAULTS[ns.HEAL_VISION_PLATE_ROW] = "not city and not dead"
 -- haze"): where they showed before they had rows, now rules you can change.
 ns.RULE_DEFAULTS["effect:inn"] = "inn and indoors"
 ns.RULE_DEFAULTS["effect:haze"] = "camera"
+-- The Weather page's screen effects (WeatherFX.lua): with their weather.
+ns.RULE_DEFAULTS["effect:frost"] = "snow"
+ns.RULE_DEFAULTS["effect:rainlens"] = "rain"
+ns.RULE_DEFAULTS["effect:lightning"] = "storm"
+ns.RULE_DEFAULTS["effect:density"] = "weather"
 do
 	local OFF_GRID_ROWS, OLD_GRID_DEFAULTS = {}, {}
 
@@ -2139,7 +2152,8 @@ do
 			-- switches, which stay, kept on while their rows show anywhere.)
 			-- (And the inn glow's and haze's rows, 2026-11-23: their switches as their sliders' Off had them.)
 			local SWITCHES = { letterbox = "letterbox", vignette = "vignette", weather = "weatherTint", inn = "innGlow",
-				haze = "depthOfField" }
+				haze = "depthOfField", frost = "weatherFrost", rainlens = "weatherRainLens",
+				lightning = "weatherLightning", density = "weatherDensityOn" }
 			for _, effect in ipairs(ns.EFFECT_GRID) do
 				OFF_GRID_ROWS[#OFF_GRID_ROWS + 1] = { key = "effect:" .. effect, always = effect .. "Always",
 					offAlways = effect .. "OffAlways", switch = SWITCHES[effect], places = Places(effect .. "OffIn"),
@@ -2262,8 +2276,10 @@ DEFAULTS.taxiZoomPauseVary = 3
 -- switch (depthOfField) and one strength for every camera since 2026-11-23,
 -- dofScale 0-1 (it was 0-2 times each mode's own dof<Mode>, 2.5% then 15%:
 -- the haze could hardly be seen). Migrations.lua's dofScaleV2 sets it once.
+-- 0 to start with (the user, 2026-11-23: "default should be 0 going
+-- forward"): no haze till you set one.
 DEFAULTS.depthOfField = true
-DEFAULTS.dofScale = 0.3
+DEFAULTS.dofScale = 0
 
 -- While any of these windows is open, keep the UI visible.
 local REVEAL_WHILE_SHOWN = {
@@ -3953,7 +3969,12 @@ local snapRound = 0
 -- (inn and haze, the inn glow's and camera haze's rows on the Visual Effects
 -- page since 2026-11-23: the inn glow out of CineMode as the tint's tick says,
 -- the haze in CineMode only, as Focus.lua has it.)
-local GRID_EFFECTS = { "letterbox", "tint", "vignette", "weather", "inn", "haze" }
+-- (frost, rainlens, lightning, density: the Weather page's screen effects,
+-- 2026-11-23, out of CineMode as the weather's own tick says: OUTSIDE_SHARED.)
+local GRID_EFFECTS = { "letterbox", "tint", "vignette", "weather", "inn", "haze", "frost", "rainlens", "lightning",
+	"density" }
+ns.OUTSIDE_SHARED = { inn = "outsideCineTint", frost = "outsideCineWeather", rainlens = "outsideCineWeather",
+	lightning = "outsideCineWeather", density = "outsideCineWeather" }
 -- Allow outside CineMode's tick for each (CineMode page; off: CineMode only).
 local OUTSIDE_EFFECT = { letterbox = "outsideCineLetterbox", tint = "outsideCineTint",
 	vignette = "outsideCineVignette", weather = "outsideCineWeather" }
@@ -4244,7 +4265,7 @@ local function OnUpdate(_, elapsed)
 				if ns.effectsDemo then
 					effectAsk[key] = ns.effectsDemo[key] or false
 				else
-					effectAsk[key] = (cinematic or ns.db[key == "inn" and "outsideCineTint" or OUTSIDE_EFFECT[key]] == true)
+					effectAsk[key] = (cinematic or ns.db[ns.OUTSIDE_SHARED[key] or OUTSIDE_EFFECT[key]] == true)
 						and ns.db.visualEffects and ns.db[key .. "Page"] ~= false
 						and ns.RowOnNow(EFFECT_ROWS[key], ns.db[key .. "Always"], true) or false
 				end

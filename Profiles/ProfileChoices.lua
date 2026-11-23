@@ -263,8 +263,10 @@ ns.BUILTIN_PROFILES = {
 			bars = { forever = "split", retail = "pure" }, camera = "pure", vfx = "pure", chat = "pure" },
 		-- (Its own Visions and cards, apart from the slots' choices: picking a
 		-- choice for a slot then leaves them as they are.)
+		-- (No view distance in bad weather since 2026-11-23: no profile changes your
+		-- graphics, the user's call. Migrations.lua's rainViewOffV1.)
 		modules = With("zone-card", "travel-cards", "story-cards", "damage-vision", "vitals-vision",
-			"combat-vision", "cursor-hide", "music-calm", "weather-view-distance",
+			"combat-vision", "cursor-hide", "music-calm",
 			"node-icons", "effects-outside-cinemode"),
 	},
 	-- Cinema over your shoulder (testers' and Forever's only till 2026-11-15;
@@ -284,7 +286,7 @@ ns.BUILTIN_PROFILES = {
 		-- (The Shoulder Cam and its Frames follow you: its own, apart from UI
 		-- Auto Fade's choice, so picking another there keeps them.)
 		modules = With("zone-card", "travel-cards", "story-cards", "damage-vision", "vitals-vision",
-			"combat-vision", "cursor-hide", "music-calm", "weather-view-distance",
+			"combat-vision", "cursor-hide", "music-calm",
 			"node-icons", "effects-outside-cinemode", "shoulder-cam-on", "follow-frames"),
 		-- (No Quest Vision, as in every profile: Escape and walking off glide
 		-- back in the game's own talk windows too, since 2026-11-15.)

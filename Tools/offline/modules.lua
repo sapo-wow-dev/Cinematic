@@ -85,7 +85,8 @@ local SPECS = {
 		-- way, for Death Vision and the time of day), the letterbox (how bars
 		-- are drawn stays in Effects.lua), edge haze, music, Graphics+ (its
 		-- list of settings loaded: Core's defaults), the Letterbox and Tint pages.)
-		files = { "Atmosphere/Tint.lua", "Atmosphere/Focus.lua", "Atmosphere/Music.lua", "Atmosphere/Letterbox.lua",
+		files = { "Atmosphere/Tint.lua", "Atmosphere/Focus.lua", "Atmosphere/WeatherFX.lua", "Atmosphere/Music.lua",
+			"Atmosphere/Letterbox.lua",
 			"Graphics.lua", "Style/LetterboxStyle.lua" },
 		allowed = {},
 		pages = { "Tint", "Letterbox", "Weather", "Graphics+", "Audio", "Tint Style", "Letterbox Style", "Weather Style" },

@@ -93,8 +93,14 @@ function ns.TintPreviewButton(kit, parent, anchor, kind, text, width, tip, usabl
 	return button
 end
 
--- Under the Weather tab's row: how strong, with a weather to preview (a
--- dropdown and Preview), and the view distance in bad weather.
+-- The Weather page's screen effects (WeatherFX.lua, 2026-11-23): a Show in
+-- row each under the weather tint's, their strengths under its own.
+EFFECT_PAGES.weather.extraRows = { { "frost", "Frost" }, { "rainlens", "Rain on the lens" },
+	{ "lightning", "Lightning" }, { "density", "Heavier weather" } }
+
+-- Under the Weather tab's rows: how strong, with a weather to preview (a
+-- dropdown and Preview), the screen effects' strengths, and the view
+-- distance in bad weather.
 EFFECT_PAGES.weather.More = function(kit, content, stack)
 	local function Picked() return ns.WeatherTypeOf(ns.GetDB().weatherPreviewKind or "Rain") end
 	stack:Header(content, L["How strong"])
@@ -124,6 +130,40 @@ EFFECT_PAGES.weather.More = function(kit, content, stack)
 	ns.TintPreviewButton(kit, content, pick or line, "weather", L["Preview"], 80,
 		L["Shows this weather's tint at its heaviest for a few seconds (at 50% while Strength is Off)."],
 		function() return true end, Picked)
+	-- On the screen (WeatherFX.lua): each effect's strength, Off to start with,
+	-- and a Preview (the slider's move shows it for a moment too), each
+	-- greyed while its row is off everywhere.
+	stack:Header(content, L["On the screen"])
+	local function Percent(value) return value == 0 and L["Off"] or ("%d%%"):format(value) end
+	for _, fx in ipairs({
+		{ "frost", "Frost", "Frost creeps in on the screen's edges in snow, and melts away after." },
+		{ "rainlens", "Rain on the lens", "Drops and trails run down the screen in rain." },
+		{ "lightning", "Lightning", "Now and then a flash lights up a storm, with thunder." },
+	}) do
+		local keys = ns.WEATHER_FX_KEYS[fx[1]]
+		local slider = stack:Add(kit.Slider(content, keys.strength, L[fx[2]], 0, 100, 1, Percent, 100, function(value)
+			if value > 0 then ns.WeatherFxPreview(fx[1], 3) end
+		end), "slider")
+		kit.Tooltip(slider, L[fx[3]])
+		kit.GreyUnless(slider, function(db) return db[keys.switch] ~= false end)
+		ns.EffectPreviewButton(kit, content, slider, L["Preview"], 80,
+			L["Shows it for a few seconds, in CineMode or not (at 50% while it's Off)."],
+			function(db) return db[keys.switch] ~= false end,
+			function() return ns.WeatherFxPreviewing(fx[1]) end,
+			function() ns.WeatherFxPreview(fx[1], PREVIEW_SECONDS) end,
+			function() ns.WeatherFxPreview(nil) end).previewFor = fx[1]
+		ns.weatherFxSliders = ns.weatherFxSliders or {}
+		ns.weatherFxSliders[fx[1]] = slider -- (for /cine debug atmosphere)
+	end
+	-- (The game's own rain and snow: its density held at 1-3 while the row is
+	-- on, yours back after. No preview: it shows only where it's raining.)
+	local density = stack:Add(kit.Slider(content, "weatherDensityLevel", L["Heavier weather"], 0, 3, 1, function(value)
+		return value == 0 and L["Off"] or ({ L["Light"], L["Medium"], L["Heavy"] })[value]
+	end, 1), "slider")
+	kit.Tooltip(density, L["Makes the game's own rain and snow thicker while its row is on, and puts yours back after."])
+	kit.GreyUnless(density, function(db) return db.weatherDensityOn ~= false end)
+	ns.weatherFxSliders = ns.weatherFxSliders or {}
+	ns.weatherFxSliders.density = density
 	-- View distance in bad weather (Graphics.lua): only where the game says
 	-- the weather and has the view distance setting.
 	if C_Weather and C_Weather.GetCurrentWeather and GetCVar("horizonStart") ~= nil then
@@ -237,20 +277,25 @@ function ns.CreateEffectPanel(kit, effect)
 	end)
 	local stack = kit.Stack(switch, "check")
 	local header = stack:Header(content, L["Show in"])
-	local key, alwaysKey = "effect:" .. effect, effect .. "Always"
-	local lastRow = ns.ShowTable(content, header, {
-		opts = { quiet = true, cam = true, anyFight = true }, underHeader = true,
-		{ key = key, label = L[info.name], alwaysKey = alwaysKey,
+	-- (A row each: the page's effect, then its extraRows, the Weather page's
+	-- screen effects since 2026-11-23: { effect, label } each.)
+	local rows = { opts = { quiet = true, cam = true, anyFight = true }, underHeader = true }
+	local function Row(fx, label)
+		local key, alwaysKey = "effect:" .. fx, fx .. "Always"
+		rows[#rows + 1] = { key = key, label = label, alwaysKey = alwaysKey,
 			alwaysOn = function() return ns.GetDB()[alwaysKey] end,
 			setAlways = function(value) ns.GetDB()[alwaysKey] = value end,
 			alwaysTip = L["Shows the whole time in CineMode, including fights and the Calm Timer after them."],
 			apply = function()
-				local switch = ns.EFFECT_SWITCHES and ns.EFFECT_SWITCHES[effect]
+				local switch = ns.EFFECT_SWITCHES and ns.EFFECT_SWITCHES[fx]
 				if switch then ns.GetDB()[switch] = ns.RowOnAnywhere(key, ns.GetDB()[alwaysKey]) end
 				ns.letterboxDirty = true
 				if ns.RefreshTint then ns.RefreshTint() end
-			end },
-	}, L[info.name])
+			end }
+	end
+	Row(effect, L[info.name])
+	for _, extra in ipairs(info.extraRows or {}) do Row(extra[1], L[extra[2]]) end
+	local lastRow = ns.ShowTable(content, header, rows, L[info.name])
 	stack:Continue(lastRow, "label")
 	if info.More then
 		info.More(kit, content, kit.Stack(lastRow, "label", true))

@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-23", page = "Weather", title = "Weather on the screen",
+		text = "Frost creeps in on the screen's edges in snow, rain runs down the lens, and lightning flashes with " ..
+			"thunder in storms. Off to start with: turn each up on the Weather page." },
 	{ date = "2026-11-23", page = "Cooldown Manager Style", client = "forever", title = "Shield drain ring",
 		text = "Tracked buffs that absorb damage, like Power Word: Shield, can show a ring that drains as the shield " ..
 			"takes hits, with the amount left in the middle. Turn it on per buff in the Cooldown Manager's Look, and " ..
