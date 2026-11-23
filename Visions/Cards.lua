@@ -66,9 +66,11 @@ local EVENTS = {
 	{ id = "combatIn", name = "Entering combat", on = "combatOnEnter", priority = 50,
 		icon = "Interface\\Icons\\Ability_DualWield", fight = true },
 	-- (In place of Entering combat's card when the fight's against players:
-	-- CombatVision.lua. Its look is Entering combat's until it has its own.)
+	-- CombatVision.lua. Its look is Entering combat's until it has its own.
+	-- In its place: Entering combat unticked, none plays, release review
+	-- 2026-11-23, fix card 2026-11-23-pvp-card-needs-combat.md.)
 	{ id = "combatPvp", name = "Entering a PvP fight", on = "cardCombatPvpOn", priority = 50,
-		icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance", parent = "combatIn", fight = true },
+		icon = "Interface\\Icons\\Ability_Warrior_OffensiveStance", parent = "combatIn", needs = "combatIn", fight = true },
 	{ id = "combatOut", name = "Leaving combat", on = "combatOnLeave", priority = 50, icon = 132320, fight = true },
 	{ id = "boss", name = "Boss", on = "cardBossOn", priority = 80,
 		icon = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull", fight = true },
