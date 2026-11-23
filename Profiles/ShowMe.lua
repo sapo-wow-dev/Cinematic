@@ -436,7 +436,7 @@ local DEMOS = {
 	recap = { once = true, start = function() ns.TestDamageRecap() end },
 	-- (Flashes the game's Cooldown Manager's icons: only once a level that
 	-- shows it is picked, and its Cooldowns page is on.)
-	cdflash = { once = true, start = function() ns.TestCooldownFlash() end,
+	cooldowns = { once = true, start = function() ns.TestCooldownFlash() end,
 		blocked = function()
 			if not (ns.PageOn and ns.PageOn("handleCooldowns") and ns.CooldownViewersShown
 				and ns.CooldownViewersShown()) then
@@ -454,6 +454,21 @@ local DEMOS = {
 	combatText = { seconds = 9, fade = true,
 		start = function() if not ns.ShowCombatTextDemo(true) then error("no preview") end end,
 		stop = function() ns.ShowCombatTextDemo(false) end },
+	-- (Style: a theme on your real frames for a moment, yours back after,
+	-- StyleDemos.lua. Themes: three in turn; Unit Frames and Nameplates: one
+	-- theme on just those. The window faded, to see them. The user, 2026-11-22.)
+	styleThemes = { seconds = 10, fade = true,
+		start = function() if not ns.StyleDemo("themes") then error("can't now") end end,
+		running = function() return ns.StyleDemoRunning() end,
+		stop = function() ns.StyleDemo(nil) end },
+	unitStyle = { seconds = 6, fade = true,
+		start = function() if not ns.StyleDemo("frames") then error("can't now") end end,
+		running = function() return ns.StyleDemoRunning() end,
+		stop = function() ns.StyleDemo(nil) end },
+	plateStyle = { seconds = 6, fade = true,
+		start = function() if not ns.StyleDemo("plates") then error("can't now") end end,
+		running = function() return ns.StyleDemoRunning() end,
+		stop = function() ns.StyleDemo(nil) end },
 	-- (Chat Bubbles: two in your bubble look over the world, Bubbles.lua.)
 	bubbles = { seconds = 7, fade = true, start = function() ns.ShowBubbleDemo(true) end,
 		stop = function() ns.ShowBubbleDemo(false) end },
@@ -523,8 +538,9 @@ end
 -- Each test's function, which a client without that Vision lacks.
 local NEEDS = { vitals = "FlashVitals", tele = "TestTeleportVision", emote = "TestEmoteVision",
 	roll = "TestRollWindow", damage = "TestDamageVision", shoulder = "ShoulderCamDemo",
-	timeTitle = "TestTimeChangeTitle", cards = "CardTest", recap = "TestDamageRecap", cdflash = "TestCooldownFlash",
-	speech = "TestSpeechBehind", audio = "SaveCVar", bubbles = "ShowBubbleDemo", combatText = "ShowCombatTextDemo", deathVision = "TestDeathVision" }
+	timeTitle = "TestTimeChangeTitle", cards = "CardTest", recap = "TestDamageRecap", cooldowns = "TestCooldownFlash",
+	speech = "TestSpeechBehind", audio = "SaveCVar", bubbles = "ShowBubbleDemo", combatText = "ShowCombatTextDemo", deathVision = "TestDeathVision",
+	styleThemes = "StyleDemo", unitStyle = "StyleDemo", plateStyle = "StyleDemo" }
 for key in pairs(CAM_DEMOS) do NEEDS[key] = "CameraTestStart" end
 -- (Cameras left out, Modules.lua: no camera demo at all, the half turn too.)
 ns.ModuleLeftOut("cameras", function()
@@ -559,6 +575,9 @@ function ns.ShowMeFor(slot, choice)
 		key = BY_PART[slot][choice.part]
 	end
 	if key and NEEDS[key] and not ns[NEEDS[key]] then return nil end
+	-- (Its demo's part left out, Atmosphere's letterbox and tint: no demo, no
+	-- Show me. It greyed with "Nothing to show here", the welcome audit 2026-11-22.)
+	if key and not DEMOS[key] then return nil end
 	return key
 end
 
@@ -640,11 +659,13 @@ local IN_PROFILE = { fadeUI = { "handleFrames" }, bars = { "letterboxPage", "let
 	deathVision = { "deathScreen" }, duel = { "duelPlates" }, audio = { "musicInCinematic" },
 	mouseover = { "handleFrames", "mouseover" }, heal = { "handleHealVision" }, plates = { "handlePlates" },
 	bubbles = { "handleBubbles" }, combatText = { "combatTextStyle" },
+	-- (Style's: Themes by Style's own switch (General), the pages by theirs.)
+	styleThemes = { "styleGeneral" }, unitStyle = { "ufStyle" }, plateStyle = { "handlePlateStyle" },
 	-- (Speech: the Chat bubbles page's off-screen bubbles, with the chat peeks
-	-- it hangs on, as Speech.lua checks; Cooldown Flash: the Cooldown Manager
-	-- page's Flash switch, every spell's own Flash kept under it.)
+	-- it hangs on, as Speech.lua checks; Cooldown Manager: its page's switch,
+	-- the whole feature, the user 2026-11-22.)
 	speech = { "handleBubbles", "chatPeek", "chatHideBubbled", "chatSpeechBehind" },
-	cdflash = { "handleCooldowns", "cooldownFlash" } }
+	cooldowns = { "handleCooldowns" } }
 -- Features on with any one of theirs (all of them for Turn on, none for Turn
 -- off): Fight Recap's two (a boss, a dungeon), under Damage Vision, which its
 -- switch leaves on (it turned the whole Vision off before).

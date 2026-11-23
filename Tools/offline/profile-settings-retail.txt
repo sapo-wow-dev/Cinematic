@@ -10,6 +10,7 @@ Auto-Hide UI|chatPeekChannelList.TradeLocal=false
 Auto-Hide UI|deathScreen=false
 Auto-Hide UI|duelPlates=false
 Auto-Hide UI|graphicsPlus=false
+Auto-Hide UI|handleCooldowns=false
 Auto-Hide UI|handleHealVision=false
 Auto-Hide UI|handlePlateStyle=false
 Auto-Hide UI|handleQuality=false

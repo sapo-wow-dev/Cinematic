@@ -34,7 +34,10 @@ local ns = dofile("Tools/offline/load.lua")("forever", nil, function()
 	Constants.EditModeConsts = { EditModeMaxLayoutsPerType = 5 }
 	GetActionBarToggles = function() return false, false, false, false end
 	SetActionBarToggles = function() end
-	StaticPopup_Show = function(name) if name == "CINEMATIC_LAYOUT_RELOAD" then reloads = reloads + 1 end end
+	-- (Edit Mode's reason goes into our one Reload box, Modules.lua.)
+	StaticPopup_Show = function(name, text)
+		if name == "CINEMATIC_LOAD_PARTS" and tostring(text):find("Edit Mode", 1, true) then reloads = reloads + 1 end
+	end
 end)
 -- luacheck: pop
 local fails = 0

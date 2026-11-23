@@ -557,15 +557,18 @@ ns.PROFILE_MODULES = {
 		"Tooltip Style/top", "Nameplate Style/top", "Name Style/top", "Cast Bar Style/top", "Bubble Style/top",
 		"Interface Recolor/top", "Heal Vision/top", "Damage Vision", "Vitals Vision", "Quest Vision/top",
 		"Roll Vision/top", "Teleport Vision", "Death Vision/top", "Duel Vision/top", "Emote Vision",
-		"Card Vision/top", "Fishing/top", "Hunter/top" },
-		tip = "Turns off every page that isn't about your UI: no cameras, effects, styles, Visions or cards. Music goes by the Sound choice.",
+		"Card Vision/top", "Fishing/top", "Hunter/top", "Cooldown Manager/top" },
+		tip = "Turns off every page that isn't about your UI: no cameras, effects, styles, Visions or cards, " ..
+			"and the Cooldown Manager page. Music goes by the Sound choice.",
 		apply = function(set)
 			for _, key in ipairs({ "cameraModes", "shoulderCam", "skyrideCam", "visualEffects", "letterboxPage",
 				"tintPage", "graphicsPlus", "styleGeneral", "ufStyle", "rfStyle", "abStyle",
 				"prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle", "plateCastStyle", "bubblesStyle",
 				"irStyle", "combatTextStyle", "handleHealVision", "damageVision", "lowHealth", "questVision",
 				"questTalk", "rollWindow", "teleportVision", "deathScreen", "duelPlates", "emoteVision", "cards",
-				"windGuide", "handleQuality", "handleFishing", "handleHunter" }) do
+				"windGuide", "handleQuality", "handleFishing", "handleHunter",
+				-- (Its Cooldown Manager page off too: the game's as it is, the user 2026-11-22.)
+				"handleCooldowns" }) do
 				if ns.DEFAULTS[key] ~= nil and ns.DEFAULTS[key] ~= false then set(key, false) end
 			end
 		end },

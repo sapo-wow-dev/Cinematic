@@ -42,11 +42,13 @@ local _, ns = ...
 local PLAY_FOR = 8   -- seconds a tile's watched at most
 local SHOT_AT = 2
 -- (later for a demo whose look comes partway: Mouseover's group, 2.5 s in)
-local SHOT_AT_FOR = { mouseover = 4, heal = 5, plates = 3 }
+-- (Style's: after the 4 s prompt, which covers their board at the top;
+-- Themes on its second theme, 3 s each.)
+local SHOT_AT_FOR = { mouseover = 4, heal = 5, plates = 3, styleThemes = 4.5, unitStyle = 4.5, plateStyle = 4.5 }
 local SKIP = { shoulder = "trying it agrees to its experimental camera setting" }
 -- (ShowMe.lua's once demos: shown and done, no Stop. Any other not running
 -- right after its click didn't start: the quest camera, 2026-11-20.)
-local ONCE = { cards = true, recap = true, cdflash = true, speech = true }
+local ONCE = { cards = true, recap = true, cooldowns = true, speech = true }
 local run -- this run: verdicts, results by tile, what to put back
 -- Whether it's on screen, by the feature's own reading, at the screenshot
 -- (these showed nothing before a level's picked, 2026-11-20: their switches
@@ -192,7 +194,7 @@ local SHOWS = {
 			right, left, right <= left + 1 and ", clear of it" or ", OVER IT")
 	end,
 	tele = function() return ns.TeleportVisionShown and ns.TeleportVisionShown(), "portal" end,
-	cdflash = function()
+	cooldowns = function()
 		return ns.CooldownFlashTesting and ns.CooldownFlashTesting(GetTime()), "flash test running"
 	end,
 	-- (the group up as if pointed at: the pointer shown, an action bar back,
@@ -252,6 +254,23 @@ local SHOWS = {
 		return TextOnScreen(ns.L["Speech from behind you shows here."]), "its line searched for on screen"
 	end,
 }
+-- (Style's: a theme on over yours while it plays, Style/StyleDemos.lua; the
+-- screenshot shows the look. Plates: how many nameplates are up to take it.)
+local function StyleShows()
+	local db = ns.GetDB and ns.GetDB()
+	local kept = db and db.styleDemoRestore
+	local on = ns.StyleDemoRunning and ns.StyleDemoRunning() and type(kept) == "table"
+		and db.styleTheme ~= kept.styleTheme or false
+	local plates = C_NamePlate and C_NamePlate.GetNamePlates and #(C_NamePlate.GetNamePlates() or {}) or 0
+	-- (Its board up too, with every preview: the look shown whatever's around.)
+	local board, previews = false, 0
+	if ns.StyleDemoBoardShown then board, previews = ns.StyleDemoBoardShown() end
+	on = on and board and previews > 0 or false
+	return on, ("theme %s over yours %s, reach frames %s plates %s, %d nameplates up, board %s with %s previews"):format(
+		tostring(db and db.styleTheme), tostring(type(kept) == "table" and kept.styleTheme),
+		tostring(db and db.styleThemeReachFrames), tostring(db and db.styleThemeReachPlates), plates, tostring(board), tostring(previews))
+end
+SHOWS.styleThemes, SHOWS.unitStyle, SHOWS.plateStyle = StyleShows, StyleShows, StyleShows
 for _, key in ipairs({ "afk", "questCam", "flight", "cozy", "vista", "fish", "deathCam", "walk", "run" }) do
 	SHOWS[key] = CameraMoving
 end
@@ -366,6 +385,7 @@ local function TileStep(b)
 		local errors = Errors()
 		local before = CameraWhy()
 		if key == "plates" then run.platesBefore = { PlatesNow() } end
+		local themeBefore = ns.db.styleTheme
 		b:Click()
 		local running = ns.ShowMeRunning(key)
 		Log(("tile %s: clicked, running %s, name now \"%s\", tag \"%s\""):format(key, tostring(running),
@@ -415,6 +435,11 @@ local function TileStep(b)
 			run.played[#run.played + 1] = key .. (running and "" or " (shown and done)")
 			Verdict(ok, ("%s played and stopped clean (%d Lua errors, switches put back %s)"):format(key, new,
 				tostring(ns.db.showMeRestore == nil)))
+			-- (A Style tile: your own look back, theme and all, StyleDemos.lua.)
+			if key == "styleThemes" or key == "unitStyle" or key == "plateStyle" then
+				Verdict(ns.db.styleDemoRestore == nil and ns.db.styleTheme == themeBefore,
+					("%s: your look back after (theme %s, was %s)"):format(key, tostring(ns.db.styleTheme), tostring(themeBefore)))
+			end
 			C_Timer.After(1, Next)
 		end)
 	end

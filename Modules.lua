@@ -93,19 +93,24 @@ function ns.ModuleLeftOutLine(name)
 	return ns.L and ns.L[line] or line
 end
 
--- The one Reload box for every part whose Load box differs from what's
--- loaded now: from a Load box (Options.lua ns.LoadPartBox) and from picking a
--- profile that leaves parts out (Profiles.lua ns.ProfilePartsPicked), the
--- same box and words either way (the user, 2026-11-22: "keep everything in
--- sync"). Where the game puts its boxes, as every Reload box of ours.
--- One short line, "Reload now to unload Visions, Cameras, Atmosphere" (the
--- user, 2026-11-22), the same from a profile pick: no profile name.
+-- The one Reload box of ours: every reason a reload is wanted in one box,
+-- never two at once (the user, 2026-11-22: picking Shoulder Cam showed the
+-- parts' box and Edit Mode's layout box together, "should be one popup").
+-- The parts whose Load box differs from what's loaded now: from a Load box
+-- (Options.lua ns.LoadPartBox) and from picking a profile that leaves parts
+-- out (Profiles.lua ns.ProfilePartsPicked), the same words either way ("keep
+-- everything in sync"). Other reasons by key (ns.AskReload: Edit Mode's
+-- layout and its bars, Profiles/Layouts.lua): one alone says its own words,
+-- with others each its short phrase, "Reload now to load Visions, Cameras and
+-- switch Edit Mode layouts". A reason stays till the reload (Later doesn't
+-- make it untrue). Where the game puts its boxes, at the game's width (a
+-- long list wraps; widened to one line it didn't match the game's other
+-- boxes, the user 2026-11-22).
 local ASK_ORDER = { "visions", "cameras", "style", "atmosphere" }
 local ASK_NAMES = { visions = "Visions", cameras = "Cameras", style = "Style", atmosphere = "Atmosphere" }
 ns.MODULES_RELOAD_POPUP = "CINEMATIC_LOAD_PARTS"
-function ns.AskModulesReload()
-	local L = ns.L
-	local which = ns.MODULES_RELOAD_POPUP
+local reasons, reasonOrder = {}, {} -- key -> { phrase, alone }; keys in the order asked
+local function PartsPhrases(L)
 	local load, unload = {}, {}
 	for _, part in ipairs(ASK_ORDER) do
 		if ASK_NAMES[part] and ns.ModuleWanted(part) ~= ns.ModuleLoaded(part) then
@@ -113,28 +118,53 @@ function ns.AskModulesReload()
 			list[#list + 1] = L[ASK_NAMES[part]]
 		end
 	end
+	local phrases = {}
+	if #load > 0 then phrases[#phrases + 1] = L["load %s"]:format(table.concat(load, ", ")) end
+	if #unload > 0 then phrases[#phrases + 1] = L["unload %s"]:format(table.concat(unload, ", ")) end
+	return phrases
+end
+-- The box's words now (nil: nothing to reload).
+function ns.ReloadBoxText()
+	local L = ns.L
+	local phrases = PartsPhrases(L)
+	local others = {}
+	for _, key in ipairs(reasonOrder) do
+		if reasons[key] then others[#others + 1] = reasons[key] end
+	end
+	if #phrases == 0 and #others == 1 and others[1].alone then return others[1].alone end
+	for _, reason in ipairs(others) do phrases[#phrases + 1] = reason.phrase end
+	if #phrases == 0 then return nil end
+	local ask = #phrases < 2 and phrases[1]
+		or table.concat(phrases, ", ", 1, #phrases - 1) .. L[" and "] .. phrases[#phrases]
+	return L["Reload now to %s"]:format(ask)
+end
+local function ShowReloadBox()
+	local L = ns.L
+	local which = ns.MODULES_RELOAD_POPUP
 	if StaticPopup_Hide then StaticPopup_Hide(which) end -- (its text anew, or gone)
-	if #load == 0 and #unload == 0 then return false end
+	local text = ns.ReloadBoxText()
+	if not text then return false end
 	StaticPopupDialogs[which] = {
 		text = "%s", button1 = RELOADUI or L["Reload"], button2 = L["Later"],
 		OnAccept = function() ns.Reload() end,
 		cineReload = 1, -- (Forever: a secure Reload over the button, QoL/Reload.lua)
 		timeout = 0, whileDead = true, hideOnEscape = true,
 	}
-	local text
-	if #load > 0 and #unload > 0 then
-		text = L["Reload now to load %s and unload %s"]:format(table.concat(load, ", "), table.concat(unload, ", "))
-	elseif #load > 0 then
-		text = L["Reload now to load %s"]:format(table.concat(load, ", "))
-	else
-		text = L["Reload now to unload %s"]:format(table.concat(unload, ", "))
-	end
-	-- (At the game's width, as every box: a long list wraps. Widened to one
-	-- line, it didn't match the game's other boxes, the user 2026-11-22.)
 	StaticPopup_Show(which, text)
 	return true
 end
-
+-- The parts' reason, worked out anew (nothing to reload for them: only the
+-- others ask, or the box goes). True: the box is up.
+function ns.AskModulesReload()
+	return ShowReloadBox()
+end
+-- Another reason to reload, into the one box: phrase for a list ("switch
+-- Edit Mode layouts"), alone for its own words when it's the only one.
+function ns.AskReload(key, phrase, alone)
+	if not reasons[key] then reasonOrder[#reasonOrder + 1] = key end
+	reasons[key] = { phrase = phrase, alone = alone }
+	return ShowReloadBox()
+end
 
 local queue = {}
 local ran = false

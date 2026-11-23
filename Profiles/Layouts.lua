@@ -174,7 +174,9 @@ local function SyncBars(name)
 	if not changed then return end
 	SetActionBarToggles(unpack(toggles))
 	local shown = ShowToggledBars(toggles)
-	if not shown then StaticPopup_Show("CINEMATIC_BARS_RELOAD") end
+	if not shown then
+		ns.AskReload("bars", L["show this layout's action bars"], StaticPopupDialogs.CINEMATIC_BARS_RELOAD.text)
+	end
 	ns.Log("state", "edit mode layout action bars: " .. (def and "on" or "back off")
 		.. (shown and " (shown now)" or " (after a reload)"))
 end
@@ -871,8 +873,10 @@ local madeNow = {}
 
 local function OfferReload(name)
 	ns.chardb.layoutPending = name
-	StaticPopup_Show("CINEMATIC_LAYOUT_RELOAD")
+	-- (Into our one Reload box: with a profile's parts, one box, the user 2026-11-22.)
+	ns.AskReload("layout", L["switch Edit Mode layouts"], StaticPopupDialogs.CINEMATIC_LAYOUT_RELOAD.text)
 end
+ns.OfferLayoutReload = OfferReload -- (the profile parts test: a layout switch's own call)
 
 -- Why layouts can't be changed now (nil: they can).
 local function Blocked()
@@ -1005,6 +1009,10 @@ function ns.ApplyProfileLayout()
 	local manager = _G.EditModeManagerFrame
 	if manager and manager:IsShown() then return end -- (the player's choosing there)
 	if LeftToKeeper() then return end
+	-- (A newer switch: an older one's "go there after the reload" is over.
+	-- Shoulder Cam then Balanced, then Reload UI, went back to Shoulder Cam's
+	-- layout; found with the welcome audit 2026-11-22. A new one sets it again.)
+	ns.chardb.layoutPending = nil
 	local name = ns.db.editModeLayout or ""
 	local info = C_EditMode.GetLayouts()
 	if name == "" then

@@ -33,6 +33,11 @@ end
 Check("profile found", found)
 -- (The base does apply modules: Blank Slate's every-page-off has it off.)
 Check("Blank Slate base has it off", ns.ProfileBase("Blank Slate").mouseover == false)
+-- (And its Cooldown Manager page off, the user 2026-11-22; Balanced keeps it.)
+Check("Auto-Hide UI base has the Cooldown Manager page off", ns.ProfileBase(NAME).handleCooldowns == false,
+	tostring(ns.ProfileBase(NAME).handleCooldowns))
+Check("Balanced base keeps the Cooldown Manager page", ns.ProfileBase("Balanced").handleCooldowns ~= false,
+	tostring(ns.ProfileBase("Balanced").handleCooldowns))
 
 local db = ns.db
 db.profiles = db.profiles or {}

@@ -155,6 +155,7 @@ Style\ColorPalette.lua
 Style\StylePages.lua
 Style\MirrorTimerStyle.lua
 Style\StyleThemes.lua
+Style\StyleDemos.lua
 Plates\PlateThemes.lua
 Plates\NameThemes.lua
 Style\LetterboxStyle.lua

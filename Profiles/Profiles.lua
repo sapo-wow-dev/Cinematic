@@ -581,7 +581,9 @@ function ns.GameSettingsAgreed(after)
 		button1 = L["Agree"], button2 = _G.CANCEL or L["Cancel"],
 		OnAccept = function(_, data)
 			ns.db.gameSettingsNoticeSeen = true
-			if data then data() end
+			-- (The pick a moment on, once this box has gone: its Reload box
+			-- showed under this one for a moment, the welcome audit 2026-11-22.)
+			if data then C_Timer.After(0, data) end
 		end,
 		OnCancel = function() ns.Print(L["nothing changed: no profile picked yet."]) end,
 		timeout = 0, whileDead = true, hideOnEscape = true,
@@ -865,10 +867,19 @@ function ns.NewProfile(name)
 	ns.SaveProfile()
 	ns.db.profiles[name] = saved
 	ns.db.profileNotes[name] = L["Started from %s."]:format(ns.ProfileLabel(ns.ActiveProfile()))
+	-- (The profile it started from, by name: the welcome window's level for it,
+	-- ns.ProfileFrom.)
+	ns.db.profileFrom = ns.db.profileFrom or {}
+	ns.db.profileFrom[name] = ns.db.profileFrom[ns.ActiveProfile()] or ns.ActiveProfile()
 	ns.db.profileIcons[name] = ns.UnusedProfileIcon()
 	Choose(name)
 	ns.db.profileChosen = true
 	return true
+end
+
+-- The profile one of your own started from (a built-in's name), or nil.
+function ns.ProfileFrom(name)
+	return name and ns.db and ns.db.profileFrom and ns.db.profileFrom[name] or nil
 end
 
 function ns.RenameProfile(old, new)
@@ -878,6 +889,7 @@ function ns.RenameProfile(old, new)
 	ns.db.profiles[new], ns.db.profiles[old] = ns.db.profiles[old], nil
 	ns.db.profileNotes[new], ns.db.profileNotes[old] = ns.db.profileNotes[old], nil
 	ns.db.profileIcons[new], ns.db.profileIcons[old] = ns.db.profileIcons[old], nil
+	if ns.db.profileFrom then ns.db.profileFrom[new], ns.db.profileFrom[old] = ns.db.profileFrom[old], nil end
 	local points = ns.db.profileResetPoints
 	if points then points[new], points[old] = points[old], nil end
 	-- (Other characters with it as their own go back to the account's next login.)
@@ -898,6 +910,7 @@ function ns.DeleteProfile(name)
 	ns.db.profiles[name] = nil
 	ns.db.profileNotes[name] = nil
 	ns.db.profileIcons[name] = nil
+	if ns.db.profileFrom then ns.db.profileFrom[name] = nil end
 	ns.ForgetResetPoint(name)
 	return true
 end

@@ -74,6 +74,13 @@ end)
 local window, pages, status, about, demoRow
 local cards = {} -- profile name -> its card
 local levelOf = {} -- profile name -> its level
+-- A profile's level: a built-in's own, or for one of your own the built-in it
+-- started from (Customize makes "My setup": page 1 showed nothing picked,
+-- the welcome audit 2026-11-22).
+local function LevelFor(profile)
+	if not profile then return nil end
+	return levelOf[profile] or levelOf[ns.ProfileFrom and ns.ProfileFrom(profile) or ""]
+end
 
 -- (Forever keeps a FontString's text and vertex colour as one: set both.)
 local function Color(s, c)
@@ -298,7 +305,7 @@ local LEAVE_WAIT = 0.15 -- seconds
 local function DescribeSoon()
 	local was = about and about:GetText()
 	C_Timer.After(LEAVE_WAIT, function()
-		if about and about:GetText() == was then Describe(levelOf[Active()]) end
+		if about and about:GetText() == was then Describe(LevelFor(Active())) end
 	end)
 end
 
@@ -308,8 +315,10 @@ local primary, finish, settings, off, back
 -- Decide later (none picked yet) or Done.
 local function UpdatePicked()
 	local active = Active()
+	-- (Your own profile: its built-in's card, as that's where it started.)
+	local from = active and not levelOf[active] and ns.ProfileFrom and ns.ProfileFrom(active)
 	for name, card in pairs(cards) do
-		card.active = name == active
+		card.active = name == active or name == from
 		card:SetBackdropBorderColor(unpack(card.active and GOLD or EDGE))
 	end
 	if active then
@@ -324,9 +333,9 @@ local function UpdatePicked()
 	finish:SetLabel(ns.ProfileChosen() and L["See Profile"] or L["Decide later"])
 	-- (Next only once a level's picked: Customize changes a level. Not for
 	-- one with noCustomize, Blank Slate: its parts are all off.)
-	local level = levelOf[active]
+	local level = LevelFor(active)
 	if pages[1]:IsShown() then primary:SetUsable(active and not (level and level.noCustomize) and true or false) end
-	Describe(levelOf[active])
+	Describe(LevelFor(active))
 end
 
 local function Pick(name, level)
@@ -337,21 +346,39 @@ local function Pick(name, level)
 	-- (The Shoulder Cam's card: picking it is the yes to its one-time
 	-- question, the card's line saying why. Before and after the switch: the
 	-- profile's settings are loaded over db.)
-	if level and level.shoulderCam and ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
+	-- (Written here, not only by ns.ShoulderCamAgree: with Cameras left out
+	-- that's not loaded, and the yes was lost, so the game's question came
+	-- after the reload anyway; the welcome audit 2026-11-22.)
+	if level and level.shoulderCam then
+		ns.db.shoulderCamNoticed = true
+		if ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
+	end
 	ns.SetProfile(name)
-	if level and level.shoulderCam and ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
+	if level and level.shoulderCam then
+		ns.db.shoulderCamNoticed = true
+		if ns.ShoulderCamAgree then ns.ShoulderCamAgree() end
+	end
 	-- (Auto-Hide UI, Blank Slate: no Visions; asks to reload. The reload
 	-- brings this window back: the user, 2026-11-22. Not a pick on the
 	-- Profiles page or /cine profile: only from here.)
 	-- (Where the window is too: back in that spot, not the middle, the user
 	-- 2026-11-22.)
-	if next((ns.ProfilePartsPicked(name))) then
+	-- (Any reason in our Reload box, an Edit Mode layout's too: it came back
+	-- in the middle for those, the welcome audit 2026-11-22.)
+	ns.ProfilePartsPicked(name)
+	if ns.ReloadBoxText and ns.ReloadBoxText() then
 		local point, _, relativePoint, x, y = window:GetPoint(1)
 		CinematicDB.welcomeAfterReload = { at = time(), point = point and { point, relativePoint, x, y } or nil }
 	end
 	-- (your switches on the tiles, kept over the level picked)
 	if demoRow and demoRow.LevelPicked then demoRow:LevelPicked(level) end
-	-- (the profile's tint strength on the slider)
+	-- (the strength dragged before the first pick, kept; then the profile's on the slider)
+	if demoRow and demoRow.pendingStrength then
+		ns.db.tintStrength = demoRow.pendingStrength
+		demoRow.pendingStrength = nil
+		if ns.SaveProfile then ns.SaveProfile() end
+		if ns.RefreshTint then ns.RefreshTint() end
+	end
 	if demoRow and demoRow.ShowStrength then demoRow.ShowStrength() end
 	if ns.RestartTimers then ns.RestartTimers() end
 	ns.PreviewProfile(name)
@@ -375,6 +402,16 @@ local function Card(parent, profile, level)
 	Rounded(card, icon)
 	local title = Text(card, "GameFontHighlightLarge", level.label)
 	title:SetPoint("TOP", icon, "BOTTOM", 0, -8)
+	-- (A longer name, in German or Russian: smaller to fit the card, not into
+	-- the next one; the welcome audit 2026-11-22.)
+	local room = CARD_W - 12
+	local need = title.GetUnboundedStringWidth and title:GetUnboundedStringWidth() or title:GetStringWidth()
+	if type(need) == "number" and need > room and title.SetTextScale then
+		title:SetTextScale(math.max(0.7, room / need))
+	end
+	title:SetWidth(room)
+	title:SetJustifyH("CENTER")
+	title:SetWordWrap(false)
 	local sub = Text(card, "GameFontHighlightSmall", level.line, SOFT, CARD_W - 20)
 	sub:SetJustifyH("CENTER")
 	sub:SetSpacing(2)
@@ -390,7 +427,7 @@ local function Card(parent, profile, level)
 		-- (The feature tags go back to the picked level at once: from a card
 		-- straight onto a feature, that feature's words put theirs up first,
 		-- so DescribeSoon left the hovered level's tags on, 2026-11-20.)
-		if demoRow then demoRow:Update(levelOf[Active()]) end
+		if demoRow then demoRow:Update(LevelFor(Active())) end
 		DescribeSoon()
 	end)
 	card:SetScript("OnClick", function() Pick(profile.name, level) end)
@@ -436,12 +473,15 @@ local DEMO_ROW = {
 }
 -- The shelf's groups, the settings hubs, each in its hub's band color
 -- (Options.lua's HUBS); a group with nothing to play is left out.
+-- (In the settings' order, Options.lua menu.order: Interface, Visions,
+-- Style, Atmosphere, Camera; the user 2026-11-22. Tools/offline/shelforder.lua
+-- checks they stay in step.)
 local SHELF_GROUPS = {
-	{ key = "atmo", label = "Atmosphere", color = { 0.65, 0.45, 0.9 } },
-	{ key = "cam", label = "Cameras", color = { 0.35, 0.6, 0.9 } },
-	{ key = "vis", label = "Visions", color = { 0.85, 0.3, 0.25 } },
-	{ key = "ui", label = "Interface", color = { 0.35, 0.7, 0.45 } },
-	{ key = "style", label = "Style", color = { 0.85, 0.55, 0.25 } },
+	{ key = "ui", label = "Interface", color = { 0.35, 0.7, 0.45 }, hub = "UI Manager" },
+	{ key = "vis", label = "Visions", color = { 0.85, 0.3, 0.25 }, hub = "Visions" },
+	{ key = "style", label = "Style", color = { 0.85, 0.55, 0.25 }, hub = "Style" },
+	{ key = "atmo", label = "Atmosphere", color = { 0.65, 0.45, 0.9 }, hub = "Atmosphere" },
+	{ key = "cam", label = "Cameras", color = { 0.35, 0.6, 0.9 }, hub = "Camera" },
 }
 -- The shelf's tiles besides the row's: only what plays (each feature's own
 -- Test, ShowMe.lua). Tips one sentence: they're translated.
@@ -489,11 +529,21 @@ local SHELF_MORE = {
 		tip = "Chat bubbles get a cleaner look, so you can still read them with your UI hidden." },
 	{ key = "combatText", label = "Combat Text", icon = "Interface\\Icons\\Ability_Warrior_Riposte", group = "style",
 		tip = "Damage and heal numbers in a cleaner style." },
+	-- (Style's pages as tiles, each a theme on your frames for a moment
+	-- (StyleDemos.lua); they were links, the user 2026-11-22.)
+	{ key = "styleThemes", label = "Themes", icon = "Interface\\Icons\\INV_Misc_Gear_08", group = "style",
+		tip = "One look for your whole UI: fonts, borders, colors." },
+	{ key = "unitStyle", label = "Unit Frames Style", icon = "Interface\\Icons\\INV_Misc_Head_Human_01", group = "style",
+		tip = "Restyles your player, target and focus frames." },
+	{ key = "plateStyle", label = "Nameplate Style", icon = "Interface\\Icons\\Ability_Marksmanship", group = "style",
+		tip = "Shapes, bars and cast bars for nameplates." },
 	-- (the Mouseover page's own icon, a pointing hand)
 	{ key = "mouseover", label = "Mouseover", icon = "Interface\\Cursor\\Point", group = "ui",
 		tip = "Mouse over the spot where a faded frame sits and it comes back, along with its group." },
-	{ key = "cdflash", label = "Cooldown Flash", icon = "Interface\\Icons\\Spell_Nature_TimeStop", group = "ui",
-		tip = "A spell's icon flashes in the middle of the screen as it comes off cooldown." },
+	-- (The whole Cooldown Manager page, not its Flash alone: "Cooldown Flash"
+	-- was a bad name for a part of it, the user 2026-11-22. Its demo flashes the icons.)
+	{ key = "cooldowns", label = "Cooldown Manager", icon = "Interface\\Icons\\Spell_Nature_TimeStop", group = "ui",
+		tip = "Your Cooldown Manager's spells show when they matter, and flash as they come off cooldown." },
 	{ key = "speech", label = "Speech", icon = "Interface\\Icons\\Ability_Warrior_RallyingCry", group = "ui",
 		tip = "What's said behind you shows as a bubble, so you don't miss it." },
 }
@@ -517,6 +567,7 @@ local NOTICE_LINES = {
 -- it for you. (Quest and Damage Vision left out on purpose: few use them.)
 local TOUR = { { key = "fadeUI" }, { key = "bars" }, { key = "tint" }, { key = "afk" }, { key = "shoulder" },
 	{ key = "vitals" }, { key = "emote", seconds = 15 }, { key = "cards" }, { key = "tele" } }
+local TOUR_FULL = #TOUR -- (fewer: parts left out, below; the 1½ min no longer true)
 -- The features with nothing to play: a line of links under the grid, "Also
 -- in Cinematic", each opening its settings page (by its English name, as
 -- ns.OpenOptions takes it) over the welcome window, closing back to it. The
@@ -536,11 +587,6 @@ local SHELF_LINKS = {
 		tip = "In CineMode, the nameplates of two players dueling near you show." },
 	{ page = "Tooltips", label = "Tooltips", group = "ui", tip = "Which parts of a tooltip show, and where it sits." },
 	{ page = "Cursor Hide", label = "Cursor Hide", group = "ui", tip = "Hides the mouse cursor when you aren't using it." },
-	{ page = "Style Themes", label = "Themes", group = "style", tip = "One look for your whole UI: fonts, borders, colors." },
-	{ page = "Unit Style", label = "Unit Frames Style", group = "style",
-		tip = "Restyles your player, target and focus frames." },
-	{ page = "Nameplate Style", label = "Nameplate Style", group = "style",
-		tip = "Shapes, bars and cast bars for nameplates." },
 	{ page = "Your wheels", label = "Wheels", group = "qol",
 		tip = "Radial menus on a key: cameras, menus, raid markers, Visions." },
 	{ page = "Keyboard Map", label = "Keyboard Map", group = "qol",
@@ -570,8 +616,12 @@ for part, group in pairs({ visions = "vis", cameras = "cam", style = "style", at
 			if gone[TOUR[i].key] then table.remove(TOUR, i) end
 		end
 		for i = #SECTIONS, 1, -1 do
-			if (part == "visions" and SECTIONS[i] == VISIONS) or (part == "cameras" and SECTIONS[i].slot == "camera")
-				or (part == "style" and SECTIONS[i] == THEMES) then
+			-- (Atmosphere's Look and Sound too: with it out they did nothing,
+			-- the welcome audit 2026-11-22.)
+			local slot = SECTIONS[i].slot
+			if (part == "visions" and SECTIONS[i] == VISIONS) or (part == "cameras" and slot == "camera")
+				or (part == "style" and SECTIONS[i] == THEMES)
+				or (part == "atmosphere" and (slot == "vfx" or slot == "sound")) then
 				table.remove(SECTIONS, i)
 			end
 		end
@@ -642,7 +692,25 @@ local function BuildDemoRow(page, width)
 	hint:SetPoint("TOPRIGHT", -12, -9)
 	-- Watch the tour, on the right of the header: there before the shelf's
 	-- open (Stop the tour while it plays; gone in a fight, the hint says why).
-	local tourButton = FlatButton(row, L["Watch the tour \194\183 1\194\189 min"], nil, function()
+	-- (Parts left out: the stops left, by name, and no time; one stop or none,
+	-- no tour. It promised Shoulder Cam and Vitals with only Fading UI left,
+	-- the welcome audit 2026-11-22.)
+	local function TourLabel()
+		return #TOUR == TOUR_FULL and L["Watch the tour \194\183 1\194\189 min"] or L["Watch the tour"]
+	end
+	local function TourWords()
+		if #TOUR == TOUR_FULL then
+			return L["The highlights one after another: your UI fading, the letterbox and tint, a camera, the Shoulder Cam if " ..
+				"you've said yes to it, Vitals, Emote and Card Visions, a teleport. Stop any time."]
+		end
+		local names = {}
+		for _, stop in ipairs(TOUR) do
+			local demo = DEMO_BY_KEY[stop.key]
+			if demo then names[#names + 1] = L[demo.label] end
+		end
+		return L["The highlights one after another: %s. Stop any time."]:format(table.concat(names, ", "))
+	end
+	local tourButton = FlatButton(row, TourLabel(), nil, function()
 		if ns.ShowMeTouring and ns.ShowMeTouring() then
 			ns.StopShowMe()
 		elseif ns.ShowMeTour then
@@ -653,18 +721,20 @@ local function BuildDemoRow(page, width)
 	Color(tourButton.text, GOLD)
 	tourButton:SetScript("OnEnter", function(self)
 		Color(self.text, WHITE)
-		about:SetText("|cffffd100" .. L["Watch the tour"] .. "|r   " ..
-			L["The highlights one after another: your UI fading, the letterbox and tint, a camera, the Shoulder Cam if " ..
-			"you've said yes to it, Vitals, Emote and Card Visions, a teleport. Stop any time."])
+		about:SetText("|cffffd100" .. L["Watch the tour"] .. "|r   " .. TourWords())
 	end)
 	tourButton:SetScript("OnLeave", function(self)
 		Color(self.text, GOLD)
 		DescribeSoon()
 	end)
+	-- (Five on the row at most, the rest under See all: seven left each tile
+	-- too narrow, "Out..." for Out of fights and "Shoulder C..."; the welcome
+	-- audit 2026-11-22.)
+	local ROW_MAX = 5
 	local list, all = {}, {}
 	for _, demo in ipairs(DEMO_ROW) do
 		if ns.ShowMeAvailable and ns.ShowMeAvailable(demo.key) then
-			list[#list + 1] = demo
+			if #list < ROW_MAX then list[#list + 1] = demo end
 			all[#all + 1] = demo
 		end
 	end
@@ -706,7 +776,9 @@ local function BuildDemoRow(page, width)
 		Color(start.label, startFor and SOFT or DIM)
 	end
 	start:SetScript("OnClick", function()
-		if startFor ~= Active() then return end
+		-- (Nothing picked: both nil, and it wrote fadeUI with nothing to show;
+		-- the welcome audit 2026-11-22.)
+		if not startFor or startFor ~= Active() then return end
 		ns.db.fadeUI = not StartOn()
 		if ns.RestartTimers then ns.RestartTimers() end
 		-- (and the Fading UI button's tag, which goes by it)
@@ -763,6 +835,10 @@ local function BuildDemoRow(page, width)
 			value:SetText(("%d%%"):format(v))
 			if setting then return end
 			ns.db.tintStrength = v / 100
+			-- (Nothing picked yet: the first pick loads its own and the slider
+			-- jumped back; kept and put on the pick, Pick. The welcome audit
+			-- 2026-11-22.)
+			if not ns.ProfileChosen() then row.pendingStrength = v / 100 end
 			if ns.RefreshTint then ns.RefreshTint() end
 			if ns.ShowMeRunning("tint") then
 				ns.ShowMeKeep("tint", 3)
@@ -822,7 +898,9 @@ local function BuildDemoRow(page, width)
 	local gap = 6
 	-- (the See all button narrower: two short words, no icon)
 	local moreW = 74
-	local buttonW = math.floor((width - 24 - moreW - gap * #list) / math.max(1, #list))
+	-- (No wider than a few side by side: with parts left out one Fading UI
+	-- tile ran across the row, the welcome audit 2026-11-22.)
+	local buttonW = math.min(150, math.floor((width - 24 - moreW - gap * #list) / math.max(1, #list)))
 	local buttons = {}
 	local show -- (the level the tags are for: Describe's, nil for none)
 	-- Your switches (the tiles'): key -> on, kept over each level picked
@@ -839,7 +917,7 @@ local function BuildDemoRow(page, width)
 	-- you want is its point.
 	local function SwitchLevel()
 		local active = Active()
-		local level = active and levelOf[active]
+		local level = active and LevelFor(active)
 		if not level or show ~= level then return nil end
 		return active
 	end
@@ -882,7 +960,7 @@ local function BuildDemoRow(page, width)
 			-- (a tile's border lit; a page link has none: its words)
 			if b.SetBackdropBorderColor then b:SetBackdropBorderColor(unpack(LIT)) end
 			if b.text then Color(b.text, GOLD) end
-			local level = levelOf[Active()]
+			local level = LevelFor(Active())
 			local text = (self.on and L["Turn %s off"] or L["Turn %s on"]):format(L[demo.label])
 			local line = (self.on and L["Takes it out of %s, the profile you're trying."]
 				or L["Adds it to %s, the profile you're trying."]):format(level and level.label or "")
@@ -1258,7 +1336,9 @@ local function BuildDemoRow(page, width)
 			return
 		end
 		local words = (search:GetText() or ""):match("^%s*(.-)%s*$")
-		if words == "" and saved.group == "all" then
+		-- (The tour only with two stops or more: parts left out, every tile
+		-- shown, "Play all"; it played Fading UI alone, profileparts run 9.)
+		if words == "" and saved.group == "all" and #TOUR >= 2 then
 			ns.ShowMeTour(TourSteps(TOUR), window)
 			return
 		end
@@ -1345,6 +1425,8 @@ local function BuildDemoRow(page, width)
 	function row:Update(level, keep)
 		if not keep then show = level end
 		startFor = show and (show.profile or ns.DEFAULT_PROFILE) or nil
+		-- (Your own profile from this level: the tick is its own, to change.)
+		if show and Active() and show == LevelFor(Active()) then startFor = Active() end
 		ShowStart()
 		local fight = InCombatLockdown()
 		hint:SetText(fight and L["In a fight: demos wait till it ends."] or "")
@@ -1352,13 +1434,14 @@ local function BuildDemoRow(page, width)
 		search:SetShown(not fight)
 		-- (the tour buttons: Stop the tour while one plays; none in a fight)
 		local touring = ns.ShowMeTouring and ns.ShowMeTouring()
-		tourButton:SetShown(not fight)
-		tourButton:SetLabel(touring and L["Stop the tour"] or L["Watch the tour \194\183 1\194\189 min"])
+		tourButton:SetShown(not fight and (touring or #TOUR >= 2))
+		tourButton:SetLabel(touring and L["Stop the tour"] or TourLabel())
 		play:SetShown(not fight)
 		local words = (search:GetText() or ""):match("^%s*(.-)%s*$")
 		local group = groupOf[saved.group]
 		play:SetLabel(touring and L["Stop the tour"] or words ~= "" and L["Play these"]
-			or (not group or group.key == "all") and L["Watch the tour"] or (L["Play all in %s"]):format(L[group.label]))
+			or (not group or group.key == "all") and (#TOUR >= 2 and L["Watch the tour"] or L["Play all"])
+			or (L["Play all in %s"]):format(L[group.label]))
 		UpdateNotice()
 		ShowYours()
 		Recount()
@@ -1668,6 +1751,9 @@ function ns.CustomizePanel(parent, width, onChange, skinned)
 			if not self.active then self:SetBackdropBorderColor(unpack(EDGE)) end
 		end)
 		option:SetScript("OnClick", function(self)
+			-- (Not in a fight: a profile switched halfway, as the cards; the
+			-- welcome audit 2026-11-22.)
+			if InCombatLockdown() then ns.ProfileSwitchBlocked() return end
 			local vision = self.choice.vision
 			if vision then
 				-- (A Vision: on or off, any number of them, in a profile of your own.)
@@ -1908,10 +1994,12 @@ local toSettings, afterClose
 -- (no chat line, as for Settings), with a Back button over its top-left;
 -- Back, or closing the settings any way, brings the welcome window back.
 local backButton, backTo
+local roundTrip -- (closing for a shelf link: back after, so nothing forgotten)
 function OpenPageFromWelcome(page)
 	if InCombatLockdown() or not window then return end
 	local panel = SettingsPanel or InterfaceOptionsFrame
 	toSettings = true
+	roundTrip = true
 	window:Hide()
 	ns.OpenOptions(page)
 	if not (panel and ns.Flag(panel:IsShown())) then
@@ -1938,11 +2026,19 @@ function OpenPageFromWelcome(page)
 	backButton:Show()
 end
 local function OnHide()
-	CinematicDB.welcomeAfterReload = nil -- (closed: not back after a reload)
-	if demoRow and demoRow.ForgetSwitches then demoRow:ForgetSwitches() end
+	-- (A shelf link's page, Back brings this window back: your switches,
+	-- their Undo, the reload mark and a window waiting its turn all kept for
+	-- then. They went, and the conflicts window opened over the settings
+	-- page; the welcome audit 2026-11-22.)
+	local trip = roundTrip
+	roundTrip = false
+	if not trip then
+		CinematicDB.welcomeAfterReload = nil -- (closed: not back after a reload)
+		if demoRow and demoRow.ForgetSwitches then demoRow:ForgetSwitches() end
+	end
 	-- (A window waiting its turn, the conflicts one: opened once this has
 	-- closed, a moment on so See Profile's settings open first.)
-	if afterClose then
+	if afterClose and not trip then
 		local fn = afterClose
 		afterClose = nil
 		C_Timer.After(0.2, function() fn() end)
@@ -1950,7 +2046,7 @@ local function OnHide()
 	if toSettings then
 		toSettings = false
 	elseif not ns.db.enabled then -- (closed after Turn off)
-		ns.Print(L["turned off. /cine brings this window back to pick a profile."])
+		ns.Print(L["turned off. /cine welcome brings this window back to pick a profile."])
 	elseif not ns.ProfileChosen() then
 		ns.Print(L["off until you pick a profile. This window comes back next login, or now with /cine welcome."])
 	else
@@ -2087,6 +2183,9 @@ local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:SetScript("OnEvent", function(_, _, isLogin, isReload)
 	-- (Or a reload a pick here asked for, a moment ago: back where you were.)
+	-- (Only a login or reload uses it up: a portal or dungeon on the way
+	-- kept it, the welcome audit 2026-11-22.)
+	if not (isLogin or isReload) then return end
 	local back = CinematicDB and CinematicDB.welcomeAfterReload
 	if CinematicDB then CinematicDB.welcomeAfterReload = nil end
 	if isReload and type(back) == "table" and type(back.at) == "number" and time() - back.at < WELCOME_BACK_SECONDS then

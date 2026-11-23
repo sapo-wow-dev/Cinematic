@@ -3720,6 +3720,7 @@ function ns.MakeUnitStylePreview(parent, width, onPick)
 	stage:SetSize(right + 14, bottom + 30) -- (the layout's left and top margins, on the other sides too)
 	stage.baseW, stage.baseH = right + 14, bottom + 30
 	stage:SetPoint("CENTER")
+	holder.stage = stage -- (the Style demos' board cuts the preview to it: StyleDemos.lua)
 	local samples = {}
 	for _, entry in ipairs(PREVIEW_UNITS) do
 		local unit = NewUnit(stage, entry.id, entry.key, onPick)

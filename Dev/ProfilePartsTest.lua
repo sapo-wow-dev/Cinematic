@@ -43,7 +43,90 @@ local function Words(kind, parts)
 	for _, part in ipairs(parts or PARTS) do list[#list + 1] = NAMES[part] end
 	return list
 end
-local TOUCHED = { "Auto-Hide UI", "Balanced", "Blank Slate" }
+
+-- The welcome audit's checks (2026-11-22), on the window as it is.
+-- Each shown text in a frame, its children walked.
+local function EachText(frame, fn)
+	if not (frame and frame.IsVisible and frame:IsVisible()) then return end
+	for _, region in ipairs({ frame:GetRegions() }) do
+		if region.GetText and region.IsVisible and region:IsVisible() and region:GetObjectType() == "FontString" then
+			fn(region)
+		end
+	end
+	for _, child in ipairs({ frame:GetChildren() }) do EachText(child, fn) end
+end
+local function WelcomeHas(words)
+	local found
+	EachText(rawget(_G, "CinematicWelcome"), function(fs)
+		local t = fs:GetText()
+		if type(t) == "string" and t:find(words, 1, true) then found = found or fs end
+	end)
+	return found
+end
+-- A shown button of the window by its words.
+local function WelcomeButton(words)
+	local fs
+	EachText(rawget(_G, "CinematicWelcome"), function(each) if not fs and each:GetText() == words then fs = each end end)
+	local b = fs and fs:GetParent()
+	while b and not (b.Click and b:GetObjectType() == "Button") do b = b:GetParent() end
+	return b
+end
+-- Nothing cut off ("Out..." for Out of fights, "Shoulder C...": run 8), and
+-- the tour only with two stops or more (parts left out: Fading UI alone).
+local function WelcomeLook(r, what)
+	local welcome = rawget(_G, "CinematicWelcome")
+	if not (welcome and welcome:IsVisible()) then
+		r:Verdict(false, what .. ": the welcome window is up")
+		return
+	end
+	local cut = {}
+	EachText(welcome, function(fs)
+		if fs.IsTruncated and fs:IsTruncated() then cut[#cut + 1] = tostring(fs:GetText()) end
+	end)
+	r:Verdict(#cut == 0, ("%s: no words cut off in the window (%s)"):format(what, table.concat(cut, " | ")))
+	if welcome.page == 1 then
+		local allIn = true
+		for _, part in ipairs(PARTS) do allIn = allIn and ns.ModuleLoaded(part) end
+		-- (Both the row's tour button and the open shelf's play button: either
+		-- saying Watch the tour with parts out promises what won't play.)
+		local tour = WelcomeHas(ns.L["Watch the tour"]) ~= nil
+		r:Verdict(tour == allIn, ("%s: Watch the tour %s (all parts loaded %s)"):format(what,
+			tour and "shown" or "gone", tostring(allIn)))
+	end
+end
+-- Customize (Next) and back: with Atmosphere out, no Look or Sound section
+-- (they did nothing), no greyed Show me; nothing cut off there either.
+local function CustomizeLook(r, what)
+	local next = WelcomeButton(ns.L["Next"])
+	if not next then
+		r:Verdict(false, what .. ": a Next button to Customize")
+		return false
+	end
+	next:Click()
+	r:Sleep(0.5)
+	local welcome = rawget(_G, "CinematicWelcome")
+	r:Verdict(welcome and welcome.page == 2 or false, what .. ": Customize open (page " .. tostring(welcome and welcome.page) .. ")")
+	WelcomeLook(r, what .. " Customize")
+	if not ns.ModuleLoaded("atmosphere") then
+		local look, sound = WelcomeHas(ns.L["How should the world look?"]), WelcomeHas(ns.L["How much music?"])
+		local look2 = false
+		EachText(welcome, function(fs)
+			local t = fs:GetText()
+			if t == ns.L["Look"] or t == ns.L["Sound"] then look2 = true end
+		end)
+		r:Verdict(not look and not sound and not look2,
+			what .. ": Atmosphere out: no Look or Sound section in Customize")
+	end
+	r:Verdict(WelcomeHas(ns.L["Nothing to show here."]) == nil, what .. ": no greyed Show me in Customize")
+	return true
+end
+local function BackToLevels(r)
+	local back = WelcomeButton(ns.L["< Back"])
+	if back then back:Click() end
+	r:Sleep(0.3)
+end
+
+local TOUCHED = { "Auto-Hide UI", "Balanced", "Blank Slate", "Shoulder Cam" }
 
 local function Copy(t)
 	if type(t) ~= "table" then return t end
@@ -212,6 +295,16 @@ local function CheckBox(r, what, words)
 			textEdges and textEdges.left or -1, textEdges and textEdges.right or -1,
 			boxEdges and boxEdges.left or -1, boxEdges and boxEdges.right or -1))
 	NoteBoxWidth(r, what, popup)
+	-- (One box of ours at a time: Shoulder Cam showed the parts' box and
+	-- Edit Mode's together, run 8. The game's own, a group invite, may be up.)
+	local ours = {}
+	for i = 1, (_G.STATICPOPUP_NUMDIALOGS or 4) do
+		local d = _G["StaticPopup" .. i]
+		if d and d ~= popup and d:IsShown() and type(d.which) == "string" and d.which:find("^CINEMATIC_") then
+			ours[#ours + 1] = d.which
+		end
+	end
+	r:Verdict(#ours == 0, ("%s: no other box of ours up (%s)"):format(what, table.concat(ours, ", ")))
 	r:Verdict(popup:GetFrameStrata() == "DIALOG", what .. ": the game's layer for its boxes: " .. tostring(popup:GetFrameStrata()))
 	-- (The game's spot: the first of its boxes, top middle, as the Edit Mode
 	-- box in the user's screenshot.)
@@ -281,6 +374,7 @@ ns.TestKit.Define({
 			end
 			if ns.ModuleWanted(part) ~= ns.ModuleLoaded(part) then reload = true end
 		end
+		if extra.shoulderNoticed ~= nil then ns.db.shoulderCamNoticed = extra.shoulderNoticed or nil end
 		ns.db.fadeUI = false
 		CinematicDB.profilePartsTestData = nil
 		if reload then said[#said + 1] = "takes your next /reload" end
@@ -289,6 +383,7 @@ ns.TestKit.Define({
 	steps = {
 		{ key = "ready", title = "all loaded to start", run = function(r)
 			r:Keep("profile", ns.ActiveProfile())
+			r:Keep("shoulderNoticed", ns.db.shoulderCamNoticed or false)
 			for _, part in ipairs(PARTS) do r:Keep("wanted:" .. part, ns.ModuleWanted(part)) end
 			for _, name in ipairs(TOUCHED) do
 				local saved = ns.db.profiles and ns.db.profiles[name]
@@ -357,7 +452,27 @@ ns.TestKit.Define({
 			WelcomeBack(r, "Auto-Hide UI")
 			ns.ShowWelcome()
 			r:Sleep(0.5)
+			WelcomeLook(r, "parts out")
+			if CustomizeLook(r, "parts out") then BackToLevels(r) end
 			local cards = Cards()
+			-- Shoulder Cam's card with Cameras out: the card's yes kept (it
+			-- was lost: ns.ShoulderCamAgree is Cameras' own), one box.
+			if cards["Shoulder Cam"] then
+				ns.db.shoulderCamNoticed = nil
+				cards["Shoulder Cam"]:Click()
+				ns.db.fadeUI = false
+				r:Sleep(0.5)
+				r:Verdict(ns.db.shoulderCamNoticed == true,
+					("Shoulder Cam with Cameras out: its yes kept (%s; ShoulderCamAgree there %s)"):format(
+						tostring(ns.db.shoulderCamNoticed), tostring(ns.ShoulderCamAgree ~= nil)))
+				local up = 0
+				for i = 1, (_G.STATICPOPUP_NUMDIALOGS or 4) do
+					local d = _G["StaticPopup" .. i]
+					if d and d:IsShown() and type(d.which) == "string" and d.which:find("^CINEMATIC_") then up = up + 1 end
+				end
+				r:Verdict(up == 1, ("Shoulder Cam: one box of ours (%d)"):format(up))
+				WelcomeLook(r, "Shoulder Cam picked")
+			end
 			if not cards.Balanced then
 				r:Fail("no Balanced card on the welcome window")
 				return
@@ -368,7 +483,19 @@ ns.TestKit.Define({
 			r:Verdict(ns.ActiveProfile() == "Balanced", "Balanced picked: " .. tostring(ns.ActiveProfile()))
 			Wanted(r, true, "Balanced")
 			local popup = CheckBox(r, "Balanced", Words("load"))
-			if popup then r:Shot("the box saying load them", { behind = { popup, rawget(_G, "CinematicWelcome") } }) end
+			-- A layout switch wanting a reload too (Shoulder Cam's, run 8), by
+			-- its own call (Layouts.lua OfferReload; the layout on now, so the
+			-- switch after the reload is to where it is): still one box, both
+			-- reasons in it.
+			local layout = ns.ActiveLayoutName and ns.ActiveLayoutName()
+			if layout and ns.OfferLayoutReload then
+				ns.OfferLayoutReload(layout)
+				r:Sleep(0.3)
+				popup = CheckBox(r, "Balanced + Edit Mode layout", { "Reload now to load ", "Visions", "switch Edit Mode layouts" })
+			else
+				r:Log("no Edit Mode here: the layout's reason not tried")
+			end
+			if popup then r:Shot("the one box: the parts and the layout", { behind = { popup, rawget(_G, "CinematicWelcome") } }) end
 			ClickReload(r, popup)
 		end },
 		{ key = "back", title = "both back; /cine profile", run = function(r)
@@ -379,6 +506,42 @@ ns.TestKit.Define({
 			r:Verdict(ns.settingsCanvases and ns.settingsCanvases["Roll Vision"] ~= nil and ns.settingsCanvases["Scenes"] ~= nil
 				and true or false, "their pages back")
 			WelcomeBack(r, "Balanced")
+			WelcomeLook(r, "all loaded")
+			-- Customize a choice: your own profile from Balanced. Back on the
+			-- levels it still reads as Balanced (it read as nothing picked).
+			if CustomizeLook(r, "all loaded") then
+				local option
+				local function Find(frame)
+					if option or not (frame and frame:IsVisible()) then return end
+					local c = frame.choice
+					if c and c.part and not c.vision and not c.theme and not c.custom and not frame.active then option = frame end
+					for _, child in ipairs({ frame:GetChildren() }) do Find(child) end
+				end
+				Find(rawget(_G, "CinematicWelcome"))
+				if option then
+					option:Click()
+					r:Sleep(0.5)
+					local own = ns.ActiveProfile()
+					r:Log(("Customize: %s %s picked: on %s, from %s"):format(tostring(option.choice.part),
+						tostring(option.choice.label), tostring(own), tostring(ns.ProfileFrom and ns.ProfileFrom(own))))
+					BackToLevels(r)
+					local gold = {}
+					for name, card in pairs(Cards()) do if card.active then gold[#gold + 1] = name end end
+					r:Verdict(#gold == 1 and gold[1] == "Balanced",
+						("your own setup from Balanced: Balanced's card gold (%s)"):format(table.concat(gold, ", ")))
+					WelcomeLook(r, "your own setup")
+					if own ~= "Balanced" and ns.ProfileExists(own) then
+						ns.SetProfile("Balanced")
+						ns.DeleteProfile(own)
+						r:Log("your own setup removed: " .. tostring(own))
+					end
+				else
+					r:Log("Customize: no choice to click")
+					BackToLevels(r)
+				end
+			end
+			r:Verdict(ns.ReloadBoxText and ns.ReloadBoxText() == nil or false,
+				"after the reload: nothing left to reload (" .. tostring(ns.ReloadBoxText and ns.ReloadBoxText()) .. ")")
 			local welcome = rawget(_G, "CinematicWelcome")
 			if welcome and welcome:IsShown() then welcome:Hide() end
 			ns.HandleSlash("profile blank slate")
