@@ -889,7 +889,9 @@ function ns.ChatTestAlpha(chatFrame) return WindowAlpha(chatFrame) end
 function ns.ChatCopyState(chatFrame)
 	local copy = lineCopies[chatFrame]
 	if not copy then return nil end
+	local n = copy.frame.GetNumMessages and copy.frame:GetNumMessages()
 	return { shown = copy.frame:IsShown(), alpha = copy.frame:GetAlpha(), quick = copy.quickFrom ~= nil,
+		line = type(n) == "number" and n > 0 and copy.frame:GetMessageInfo(n) or nil,
 		count = copy.count, windowCount = WindowCount(chatFrame), windowAlpha = WindowAlpha(chatFrame),
 		base = copy.base, linesUp = CopyLinesUp(chatFrame, copy) }
 end

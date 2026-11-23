@@ -343,6 +343,7 @@ Dev\SpokenTest.lua
 Dev\ChatRevealTest.lua
 Dev\ChatDefaultTest.lua
 Dev\ChatTabTest.lua
+Dev\ChatLinesTest.lua
 Dev\ChecksProbe.lua
 Dev\WhoseHitTest.lua
 Dev\CorpseTest.lua
