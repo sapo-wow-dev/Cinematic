@@ -16,6 +16,13 @@
 -- else its own mode, else its bar's first line that fits, else the bar's
 -- default; a line with no place is anywhere; another spell's lines never
 -- change X.
+-- Two rules true at once (cooldown-rules-overlap, fix card
+-- Tools/audits/2026-11-23-cooldown-rules-overlap.md): spells A and B each
+-- with a real rule of its own ("boss", or "combat": a boss fight is a fight
+-- too), A's met first or second, from your live settings or a v2.1.23
+-- string. Each spell does what its own rule says where it fits (v2.1.23 read
+-- each spell's own lines); the grid's first scene that fits mustn't hand one
+-- spell's rule to the other. (ae2cda8 lost the second spell's.)
 
 local client = arg and arg[1] or "forever"
 local ns = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc")
@@ -207,4 +214,91 @@ Matrix.Run({
 		return Modes()
 	end,
 	pins = pins,
+})
+
+-- Two spells' rules true at once.
+local RULE_SHOW = { A = { boss = "proc", fight = "recharge" }, B = { boss = "never", fight = "ready" } }
+local RULE_CQL = { boss = "boss", fight = "combat" }
+local function RuleFits(rule, m)
+	if rule == "boss" then return m[4] == true end
+	return m[3]
+end
+local function OverlapModes(ids)
+	local out = {}
+	for _, who in ipairs({ "A", "B" }) do
+		local parts = {}
+		for _, m in ipairs(MOMENTS) do
+			Be(m[2], m[3], m[4])
+			parts[#parts + 1] = m[1] .. "=" .. tostring((ns.CooldownSpellMode(ids[who], "essential")))
+		end
+		out[#out + 1] = who .. ": " .. table.concat(parts, " ")
+	end
+	return table.concat(out, " | ")
+end
+local overlapDims = {
+	{ "from", { "live", "string" } },
+	{ "a", { "boss", "fight" } },
+	{ "b", { "none", "boss", "fight" } },
+	{ "order", { "afirst", "bfirst" } },
+}
+local overlapPins = {}
+do
+	local values = {}
+	local function Walk(depth)
+		if depth > #overlapDims then
+			local c, parts = {}, {}
+			for i, dim in ipairs(overlapDims) do
+				c[dim[1]] = values[i]
+				parts[#parts + 1] = dim[1] .. "=" .. values[i]
+			end
+			local out = {}
+			for _, who in ipairs({ "A", "B" }) do
+				local rule = who == "A" and c.a or c.b
+				local modes = {}
+				for _, m in ipairs(MOMENTS) do
+					local mode = DEFAULT[m[1]]
+					if rule ~= "none" and RuleFits(rule, m) then mode = RULE_SHOW[who][rule] end
+					modes[#modes + 1] = m[1] .. "=" .. mode
+				end
+				out[#out + 1] = who .. ": " .. table.concat(modes, " ")
+			end
+			overlapPins[#overlapPins + 1] = { table.concat(parts, " "), table.concat(out, " | ") }
+			return
+		end
+		for _, value in ipairs(overlapDims[depth][2]) do
+			values[depth] = value
+			Walk(depth + 1)
+		end
+	end
+	Walk(1)
+end
+Matrix.Run({
+	name = "cooldown-rules-overlap",
+	fixed = { client = client },
+	dims = overlapDims,
+	cell = function(c)
+		n = n + 1
+		db.liveProfile, db.profile = "Balanced", "Balanced"
+		db.profiles, db.profileBackups, db.deletedProfiles, db.profileResetPoints = {}, {}, {}, {}
+		Fresh()
+		-- (Met first: the lower id, as the update sorts rows by key.)
+		local ids = c.order == "afirst" and { A = X, B = OTHER } or { A = OTHER, B = X }
+		local spells = { [ids.A] = { { show = RULE_SHOW.A[c.a], cql = RULE_CQL[c.a] } } }
+		if c.b ~= "none" then spells[ids.B] = { { show = RULE_SHOW.B[c.b], cql = RULE_CQL[c.b] } } end
+		local old = { cooldownSpellRules = spells }
+		if c.from == "live" then
+			for k, v in pairs(old) do db[k] = v end
+			db.cooldownGridV1 = nil
+			ns.RunMigrations()
+		else
+			local name = "Overlap" .. n
+			local text = ns.PackShared("CINE", 1, { format = 1, version = "v2.1.23", name = name, settings = old })
+			local read, why = ns.ReadSharedProfile(text)
+			if not read then return "not read: " .. tostring(why) end
+			if not ns.AddSharedProfile(name, read.settings) then return "not added" end
+		end
+		PagesOn()
+		return OverlapModes(ids)
+	end,
+	pins = overlapPins,
 })
