@@ -217,6 +217,9 @@ function ns.ReadSharedProfile(text)
 	-- (One from before Heal Vision's Nameplates tab had its own switch: its old
 	-- switch onto the tab, not skipped as unknown. Migrations.lua.)
 	if ns.MoveHealVisionPlates then ns.MoveHealVisionPlates(data.settings) end
+	-- (One from before the Cooldown Manager's grid: its numbered lines made
+	-- scenes, not skipped as from a newer version. Release review, 2026-11-22.)
+	if ns.MigrateCooldownLines then ns.MigrateCooldownLines(data.settings) end
 	for key, value in pairs(data.settings) do
 		if ns.KnownProfileSetting(key, value) then
 			settings[key] = value

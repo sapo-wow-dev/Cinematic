@@ -115,6 +115,8 @@ local function Known(settings)
 	-- (A backup from before Heal Vision's Nameplates tab had its own switch: its
 	-- old switch onto the tab. Migrations.lua.)
 	if ns.MoveHealVisionPlates then ns.MoveHealVisionPlates(settings) end
+	-- (And from before the Cooldown Manager's grid: its lines made scenes.)
+	if ns.MigrateCooldownLines then ns.MigrateCooldownLines(settings) end
 	for k, v in pairs(settings or {}) do
 		if ns.KnownProfileSetting(k, v) then known[k] = CopyTable(v) end
 	end

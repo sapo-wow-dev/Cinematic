@@ -41,9 +41,25 @@ do
 	-- (Its support switched off on the Addons page: as if it weren't in, so
 	-- no path of ours reaches into it, not only its setup (ns.AddonSupportOn).
 	-- Questie's plate marks, tooltip lines and item button still did. Audit
-	-- 2026-11-22.)
+	-- 2026-11-22. As the box was at login, as it says (it counts after a
+	-- reload): read live, unticking it stopped our own put-back code too, its
+	-- hidden target icon and moved plate icons left so till the reload.)
+	local offAtLoad
+	local function OffAtLoad(name)
+		if not offAtLoad then
+			local db = ns.db or _G.CinematicDB
+			if type(db) ~= "table" then return false end -- (saved settings not in yet: asked again)
+			offAtLoad = {}
+			for addon, off in pairs(type(db.addonSupportOff) == "table" and db.addonSupportOff or {}) do
+				offAtLoad[addon] = off
+			end
+		end
+		return offAtLoad[name] == true
+	end
+	-- (Tools/offline/questiegate.lua: a reload, the box read again.)
+	function ns.ForgetAddonSupportAtLoad() offAtLoad = nil end
 	function ns.AddonUp(name)
-		if ns.AddonSupportOn and not ns.AddonSupportOn(name) then return false end
+		if OffAtLoad(name) then return false end
 		if up[name] then return true end
 		if notUp[name] or not isLoaded then return false end
 		local ok, loaded = pcall(isLoaded, name)

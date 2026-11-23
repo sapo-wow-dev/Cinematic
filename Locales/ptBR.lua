@@ -6807,3 +6807,16 @@ L["No GitHub account? Post in #bug-reports, with your log as a .txt file."] = "S
 L["Report a bug"] = "Relatar um bug"
 L["Troubleshooting"] = "Solução de problemas"
 L["Videos of Cinematic's cameras and features."] = "Vídeos das câmeras e recursos do Cinematic."
+
+-- UI/ShareWindow.lua (restored: the v2.1.24 cleanup took these out, still used)
+L["%s (a shot of its own, added too)"] = "%s (uma tomada própria, também adicionada)"
+L["Add it"] = "Adicionar"
+L["Camera: %s"] = "Câmera: %s"
+L["Import a scene or shot"] = "Importar uma cena ou tomada"
+L["No room for it: delete a scene or shot first."] = "Não há espaço: exclua uma cena ou tomada primeiro."
+L["Paste the text a friend sent (Ctrl+V). What it holds shows below before you add it."] = "Cole o texto que um amigo enviou (Ctrl+V). O que ele contém aparece abaixo antes de você adicioná-lo."
+L["Press Ctrl+C to copy this, then paste it wherever your friend will see it."] = "Pressione Ctrl+C para copiar isto e cole onde o seu amigo vai ver."
+L["Scene:"] = "Cena:"
+L["Shot:"] = "Tomada:"
+L["That isn't a scene or shot: profiles go on the Profiles page, wheels on Your wheels."] = "Isso não é uma cena nem uma tomada: perfis vão na página Perfis, rodas em Suas rodas."
+L["Triggers: %s"] = "Gatilhos: %s"

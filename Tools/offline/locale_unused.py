@@ -119,9 +119,15 @@ def strings_of(text):
     return found
 
 
+def lua_files():
+    """Every .lua the game can load: tracked, and new ones not added yet (the v2.1.24 cleanup took out
+    the share window's strings while it sat in a new, untracked UI/ShareWindow.lua)."""
+    return subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.lua"],
+                          cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+
+
 def code_strings():
-    files = subprocess.run(["git", "ls-files", "*.lua"], cwd=ROOT, capture_output=True, text=True,
-                           check=True).stdout.split()
+    files = lua_files()
     strings = set()
     for path in files:
         if path.startswith(("Locales/", "Tools/")):
@@ -135,8 +141,7 @@ def code_strings():
 
 def built_lookups():
     """Each L[...] whose key is joined with .. from something not a string."""
-    files = subprocess.run(["git", "ls-files", "*.lua"], cwd=ROOT, capture_output=True, text=True,
-                           check=True).stdout.split()
+    files = lua_files()
     found = []
     for path in files:
         if path.startswith(("Locales/", "Tools/")) or not (ROOT / path).exists():

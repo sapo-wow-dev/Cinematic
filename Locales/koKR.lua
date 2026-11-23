@@ -6807,3 +6807,16 @@ L["No GitHub account? Post in #bug-reports, with your log as a .txt file."] = "G
 L["Report a bug"] = "버그 신고"
 L["Troubleshooting"] = "문제 해결"
 L["Videos of Cinematic's cameras and features."] = "Cinematic의 카메라와 기능 영상."
+
+-- UI/ShareWindow.lua (restored: the v2.1.24 cleanup took these out, still used)
+L["%s (a shot of its own, added too)"] = "%s (자체 샷, 함께 추가됨)"
+L["Add it"] = "추가"
+L["Camera: %s"] = "카메라: %s"
+L["Import a scene or shot"] = "장면 또는 샷 가져오기"
+L["No room for it: delete a scene or shot first."] = "자리가 없습니다: 먼저 장면이나 샷을 삭제하세요."
+L["Paste the text a friend sent (Ctrl+V). What it holds shows below before you add it."] = "친구가 보낸 문자를 붙여 넣으세요(Ctrl+V). 추가하기 전에 무엇이 들어 있는지 아래에 보입니다."
+L["Press Ctrl+C to copy this, then paste it wherever your friend will see it."] = "Ctrl+C로 복사한 뒤 친구가 볼 수 있는 곳에 붙여 넣으세요."
+L["Scene:"] = "장면:"
+L["Shot:"] = "샷:"
+L["That isn't a scene or shot: profiles go on the Profiles page, wheels on Your wheels."] = "장면이나 샷이 아닙니다: 프로필은 프로필 페이지에, 휠은 내 휠에 넣으세요."
+L["Triggers: %s"] = "발동 조건: %s"

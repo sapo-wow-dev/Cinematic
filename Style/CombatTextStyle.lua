@@ -1462,6 +1462,10 @@ ns.CombatTextBy = By
 
 -- After a setting changes (the page), and every two seconds.
 function ns.RefreshCombatTextStyle()
+	-- (Stopped for the session, ns.Suspend: its game settings were let go,
+	-- so none written again till /cine resume, which runs this. Release
+	-- review 2026-11-22: this every-2-s refresh undid the stop.)
+	if ns.IsSuspended and ns.IsSuspended() then return end
 	local on = PageOn()
 	for kind, sets in pairs(GAME_SETS) do
 		local by = By(kind)

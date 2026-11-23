@@ -744,5 +744,51 @@ do
 	Check("twelve wheres: nine scenes kept", #db.cooldownPlaceGroups == ns.COOLDOWN_GROUP_LIMIT, #db.cooldownPlaceGroups)
 end
 
+-- The release review's cases (2026-11-22): the rules the situations update
+-- wrote are places again, a spell's own setting still beats its bar's, and
+-- one row's rule doesn't take over the other rows' places.
+do
+	Fresh()
+	db.cooldownGroupRules = { essential = { { show = "never", combat = "in", place = "dungeon" } } }
+	db.cooldownSpellRules = {
+		[300] = { { show = "always", cql = "(dungeon or raid) and (combat or calm)" } },
+		[900] = { { show = "proc", cql = "boss" } },
+	}
+	db.cooldownBuffRules = nil
+	db.cooldownAlwaysShow = { [IMMOLATE] = true }
+	db.cooldownGroupRules.utility = { { show = "ready", cql = "(dungeon or raid) and (combat or calm)" } }
+	db.cooldownNeverShow = { [700] = true }
+	db.cooldownGridV1 = nil
+	ns.RunMigrations()
+	local generated = false
+	for _, group in ipairs(db.cooldownPlaceGroups) do
+		generated = generated or (group.cql and group.cql:find("dungeon or raid", 1, true) ~= nil)
+	end
+	Check("review: the situations' rule made places again", not generated)
+	In("dungeon", true)
+	Check("review: another spell's rule leaves the bar's Never on Agony in a dungeon fight",
+		(ns.CooldownSpellMode(AGONY, "essential")) == "never", (ns.CooldownSpellMode(AGONY, "essential")))
+	Check("review: and spell 300 Always there", (ns.CooldownSpellMode(300, "utility")) == "always")
+	In("raid", true)
+	Check("review: a spell's own Never beats its bar's situation line in a raid fight",
+		(ns.CooldownSpellMode(700, "utility")) == "never", (ns.CooldownSpellMode(700, "utility")))
+	In("dungeon", true, { boss = true })
+	Check("review: a real rule (boss) keeps the bar's Never on Agony",
+		(ns.CooldownSpellMode(AGONY, "essential")) == "never", (ns.CooldownSpellMode(AGONY, "essential")))
+	Check("review: and its own row's answer there", (ns.CooldownSpellMode(900, "utility")) == "proc")
+	Check("review: and the spell's own Always beats its bar there", (ns.CooldownSpellMode(IMMOLATE, "essential")) == "always")
+	Check("review: no more scenes than the grid draws", #db.cooldownPlaceGroups <= ns.COOLDOWN_GROUP_LIMIT,
+		#db.cooldownPlaceGroups)
+	-- (A line with no place: Anywhere, as the old page read it.)
+	Fresh()
+	db.cooldownSpellRules = { [500] = { { show = "never", combat = "any" } } }
+	db.cooldownGroupRules, db.cooldownBuffRules = nil, nil
+	db.cooldownGridV1 = nil
+	ns.RunMigrations()
+	In("city", false)
+	Check("review: a line with no place is Anywhere", (ns.CooldownSpellMode(500, "utility")) == "never",
+		(ns.CooldownSpellMode(500, "utility")))
+end
+
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

@@ -199,6 +199,9 @@ local function SamePoints(a, b)
 end
 
 local function SetCastPoints(cast, points)
+	-- (None read (its anchor count secret in a fight): left alone, not
+	-- cleared, or the cast bar had no anchors at all. Audit 2026-11-22.)
+	if not (points and points[1]) then return end
 	cast:ClearAllPoints()
 	for _, p in ipairs(points) do cast:SetPoint(p[1], p[2], p[3], p[4], p[5]) end
 end
@@ -230,7 +233,7 @@ local function PlaceCastBar()
 		if castRight * cs < barLeft * bs or castLeft * cs > barRight * bs then return end
 		return CastPoints(cast), (castTop * cs - want) / cs
 	end)
-	if not (ok and own and shift) then return end
+	if not (ok and own and own[1] and shift) then return end
 	local ours = {}
 	for i, p in ipairs(own) do ours[i] = { p[1], p[2], p[3], p[4], p[5] - shift } end
 	SetCastPoints(cast, ours)

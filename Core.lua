@@ -4531,6 +4531,13 @@ function ns.Resume()
 	if ns.RefreshTint then ns.RefreshTint() end
 	if _G.CinematicFocus then _G.CinematicFocus:Show() end
 	if ns.ApplyHealVisionFrames then ns.ApplyHealVisionFrames() end
+	-- (The game settings a safety stop let go (RestoreEverything, every set
+	-- held) and that are written only as a setting changes: written again
+	-- now, or combat text, Text on You and the plate style stayed the game's
+	-- till a reload. Release review 2026-11-22.)
+	for _, name in ipairs({ "RefreshCombatTextStyle", "RefreshSelfTextStyle", "RefreshPlateHealthStyle" }) do
+		if ns[name] then ns.Guard(ns[name]) end
+	end
 	if started then
 		ticker:SetScript("OnUpdate", OnUpdate)
 		-- (Cameras left out, Modules.lua: no orbit to run, and nothing of theirs to put it to sleep.)

@@ -7060,3 +7060,16 @@ L["Make scenes, like dungeons in combat, and pick what each spell shows in each 
 -- UI/GridRows.lua (rule words)
 L["Gliding"] = "Planeando"
 L["At an NPC"] = "Con un PNJ"
+
+-- UI/ShareWindow.lua (restored: the v2.1.24 cleanup took these out, still used)
+L["%s (a shot of its own, added too)"] = "%s (un plano propio, también se añade)"
+L["Add it"] = "Añadir"
+L["Camera: %s"] = "Cámara: %s"
+L["Import a scene or shot"] = "Importar una escena o un plano"
+L["No room for it: delete a scene or shot first."] = "No hay sitio: borra antes una escena o un plano."
+L["Paste the text a friend sent (Ctrl+V). What it holds shows below before you add it."] = "Pega el texto que te envió un amigo (Ctrl+V). Lo que contiene aparece abajo antes de añadirlo."
+L["Press Ctrl+C to copy this, then paste it wherever your friend will see it."] = "Pulsa Ctrl+C para copiarlo y pégalo donde tu amigo lo vea."
+L["Scene:"] = "Escena:"
+L["Shot:"] = "Plano:"
+L["That isn't a scene or shot: profiles go on the Profiles page, wheels on Your wheels."] = "Eso no es una escena ni un plano: los perfiles van en la página Perfiles, las ruedas en Tus ruedas."
+L["Triggers: %s"] = "Disparadores: %s"

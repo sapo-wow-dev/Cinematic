@@ -72,7 +72,26 @@ Check(client .. ": 1 held", cvars.cameraSmoothStyle == "0", cvars.cameraSmoothSt
 ns.Suspend("audit test")
 Check(client .. ": 1 a safety stop lets it go", not death.active and cvars.cameraSmoothStyle == "4",
 	cvars.cameraSmoothStyle)
+-- 1b: stopped, the style refreshes on their timers don't write the game's
+-- settings again; /cine resume writes them back. (Release review 2026-11-22:
+-- the 2 s refreshes undid the stop, and after resume the ones written only
+-- as a setting changes stayed the game's till a reload.)
+local applies = 0
+local realApply = ns.ApplyCVarSet
+ns.ApplyCVarSet = function(...) applies = applies + 1 return realApply(...) end
+for _, name in ipairs({ "RefreshCombatTextStyle", "RefreshSelfTextStyle", "RefreshPlateHealthStyle" }) do
+	if ns[name] then pcall(ns[name]) end
+end
+ns.ApplyCVarSet = realApply
+Check(client .. ": 1b stopped: the style refreshes write nothing", applies == 0, applies)
+local refreshed = {}
+for _, name in ipairs({ "RefreshCombatTextStyle", "RefreshSelfTextStyle", "RefreshPlateHealthStyle" }) do
+	local real = ns[name]
+	ns[name] = function(...) refreshed[name] = true return real(...) end
+end
 ns.Resume()
+Check(client .. ": 1b resume writes them back", refreshed.RefreshCombatTextStyle and refreshed.RefreshSelfTextStyle
+	and refreshed.RefreshPlateHealthStyle)
 
 -- 2: the max zoom, held by a script and by the idle zoom.
 if ns.ZoomMaxHolds then

@@ -6807,3 +6807,16 @@ L["No GitHub account? Post in #bug-reports, with your log as a .txt file."] = "�
 L["Report a bug"] = "Сообщить об ошибке"
 L["Troubleshooting"] = "Устранение неполадок"
 L["Videos of Cinematic's cameras and features."] = "Видео о камерах и функциях Cinematic."
+
+-- UI/ShareWindow.lua (restored: the v2.1.24 cleanup took these out, still used)
+L["%s (a shot of its own, added too)"] = "%s (отдельный кадр, тоже добавлен)"
+L["Add it"] = "Добавить"
+L["Camera: %s"] = "Камера: %s"
+L["Import a scene or shot"] = "Импорт сцены или кадра"
+L["No room for it: delete a scene or shot first."] = "Нет места: сначала удалите сцену или кадр."
+L["Paste the text a friend sent (Ctrl+V). What it holds shows below before you add it."] = "Вставьте текст, который прислал друг (Ctrl+V). Его содержимое покажется ниже, прежде чем вы его добавите."
+L["Press Ctrl+C to copy this, then paste it wherever your friend will see it."] = "Нажмите Ctrl+C, чтобы скопировать, затем вставьте туда, где это увидит ваш друг."
+L["Scene:"] = "Сцена:"
+L["Shot:"] = "Кадр:"
+L["That isn't a scene or shot: profiles go on the Profiles page, wheels on Your wheels."] = "Это не сцена и не кадр: профили — на странице «Профили», колеса — в «Ваших колесах»."
+L["Triggers: %s"] = "Триггеры: %s"

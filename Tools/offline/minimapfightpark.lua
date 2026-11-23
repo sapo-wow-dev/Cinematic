@@ -64,5 +64,24 @@ Park()
 ns.StopFading("Minimap")
 Check("2 out of a fight: back at once", Spot() == "TOPRIGHT -10 -12", Spot())
 
+-- 3: its anchor count secret (a fight on WoW Forever, another addon's anchors):
+-- left where it is, never cleared to none. (Release review 2026-11-22: since
+-- ns.NumPoints gives 0 there, it was parked with no anchors saved and given
+-- none back, off the screen till a reload.)
+ns.db.ignoredFrames.Minimap = nil
+points = { { "TOPRIGHT", UIParent, "TOPRIGHT", -10, -12 } }
+local count = Minimap.GetNumPoints
+rawset(Minimap, "GetNumPoints", function() error("secret") end)
+local secretEntry = { frame = Minimap, name = "Minimap", baseAlpha = 1 }
+moves = 0
+ns.ParkFullSize(secretEntry)
+Check("3 a secret anchor count: not moved", moves == 0 and Spot() == "TOPRIGHT -10 -12", Spot())
+rawset(Minimap, "GetNumPoints", count)
+-- 4: parked with no anchors saved: not cleared on the way back.
+points = { { "TOPLEFT", UIParent, "TOPRIGHT", 20000, 0 } }
+moves = 0
+ns.UnparkShrunk({ frame = Minimap, savedPoints = {} })
+Check("4 none saved: not cleared to none", moves == 0 and #points == 1, Spot())
+
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
 if fails > 0 then os.exit(1) end

@@ -79,6 +79,9 @@ if LeftOut then
 	Check(client .. ": 2 one ns has: a real bug", not LeftOut("Slash.lua:10: attempt to call field 'Print' (a nil value)"))
 	Check(client .. ": 2 a nil local: a real bug", not LeftOut("Slash.lua:10: attempt to index local 'entry' (a nil value)"))
 	Check(client .. ": 2 another error: a real bug", not LeftOut("Slash.lua:10: bad argument #1 to 'format'"))
+	-- (Lua 5.1 names some calls' field "?": /cine doftest with Atmosphere left out, release review 2026-11-22.)
+	Check(client .. ": 2 an unnamed missing call: a left-out part's",
+		LeftOut("Slash.lua:1129: attempt to call field '?' (a nil value)"))
 end
 
 -- 3: /cine debug hover with an entry not faded yet (no alpha).

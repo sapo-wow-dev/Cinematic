@@ -35,13 +35,11 @@ local discovered = false
 -- only for a card that replaces them, the user's call, audit 2026-11-22.)
 local standing = false
 local function Hiding() return not standing and (On() or discovered) end
--- The game's territory lines ("Contested Territory", "Sanctuary"): hidden
--- only where the card carries the territory (Zone's, with its row ticked),
--- or Discovered's card has the place.
-local TERRITORY = { PVPInfoTextString = true, PVPArenaTextString = true }
-local function Covers(name)
-	return not TERRITORY[name] or discovered or (name == "PVPInfoTextString" and ns.db.storyZoneTerritory)
-end
+-- The game's territory lines ("Contested Territory", "Sanctuary") go with
+-- the rest while a card plays, its Territory tick on or off: shown under or
+-- over the card's own words otherwise (release review 2026-11-22). The
+-- game's lines show only when no card replaces them (standing, above).
+local function Covers() return true end
 
 -- A line's text, or "" (none, or one the game keeps secret).
 local function Text(line)

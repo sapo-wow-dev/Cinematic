@@ -252,6 +252,7 @@ local function SamePoints(a, b)
 end
 
 local function SetPoints(frame, points)
+	if not (points and points[1]) then return end -- (none read: left alone, audit 2026-11-22)
 	frame:ClearAllPoints()
 	for _, p in ipairs(points) do frame:SetPoint(p[1], p[2], p[3], p[4], p[5]) end
 end

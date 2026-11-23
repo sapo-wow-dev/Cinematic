@@ -6807,3 +6807,16 @@ L["No GitHub account? Post in #bug-reports, with your log as a .txt file."] = "�
 L["Report a bug"] = "回報錯誤"
 L["Troubleshooting"] = "疑難排解"
 L["Videos of Cinematic's cameras and features."] = "Cinematic 鏡頭與功能的影片。"
+
+-- UI/ShareWindow.lua (restored: the v2.1.24 cleanup took these out, still used)
+L["%s (a shot of its own, added too)"] = "%s（專屬的鏡頭片段，也一併加入）"
+L["Add it"] = "加入"
+L["Camera: %s"] = "鏡頭：%s"
+L["Import a scene or shot"] = "匯入場景或鏡頭片段"
+L["No room for it: delete a scene or shot first."] = "沒有空間了:請先刪除一個場景或鏡頭片段。"
+L["Paste the text a friend sent (Ctrl+V). What it holds shows below before you add it."] = "貼上朋友傳來的文字（Ctrl+V）。加入前，其內容會顯示在下方。"
+L["Press Ctrl+C to copy this, then paste it wherever your friend will see it."] = "按 Ctrl+C 複製，然後貼到你朋友看得到的地方。"
+L["Scene:"] = "場景："
+L["Shot:"] = "鏡頭片段："
+L["That isn't a scene or shot: profiles go on the Profiles page, wheels on Your wheels."] = "這不是場景或鏡頭片段:設定檔請到設定檔頁面,輪盤請到「你的輪盤」。"
+L["Triggers: %s"] = "觸發條件：%s"

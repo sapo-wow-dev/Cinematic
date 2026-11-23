@@ -87,5 +87,23 @@ RunCooldowns({}, nil)
 Check("loading the kept copy: on", Loaded(db.profiles[NAME]) == true)
 Check("a fresh pick: off", Loaded(nil) == false)
 
+-- The wheels and the Keyboard Map, off in Auto-Hide UI and Blank Slate from
+-- 2026-11-22: kept as they were in a saved copy from before, once; a fresh
+-- pick gets them off. (Release review, 2026-11-22.)
+for _, name in ipairs({ NAME, "Blank Slate" }) do
+	local base = ns.ProfileBase(name)
+	Check(name .. ": base has the Keyboard Map off", base.keyboardMap == false, tostring(base.keyboardMap))
+	db.profileKeysOffV1 = nil
+	db.profiles[name], db.profileResetPoints[name] = { keyboardMap = false }, {}
+	ns.RunMigrations()
+	local saved, point = db.profiles[name], db.profileResetPoints[name]
+	Check(name .. ": saved copy keeps its wheels", saved.wheelMasterOn == ns.DEFAULTS.wheelMasterOn
+		and saved.wheelMarkerOn == ns.DEFAULTS.wheelMarkerOn, tostring(saved.wheelMasterOn))
+	Check(name .. ": turned off yourself: left off", saved.keyboardMap == false)
+	Check(name .. ": its reset point too", point.wheelMasterOn == ns.DEFAULTS.wheelMasterOn
+		and point.keyboardMap == ns.DEFAULTS.keyboardMap, tostring(point.keyboardMap))
+	Check(name .. ": once", db.profileKeysOffV1 == true)
+end
+
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
 if fails > 0 then os.exit(1) end

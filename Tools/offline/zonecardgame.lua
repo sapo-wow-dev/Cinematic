@@ -6,7 +6,7 @@
 -- showed them, card or no card: the Subzone row off, a second place within
 -- the Wait between of the last card, and "Contested Territory" with the
 -- card's Territory tick off all showed nothing. Now they go only where a card
--- takes their place. On stand-in zone text frames. PASS or FAIL per check.
+-- takes their place (territory too, while a card plays: release review). On stand-in zone text frames. PASS or FAIL per check.
 
 local fails = 0
 local function Check(name, ok, detail)
@@ -60,12 +60,13 @@ local function Show(frameName, zone, subzone, territory)
 end
 local function Alpha(name) return lines[name]._alpha end
 
--- 1: a new zone, a card for it: the game's zone line goes, its territory stays.
+-- 1: a new zone, a card for it: the game's zone line goes, its territory too
+-- (release review 2026-11-22: left showing, it sat under the card's words).
 played = 0
 Show("ZoneTextFrame", "Elwynn Forest", "", "Contested Territory")
 Check(client .. ": 1 the card plays", played == 1, played)
 Check(client .. ": 1 the game's zone line goes", Alpha("ZoneTextString") == 0, Alpha("ZoneTextString"))
-Check(client .. ": 1 Contested Territory stays (the card's Territory tick off)", Alpha("PVPInfoTextString") == 1,
+Check(client .. ": 1 Contested Territory goes with the card (its Territory tick off)", Alpha("PVPInfoTextString") == 0,
 	Alpha("PVPInfoTextString"))
 
 -- 2: into a subzone with the Subzone row off: no card, the game's line shows.
@@ -83,6 +84,7 @@ now = now + 2
 Show("ZoneTextFrame", "Duskwood", "")
 Check(client .. ": 3 no card so soon after the last", played == 0, played)
 Check(client .. ": 3 the game's zone line shows", Alpha("ZoneTextString") == 1, Alpha("ZoneTextString"))
+Check(client .. ": 3 and its territory line", Alpha("PVPInfoTextString") == 1, Alpha("PVPInfoTextString"))
 
 -- 4: the Territory tick on: the card carries it, the game's line goes.
 db.storyZoneTerritory = true

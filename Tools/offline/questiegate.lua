@@ -96,11 +96,15 @@ Check("1 and asked with it in", asked >= 2, asked)
 -- 2: its support switched off on the Addons page: as if not in.
 Check("2 Questie in: up", ns.AddonUp("Questie") == true)
 db.addonSupportOff = { Questie = true }
+-- (Before the reload its box asks for: still up, so our put-back code runs.)
+Check("2 unticked, no reload yet: still up", ns.AddonUp("Questie") == true)
+ns.ForgetAddonSupportAtLoad() -- (the reload)
 Check("2 its support off: not up", ns.AddonUp("Questie") == false)
 asked = 0
 if LinesToCut then pcall(LinesToCut, tooltip, 1, "mouseover", false) end
 Check("2 its support off: not asked", asked == 0, asked)
 db.addonSupportOff = {}
+ns.ForgetAddonSupportAtLoad()
 Check("2 back on: up", ns.AddonUp("Questie") == true)
 
 -- 3: DaylightUI's keeper asks one set before it (no DaylightUI layout here).

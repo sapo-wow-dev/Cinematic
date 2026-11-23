@@ -607,6 +607,10 @@ letGo:RegisterEvent("PLAYER_LOGOUT")
 letGo:SetScript("OnEvent", function() pcall(ns.ApplyCVarSet, GAME_TEXT_ON, false) end)
 
 function ns.RefreshSelfTextStyle()
+	-- (Stopped for the session, ns.Suspend: its game settings were let go,
+	-- so none written again till /cine resume, which runs this. Release
+	-- review 2026-11-22: this every-2-s refresh undid the stop.)
+	if ns.IsSuspended and ns.IsSuspended() then return end
 	local by = By()
 	local active = by ~= "game"
 	ns.ApplyCVarSet(GAME_TEXT_ON, by == "ours")

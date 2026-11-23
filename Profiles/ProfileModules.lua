@@ -64,6 +64,7 @@ local MUSIC_EVENTS = { "AFK", "Still", "Chair", "Kneel", "Sleep", "Dance", "Weap
 -- module's scope): off on Blank Slate and Auto-Hide UI, the user 2026-11-22.
 local KEYS_OFF = { "wheelMasterOn", "wheelYoursOn", "wheelCameraOn", "wheelMenuOn", "wheelMarkerOn",
 	"wheelWorldOn", "wheelVisionOn", "keyboardMap" }
+ns.PROFILE_KEYS_OFF = KEYS_OFF -- (Migrations.lua: kept on in the saved copies from before)
 local KEYS_OFF_SCOPE = { "Master wheel/top", "Your wheels/top", "Camera wheel/top", "Menu wheel/top",
 	"Marker wheel/top", "Ground marker wheel/top", "Vision wheel/top", "Keyboard Map/top" }
 local function WithKeysOff(scope)

@@ -2545,8 +2545,11 @@ end
 -- others raised again without their stack. Audit 2026-11-22.)
 local function LeftOutField(err)
 	if type(err) ~= "string" or (issecretvalue and issecretvalue(err)) then return false end
-	local field = err:match("field '([%w_]+)' %(a nil value%)")
-	return field ~= nil and rawget(ns, field) == nil
+	-- (Lua 5.1 names some calls' field "?" (an elseif's call, Forever: /cine
+	-- doftest with Atmosphere left out said nothing). Not known: a left-out
+	-- part's, as before the audit; a named one only when ns lacks it.)
+	local field = err:match("field '([%w_?]+)' %(a nil value%)")
+	return field ~= nil and (field == "?" or rawget(ns, field) == nil)
 end
 ns.SlashLeftOutField = LeftOutField -- (Tools/offline/auditsettings.lua)
 HandleSlash = function(msg)

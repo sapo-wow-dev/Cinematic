@@ -28,6 +28,8 @@ end
 
 local function HoldPlateStyle()
 	local db = ns.db
+	-- (Stopped for the session: let go, not held again till /cine resume.)
+	if ns.IsSuspended and ns.IsSuspended() then return end
 	if not (db and ns.GamePlateStyles()) then return end
 	local value = db.styleGeneral and db.stylePlate ~= "game" and tostring(db.stylePlate) or nil
 	if STYLE_SET.active and value ~= STYLE_SET.values.nameplateStyle then ns.ApplyCVarSet(STYLE_SET, false) end

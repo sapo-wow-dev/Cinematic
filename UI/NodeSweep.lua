@@ -231,6 +231,9 @@ local function Grow()
 	end
 	return function()
 		ns.FrameCall(Minimap, "SetScale", scale)
+		-- (Its anchors unread (a secret count): left on the ones it has, not
+		-- cleared to none. Audit 2026-11-22.)
+		if not points[1] then return end
 		ns.FrameCall(Minimap, "ClearAllPoints")
 		for _, p in ipairs(points) do ns.FrameCall(Minimap, "SetPoint", unpack(p)) end
 	end
@@ -2927,6 +2930,7 @@ do
 			return
 		end
 		ns.FrameCall(Minimap, "SetScale", saved.scale)
+		if not saved.points[1] then return end -- (none read: left on its own, audit 2026-11-22)
 		ns.FrameCall(Minimap, "ClearAllPoints")
 		for _, p in ipairs(saved.points) do ns.FrameCall(Minimap, "SetPoint", unpack(p)) end
 	end

@@ -1027,14 +1027,28 @@ local function FullSizeOffsets(frame, entry, x, y)
 	return x, y
 end
 
+-- A frame's anchor count, or nil when it can't be read (secret in a fight,
+-- refused): ns.NumPoints gives 0 then, and a frame cleared on that and given
+-- its "saved" anchors back had none, off the screen till a reload. Audit
+-- 2026-11-22 (release review).
+function ns.ReadNumPoints(frame)
+	if type(frame) ~= "table" or type(frame.GetNumPoints) ~= "function" then return nil end
+	local ok, count = pcall(frame.GetNumPoints, frame)
+	if not ok or (issecretvalue and issecretvalue(count)) or type(count) ~= "number" then return nil end
+	return count
+end
+
 function ns.ParkShrunk(entry)
 	local frame = entry.frame
+	-- (Its anchors unreadable, or none: left where it is, never cleared.)
+	local count = ns.ReadNumPoints(frame)
+	if not count or count == 0 then return end
 	-- (The cursor sweep has the minimap under your pointer: put back first,
 	-- or that spot is saved as its place and it comes up there, in the middle
 	-- of the screen, seen 2026-11-10 when a quest area parked it mid-sweep.)
 	if frame == Minimap and ns.EndCursorSweep then ns.EndCursorSweep("it was moved off the screen") end
 	local points = {}
-	for i = 1, ns.NumPoints(frame) do
+	for i = 1, count do
 		local ok, point, relativeTo, relativePoint, x, y = pcall(frame.GetPoint, frame, i)
 		if not ok or type(point) ~= "string" then
 			return -- (can't read them back: leave it where it is)
@@ -1076,7 +1090,8 @@ function ns.UnparkShrunk(entry)
 		entry.savedClamped = nil
 		entry.frame:SetClampedToScreen(true)
 	end
-	if not points or not ns.IsParked(entry) then
+	-- (None saved: nothing to put back, so not cleared either.)
+	if not points or #points == 0 or not ns.IsParked(entry) then
 		return
 	end
 	local frame = entry.frame
