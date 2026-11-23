@@ -1491,7 +1491,7 @@ function ns.PlateFontTest()
 		{ length = 14, say = "2/3: WATCH your GROUP's names. Do they turn into BIG FANCY letters?", swap = true },
 		{ length = 5, say = "3/3: Fonts going back to normal. Just wait." },
 	}
-	test = { run = (ns.padTestRun or 0) + 1, saved = {}, cvars = {} }
+	test = { run = (ns.padTestRun or 0) + 1, saved = {} }
 	ns.padTestRun = test.run
 	ns.plateFontTest = test
 	local function Say(text)
@@ -1550,8 +1550,18 @@ function ns.PlateFontTest()
 	function test.Finish(why, extra)
 		if test.ticker then test.ticker:Cancel() end
 		Swap(false)
-		if not InCombatLockdown() then
-			for cvar, was in pairs(test.cvars) do pcall(SetCVar, cvar, was) end
+		-- (Yours back as the set lets go; in a fight, once it ends.)
+		local cvarSet = ns.plateFontCVars
+		if cvarSet and cvarSet.active then
+			ns.ApplyCVarSet(cvarSet, false)
+			if cvarSet.active then
+				local wait = CreateFrame("Frame")
+				wait:RegisterEvent("PLAYER_REGEN_ENABLED")
+				wait:SetScript("OnEvent", function(self)
+					self:UnregisterAllEvents()
+					if not ns.plateFontTest then ns.ApplyCVarSet(cvarSet, false) end
+				end)
+			end
 		end
 		ns.plateFontTest = nil
 		Say("plate font test " .. why .. (extra and (": " .. extra) or ""))
@@ -1570,10 +1580,16 @@ function ns.PlateFontTest()
 		tostring(IsInGroup()), tostring(InCombatLockdown()), tostring(ns.IsCineModeOn and ns.IsCineModeOn()),
 		tostring(GetCVar("nameplateShowFriends")), tostring(GetCVar("nameplateShowAll"))))
 	Say("font objects: " .. table.concat(objects, "; "))
-	-- (Friendly plates on for the run, if off and we may.)
+	-- (Friendly plates on for the run, if off and we may: a held set, so a
+	-- set of ours holding them off meanwhile keeps your value, and a /reload
+	-- mid-run puts yours back at the next login (savedCVars). A plain
+	-- SetCVar looked like your own change: yours dropped, and the run's end
+	-- wrote back the "0" it found. Audit 2026-11-23,
+	-- Tools/audits/2026-11-23-platefont-friendly-plates.md.)
 	if not InCombatLockdown() and GetCVar("nameplateShowFriends") == "0" then
-		test.cvars.nameplateShowFriends = "0"
-		SetCVar("nameplateShowFriends", "1")
+		ns.plateFontCVars = ns.plateFontCVars or ns.CVarSet("Plate font test: friendly plates",
+			"/cine debug platefont's run", { secure = true, values = { nameplateShowFriends = "1" } })
+		ns.ApplyCVarSet(ns.plateFontCVars, true)
 		Say("switched friendly nameplates on for the test")
 	end
 	local started, at = GetTime(), 0
