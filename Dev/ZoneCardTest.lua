@@ -518,5 +518,93 @@ ns.TestKit.Define({
 			local card = ns.Cards.Current()
 			if card then ns.Cards.Cut(card.id) r:Sleep(1.5) end
 		end },
+		-- 10 (2026-11-23, "DUN MOROGH" slammed big on a new character): New
+		-- zone off to start with and turned off once by the update
+		-- (Migrations.lua newZoneOffV1), everywhere it's saved; a new zone
+		-- gets Discovered's small card; ticked again, the big one's back.
+		{ key = "newzoneoff", title = "New zone off: a new zone gets the small Discovered card",
+		proven = "zonecard run 2026-11-23 (Forever, queue q607a): 8 PASS, small card with New zone off, big once ticked",
+		run = function(r)
+			if #r.steps ~= 1 then return r:Skip("runs alone: /cine debug zonecard 10") end
+			if ns.ModuleLoaded and not ns.ModuleLoaded("visions") then
+				return r:Skip("Visions aren't loaded (Load Visions off): no Discovered card")
+			end
+			local db = ns.db
+			-- (Yours as the update left them, before the test changes anything.)
+			r:Verdict(ns.DEFAULTS.cardNewZoneOn == false,
+				"New zone off to start with (DEFAULTS): " .. tostring(ns.DEFAULTS.cardNewZoneOn))
+			r:Verdict(db.newZoneOffV1 == true, "the once-only update ran (newZoneOffV1): " .. tostring(db.newZoneOffV1))
+			r:Verdict(not db.cardNewZoneOn, "New zone off in your settings now: " .. tostring(db.cardNewZoneOn))
+			r:Verdict(not ns.CardOn("newZone"), "New zone's card not on (ns.CardOn): " .. tostring(ns.CardOn("newZone")))
+			local onIn = {}
+			for _, list in ipairs({ { "profile", db.profiles }, { "reset point", db.profileResetPoints } }) do
+				for name, saved in pairs(type(list[2]) == "table" and list[2] or {}) do
+					if type(saved) == "table" and saved.cardNewZoneOn == true then
+						onIn[#onIn + 1] = list[1] .. " " .. tostring(name)
+					end
+				end
+			end
+			r:Verdict(#onIn == 0, "no saved profile or reset point with New zone on" ..
+				(#onIn > 0 and (": " .. table.concat(onIn, ", ")) or ""))
+			local reads, seen = ns.CardReads, ns.chardb and ns.chardb.cardSeen
+			if not (reads and seen and ns.DiscoverHasIt) then return r:Skip("no ns.CardReads or cardSeen") end
+			r:Set("cards", true)
+			r:Set("cardDiscoverOn", true)
+			local current = ns.Cards.Current()
+			if current then ns.Cards.Cut(current.id) end
+			local allowed, why = ns.CardAllowed("discover")
+			r:Log(("Discovered card allowed now: %s%s"):format(tostring(allowed), why and (" (" .. tostring(why) .. ")") or ""))
+			if not allowed then return r:Skip("no Discovered card can play here and now: " .. tostring(why)) end
+			-- (A made-up new zone, entered with New zone as it is (off), then
+			-- ticked: the reads and what's counted as seen back after each.)
+			local saved = { zone = reads.zone, instance = reads.instance, instanceInfo = reads.instanceInfo,
+				explored = reads.explored }
+			local hadZones = next(seen.zones) ~= nil
+			local function Enter(place)
+				if not hadZones then seen.zones["Cinematic Test Field"] = true end
+				reads.zone = function() return place end
+				reads.instance = function() return false, "none" end
+				reads.instanceInfo = function() return place, "none", 0, "", 0, 0, false, 0 end
+				reads.explored = function() return 1 end -- (the game's count: one area, new to you)
+				local ok, err = pcall(ns.DiscoverHasIt)
+				for key in pairs(saved) do reads[key] = saved[key] end
+				reads.explored = saved.explored
+				local card = ns.Cards.Current()
+				seen.zones[place] = nil
+				if not hadZones then seen.zones["Cinematic Test Field"] = nil end
+				if not ok then r:Verdict(false, "error: " .. tostring(err)) end
+				return card
+			end
+			-- (A card cut fades out first: the next one waits behind it till it's gone.)
+			local function Gone(what)
+				for _ = 1, 40 do
+					if not ns.Cards.Current() then return true end
+					r:Sleep(0.1)
+				end
+				local left = ns.Cards.Current()
+				r:Verdict(false, ("%s: a card still up after 4 s, %s \"%s\""):format(what, tostring(left and left.id),
+					tostring(left and left.name)))
+				return false
+			end
+			if not Gone("before the first place") then return end
+			local SMALL, BIG = "Cinematic Test Vale", "Cinematic Test Heights"
+			local card = Enter(SMALL)
+			r:Verdict(card and card.id == "discover" and card.name == SMALL, ("New zone off, a new zone: %s \"%s\" (want discover)"):format(
+				tostring(card and card.id), tostring(card and card.name)))
+			r:Verdict(card and card.meta == ns.L["Discovered"], "its small line says Discovered: " .. tostring(card and card.meta))
+			r:Sleep(0.6)
+			r:Shot("the small Discovered card (New zone off)", { behind = _G.CinematicCard })
+			if card then ns.Cards.Cut(card.id) end
+			if not Gone("after the small card") then return end
+			r:Set("cardNewZoneOn", true)
+			card = Enter(BIG)
+			r:Verdict(card and card.id == "newZone" and card.name == BIG, ("New zone ticked again, a new zone: %s \"%s\" (want newZone)"):format(
+				tostring(card and card.id), tostring(card and card.name)))
+			r:Sleep(0.6)
+			r:Shot("the big New zone card (ticked again)", { behind = _G.CinematicCard })
+			if card then ns.Cards.Cut(card.id) end
+			Gone("after the big card")
+			-- (Put back at the end by the kit: New zone off again.)
+		end },
 	},
 })

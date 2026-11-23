@@ -16,3 +16,12 @@ Cause: the zone name stays the dungeon's ~6 s outside (rule forever.zone.stale-n
 | Run | Date | Command | Answered | Still open, and why this run couldn't |
 |-----|------|---------|----------|---------------------------------------|
 | 1 | 2026-11-23 | /cine debug zonecard 9 (retail) | Q2: 3 PASS, errors +0, blocked +0, shot shows the New zone card; step 9 marked proven | none. Made-up reads, so client-independent; Forever's real exit covered by everyday play |
+
+## New zone off by default (2026-11-23)
+"DUN MOROGH" slammed big on a new character: New zone was on by default. Now
+off (DEFAULTS) and turned off once by Migrations.lua newZoneOffV1 (settings,
+profiles, reset points). Offline: newzonedefault.lua, zonecardnewzone.lua.
+
+| Run | Date | Command | Answered | Still open |
+|-----|------|---------|----------|------------|
+| 1 | 2026-11-23 | zonecard 10 (queue q607a, Forever) | 8 PASS 0 FAIL: update ran, off everywhere saved, small Discovered card for a new zone, big card once ticked; no errors, nothing blocked | none |

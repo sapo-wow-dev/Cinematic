@@ -13,7 +13,10 @@ local DEFAULTS = ns.DEFAULTS
 
 DEFAULTS.cardLevelUpOn = false
 DEFAULTS.cardDiscoverOn = false
-DEFAULTS.cardNewZoneOn = true -- (a whole new zone as its own big card: only with Discovered ticked)
+-- (A whole new zone as its own big card: only with Discovered ticked. Off to
+-- start with since 2026-11-23, and turned off once for everyone
+-- (Migrations.lua newZoneOffV1): a new zone gets Discovered's small card.)
+DEFAULTS.cardNewZoneOn = false
 DEFAULTS.cardDepartureOn = false
 DEFAULTS.cardDepartureLine = true -- (its progress line as you fly: FlightLine.lua)
 DEFAULTS.cardDepartureLinePlace = "top" -- its bar: "top" or "bottom" (no letterbox up: that edge of the screen)

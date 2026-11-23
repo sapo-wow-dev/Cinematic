@@ -5793,6 +5793,21 @@ STEPS[#STEPS + 1] = function()
 	end
 	ns.db.vignetteOffV1 = true
 end
+-- The New zone card off, once (2026-11-23): it was on to start with, so a
+-- whole new zone (Dun Morogh) got the big headline card where the user
+-- wanted Discovered's small one. Off here and in every saved profile and
+-- reset point; tick it again and it stays (a plain key: no Visions code).
+function ns.NewZoneCardOff(t)
+	if type(t) == "table" and t.cardNewZoneOn ~= nil then t.cardNewZoneOn = false end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.newZoneOffV1 then return end
+	ns.NewZoneCardOff(ns.db)
+	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do ns.NewZoneCardOff(saved) end
+	end
+	ns.db.newZoneOffV1 = true
+end
 
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
