@@ -4407,12 +4407,15 @@ function ns.plates.SameAsBefore(cinematic, now)
 	local target = ns.Flag(UnitExists("target")) and true or false
 	local place = ns.GetPlaceType() or false
 	local immersive = (ns.ChatCamImmersive and ns.ChatCamImmersive()) and true or false
+	-- (The Calm Timer ending, or cut: the kinds it held let go at once.)
+	local lingering = ns.FightLingering and ns.FightLingering() and true or false
 	local same = seen.cinematic == cinematic and seen.fight == fight and seen.target == target
-		and seen.place == place and seen.immersive == immersive
+		and seen.place == place and seen.immersive == immersive and seen.lingering == lingering
 		and now - (seen.at or -math.huge) < (ns.SlowChecks() and ns.plates.SETTLED_SLOW or ns.plates.SETTLED_EVERY)
 	if not same then
 		seen.cinematic, seen.fight, seen.target, seen.place, seen.immersive, seen.at = cinematic, fight, target, place,
 			immersive, now
+		seen.lingering = lingering
 	end
 	return same
 end
@@ -4579,8 +4582,14 @@ function ns.UpdatePlates(cinematic, elapsed)
 			local from = combatCap[kind] or 1
 			if from > 0 then
 				changed = true
+				combatCap[kind] = ns.Approach(from, 0, elapsed, ns.FadeOutTime())
+			else
+				-- (Held at 0 through the Calm Timer: settled too, like a fight's.
+				-- It ran the whole pass every tick of every Calm Timer, ~27 a
+				-- second, perf 2026-11-23. The Calm Timer's end is in SameAsBefore.)
+				combatCap[kind] = 0
+				capsHeld = capsHeld + 1
 			end
-			combatCap[kind] = ns.Approach(from, 0, elapsed, ns.FadeOutTime())
 		elseif combatCap[kind] then
 			if hide and not cinematicKept then
 				if ns.plates.level <= combatCap[kind] then
