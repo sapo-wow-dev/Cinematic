@@ -22,12 +22,32 @@ local AURAS = {
 }
 local AURA_SIZE, AURA_GAP = 17, 3 -- (the game's target frame's, in its own units)
 local DEBUFF_BORDER = "Interface\\Buttons\\UI-Debuff-Overlays"
+-- (The game's own border colors, AuraUtil.GetAuraBorderColor: Forever has no
+-- DebuffTypeColor, so until 2026-11-23 these were always our own.)
 local function DebuffColor(kind)
+	local util = _G.AuraUtil
+	local ok, color = pcall(function() return util and util.GetAuraBorderColor and util.GetAuraBorderColor(kind) end)
+	if ok and type(color) == "table" and color.GetRGB then return color:GetRGB() end
 	local colors = _G.DebuffTypeColor
-	local color = colors and colors[kind]
+	color = colors and colors[kind]
 	if color then return color.r, color.g, color.b end
 	if kind == "Poison" then return 0, 0.6, 0 end
 	return 0.2, 0.6, 1
+end
+-- (The game's row: debuffs first on a hostile unit, buffs first on a friendly
+-- one, the second kind on a line of its own (TargetFrameAuraContainer,
+-- rule forever.targetframe.aura-anchor-flow).)
+local function AuraOrder(sample)
+	local hostile = sample.reaction and sample.reaction <= 4 and not sample.class
+	local first, second = {}, {}
+	for _, info in ipairs(AURAS) do
+		local debuff = info[2] ~= nil
+		if debuff == (hostile and true or false) then first[#first + 1] = info else second[#second + 1] = info end
+	end
+	local list = {}
+	for _, info in ipairs(first) do list[#list + 1] = info end
+	for i, info in ipairs(second) do list[#list + 1] = { info = info, newLine = i == 1 and #first > 0 } end
+	return list
 end
 local function Auras(unit, on, scale, spot)
 	unit.auras = unit.auras or {}
@@ -39,20 +59,25 @@ local function Auras(unit, on, scale, spot)
 	-- (Measured off the live frame in this look: its first buff's place and size.)
 	local hw = spot and unit.health:GetWidth()
 	if hw and hw > 0 and spot.w and spot.w > 0 then size = spot.w * hw end
-	for i, info in ipairs(AURAS) do
+	local col, line = 0, 0
+	for i, entry in ipairs(AuraOrder(unit.sample or {})) do
+		local info = entry.info or entry
 		local aura = unit.auras[i]
 		if not aura then
 			aura = CreateFrame("Frame", nil, unit)
+			-- (The whole icon, its own edge too, as the game's aura buttons show it:
+			-- cropped until 2026-11-23.)
 			aura.icon = aura:CreateTexture(nil, "ARTWORK")
 			aura.icon:SetAllPoints()
-			aura.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 			aura.border = aura:CreateTexture(nil, "OVERLAY")
 			aura.border:SetPoint("TOPLEFT", -1, 1)
 			aura.border:SetPoint("BOTTOMRIGHT", 1, -1)
 			aura.count = aura:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-			aura.count:SetPoint("BOTTOMRIGHT", 2, -1)
+			aura.count:SetPoint("BOTTOMRIGHT", 1, 0)
 			unit.auras[i] = aura
 		end
+		aura.newLine = entry.newLine or nil
+		if aura.newLine then col, line = 0, line + 1 end
 		aura:SetSize(size, size)
 		aura:ClearAllPoints()
 		local step = size * (1 + AURA_GAP / AURA_SIZE)
@@ -63,7 +88,8 @@ local function Auras(unit, on, scale, spot)
 			unit.auraRow = { unit, "BOTTOMLEFT", 5 * scale, -2 * scale, step }
 		end
 		local row = unit.auraRow
-		aura:SetPoint("TOPLEFT", row[1], row[2], row[3] + (i - 1) * step, row[4])
+		aura:SetPoint("TOPLEFT", row[1], row[2], row[3] + col * step, row[4] + (row[6] and line or -line) * step)
+		col = col + 1
 		aura.icon:SetTexture(info[1])
 		aura.border:SetShown(info[2] ~= nil)
 		if info[2] then
@@ -71,7 +97,8 @@ local function Auras(unit, on, scale, spot)
 			aura.border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
 			aura.border:SetVertexColor(DebuffColor(info[2]))
 		end
-		aura.count:SetText(info[3] and tostring(info[3]) or "")
+		-- (A count only over 1, as the game's.)
+		aura.count:SetText(info[3] and info[3] > 1 and tostring(info[3]) or "")
 		aura:Show()
 	end
 end
@@ -99,12 +126,29 @@ local function StatusTextHow()
 	if how == "NONE" then return nil end
 	return how
 end
+-- (The client's own way of shortening, as the game's bar texts use it.)
 local function Short(value)
+	value = math.floor(value + 0.5)
+	local abbreviate = _G.AbbreviateLargeNumbers
+	if type(abbreviate) == "function" then
+		local ok, text = pcall(abbreviate, value)
+		if ok and type(text) == "string" then return text end
+	end
 	if value >= 1e6 then return ("%.1f M"):format(value / 1e6) end
 	if value >= 1e4 then return ("%d K"):format(math.floor(value / 1e3 + 0.5)) end
-	return tostring(math.floor(value + 0.5))
+	return tostring(value)
 end
-local function BarTexts(unit, bar, key, share, most, how, scale)
+-- (Rounded up, as the game's: TextStatusBar's math.ceil.)
+local function Percent(share) return ("%d%%"):format(math.ceil(share * 100 - 1e-9)) end
+-- (Where each frame's game code puts its texts, in its own units: Forever's
+-- Camelot TargetFrame.lua and PetFrame.xml; the rest the template's 2.)
+local TEXT_PLACES = {
+	TARGET = { healthTexts = { LEFT = 2, RIGHT = -3, CENTER = 0 }, powerTexts = { LEFT = 6, RIGHT = -7, CENTER = 0 } },
+	PET = { healthTexts = { LEFT = 0, RIGHT = 0, CENTER = 0 }, powerTexts = { LEFT = 4, RIGHT = 0, CENTER = 2 } },
+}
+TEXT_PLACES.FOCUS = TEXT_PLACES.TARGET
+local TEXT_PLACE = { LEFT = 2, RIGHT = -2, CENTER = 0 }
+local function BarTexts(unit, bar, key, share, most, how, scale, noPercent)
 	local texts = unit[key]
 	if not texts then
 		texts = {}
@@ -114,10 +158,11 @@ local function BarTexts(unit, bar, key, share, most, how, scale)
 		end
 		unit[key] = texts
 	end
+	local places = TEXT_PLACES[unit.id] and TEXT_PLACES[unit.id][key] or TEXT_PLACE
 	for side, text in pairs(texts) do
 		text:Hide()
 		text:ClearAllPoints()
-		text:SetPoint(side, bar, side, side == "LEFT" and 2 or side == "RIGHT" and -2 or 0, 0)
+		text:SetPoint(side, bar, side, places[side] * scale, 0)
 		-- (Its font object's three values: "a and b:GetFont()" would keep the first only.)
 		local object, file, size, flags = _G.TextStatusBarText, nil, nil, nil
 		if object and object.GetFont then file, size, flags = object:GetFont() end
@@ -126,12 +171,13 @@ local function BarTexts(unit, bar, key, share, most, how, scale)
 	if not (how and bar:IsShown() and most) then return end
 	local value = most * share
 	if how == "BOTH" then
-		texts.LEFT:SetText(("%d%%"):format(math.floor(share * 100 + 0.5)))
+		-- (The percent on the left only on health and mana bars, as the game's.)
+		texts.LEFT:SetText(Percent(share))
 		texts.RIGHT:SetText(Short(value))
-		texts.LEFT:Show()
+		texts.LEFT:SetShown(not noPercent)
 		texts.RIGHT:Show()
 	elseif how == "PERCENT" then
-		texts.CENTER:SetText(("%d%%"):format(math.floor(share * 100 + 0.5)))
+		texts.CENTER:SetText(Percent(share))
 		texts.CENTER:Show()
 	else
 		texts.CENTER:SetText(Short(value) .. " / " .. Short(most))
@@ -149,7 +195,7 @@ local function Skull(unit, sample)
 	local ok, mine = pcall(UnitLevel, "player")
 	return ok and Readable(mine) and type(mine) == "number" and mine > 0 and sample.level >= mine + 10
 end
-local function DressLevel(unit, sample)
+local function DressLevel(unit, sample, scale)
 	local badge = unit.badge
 	if not badge then return end
 	local skull = Skull(unit, sample)
@@ -160,10 +206,19 @@ local function DressLevel(unit, sample)
 	end
 	unit.skull:SetShown(skull and badge.text:IsShown())
 	if skull and badge.text:IsShown() then
-		local h = math.max(badge.text:GetHeight() or 0, 8)
+		-- (The copy: at the atlas's own size, centered on the level circle, as the
+		-- game's (rule forever.targetframe.level-skull-boss). Drawn: by the text.)
+		local circle = unit.copy and unit.copy.on and unit.copy.circle
+		local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(SKULL_ATLAS)
 		unit.skull:ClearAllPoints()
-		unit.skull:SetPoint("CENTER", badge.text, "CENTER", 0, 0)
-		unit.skull:SetSize(h * 1.25, h * 1.25)
+		if circle and circle:IsShown() and type(info) == "table" and type(info.width) == "number" then
+			unit.skull:SetPoint("CENTER", circle, "CENTER", 0, 0)
+			unit.skull:SetSize(info.width * scale, info.height * scale)
+		else
+			local h = math.max(badge.text:GetHeight() or 0, 8)
+			unit.skull:SetPoint("CENTER", badge.text, "CENTER", 0, 0)
+			unit.skull:SetSize(h * 1.25, h * 1.25)
+		end
 		badge.text:SetAlpha(0)
 	else
 		badge.text:SetAlpha(1)
@@ -173,18 +228,38 @@ end
 -- The boss dragon round a boss's portrait (the copy: the game's art where it
 -- reads it, retail 2026-11-20; a theme's drawn frame has its own).
 local BOSS_ATLAS = "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold"
+local FOREVER_BOSS_ATLAS = "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged"
 local function Classification(unit, sample, recipe, scale)
 	local on = sample.boss and unit.copy and unit.copy.on and recipe and recipe.classification
 		and not recipe.classification.hidden and recipe.classification.w
 	if not unit.dragon then unit.dragon = unit:CreateTexture(nil, "ARTWORK", nil, 2) end
 	local shown = false
+	-- (Forever's own boss art and place, from its Camelot GetBossPortraitFrameData:
+	-- the winged gold dragon, its top right +11,-4 off the 232x100 frame's,
+	-- whose art sits 19,16 in; at the atlas's size. Until 2026-11-23 the plain
+	-- elite dragon at retail's spot.)
+	local forever = on and not ns.isRetail
 	if on then
-		local ok, done = pcall(unit.dragon.SetAtlas, unit.dragon, BOSS_ATLAS)
+		local atlas = forever and FOREVER_BOSS_ATLAS or BOSS_ATLAS
+		local ok, done = pcall(unit.dragon.SetAtlas, unit.dragon, atlas)
+		if not (ok and done ~= false) and forever then
+			forever = false
+			ok, done = pcall(unit.dragon.SetAtlas, unit.dragon, BOSS_ATLAS)
+		end
 		if ok and done ~= false then
 			local e = recipe.classification
+			local info = forever and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
 			unit.dragon:ClearAllPoints()
-			unit.dragon:SetPoint("TOPLEFT", unit, "TOPLEFT", e.x * scale, -e.y * scale)
-			unit.dragon:SetSize(e.w * scale, e.h * scale)
+			if forever then
+				unit.dragon:SetPoint("TOPRIGHT", unit, "TOPLEFT", (213 + 11) * scale, (16 - 4) * scale)
+			else
+				unit.dragon:SetPoint("TOPLEFT", unit, "TOPLEFT", e.x * scale, -e.y * scale)
+			end
+			if type(info) == "table" and type(info.width) == "number" and info.width > 0 then
+				unit.dragon:SetSize(info.width * scale, info.height * scale)
+			else
+				unit.dragon:SetSize(e.w * scale, e.h * scale)
+			end
 			shown = true
 		end
 	end
@@ -309,8 +384,11 @@ function ns.DressUnitParts(unit)
 	end
 	local how = StatusTextHow()
 	BarTexts(unit, unit.health, "healthTexts", sample.health or 1, sample.maxHealth, how, scale)
-	BarTexts(unit, unit.power, "powerTexts", sample.amount or 1, sample.maxPower, how, scale)
-	DressLevel(unit, sample)
+	-- (Mana: the samples' blue power, else your pet's live one.)
+	local power = unit.id == "PET" and ns.LivePetPower and ns.LivePetPower() or sample.power
+	local mana = type(power) == "table" and power[1] == 0 and power[3] == 1
+	BarTexts(unit, unit.power, "powerTexts", sample.amount or 1, sample.maxPower, how, scale, not mana)
+	DressLevel(unit, sample, scale)
 	Classification(unit, sample, unit.copyRecipe, scale)
 end
 
@@ -330,14 +408,21 @@ function ns.WrapUnitAuras(unit, tot)
 	if tot and tot:IsShown() then tl, tr, tt, tb = Screen(tot) end
 	local step = row[5]
 	local col, line = 0, 0
+	-- (The game's rows: 122 units wide, the first two 101 while a target of
+	-- target shows: 6 icons a row, 5 beside it. The second kind on its own line.)
+	local totUp = tl ~= nil
 	for _, aura in ipairs(unit.auras) do
 		if aura:IsShown() then
-			for _ = 1, 2 do
+			if aura.newLine and col > 0 then col, line = 0, line + 1 end
+			if col >= ((totUp and line < 2) and 5 or 6) then col, line = 0, line + 1 end
+			-- (Still on it: a line further, even from a line's start, where the
+			-- second kind's own line begins.)
+			for _ = 1, 5 do
 				aura:ClearAllPoints()
 				aura:SetPoint("TOPLEFT", row[1], row[2], row[3] + col * step, row[4] + (row[6] and line or -line) * step)
 				local al, ar, at, ab = Screen(aura)
 				local touches = tl and al and ar > tl - 2 and al < tr + 2 and at > tb - 2 and ab < tt + 2
-				if touches and col > 0 then
+				if touches then
 					col, line = 0, line + 1
 				else
 					break

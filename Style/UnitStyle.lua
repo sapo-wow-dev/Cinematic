@@ -2776,7 +2776,7 @@ end
 local THRALL = { "Interface\\Icons\\Achievement_Leader_Thrall", "Interface\\Icons\\INV_Misc_Head_Orc_01" }
 local SAMPLES = {
 	PLAYER = { framed = { 14, -22, 54, 104 }, name = "Thrall", level = 60, x = 14, y = -30, w = 150, class = "SHAMAN", health = 0.86, power = { 0, 0.55, 1 },
-		amount = 0.4, faces = THRALL },
+		amount = 0.4, maxHealth = 98000, maxPower = 60000, faces = THRALL },
 	TARGET = { framed = { 300, -22, 54, 104 }, name = "The Lich King", level = 63, x = 270, y = -30, w = 150, reaction = 2, health = 0.62,
 		boss = true, auras = true, maxHealth = 554000, maxPower = 120000,
 		power = { 0, 0.55, 1 }, amount = 1, flip = true,
@@ -2787,6 +2787,7 @@ local SAMPLES = {
 		faces = { "Interface\\Icons\\Achievement_Character_Jaina_Proudmoore", "Interface\\Icons\\Achievement_Leader_Jaina_Proudmoore",
 			"Interface\\Icons\\INV_Misc_Head_Human_02" } },
 	PET = { framed = { 30, -96, 36, 70 }, name = "Wolf", x = 30, y = -118, w = 80, reaction = 5, health = 1, power = { 1, 1, 0 }, amount = 0.5,
+		maxHealth = 42000, maxPower = 100,
 		parent = "PLAYER", hang = "pet",
 		small = true, faces = { "Interface\\Icons\\Ability_Hunter_Pet_Wolf" } },
 	PARTY = { framed = { 150, -140, 36, 80 }, name = "Varian", x = 150, y = -146, w = 90, class = "WARRIOR", health = 0.7, power = { 1, 0, 0 },
@@ -2961,7 +2962,11 @@ local function CopyLook(unit, view, on)
 	local function Place(region, entry)
 		region:ClearAllPoints()
 		region:SetPoint("TOPLEFT", unit, "TOPLEFT", entry.x * scale, -entry.y * scale)
-		region:SetSize(math.max(entry.w * scale, 0.1), math.max(entry.h * scale, 0.1))
+		-- (atlasSize: the game draws it at its atlas's own size, useAtlasSize.)
+		local w, h = entry.w, entry.h
+		local info = entry.atlasSize and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(entry.atlas)
+		if type(info) == "table" and type(info.width) == "number" and info.width > 0 then w, h = info.width, info.height end
+		region:SetSize(math.max(w * scale, 0.1), math.max(h * scale, 0.1))
 	end
 	local function Art(texture, entry)
 		if entry and not entry.hidden and SetAtlasSafe(texture, entry.atlas) then
@@ -3089,8 +3094,12 @@ local function CopyLook(unit, view, on)
 	-- (The strip behind the target's name in its reaction's color; a player's blue.)
 	if recipe.reaction then
 		Art(copy.reaction, recipe.reaction)
-		local color = not sample.class and FACTION_BAR_COLORS and FACTION_BAR_COLORS[sample.reaction or 4]
-		if color then copy.reaction:SetVertexColor(color.r, color.g, color.b) else copy.reaction:SetVertexColor(0, 0, 1) end
+		-- (In the unit's selection color, as the game's CheckFaction: red, orange,
+		-- yellow or green; a player's blue. Was the reaction bar colors.)
+		local reaction = sample.reaction or 4
+		local color = not sample.class and (reaction <= 2 and { 1, 0, 0 } or reaction == 3 and { 1, 0.5, 0 }
+			or reaction == 4 and { 1, 1, 0 } or { 0, 1, 0 })
+		if color then copy.reaction:SetVertexColor(color[1], color[2], color[3]) else copy.reaction:SetVertexColor(0, 0, 1) end
 	else
 		copy.reaction:Hide()
 	end
@@ -3125,9 +3134,18 @@ local function CopyLook(unit, view, on)
 			if file and level.size then badge.text:SetFont(file, level.size * scale, flags or "") end
 		end
 		-- (Its colors: yours white, another's by how hard it is for you. Read in game 2026-11-20.)
-		local color = unit.id ~= "PLAYER" and _G.GetCreatureDifficultyColor and sample.level
+		-- (Only for one you can attack; a friendly one's gold, as the game's code
+		-- has it: rule forever.targetframe.level-skull-boss. Jaina was green.)
+		local attackable = sample.reaction and sample.reaction <= 4 and not sample.class
+		local color = unit.id ~= "PLAYER" and attackable and _G.GetCreatureDifficultyColor and sample.level
 			and _G.GetCreatureDifficultyColor(sample.level)
-		if color then badge.text:SetTextColor(color.r, color.g, color.b) else badge.text:SetTextColor(1, 1, 1) end
+		if color then
+			badge.text:SetTextColor(color.r, color.g, color.b)
+		elseif unit.id ~= "PLAYER" then
+			badge.text:SetTextColor(1, 0.82, 0)
+		else
+			badge.text:SetTextColor(1, 1, 1)
+		end
 	end
 end
 

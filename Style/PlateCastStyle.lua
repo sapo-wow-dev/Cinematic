@@ -1114,19 +1114,24 @@ function DressAs(bar, state, which, look)
 	else
 		ShowPart(state, Part(bar, "Border"), false)
 		ShowPart(state, Part(bar, "TextBorder"), false)
-		copyIcon:SetSize(12, 12)
-		if ns.isRetail then
-			copyIcon:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -1)
-		else
+		-- (As your nameplates lay theirs out: in the bar or under it, by your
+		-- nameplate style, ns.PlateCastLayout.)
+		local layout = ns.PlateCastLayout()
+		copyIcon:SetSize(layout.icon, layout.icon)
+		if layout.classic then
+			copyIcon:SetPoint("CENTER", bar, "LEFT", -9.25 * layout.h, 0)
+		elseif layout.inside then
 			copyIcon:SetPoint("LEFT", bar, "LEFT", 0, 0)
+		else
+			copyIcon:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
 		end
 		-- (Beside the icon, or where it would be when the game shows none: yours.)
-		if copyIcon:IsShown() then
+		if copyIcon:IsShown() and not layout.classic then
 			copy:SetPoint("LEFT", copyIcon, "RIGHT", 2, 0)
-		elseif ns.isRetail then
-			copy:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, -1)
-		else
+		elseif layout.inside then
 			copy:SetPoint("LEFT", bar, "LEFT", 2, 0)
+		else
+			copy:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, 0)
 		end
 		copy:SetJustifyH("LEFT")
 		Resize(spark, 4, 12)
@@ -1595,6 +1600,66 @@ local function GameAtlas(kind)
 	return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) and atlas or nil
 end
 
+-- The game's nameplate cast bar layout for your nameplate settings, as its
+-- own code lays it out (rules all.plate.castbar-layout-by-style and
+-- all.plate.castbar-sizes: Blizzard_NamePlates' ApplyStyleAndAnchoring and
+-- NamePlateConstants). Where the icon and name go is the nameplateStyle
+-- CVar's pick, not the client's: Block, CastFocus and Classic put the name in
+-- the bar, the rest under it beside the icon. Sizes are the constants times
+-- the nameplateSize scale. The game's own constants where it has them, else
+-- each client's (Forever's are its Camelot file's).
+local PLATE_CONSTANTS = {
+	forever = { width = 190, inset = 12, small = 6, icon = 10 },
+	retail = { width = 230, inset = 12, small = 10, icon = 12 },
+}
+local PLATE_SCALES = { { 0.75, 0.8 }, { 1, 1 }, { 1.25, 1.25 }, { 1.4, 1.4 }, { 1.6, 1.6 } }
+local STYLE = { modern = 0, thin = 1, block = 2, healthFocus = 3, castFocus = 4, legacy = 5, classic = 6 }
+function ns.PlateCastLayout(style, size)
+	local function CVarNumber(name)
+		local ok, value = pcall(GetCVar, name)
+		return ok and tonumber(value) or nil
+	end
+	style = style or CVarNumber("nameplateStyle") or STYLE.modern
+	size = size or CVarNumber("nameplateSize") or 2
+	if not PLATE_SCALES[size] then size = 2 end
+	local own = PLATE_CONSTANTS[ns.isRetail and "retail" or "forever"]
+	local live = type(_G.NamePlateConstants) == "table" and _G.NamePlateConstants or {}
+	local function Constant(key, fallback)
+		local value = live[key]
+		return type(value) == "number" and value or fallback
+	end
+	local classic = style == STYLE.classic
+	local h, v = PLATE_SCALES[size] and PLATE_SCALES[size][1] or 1, PLATE_SCALES[size] and PLATE_SCALES[size][2] or 1
+	-- (Classic's own scale table: the same both ways, Small 0.8.)
+	if classic and size == 1 then h = 0.8 end
+	local scales = classic and live.NAME_PLATE_SCALES_CLASSIC_STYLE or live.NAME_PLATE_SCALES
+	local scale = type(scales) == "table" and scales[size]
+	if type(scale) == "table" and type(scale.horizontal) == "number" and type(scale.vertical) == "number" then
+		h, v = scale.horizontal, scale.vertical
+	end
+	local inset = Constant("HORIZONTAL_INSET", own.inset)
+	local plateW = classic and Constant("CLASSIC_NAME_PLATE_WIDTH", 152) or Constant("NAME_PLATE_WIDTH", own.width)
+	local height
+	if classic then
+		height = Constant("CLASSIC_CAST_BAR_HEIGHT", 10)
+	elseif style == STYLE.castFocus or style == STYLE.block then
+		height = Constant("LARGE_CAST_BAR_HEIGHT", 16)
+	else
+		height = Constant("SMALL_CAST_BAR_HEIGHT", own.small)
+	end
+	local container = (plateW - 2 * inset) * h
+	return {
+		style = style, size = size, h = h, v = v, classic = classic,
+		inside = classic or style == STYLE.block or style == STYLE.castFocus,
+		-- (Classic's bar sits in its border: 20.75 in from the left, 3.5 from the right.)
+		width = classic and container - 24.25 * h or container, container = container,
+		height = height * v,
+		icon = Constant("CAST_BAR_ICON_HEIGHT", own.icon) * v,
+		shieldW = 10 * v, shieldH = 12 * v,
+		hideIconLocked = not classic,
+	}
+end
+
 -- The old stand-in for the game's bar, drawn by hand: a status bar with its
 -- parts by the same names. Only where the game's template can't be made.
 local function MakeDrawnSample(parent, info)
@@ -1666,6 +1731,7 @@ local SAMPLE_KINDS = {
 	player = { "CastingBarFrameTemplate", 208, 11, look = "CLASSIC" },
 	unit = { "SmallCastingBarFrameTemplate", 150, 10 },
 	boss = { "SmallCastingBarFrameTemplate", 120, 10 },
+	-- (The plate's size is your nameplate settings': ns.PlateCastLayout.)
 	plate = { "NamePlateCastingBarTemplate", 206, ns.isRetail and 10 or 7.5 },
 }
 -- (The parts our styling knows; the rest of the template's effects, its
@@ -1682,28 +1748,67 @@ local function Quiet(bar)
 		end
 	end
 end
--- The plate's icon and name as the game's code places them: retail's under
--- the bar at its left, Forever's on the bar (the old sample's layout,
--- matched to each client's own plates).
+-- The plate's parts as the game's code places them for your nameplate style
+-- (ns.PlateCastLayout; until 2026-11-23 placed by client, which put Forever's
+-- name on the bar where your Thin style has it under the bar).
 local function PlacePlateParts(bar)
+	local layout = ns.PlateCastLayout()
 	local icon, text, shield = bar.Icon, bar.Text, bar.BorderShield
-	icon:SetSize(12, 12)
+	bar:SetSize(layout.width, layout.height)
+	icon:SetSize(layout.icon, layout.icon)
 	icon:ClearAllPoints()
-	if ns.isRetail then
-		icon:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -1)
-	else
-		icon:SetPoint("LEFT", bar, "LEFT", 0, 0)
-	end
 	text:ClearAllPoints()
-	text:SetPoint("LEFT", icon, "RIGHT", 2, 0)
-	-- (Forever's plate name reads CENTER in game, retail's code sets LEFT:
-	-- the Preview Match test, 2026-11-19.)
-	text:SetJustifyH(ns.isRetail and "LEFT" or "CENTER")
-	if shield then
-		shield:SetSize(10, 12)
-		shield:ClearAllPoints()
-		shield:SetPoint("RIGHT", icon, "RIGHT", 0, 0)
+	if layout.classic then
+		-- (The border's left end holds the icon: the border is the container's
+		-- width, the bar inset in it.)
+		icon:SetPoint("CENTER", bar, "LEFT", -9.25 * layout.h, 0)
+		text:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, -1 * layout.v)
+		text:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, -1 * layout.v)
+		text:SetJustifyH("CENTER")
+	else
+		if layout.inside then
+			icon:SetPoint("LEFT", bar, "LEFT", 0, 0)
+		else
+			icon:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
+		end
+		text:SetPoint("LEFT", icon, "RIGHT", 2, 0)
+		-- (The game never sets it: its font's own CENTER, which with one point
+		-- reads the same as LEFT. CENTER in game, Preview Match 2026-11-23.)
+		text:SetJustifyH("CENTER")
 	end
+	if shield then
+		shield:ClearAllPoints()
+		if layout.classic then
+			pcall(shield.SetTexture, shield, "Interface\\CastingBar\\UI-CastingBar-Small-Shield")
+			shield:SetPoint("TOPLEFT", bar, "TOPLEFT", -20 * layout.h, 11 * layout.v)
+			shield:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 13 * layout.h, -13 * layout.v)
+		else
+			shield:SetSize(layout.shieldW, layout.shieldH)
+			shield:SetPoint("RIGHT", icon, "RIGHT", 0, 0)
+		end
+	end
+	-- (Classic's own border and spark: the others' bar has neither.)
+	if layout.classic then
+		local border = bar.classicBorder
+		if not border then
+			border = bar:CreateTexture(nil, "OVERLAY", nil, -1)
+			border:SetTexture("Interface\\Tooltips\\Nameplate-Border-Castbar")
+			border:SetTexCoord(0, 1, 0.5, 1)
+			bar.classicBorder = border
+		end
+		border:ClearAllPoints()
+		border:SetSize(128 * layout.h, 16 * layout.v)
+		border:SetPoint("CENTER", bar, "CENTER", -8.625 * layout.h, -0.5 * layout.v)
+		border:Show()
+		if bar.Spark then
+			bar.Spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+			bar.Spark:SetSize(32, 32)
+		end
+	elseif bar.classicBorder then
+		bar.classicBorder:Hide()
+	end
+	bar.plateLayout = layout
+	return layout
 end
 local sampleCount = 0
 local function MakeSample(parent, info, kind)
@@ -1712,23 +1817,39 @@ local function MakeSample(parent, info, kind)
 	-- named bar; unnamed, the game warned "Couldn't find relative frame:
 	-- $parent" and the icon had no place. Forever 2026-11-19.)
 	sampleCount = sampleCount + 1
+	-- (Yours locked to your player frame in Edit Mode: the game gives it its
+	-- unit frame look, 150x10, the name over the bar and no text box (rule
+	-- all.castbar.player-look-attached).)
+	local look, width, height = spec.look, spec[2], spec[3]
+	local real = kind == "player" and _G.PlayerCastingBarFrame
+	local attached = type(real) == "table" and real.attachedToPlayerFrame == true
+	if attached then look, width, height = "UNITFRAME", 150, 10 end
 	local ok, bar = pcall(CreateFrame, "StatusBar", "CinematicCastSample" .. sampleCount, parent, spec[1])
 	if not (ok and bar and bar.Text and bar.Icon and bar.Spark) then
 		local drawn = MakeDrawnSample(parent, info)
 		drawn.sampleKind = kind
+		if kind == "plate" then
+			local layout = PlacePlateParts(drawn)
+			drawn.gameW = layout.width
+			drawn.Icon:SetShown(not (info.locked and layout.hideIconLocked))
+		elseif attached then
+			drawn:SetSize(width, height)
+			drawn.gameW, drawn.attached = width, true
+		end
 		return drawn
 	end
-	if spec.look and bar.SetLook then pcall(bar.SetLook, bar, spec.look) end
+	if look and bar.SetLook then pcall(bar.SetLook, bar, look) end
 	Quiet(bar)
-	bar:SetSize(spec[2], spec[3])
+	bar:SetSize(width, height)
+	bar.attached = attached or nil
 	bar:SetMinMaxValues(0, 1)
 	bar:Show()
-	if kind == "plate" then PlacePlateParts(bar) end
+	local layout = kind == "plate" and PlacePlateParts(bar)
 	local art = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(info[3]) or info[2]
 	bar.Icon:SetTexture(art)
-	-- (Yours shows no icon in the game, nor a plate's that can't be interrupted:
-	-- the shield in its place.)
-	bar.Icon:SetShown(kind ~= "player" and not (kind == "plate" and info.locked))
+	-- (Yours shows no icon in the game, nor a plate's that can't be interrupted,
+	-- the shield in its place, but in the Classic plate style both show.)
+	bar.Icon:SetShown(kind ~= "player" and not (layout and info.locked and layout.hideIconLocked))
 	if bar.BorderShield then bar.BorderShield:SetShown(info.locked == true and kind ~= "player") end
 	bar.Text:SetText(SpellName(info[3], info[4]))
 	bar.Text:Show()
@@ -1739,15 +1860,15 @@ local function MakeSample(parent, info, kind)
 	-- Forever 2026-11-19: 37x12). Centered on the spark it stuck out past the
 	-- fill and the bar's end.)
 	local glow = bar.StandardGlow
-	if kind == "player" and glow and not info.channel and not info.locked then
+	if kind == "player" and not attached and glow and not info.channel and not info.locked then
 		glow:ClearAllPoints()
 		glow:SetPoint("RIGHT", bar.Spark, "CENTER", -2, 0)
 		glow:Show()
 		bar.glow = glow
 	end
-	local fill = GameAtlas(info.locked and "locked" or (info.channel and "channel" or "cast"))
+	local fill = not (layout and layout.classic) and GameAtlas(info.locked and "locked" or (info.channel and "channel" or "cast"))
 	if fill then bar:SetStatusBarTexture(fill) else bar:SetStatusBarTexture(FILLS.smooth) end
-	bar.gameW, bar.fromTemplate, bar.sampleKind = spec[2], spec[1], kind
+	bar.gameW, bar.fromTemplate, bar.sampleKind = layout and layout.width or width, spec[1], kind
 	bar.channeling = info.channel or nil
 	bar.casting = not info.channel or nil
 	bar.notInterruptible = info.locked or false
@@ -1760,7 +1881,9 @@ end
 local function DressSample(bar, info, look, sized)
 	if not FILLS[look.plateCastFill] then
 		local kind = info.locked and "locked" or (info.channel and "channel" or "cast")
-		local atlas = GameAtlas(kind)
+		-- (A Classic style plate's bar is the plain bar tinted, as the game's
+		-- classicStyleCastBar fill: CastingBarMixin.)
+		local atlas = not (bar.plateLayout and bar.plateLayout.classic) and GameAtlas(kind)
 		if atlas and bar.SetStatusBarTexture then
 			bar:SetStatusBarTexture(atlas)
 			bar:SetStatusBarColor(1, 1, 1)
@@ -1874,7 +1997,7 @@ local function BuildCastPage(kit, spec)
 		width, height = width or PREVIEW_W, height or PREVIEW_H
 		-- (Plates are as wide as the game's, about 206: the two up top at
 		-- the sides mustn't meet.)
-		local most = units and 1.6 or 0.5 * width / SAMPLE_KINDS.plate[2]
+		local most = units and 1.6 or 0.5 * width / ns.PlateCastLayout().container
 		-- (A unit frame over its cast bar: as big as fits its share of the preview,
 		-- side by side and top to bottom, none on another.)
 		if units then
@@ -1975,12 +2098,28 @@ local function BuildCastPage(kit, spec)
 	-- the game has it, room for a row of buffs between; joined to it, under its
 	-- bars. Yours alone when it isn't joined. The plate the size of it all.)
 	local AURA_ROOM = 8 -- (under the frame's auras and its target of target, which its size takes in)
+	-- (Edit Mode's lock on your bar can change while the page is up: each
+	-- refresh follows it, its look and size as the game's then.)
+	local function SyncAttached(bar)
+		if bar.sampleKind ~= "player" then return end
+		local real = _G.PlayerCastingBarFrame
+		local attached = type(real) == "table" and real.attachedToPlayerFrame == true or nil
+		if attached == bar.attached then return end
+		bar.attached = attached
+		if bar.fromTemplate and bar.SetLook then pcall(bar.SetLook, bar, attached and "UNITFRAME" or "CLASSIC") end
+		local width = attached and 150 or SAMPLE_KINDS.player[2]
+		bar:SetSize(width, attached and 10 or SAMPLE_KINDS.player[3])
+		bar.gameW = width
+		if bar.glow then bar.glow:SetShown(not attached) end
+	end
 	local function DressUnitFrame(bar, framed, id)
+		SyncAttached(bar)
 		local plate = bar.frameBars
 		local sample = plate.unitFrame
 		sample:Refresh()
 		local unit = sample.unit
-		local alone = id == "PLAYER" and not framed
+		-- (Yours locked to your frame in Edit Mode hangs under it, as the game's.)
+		local alone = id == "PLAYER" and not framed and not bar.attached
 		sample:SetShown(not alone)
 		plate.caption:SetShown(not alone)
 		bar:ClearAllPoints()
@@ -1999,9 +2138,24 @@ local function BuildCastPage(kit, spec)
 			bar:SetPoint("TOPRIGHT", unit.power, "BOTTOMRIGHT", 0, -PIN_GAP)
 			plate:SetSize(math.max(sample:GetWidth(), 1), 14 + sample:GetHeight() + 24)
 		else
+			-- (Where the game's own code hangs each one off its frame: rules
+			-- all.castbar.target-boss-place and all.castbar.player-look-attached,
+			-- TargetSpellBarMixin/BossSpellBarMixin:AdjustPosition and
+			-- AnchorCastBarToPlayerFrame. Until 2026-11-23 it was under all of the
+			-- sample, its auras and target of target, by the icon's width.)
 			bar:SetWidth(barW)
-			bar:SetPoint("TOPLEFT", sample, "BOTTOMLEFT", room + 2, -AURA_ROOM)
-			plate:SetSize(math.max(sample:GetWidth(), room + 2 + barW), 14 + sample:GetHeight() + AURA_ROOM + 30)
+			local frame = unit or sample
+			if id == "BOSS" then
+				bar:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", -100, 17)
+			elseif id == "PLAYER" then
+				bar:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", -24, 12)
+			else
+				local tot = sample.tot and sample.tot:IsShown()
+				bar:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 43, tot and -46 or 5)
+			end
+			local frameH = frame:GetHeight() or 0
+			local below = math.max(sample:GetHeight() - frameH, 46) + AURA_ROOM + 24
+			plate:SetSize(math.max(sample:GetWidth(), 43 + barW), 14 + frameH + below)
 		end
 		ns.DressCastSkin(bar, framed and (id == "PLAYER" and "PLAYER" or "TARGET") or nil)
 	end
@@ -2433,7 +2587,7 @@ function ns.MakePlateCastSample(parent)
 	function bar:Refresh()
 		local look = ns.PlateCastLook()
 		if not FILLS[look.plateCastFill] then
-			local atlas = GameAtlas("cast")
+			local atlas = not (self.plateLayout and self.plateLayout.classic) and GameAtlas("cast")
 			if atlas and self.SetStatusBarTexture then
 				self:SetStatusBarTexture(atlas)
 				self:SetStatusBarColor(1, 1, 1)

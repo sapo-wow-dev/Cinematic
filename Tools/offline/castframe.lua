@@ -5,8 +5,8 @@
 -- bars over it looked nothing like the target frame), on the style lab's
 -- real-layout stand-in (Tools/style-lab/frames.lua):
 --   each sample has its unit frame, the game's frame copied in the game's look;
---   the cast bar under it as the game has it, room for buffs between, its
---   icon's left past the frame's left edge no further;
+--   the cast bar hung off it where the game's code hangs it (target:
+--   +43,-46 under its target of target; boss: -100,+17 off its right);
 --   the two (target & focus, boss & arena) side by side, none on another,
 --   all inside the preview;
 --   joined to the frame (a theme's look), the bar right under its bars;
@@ -79,19 +79,17 @@ for _, look in ipairs({ "game", "theme" }) do
 				Check(("game look, sample %d: the game's frame copied"):format(i), frame.unit.copy and frame.unit.copy.on,
 					frame.unit.copyWhy)
 			end
-			local joined = bar:GetTop() and frame.unit.power:GetBottom() and bar:GetTop() > frame:GetBottom() - 1
-			if not joined then
-				-- (The frame's size takes in its buffs and target of target: the bar a little under all of it.)
-				local room = frame:GetBottom() - bar:GetTop()
-				Check(("%s look, sample %d: the cast bar a little under the frame and what hangs off it"):format(look, i),
-					room >= 4 and room <= 14, room)
-				local under = true
-				for _, aura in ipairs(frame.unit.auras or {}) do
-					if aura:IsShown() and aura:GetBottom() * aura:GetEffectiveScale() < bar:GetTop() * bar:GetEffectiveScale() - 0.5 then under = false end
-				end
-				Check(("%s look, sample %d: the cast bar under the buffs"):format(look, i), under)
-				Check(("%s look, sample %d: its bar starts inside the frame's left"):format(look, i),
-					bar:GetLeft() >= frame:GetLeft() - 1, bar:GetLeft() - frame:GetLeft())
+			local _, joinedTo = bar:GetPoint(1)
+			if joinedTo ~= frame.unit.power then
+				-- (Hung off its frame where the game's code hangs it (rule
+				-- all.castbar.target-boss-place): the target's TOPLEFT at the
+				-- frame's BOTTOMLEFT +43, -46 with a target of target up; a
+				-- boss's TOPRIGHT at its BOTTOMRIGHT -100, +17.)
+				local point, relative, relativePoint, x, y = bar:GetPoint(1)
+				local got = ("%s>%s %s,%s"):format(tostring(point), tostring(relativePoint), tostring(x), tostring(y))
+				local want = i == 1 and "TOPLEFT>BOTTOMLEFT 43,-46" or "TOPRIGHT>BOTTOMRIGHT -100,17"
+				Check(("%s look, sample %d: the cast bar where the game hangs it"):format(look, i),
+					relative == frame.unit and got == want, got)
 			end
 			Check(("%s look, sample %d: all inside the preview"):format(look, i), Inside(plate, preview, 2))
 			local unit = frame.unit
@@ -149,6 +147,71 @@ do
 	rawset(_G, "C_CVar", realC)
 end
 
+-- The frames' parts as the game's own code draws them (Forever's export,
+-- 2026-11-23; rules forever.targetframe.*, all.statustext.format).
+do
+	db.ufStyle, db.ufShape = false, "game"
+	preview:Refresh()
+	local target = preview.plates[1].unitFrame.unit
+	local recipe = ns.UNIT_FRAME_RECIPES.TARGET
+	Check("target recipe: power bar 134 wide, masked", recipe.power.w == 134 and recipe.powerMask
+		and recipe.powerMask.atlas == "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana-Mask", recipe.power.w)
+	Check("pet recipe: mana bar 77 wide, the target of target's 78", ns.UNIT_FRAME_RECIPES.PET.power.w == 77
+		and ns.UNIT_FRAME_RECIPES.TOT.power.w == 78)
+	local auras = target.auras or {}
+	local first, last = auras[1], auras[#auras]
+	Check("hostile target: debuffs first", first and first.border:IsShown())
+	Check("hostile target: buffs on a line of their own", last and not last.border:IsShown() and last.newLine ~= nil
+		or (auras[3] and auras[3].newLine == true), tostring(auras[3] and auras[3].newLine))
+	local cropped = false
+	for _, aura in ipairs(auras) do
+		local l, _, t = aura.icon:GetTexCoord()
+		if l and l > 0 or t and t > 0 then cropped = true end
+	end
+	Check("aura icons whole, not cropped", not cropped)
+	local counts = {}
+	for _, aura in ipairs(auras) do counts[#counts + 1] = aura.count:GetText() or "" end
+	Check("a stack count only over 1", table.concat(counts, ",") == ",,3," or table.concat(counts, ","):find("3") ~= nil,
+		table.concat(counts, ","))
+	local r, g, b
+	if target.copy then r, g, b = target.copy.reaction:GetVertexColor() end
+	Check("hostile target's name strip red (selection color)", r == 1 and g == 0 and b == 0,
+		("%s,%s,%s"):format(tostring(r), tostring(g), tostring(b)))
+	if not ns.isRetail then
+		Check("Forever boss: the winged dragon", target.dragon and target.dragon:IsShown()
+			and target.dragon:GetAtlas() == "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged",
+			target.dragon and target.dragon:GetAtlas())
+	end
+	-- A friendly player's level in gold, not its difficulty color.
+	local focus = ns.MakeUnitFrameSample(UIParent, "FOCUS", "FOCUS")
+	focus:Show()
+	focus:Refresh()
+	local fr, fg, fb = focus.unit.badge.text:GetTextColor()
+	Check("friendly focus's level gold", math.abs(fr - 1) < 0.01 and math.abs(fg - 0.82) < 0.01 and fb < 0.01,
+		("%s,%s,%s"):format(tostring(fr), tostring(fg), tostring(fb)))
+	-- Status text Both: the percent rounded up, and on mana and health only.
+	local cvars = { statusText = "1", statusTextDisplay = "BOTH" }
+	local realGet, realC = GetCVar, C_CVar
+	rawset(_G, "GetCVar", function(name) return cvars[name] or realGet(name) end)
+	rawset(_G, "C_CVar", setmetatable({ GetCVar = function(name) return cvars[name] or realGet(name) end }, { __index = realC }))
+	local pet = ns.MakeUnitFrameSample(UIParent, "PET", "PET")
+	pet:Show()
+	pet:Refresh()
+	local petTexts = pet.unit.powerTexts
+	Check("pet's energy: no percent on the left", petTexts and not petTexts.LEFT:IsShown() and petTexts.RIGHT:IsShown())
+	local petHealth = pet.unit.healthTexts
+	Check("pet's health texts shown", petHealth and petHealth.LEFT:IsShown() and petHealth.LEFT:GetText() == "100%",
+		petHealth and petHealth.LEFT:GetText())
+	local you = ns.MakeUnitFrameSample(UIParent, "PLAYER", "PLAYER")
+	you:Show()
+	you:Refresh()
+	-- (0.86 of its health: 86%; 0.4 of its mana: 40%.)
+	Check("your health texts shown", you.unit.healthTexts and you.unit.healthTexts.LEFT:GetText() == "86%",
+		you.unit.healthTexts and you.unit.healthTexts.LEFT:GetText())
+	rawset(_G, "GetCVar", realGet)
+	rawset(_G, "C_CVar", realC)
+end
+
 -- Your Cast Bar: yours alone, no frame over it.
 local mine = ns.castPreviews["Player Cast Style"]
 Check("Your Cast Bar's preview is there", mine ~= nil)
@@ -159,6 +222,33 @@ if mine then
 	local plate = mine.plates[1]
 	Check("Your Cast Bar: alone, no frame over it", plate.unitFrame and not plate.unitFrame:IsShown())
 	Check("Your Cast Bar: inside its preview", Inside(plate, mine, 2))
+end
+
+-- Yours locked to your player frame in Edit Mode: the game's unit frame look
+-- (150x10), hung under your frame at -24,+12 off its right, and back when
+-- unlocked (rule all.castbar.player-look-attached).
+do
+	local real = rawget(_G, "PlayerCastingBarFrame")
+	rawset(_G, "PlayerCastingBarFrame", { attachedToPlayerFrame = true })
+	local locked = mine
+	if locked then
+		locked:Refresh()
+		local bar, plate = locked.samples[1], locked.plates[1]
+		Check("locked to your frame: 150x10", bar.attached and math.abs(bar:GetWidth() - 150) < 0.01
+			and math.abs(bar:GetHeight() - 10) < 0.01, bar:GetWidth() .. "x" .. bar:GetHeight())
+		Check("locked to your frame: your frame shown over it", plate.unitFrame and plate.unitFrame:IsShown())
+		local point, relative, relativePoint, x, y = bar:GetPoint(1)
+		Check("locked to your frame: hung off its right, -24,+12", relative == plate.unitFrame.unit and point == "TOPRIGHT"
+			and relativePoint == "BOTTOMRIGHT" and x == -24 and y == 12, ("%s %s %s,%s"):format(tostring(point),
+			tostring(relativePoint), tostring(x), tostring(y)))
+	end
+	rawset(_G, "PlayerCastingBarFrame", real)
+	if locked then
+		locked:Refresh()
+		local bar = locked.samples[1]
+		Check("unlocked again: alone at 208x11", not bar.attached and math.abs(bar:GetWidth() - 208) < 0.01
+			and not locked.plates[1].unitFrame:IsShown(), bar:GetWidth())
+	end
 end
 
 if fails > 0 then

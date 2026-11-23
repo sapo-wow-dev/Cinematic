@@ -367,11 +367,15 @@ do
 		-- (A target of target right where the focus's buffs run: they wrap before it, as the game's.)
 		do
 			local focus, tot = screen.units.FOCUS, screen.units.FOCUSTOT
+			-- (Since 2026-11-23 the debuffs take a line of their own, as the game's:
+			-- the target of target goes where a third icon on the first line would.)
+			local second = focus.auras and focus.auras[2]
 			local third = focus.auras and focus.auras[3]
-			if third and third:IsShown() then
-				-- (Fixed where the third buff is now: not hung on the buff, which moves when it wraps.)
-				local dx = third:GetLeft() - focus.health:GetLeft()
-				local dy = third:GetTop() - focus.health:GetTop()
+			if second and second:IsShown() and third and third:IsShown() then
+				-- (Fixed there: not hung on a buff, which moves when it wraps.)
+				local step = second:GetLeft() - focus.auras[1]:GetLeft()
+				local dx = second:GetLeft() + step - focus.health:GetLeft()
+				local dy = second:GetTop() - focus.health:GetTop()
 				tot:ClearAllPoints()
 				tot:SetPoint("TOPLEFT", focus.health, "TOPLEFT", dx, dy)
 				ns.WrapUnitAuras(focus, tot)
@@ -900,8 +904,8 @@ end
 
 -- Forever's buff row worked out (its place secret, 2026-11-21): from the
 -- frame's place, Buffs On Top and Cinematic's lift, as the game's layout was
--- measured off screenshots (first icon 24 in, 5 under the top on top, 74 under
--- it below, 17 square). Retail reads its own buttons: never worked out.
+-- measured off screenshots (first icon 24 in, 5 under the top on top, 75 under
+-- it below (the game's code: 74 was a pixel short), 17 square). Retail reads its own buttons: never worked out.
 do
 	local frame = _G.TargetFrame
 	_G.TargetFrameBuff1:Hide()
@@ -919,7 +923,7 @@ do
 		return (fl + 24 * scale - hl) / hw, (ht - (ft - top * scale)) / hw, 17 * scale / hw
 	end
 	local function Near(a, b) return a and b and math.abs(a - b) < 0.006 end
-	for _, case in ipairs({ { false, 0, 74 }, { true, 0, 5 }, { true, 6, -1 } }) do
+	for _, case in ipairs({ { false, 0, 75 }, { true, 0, 5 }, { true, 6, -1 } }) do
 		frame.buffsOnTop, lift = case[1], case[2]
 		local hangs = ns.ReadUnitHangs("TARGET")
 		local spot = hangs and hangs.aura

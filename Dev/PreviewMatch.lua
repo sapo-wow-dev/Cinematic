@@ -407,14 +407,16 @@ local function Compare(real, ours)
 		elseif o and not g then
 			Say(("EXTRA %s (%s %s) shows ours, not in game"):format(name, tostring(o.kind), tostring(o.art or o.font or "")))
 		else
-			-- (The icon's art is the spell's: never the same spell.)
+			-- (The icon's art is the spell's: never the same spell. Our copy of it
+			-- too, cinematicAsIcon: run 2026-11-23 counted the pet's Firebolt.)
 			-- (Nor art the game won't tell: nil on its side is unknown, not none.)
-			if name ~= "Icon" and g.art and g.art ~= o.art then
+			local spellIcon = name == "Icon" or name == "cinematicAsIcon"
+			if not spellIcon and g.art and g.art ~= o.art then
 				Say(("ART %s: %s in game, %s ours"):format(name, tostring(g.art), tostring(o.art)))
 			end
 			-- (Its color: a theme's tint on the game's art shows here, 2026-11-19:
 			-- your bar was purple, the preview gold, and nothing said so.)
-			if g.kind ~= "FontString" and name ~= "Icon" and ColorOff(g.color, o.color) then
+			if g.kind ~= "FontString" and not spellIcon and ColorOff(g.color, o.color) then
 				Say(("COLOR %s: %s in game, %s ours"):format(name, tostring(g.color), tostring(o.color)))
 			end
 			-- (A font string's width follows its words, which differ: height only.)

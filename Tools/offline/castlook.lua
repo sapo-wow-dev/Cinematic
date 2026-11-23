@@ -86,8 +86,9 @@ for _, id in ipairs({ "PLAYER", "TARGET" }) do
 		tostring(CopyShown(bar)) .. " " .. bar.Text:GetAlpha())
 	Check(who .. ": our name on the left", copy and copy:GetJustifyH() == "LEFT", copy and copy:GetJustifyH())
 	Check(who .. ": our name says the spell", copy and copy:GetText() == bar.Text:GetText(), copy and copy:GetText())
-	Check(who .. ": our icon 12 wide", copyIcon and math.abs(copyIcon:GetWidth() - 12) < 0.01,
-		copyIcon and copyIcon:GetWidth())
+	-- (Your nameplates' icon size: the game's constant times nameplateSize's scale.)
+	Check(who .. ": our icon the plates' size", copyIcon
+		and math.abs(copyIcon:GetWidth() - ns.PlateCastLayout().icon) < 0.01, copyIcon and copyIcon:GetWidth())
 	Check(who .. ": our name beside our icon", copy and Points(copy):find("LEFT>", 1, true) == 1, copy and Points(copy))
 	Check(who .. ": the game's name not moved", Points(bar.Text) == gameText and Points(bar.Icon) == gameIcon
 		and bar.Text:GetJustifyH() == gameJustify, Points(bar.Text))
@@ -182,6 +183,58 @@ mine:Refresh()
 Check("Your Cast Bar tab off: your bar the game's", not CopyShown(mine), tostring(CopyShown(mine)))
 db.playerCastStyle, db.plateCastGameAs_PLAYER = true, false
 mine:Refresh()
+
+-- The nameplate sample laid out as the game's code lays it out for your
+-- nameplate settings (rules all.plate.castbar-layout-by-style and
+-- all.plate.castbar-sizes, from Blizzard_NamePlates): the style CVar decides
+-- whether the name is in the bar or under it, not the client.
+do
+	local cvars = {}
+	local getCVar = GetCVar
+	rawset(_G, "GetCVar", function(name) return cvars[name] or getCVar(name) end)
+	local function Near(a, b) return type(a) == "number" and math.abs(a - b) < 0.01 end
+	local wide = { forever = 190, retail = 230 }
+	local barSmall = { forever = 6, retail = 10 }
+	local iconSize = { forever = 10, retail = 12 }
+	-- Thin (1) at Large (3): the user's setting on Forever (bar 207.5x7.5 read in game).
+	cvars.nameplateStyle, cvars.nameplateSize = "1", "3"
+	local layout = ns.PlateCastLayout()
+	Check("layout thin large: width", Near(layout.width, (wide[client] - 24) * 1.25), layout.width)
+	Check("layout thin large: bar height", Near(layout.height, barSmall[client] * 1.25), layout.height)
+	Check("layout thin large: icon", Near(layout.icon, iconSize[client] * 1.25), layout.icon)
+	Check("layout thin large: shield 12.5x15", Near(layout.shieldW, 12.5) and Near(layout.shieldH, 15),
+		layout.shieldW .. "x" .. layout.shieldH)
+	Check("layout thin: name under the bar", layout.inside == false)
+	local thin = ns.MakeCastLookSample(UIParent, "plate", 1, nil)
+	Check("thin sample: icon under the bar at its left", Points(thin.Icon):find("TOPLEFT>.-BOTTOMLEFT 0,0") ~= nil,
+		Points(thin.Icon))
+	Check("thin sample: name beside the icon", Points(thin.Text):find("LEFT>", 1, true) == 1, Points(thin.Text))
+	Check("thin sample: name justify the font's own CENTER, as in game", thin.Text:GetJustifyH() == "CENTER",
+		thin.Text:GetJustifyH())
+	Check("thin sample: the bar the plates' size", Near(thin:GetWidth(), layout.width)
+		and Near(thin:GetHeight(), layout.height), thin:GetWidth() .. "x" .. thin:GetHeight())
+	local thinLocked = ns.MakeCastLookSample(UIParent, "plate", 3, nil)
+	Check("thin sample, can't interrupt: icon hidden", not thinLocked.Icon:IsShown())
+	-- Block (2): the name in the bar, a 16 tall bar.
+	cvars.nameplateStyle, cvars.nameplateSize = "2", "2"
+	layout = ns.PlateCastLayout()
+	Check("layout block: name in the bar, 16 tall", layout.inside and Near(layout.height, 16), layout.height)
+	local block = ns.MakeCastLookSample(UIParent, "plate", 1, nil)
+	Check("block sample: icon at the bar's left", Points(block.Icon):find("^LEFT>.-LEFT 0,0") ~= nil, Points(block.Icon))
+	-- Classic (6): its own border, the icon kept beside the shield, the name centered on the bar.
+	cvars.nameplateStyle = "6"
+	layout = ns.PlateCastLayout()
+	Check("layout classic: in a 152 wide plate", Near(layout.container, 128) and Near(layout.width, 128 - 24.25),
+		layout.width)
+	local classic = ns.MakeCastLookSample(UIParent, "plate", 3, nil)
+	Check("classic sample, can't interrupt: icon shown", classic.Icon:IsShown())
+	Check("classic sample: name centered", classic.Text:GetJustifyH() == "CENTER", classic.Text:GetJustifyH())
+	Check("classic sample: border shown", classic.classicBorder and classic.classicBorder:IsShown())
+	cvars.nameplateStyle = "1"
+	local back = ns.MakeCastLookSample(UIParent, "plate", 1, nil)
+	Check("back to thin: no classic border", not (back.classicBorder and back.classicBorder:IsShown()))
+	rawset(_G, "GetCVar", getCVar)
+end
 
 print(("castlook %s: %d FAIL"):format(client, fails))
 if fails > 0 then os.exit(1) end

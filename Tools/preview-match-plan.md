@@ -21,9 +21,40 @@ Done and committed (ee3d51f, b86a5bf, 5c584c6, d17755a2, 289d3821; in v2.1.17 up
 
 Known gaps on cast bars:
 - The can't-be-interrupted shield stays the game's in the other look (not moved with our copied icon).
-- The nameplate preview's icon and name are placed by client (retail under the bar, Forever on it); the game decides
-  by the player's nameplate style. Plate anchors read in game would settle it.
 - Retail: no match test run yet.
+
+Review against the game's code (Forever export, 2026-11-23; rules all.plate.castbar-layout-by-style,
+all.plate.castbar-sizes, all.castbar.player-look-attached, all.castbar.target-boss-place), fixed offline, untested in
+game:
+- The nameplate sample is laid out by your nameplateStyle and nameplateSize (`ns.PlateCastLayout`), not by client:
+  Block/CastFocus/Classic put the name in the bar, the rest (your Thin) under it beside the icon; sizes from the
+  game's constants (Forever at Large: 207.5x7.5, icon 12.5, shield 12.5x15); Classic's border, spark, plain fill and
+  icon kept beside the shield. The other bars' "nameplates' look" (DressAs) follows it too.
+- Your bar locked to your player frame (Edit Mode) gets the game's UNITFRAME look (150x10) and hangs under your
+  frame at -24,+12; the page follows the lock as it changes.
+- The target's and boss's bars hang where the game's AdjustPosition puts them (target +43,-46 under its target of
+  target; boss -100,+17 off its right), not under the whole sample.
+Offline: castlook.lua (layout per style), castframe.lua (places, the lock).
+In-game run 08:45 (Forever, Thin at Large): yours 100, target 100, plate 96, only the name's justify (the game
+leaves its font's CENTER; ours set LEFT: now CENTER). Other look: 100 / 96 / 96, each only the spell icon of what
+was cast (our icon copy, now not counted, as the game's icon never was). Screenshot: the pet's plate and the sample
+both draw icon and name under a 207.5x7.5 bar. Not reached in game: your bar locked to the player frame, Classic
+and Block styles (offline only).
+
+Unit frames, same review (rules forever.targetframe.*, all.statustext.format), fixed offline, untested in game:
+target power bar 134 wide with its mask (atlas size), pet mana 77; buff row 75 under the frame (was 74); auras:
+debuffs first on a hostile unit, the second kind on its own line, 6 a row (5 beside a target of target), whole
+icons, counts only over 1 at 1,0, the game's border colors (AuraUtil); bar texts rounded up, percent on health and
+mana only, the client's AbbreviateLargeNumbers, each frame's text places, your and your pet's texts shown; a
+friendly unit's level gold; the name strip in selection colors; the skull at atlas size on the circle; Forever's
+winged boss dragon at its own place. Still open from it: your own auras at 21, the threat number's 18 lift, the
+level circle ~1.5 lower (inferred, the read place kept), and the parts list below (all their game places are in the
+review: leader/role/PvP, marker, rest/combat, threat, heal prediction, dead/offline, combo points).
+In-game run 09:14 (Forever): 70 pairs, every one 100 (yours, your style, 16 themes), layout clean in every look, no
+errors. The live target's mana bar read 1.063 health-bar widths, ours the same (the 134 recipe; 126 before). Not
+reached: the game look's target and focus after the fight (the mob was gone; read in the your-style step, same
+shape), a buff on the read unit (aura order, whole icons and counts unconfirmed in game), the bar texts and the boss
+art (the sample's, not compared against a live unit).
 
 Unit frames (started 2026-11-20): the match test's pairs are built, `/cine debug previewmatch units`
 (Dev/PreviewMatchUnits.lua; offline Tools/offline/unitmatch.lua). It reads the player, target, focus and pet frames

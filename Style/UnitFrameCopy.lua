@@ -36,8 +36,14 @@ local BUILT_IN = {
 		reaction = { x = -3.3, y = 10, w = 134, h = 17.5, atlas = "UI-HUD-UnitFrame-Target-PortraitOn-Type" },
 		health = { x = 1.7, y = 25, w = 126, h = 20, atlas = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health" },
 		healthMask = { x = 0.8, y = 18.3, w = 127.5, h = 31.7, atlas = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health-Mask" },
-		-- (Not read yet: the run's target had no power. Under the health bar, as the player's.)
-		power = { x = 1.7, y = 42.5, w = 126, h = 10, atlas = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana", guess = true },
+		-- (Not read yet in game: the run's target had no power. Where Forever's own
+		-- code puts it (rule forever.targetframe.power-bar-place): 134 wide, its
+		-- top right at the health bars' bottom right +4,-1; its mask at its top
+		-- left -61,+3, the atlas's own size. Until 2026-11-23 a guess, 126 wide
+		-- with no mask.)
+		power = { x = -2.3, y = 44, w = 134, h = 10, atlas = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana" },
+		powerMask = { x = -63.3, y = 41, w = 256, h = 16, atlasSize = true,
+			atlas = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana-Mask" },
 		name = { x = 5, y = 14.2, w = 116.7, h = 11.7, size = 10, justify = "CENTER" },
 		circle = { x = 161.7, y = 37.5, w = 38, h = 38, atlas = "UI-HUD-UnitFrame-SmallCircle" },
 		level = { x = 175, y = 50.8, w = 11, h = 14, size = 14, justify = "RIGHT" },
@@ -61,7 +67,11 @@ BUILT_IN.TOT = {
 	powerMask = { x = 15, y = 25.5, w = 128, h = 16, atlas = "UI-HUD-UnitFrame-Party-PortraitOn-Bar-Mana-Mask" },
 	name = { x = 44, y = 6, w = 68, h = 10, size = 10, justify = "CENTER" },
 }
-BUILT_IN.PET = BUILT_IN.TOT
+-- (The pet's mana bar is 77 wide, the target of target's 78: Forever's
+-- Camelot/PetFrame.lua.)
+BUILT_IN.PET = {}
+for role, entry in pairs(BUILT_IN.TOT) do BUILT_IN.PET[role] = entry end
+BUILT_IN.PET.power = { x = 42, y = 29.5, w = 77, h = 7, atlas = BUILT_IN.TOT.power.atlas }
 BUILT_IN.PARTY = BUILT_IN.TOT
 ns.UNIT_FRAME_RECIPES = BUILT_IN
 -- Retail's own, over those (12.1.5, the Preview Match run of 2026-11-20): the
@@ -596,7 +606,10 @@ ns.UnitFirstAura = FirstAura -- (the Preview Match test finds the game's by it t
 -- screenshots 2026-11-21 (1.2 px a unit, to the pixel in all three): its first
 -- icon 24 units in from the frame's left; its top 5 under the frame's top with
 -- Buffs On Top, 74 under it without; 17 square (your own debuffs 21).)
-local AURA_LEFT, AURA_TOP_ONTOP, AURA_TOP_BELOW, AURA_SQUARE = 24, 5, 74, 17
+-- (Under it: 75, as the game's code hangs it, the row's top 9 over its frame
+-- art's bottom, rule forever.targetframe.aura-anchor-flow. The screenshots'
+-- 74 was a pixel short.)
+local AURA_LEFT, AURA_TOP_ONTOP, AURA_TOP_BELOW, AURA_SQUARE = 24, 5, 75, 17
 local function WorkedOutAura(frame, hl, ht, hw)
 	local fl, ft = ScreenRect(frame)
 	local scale = Plain(Call(frame, "GetEffectiveScale"))
