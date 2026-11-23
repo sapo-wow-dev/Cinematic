@@ -683,28 +683,36 @@ def cmd_precommit(staged_dir):
         return 0
     code_changed = any(not p.startswith(("Tools/", ".claude/", "docs/")) for p in
                        git("diff", "--cached", "--name-only").stdout.split())
-    fails = 0
-    for name in names:
-        card = read_card(name, git("show", ":" + name).stdout)
+    # (Every card's rows count, staged ones as staged, the rest as in HEAD:
+    # two cards on one matrix each declare their own cells.)
+    head_cards = [n for n in git("ls-tree", "--name-only", "HEAD", "Tools/audits/").stdout.split()
+                  if n.endswith(".md") and not os.path.basename(n).upper().startswith(("README", "TEMPLATE"))]
+    changes, tests = [], []
+    for name in sorted(set(names) | set(head_cards)):
+        is_staged = name in names
+        card = read_card(name, git("show", (":" if is_staged else "HEAD:") + name).stdout)
         old = git("show", "HEAD:" + name)
         old_rows = set()
-        if old.returncode == 0:
+        if is_staged and old.returncode == 0:
             old_rows = {(c["matrix"], c["cell"], c["before"], c["after"]) for c in read_card(name, old.stdout)["changes"]}
-        # (The fix in this commit: its card's new rows must happen. A card
-        # staged without code, or its older rows, only catch an undeclared
-        # change.)
-        # (A card whose Base is an older commit (its fix already landed) is
-        # loose too: HEAD has its change already.)
+        # (The fix in this commit: a staged card's new rows must happen. A
+        # card staged without code, its older rows, a card whose Base is an
+        # older commit (its fix already landed) and cards not staged only
+        # catch an undeclared change.)
         base = card["base"] or "HEAD"
-        on_head = base == "HEAD" or git("rev-parse", "-q", "--verify", base + "^{commit}").stdout.strip() == \
-            git("rev-parse", "HEAD").stdout.strip()
+        on_head = base == "HEAD" or (git("rev-parse", "-q", "--verify", base + "^{commit}").stdout.strip() ==
+                                     git("rev-parse", "HEAD").stdout.strip())
         for c in card["changes"]:
             new_row = (c["matrix"], c["cell"], c["before"], c["after"]) not in old_rows
-            c["loose"] = not (code_changed and new_row and on_head)
-        for test, args in card["tests"]:
-            lines, f = diff(test, args, "HEAD", staged_dir, card["changes"])
-            report(["audit: " + l for l in lines if not l.startswith("PASS ") or " cells, " in l])
-            fails += f
+            c["loose"] = not (is_staged and code_changed and new_row and on_head)
+        changes += card["changes"]
+        if is_staged:
+            tests += [t for t in card["tests"] if t not in tests]
+    fails = 0
+    for test, args in tests:
+        lines, f = diff(test, args, "HEAD", staged_dir, changes)
+        report(["audit: " + l for l in lines if not l.startswith("PASS ") or " cells, " in l])
+        fails += f
     return fails
 
 

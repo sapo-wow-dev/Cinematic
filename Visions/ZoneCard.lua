@@ -135,8 +135,11 @@ local function Card(zone, subzone, newArea)
 	end
 	return false
 end
--- No card for this showing: the game's lines back.
+-- No card for this showing: the game's lines back. (Not while the last card
+-- is still on screen, whatever kept a new one away: it covers them, or a
+-- subzone's line with the Subzone row off showed over it, 2026-11-23.)
 local function Uncover()
+	if last and ns.Cards.Current() == last then return end
 	standing = true
 	HideGame()
 end
