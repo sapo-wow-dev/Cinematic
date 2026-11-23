@@ -215,7 +215,7 @@ def judge_check(ok, output):
 
 def judge_sweep(ok, output):
     lines = output.strip().splitlines()
-    new = [l.strip() for l in lines if l.strip().startswith("NEW ")]
+    new = [l.strip() for l in lines if l.strip().startswith(("NEW ", "GONE "))]
     summary = last_line(output, "sweep ")
     detail = summary + ("".join("\n      " + l[:220] for l in new[:8]) if new else "")
     return ok, detail

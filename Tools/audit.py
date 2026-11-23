@@ -319,10 +319,13 @@ def parse_diff(text):
     for line in text.splitlines():
         if line.startswith("diff --git "):
             m = re.match(r"diff --git a/(.*) b/(.*)$", line)
-            cur = {"old": m.group(1), "new": m.group(2), "deleted": False, "added": False, "removed": []}
+            cur = {"old": m.group(1), "new": m.group(2), "deleted": False, "added": False, "removed": [],
+                   "plus": []}
             files.append(cur)
         elif cur is None:
             continue
+        elif line.startswith("+") and not line.startswith("+++ "):
+            cur["plus"].append(line[1:])
         elif line.startswith("deleted file mode"):
             cur["deleted"] = True
         elif line.startswith("new file mode"):
@@ -414,6 +417,15 @@ def expectations(diff_text, old_text):
     for f in parse_diff(diff_text):
         old, new = f["old"], f["new"]
         if f["added"]:
+            continue
+        if re.match(r"^Tools/offline/sweep-baseline-\w+\.txt$", new):
+            # (A FAIL line added is a failure taken as known: the sweep stops
+            # seeing it. 6f79106 added two stack overflows that way. Lines
+            # taken off are fixes: no OK needed.)
+            added = [l.strip() for l in f["plus"] if l.strip().startswith("FAIL")]
+            if added:
+                found.append((new, "%d FAIL line%s taken as known: %s" % (
+                    len(added), "" if len(added) == 1 else "s", "; ".join(a[:90] for a in added[:3]))))
             continue
         if is_test(old):
             text = old_text(old)
@@ -866,6 +878,15 @@ def selftest():
     d7 = "diff --git a/Tools/engine/rules/x.lua b/Tools/engine/rules/x.lua\n@@ -6 +6 @@\n@@ -4 +4 @@\n"
     check("guard: a rule's text changed; its tested date isn't", expectations(d7, lambda p: rules_old) ==
           [("Tools/engine/rules/x.lua", "rule a.b changed")])
+    d8 = ("diff --git a/Tools/offline/sweep-baseline-forever.txt b/Tools/offline/sweep-baseline-forever.txt\n"
+          "@@ -3,0 +4,1 @@\n+FAIL cards | Card Vision | Enable Page: Lua error setting true: x.lua:#: stack overflow\n"
+          "@@ -9,1 +9,0 @@\n-FAIL aggroMarkSize | Nameplate Style | Size: Lua error\n")
+    found = expectations(d8, lambda p: "")
+    check("guard: a sweep baseline FAIL line added needs an OK; one taken off doesn't",
+          len(found) == 1 and found[0][1].startswith("1 FAIL line taken as known"))
+    d9 = ("diff --git a/Tools/offline/sweep-baseline-retail.txt b/Tools/offline/sweep-baseline-retail.txt\n"
+          "@@ -9,1 +9,0 @@\n-FAIL aggroMarkSize | Nameplate Style | Size: Lua error\n")
+    check("guard: a sweep baseline only pruned needs no OK", expectations(d9, lambda p: "") == [])
     base = {("m", "card=up gap=within"): "hidden", ("m", "card=gone gap=within"): "hidden"}
     new = {("m", "card=up gap=within"): "shown", ("m", "card=gone gap=within"): "shown"}
     rows = [{"matrix": "m", "cell": "card=gone gap=within", "before": "hidden", "after": "shown", "card": "c",

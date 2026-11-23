@@ -3,7 +3,10 @@
 -- put back. The stand-in's stubs make some FAIL lines of their own (a slider
 -- that reads 0-1, a size that's always 0), so the FAIL lines are compared
 -- with the last saved ones (sweep-baseline-<client>.txt) and only new ones
--- count. Exit 1 on a new one, or when the sweep doesn't finish.
+-- count. Exit 1 on a new one, on a known one that no longer comes up (take it
+-- off with --update), or when the sweep doesn't finish. A FAIL line added to
+-- the baseline is an expectation change (Tools/audit.py since/guard): the
+-- user's OK.
 --
 --   lua5.1 Tools/offline/sweep.lua <client> [--update]
 --   python -I Tools/offline/run.py Tools/offline/sweep.lua forever
@@ -101,16 +104,24 @@ if file then
 	for line in file:lines() do known[(line:gsub("\r", ""))] = true end
 	file:close()
 end
-local new, gone = {}, 0
+local new = {}
 for _, key in ipairs(fails) do
 	if not known[key] then new[#new + 1] = key end
 	known[key] = nil
 end
-for _ in pairs(known) do gone = gone + 1 end
+-- (A known line that no longer comes up FAILs too: left on the list, the
+-- same error coming back is never seen. 120 of the 152 first saved stayed
+-- on the list for days that way, prerelease audit 2026-11-23. --update
+-- takes them off; it's run on a fixed tree, so nothing new is taken on.)
+local goneKeys = {}
+for key in pairs(known) do goneKeys[#goneKeys + 1] = key end
+table.sort(goneKeys)
+local gone = #goneKeys
 for _, key in ipairs(new) do print("  NEW " .. key) end
+for i = 1, math.min(gone, 5) do print("  GONE " .. goneKeys[i]) end
 if gone > 0 then
-	print(("  %d baseline FAIL lines didn't come up this time (fixed? --update takes them off)"):format(gone))
+	print(("  %d baseline FAIL lines didn't come up this time: fixed, take them off with --update"):format(gone))
 end
-print(("sweep %s: %d new FAIL lines (%d known)"):format(client, #new, #fails - #new))
+print(("sweep %s: %d new FAIL lines, %d gone (%d known)"):format(client, #new, gone, #fails - #new))
 local finished = summary and summary:find("^done")
-os.exit((finished and #new == 0) and 0 or 1)
+os.exit((finished and #new == 0 and gone == 0) and 0 or 1)
