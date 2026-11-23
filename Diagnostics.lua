@@ -679,6 +679,15 @@ local function Summary()
 		add("may overlap: " .. table.concat(overlapping, ", "))
 	end
 	add(("other addons (%d): %s"):format(#addons, table.concat(addons, ", ")))
+	-- (Theme-shaped unit frames, measured now: Style/UnitStyle.lua; absent with Style left out.)
+	if ns.UnitLayoutLines then
+		local ok, layout = pcall(ns.UnitLayoutLines)
+		if ok then
+			for _, line in ipairs(layout) do add("unit frames: " .. line) end
+		else
+			add("unit frames: check failed: " .. tostring(layout))
+		end
+	end
 
 	local counts = ErrorCounts()
 	if #counts > 0 then

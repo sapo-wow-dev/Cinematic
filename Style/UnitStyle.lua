@@ -4282,6 +4282,67 @@ function ns.ReportPlayerName()
 	ns.Print("Player name layout written to the log.")
 end
 
+-- For /cine log (Diagnostics.lua): is each theme-shaped unit frame laid out as
+-- FitBars put it? Read once, only when the log is built: no watch, no cost while
+-- playing. Measured against where it should be, not an earlier reading, so a
+-- frame that was already off when its unit was first seen shows too ("the
+-- portrait moved from the default look", 2026-11-23).
+-- off: the portrait's middle above (+) or below (-) the rows' middle, the rows
+-- being the name strip (when it shows) down to the last bar that shows.
+-- moved: the portrait's middle from where it was at the frame's first fit.
+local LAYOUT_SLACK = 1.5
+function ns.UnitLayoutMeasure(frame, bars, strip, portrait, middle)
+	local frameTop = frame:GetTop()
+	local portraitTop, portraitBottom = portrait:GetTop(), portrait:GetBottom()
+	local health = bars[1]
+	local rowsTop = health:GetTop()
+	if strip and ns.Flag(strip:IsShown()) then rowsTop = strip:GetTop() end
+	local rowsBottom, rows = health:GetBottom(), 1
+	for i = 2, #bars do
+		if ns.Flag(bars[i]:IsShown()) then
+			rowsBottom, rows = bars[i]:GetBottom(), rows + 1
+		end
+	end
+	for _, value in ipairs({ frameTop or false, portraitTop or false, portraitBottom or false, rowsTop or false,
+		rowsBottom or false }) do
+		if value == false or not Readable(value) then return nil end
+	end
+	local portraitMiddle = (portraitTop + portraitBottom) / 2
+	local result = { off = portraitMiddle - (rowsTop + rowsBottom) / 2, rows = rows }
+	if Readable(middle) then result.moved = (portraitMiddle - frameTop) - middle end
+	result.bad = math.abs(result.off) > LAYOUT_SLACK or (result.moved ~= nil and math.abs(result.moved) > LAYOUT_SLACK)
+	return result
+end
+
+function ns.UnitLayoutLines()
+	local out = {}
+	for _, id in ipairs({ "PlayerFrame", "TargetFrame", "FocusFrame" }) do
+		local frame = _G[id]
+		local state = frame and fits[frame]
+		local shown = frame and frame:IsShown()
+		if state and Readable(shown) and shown then
+			local health, power, _, portrait = Parts(frame)
+			local bars = { health, power }
+			if frame == _G.PlayerFrame and _G.AlternatePowerBar and power then bars[3] = _G.AlternatePowerBar end
+			local dressed = shapes[frame]
+			local ok, result = pcall(ns.UnitLayoutMeasure, frame, bars, dressed and dressed.plate, portrait, state.middle)
+			local where = ("%s (shape %s, %s)"):format(id, tostring(state.shape),
+				InCombatLockdown() and "in a fight" or "out of fights")
+			if not (ok and health and portrait) then
+				out[#out + 1] = where .. ": couldn't measure (" .. tostring(not ok and result or "no bars or portrait") .. ")"
+			elseif not result then
+				out[#out + 1] = where .. ": unreadable now"
+			else
+				out[#out + 1] = ("%s: %s, portrait %.1f px %s the rows' middle%s, %d bar%s shown"):format(where,
+					result.bad and "OFF" or "ok", math.abs(result.off), result.off >= 0 and "above" or "below",
+					result.moved and (", %.1f px from its first fit"):format(result.moved) or "",
+					result.rows, result.rows == 1 and "" or "s")
+			end
+		end
+	end
+	return out
+end
+
 -- For /cine debug partyportrait: the first party frame's portrait and what our
 -- shape put on it (to the log). With a theme its picture went missing, the ring
 -- left round nothing.
