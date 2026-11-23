@@ -12,8 +12,10 @@
 local now = 100
 
 -- luacheck: push ignore 111 112 113 121 122 212
-local ns = dofile("Tools/offline/load.lua")("retail", arg and arg[1], function()
+local ns = dofile("Tools/offline/load.lua")("retail", arg and arg[1], function(wow)
 	GetTime = function() return now end
+	-- (A color texture's color kept, to read back: the tab line's gold.)
+	wow.Methods.SetColorTexture = function(self, r, g, b, a) self._color = { r, g, b, a } end
 	InCombatLockdown = function() return true end
 end)
 -- luacheck: pop
@@ -71,9 +73,19 @@ g2.places, g2.combat = { city = true, inn = true }, "out"
 Check("two groups, ids apart", g1 and g2 and g1.id ~= g2.id and #ns.CooldownPlaceGroups() == 2)
 Check("a new scene named on its own", g1.name == ns.L["Scene %d"]:format(1) and g2.name == ns.L["Scene %d"]:format(2),
 	g2.name)
+-- (Named by its rule till you name it: "Scene 1" said nothing, the user 2026-11-23.)
+Check("still Scene 1: named by its rule", ns.CooldownGroupName(g1) == ns.CooldownGroupText(g1)
+	and ns.CooldownGroupName(g1):find("dungeon") ~= nil, ns.CooldownGroupName(g1))
 g1.name = ""
-Check("no name: named by its places", ns.CooldownGroupName(g1) == ns.L["Dungeons"] .. ", " .. ns.L["Raids"] .. " · " .. ns.L["In combat"],
-	ns.CooldownGroupName(g1))
+Check("no name: named by its rule", ns.CooldownGroupName(g1) == ns.CooldownGroupText(g1), ns.CooldownGroupName(g1))
+do
+	local bare = { name = ns.L["Scene %d"]:format(7), places = {}, combat = "any" }
+	Check("no places yet: keeps Scene 7", ns.CooldownGroupName(bare) == ns.L["Scene %d"]:format(7), ns.CooldownGroupName(bare))
+	local typed = { name = "Scene 7 boss", places = { raid = true }, combat = "any" }
+	Check("a name you typed stays", ns.CooldownGroupName(typed) == "Scene 7 boss")
+	local rule = { name = ns.L["Scene %d"]:format(3), cql = "raid and boss" }
+	Check("a CQL scene: named by its rule", ns.CooldownGroupName(rule) == "raid and boss")
+end
 g1.name = "Group content"
 Check("own name wins", ns.CooldownGroupName(g1) == "Group content")
 local extra = {}
@@ -243,7 +255,8 @@ do
 			ns.SetCooldownCell("spell", CORRUPTION, dead.id, "proc")
 			grid.Changed()
 			Check("a cell in a scene that never applies: ! on the tab", tab and tab.warnMark and tab.warnMark:IsShown()
-				and tab.warnLines and tab.warnLines[1]:find(dead.name, 1, true) ~= nil, tab and tab.warnLines and tab.warnLines[1])
+				and tab.warnLines and tab.warnLines[1]:find(ns.CooldownGroupName(dead), 1, true) ~= nil,
+				tab and tab.warnLines and tab.warnLines[1])
 			ns.SetCooldownCell("spell", CORRUPTION, dead.id, nil)
 			grid.Changed()
 			Check("cleared: no ! on the tab", tab and not tab.warnMark:IsShown())
@@ -521,6 +534,21 @@ do
 			Check("moved left", ns.CooldownPlaceGroups()[1] == g2)
 			Click(grid.moveButtons[2])
 			Check("moved back", ns.CooldownPlaceGroups()[2] == g2)
+			-- No Name line: Edit by Delete opens the box in Order's place (2026-11-23).
+			Check("the editor one line high (no Name line)", grid.editor:GetHeight() <= 64, grid.editor:GetHeight())
+			Check("name box hidden, Edit shown", not grid.nameBox:IsShown() and grid.renameButton:IsShown())
+			Click(grid.renameButton)
+			Check("Edit: the box in Order's place", grid.nameBox:IsShown() and not grid.renameButton:IsShown()
+				and not grid.moveButtons[1]:IsShown())
+			grid.nameBox:SetText("Town")
+			grid.nameBox:GetScript("OnEnterPressed")(grid.nameBox)
+			Check("Enter: named, box closed", g2.name == "Town" and ns.CooldownGroupName(g2) == "Town"
+				and not grid.nameBox:IsShown() and grid.renameButton:IsShown(), g2.name)
+			Click(grid.renameButton)
+			grid.nameBox:SetText("")
+			grid.nameBox:GetScript("OnEnterPressed")(grid.nameBox)
+			Check("left empty: named by its rule again", ns.CooldownGroupName(g2) == ns.CooldownGroupText(g2),
+				ns.CooldownGroupName(g2))
 			Click(head)
 			Check("heading again shuts it", not grid.editor:IsShown())
 		end
@@ -609,6 +637,38 @@ do
 		Click(grid.extraParts.center.box)
 		Click(grid.showsSwitch)
 		Check("back to When it shows", not grid.state.look)
+		local orders, heads = {}, grid.heads or {}
+		for _, head in ipairs(heads) do
+			if head:IsShown() and head.col then
+				orders[#orders + 1] = (head.order:IsShown() and head.order:GetText() or "-")
+					.. (head.col.other and "e" or "")
+			end
+		end
+		Check("scene headings numbered 1 to X, Everywhere else not", #orders > 1
+			and orders[1] == "1" and orders[#orders] == "-e", table.concat(orders, " "))
+		-- The open cell's choices kept in the page's view (cut at its bottom, 2026-11-23).
+		do
+			local scrolled
+			local view = { GetVerticalScroll = function() return 50 end, GetVerticalScrollRange = function() return 400 end,
+				SetVerticalScroll = function(_, to) scrolled = to end, GetTop = function() return 500 end,
+				GetBottom = function() return 100 end, GetEffectiveScale = function() return 1 end }
+			local function Cell(top) return { GetTop = function() return top end, GetBottom = function() return top - 20 end,
+				GetEffectiveScale = function() return 1 end } end
+			local oldParent, oldScale, oldTimer = rawget(grid, "GetParent"), rawget(grid.chooser, "GetEffectiveScale"), C_Timer
+			rawset(grid, "GetParent", function() return view end)
+			rawset(grid.chooser, "GetEffectiveScale", function() return 1 end)
+			C_Timer = { After = function(_, fn) fn() end } -- luacheck: ignore 121
+			Check("room under: stays under", grid.FitChooser(Cell(450), false, 150) == nil)
+			Check("no room under, room above: opens above", grid.FitChooser(Cell(200), false, 150) == "above")
+			Check("room neither side: the page scrolls", grid.FitChooser(Cell(300), false, 250) == "scroll"
+				and scrolled and scrolled > 50, tostring(scrolled))
+			rawset(grid, "GetParent", oldParent)
+			rawset(grid.chooser, "GetEffectiveScale", oldScale)
+			C_Timer = oldTimer -- luacheck: ignore 121
+		end
+		local tabLine = grid.showsSwitch.line._color or {}
+		Check("the picked tab's line is gold", tabLine[1] == 1 and tabLine[2] == 0.82 and tabLine[3] == 0,
+			table.concat(tabLine, ","))
 		Check("the bar's looks line gone with Look", not grid.extras:IsShown())
 	end
 	-- Open CDM: says Close CDM while the game's window is open, however it was opened.

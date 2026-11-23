@@ -732,7 +732,7 @@ function ns.CooldownGrid(parent, opts)
 		b.line:SetPoint("BOTTOMLEFT")
 		b.line:SetPoint("BOTTOMRIGHT")
 		b.line:SetHeight(2)
-		b.line:SetColorTexture(WHITE[1], WHITE[2], WHITE[3], 1)
+		b.line:SetColorTexture(1, 0.82, 0, 1) -- the game's gold
 		local glow = b:CreateTexture(nil, "HIGHLIGHT")
 		glow:SetAllPoints()
 		glow:SetColorTexture(1, 1, 1, 0.05)
@@ -773,6 +773,7 @@ function ns.CooldownGrid(parent, opts)
 	headLine:SetHeight(1)
 	headLine:SetColorTexture(1, 1, 1, 0.14)
 	local heads = {}
+	grid.heads = heads -- (read by Tools/offline/cooldowngrid.lua)
 	local function Head(i)
 		if heads[i] then return heads[i] end
 		local head = CreateFrame("Button", nil, grid)
@@ -807,6 +808,11 @@ function ns.CooldownGrid(parent, opts)
 		head.dot:SetTexture(TEXTURES .. "CdmDisc")
 		head.dot:SetVertexColor(0.37, 0.83, 0.43, 1)
 		head.dot:SetPoint("TOPRIGHT", head, "TOPRIGHT", -2, -8)
+		-- (A scene's place in the order, small in the bottom-left corner: the
+		-- one further left wins. The user, 2026-11-23.)
+		head.order = head:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		head.order:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 3, 3)
+		if head.order.SetTextScale then head.order:SetTextScale(0.8) end
 		head:SetScript("OnClick", function(self)
 			if not Enabled() or not self.col or self.col.other or self.col.look then return end
 			state.editing = state.editing ~= self.col.id and self.col.id or nil
@@ -1009,15 +1015,16 @@ function ns.CooldownGrid(parent, opts)
 		back:SetColorTexture(0.105, 0.1, 0.09, 0.97)
 	end
 	local function EditingGroup() return state.editing and ns.CooldownPlaceGroup(state.editing) end
-	local nameLabel = editor:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	nameLabel:SetPoint("TOPLEFT", editor, "TOPLEFT", 8, -10)
-	nameLabel:SetText(L["Name"])
+	-- (No Name line: a scene names itself by its rule till you name it, and
+	-- Edit by Delete opens this box in its place. The user, 2026-11-23: "a
+	-- lot of wasted space".)
 	-- (A plain box like the chips: the game's input box was the one black,
 	-- square thing on the page, 2026-11-22.)
 	local nameBox = CreateFrame("EditBox", nil, editor)
 	nameBox:SetFontObject("GameFontHighlight")
 	nameBox:SetTextInsets(8, 8, 0, 0)
-	nameBox:SetSize(170, 22)
+	nameBox:SetSize(150, 22)
+	nameBox:Hide()
 	do
 		local fill = nameBox:CreateTexture(nil, "BACKGROUND")
 		fill:SetAllPoints()
@@ -1030,21 +1037,24 @@ function ns.CooldownGrid(parent, opts)
 	end
 	nameBox:SetAutoFocus(false)
 	nameBox:SetMaxLetters(24)
-	nameBox:SetPoint("LEFT", nameLabel, "LEFT", 46, 0)
 	local namePlace = nameBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	namePlace:SetPoint("LEFT", nameBox, "LEFT", 8, 0)
 	namePlace:SetPoint("RIGHT", nameBox, "RIGHT", -2, 0)
 	namePlace:SetJustifyH("LEFT")
 	namePlace:SetWordWrap(false)
 	nameBox:HookScript("OnTextChanged", function(self) namePlace:SetShown(self:GetText() == "") end)
-	Tip(nameBox, L["Its name. Leave it empty to name it by its places."])
+	Tip(nameBox, L["Its name. Leave it empty to name it by its rule."])
 	local function SaveName(self)
 		self:ClearFocus()
+		state.renaming = nil
 		local group = EditingGroup()
-		if group and self:GetText() ~= group.name then
-			group.name = self:GetText()
-			Changed()
+		local typed = self:GetText()
+		-- (Left empty, or as it shows: still named by its rule.)
+		if group and not (typed == "" and ns.CooldownGroupAutoNamed(group))
+			and typed ~= ns.CooldownGroupName(group) and typed ~= group.name then
+			group.name = typed
 		end
+		Changed()
 	end
 	nameBox:SetScript("OnEnterPressed", SaveName)
 	nameBox:SetScript("OnEditFocusLost", function(self)
@@ -1054,9 +1064,11 @@ function ns.CooldownGrid(parent, opts)
 		self.saving = nil
 	end)
 	nameBox:SetScript("OnEscapePressed", function(self)
-		local group = EditingGroup()
-		self:SetText(group and group.name or "")
+		self.saving = true
 		self:ClearFocus()
+		self.saving = nil
+		state.renaming = nil
+		Changed()
 	end)
 	-- (Pills, as the grid's: they were the last boxes on the page, 2026-11-22.)
 	local function SmallButton(text, _, tip, onClick)
@@ -1103,8 +1115,18 @@ function ns.CooldownGrid(parent, opts)
 		state.editing, state.sure = nil, nil
 		Changed()
 	end)
-	delete:SetPoint("TOPRIGHT", editor, "TOPRIGHT", -8, -6)
-	later:SetPoint("RIGHT", delete, "LEFT", -12, 0)
+	-- (Its name: Edit opens the box in Order's place; Enter, a click away or
+	-- Escape closes it. The user, 2026-11-23.)
+	local rename = SmallButton(L["Edit"], 40, L["Renames this scene. Left empty, it's named by its rule."], function()
+		state.renaming = state.editing
+		Changed()
+		nameBox:SetFocus()
+		nameBox:HighlightText()
+	end)
+	-- (Placed under the headings, beside the dropdowns: EditorShow.)
+	rename:SetPoint("RIGHT", delete, "LEFT", -4, 0)
+	nameBox:SetPoint("RIGHT", delete, "LEFT", -6, 0)
+	later:SetPoint("RIGHT", rename, "LEFT", -12, 0)
 	earlier:SetPoint("RIGHT", later, "LEFT", -2, 0)
 	-- (No "on every tab" note by the name: it said nothing, the user 2026-11-22.
 	-- Delete's tooltip still says it goes on every tab.)
@@ -1194,7 +1216,7 @@ function ns.CooldownGrid(parent, opts)
 	placeEntries.allText = L["Anywhere"]
 	local headTop = CreateFrame("Frame", nil, editor)
 	headTop:SetSize(1, 1)
-	headTop:SetPoint("TOPLEFT", editor, "TOPLEFT", 8, -34)
+	headTop:SetPoint("TOPLEFT", editor, "TOPLEFT", 8, -6)
 	local headings = ns.GridHeadings(kit, editor, headTop, 0, WHEN_LAYOUT)
 	local headH = kit.headingHeight or 16
 	local whenRow = ns.GridRow(kit, editor, 0, WHEN_LAYOUT, {
@@ -1202,7 +1224,9 @@ function ns.CooldownGrid(parent, opts)
 		help = { [ns.GRID_COMBAT] = L["In a fight (the Calm Timer after one too), out of one, or both."],
 			[ns.GRID_LOCATION] = L["Where this scene fits. Tick any number."] },
 	})
-	whenRow:SetPoint("TOPLEFT", editor, "TOPLEFT", 8, -34 - headH)
+	whenRow:SetPoint("TOPLEFT", editor, "TOPLEFT", 8, -6 - headH)
+	-- (Order, Edit and Delete on the dropdowns' line, at the right.)
+	delete:SetPoint("TOPRIGHT", editor, "TOPRIGHT", -8, -6 - headH)
 	-- The pen: the scene as a rule; on a rule, back to the dropdowns.
 	local pen = ns.PanelButton(editor)
 	pen:SetSize(22, 20)
@@ -1240,8 +1264,15 @@ function ns.CooldownGrid(parent, opts)
 		local group = EditingGroup()
 		editor:SetShown(group ~= nil and not state.look)
 		if not editor:IsShown() then return 0 end
-		if not nameBox:HasFocus() then nameBox:SetText(group.name or "") end
-		namePlace:SetText(ns.CooldownGroupWhere(group))
+		-- (Renaming: the box in Order's place. Named by its rule: empty, its
+		-- rule greyed in it.)
+		local renaming = state.renaming == group.id
+		nameBox:SetShown(renaming)
+		for _, part in ipairs({ rename, earlier, later, orderLabel }) do part:SetShown(not renaming) end
+		if not nameBox:HasFocus() then
+			nameBox:SetText(ns.CooldownGroupAutoNamed(group) and "" or group.name)
+		end
+		namePlace:SetText(ns.CooldownGroupText(group) ~= "" and ns.CooldownGroupText(group) or L["Scene"])
 		namePlace:SetShown(nameBox:GetText() == "")
 		local _, index = ns.CooldownPlaceGroup(group.id)
 		earlier:SetAlpha(index > 1 and 1 or 0.35)
@@ -1271,13 +1302,14 @@ function ns.CooldownGrid(parent, opts)
 		cqlButton:SetShown(own)
 		if own then cqlText:SetText(ns.ColoredRule and ns.ColoredRule(group.cql) or group.cql) end
 		pen.icon:SetTexture(TEXTURES .. (own and "GridIcon" or "Quill"))
-		editor:SetHeight(own and 64 or 34 + headH + 30)
+		editor:SetHeight(6 + headH + 30)
 		return editor:GetHeight()
 	end
 	grid.editor = editor
 	grid.placeEntries, grid.combatEntries, grid.deleteButton, grid.nameBox = placeEntries, combatEntries, delete, nameBox
 	grid.whenRow, grid.penButton, grid.cqlButton = whenRow, pen, cqlButton
 	grid.moveButtons = { earlier, later }
+	grid.renameButton = rename
 
 	-- Under the headings: a line per group that's never in use or unfinished.
 	local troubleLines = {}
@@ -1566,6 +1598,42 @@ function ns.CooldownGrid(parent, opts)
 		self.saving = nil
 	end)
 	grid.chooser, grid.choices = chooser, choices
+	-- (In the page's view: under the cell it ran past the view's bottom, cut,
+	-- the user's shot 2026-11-23. Above the cell when it fits there; else the
+	-- page scrolls down till it fits under. On grid: Layout is at Lua's
+	-- 60-upvalue cap, a new local here would be one more.)
+	grid.FitChooser = function(cell, right, height)
+		local scroll = grid:GetParent()
+		while scroll and not scroll.GetVerticalScroll do scroll = scroll:GetParent() end
+		if not scroll then return end
+		local s, v = cell:GetEffectiveScale(), scroll:GetEffectiveScale()
+		local top, bottom = cell:GetTop(), cell:GetBottom()
+		local viewTop, viewBottom = scroll:GetTop(), scroll:GetBottom()
+		for _, n in ipairs({ top or 0, bottom or 0, viewTop or 0, viewBottom or 0, s or 0, v or 0 }) do
+			if type(n) ~= "number" then return end
+		end
+		if not (top and bottom and viewTop and viewBottom and s and v) then return end
+		local need = (height + 2) * chooser:GetEffectiveScale()
+		local below = bottom * s - viewBottom * v
+		local above = viewTop * v - top * s
+		if below >= need then return end
+		if above >= need then
+			chooser:ClearAllPoints()
+			if right then
+				chooser:SetPoint("BOTTOMRIGHT", cell, "TOPRIGHT", 0, 2)
+			else
+				chooser:SetPoint("BOTTOMLEFT", cell, "TOPLEFT", 0, 2)
+			end
+			return "above"
+		end
+		-- (Next frame: the grid's new height sets the scroll range first.)
+		local by = (need - below) / v + 4
+		C_Timer.After(0, function()
+			local range = scroll:GetVerticalScrollRange() or 0
+			scroll:SetVerticalScroll(math.min(scroll:GetVerticalScroll() + by, range))
+		end)
+		return "scroll"
+	end
 	grid.readyParts = { power = powerTick, anyTime = anyTimeTick, early = earlyBox }
 
 	-- A row's Otherwise if it had none of its own (its bar's, or the Smart
@@ -2133,6 +2201,10 @@ function ns.CooldownGrid(parent, opts)
 			head.sub:SetText(sub)
 			head.sub:SetTextColor(AMBER[1], AMBER[2], AMBER[3])
 			head.sub:SetShown(sub ~= "")
+			-- (Scenes only, and not when the name is already its number.)
+			local order = not col.look and not col.other and not numbered and col.index or nil
+			head.order:SetText(order and tostring(order) or "")
+			head.order:SetShown(order ~= nil)
 			-- (The in-use dot right after the name: at the heading's far edge it
 			-- floated away from it, 2026-11-22.)
 			-- (After the name when it fits on a line; a wrapped name's would sit
@@ -2464,6 +2536,7 @@ function ns.CooldownGrid(parent, opts)
 			else
 				chooser:SetPoint("TOPLEFT", openCell, "BOTTOMLEFT", 0, -2)
 			end
+			grid.chooserFit = grid.FitChooser(openCell, openX + POP_W > WIDTH, height)
 			lowest = math.min(y, openBottom - 2 - height)
 			openShown = true
 		end

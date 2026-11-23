@@ -154,8 +154,19 @@ function ns.CooldownGroupWhere(group)
 	return text
 end
 
--- Its name: its own, else its where.
+-- Its name: one you gave it; else (none, or still the "Scene 2" it came
+-- with) its rule, "dungeon and combat" (the user, 2026-11-23: a name that
+-- says what it is); else, no places yet, the name it came with.
+local function AutoNamed(name)
+	if not name or not name:find("%S") then return true end
+	local pattern = "^" .. L["Scene %d"]:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%d", "%%d+") .. "$"
+	return name:find(pattern) ~= nil
+end
+ns.CooldownGroupAutoNamed = function(group) return AutoNamed(group.name) end
 function ns.CooldownGroupName(group)
+	if not AutoNamed(group.name) then return group.name end
+	local text = ns.CooldownGroupText(group)
+	if text:find("%S") then return text end
 	if group.name and group.name:find("%S") then return group.name end
 	return ns.CooldownGroupWhere(group)
 end
