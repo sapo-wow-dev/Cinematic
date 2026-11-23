@@ -283,6 +283,7 @@ Dev\PerfTest.lua
 Dev\ResetPopupTest.lua
 Dev\ResetCvarsTest.lua
 Dev\KeybindSwitchTest.lua
+Dev\CdmRoundTest.lua
 Dev\LoadPartsTest.lua
 Dev\PageCostTest.lua
 Dev\ProfilePartsTest.lua

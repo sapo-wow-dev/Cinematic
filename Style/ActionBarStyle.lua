@@ -753,6 +753,55 @@ local function CropCdmIcon(icon, round)
 	crop.on = round
 	ApplyCdmCrop(icon)
 end
+-- The game's pandemic border (a buff or DoT in its last stretch, when
+-- refreshing it is best: CooldownPandemicFXTemplate, a square border and a
+-- square sweep 6px out from the icon, a pooled frame the game parents to the
+-- icon as it starts). On a round icon: the square art hidden and a round glow
+-- of ours instead, the round buttons' proc ring in the game's border red,
+-- pulsing. Square or the game's shape: the game's border, untouched.
+-- (Its red read off the game's border on Forever, the cdmround run, 2026-11-23.)
+local PANDEMIC_R, PANDEMIC_G, PANDEMIC_B = 1, 0.14, 0.08
+local pandemicRings = setmetatable({}, { __mode = "k" }) -- (the game's pooled frame -> our glow)
+local function DressPandemic(item, round)
+	local fx = item.PandemicIcon
+	if type(fx) ~= "table" or not fx.CreateTexture then return end
+	local border = type(fx.Border) == "table" and fx.Border.Border or nil
+	SetHidden(border, round)
+	if type(fx.FX) == "table" and fx.FX.SetAlpha then fx.FX:SetAlpha(round and 0 or 1) end
+	local ring = pandemicRings[fx]
+	if round and not ring then
+		ring = fx:CreateTexture(nil, "OVERLAY", nil, 6)
+		ring:SetTexture(ROUND_PROC)
+		ring:SetBlendMode("ADD")
+		ring:SetVertexColor(PANDEMIC_R, PANDEMIC_G, PANDEMIC_B, 1)
+		ring.pulse = ring:CreateAnimationGroup()
+		ring.pulse:SetLooping("BOUNCE")
+		local fade = ring.pulse:CreateAnimation("Alpha")
+		fade:SetFromAlpha(1)
+		fade:SetToAlpha(0.45)
+		fade:SetDuration(0.6)
+		pandemicRings[fx] = ring
+	end
+	if not ring then return end
+	if round then
+		-- (On this icon's edge: the frame is pooled, so placed each time it's shown.
+		-- Sized as the round buttons' proc: its art reaches PROC_SCALE past the edge.)
+		local art = type(item.Icon) == "table" and item.Icon or item
+		local ok, wide = pcall(art.GetWidth, art)
+		if not ok or type(wide) ~= "number" or (issecretvalue and issecretvalue(wide)) or wide <= 0 then wide = 40 end
+		ring:ClearAllPoints()
+		ring:SetPoint("CENTER", art, "CENTER")
+		ring:SetSize(wide * PROC_SCALE, wide * PROC_SCALE)
+		ring:Show()
+		ring.pulse:Play()
+	else
+		ring.pulse:Stop()
+		ring:Hide()
+	end
+end
+-- (For /cine debug cdmround: our glow on a border frame. In game a texture
+-- reads back as a file ID, not the path, so it can't be found by its file.)
+function ns.CdmPandemicRing(fx) return pandemicRings[fx] end
 local function DressCdmIcon(item, icon, plan)
 	local part = cdmParts[item]
 	if not part then
@@ -803,6 +852,14 @@ local function DressCdmIcon(item, icon, plan)
 		cooldown:SetSwipeTexture(plan.round and CIRCLE or SQUARE_SWIPE)
 		part.swipe = plan.round or nil
 	end
+	-- (The pandemic border: dressed when the game shows it, and now if it's up.)
+	if not part.pandemicHooked and type(item.ShowPandemicStateFrame) == "function" then
+		part.pandemicHooked = true
+		hooksecurefunc(item, "ShowPandemicStateFrame", function(self)
+			pcall(DressPandemic, self, ns.CooldownSwipeTexture and ns.CooldownSwipeTexture() ~= nil)
+		end)
+	end
+	DressPandemic(item, plan.round)
 	local ring = plan.round and plan.line
 	if ring and not part.ring then
 		part.ring = item:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -832,12 +889,25 @@ function ns.CooldownSwipeTexture()
 	return cdmRound and CIRCLE or nil
 end
 ns.SQUARE_SWIPE = SQUARE_SWIPE
+ns.CDM_TRIM = CDM_TRIM
+local dressError -- (the last icon that failed to dress, and why: /cine debug cdmround)
+-- (For /cine debug cdmround: whether a Cooldown Manager icon has its round
+-- look: made, its picture masked, its crop on; and the last failure.)
+function ns.CdmIconState(item)
+	local part = cdmParts[item]
+	local icon = item and item.Icon
+	local crop = icon and cdmCrop[icon]
+	return part ~= nil, (part and icon and part.on[icon] ~= nil) or false, (crop and crop.on) or false, dressError
+end
 function ns.RefreshCooldownShape()
 	local plan = Plan()
 	cdmRound = plan.round and true or false
 	EachCdmIcon(function(item, icon)
 		local ok, err = pcall(DressCdmIcon, item, icon, plan)
-		if not ok then ns.Log("style", "cooldown icon failed: " .. tostring(err)) end
+		if not ok then
+			dressError = tostring(err)
+			ns.Log("style", "cooldown icon failed: " .. tostring(err))
+		end
 	end)
 	if cdmHooked then return end
 	cdmHooked = true
