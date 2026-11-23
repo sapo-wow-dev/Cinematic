@@ -61,9 +61,9 @@ OK_RE = re.compile(r"ok'?d by the user\b.*\b20\d\d-\d\d-\d\d", re.I)
 AUDIT_RE = re.compile(r"code audit|audit fix|from an? audit|^audit\b|^audit:", re.I | re.M)
 
 
-def git(*args, cwd=ROOT, check=False):
+def git(*args, cwd=ROOT, check=False, input_text=None):
     out = subprocess.run(["git"] + list(args), cwd=cwd, capture_output=True, text=True,
-                         encoding="utf-8", errors="replace")
+                         encoding="utf-8", errors="replace", input=input_text)
     if check and out.returncode != 0:
         raise RuntimeError("git %s: %s" % (" ".join(args), out.stderr.strip()))
     return out
@@ -505,6 +505,22 @@ def guard(message, diff_text, old_text, card_exists):
     return problems
 
 
+def head_mark():
+    """Where pre-commit notes HEAD for this index (one per index file: sessions
+    committing side by side, each with its own temporary index, never read
+    or remove each other's)."""
+    index = os.environ.get("GIT_INDEX_FILE") or git("rev-parse", "--git-path", "index").stdout.strip()
+    key = git("hash-object", "--stdin", input_text=os.path.abspath(index).replace("\\", "/").lower()).stdout.strip()
+    rel = git("rev-parse", "--git-path", "cine-precommit-head-" + key[:12]).stdout.strip()
+    return os.path.join(ROOT, rel)
+
+
+def cmd_mark():
+    with open(head_mark(), "w", encoding="utf-8") as f:
+        f.write(git("rev-parse", "HEAD").stdout.strip())
+    return 0
+
+
 def cmd_guard(msgfile):
     if os.environ.get("CINE_SKIP_CHECKS"):
         return 0
@@ -514,7 +530,7 @@ def cmd_guard(msgfile):
     # (HEAD moved while pre-commit's checks ran: another session committed, and
     # this index was built on the HEAD before, so committing it would undo
     # their commit. Seen 2026-11-23: three commits landed in a 4-minute check.)
-    mark = os.path.join(ROOT, git("rev-parse", "--git-path", "cine-precommit-head").stdout.strip())
+    mark = head_mark()
     if os.path.exists(mark):
         with open(mark, encoding="utf-8") as f:
             was = f.read().strip()
@@ -884,6 +900,12 @@ def main():
         sys.exit(__doc__)
     cmd = argv.pop(0)
     try:
+        if cmd == "mark":
+            try:
+                return cmd_mark()
+            except Exception as err:
+                print("pre-commit: couldn't note HEAD: %s" % err)
+                return 0
         if cmd == "guard":
             try:
                 return cmd_guard(argv[0])

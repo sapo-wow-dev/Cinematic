@@ -15,7 +15,8 @@
 root=$(git rev-parse --show-toplevel) || exit 1
 # (HEAD as the checks start: commit-msg refuses the commit if another
 # session's commit lands meanwhile, as this index would undo it.)
-git rev-parse HEAD > "$(git rev-parse --git-path cine-precommit-head)" 2>/dev/null
+_py=$(command -v python 2>/dev/null || command -v python3 2>/dev/null)
+[ -n "$_py" ] && [ -f "$root/Tools/audit.py" ] && (cd "$root" && "$_py" -I Tools/audit.py mark)
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/cine-precommit.XXXXXX") || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
