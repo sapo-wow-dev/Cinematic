@@ -1,0 +1,19 @@
+#!/bin/sh
+# Cinematic's commit message check (the audit kit, .claude/skills/audit):
+# a commit that changes what an existing offline test, test ledger or engine
+# rule expects needs the user's OK, written in the message as one line per
+# file:
+#   Expectation-changed: Tools/offline/x.lua: <check>: <was> -> <now> (OK'd by the user 2026-11-23)
+# and an audit commit needs a Risk: line and its fix card (Tools/audits/).
+# Only adding checks needs nothing. It reads what's staged (a temporary index
+# too). A broken check never blocks a commit (it says so).
+#
+# On once per clone: git config core.hooksPath Tools/hooks
+# Skipped only when the user asks: CINE_SKIP_CHECKS=1 git commit ...
+
+[ -n "$CINE_SKIP_CHECKS" ] && exit 0
+root=$(git rev-parse --show-toplevel) || exit 0
+python=$(command -v python 2>/dev/null || command -v python3 2>/dev/null)
+[ -z "$python" ] && { echo "commit-msg: python not found, expectation check skipped"; exit 0; }
+[ -f "$root/Tools/audit.py" ] || exit 0
+cd "$root" && "$python" -I Tools/audit.py guard "$1"

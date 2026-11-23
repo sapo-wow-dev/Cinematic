@@ -1,7 +1,9 @@
 #!/bin/sh
 # Cinematic's checks before every commit: luacheck, the TOC check and the
 # offline check (the addon loaded outside the game on both clients, which also
-# catches a file over Lua's 200-local cap). They run on what is being
+# catches a file over Lua's 200-local cap), and a staged fix card's matrix
+# tests (Tools/audit.py, the /audit skill; commit-msg checks the message's
+# expectation OKs and risk note). They run on what is being
 # committed (the index, a temporary one too), copied to a scratch folder, so
 # another session's unfinished edits in the working tree don't block a commit.
 #
@@ -43,6 +45,12 @@ if [ -n "$python" ]; then
 		lua5.1 Tools/offline/check.lua || failed=1
 	else
 		"$python" -I Tools/offline/run.py Tools/offline/check.lua || failed=1
+	fi
+	# (A staged fix card, Tools/audits: its matrices on HEAD's code and on
+	# what's staged; a changed cell the card doesn't declare fails. Run from
+	# the repo for git, on the staged copy here.)
+	if [ -f Tools/audit.py ]; then
+		(cd "$root" && "$python" -I Tools/audit.py precommit "$tmp") || failed=1
 	fi
 else
 	echo "pre-commit: python not found, TOC and offline checks skipped"

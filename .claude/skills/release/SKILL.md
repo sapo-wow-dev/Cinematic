@@ -87,6 +87,13 @@ without asking.
      real error is a finding; stand-in noise (a stub's nil) is saved with
      `python -I Tools/offline/run.py Tools/offline/sweep.lua <client> --update`
      in phase 2, with the user's OK.
+   - **Fix cards and changed expectations** (the audit kit, /audit skill):
+     the "fix cards' matrices" line FAILs on a matrix cell that changed
+     since the last tag with no card declaring it (a later change broke a
+     neighbor an audit pinned) or a cell its test pins differently: each is
+     a finding. The "expectations changed" line lists every offline check,
+     ledger answer or engine rule changed since the tag and whether its
+     commit had the user's OK: one with NO OK is a finding (ask the user).
    - **Existing players** (the "upgrade check" line, never a FAIL itself):
      `Tools/upgrade-check.py` loads the last tag's code and this release's
      on the same saved settings (a player on the last release with no

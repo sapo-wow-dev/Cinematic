@@ -22,7 +22,11 @@ Runs side by side, each a PASS or FAIL line, then one line for all of it:
   that doesn't load or an update that errors fails;
 - the offline tests of fixed bugs (OFFLINE_TESTS: no FAIL line);
 - other addons as installed against Support/ (Tools/addon-check.py: a name
-  our support uses gone fails; what changed since its baseline is listed).
+  our support uses gone fails; what changed since its baseline is listed);
+- the audit kit (Tools/audit.py): its selftest, every fix card's matrix
+  against the last tag (a changed cell no card declares fails), and every
+  test, ledger or rule expectation changed since the tag (listed, with
+  whether its commit carried the user's OK; never a FAIL).
 Then the last /cine prerelease runs on each client, read from the dev
 copy's saved settings (after a /reload): their summary and NEW FAIL lines.
 
@@ -215,6 +219,23 @@ def judge_test(ok, output):
     return passed > 0, "%d checks passed" % passed
 
 
+def judge_audit(ok, output):
+    # (A changed cell no fix card declares, or a cell the test pins
+    # differently: each FAIL line with the cells under it.)
+    lines = output.splitlines()
+    shown = [l.rstrip() for l in lines if l.startswith("FAIL")]
+    detail = last_line(output, "audit matrices")
+    return ok, detail + "".join("\n      " + l[:220] for l in shown[:12])
+
+
+def judge_since(ok, output):
+    # (Never a FAIL: the review shows each one, and whether its commit had the user's OK.)
+    lines = output.splitlines()
+    shown = [l.strip() for l in lines if l.startswith("  ")]
+    detail = last_line(output, "expectations changed")
+    return True, detail + "".join("\n      " + l[:220] for l in shown[:20])
+
+
 def judge_addons(ok, output):
     lines = output.splitlines()
     shown = [l.strip() for l in lines if l.startswith(("FAIL", "MISS", "NOTE", "      +", "      -"))]
@@ -298,6 +319,12 @@ def main():
             jobs.append(Job("offline sweep, %s" % client, lua + ["Tools/offline/sweep.lua", client], judge_sweep))
         for name, script, *args in OFFLINE_TESTS:
             jobs.append(Job(name, lua + [script] + args, judge_test))
+        jobs.append(Job("audit kit's own checks (Tools/audit.py selftest)", [PY, "-I", "Tools/audit.py", "selftest"],
+                        judge_test))
+        jobs.append(Job("fix cards' matrices vs the last release (Tools/audits)", [PY, "-I", "Tools/audit.py",
+                                                                                   "prerelease"], judge_audit))
+        jobs.append(Job("expectations changed since the last release", [PY, "-I", "Tools/audit.py", "since"],
+                        judge_since))
         jobs.append(Job("upgrade check (existing players' settings)", [PY, "-I", "Tools/upgrade-check.py"],
                         judge_upgrade))
         jobs.append(Job("other addons vs our support", [PY, "-I", "Tools/addon-check.py"], judge_addons))

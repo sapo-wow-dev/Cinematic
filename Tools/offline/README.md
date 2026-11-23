@@ -85,6 +85,13 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `quietblock.lua`: Settings opened in a fight with Forever's gamepad UI: its blocked lines are known by their stack
   (our pick + SetSecureValue) and kept out of the dev error box, a pick from any caller marks the fight, and the
   game's own Escape > Options still shows (Tools/errors/known.lua `settings-pick-in-fight-gamepad`).
+- `matrix.lua`: the audit kit's state matrix (`/audit` skill, `Tools/audit.py`, fix cards in `Tools/audits`). A test
+  lists the states a behavior reads (dimensions), returns one outcome per combination (a `CELL` line each) and pins
+  every cell (PASS/FAIL; an unpinned cell FAILs). `python -I Tools/audit.py diff <test> [client] --base <ref>` runs the
+  same test on the old code and the new and FAILs on any changed cell no fix card declares.
+- `zonecardmatrix.lua [forever|retail]`: the game's zone, subzone and territory lines around a Zone card, 32 states
+  (place, last card up or gone, within the gap or after, Subzone row, Territory tick); the first matrix (fix card
+  `Tools/audits/2026-11-23-zone-card-gap.md`).
 - `Tools/prerelease.py` (one folder up) runs these checks and the rest side by side before a release, and reads the
   in-game `/cine prerelease` results from the saved settings.
 - `export.lua`: `lua5.1 Tools/offline/export.lua > profiles.json` writes the options pages and their sections, the
