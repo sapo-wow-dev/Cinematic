@@ -5730,6 +5730,28 @@ STEPS[#STEPS + 1] = function()
 	ns.db.pvpCardOffV1 = true
 end
 
+-- The minimap's look moved off Interface Recolor onto a Minimap page of its
+-- own (Style/MinimapStyle.lua, 2026-11-23), its switch minimapStyle: off for
+-- anyone whose Interface Recolor was off, so their minimap stays the game's.
+-- Their settings, saved profile copies and reset points. Once.
+-- (db: the saved settings; Tools/offline/squaremap.lua hands in pretend ones.)
+function ns.MinimapPageFromRecolor(db)
+	local function Follow(store)
+		if type(store) == "table" and store.minimapStyle == nil and store.irStyle == false then
+			store.minimapStyle = false
+		end
+	end
+	Follow(db)
+	for _, list in ipairs({ db.profiles or false, db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do Follow(saved) end
+	end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.minimapPageV1 then return end
+	ns.MinimapPageFromRecolor(ns.db)
+	ns.db.minimapPageV1 = true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only

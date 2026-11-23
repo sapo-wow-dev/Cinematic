@@ -1,4 +1,6 @@
--- The minimap's part of the Style hub's Interface Recolor page (InterfaceRecolor.lua): the minimap's own ring in the theme's color (the
+-- The Style hub's Minimap page (Minimap Style, its own page since 2026-11-23;
+-- Interface Recolor's Minimap rows before): the minimap square with a border
+-- (a player's ask, Discord 2026-11-19), and the minimap's own ring in the theme's color (the
 -- game's art, turned grey and tinted, so its light, shadow and north point stay
 -- just as the game draws them), with a little dark just inside it. The buttons
 -- on it take the color too: their rings (the game's tracking border art, which
@@ -13,6 +15,15 @@ local _, ns = ...
 ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 local DEFAULTS = ns.DEFAULTS
+DEFAULTS.minimapStyle = true -- the page's switch (Migrations.lua: off for anyone whose Interface Recolor was)
+DEFAULTS.mmSquare = false -- the minimap square (WoW Forever and classic clients; not retail, untested there)
+DEFAULTS.mmSquareBorderSize = 2 -- the border round the square minimap (0: none)
+DEFAULTS.mmBorderColor = "theme" -- theme (its ring color), black, white, gold or class
+DEFAULTS.mmHeaderInside = false -- the zone name and clock inside the square
+DEFAULTS.mmScale = 1 -- the minimap's size
+DEFAULTS.mmHideZoom = false -- the Hide rows: for good, not just in CineMode
+DEFAULTS.mmHideZoneBar = false
+DEFAULTS.mmHideDial = false
 DEFAULTS.mmShade = true -- the dark just inside the ring
 DEFAULTS.mmButtons = true -- the round buttons' rings in the theme's color
 DEFAULTS.mmZoneBar = true -- the zone's bar as the theme's panel
@@ -30,14 +41,18 @@ local BUTTON_HOLDERS = { "Minimap", "MinimapCluster", "MinimapBackdrop", "GameTi
 local SHADE_INNER = 114 / 128 -- (the shade's circle, of its size: Media/make_shape_art.py's MINIMAP_INNER)
 
 local function Look()
-	return ns.StyleLook("irStyle")
+	return ns.StyleLook("minimapStyle")
 end
+
+-- Ours, while the square minimap's on (the global minimap addons set for a
+-- square map, read by LibDBIcon, our minimap button and NodeSweep.lua).
+local function SquareShape() return "SQUARE" end
 
 local function OthersSkinIt()
 	-- (An addon's own square minimap with its Addon Conflicts row on Ours: dressed anyway.)
 	local _, pick = ns.ConflictState("style:minimap")
 	if pick == "ours" then return false end
-	local shape = type(_G.GetMinimapShape) == "function" and _G.GetMinimapShape()
+	local shape = type(_G.GetMinimapShape) == "function" and _G.GetMinimapShape ~= SquareShape and _G.GetMinimapShape()
 	if shape and shape ~= "ROUND" then return true end
 	local IsLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
 	if not IsLoaded then return false end
@@ -373,15 +388,160 @@ local function SizeShade()
 	shade:SetSize(wide / SHADE_INNER, wide / SHADE_INNER)
 end
 
+-- The square minimap: the map cut square (the mask other addons use for it),
+-- the game's round ring hidden, GetMinimapShape saying SQUARE, and a border
+-- round it. Off: the game's round mask back (WoW Forever's own atlas: its old
+-- "Textures\\MinimapMask" left the map blank, engine rule
+-- forever.minimap.mask-restore-atlas) and the shape as it was.
+local SQUARE_MASK = "Interface\\ChatFrame\\ChatFrameBackground"
+local ROUND_ATLAS = "ui-hud-minimap-frame-generic-mask"
+local square = { on = false }
+local function RoundMask()
+	if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(ROUND_ATLAS) then return ROUND_ATLAS end
+	return "Textures\\MinimapMask"
+end
+local function SetSquare(map, on, border, size, color)
+	if on and not square.on then
+		square.on = true
+		square.before = _G.GetMinimapShape
+		_G.GetMinimapShape = SquareShape
+		square.maskOk = pcall(map.SetMaskTexture, map, SQUARE_MASK)
+	elseif not on and square.on then
+		square.on = false
+		-- (Another addon's shape since ours: theirs, mask and all, left be.)
+		if _G.GetMinimapShape == SquareShape then
+			_G.GetMinimapShape = square.before
+			pcall(map.SetMaskTexture, map, RoundMask())
+		end
+		square.before = nil
+	end
+	for _, name in ipairs(GAME_RINGS) do SetHidden(_G[name], on) end
+	if on and border and not square.edges then
+		square.edges = ns.MakeStyleEdges(map, "OVERLAY")
+		square.edges:EnableMouse(false)
+	end
+	if square.edges then
+		square.edges:SetShown(on and border)
+		if on and border then
+			ns.DressStyleEdges(square.edges, size, color[1], color[2], color[3], 1, true)
+		end
+	end
+	if ns.UpdateMinimapButton then pcall(ns.UpdateMinimapButton) end -- (its spot on the edge: round or square)
+end
+-- (The tests': Tools/offline/squaremap.lua, /cine debug minimapstyle square.)
+function ns.MinimapSquareState()
+	return square.on, square.maskOk, square.edges ~= nil and square.edges:IsShown()
+end
+
+-- The border's color: the theme's ring color (black on a theme with none),
+-- or one picked.
+local BORDER_COLORS = { black = { 0, 0, 0 }, white = { 1, 1, 1 }, gold = { 0.93, 0.74, 0.34 } }
+local function BorderColor(look)
+	local pick = look.mmBorderColor
+	if pick == "class" then
+		local _, class = UnitClass("player")
+		local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+		if color then return { color.r, color.g, color.b } end
+	end
+	return BORDER_COLORS[pick] or ns.ThemeRing() or BORDER_COLORS.black
+end
+
+-- Parts of the minimap hidden for good (the Hide rows; CineMode's own rows
+-- only hide them in CineMode): alpha 0, held there, and no mouse.
+local mouseKept = {}
+local function HidePart(frame, hide)
+	if type(frame) ~= "table" or type(frame.SetAlpha) ~= "function" then return end
+	SetHidden(frame, hide and true or false)
+	if not (frame.EnableMouse and frame.IsMouseEnabled) then return end
+	if hide and mouseKept[frame] == nil then
+		mouseKept[frame] = frame:IsMouseEnabled() and true or false
+		pcall(frame.EnableMouse, frame, false)
+	elseif not hide and mouseKept[frame] ~= nil then
+		pcall(frame.EnableMouse, frame, mouseKept[frame])
+		mouseKept[frame] = nil
+	end
+end
+-- The zone name and clock moved inside the square map, and put back where
+-- they were (their points and frame level kept).
+local moved = {}
+local function MoveInside(frame, on, map, point, x, y)
+	if type(frame) ~= "table" or not frame.GetNumPoints then return end
+	if on then
+		if not moved[frame] then
+			local kept = { level = frame:GetFrameLevel() }
+			for i = 1, ns.NumPoints(frame) do kept[i] = { frame:GetPoint(i) } end
+			moved[frame] = kept
+		end
+		frame:ClearAllPoints()
+		frame:SetPoint(point, map, point, x, y)
+		frame:SetFrameLevel(map:GetFrameLevel() + 10)
+	elseif moved[frame] then
+		local kept = moved[frame]
+		moved[frame] = nil
+		frame:ClearAllPoints()
+		for _, at in ipairs(kept) do frame:SetPoint(unpack(at)) end
+		frame:SetFrameLevel(kept.level)
+	end
+end
+local function ZoneButton(cluster)
+	return cluster and cluster.ZoneTextButton or _G.MinimapZoneTextButton
+end
+local scaled = false
+-- look: the page's (false: the page off or another addon's minimap).
+local function DressParts(map, look, squared, hideZone)
+	local cluster = type(_G.MinimapCluster) == "table" and _G.MinimapCluster or nil
+	local zoom = look and look.mmHideZoom == true
+	HidePart(map.ZoomIn or _G.MinimapZoomIn, zoom)
+	HidePart(map.ZoomOut or _G.MinimapZoomOut, zoom)
+	local zone = ZoneButton(cluster)
+	HidePart(zone, hideZone)
+	HidePart(cluster and cluster.BorderTop, hideZone)
+	HidePart(cluster and cluster.DielFrame, look and look.mmHideDial == true)
+	HidePart(_G.MinimapNorthTag, squared) -- (classic clients' N: off a square map's corner)
+	local inside = squared and look and look.mmHeaderInside == true and not hideZone
+	if not InCombatLockdown() then
+		pcall(MoveInside, zone, inside, map, "TOP", 0, -4)
+		pcall(MoveInside, _G.TimeManagerClockButton, inside, map, "BOTTOMRIGHT", -4, 4)
+	end
+	local scale = look and tonumber(look.mmScale) or 1
+	if (scale ~= 1 or scaled) and map.SetScale then
+		pcall(map.SetScale, map, scale)
+		scaled = scale ~= 1
+	end
+end
+-- (The tests': Tools/offline/squaremap.lua, /cine debug minimapsquare.)
+function ns.MinimapPartsState()
+	local map, cluster = _G.Minimap, type(_G.MinimapCluster) == "table" and _G.MinimapCluster or nil
+	local function Alpha(frame) return type(frame) == "table" and frame.GetAlpha and frame:GetAlpha() or "none" end
+	local buttons, moves = 0, 0
+	for _ in pairs(tinted) do buttons = buttons + 1 end
+	for _, copy in pairs(copies) do if copy:IsShown() then buttons = buttons + 1 end end
+	for _ in pairs(moved) do moves = moves + 1 end
+	local zone = ZoneButton(cluster)
+	local okAt, _, at = pcall(function() return zone:GetPoint(1) end)
+	return { buttons = buttons, moved = moves, edge = BorderColor(Look()),
+		scale = map and map.GetScale and map:GetScale(), zoom = Alpha(map and map.ZoomIn or _G.MinimapZoomIn),
+		zone = Alpha(zone), dial = Alpha(cluster and cluster.DielFrame), zoneInside = okAt and at == map }
+end
+
 function ns.RefreshMinimapStyle()
 	local map = _G.Minimap
 	if type(map) ~= "table" or not map.GetWidth then return end
-	local color = ns.StyleOn("irStyle") and ns.ThemeRing()
-	local on = color and not OthersSkinIt() and true or false
-	TintRings(on and color or nil)
-	TintButtons(on and Look().mmButtons ~= false and color or nil)
-	DressZoneBar(on and Look().mmZoneBar ~= false)
-	local shaded = on and Look().mmShade ~= false
+	local look, pageOn, others = Look(), ns.StyleOn("minimapStyle"), OthersSkinIt()
+	local mine = pageOn and not others
+	local squared = mine and not ns.isRetail and look.mmSquare == true and map.SetMaskTexture ~= nil
+	local edge = BorderColor(look)
+	local size = tonumber(look.mmSquareBorderSize) or 2
+	SetSquare(map, squared, size > 0, size, edge)
+	local color = pageOn and ns.ThemeRing()
+	local on = color and not others and true or false
+	TintRings(on and not squared and color or nil)
+	-- (A theme with no ring color: the buttons take the border's.)
+	TintButtons(mine and look.mmButtons ~= false and (color or edge) or nil)
+	local hideZone = mine and look.mmHideZoneBar == true
+	DressZoneBar(on and look.mmZoneBar ~= false and not hideZone)
+	DressParts(map, mine and look, squared, hideZone)
+	local shaded = on and not squared and look.mmShade ~= false
 	if shaded and not shade then
 		local holder = CreateFrame("Frame", nil, map)
 		holder:SetAllPoints()
@@ -411,8 +571,8 @@ end)
 -- For /cine debug minimapstyle: what this client's minimap has, and our state.
 function ns.ReportMinimapStyle()
 	local map = _G.Minimap
-	print(("Cinematic: Minimap Style: page %s, theme ring %s, others skin it %s, shape %s, game %s"):format(
-		tostring(ns.StyleOn("irStyle")), tostring(ns.ThemeRing() ~= nil), tostring(OthersSkinIt()),
+	print(("Cinematic: Minimap Style: page %s, square %s (mask set %s), theme ring %s, others skin it %s, shape %s, game %s"):format(
+		tostring(ns.StyleOn("minimapStyle")), tostring(square.on), tostring(square.maskOk), tostring(ns.ThemeRing() ~= nil), tostring(OthersSkinIt()),
 		tostring(type(_G.GetMinimapShape) == "function" and _G.GetMinimapShape() or "none"),
 		tostring(select(4, GetBuildInfo()))))
 	if map then
@@ -491,5 +651,93 @@ function ns.ReportMinimapStyle()
 		end
 	end
 	if cluster then Others(cluster, "Cluster", 0) end
+end
+-- The page: the Style hub's Minimap icon, and the Interface hub's Minimap
+-- icon's last tab (StylePages.lua's SHOW_IN_TABS.minimap).
+function ns.CreateMinimapStylePanel(kit)
+	local L = ns.L
+	local canvas, content = kit.CreateScrollPage()
+	local title = kit.Label(content, "GameFontNormalLarge", L["Minimap Style"])
+	local tabs = ns.PageTabs(content, ns.ShowInTabs("minimap"), ns.ShowInIndex("minimap", "Minimap Style"))
+	title:SetPoint("TOPLEFT", tabs, "BOTTOMLEFT", 8, -14)
+	local intro = kit.PageIntro(content, title, L["How the minimap looks: its shape, border and ring."])
+	local function Changed() ns.RefreshMinimapStyle() end
+	local switch = kit.PageSwitch(content, "minimapStyle", L["Enable Page"],
+		L["Turns this page's minimap look on or off."], intro, Changed)
+	local stack = kit.Stack(switch, "check")
+	local rows = ns.StyleRows(kit, content, stack, Changed, "minimapStyle")
+	local function Square(db) return rows.On(db) and db.mmSquare == true end
+	local function Bordered(db) return Square(db) and (tonumber(db.mmSquareBorderSize) or 0) > 0 end
+	-- One section, one left edge: size, shape, then the square's own rows
+	-- (greyed while it's round: the switch tree).
+	stack:Header(content, L["Size and shape"])
+	rows.Slider("mmScale", L["Size"], 50, 200, 5, "%d%%", 100, L["How big the minimap is."])
+	if not ns.isRetail then -- (untested there: hidden)
+		rows.Check("mmSquare", L["Square minimap"], L["Makes the minimap square."])
+		rows.Slider("mmSquareBorderSize", L["Border size"], 0, 6, 1, "%d", nil,
+			L["How thick the border round the square minimap is. 0: no border."], Square)
+		local colors = kit.Dropdown(content, "mmBorderColor", {
+			{ value = "theme", text = L["Theme"] },
+			{ value = "black", text = L["Black"] },
+			{ value = "white", text = L["White"] },
+			{ value = "gold", text = L["Gold"] },
+			{ value = "class", text = L["Class color"] },
+		}, 160, Changed)
+		if colors then
+			local name = stack:Add(kit.Label(content, "GameFontHighlight", L["Border color:"]), "label")
+			name:SetHeight(30) -- (as tall as its dropdown)
+			name:SetJustifyV("MIDDLE")
+			colors:SetPoint("LEFT", name, "RIGHT", 10, 0)
+			kit.GreyUnless(colors, Bordered)
+			kit.Tooltip(colors, L["Theme uses your theme's ring color, or black when it has none."])
+		end
+		rows.Check("mmHeaderInside", L["Zone name and clock inside"],
+			L["Puts the zone name at the top of the square minimap and the clock in its corner."], Square)
+	end
+	-- Hide: the three on one line.
+	stack:Header(content, L["Hide"])
+	local function Plain(key, label, tip)
+		local check = kit.Check(content, key, label, tip, function(value)
+			ns.GetDB()[key] = value
+			Changed()
+			kit.Refresh()
+		end)
+		kit.GreyUnless(check, rows.On)
+		return check
+	end
+	local zoom = stack:Add(Plain("mmHideZoom", L["Zoom buttons"], L["Hides the minimap's zoom buttons."]), "check")
+	local last = Plain("mmHideZoneBar", L["Zone bar"], L["Hides the zone name bar over the minimap."])
+	last:SetPoint("LEFT", zoom.Text or zoom.text, "RIGHT", 24, 0)
+	local cluster = _G.MinimapCluster
+	if type(cluster) == "table" and cluster.DielFrame then -- (WoW Forever's)
+		local dial = Plain("mmHideDial", L["Day and night dial"], L["Hides the day and night dial on the minimap's edge."])
+		dial:SetPoint("LEFT", last.Text or last.text, "RIGHT", 24, 0)
+	end
+	stack:Header(content, L["Ring and buttons"])
+	rows.Check("mmButtons", L["Color the buttons' rings"],
+		L["Colors the rings around minimap buttons in your theme's ring color, or the border color when it has none."])
+	-- (These two need a theme with a ring color: hidden on one without, a
+	-- line in their place. Last on the page, so hiding them leaves no gap.)
+	local shade = rows.Check("mmShade", L["Shade inside the edge"],
+		L["A little shading just inside the ring, so the map looks set into it."],
+		function(db) return rows.On(db) and db.mmSquare ~= true end)
+	local zoneLook = rows.Check("mmZoneBar", L["Zone bar in the theme's look"], L["Gives the zone name bar the theme's panel look."],
+		function(db) return rows.On(db) and db.mmHideZoneBar ~= true end)
+	local note = kit.Label(content, "GameFontDisableSmall",
+		L["Shade and the zone bar's look come with themes that have a ring color."])
+	note:SetPoint("TOPLEFT", shade, "TOPLEFT", 4, -6)
+	local function Ringed()
+		local ringed = ns.ThemeRing() ~= nil
+		shade:SetShown(ringed)
+		zoneLook:SetShown(ringed)
+		note:SetShown(not ringed)
+	end
+
+	canvas:SetScript("OnShow", kit.PageShown(function()
+		kit.Refresh()
+		Ringed()
+	end, content))
+	canvas:Hide()
+	kit.RegisterSubpage(canvas, "Minimap Style", L["Minimap Style"])
 end
 end) -- (ns.Module "style")

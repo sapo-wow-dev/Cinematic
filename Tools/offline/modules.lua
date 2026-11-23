@@ -70,7 +70,7 @@ local SPECS = {
 		allowed = { "from @Style/LetterboxStyle.lua", "from @Style/RollStyle.lua", "from @Style/StylePages.lua",
 			"from @Style/ColorPalette.lua", "from @Style/StyleFonts.lua" },
 		pages = { "Style Themes", "Style Overrides", "Interface Recolor", "Unit Style", "Personal Style", "Raid Style",
-			"Action Style", "Combat Text Style", "Nameplate Style", "Name Style", "Bubble Style", "Tooltip Style",
+			"Action Style", "Combat Text Style", "Nameplate Style", "Name Style", "Bubble Style", "Tooltip Style", "Minimap Style",
 			"Tint Style", "Letterbox Style", "Visions Style", "Vitals Style", "Card Styles", "Damage Vision Look",
 			"Emote Vision Style" },
 		general = "Style General", box = "Load Style", ask = "Style",

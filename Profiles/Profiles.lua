@@ -265,7 +265,7 @@ local OFF_UNTIL_PICKED = {
 	"cameraModes", "shoulderCam", "skyrideCam",
 	"visualEffects", "letterboxPage", "tintPage", "graphicsPlus", "musicInCinematic",
 	"styleGeneral", "ufStyle", "rfStyle", "abStyle", "prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle",
-	"plateCastStyle", "bubblesStyle", "irStyle", "combatTextStyle",
+	"plateCastStyle", "bubblesStyle", "irStyle", "minimapStyle", "combatTextStyle",
 	"handleHealVision", "damageVision", "lowHealth", "questVision", "questTalk", "rollWindow", "teleportVision", "deathScreen",
 	"duelPlates", "emoteVision", "cards", "windGuide",
 	"handleQuality", "handleFishing", "handleHunter",

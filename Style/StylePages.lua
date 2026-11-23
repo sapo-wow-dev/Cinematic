@@ -554,6 +554,7 @@ local SHOW_IN_TABS = {
 		{ "Show Advanced", "Minimap", "What brings the hidden minimap up for a while." },
 		{ "Keep Open", "Minimap Keep Open", "When the minimap stays up the whole time: in certain zones, indoors, with a tracked quest, or " ..
 			"while tracking." },
+		{ "Minimap Style", "Minimap Style", "How the minimap looks: its shape, border and ring." }, -- (MinimapStyle.lua)
 	},
 	quests = {
 		{ "Show", "HUD:quests", "CineMode hides the quest tracker: pick when it shows." },

@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-23", page = "Minimap Style", client = "forever", title = "Minimap Style",
+		text = "A Minimap page in the Style hub: make the minimap square with a border in your theme's color, " ..
+		"change its size, and hide its zoom buttons, zone bar or day and night dial." },
 	{ date = "2026-11-22", page = "Cooldown Manager", title = "Cooldown Manager grid",
 		text = "Make scenes, like dungeons in combat, and pick what each spell shows in each one, side by side " ..
 		"in one grid. Tick several spells to set them at once, or copy one spell's row onto others." },

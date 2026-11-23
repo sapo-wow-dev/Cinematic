@@ -555,7 +555,7 @@ ns.PROFILE_MODULES = {
 		"Audio/top", "Bubble Style/top", "Buffs/debuffs/top", "Cameras/top", "Card Vision/top", "Cast Bar Style/top",
 		"Chat/top", "Cooldown Manager/top", "Death Vision/top", "Duel Vision/top", "Effects/top", "Fishing/top", "Gamepad/top",
 		"General/top", "Graphics+/top", "Heal Vision/top", "Hunter/top", "Letterbox/top", "Minimap/top",
-		"Interface Recolor/top", "Mouseover groups/top", "Name Style/top", "Nameplate Style/top", "Nameplates/top", "Personal Resources/top",
+		"Interface Recolor/top", "Minimap Style/top", "Mouseover groups/top", "Name Style/top", "Nameplate Style/top", "Nameplates/top", "Personal Resources/top",
 		"Personal Style/top", "Quest Vision/top", "Quest tracker/top", "Raid Style/top", "Roll Vision/top",
 		"Skyriding Cam/top", "Standard Frames/top", "Style General/top", "Swing timer/top", "Tint/top",
 		"Tooltip Style/top", "Unit Style/top" }),
@@ -573,7 +573,7 @@ ns.PROFILE_MODULES = {
 		"Skyriding Cam/top", "Effects/top", "Letterbox/top", "Tint/top", "Graphics+/top", "General/top",
 		"Style General/top", "Unit Style/top", "Raid Style/top", "Action Style/top", "Personal Style/top",
 		"Tooltip Style/top", "Nameplate Style/top", "Name Style/top", "Cast Bar Style/top", "Bubble Style/top",
-		"Interface Recolor/top", "Heal Vision/top", "Damage Vision", "Vitals Vision", "Quest Vision/top",
+		"Interface Recolor/top", "Minimap Style/top", "Heal Vision/top", "Damage Vision", "Vitals Vision", "Quest Vision/top",
 		"Roll Vision/top", "Teleport Vision", "Death Vision/top", "Duel Vision/top", "Emote Vision",
 		"Card Vision/top", "Fishing/top", "Hunter/top", "Cooldown Manager/top" }),
 		tip = "Turns off every page that isn't about your UI: no cameras, effects, styles, Visions, cards, " ..
@@ -582,7 +582,7 @@ ns.PROFILE_MODULES = {
 			for _, key in ipairs({ "cameraModes", "shoulderCam", "skyrideCam", "visualEffects", "letterboxPage",
 				"tintPage", "graphicsPlus", "styleGeneral", "ufStyle", "rfStyle", "abStyle",
 				"prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle", "plateCastStyle", "bubblesStyle",
-				"irStyle", "combatTextStyle", "handleHealVision", "damageVision", "lowHealth", "questVision",
+				"irStyle", "minimapStyle", "combatTextStyle", "handleHealVision", "damageVision", "lowHealth", "questVision",
 				"questTalk", "rollWindow", "teleportVision", "deathScreen", "duelPlates", "emoteVision", "cards",
 				"windGuide", "handleQuality", "handleFishing", "handleHunter",
 				-- (Its Cooldown Manager page off too: the game's as it is, the user 2026-11-22.)

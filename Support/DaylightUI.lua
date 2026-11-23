@@ -465,13 +465,13 @@ end)
 
 ns.WhenAddonLoads("DaylightUI_InfoPanel", function()
 	ns.AddConflict({ key = "style:minimap", addon = LABEL, label = "Minimap look", group = "style", noBoth = true,
-		about = "Its square minimap: left as DaylightUI draws it, or also colored by the Style hub's Interface " ..
-			"Recolor page, which puts its ring and buttons in the theme's color",
+		about = "Its square minimap: left as DaylightUI draws it, or also colored by the Style hub's Minimap " ..
+			"page, which puts its ring and buttons in the theme's color",
 		theirs = function()
 			local dui = DUI()
 			return dui and dui.Get and dui:Get("InfoPanel", "map.enabled") == true or false
 		end,
-		ours = function() return ns.StyleOn("irStyle") end,
+		ours = function() return ns.StyleOn("minimapStyle") end,
 		onPick = function() if ns.RefreshMinimapStyle then ns.RefreshMinimapStyle() end end })
 end)
 

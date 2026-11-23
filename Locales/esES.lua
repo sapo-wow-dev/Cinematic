@@ -7056,6 +7056,8 @@ L["Text on You"] = "Texto sobre ti"
 L["The game's floating combat text about you (hits, heals, misses, power, auras, Low Health) now has a page of its own on Style: a look for each kind, beside your character, and it can follow the Shoulder Cam."] = "El texto de combate flotante del juego sobre ti (golpes, curaciones, fallos, poder, auras, Salud baja) tiene ahora su propia página en Estilo: un aspecto para cada tipo, junto a tu personaje, y puede seguir a la Cámara al hombro."
 L["Cooldown Manager grid"] = "Cuadrícula del Gestor de reutilización"
 L["Make scenes, like dungeons in combat, and pick what each spell shows in each one, side by side in one grid. Tick several spells to set them at once, or copy one spell's row onto others."] = "Crea escenas, como mazmorras en combate, y elige qué muestra cada hechizo en cada uno, lado a lado en una sola cuadrícula. Marca varios hechizos para ajustarlos a la vez, o copia la fila de un hechizo en otros."
+L["Minimap Style"] = "Estilo del minimapa"
+L["A Minimap page in the Style hub: make the minimap square with a border in your theme's color, change its size, and hide its zoom buttons, zone bar or day and night dial."] = "Una página Minimapa en Estilo: haz el minimapa cuadrado con un borde del color de tu tema, cambia su tamaño y oculta sus botones de zoom, la barra de zona o el dial de día y noche."
 
 -- UI/GridRows.lua (rule words)
 L["Gliding"] = "Planeando"

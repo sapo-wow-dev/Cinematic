@@ -868,15 +868,15 @@ ns.WhenAddonLoads("EllesmereUIBlizzardSkin", function()
 		onPick = function() if ns.RefreshBubbleStyle then ns.RefreshBubbleStyle() end end })
 end)
 
--- Its minimap: the Interface Recolor page leaves it as it draws it
+-- Its minimap: the Minimap Style page leaves it as it draws it
 -- (Style/MinimapStyle.lua), unless this row says Ours.
 ns.WhenAddonLoads("EllesmereUIMinimap", function()
 	ns.AddConflict({ key = "style:minimap", addon = "EllesmereUI", label = "Minimap look", group = "style",
 		noBoth = true,
-		about = "Its minimap: left as EllesmereUI draws it, or also colored by the Style hub's Interface " ..
-			"Recolor page, which puts its ring and buttons in the theme's color",
+		about = "Its minimap: left as EllesmereUI draws it, or also colored by the Style hub's Minimap " ..
+			"page, which puts its ring and buttons in the theme's color",
 		theirs = function() return true end,
-		ours = function() return ns.StyleOn("irStyle") end,
+		ours = function() return ns.StyleOn("minimapStyle") end,
 		onPick = function() if ns.RefreshMinimapStyle then ns.RefreshMinimapStyle() end end })
 end)
 

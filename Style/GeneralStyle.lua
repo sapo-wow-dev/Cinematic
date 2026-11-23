@@ -18,6 +18,7 @@ local PAGES = {
 	{ "Raid Frames", part = "Frames", "Raid Style", { "rfTexture", "rfFont", "rfOutline", "rfShadow", "rfBorder" } },
 	{ "Action Bars", part = "Bars", "Action Style", {}, fixed = "Its own settings" },
 	{ "Interface Recolor", "Interface Recolor", {}, fixed = "Follows General" },
+	{ "Minimap", "Minimap Style", {}, fixed = "Follows General" }, -- (MinimapStyle.lua, 2026-11-23)
 	{ "Personal Resource Display", part = "Frames", "Personal Style", { "prdTexture", "prdBorder" } },
 	{ "Tooltips", part = "Panels", "Tooltip Style", { "tooltipBarTexture", "tooltipFont", "tooltipOutline", "tooltipShadow", "tooltipEdge" } },
 	-- (These two go by their plate and name themes: PlateThemes.lua, NameThemes.lua.)
@@ -422,7 +423,7 @@ local TOP_TABS = {
 local THEME_TABS = {
 	{ "Themes", "Style Themes", "A whole look for the addon in one pick." },
 	{ "Quick Settings", "Style Quick", "Make a theme your own: fonts, bars, shapes, outline and border." },
-	{ "Interface Recolor", "Interface Recolor", "The game's minimap, quest tracker, windows and the rest in your theme's color." },
+	{ "Interface Recolor", "Interface Recolor", "The game's quest tracker, windows and the rest in your theme's color." },
 	{ "Overrides", "Style Overrides", "Hide or show parts of unit frames, nameplates and action bars, no matter what their rows say." },
 }
 local function StyleTabs(content, title, page)

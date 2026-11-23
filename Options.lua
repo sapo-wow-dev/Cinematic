@@ -3188,6 +3188,9 @@ do
 				section = "Interface", sub = "Info" },
 			{ "Tooltip Style", "Interface\\Icons\\INV_Misc_Note_05", label = "Tooltips", section = "Interface",
 				sub = "Info" },
+			-- (Its own page since 2026-11-23: the square minimap, then Interface Recolor's ring rows. MinimapStyle.lua.)
+			{ "Minimap Style", "Interface\\Icons\\INV_Misc_Map02", label = "Minimap", section = "Interface",
+				sub = "Info" },
 			-- (Visions: the look they share (VisionsStyle.lua), in no group, then each Vision's in its Visions hub group.)
 			-- (The Visions hub's General icon, not Style General's gear: 2026-11-19.)
 			{ "Visions Style", "Interface\\Icons\\INV_Misc_Book_11", label = "All Visions", section = "Visions" },
@@ -22120,6 +22123,10 @@ ns.OnLanguage(function()
 	if ns.CreateActionBarStylePanel then -- (ActionBarStyle.lua)
 		ns.CreateActionBarStylePanel(ns.lowHealthKit)
 		Lap("CreateActionBarStylePanel")
+	end
+	if ns.CreateMinimapStylePanel then -- (MinimapStyle.lua)
+		ns.CreateMinimapStylePanel(ns.lowHealthKit)
+		Lap("CreateMinimapStylePanel")
 	end
 	if ns.CreateInterfaceRecolorPanel then -- (InterfaceRecolor.lua)
 		ns.CreateInterfaceRecolorPanel(ns.lowHealthKit)
