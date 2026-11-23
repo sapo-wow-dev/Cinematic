@@ -43,7 +43,8 @@ Check(client .. ": the Zone card's on, Subzone's off", ns.CardOn("zone") and not
 
 local played = 0
 local Fire = ns.Cards.Fire
-ns.Cards.Fire = function(...) played = played + 1 return Fire(...) end
+local fired
+ns.Cards.Fire = function(id, card, ...) played, fired = played + 1, card return Fire(id, card, ...) end
 
 local function Show(frameName, zone, subzone, territory)
 	lines.ZoneTextString:SetText(zone)
@@ -85,6 +86,22 @@ Show("ZoneTextFrame", "Duskwood", "")
 Check(client .. ": 3 no card so soon after the last", played == 0, played)
 Check(client .. ": 3 the game's zone line shows", Alpha("ZoneTextString") == 1, Alpha("ZoneTextString"))
 Check(client .. ": 3 and its territory line", Alpha("PVPInfoTextString") == 1, Alpha("PVPInfoTextString"))
+
+-- 3b: the same, but the last card still on screen: the game's line stays
+-- hidden under it (shown, it doubled the name, Darrowmere Lake 2026-11-23).
+local Current = ns.Cards.Current
+now = now + 30
+Show("ZoneTextFrame", "Westfall", "")
+local up = fired
+Check(client .. ": 3b the Westfall card played", up ~= nil and up.name == "Westfall", up and up.name)
+ns.Cards.Current = function() return up end -- (still on screen)
+played = 0
+now = now + 2
+Show("ZoneTextFrame", "Duskwood", "")
+Check(client .. ": 3b no card so soon after the last", played == 0, played)
+Check(client .. ": 3b the game's zone line stays hidden under the last card", Alpha("ZoneTextString") == 0,
+	Alpha("ZoneTextString"))
+ns.Cards.Current = Current
 
 -- 4: the Territory tick on: the card carries it, the game's line goes.
 db.storyZoneTerritory = true

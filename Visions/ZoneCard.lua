@@ -121,8 +121,12 @@ local function Card(zone, subzone, newArea)
 	end
 	-- (On a flight path: none, the places flown over coming one after another.)
 	if ns.db.storyZoneNotFlying and ns.Flag(ns.OnTaxi()) then return false end
-	-- (Passing through places quickly: none until the gap since the last's up.)
-	if last and GetTime() - last.played < (tonumber(ns.db.storyZoneGap) or 0) then return false end
+	-- (Passing through places quickly: none until the gap since the last's up.
+	-- The last card still on screen covers the game's lines all the same: shown
+	-- under it they doubled the name, at Darrowmere Lake's border, 2026-11-23.)
+	if last and GetTime() - last.played < (tonumber(ns.db.storyZoneGap) or 0) then
+		return ns.Cards.Current() == last
+	end
 	local card = ns.ZoneCardText(zone, subzone, nil, newArea, meta)
 	if card then
 		card.newArea = newArea
