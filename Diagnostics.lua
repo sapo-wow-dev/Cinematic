@@ -370,9 +370,26 @@ end
 -- feature started by an event (a cast, a click). Gives a function that asks
 -- for that frame at once too.
 local featureLoops = {} -- { frame, run, wanted, on }
+local gateStack
+local function GateHandler(err)
+	gateStack = debugstack and debugstack(2) or "" -- (none offline)
+	return err
+end
 local function SyncFeatureLoop(loop)
-	local ok, want = pcall(loop.wanted)
-	want = not ok or want and true or false -- (an error in it: kept running)
+	local ok, want = xpcall(loop.wanted, GateHandler)
+	if ok then
+		loop.gateFailed = nil
+		want = want and true or false
+	else
+		-- (An error in it: kept running, as before, and now reported, once
+		-- till it works again. It was swallowed: a broken gate never showed
+		-- in /cine log or the offline checks. Audit 2026-11-23.)
+		if not loop.gateFailed then
+			loop.gateFailed = true
+			ns.ReportError(want, gateStack, true)
+		end
+		want = true
+	end
 	-- (/cine debug loops all: every one running, as if every feature were on,
 	-- to measure them all.)
 	if ns.featureLoopsForced then want = true end
