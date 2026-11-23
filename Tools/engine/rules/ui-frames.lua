@@ -1251,4 +1251,18 @@ return {
     proof = "/cine debug pagecost run 1 (Forever): CreateCombatTextStylePanel lap -17937 KB; login build 12675 KB by count vs about 22.5 MB at 0.56 KB per object from collected builds",
     source = "Tools/tests/page-cost.md",
   },
+  {
+    id = "forever.zone.stale-name-after-instance",
+    area = "ui",
+    clients = { "forever" },
+    api = { "GetRealZoneText", "IsInInstance", "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD" },
+    when = "the first seconds after leaving a dungeon",
+    rule = "Out of a dungeon, IsInInstance() already says false a second after PLAYER_ENTERING_WORLD, but GetRealZoneText() still gives the dungeon's name (\"Stormwind Stockade\") for about 6 s, until ZONE_CHANGED_NEW_AREA brings the real one (\"Stormwind City\"). A zone check at PLAYER_ENTERING_WORLD + 1 s sees the dungeon's name as an outdoor zone.",
+    works = { "remember the instance's name while inside; outside, skip a zone of that name until the zone change brings another (Visions/CardMoments.lua StaleInstanceName)" },
+    fails = { "GetRealZoneText at PLAYER_ENTERING_WORLD + 1 s out of an instance" },
+    status = "tested",
+    tested = "2026-11-23",
+    proof = "the user's log 2026-11-23 (Forever): loading screen out of the Stockade 06:02:34.14, 'Discovered: Stormwind Stockade (a zone)' 06:02:35.21 from the +1 s check, the Zone card for The Canals at 06:02:40.88",
+    source = "Tools/tests/discover-instance.md",
+  },
 }

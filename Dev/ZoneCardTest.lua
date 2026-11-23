@@ -24,6 +24,12 @@
 --              line stays hidden under ours (2026-11-23: a player at
 --              Darrowmere Lake saw both); the card gone, a third zone: the
 --              game's line shows (PASS/FAIL)
+--   9 dungeon  (/cine debug zonecard 9) no walking, no click: made-up
+--              places read in place of yours a moment. Out of a dungeon seen
+--              before, the game's zone name still the dungeon's: no card
+--              (2026-11-23: out of the Stormwind Stockade, the big New zone
+--              card for "Stormwind Stockade"); a whole new zone after: the New
+--              zone card still plays (PASS/FAIL)
 -- The places in 3-6 are made up ("Cinematic Test Glade 1"...), so nothing of
 -- yours is counted as discovered. Into CinematicDB.zoneCardTestLog. Dev copy
 -- only.
@@ -169,7 +175,7 @@ ns.TestKit.Define({
 	key = "zoneCardTest",
 	title = "Zone card test",
 	about = "a place's name once: DaylightUI's Discovered line goes with our card (1-6 run themselves; 7 = walk)",
-	settings = { "cards", "cardDiscoverOn", "storyZoneCard", "storyZoneGap", "storyZoneNotFlying" },
+	settings = { "cards", "cardDiscoverOn", "cardNewZoneOn", "storyZoneCard", "storyZoneGap", "storyZoneNotFlying" },
 	-- (What step 1 turned on, off again: DaylightUI as it was (off for this
 	-- character, or for all where only that turned it on), Visions left out.)
 	putBack = function(extra)
@@ -423,6 +429,67 @@ ns.TestKit.Define({
 			-- (The game's lines back to where you are.)
 			zoneLine:SetText(GetZoneText and GetZoneText() or "")
 			if _G.SubZoneTextString then _G.SubZoneTextString:SetText(GetSubZoneText and GetSubZoneText() or "") end
+		end },
+		{ key = "dungeon", title = "out of a dungeon, its name still up",
+		proven = "zonecard run 2026-11-23 (retail): 3 PASS, no card for the dungeon's leftover name, New zone's after",
+		run = function(r)
+			-- (Only asked for by number, /cine debug zonecard 9.)
+			if #r.steps ~= 1 then return r:Skip("runs alone: /cine debug zonecard 9") end
+			if ns.ModuleLoaded and not ns.ModuleLoaded("visions") then
+				return r:Skip("Visions aren't loaded (Load Visions off): no Discovered card")
+			end
+			local reads, seen = ns.CardReads, ns.chardb and ns.chardb.cardSeen
+			if not (reads and seen and ns.DiscoverHasIt) then return r:Skip("no ns.CardReads or cardSeen") end
+			r:Set("cards", true)
+			r:Set("cardDiscoverOn", true)
+			r:Set("cardNewZoneOn", true)
+			local current = ns.Cards.Current()
+			if current then ns.Cards.Cut(current.id) r:Sleep(1.5) end
+			local allowed, why = ns.CardAllowed("newZone")
+			r:Log(("New zone card allowed now: %s%s"):format(tostring(allowed), why and (" (" .. tostring(why) .. ")") or ""))
+			if not allowed then return r:Skip("no New zone card can play here and now: " .. tostring(why)) end
+			-- (Made-up places, yours as they were after: the reads, and the
+			-- made-up names out of what's counted as seen.)
+			local DUNGEON, ID, NEW = "Cinematic Test Crypt", -9001, "Cinematic Test Downs"
+			local zone, inside = DUNGEON, true
+			local saved = { zone = reads.zone, instance = reads.instance, instanceInfo = reads.instanceInfo,
+				explored = reads.explored }
+			local hadZones = next(seen.zones) ~= nil
+			seen.instances[ID] = true
+			if not hadZones then seen.zones["Cinematic Test Field"] = true end
+			reads.zone = function() return zone end
+			reads.instance = function() return inside, inside and "party" or "none" end
+			reads.instanceInfo = function() return DUNGEON, "party", 1, "Normal", 5, 0, false, ID end
+			reads.explored = function() return 0 end
+			-- (No r:Sleep in the pcall, Lua 5.1 can't yield across it: the
+			-- cards fire at once, read straight after.)
+			local out, newCard, counted
+			local ok, err = pcall(function()
+				ns.DiscoverHasIt() -- (inside, seen before: nothing)
+				inside = false -- (out, the name still the dungeon's)
+				ns.DiscoverHasIt()
+				out = ns.Cards.Current()
+				counted = seen.zones[DUNGEON]
+				zone = NEW -- (the real name: a whole zone new to you)
+				ns.DiscoverHasIt()
+				newCard = ns.Cards.Current()
+			end)
+			for key in pairs(saved) do reads[key] = saved[key] end
+			reads.explored = saved.explored
+			seen.instances[ID], seen.zones[DUNGEON], seen.zones[NEW] = nil, nil, nil
+			if not hadZones then seen.zones["Cinematic Test Field"] = nil end
+			r:Log(("out, zone still \"%s\": card %s \"%s\""):format(DUNGEON, tostring(out and out.id),
+				tostring(out and out.name)))
+			r:Verdict(not out, ("no card for the dungeon's name outside (the fix): %s \"%s\""):format(
+				tostring(out and out.id), tostring(out and out.name)))
+			r:Verdict(not counted, "the dungeon's name not counted as a zone")
+			r:Verdict(newCard and newCard.id == "newZone" and newCard.name == NEW, ("a new zone after: %s \"%s\""):format(
+				tostring(newCard and newCard.id), tostring(newCard and newCard.name)))
+			r:Sleep(0.6)
+			r:Shot("the New zone card", { behind = _G.CinematicCard })
+			if not ok then r:Verdict(false, "error: " .. tostring(err)) end
+			local card = ns.Cards.Current()
+			if card then ns.Cards.Cut(card.id) r:Sleep(1.5) end
 		end },
 	},
 })

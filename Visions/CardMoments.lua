@@ -60,8 +60,16 @@ local function Fight()
 	return (InCombatLockdown and InCombatLockdown()) or ns.Flag(UnitAffectingCombat("player"))
 end
 
+-- Where you are, as the Discovered card reads it. (/cine debug zonecard 9
+-- swaps these for made-up places a moment, Dev/ZoneCardTest.lua.)
+local reads = {
+	zone = function() return GetRealZoneText and GetRealZoneText() end,
+	instance = function() return IsInInstance() end,
+	instanceInfo = function() return GetInstanceInfo() end,
+}
+ns.CardReads = reads
 local function Zone()
-	return Plain(GetRealZoneText and GetRealZoneText()) or ""
+	return Plain(reads.zone()) or ""
 end
 local function Subzone()
 	return Plain(GetSubZoneText and GetSubZoneText()) or ""
@@ -114,6 +122,16 @@ end
 -- the first time. A new zone's beats the subzone found with it.
 local DISCOVERED = { Pattern(ERR_ZONE_EXPLORED), Pattern(ERR_ZONE_EXPLORED_XP) }
 local zoneFoundAt, lastFound, lastFoundAt, shownAt = 0, nil, 0, 0
+-- The dungeon or raid you were last in. Just out of one, the game's zone
+-- name is still the instance's for a few seconds (2026-11-23: out of the
+-- Stockade, "Stormwind Stockade" outside for 6 s took for a new zone, the
+-- New zone card). Its zone change after has the real name.
+local lastInstance
+local function StaleInstanceName(zone)
+	if lastInstance and zone == lastInstance then return true end
+	lastInstance = nil -- (the real name's come: a zone of that name is one)
+	return false
+end
 local function DiscoverCard(name, sub)
 	return { meta = L["Discovered"], name = name, sub = sub or "" }
 end
@@ -149,6 +167,7 @@ end
 -- area you just found explored is new to you. Else, ours: a zone not seen
 -- before since this was installed.)
 local function ExploredCount()
+	if reads.explored then return reads.explored() end
 	if not (C_MapExplorationInfo and C_MapExplorationInfo.GetExploredMapTextures and C_Map) then return nil end
 	local mapID = C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
 	if not Plain(mapID) then return nil end
@@ -159,11 +178,12 @@ end
 local function ZoneEntered()
 	local seen = Seen()
 	if not seen then return end
-	local inInstance, kind = IsInInstance()
+	local inInstance, kind = reads.instance()
 	if ns.Flag(inInstance) and (kind == "party" or kind == "raid") then
-		local name, _, _, _, _, _, _, instanceID = GetInstanceInfo()
+		local name, _, _, _, _, _, _, instanceID = reads.instanceInfo()
 		name, instanceID = Plain(name), Plain(instanceID)
 		local key = instanceID or name
+		lastInstance = name or lastInstance
 		if key and not seen.instances[key] then
 			seen.instances[key] = true
 			if Wanted() and name then
@@ -175,7 +195,7 @@ local function ZoneEntered()
 	end
 	if ns.Flag(inInstance) then return end -- (battlegrounds, arenas, scenarios: theirs)
 	local zone = Zone()
-	if zone == "" or seen.zones[zone] then return end
+	if zone == "" or StaleInstanceName(zone) or seen.zones[zone] then return end
 	local first = next(seen.zones) == nil -- (the very first: just counted, nothing shown)
 	seen.zones[zone] = true
 	local count = ExploredCount()
@@ -215,7 +235,8 @@ local function InfoLine(text)
 				if GetTime() - shownAt < 5 and ns.HideGameDiscovered then ns.HideGameDiscovered() end
 			else
 				local zone = Zone()
-				Discovered(place, zone ~= place and zone or "", place == zone and not ns.Flag(IsInInstance()))
+				Discovered(place, zone ~= place and zone or "",
+					place == zone and not ns.Flag(reads.instance()) and not StaleInstanceName(zone))
 			end
 			if ns.CardOn("discover") and Carded(place) then HideOtherLines(text) end
 			return
