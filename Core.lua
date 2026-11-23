@@ -1543,7 +1543,9 @@ DEFAULTS.handleFishing = false -- right-click casting and the cast bar
 -- the settings' upgrades).
 ns.PLATE_TARGET_ROWS = { "MyEnemyPlayerTarget", "MyEnemyNPCTarget", "MyNeutralPlayerTarget", "MyNeutralNPCTarget",
 	"MyFriendlyPlayerTarget", "MyFriendlyNPCTarget" }
-ns.PLATE_UNIT_ROWS = { "MyPet", "GroupMembers", "GroupMinions", "YourTarget" }
+-- YourMouseover: the Target section's Mouseover row, under Your target: the
+-- unit under the mouse has its whole plate up while it's there (off to start).
+ns.PLATE_UNIT_ROWS = { "MyPet", "GroupMembers", "GroupMinions", "YourTarget", "YourMouseover" }
 for _, row in ipairs(ns.PLATE_UNIT_ROWS) do
 	for _, prefix in ipairs({ "plateAlways", "plateCombat", "plateCombatPvP", "plateCinematic", "plateGroup" }) do
 		DEFAULTS[prefix .. row] = false

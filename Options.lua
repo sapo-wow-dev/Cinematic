@@ -11047,6 +11047,7 @@ local function CreatePlatesPanel()
 		local tip = L[" Also turns these nameplates on in the game's options."]
 		local UNIT_ROW_TIPS = {
 			YourTarget = L[" Your target's nameplate, whatever the Nameplates grid says."],
+			YourMouseover = L[" The nameplate of the unit under your mouse, whatever the Nameplates grid says."],
 			MyPet = L[" Your pet's nameplate, whatever the Minions rows say, grouped or not."],
 			GroupMembers = L[" Your party or raid members' nameplates, whatever Friendly players says."],
 			GroupMinions = L[" Your party or raid members' pets, whatever the Minions rows say."],
@@ -11075,7 +11076,8 @@ local function CreatePlatesPanel()
 			local alwaysKey = "plateAlways" .. kind[1]
 			local rowTip = UNIT_ROW_TIPS[kind[1]]
 			local part = kind[1]:find("^Part") -- (Plate parts rows: no game settings of their own)
-			local tip = rowTip and (part or kind[1]:find("Target$")) and rowTip or (rowTip or "") .. tip
+			local tip = rowTip and (part or kind[1]:find("Target$") or kind[1] == "YourMouseover") and rowTip
+				or (rowTip or "") .. tip
 			RecordKey(content, alwaysKey)
 			local combat = { Item(L["In combat"], "plateCombat" .. kind[1], COMBAT_TIP .. tip),
 				Item(L["In PvP combat"], "plateCombatPvP" .. kind[1], PVP_COMBAT_TIP .. tip) }
@@ -11580,6 +11582,8 @@ local function CreatePlatesPanel()
 		AddPlateRow(targetTop, 1, { "YourTarget", L["Nameplates"] })
 		local targetNameTip = L[" Your target's name, even with its kind's names off."] .. nameTip
 		AddNameRow(targetTop, 2, targetGroup, "YourTarget", L["Names"], nil, targetNameTip)
+		-- (The unit under the mouse: its whole plate. Off to start.)
+		AddPlateRow(targetTop, 3, { "YourMouseover", L["Mouseover"] })
 		EndSection(targetSection, lastLabel)
 
 		ns.PageBuildStep(true) -- (made ahead: the next frame from here)

@@ -2535,6 +2535,74 @@ local function UpdateTargetFade(elapsed)
 			targetHidden.plate = nil
 		end
 	end
+	return ns.plates.UpdateHover(elapsed) or moving
+end
+
+-- The Target section's Mouseover row (YourMouseover, under Your target): the
+-- unit under the mouse has its whole plate faded in (at the UI's fade-in
+-- time) while the row is on here, whatever its kind's row says, and faded
+-- back down once the mouse leaves it. The game has no event for the mouse
+-- leaving a unit: a watcher looks while a plate is held up. (On ns.plates:
+-- this file's main chunk is at Lua's 200 locals.)
+ns.plates.hover = { plate = nil, level = 0, leaving = {} }
+function ns.plates.HoverWanted()
+	return ns.db.handlePlates and UnitRowWanted("YourMouseover") or false
+end
+-- The plate under the mouse now, for the row (not your own).
+function ns.plates.HoverPlate()
+	if not (ns.plates.HoverWanted() and Ask(UnitExists, "mouseover")) or Ask(UnitIsUnit, "mouseover", "player") then
+		return nil
+	end
+	local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, "mouseover")
+	return ok and plate or nil
+end
+function ns.plates.HoverLevel(plate)
+	local hover = ns.plates.hover
+	if not plate then return 0 end
+	if plate == hover.plate then return hover.level end
+	return hover.leaving[plate] or 0
+end
+function ns.plates.HoverActive()
+	return ns.plates.hover.plate ~= nil or next(ns.plates.hover.leaving) ~= nil
+end
+ns.plates.hoverWatch = CreateFrame("Frame")
+ns.plates.hoverWatch:Hide()
+do
+	local at = 0
+	ns.SetOnUpdate(ns.plates.hoverWatch, function(self)
+		local now = GetTime()
+		if now < at then return end
+		at = now + 0.1
+		if ns.plates.HoverPlate() ~= ns.plates.hover.plate then
+			ns.plates.seen.at = nil -- (the next pass runs: the plate goes back down)
+			self:Hide()
+		end
+	end)
+end
+function ns.plates.UpdateHover(elapsed)
+	local hover = ns.plates.hover
+	local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and ns.plates.HoverPlate() or nil
+	if plate ~= hover.plate then
+		if hover.plate and hover.level > 0 then
+			hover.leaving[hover.plate] = hover.level
+		end
+		-- (Back on a plate still on its way down: carries on from there.)
+		hover.plate, hover.level = plate, plate and hover.leaving[plate] or 0
+		if plate then hover.leaving[plate] = nil end
+	end
+	local moving = false
+	if plate then
+		ns.plates.hoverWatch:Show()
+		if hover.level < 1 then
+			hover.level = ns.Approach(hover.level, 1, elapsed, ns.FadeInTime())
+			moving = true
+		end
+	end
+	for leavingPlate, level in pairs(hover.leaving) do
+		level = ns.Approach(level, 0, elapsed, ns.FadeOutTime())
+		hover.leaving[leavingPlate] = level > 0 and level or nil
+		moving = true
+	end
 	return moving
 end
 
@@ -2546,6 +2614,11 @@ local function ForgetTargetFade(plate)
 	end
 	if targetHidden.plate == plate then
 		targetHidden.plate, targetHidden.level = nil, 1
+	end
+	local hover = ns.plates.hover
+	if plate then hover.leaving[plate] = nil end
+	if plate and hover.plate == plate then
+		hover.plate, hover.level = nil, 0
 	end
 end
 
@@ -2610,7 +2683,8 @@ local function PlatesFiltered()
 		end
 	end
 	return ns.plates.level < 1
-		and (AnyPlatesKeptCinematic() or TargetKeptUp() or next(leavingTargets) ~= nil or NamesOnPlates())
+		and (AnyPlatesKeptCinematic() or TargetKeptUp() or next(leavingTargets) ~= nil or NamesOnPlates()
+			or ns.plates.HoverActive())
 end
 
 local function IsTarget(unit)
@@ -2670,6 +2744,8 @@ local function PlateAlpha(unit, plate, besidesHeal)
 		if ns.SetHealVisionKeptLevel then ns.SetHealVisionKeptLevel(unit, (PlateAlphas(unit, plate, true))) end
 		return 1
 	end
+	-- (The Target section's Mouseover row: the plate under the mouse, whole.)
+	alpha = math.max(alpha, ns.plates.HoverLevel(plate))
 	if plate == targetFade.plate and not (unit and IsTarget(unit) and AlwaysShownTarget(unit)) then
 		-- a frame before the target fade catches up with a new target
 		return math.max(alpha, duels.Level(plate))
@@ -2686,8 +2762,9 @@ local function PlateAlpha(unit, plate, besidesHeal)
 	end
 	-- (A duelist's plate stays up whole even as your target: Your Target
 	-- hiding it after a fight left it a name alone, every part at 0, user
-	-- 2026-11-20. Dev/DuelTargetTest.lua.)
-	return math.max(alpha, duels.Level(plate))
+	-- 2026-11-20. Dev/DuelTargetTest.lua.) The Mouseover row's too, under Your
+	-- target's hold: the mouse on it asks for it.
+	return math.max(alpha, duels.Level(plate), ns.plates.HoverLevel(plate))
 end
 -- (For Dev/DuelTargetTest.lua: a plate's duel level, and Your Target's hold
 -- on it: held, and how far down.)
@@ -3781,7 +3858,7 @@ end
 
 -- Whether this client has any of a row's nameplate settings.
 function ns.HasPlateSettings(kind)
-	if kind:find("Target$") then
+	if kind:find("Target$") or kind == "YourMouseover" then
 		return true
 	end
 	for _, cvar in ipairs(PLATE_KIND_CVARS[UNIT_ROW_KIND[kind] or kind]) do
@@ -3914,7 +3991,7 @@ for kind, cvars in pairs(PLATE_KIND_CVARS) do
 	end
 end
 -- Far names smaller (WoW Forever, names over heads on: the Name Style page):
--- ours are sized by the camera's zoom only, as big far off as at 16 yards,
+-- ours are sized by the camera's zoom only, as big far off as at 8 yards,
 -- where the game's own shrink (2026-11-23). The game can shrink plates by
 -- their distance from the camera itself (rule forever.plate.no-distance-scale,
 -- changed: /cine debug nameconsole), and our names on them shrink too. Set as
@@ -4422,7 +4499,7 @@ function ns.UpdatePlates(cinematic, elapsed)
 	local holding = platesActive and lingering and AnyFightKinds()
 	local hide = platesActive and not inCombat and not holding
 	local keep = platesForced or AnyPlatesKeptCinematic() or TargetKeptUp() or next(leavingTargets) ~= nil
-		or MarkersKeptUp()
+		or MarkersKeptUp() or ns.plates.HoverWanted()
 	if not hide or keep then
 		ns.ShowPlatesNow()
 	end

@@ -313,6 +313,7 @@ Dev\NpcNamesTest.lua
 Dev\NameScaleTest.lua
 Dev\FontStepTest.lua
 Dev\NameConsoleTest.lua
+Dev\HoverPlateTest.lua
 Dev\FarNamesTest.lua
 Dev\NpcTitleTest.lua
 Dev\ThemeArtTest.lua

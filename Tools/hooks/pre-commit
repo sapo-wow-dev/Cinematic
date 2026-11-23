@@ -39,6 +39,8 @@ else
 fi
 if [ -n "$python" ]; then
 	if [ -f Tools/check-toc.py ]; then "$python" -I Tools/check-toc.py || failed=1; fi
+	# (A kit test named like an older /cine debug command never runs.)
+	if [ -f Tools/kit-names.py ]; then "$python" -I Tools/kit-names.py || failed=1; fi
 	# (A local function called above its own line calls a nil global; luacheck
 	# misses it when the name is also a known global. known.lua:
 	# lua-local-before-defined.)
