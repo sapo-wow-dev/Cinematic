@@ -250,7 +250,7 @@ local STATES = {
 		Cell("spell", 3044, 1, "never")
 		Cell("group", "essential", 2, "never")
 		Own(2973, "proc")
-		ns.SetCooldownPreview("dungeonFight")
+		ns.SetCooldownPreview("dungeon", "in")
 	end },
 	{ id = "s15", name = "15 The preview picker open", set = function()
 		Reset()

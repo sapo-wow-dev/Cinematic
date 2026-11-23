@@ -282,7 +282,7 @@ do
 			InCombatLockdown = function() return false end -- luacheck: ignore 121
 			Be("city", false)
 			ns.SetCooldownCell("spell", IMMOLATE, g1.id, "proc")
-			ns.SetCooldownPreview("dungeonFight")
+			ns.SetCooldownPreview("dungeon", "in")
 			grid.Layout()
 			local _, at = ns.CooldownGroupNow()
 			Check("previewing a dungeon fight: Group content in use, though we're in a city", at == 1, at)
@@ -295,11 +295,30 @@ do
 			grid.Layout()
 			local _, live = ns.CooldownGroupNow()
 			Check("back to live: the city again, no banner, no rings", live ~= 1 and not grid.banner:IsShown() and not im.cells[1].ringed)
-			ns.SetCooldownPreview("dungeonFight")
+			-- (Place and combat each on its own, 2026-11-22.)
+			ns.SetCooldownPreview("dungeon", nil)
+			Check("a place alone: your own fight state kept", ns.CooldownPreview().combat == nil
+				and ns.CooldownPreview().label == ns.L["Dungeon"], ns.CooldownPreview().label)
+			ns.SetCooldownPreview(nil, "out")
+			Check("combat alone: where you are, out of combat", ns.CooldownRuleFacts().nocombat == true
+				and ns.CooldownPreview().place == nil)
+			local menuBox
+			for _, b in ipairs(grid.previewItems) do
+				if b.which == "place" and b.value == "raid" then menuBox = b end
+			end
+			Click(menuBox)
+			Check("picking a place keeps the combat picked", ns.cdmPreview.place == "raid" and ns.cdmPreview.combat == "out")
+			Check("no Town to preview", (function()
+				for _, b in ipairs(grid.previewItems) do
+					if b.value == "town" then return false end
+				end
+				return true
+			end)())
+			ns.SetCooldownPreview("dungeon", "in")
 			grid:GetScript("OnHide")(grid)
 			Check("the page hidden: back to live", ns.cdmPreview == nil)
 			InCombatLockdown = function() return true end -- luacheck: ignore 121
-			ns.SetCooldownPreview("dungeonFight")
+			ns.SetCooldownPreview("dungeon", "in")
 			Check("no preview in a fight", ns.cdmPreview == nil)
 			InCombatLockdown = lockdown -- luacheck: ignore 121
 			ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)

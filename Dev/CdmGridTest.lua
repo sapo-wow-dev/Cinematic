@@ -526,7 +526,7 @@ ns.TestKit.Define({
 			probe:Hide()
 			r:Pass("gallery shot; look at the screenshots")
 		end },
-		{ key = "preview", proven = "cdmgrid run 31 (2026-11-22): PASS, faded while previewing, banner, back to shown", title = "the previewer: a dungeon fight from here, your icon follows", seconds = 6, run = function(r)
+		{ key = "preview", proven = "cdmgrid run 35 (2026-11-22): PASS, Where/When picker, faded, banner, back to shown", title = "the previewer: a dungeon fight from here, your icon follows", seconds = 6, run = function(r)
 			if not test.here and not Setup(r) then return end
 			-- (A scene for dungeon fights, the spell Never in it; you're not in one.)
 			if test.place == "dungeon" then return r:Skip("you're in a dungeon: stand outside one for this step") end
@@ -548,13 +548,19 @@ ns.TestKit.Define({
 			-- it hides, and run alone this step opened it after, cdmgrid run 30.)
 			local grid, panel = OpenPage(r)
 			r:Sleep(0.5)
-			ns.SetCooldownPreview("dungeonFight")
+			ns.SetCooldownPreview("dungeon", "in")
 			if grid then grid.Changed() end
 			r:Sleep(1.5)
 			Look(r, "faded")
 			if grid then
 				r:Verdict(grid.banner:IsVisible(), "the blue banner shows while previewing")
 				r:Shot("previewing a dungeon fight", { behind = panel })
+				-- (The picker: Where and When side by side, no Town, 2026-11-22.)
+				Click(grid.previewButton)
+				r:Sleep(0.3)
+				r:Verdict(grid.previewMenu:IsVisible(), "the preview picker: Where and When lists")
+				r:Shot("the preview picker", { behind = panel })
+				Click(grid.previewButton)
 			end
 			ns.SetCooldownPreview(nil)
 			if grid then grid.Changed() end

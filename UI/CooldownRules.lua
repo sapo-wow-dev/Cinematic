@@ -205,22 +205,34 @@ local factsAt, factsNow, nowAt, nowGroup, nowIndex
 -- its scenes as if you were there, its real bars too. Only the place and the
 -- combat are pretended: the other facts (a CQL scene's words) stay real.
 -- Back to live as the page hides and as a real fight starts.
-ns.COOLDOWN_PREVIEWS = {
-	{ "worldFight", L["Open world fight"], {}, true },
-	{ "worldCalm", L["Open world, calm"], {}, false },
-	{ "dungeonFight", L["Dungeon fight"], { dungeon = true }, true },
-	{ "raidFight", L["Raid fight"], { raid = true }, true },
-	{ "town", L["Town"], { city = true }, false },
-	{ "bg", L["BG or arena"], { bg = true }, true },
+-- A place and a combat, each picked on its own (nil: as you are). (Two
+-- lists since 2026-11-22, the user: no Town, "a 2nd tab for combat".)
+ns.COOLDOWN_PREVIEW_PLACES = {
+	{ "world", L["Open world"], {} },
+	{ "dungeon", L["Dungeon"], { dungeon = true } },
+	{ "raid", L["Raid"], { raid = true } },
+	{ "bg", L["BG or arena"], { bg = true } },
 }
-local PREVIEW_BY = {}
-for _, each in ipairs(ns.COOLDOWN_PREVIEWS) do PREVIEW_BY[each[1]] = each end
-local PLACE_FACTS = { "bg", "dungeon", "raid", "city", "inn" }
+ns.COOLDOWN_PREVIEW_COMBATS = { { "in", L["In combat"], true }, { "out", L["Out of combat"], false } }
+local PLACE_BY, COMBAT_BY = {}, {}
+for _, each in ipairs(ns.COOLDOWN_PREVIEW_PLACES) do PLACE_BY[each[1]] = each end
+for _, each in ipairs(ns.COOLDOWN_PREVIEW_COMBATS) do COMBAT_BY[each[1]] = each end
+local PLACE_FACTS = { "bg", "dungeon", "raid", "city", "inn", "instance", "world" }
 local previewFacts, previewFrom
-function ns.CooldownPreview() return ns.cdmPreview and PREVIEW_BY[ns.cdmPreview] or nil end
-function ns.SetCooldownPreview(key)
-	if InCombatLockdown and InCombatLockdown() then key = nil end
-	ns.cdmPreview = PREVIEW_BY[key] and key or nil
+-- What's previewed: { place, combat, label } (either nil: as you are), or nil.
+function ns.CooldownPreview()
+	local pick = ns.cdmPreview
+	if not pick then return nil end
+	local place, combat = PLACE_BY[pick.place], COMBAT_BY[pick.combat]
+	local label = place and combat and L["%s, %s"]:format(place[2], combat[2]:lower()) or (place or combat)[2]
+	return { place = place, combat = combat, label = label }
+end
+-- place: a key of COOLDOWN_PREVIEW_PLACES, combat "in" or "out"; nil for as
+-- you are. Both nil: live. Not in a fight (the real one decides then).
+function ns.SetCooldownPreview(place, combat)
+	if InCombatLockdown and InCombatLockdown() then place, combat = nil, nil end
+	place, combat = PLACE_BY[place] and place or nil, COMBAT_BY[combat] and combat or nil
+	ns.cdmPreview = (place or combat) and { place = place, combat = combat } or nil
 	previewFrom = nil
 	ns.CooldownRuleFactsStale()
 	if ns.readyPace then ns.readyPace.due = true end
@@ -236,9 +248,16 @@ function ns.CooldownRuleFacts()
 		previewFrom = factsNow
 		previewFacts = {}
 		for k, v in pairs(factsNow) do previewFacts[k] = v end
-		for _, k in ipairs(PLACE_FACTS) do previewFacts[k] = nil end
-		for k, v in pairs(pick[3]) do previewFacts[k] = v end
-		previewFacts.combat, previewFacts.calm, previewFacts.nocombat = pick[4], false, not pick[4]
+		if pick.place then
+			for _, k in ipairs(PLACE_FACTS) do previewFacts[k] = nil end
+			for k, v in pairs(pick.place[3]) do previewFacts[k] = v end
+			previewFacts.instance = previewFacts.dungeon or previewFacts.raid
+			previewFacts.world = pick.place[1] == "world"
+		end
+		if pick.combat then
+			local fight = pick.combat[3]
+			previewFacts.combat, previewFacts.calm, previewFacts.nocombat = fight, false, not fight
+		end
 	end
 	return previewFacts
 end

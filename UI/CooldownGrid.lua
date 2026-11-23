@@ -785,7 +785,7 @@ function ns.CooldownGrid(parent, opts)
 	previewButton.fit = true
 	Tip(previewButton, L["See a place from anywhere: the grid shows what decides there, and your bars on screen act as if you were there."])
 	local previewMenu = CreateFrame("Frame", nil, grid)
-	previewMenu:SetSize(190, 10)
+	previewMenu:SetSize(332, 10)
 	previewMenu:EnableMouse(true)
 	previewMenu.cdmPopup = true -- (the lab's audit: meant to cover what's under it)
 	previewMenu:Hide()
@@ -802,32 +802,52 @@ function ns.CooldownGrid(parent, opts)
 			edge:SetColorTexture(1, 1, 1, 0.16)
 		end
 	end
+	-- Two lists side by side: where (as you are, or a place) and when (as you
+	-- are, or in or out of combat). Picks take at once; it stays open to try
+	-- another, shut by the button. (One list of place-and-fight pairs till
+	-- 2026-11-22; the user: "a 2nd tab for combat".)
 	local previewItems = {}
-	local PREVIEW_LIST = { { nil, L["Where you are"] } }
-	for _, each in ipairs(ns.COOLDOWN_PREVIEWS or {}) do PREVIEW_LIST[#PREVIEW_LIST + 1] = { each[1], each[2] } end
-	for i, item in ipairs(PREVIEW_LIST) do
-		local b = PillButton(previewMenu, 176, 22)
-		b:SetPoint("TOPLEFT", previewMenu, "TOPLEFT", 6, -6 - (i - 1) * 22)
-		b.value = item[1]
-		b.label = item[2]
-		b:SetScript("OnClick", function(self)
-			previewMenu:Hide()
-			ns.SetCooldownPreview(self.value)
-			Changed()
-		end)
-		previewItems[i] = b
+	local function Current(which)
+		local pick = ns.cdmPreview
+		return pick and pick[which] or nil
 	end
-	previewMenu:SetHeight(12 + #PREVIEW_LIST * 22)
+	local function PreviewList(which, title, first, list, x)
+		local head = previewMenu:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		head:SetPoint("TOPLEFT", previewMenu, "TOPLEFT", x + 8, -8)
+		head:SetText(title)
+		local items = { { nil, first } }
+		for _, each in ipairs(list) do items[#items + 1] = { each[1], each[2] } end
+		for i, item in ipairs(items) do
+			local b = PillButton(previewMenu, 152, 22)
+			b:SetPoint("TOPLEFT", previewMenu, "TOPLEFT", x + 4, -24 - (i - 1) * 22)
+			b.value, b.label, b.which = item[1], item[2], which
+			b:SetScript("OnClick", function(self)
+				local place, combat = Current("place"), Current("combat")
+				if self.which == "place" then place = self.value else combat = self.value end
+				ns.SetCooldownPreview(place, combat)
+				Changed()
+			end)
+			previewItems[#previewItems + 1] = b
+		end
+		return #items
+	end
+	local previewRows = math.max(PreviewList("place", L["Where"], L["Where you are"], ns.COOLDOWN_PREVIEW_PLACES or {}, 6),
+		PreviewList("combat", L["When"], L["Any time"], ns.COOLDOWN_PREVIEW_COMBATS or {}, 168))
+	previewMenu:SetHeight(30 + previewRows * 22)
+	local function PaintPreviewItems()
+		for _, b in ipairs(previewItems) do
+			b:SetWidth(152)
+			SetPill(b, nil, b.label, b.value == Current(b.which) and "picked" or "choice")
+			b:SetWidth(152)
+		end
+	end
+	grid.PaintPreviewItems = PaintPreviewItems
 	previewButton:SetScript("OnClick", function()
 		if not Enabled() then return end
 		if InCombatLockdown and InCombatLockdown() then return end
 		previewMenu:SetShown(not previewMenu:IsShown())
 		if previewMenu:IsShown() then
-			for _, b in ipairs(previewItems) do
-				b:SetWidth(176)
-				SetPill(b, nil, b.label, b.value == ns.cdmPreview and "picked" or "choice")
-				b:SetWidth(176)
-			end
+			PaintPreviewItems()
 			previewMenu:SetFrameLevel(grid:GetFrameLevel() + 45)
 			previewMenu:ClearAllPoints()
 			previewMenu:SetPoint("TOPLEFT", previewButton, "BOTTOMLEFT", 0, -4)
@@ -1029,11 +1049,8 @@ function ns.CooldownGrid(parent, opts)
 	delete:SetPoint("TOPRIGHT", editor, "TOPRIGHT", -8, -6)
 	later:SetPoint("RIGHT", delete, "LEFT", -12, 0)
 	earlier:SetPoint("RIGHT", later, "LEFT", -2, 0)
-	-- (Scenes are every bar's: said in the editor, 2026-11-22.)
-	local sharedNote = editor:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	sharedNote:SetPoint("LEFT", nameBox, "RIGHT", 10, 0)
-	-- ("bar" meant nothing to the user, 2026-11-22: the tabs are what they see.)
-	sharedNote:SetText(L["on every tab"])
+	-- (No "on every tab" note by the name: it said nothing, the user 2026-11-22.
+	-- Delete's tooltip still says it goes on every tab.)
 	local orderLabel = editor:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	orderLabel:SetPoint("RIGHT", earlier, "LEFT", -6, 0)
 	orderLabel:SetText(L["Order"])
@@ -1927,7 +1944,7 @@ function ns.CooldownGrid(parent, opts)
 		banner:SetShown(previewing and true or false)
 		if previewing then
 			local now = ns.CooldownGroupNow()
-			banner.text:SetText(L["Previewing %s: %s decides. Your icons show it now."]:format(previewing[2],
+			banner.text:SetText(L["Previewing %s: %s decides. Your icons show it now."]:format(previewing.label,
 				now and ns.CooldownGroupName(now) or L["Everywhere else"]))
 			banner.back:SetWidth(120)
 			banner.back:SetWidth(SetPill(banner.back, nil, L["Back to live"], "chip"))
@@ -2047,7 +2064,8 @@ function ns.CooldownGrid(parent, opts)
 		if not groups[1] then previewMenu:Hide() end
 		previewButton:SetWidth(200)
 		-- (No icon: the eye is Always's, it read as a setting, 2026-11-22.)
-		previewButton:SetWidth(SetPill(previewButton, nil, preview and L["Preview: %s"]:format(preview[2])
+		if previewMenu:IsShown() and grid.PaintPreviewItems then grid.PaintPreviewItems() end
+		previewButton:SetWidth(SetPill(previewButton, nil, preview and L["Preview: %s"]:format(preview.label)
 			or L["Preview a place"], preview and "chosen" or "chip"))
 		if preview then
 			previewButton.text:SetTextColor(0.85, 0.93, 1)
