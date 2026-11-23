@@ -1079,6 +1079,10 @@ end
 -- anchors (EllesmereUI does), or clamped to the screen again.
 function ns.ParkUndone(entry)
 	local frame = entry.frame
+	-- (None saved: its anchors couldn't be read as it was parked, so it was
+	-- left where it is. Tried again till they read, or it stayed on the
+	-- screen for the rest of the fade. Audit 2026-11-23.)
+	if not entry.savedPoints then return not ns.IsParked(entry) end
 	return entry.savedPoints and (not ns.IsParked(entry)
 		or (frame.IsClampedToScreen and ns.Flag(frame:IsClampedToScreen())))
 end
@@ -1091,7 +1095,24 @@ function ns.UnparkShrunk(entry)
 		entry.frame:SetClampedToScreen(true)
 	end
 	-- (None saved: nothing to put back, so not cleared either.)
-	if not points or #points == 0 or not ns.IsParked(entry) then
+	if not points or #points == 0 then
+		return
+	end
+	-- (Its anchor refused: can't tell it's still off the screen. Kept, and
+	-- tried again as the fight ends, or it stayed out there. Audit 2026-11-23.)
+	if not pcall(entry.frame.GetPoint, entry.frame, 1) then
+		entry.savedPoints = points
+		local waiter = CreateFrame("Frame")
+		waiter:RegisterEvent("PLAYER_REGEN_ENABLED")
+		waiter:SetScript("OnEvent", function(self)
+			self:UnregisterAllEvents()
+			if entry.savedPoints == points and (entry.removed or not (entry.shrunk or entry.parkedFullSize)) then
+				ns.UnparkShrunk(entry)
+			end
+		end)
+		return
+	end
+	if not ns.IsParked(entry) then
 		return
 	end
 	local frame = entry.frame
