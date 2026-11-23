@@ -3980,6 +3980,11 @@ local GRID_EFFECTS = { "letterbox", "tint", "vignette", "weather", "inn", "haze"
 	"density" }
 ns.OUTSIDE_SHARED = { inn = "outsideCineTint", frost = "outsideCineWeather", rainlens = "outsideCineWeather",
 	lightning = "outsideCineWeather", density = "outsideCineWeather" }
+-- The page switch of an effect on another effect's page (else <effect>Page):
+-- the Weather page's four (frostPage... don't exist, so the page off left
+-- them wanted, release review 2026-11-23).
+local EFFECT_PAGE = { frost = "weatherPage", rainlens = "weatherPage", lightning = "weatherPage",
+	density = "weatherPage" }
 -- Allow outside CineMode's tick for each (CineMode page; off: CineMode only).
 local OUTSIDE_EFFECT = { letterbox = "outsideCineLetterbox", tint = "outsideCineTint",
 	vignette = "outsideCineVignette", weather = "outsideCineWeather" }
@@ -4271,7 +4276,7 @@ local function OnUpdate(_, elapsed)
 					effectAsk[key] = ns.effectsDemo[key] or false
 				else
 					effectAsk[key] = (cinematic or ns.db[ns.OUTSIDE_SHARED[key] or OUTSIDE_EFFECT[key]] == true)
-						and ns.db.visualEffects and ns.db[key .. "Page"] ~= false
+						and ns.db.visualEffects and ns.db[EFFECT_PAGE[key] or (key .. "Page")] ~= false
 						and ns.RowOnNow(EFFECT_ROWS[key], ns.db[key .. "Always"], true) or false
 				end
 			end

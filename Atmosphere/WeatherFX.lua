@@ -222,8 +222,15 @@ end
 local function Wanted()
 	if preview.kind and GetTime() < preview.untilT then return true end
 	if level.frost > 0 or level.rainlens > 0 or flashAt > GetTime() - 1 or densitySet.active then return true end
-	local w = ns.effectWanted
-	return w ~= nil and (w.frost or w.rainlens or w.lightning or w.density) and true or false
+	-- (Only one that can draw: its row, its strength up, its switch and the
+	-- page on. Its row alone ran the loop every frame in any rain at the
+	-- default Off, release review 2026-11-23, fix card
+	-- 2026-11-23-weather-loop-strength.md.)
+	for kind in pairs(KEYS) do
+		local _, on = Strength(kind)
+		if on then return true end
+	end
+	return false
 end
 ns.FeatureLoop(frame, ns.Profiled and ns.Profiled("Weather effects", OnUpdate) or OnUpdate, Wanted)
 
