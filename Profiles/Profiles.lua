@@ -28,6 +28,7 @@ local GLOBAL_KEYS = {
 	stylePreviewPos = true, -- (StylePages.lua: where you dragged the Style preview window)
 	stylePreviewBack = true, stylePreviewFolded = true, stylePreviewOut = true, -- (StylePages.lua: the previews' backdrop pick, their sticky fold)
 	dockSpots = true, -- (Skin.lua's DockBeside: where you dragged popped-out windows)
+	ruleEditorOpen = true, -- (UI/GridRows.lua: the rule editor's lines opened past their +N)
 	hubLastTab = true, -- (Options.lua's Select: the tab last open under each settings icon)
 	peeksLog = true, -- (/cine debug peeks log)
 	addonSupportOff = true, -- (Addons page: supported addons switched off, AddonSupport.lua)

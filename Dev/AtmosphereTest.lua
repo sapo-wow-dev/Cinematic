@@ -483,10 +483,16 @@ ns.TestKit.Define({
 			ns.OpenOptions("Effects")
 			r:Sleep(0.5)
 			local rule = ns.db.frameRules and ns.db.frameRules["effect:haze"] or ""
+			-- (The World and Travel lines opened past their +N, if they have
+			-- one (2026-11-24: two rows each, the rest behind it), put back after.)
+			if type(ns.db.ruleEditorOpen) ~= "table" then ns.db.ruleEditorOpen = {} end
+			local wasOpen = { rain = ns.db.ruleEditorOpen.rain, moving = ns.db.ruleEditorOpen.moving }
+			ns.db.ruleEditorOpen.rain, ns.db.ruleEditorOpen.moving = true, true
 			-- (A stand-in row: what the editor asks of one, each doing nothing.
 			-- Without SetText, typing focus calling it raised an error, run 1.)
 			ns.OpenRuleEditor({ key = "effect:haze", label = ns.L["Haze"], Text = function() return rule end,
 				SetText = function() end, ResetToGrid = function() end, Close = function() end })
+			ns.db.ruleEditorOpen.rain, ns.db.ruleEditorOpen.moving = wasOpen.rain, wasOpen.moving
 			r:Sleep(0.6)
 			local editor = _G.CinematicRuleEditor
 			if not editor or not editor:IsShown() then return r:Fail("the rule editor didn't open") end

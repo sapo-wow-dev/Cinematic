@@ -3712,6 +3712,19 @@ ns.RULE_WORDS = {
 	targetself = "targetself", enemyplayer = "enemyplayer", hostilenpc = "hostilenpc", neutralplayer = "neutralplayer",
 	neutralnpc = "neutralnpc", friendlyplayer = "friendlyplayer", friendlynpc = "friendlynpc",
 	noplate = "noplate", plateoff = "noplate", offscreen = "noplate", near = "near", close = "near", near28 = "near28",
+	-- (The unit under the mouse, by what it is: ns.HoverWords below. mouseover...
+	-- reads the same.)
+	hover = "hover", mouseover = "hover", hoverself = "hoverself", mouseoverself = "hoverself",
+	hoverdead = "hoverdead", mouseoverdead = "hoverdead", hovercorpse = "hoverdead",
+	hoverenemy = "hoverenemy", mouseoverenemy = "hoverenemy", hoverfriendly = "hoverfriendly",
+	mouseoverfriendly = "hoverfriendly", hoverenemyplayer = "hoverenemyplayer",
+	mouseoverenemyplayer = "hoverenemyplayer", hoverhostilenpc = "hoverhostilenpc",
+	mouseoverhostilenpc = "hoverhostilenpc", hoverneutralplayer = "hoverneutralplayer",
+	mouseoverneutralplayer = "hoverneutralplayer", hoverneutralnpc = "hoverneutralnpc",
+	mouseoverneutralnpc = "hoverneutralnpc", hoverfriendlyplayer = "hoverfriendlyplayer",
+	mouseoverfriendlyplayer = "hoverfriendlyplayer", hoverfriendlynpc = "hoverfriendlynpc",
+	mouseoverfriendlynpc = "hoverfriendlynpc", hoverframe = "hoverframe", mouseoverframe = "hoverframe",
+	hoverunitframe = "hoverframe",
 	-- (Spell range bands: see RANGE_BANDS. spellrange, from before the bands,
 	-- and near40, its name before that, read as the nearest band.)
 	range5to10 = "range5to10", range20to25 = "range20to25", range30to35 = "range30to35", range40plus = "range40plus",
@@ -3766,6 +3779,74 @@ ns.RULE_CAMERAS[#ns.RULE_CAMERAS + 1] = { "cam_script" }
 for _, cam in ipairs(ns.RULE_CAMERAS) do
 	ns.RULE_WORDS[cam[1]] = cam[1]
 end
+
+-- The unit under the mouse (2026-11-24, a player's wish: tooltips only on
+-- corpses, or only over unit frames): the Target words again, for the
+-- game's "mouseover" unit. Read as they are, not out of fights only as
+-- target, enemy and friendly are: in a fight the game hides much of a
+-- unit, and what it won't say reads false. hover: anything under the mouse;
+-- hoverself: you; hoverdead: a dead one (a corpse to loot or skin);
+-- hoverenemy: one you can attack (alive); hoverfriendly: the rest, the dead
+-- too (as friendly is for your target); the kinds as enemyplayer and the
+-- rest (ns.TargetNameRow); hoverframe: the mouse on a unit frame (yours,
+-- your target's, party or raid frames), not out in the world. No near or
+-- range words: a unit under the mouse can be anywhere in view.
+-- ns.RuleFacts asks once a frame (and at once after the game's
+-- UPDATE_MOUSEOVER_UNIT); worked out afresh only when the unit or the frame
+-- under the mouse changed, or with force (its full working out, every
+-- FACTS_HOLD: a mob dying under the mouse). true when a word changed.
+-- (All on ns, no locals: this main chunk is at its 200.)
+ns.hoverState = { fields = { "hover", "hoverself", "hoverdead", "hoverenemy", "hoverfriendly", "hoverenemyplayer",
+	"hoverhostilenpc", "hoverneutralplayer", "hoverneutralnpc", "hoverfriendlyplayer", "hoverfriendlynpc",
+	"hoverframe" }, values = {} }
+ns.hoverState.watch = CreateFrame("Frame")
+ns.hoverState.watch:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
+ns.hoverState.watch:SetScript("OnEvent", function() ns.hoverState.at, ns.hoverState.read = nil, false end)
+function ns.HoverWords(facts, now, force)
+	local state = ns.hoverState
+	if not force and state.at == now then return false end
+	state.at = now
+	local exists = ns.Flag(UnitExists("mouseover")) and true or false
+	local focus = exists and ns.MouseFocus() or nil
+	local guid = exists and UnitGUID("mouseover") or nil
+	local plain = guid == nil or not (issecretvalue and issecretvalue(guid))
+	if not force and plain and state.read and exists == state.exists and guid == state.guid
+		and focus == state.focus then
+		return false
+	end
+	state.read, state.exists, state.guid, state.focus = true, exists, plain and guid or nil, focus
+	local v = state.values
+	local dead = exists and ns.Flag(UnitIsDeadOrGhost("mouseover")) and true or false
+	local enemy = exists and not dead and ns.IsEnemyUnit("mouseover")
+	local isSelf = exists and ns.Flag(UnitIsUnit("mouseover", "player")) and true or false
+	local row = exists and not isSelf and ns.TargetNameRow and ns.TargetNameRow("mouseover") or nil
+	-- (A unit frame: anything under the mouse but the world, WorldFrame and
+	-- what's on it. A frame we can't read counts as the world.)
+	local onFrame = false
+	if exists and focus ~= nil then
+		local f, world = focus, false
+		for _ = 1, 8 do
+			if f == nil then break end
+			if f == WorldFrame then world = true break end
+			local ok, parent = pcall(UIParent.GetParent, f)
+			f = ok and not (issecretvalue and issecretvalue(parent)) and parent or nil
+		end
+		onFrame = not world
+	end
+	v.hover, v.hoverself, v.hoverdead = exists, isSelf, dead
+	v.hoverenemy = enemy == true
+	v.hoverfriendly = exists and (dead or enemy == false) or false
+	v.hoverenemyplayer, v.hoverhostilenpc = row == "TargetEnemyPlayer", row == "TargetEnemyNPC"
+	v.hoverneutralplayer, v.hoverneutralnpc = row == "TargetNeutralPlayer", row == "TargetNeutralNPC"
+	v.hoverfriendlyplayer, v.hoverfriendlynpc = row == "TargetFriendlyPlayer", row == "TargetFriendlyNPC"
+	v.hoverframe = onFrame
+	local changed = false
+	for _, field in ipairs(state.fields) do
+		if facts[field] ~= v[field] then facts[field], changed = v[field], true end
+	end
+	return changed
+end
+
 do
 	local OPERATORS = { ["and"] = "and", ["&"] = "and", ["&&"] = "and", ["or"] = "or", ["|"] = "or", ["||"] = "or",
 		["not"] = "not", ["!"] = "not" }
@@ -4705,6 +4786,8 @@ do
 				end
 				if changed then ns.factsGen = ns.factsGen + 1 end -- (a camera word changed: the rows' answers too)
 			end
+			-- (The mouse words: the unit under the mouse, checked once a frame.)
+			if ns.HoverWords(facts, now) then ns.factsGen = ns.factsGen + 1 end
 			SetTargetWords()
 			return facts
 		end
@@ -4755,6 +4838,7 @@ do
 		-- (Your target up close, where its plate goes to the top: see TargetWithin.)
 		facts.near = hasTarget and not targetSelf and TargetWithin(2) or false
 		facts.near28 = hasTarget and not targetSelf and TargetWithin(4) or false
+		ns.HoverWords(facts, now, true) -- (the unit under the mouse: hover and the rest)
 		LookForRangeSpells()
 		for i, band in ipairs(RANGE_BANDS) do
 			facts[band.field] = hasTarget and not targetSelf and TargetInBand(i) or false

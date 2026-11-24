@@ -102,10 +102,19 @@ function ns.RulePieces()
 			{ "entering", L["Entering combat"] }, { "leaving", L["Leaving combat"] }, { "boss", L["Boss fight"] } } },
 		{ L["Camera"], { 0.95, 0.75, 0.45 }, ns.RuleCameraPieces() },
 		{ L["Target"], { 1, 0.65, 0.25 }, { { "enemy", L["Enemy targeted"] }, { "friendly", L["Friend targeted"] },
-			{ "target", L["Anything targeted"] }, { "targetself", L["You"] }, { "targetdead", L["Dead target"] }, { "enemyplayer", L["Enemy players"] },
-			{ "hostilenpc", L["Hostile NPCs"] }, { "neutralplayer", L["Neutral players"] },
+			-- (The most used first: the kinds after, behind the line's +N, 2026-11-24.)
+			{ "target", L["Anything targeted"] }, { "targetself", L["You"] }, { "targetdead", L["Dead target"] },
+			{ "near", L["Near (11 yards)"] }, { "near28", L["Near (28 yards)"] }, { "noplate", L["Plate off screen"] },
+			{ "enemyplayer", L["Enemy players"] }, { "hostilenpc", L["Hostile NPCs"] }, { "neutralplayer", L["Neutral players"] },
 			{ "neutralnpc", L["Neutral NPCs"] }, { "friendlyplayer", L["Friendly players"] },
-			{ "friendlynpc", L["Friendly NPCs"] }, { "noplate", L["Plate off screen"] }, { "near", L["Near (11 yards)"] }, { "near28", L["Near (28 yards)"] } } },
+			{ "friendlynpc", L["Friendly NPCs"] } } },
+		-- (The unit under the mouse: Frames.lua's ns.HoverWords. No near or range.)
+		{ L["Mouse over"], { 1, 0.85, 0.45 }, { { "hover", L["Anything"] }, { "hoverenemy", L["Enemy"] },
+			{ "hoverfriendly", L["Friendly"] }, { "hoverself", L["You"] }, { "hoverdead", L["Dead"] },
+			{ "hoverframe", L["On a unit frame"] },
+			{ "hoverenemyplayer", L["Enemy players"] }, { "hoverhostilenpc", L["Hostile NPCs"] },
+			{ "hoverneutralplayer", L["Neutral players"] }, { "hoverneutralnpc", L["Neutral NPCs"] },
+			{ "hoverfriendlyplayer", L["Friendly players"] }, { "hoverfriendlynpc", L["Friendly NPCs"] } } },
 		{ L["Spell range"], { 0.45, 0.9, 0.9 }, ranges },
 		{ L["Nearby"], { 1, 0.5, 0.8 }, { { "elite11", L["Elite near (11 yards)"] },
 			{ "elite28", L["Elite near (28 yards)"] }, { "elite40", L["Elite near (40 yards)"] } } },
@@ -401,9 +410,10 @@ local function BuildEditor()
 	now:SetWidth(EDIT_W - 32)
 	now:SetJustifyH("LEFT")
 
-	local Refresh
+	local Refresh, Layout
 	local function Changed()
 		if target and target.SetText then target.SetText(box:GetText()) end
+		Layout() -- (a word typed in comes out from behind its line's +N)
 		Refresh()
 	end
 	box:SetScript("OnTextChanged", function(_, userInput)
@@ -435,21 +445,31 @@ local function BuildEditor()
 	end
 
 	-- The pieces, a line each in its colour; a green dot: true where you are now.
+	-- (2026-11-24, the user: "our list is getting too long". Each line shows
+	-- two rows of buttons at most; the rest sit behind a +N button at the
+	-- end of the second, which opens the whole line (Fewer closes it), kept
+	-- open or not per line in CinematicDB (ruleEditorOpen, the account's). A
+	-- word in the rule is never behind it, and the +N's dot is on while a
+	-- word behind it is true where you are. Laid out again by Layout: as the
+	-- editor opens, a line opens or closes, or the rule changes.)
 	local palette = CreateFrame("Frame", nil, editor)
 	palette:SetPoint("TOPLEFT", now, "BOTTOMLEFT", -2, -12)
 	palette:SetWidth(EDIT_W - 28)
-	local LINE_X, DOT_ROOM = 70, 12
-	local px, py = LINE_X, 0
+	local LINE_X, DOT_ROOM, RIGHT, MAX_ROWS = 70, 12, EDIT_W - 28, 2
 	local wordButtons = {}
+	local function Label(button, color, text, dotted)
+		local label = button:GetFontString()
+		button:SetText(Colored(color, text))
+		button:SetWidth(label:GetStringWidth() + 16 + (dotted and DOT_ROOM or 0))
+		label:ClearAllPoints()
+		label:SetPoint("CENTER", dotted and -DOT_ROOM / 2 or 0, 0)
+	end
 	local function Piece(text, onClick, color, dotted)
 		local button = ns.PanelButton(palette)
 		button:SetHeight(20)
 		local label = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		button:SetFontString(label)
-		button:SetText(Colored(color, text))
-		button:SetWidth(label:GetStringWidth() + 16 + (dotted and DOT_ROOM or 0))
-		label:ClearAllPoints()
-		label:SetPoint("CENTER", dotted and -DOT_ROOM / 2 or 0, 0)
+		Label(button, color, text, dotted)
 		button:SetSkinEdge(color[1], color[2], color[3], 0.45)
 		if dotted then
 			button.dot = button:CreateTexture(nil, "OVERLAY")
@@ -458,25 +478,40 @@ local function BuildEditor()
 			button.dot:SetTexture("Interface\\COMMON\\Indicator-Green")
 			button.dot:Hide()
 		end
-		if px > LINE_X and px + button:GetWidth() > EDIT_W - 28 then
-			px, py = LINE_X, py - 24
-		end
-		button:SetPoint("TOPLEFT", palette, "TOPLEFT", px, py)
-		px = px + button:GetWidth() + 4
 		button:SetScript("OnClick", onClick)
 		return button
 	end
 	local GOLD = { 1, 0.82, 0 }
-	-- (The Tooltip line's name and buttons, and the palette's height without it.)
-	local tipLine, heightWithout = {}, nil
+	-- Each line: { key (its first word: the open state's), name, pieces = { {
+	-- button, field } }, tail (Undo and Clear on Logic's), more, tooltipOnly }.
+	local lines = {}
+	local showTip = false
+	local function OpenLines()
+		local db = ns.db
+		if not db then return {} end
+		if type(db.ruleEditorOpen) ~= "table" then db.ruleEditorOpen = {} end
+		return db.ruleEditorOpen
+	end
 	for g, group in ipairs(ns.RulePieces()) do
-		if group.tooltipOnly then heightWithout = -py + 22 end
-		if g > 1 then px, py = LINE_X, py - 26 end
 		local name = palette:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		if group.tooltipOnly then tipLine[#tipLine + 1] = name end
 		name:SetText(group[1])
 		name:SetTextColor(group[2][1], group[2][2], group[2][3])
-		name:SetPoint("TOPLEFT", palette, "TOPLEFT", 0, py - 6)
+		local line = { key = group[3][1] and group[3][1][1] or tostring(g), name = name, pieces = {}, tail = {},
+			tooltipOnly = group.tooltipOnly, color = group[2], capped = g > 1 }
+		lines[#lines + 1] = line
+		if line.capped then
+			line.more = Piece("+00", function()
+				local open = OpenLines()
+				open[line.key] = not open[line.key] or nil
+				Layout()
+				Refresh()
+			end, line.color, true)
+			line.reserve = line.more:GetWidth() -- (room kept for it: "+00" as wide as it gets)
+			Tip(line.more, function()
+				return OpenLines()[line.key] and L["Shows this line's first words only."]
+					or L["Shows the rest of this line's words; a green dot means one of them is true where you are now."]
+			end)
+		end
 		for _, piece in ipairs(group[3]) do
 			local word = piece[1]
 			local field = ns.RULE_WORDS[word]
@@ -494,7 +529,7 @@ local function BuildEditor()
 			else
 				button = Piece(piece[2], function() Insert(word) end, group[2], field ~= nil)
 			end
-			if group.tooltipOnly then tipLine[#tipLine + 1] = button end
+			line.pieces[#line.pieces + 1] = { button = button, field = field }
 			if field and group.tooltipOnly then
 				wordButtons[word] = button
 				Tip(button, (L["Adds \"%s\": true for a tooltip of this kind."]):format(word))
@@ -520,24 +555,100 @@ local function BuildEditor()
 		end
 		if g == 1 then
 			-- (Undo and Clear at the end of the Logic line, a little apart.)
-			px = px + 16
-			Tip(Piece(L["Undo"], Undo, GOLD), L["Takes off the piece before the cursor."])
-			Tip(Piece(L["Clear"], function()
+			local undo = Piece(L["Undo"], Undo, GOLD)
+			Tip(undo, L["Takes off the piece before the cursor."])
+			local clear = Piece(L["Clear"], function()
 				box:SetText("")
 				box:SetFocus()
 				Changed()
-			end, GOLD), L["Empties the rule."])
+			end, GOLD)
+			Tip(clear, L["Empties the rule."])
+			line.tail = { undo, clear }
 		end
 	end
-	local heightWith = -py + 22
-	heightWithout = heightWithout or heightWith
-	-- Shows the Tooltip line or not, the editor's height to match.
-	local function ShowTipLine(shown)
-		for _, widget in ipairs(tipLine) do widget:SetShown(shown) end
-		palette:SetHeight(shown and heightWith or heightWithout)
+	-- The fields named in the rule now (aliases as their field).
+	local function InRule()
+		local fields = {}
+		for word in (box:GetText() or ""):lower():gmatch("[%w_]+") do
+			local field = ns.RULE_WORDS[word]
+			if field then fields[field] = true end
+		end
+		return fields
+	end
+	-- How many rows a line's buttons take, all shown.
+	local function Rows(line)
+		local px, rows = LINE_X, 1
+		for _, piece in ipairs(line.pieces) do
+			local w = piece.button:GetWidth()
+			if px > LINE_X and px + w > RIGHT then px, rows = LINE_X, rows + 1 end
+			px = px + w + 4
+		end
+		return rows
+	end
+	-- Every line placed again, the editor's height to match: the Tooltip
+	-- line only for a tooltip row (showTip); a closed line its first two rows
+	-- and a +N, keeping room for it at the second row's end; open, Fewer.
+	function Layout()
+		local open, inRule = OpenLines(), InRule()
+		local py, first = 0, true
+		for _, line in ipairs(lines) do
+			local shown = showTip or not line.tooltipOnly
+			line.name:SetShown(shown)
+			local px, row = LINE_X, 1
+			local function Place(button)
+				if px > LINE_X and px + button:GetWidth() > RIGHT then px, py, row = LINE_X, py - 24, row + 1 end
+				button:ClearAllPoints()
+				button:SetPoint("TOPLEFT", palette, "TOPLEFT", px, py)
+				button:Show()
+				px = px + button:GetWidth() + 4
+			end
+			line.hidden = {}
+			if not shown then
+				for _, piece in ipairs(line.pieces) do piece.button:Hide() end
+				for _, button in ipairs(line.tail) do button:Hide() end
+				if line.more then line.more:Hide() end
+			else
+				if not first then py = py - 26 end
+				first = false
+				line.name:ClearAllPoints()
+				line.name:SetPoint("TOPLEFT", palette, "TOPLEFT", 0, py - 6)
+				local over = line.capped and Rows(line) > MAX_ROWS
+				local isOpen = over and open[line.key] and true or false
+				local cut = false
+				for _, piece in ipairs(line.pieces) do
+					local button = piece.button
+					if not over or isOpen or (piece.field and inRule[piece.field]) then
+						Place(button)
+					else
+						-- (Where it would go: within two rows, with room for the +N on the second.)
+						local w, nextRow, at = button:GetWidth(), row, px
+						if at > LINE_X and at + w > RIGHT then nextRow, at = row + 1, LINE_X end
+						if not cut and (nextRow < MAX_ROWS or (nextRow == MAX_ROWS and at + w + 4 + line.reserve <= RIGHT)) then
+							Place(button)
+						else
+							cut = true
+							button:Hide()
+							line.hidden[#line.hidden + 1] = piece
+						end
+					end
+				end
+				if #line.tail > 0 then px = px + 12 end
+				for _, button in ipairs(line.tail) do Place(button) end
+				if line.more then
+					if isOpen or #line.hidden > 0 then
+						Label(line.more, line.color, isOpen and L["Fewer"] or "+" .. #line.hidden, true)
+						Place(line.more)
+					else
+						line.more:Hide()
+					end
+				end
+			end
+		end
+		palette:SetHeight(-py + 22)
 		editor:SetHeight(34 + 64 + 6 + 32 + 12 + palette:GetHeight() + 50)
 	end
-	palette:SetHeight(heightWith)
+	-- (For the tests: each line's +N / Fewer and what's behind it, by key.)
+	editor.lines = lines
 
 	-- Along the bottom: Reset to grid (when it can't go back by itself), Done.
 	local done = ns.PanelButton(editor)
@@ -594,7 +705,7 @@ local function BuildEditor()
 		end)
 	end)
 	Tip(followButton, L["Makes this row show whenever another row of its table does, instead of a rule."])
-	editor:SetHeight(34 + 64 + 6 + 32 + 12 + palette:GetHeight() + 50)
+	Layout()
 
 	function Refresh()
 		if not target then return end
@@ -612,6 +723,16 @@ local function BuildEditor()
 		local facts = ns.db and ns.RuleFactsFor and ns.RuleFactsFor(target.key)
 		for word, button in pairs(wordButtons) do
 			button.dot:SetShown(facts and facts[ns.RULE_WORDS[word]] and true or false)
+		end
+		-- (A +N's dot: one of the words behind it true here.)
+		for _, line in ipairs(lines) do
+			if line.more then
+				local any = false
+				for _, piece in ipairs(line.hidden or {}) do
+					if facts and piece.field and facts[piece.field] then any = true break end
+				end
+				line.more.dot:SetShown(any)
+			end
 		end
 		if not facts then
 			now:SetText("")
@@ -645,10 +766,11 @@ local function BuildEditor()
 	end)
 	editor.Open = function(newTarget)
 		target = newTarget
-		ShowTipLine(newTarget.key ~= nil and newTarget.key:find("^tooltip:") ~= nil)
+		showTip = newTarget.key ~= nil and newTarget.key:find("^tooltip:") ~= nil
 		heading:SetText((L["Rule: %s"]):format(newTarget.label))
 		local text = newTarget.Text()
 		box:SetText(text)
+		Layout() -- (after the text: its words stay out from behind a +N)
 		editor:Show()
 		box:SetFocus()
 		box:SetCursorPosition(#text)

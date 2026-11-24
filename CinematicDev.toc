@@ -330,6 +330,7 @@ Dev\FontStepTest.lua
 Dev\NameConsoleTest.lua
 Dev\FarNamesTest.lua
 Dev\HoverPlateTest.lua
+Dev\MouseWordsTest.lua
 Dev\NpcTitleTest.lua
 Dev\ThemeArtTest.lua
 Dev\FindTabsTest.lua
