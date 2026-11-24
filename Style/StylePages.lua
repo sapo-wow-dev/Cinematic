@@ -3874,6 +3874,13 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf, panel)
 		edge:SetColorTexture(0.4, 0.4, 0.4, 1)
 		local heading = kit.Label(pop, "GameFontHighlightLarge", title)
 		heading:SetPoint("TOPLEFT", 12, -10)
+		if spec.noTitle then
+			-- (spec.noTitle: no heading, a folder tab over it names it: Cooldown
+			-- Manager Style's Drain ring, 2026-11-23.)
+			heading:SetText("")
+			heading:SetHeight(1)
+			heading:SetPoint("TOPLEFT", 12, -2)
+		end
 		-- (Its corner buttons the preview window's own, 2026-11-19, the user's
 		-- ask: Close, and Undock or Dock left of it, as small icons.)
 		local close = IconButton(pop, "close", ns.L["Close"])
@@ -3983,13 +3990,16 @@ function ns.StyleRows(kit, content, stack, changed, switchKey, fieldOf, panel)
 		if tabbed then
 			strip = CreateFrame("Frame", nil, pop)
 			strip:SetHeight(26)
+			-- (Under the title; with none (spec.noTitle), near the top: the room
+			-- left for it showed as a gap, the user's shot 2026-11-23.)
+			local underTitle = spec.noTitle and 10 or 36
 			if preview then
-				preview:SetPoint("TOPLEFT", pop, "TOPLEFT", 12, -36)
+				preview:SetPoint("TOPLEFT", pop, "TOPLEFT", 12, -underTitle)
 				preview:SetPoint("RIGHT", pop, "RIGHT", -12, 0)
 			end
 			-- (A line of tools under the sample: Hold to compare, Copy look,
 			-- Paste, Start from a theme. Then the tabs.)
-			local toolsTop = preview and (36 + preview:GetHeight() + 8) or 36
+			local toolsTop = preview and (underTitle + preview:GetHeight() + 8) or underTitle
 			local tools = CreateFrame("Frame", nil, pop)
 			tools:SetHeight(22)
 			tools:SetPoint("TOPLEFT", pop, "TOPLEFT", 12, -toolsTop)

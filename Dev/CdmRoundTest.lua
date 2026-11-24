@@ -19,6 +19,10 @@
 --             Tools/audits/2026-11-23-style-cdm-round-pandemic.md), a shot;
 --             then Square for a moment: the game's own border back, a shot
 --             to compare colors. (proven)
+--   5 own     Cooldown Manager Style's folder tabs under Look: Drain ring and
+--             Icons each opened (shot, nothing over them, the other's hidden),
+--             then Round with square buttons,
+--             Square with round ones, Same as action bars both ways.
 -- Into CinematicDB.cdmRoundTestLog. Dev copy only.
 local _, ns = ...
 
@@ -280,6 +284,115 @@ ns.TestKit.Define({
 			end
 			pcall(found.item.HidePandemicStateFrame, found.item)
 			r:Log("border taken down: PandemicIcon " .. type(rawget(found.item, "PandemicIcon")))
+			Shape(nil)
+		end },
+		-- Cooldown Manager Style's Icons folder tab (cdmIconShape, 2026-11-23): the
+		-- icons round or square on their own. Under Look, two folder tabs, one
+		-- shown at a time: Drain ring (the ring's Look panel, Ring / Color / Amount)
+		-- and Icons (the 3 shape choices). Each opened (a shot, nothing over its
+		-- controls, the other's hidden), then each pick against buttons of the
+		-- other shape: Round with square buttons, Square with round ones, Same as
+		-- action bars following them. Out of a fight; nothing to do.
+		{ key = "own", title = "Icons folder tab: the icons' own shape", run = function(r)
+			if not ns.CreateCdmStylePanel then return r:Skip("Style left out (Modules): no page") end
+			if UnitAffectingCombat("player") then
+				r:WaitFor("Leave the fight for a moment.", { check = function() return not UnitAffectingCombat("player") end })
+			end
+			if not AnyShown() then
+				r:WaitFor("Show your Cooldown Manager: hit a mob or a target dummy once.", { check = AnyShown })
+			end
+			local was = ns.db.cdmIconShape -- (the icons dressed in yours again at the end)
+			r:Set("cdmStyle", true)
+			r:Set("cdmIconShape", "bars")
+			local ok, err = pcall(ns.OpenOptionsAt, "Cooldown Manager Style")
+			r:Verdict(ok and SettingsPanel and SettingsPanel:IsShown(), "the page opened: " .. tostring(err or "ok"))
+			r:Sleep(0.6)
+			local L = ns.L
+			local choiceWords = { [L["Same as action bars"]] = true, [L["Square"]] = true, [L["Round"]] = true }
+			-- What's on the page now: its folder tabs (ns.FolderTabs' buttons, by
+			-- their text), the ring panel's Ring tab, and the shape choices shown.
+			local function Scan()
+				local seen = { folders = {}, ring = 0, choices = {} }
+				local function Walk(frame, depth)
+					if depth > 25 then return end
+					if frame.shotSet and frame.GetText then
+						local text = frame:GetText()
+						if text == L["Drain ring"] or text == L["Icons"] then seen.folders[text] = frame end
+					end
+					if frame:IsVisible() then
+						if frame.name == L["Ring"] and frame.text then seen.ring = seen.ring + 1 end
+					if frame.GetText and frame:GetText() == L["Copy look"] then seen.copy = frame end
+						if frame.GetObjectType and frame:GetObjectType() == "Button" then
+							-- (A choice's words: a font string of its own, rows.Segments.)
+							for _, region in ipairs({ frame:GetRegions() }) do
+								if region:GetObjectType() == "FontString" and choiceWords[region:GetText() or ""] then
+									seen.choices[#seen.choices + 1] = frame
+									break
+								end
+							end
+						end
+					end
+					for _, child in ipairs({ frame:GetChildren() }) do Walk(child, depth + 1) end
+				end
+				Walk(SettingsPanel, 0)
+				return seen
+			end
+			local first = Scan()
+			local ringFolder, iconsFolder = first.folders[L["Drain ring"]], first.folders[L["Icons"]]
+			r:Verdict(ringFolder ~= nil and iconsFolder ~= nil, ("folder tabs under Look: Drain ring %s, Icons %s"):format(
+				tostring(ringFolder ~= nil), tostring(iconsFolder ~= nil)))
+			if not (ringFolder and iconsFolder) then return pcall(HideUIPanel, SettingsPanel) end
+			local function Open(folder)
+				local script = folder:GetScript("OnClick")
+				if script then pcall(script, folder, "LeftButton") end
+				r:Sleep(0.4)
+				return Scan()
+			end
+			local function Clear(list, what)
+				local hits = {}
+				for _, control in ipairs(list) do
+					for _, hit in ipairs(r:Overlaps(control, SettingsPanel)) do hits[#hits + 1] = hit end
+				end
+				r:Verdict(#hits == 0, what .. ": nothing over it" .. (#hits > 0 and (": " .. table.concat(hits, ", ")) or ""))
+			end
+			local ring = Open(ringFolder)
+			r:Verdict(ring.ring == 1 and #ring.choices == 0, ("Drain ring tab: its panel (Ring tabs %d), no shape choices (%d)"):format(
+				ring.ring, #ring.choices))
+			-- (No title: Copy look near the panel's top, not under a title's empty
+			-- room, 36 px down in run qdda8's shot.)
+			local tools = ring.copy and ring.copy:GetParent()
+			local pop = tools and tools:GetParent()
+			local gap = pop and pop:GetTop() and ring.copy:GetTop() and (pop:GetTop() - ring.copy:GetTop())
+			r:Verdict(gap and gap <= 14, ("Drain ring panel: Copy look %s px under its top (14 most)"):format(
+				gap and ("%.0f"):format(gap) or "?"))
+			Clear({ ringFolder, iconsFolder }, "the folder tabs")
+			r:Shot("Style > Cooldown Manager, Drain ring tab", { behind = SettingsPanel })
+			local icons = Open(iconsFolder)
+			r:Verdict(#icons.choices == 3 and icons.ring == 0, ("Icons tab: %d of 3 shape choices, ring panel hidden (Ring tabs %d)"):format(
+				#icons.choices, icons.ring))
+			Clear(icons.choices, "Icons tab's choices")
+			r:Shot("Style > Cooldown Manager, Icons tab", { behind = SettingsPanel })
+			pcall(HideUIPanel, SettingsPanel)
+			r:Sleep(0.3)
+			local want = ns.CDM_TRIM or 0.07
+			local function IsRound(left) return math.abs(left - want) < 0.001 end
+			local function IsSquare(left) return left < 0.05 end
+			local cases = {
+				{ buttons = "square", pick = "round", test = IsRound, say = "Round with square buttons: round" },
+				{ buttons = "round", pick = "square", test = IsSquare, say = "Square with round buttons: square" },
+				{ buttons = "round", pick = "bars", test = IsRound, say = "Same as action bars, round buttons: round" },
+				{ buttons = "square", pick = "bars", test = IsSquare, say = "Same as action bars, square buttons: square" },
+			}
+			for _, case in ipairs(cases) do
+				r:Set("cdmIconShape", case.pick)
+				Shape(case.buttons)
+				r:Sleep(0.6)
+				local total, right = ReadAll(r, case.test, case.pick .. "/" .. case.buttons)
+				local art = ns.CooldownRoundArt() ~= nil
+				r:Verdict(total > 0 and right == total and art == (case.test == IsRound),
+					("%s: %d of %d icons, round art %s"):format(case.say, right, total, tostring(art)))
+			end
+			ns.db.cdmIconShape = was
 			Shape(nil)
 		end },
 	},

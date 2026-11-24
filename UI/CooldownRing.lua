@@ -38,8 +38,21 @@ DEFAULTS.cdmGradEmptyR, DEFAULTS.cdmGradEmptyG, DEFAULTS.cdmGradEmptyB = 0.95, 0
 -- "start in middle and add X/Y offset", in place of Middle / Bottom.)
 DEFAULTS.cdmAmountX, DEFAULTS.cdmAmountY = 0, 0
 DEFAULTS.cdmAmountSize = 13
+-- (The icons' shape, the page's Shape tab: bars = as Action Bar Style's buttons,
+-- or square / round for the Cooldown Manager alone. Style/ActionBarStyle.lua.)
+DEFAULTS.cdmIconShape = "bars"
+-- The page's folder tabs (Style/CdmStyle.lua's ns.PageTabsBelow), each a
+-- container: right-clicked off, what's on it reads its defaults (the ring its
+-- own look, the icons Same as action bars). Its saved switches: "tabOn:<id>:<n>".
+ns.CDM_STYLE_TABS = "Cooldown Manager Style/look"
+local RING_TAB, ICONS_TAB = 1, 2
+ns.CDM_STYLE_RING_TAB, ns.CDM_STYLE_ICONS_TAB = RING_TAB, ICONS_TAB
+function ns.CdmStyleTabOn(n)
+	local db = ns.db
+	return not (db and db[("tabOn:%s:%d"):format(ns.CDM_STYLE_TABS, n)] == false)
+end
 local function Look()
-	if ns.StyleLook then return ns.StyleLook("cdmStyle") end
+	if ns.StyleLook then return ns.StyleLook("cdmStyle", not ns.CdmStyleTabOn(RING_TAB)) end
 	return DEFAULTS -- (Style left out: the ring's own look)
 end
 

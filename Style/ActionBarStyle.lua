@@ -899,8 +899,23 @@ function ns.CdmIconState(item)
 	local crop = icon and cdmCrop[icon]
 	return part ~= nil, (part and icon and part.on[icon] ~= nil) or false, (crop and crop.on) or false, dressError
 end
-function ns.RefreshCooldownShape()
+-- The icons' shape: Cooldown Manager Style's Icons folder tab (cdmIconShape) picks
+-- Square or Round for them alone; "bars" (and its page off) follows this page,
+-- the buttons' shape. Their ring stays this page's outline either way.
+local function CdmPlan()
 	local plan = Plan()
+	-- (Its Icons folder tab right-clicked off: Same as action bars.)
+	local pick = ns.StyleLook("cdmStyle", not ns.CdmStyleTabOn(ns.CDM_STYLE_ICONS_TAB)).cdmIconShape
+	if pick == "round" or pick == "square" then
+		local own = {}
+		for key, value in pairs(plan) do own[key] = value end
+		own.round = pick == "round"
+		return own
+	end
+	return plan
+end
+function ns.RefreshCooldownShape()
+	local plan = CdmPlan()
 	cdmRound = plan.round and true or false
 	EachCdmIcon(function(item, icon)
 		local ok, err = pcall(DressCdmIcon, item, icon, plan)
