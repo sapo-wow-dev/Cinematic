@@ -131,6 +131,15 @@ events:SetScript("OnEvent", function(_, event)
 	elseif event == "AUCTION_HOUSE_SHOW" then
 		-- (The AH's addon loads on this event and shows its frame: dock a frame later.)
 		C_Timer.After(0, Update)
+	elseif event == "AUCTION_HOUSE_CLOSED" then
+		-- (Undocked here, not by Update: ours can hear it before the AH's frame
+		-- hides itself, and Update would see it shown and keep it docked under
+		-- the hidden AH, to come back with the last item next time and be
+		-- undocked as the next fight starts.)
+		local side, ah = Side(), AH()
+		if docked or (ah and side and side.parentFrame == ah) then
+			Undock()
+		end
 	else
 		Update()
 	end
