@@ -306,7 +306,8 @@ local function Charges(icon)
 	local ok, data = pcall(function() return icon.auraDataCached end)
 	if not ok or type(data) ~= "table" then return nil end
 	local okCount, count = pcall(function() return data.applications end)
-	if not okCount or count == nil then return nil end
+	-- (type() only: the count may be secret, and testing one errors.)
+	if not okCount or type(count) == "nil" then return nil end
 	if not Secret(count) and type(count) ~= "number" then return nil end
 	return count
 end
@@ -337,8 +338,14 @@ local function MostCharges(icon, id)
 		local most = SizeFor(icon, DescriptionCharges)
 		if most then return most end
 	end
+	-- (The larger of this session's and the saved: after a /reload the first
+	-- count seen, 2 with a charge used, won over the saved 3, and Lightning
+	-- Shield's ring drew 2 pips, the user 2026-11-23.)
+	if not id then return nil end
 	local saved = Saved()
-	return id and (mostSeen[id] or saved and saved[id]) or nil
+	local now, kept = mostSeen[id], saved and tonumber(saved[id])
+	if now and kept then return math.max(now, kept) end
+	return now or kept
 end
 ns.CooldownRingMostCharges = MostCharges
 
@@ -550,8 +557,12 @@ local function Draw(icon, style, look, size, amount, showAmount, whole, pips)
 	if ring.box then
 		-- (The icon's width is secret in a fight: math on it errored on every
 		-- hit, cdmring run 4. Sized when it reads plain; kept through fights.)
+		-- (The last plain width kept, ring.known: a Size change while the
+		-- width read secret kept the old size, the user's shots 2026-11-23,
+		-- 110% and 180% the same ring.)
 		local ok, width = pcall(ring.holder.GetWidth, ring.holder)
 		width = ok and Plain(width)
+		if width and width > 0 then ring.known = width else width = ring.known end
 		if width and width > 0 and width ~= ring.width then
 			ring.width = width
 			local scale = tonumber(look.cdmRingScale) or 1.36
@@ -595,15 +606,24 @@ function ns.CooldownRingDraw(icon, look, size, amount)
 end
 ns.CooldownRingLook = Look
 
+-- (Why each icon has no ring, for /cine debug cdmring why.)
+local skipped = setmetatable({}, { __mode = "k" })
+ns.CooldownRingSkipped = skipped
+local function Skip(icon, why)
+	skipped[icon] = why
+	return HideRing(rings[icon])
+end
+
 -- One icon: its ring shown and set while its buff is on you.
 local function Show(icon, id)
 	local spell = Plain(id)
 	if spell then iconSpell[icon] = spell else spell = iconSpell[icon] end
-	if not spell then return HideRing(rings[icon]) end
+	if not spell then return Skip(icon, "no spell") end
 	local look = Look()
 	local wanted, style = StyleOf(spell, look)
-	if not wanted then return HideRing(rings[icon]) end
-	if type(icon.auraInstanceID) == "nil" or not ns.Reachable(icon) then return HideRing(rings[icon]) end
+	if not wanted then return Skip(icon, "row off") end
+	if type(icon.auraInstanceID) == "nil" then return Skip(icon, "buff not on you") end
+	if not ns.Reachable(icon) then return Skip(icon, "icon unreachable") end
 	-- A shield: its absorb out of its size. Else charges: the aura's count
 	-- out of the most (2026-11-23, Lightning Shield).
 	-- (Each kept as { size, charges? } for when it can't be read: a fight.)
@@ -621,13 +641,13 @@ local function Show(icon, id)
 		end
 		if whole then amount = count end
 	end
-	if not size or size <= 0 then return HideRing(rings[icon]) end
+	if not size or size <= 0 then return Skip(icon, "no size (no absorb, no charges known)") end
 	if not whole then
 		local ok, absorbs = pcall(UnitGetTotalAbsorbs, "player")
-		if not ok then return HideRing(rings[icon]) end
+		if not ok then return Skip(icon, "absorbs unreadable") end
 		amount = absorbs
 	end
-	if amount == nil then return HideRing(rings[icon]) end
+	if type(amount) == "nil" then return Skip(icon, "no amount (count unread)") end -- (secret: type() only)
 	stats.charges = whole and (stats.charges or 0) + 1 or stats.charges
 	-- (The Amount column: hidden on rows set so.)
 	local base = RowKey(spell)
@@ -640,6 +660,7 @@ local function Show(icon, id)
 	ring.icon = icon
 	-- (Hidden with Amount on Hide too: Hide = no number, the user 2026-11-23.)
 	GameCount(ring, whole)
+	skipped[icon] = nil
 	stats.shown = stats.shown + 1
 end
 
@@ -665,12 +686,12 @@ ns.CooldownRingUpdate = Update
 
 local watcher = CreateFrame("Frame")
 local since = 0
-ns.SetOnUpdate(watcher, function(_, elapsed)
+ns.SetOnUpdate(watcher, ns.Profiled("Drain ring watcher", function(_, elapsed)
 	since = since + elapsed
 	if since < 0.25 then return end -- (the icon going on or off; amounts come by event)
 	since = 0
 	Update()
-end)
+end))
 watcher:Hide()
 watcher:SetScript("OnEvent", function(_, event, unit, _, spellID)
 	if unit ~= "player" then return end

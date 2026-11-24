@@ -82,10 +82,18 @@ end
 function ns.CooldownReadBuffNames() return readNames end
 
 -- The names an icon's buff goes by: its spell's, and its linked auras'.
-local namesOf = setmetatable({}, { __mode = "k" }) -- icon -> { cooldownID, names }
+-- (The icon's cooldownID may be secret in fights, as Frames.lua's ItemSpell
+-- has it: only type() and issecretvalue on it, never == (testing one
+-- errors, and in the SetShown hook nothing would catch it). Release review
+-- 2026-11-23, fix card 2026-11-23-cdm-secret-compares.md.)
+local function InUse(icon) return type(icon.cooldownID) ~= "nil" end
+local namesOf = setmetatable({}, { __mode = "k" }) -- icon -> { cooldownID (plain or nil), names }
 local function NamesOf(icon)
 	local kept = namesOf[icon]
-	if kept and kept.id == icon.cooldownID then return kept.names end
+	local cooldownID = icon.cooldownID
+	local secret = issecretvalue and issecretvalue(cooldownID) or false
+	-- (Secret: the names kept from when it read plain.)
+	if kept and (secret or kept.id == cooldownID) then return kept.names end
 	local names, seen = {}, {}
 	local function Add(id)
 		id = Plain(id)
@@ -107,7 +115,7 @@ local function NamesOf(icon)
 			for _, id in ipairs(linked) do Add(id) end
 		end
 	end
-	if #names > 0 then namesOf[icon] = { id = icon.cooldownID, names = names } end
+	if #names > 0 then namesOf[icon] = { id = not secret and cooldownID or nil, names = names } end
 	return names
 end
 ns.CooldownBuffNames = NamesOf
@@ -279,7 +287,7 @@ local iconOf = setmetatable({}, { __mode = "v" }) -- base spell ID -> its icon i
 -- A buff's icon in the bar now (a pooled icon may have gone to another spell).
 local function IconFor(id)
 	local icon = iconOf[id]
-	if not icon or icon.cooldownID == nil then return nil end
+	if not icon or not InUse(icon) then return nil end
 	local now = ns.CooldownIconSpellOf and ns.CooldownIconSpellOf(icon)
 	if not now or Base(now) ~= id then return nil end
 	return icon
@@ -313,7 +321,7 @@ function ns.CooldownMissingShows(icon, mode)
 		end
 		if not first then
 			local other = member == base and icon or IconFor(member)
-			if other and other.cooldownID ~= nil then first = other end
+			if other and InUse(other) then first = other end
 		end
 	end
 	return first == icon
@@ -339,7 +347,7 @@ end
 -- Whether an icon is Missing and its buff off you: it should show.
 local function Wanted(icon)
 	local group = groupOf[icon]
-	if not group or icon.cooldownID == nil or not Handled() then return false end
+	if not group or not InUse(icon) or not Handled() then return false end
 	local id = ns.CooldownIconSpellOf and ns.CooldownIconSpellOf(icon)
 	if not id then return false end
 	local mode = ns.CooldownBuffMode(id, group)
@@ -363,7 +371,12 @@ end
 -- Shows a Missing icon the game hid.
 local function Bring(icon)
 	if not Wanted(icon) or IsShownPlain(icon) ~= false then return end
-	if not Touchable(icon) then
+	-- (In a fight: Show() proven on Forever, rule
+	-- forever.cooldownviewer.show-hidden-buff-icon (38 of 38, no errors);
+	-- not tested on retail (ledger Tools/tests/cdm-missing-buff.md Q9), so
+	-- refused there in fights, shown again once the fight ends. Release
+	-- review 2026-11-23.)
+	if not Touchable(icon) or (ns.isRetail and InCombatLockdown()) then
 		stats.refused = stats.refused + 1
 		return
 	end
@@ -387,7 +400,7 @@ local function Hook(icon)
 	hooked[icon] = true
 	-- (After the game's own SetShown: its UpdateShownState. Not Hide: the
 	-- pool hides an icon it lets go, which must stay hidden.)
-	hooksecurefunc(icon, "SetShown", Bring)
+	hooksecurefunc(icon, "SetShown", ns.Profiled("Cooldown Missing show", Bring))
 end
 
 -- Whether any buff, bar or scene cell says Missing.
@@ -417,7 +430,7 @@ local function Visit(icon, _, bar)
 	if not group then return end
 	groupOf[icon] = group
 	local id = ns.CooldownIconSpellOf and ns.CooldownIconSpellOf(icon)
-	if id and icon.cooldownID ~= nil then iconOf[Base(id)] = icon end
+	if id and InUse(icon) then iconOf[Base(id)] = icon end
 	if Wanted(icon) then
 		Hook(icon)
 		Bring(icon)
@@ -445,5 +458,5 @@ end
 function ns.CooldownMissingShownHere(icon) return shownHere[icon] == true end
 
 if C_Timer and C_Timer.NewTicker then
-	C_Timer.NewTicker(0.25, function() ns.Guard(ns.CooldownMissingPass) end)
+	C_Timer.NewTicker(0.25, ns.Profiled("Cooldown Missing pass", function() ns.Guard(ns.CooldownMissingPass) end))
 end

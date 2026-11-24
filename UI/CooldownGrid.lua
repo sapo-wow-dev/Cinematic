@@ -189,7 +189,7 @@ local LOOK = {
 	-- buffs with charges, ns.CooldownRingFits; the bar's row always.)
 	-- (On or off; its look on Style > Cooldown Manager, Style/CdmStyle.lua. A
 	-- row saved with a style from before reads On.)
-	ring = { label = L["Ring"], tip = L["A ring round the icon that drains as your shield takes damage or its charges are used. Its look: Style > Cooldown Manager."],
+	ring = { label = L["Ring"], tip = L["A ring around the icon that drains as your shield takes damage or its charges are used. Its look: Style > Cooldown Manager."],
 		values = { "off", "on" },
 		Text = function(value) return (value == nil or value == "off" or value == false) and L["Off"] or L["On"] end },
 	ringAmount = { label = L["Amount"], tip = L["What's left in the middle of the ring: the amount your shield can still absorb, or its charges."],

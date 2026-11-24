@@ -20,6 +20,7 @@ Code: UI/CooldownMissing.lua (new), Frames.lua (ns.CooldownBuffShows, ReadyTarge
 | Q14 | Groups: any one / each / none on, the group's row, Ungroup | forever | YES: any one with Blood Pact (imp's) on = no reminder; each = Skin shown; none on = Skin's icon; row 'or Demon Armor'; Ungroup splits back. The 8 px spill was the test's (Layout without Changed: no panel refit) | run 4 |
 | Q15 | Ready-made alternatives: names on Forever; the hint fits? | forever | YES: all sets resolve except Blessing of Salvation/Sanctuary/Light and their Greater (not on Forever), Fel Armor, Molten Armor, Water Shield (later expansions); dropped by design. Hint 'or Demon Armor' fits | run 6 |
 | Q9 | Same on retail | retail | open, not asked yet | later |
+| Q16 | Retail in fights: a Missing buff's icon Show() (now refused in fights on retail till Q9 proves it; card 2026-11-23-cdm-secret-compares.md) | retail | open | later |
 
 ## Plan tree (step 3)
 Q5+Q6 yes, no errors -> way A is the build; next: groups (pure logic + menu, offline), confirm run.

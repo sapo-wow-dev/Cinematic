@@ -10,6 +10,7 @@
 --   charges   shaman: Lightning Shield's ring by charges, out of a fight and in one
 --   noshield  any character: Ring / Amount cells only on shields; a tracked
 --             buff with a Ring set not in Other
+--   livesize  Size 110% then 180%: the real ring follows at once
 --   4 stylepage  Style > Cooldown Manager on and off (shots); off, the ring's own look
 --   4 fight   Pips through a fight: the ring set on every hit (no errors,
 --             blocked), shots after the first hit and when the shield breaks
@@ -91,7 +92,7 @@ ns.TestKit.Define({
 	title = "Shield drain ring",
 	about = "the drain ring on a shield's tracked buff: 4 styles, the menu, a fight",
 	needs = "A shield spell (Power Word: Shield) in Tracked Buffs, and a mob to fight",
-	settings = { "cooldownRowSettings", "cdmStyle", "cdmRingStyle", "cdmRingColor" },
+	settings = { "cooldownRowSettings", "cdmStyle", "cdmRingStyle", "cdmRingColor", "cdmRingScale" },
 	steps = {
 		{ key = "shield", proven = "cdmring runs 3-7 (2026-11-23, priest): PASS, size 44 after a /reload",
 			title = "your shield, tracked and cast", run = function(r)
@@ -416,6 +417,157 @@ ns.TestKit.Define({
 			r:Sleep(0.4)
 			r:Verdict(not ring.text:IsShown() and Alpha() == 0, ("Amount Hide, no number: ours hidden %s, the game's alpha %s"):format(
 				tostring(not ring.text:IsShown()), tostring(Alpha())))
+		end },
+		-- Your rings as they are (2026-11-23, the user's shot: Lightning Shield
+		-- Ring On, no ring). Nothing changed: each tracked buff's row, whether
+		-- its ring shows, and if not, why (ns.CooldownRingSkipped).
+		{ key = "why", title = "your rings now, and why one doesn't show", run = function(r)
+			ns.CooldownRingUpdate()
+			local missing, rows = 0, 0
+			ns.EachCooldownIcon(function(icon, id, bar)
+				if bar ~= "BuffIconCooldownViewer" then return end
+				local spell = Plain(id)
+				local base = spell and (ns.BaseSpell and ns.BaseSpell(spell) or spell)
+				local row = base and ns.CooldownRowSetting("ring", base, "buffs")
+				local ring = ns.CooldownRingOf(icon)
+				local shown = ring and ring.holder:IsVisible() or false
+				local count = ns.CooldownRingCharges(icon)
+				r:Log(("  %s (%s): ring row %s, shown %s, why not %s, size %s, most %s (saved %s), count %s, aura %s"):format(
+					tostring(spell and C_Spell.GetSpellName(spell)), tostring(spell), tostring(row), tostring(shown),
+					tostring(ns.CooldownRingSkipped[icon]), tostring(ring and ring.size),
+					tostring(base and ns.CooldownRingMostCharges(icon, base)),
+					tostring(base and ns.db.cdmRingCharges and ns.db.cdmRingCharges[base]),
+					Secret(count) and "secret" or tostring(count), tostring(icon.auraInstanceID ~= nil)))
+				if row == "on" then
+					rows = rows + 1
+					if not shown then missing = missing + 1 end
+				end
+			end, true)
+			r:Shot("your rings now")
+			r:Verdict(rows == 0 or missing == 0, ("rows with Ring on: %d, ring missing on %d"):format(rows, missing))
+		end },
+		-- In CineMode (2026-11-23: why and livesize passed with CineMode off;
+		-- the user's shots were in it). CineMode on, then each ring row's ring
+		-- shown (why not, if not), and Size 110% / 180% on it, then off again.
+		{ key = "incine", title = "your rings in CineMode, and Size there", run = function(r)
+			if not (ns.IsCineModeOn and Cinematic_ToggleCineMode) then return r:Skip("no CineMode") end
+			r.cineAllowed = true
+			if not ns.IsCineModeOn() then pcall(Cinematic_ToggleCineMode) end
+			r:Sleep(1.5)
+			r:Log("  CineMode on: " .. tostring(ns.IsCineModeOn()))
+			ns.CooldownRingUpdate()
+			local target, missing, rows = nil, 0, 0
+			ns.EachCooldownIcon(function(icon, id, bar)
+				if bar ~= "BuffIconCooldownViewer" then return end
+				local spell = Plain(id)
+				local base = spell and (ns.BaseSpell and ns.BaseSpell(spell) or spell)
+				local row = base and ns.CooldownRowSetting("ring", base, "buffs")
+				local ring = ns.CooldownRingOf(icon)
+				local shown = ring and ring.holder:IsVisible() or false
+				local okA, alpha = pcall(icon.GetEffectiveAlpha, icon)
+				r:Log(("  %s: ring row %s, shown %s, why not %s, icon visible %s alpha %s, holder shown %s"):format(
+					tostring(spell), tostring(row), tostring(shown), tostring(ns.CooldownRingSkipped[icon]),
+					tostring(icon:IsVisible()), okA and tostring(alpha) or "?", tostring(ring and ring.holder:IsShown())))
+				if row == "on" then
+					rows = rows + 1
+					if not shown then missing = missing + 1 else target = target or icon end
+				end
+			end, true)
+			r:Shot("rings in CineMode")
+			r:Verdict(rows > 0 and missing == 0, ("CineMode: rows with Ring on %d, ring missing on %d"):format(rows, missing))
+			if target then
+				local function Ratio(scale)
+					r:Set("cdmRingScale", scale)
+					ns.ApplyCooldownRing()
+					r:Sleep(0.4)
+					local ring = ns.CooldownRingOf(target)
+					local okB, bw = pcall(ring.box.GetWidth, ring.box)
+					local w = ring.known
+					r:Log(("  CineMode %d%%: box %s, icon %s"):format(scale * 100, tostring(okB and bw), tostring(w)))
+					return okB and Plain(bw) and w and Plain(bw) / w or nil
+				end
+				local a, b = Ratio(1.1), Ratio(1.8)
+				r:Shot("CineMode, Size 180%")
+				r:Verdict(a and b and math.abs(a - 1.1) < 0.03 and math.abs(b - 1.8) < 0.03,
+					("CineMode Size: %s then %s x the icon"):format(tostring(a), tostring(b)))
+			end
+			if ns.IsCineModeOn() then pcall(Cinematic_ToggleCineMode) end
+			r.cineAllowed = nil
+		end },
+		-- Size right away (2026-11-23, the user's shots: 110% and 180% drew the
+		-- same ring on the real icon, the preview grew). Any buff with a ring
+		-- on you: Size 110% then 180%, the ring's box measured against the
+		-- icon each time, the icon's width logged plain or secret.
+		{ key = "livesize", title = "Size changes the real ring at once", run = function(r)
+			local found
+			ns.EachCooldownIcon(function(icon, id, bar)
+				if found or bar ~= "BuffIconCooldownViewer" then return end
+				local spell = Plain(id)
+				spell = spell and (ns.BaseSpell and ns.BaseSpell(spell) or spell)
+				if spell and type(icon.auraInstanceID) ~= "nil" and (ns.CooldownRingSizeFor(icon)
+					or ns.CooldownRingMostCharges(icon, spell)) then found = { icon = icon, spell = spell } end
+			end, true)
+			if not found then return r:Skip("no shield or charges buff on you in Tracked Buffs (Lightning Shield, Power Word: Shield)") end
+			local icon = found.icon
+			SetRing(r, "pips", "class", found.spell)
+			local function Measure(scale)
+				r:Set("cdmRingScale", scale)
+				ns.ApplyCooldownRing()
+				r:Sleep(0.4)
+				local ring = ns.CooldownRingOf(icon)
+				if not (ring and ring.box) then return nil, "no ring" end
+				local okH, hw = pcall(ring.holder.GetWidth, ring.holder)
+				local okB, bw = pcall(ring.box.GetWidth, ring.box)
+				local how = ("icon width %s, box %s, kept %s"):format(
+					not okH and "error" or Secret(hw) and "secret" or tostring(hw),
+					not okB and "error" or Secret(bw) and "secret" or tostring(bw), tostring(ring.known))
+				hw, bw = Plain(hw) or ring.known, Plain(bw)
+				return hw and bw and hw > 0 and bw / hw or nil, how
+			end
+			local small, howSmall = Measure(1.1)
+			r:Log("  110%: " .. howSmall)
+			local big, howBig = Measure(1.8)
+			r:Log("  180%: " .. howBig)
+			r:Shot("Size 180%", { behind = icon, pad = 30 })
+			r:Verdict(small and math.abs(small - 1.1) < 0.03, ("110%%: ring %s x the icon"):format(tostring(small)))
+			r:Verdict(big and math.abs(big - 1.8) < 0.03, ("180%%: ring %s x the icon, at once"):format(tostring(big)))
+			-- (Run qa786: set directly, it followed. The user's way: the page's
+			-- own Size slider, the settings open. Moved as a drag moves it.)
+			if InCombatLockdown() or not ns.CreateCdmStylePanel then return end
+			pcall(ns.OpenOptionsAt, "Cooldown Manager Style")
+			r:Sleep(0.6)
+			local slider
+			local function Walk(frame, depth)
+				if slider or depth > 25 then return end
+				if frame.GetObjectType and frame:GetObjectType() == "Slider" and frame:IsVisible() then
+					local lo, hi = frame:GetMinMaxValues()
+					if lo == 110 and hi == 180 then slider = frame return end
+				end
+				for _, child in ipairs({ frame:GetChildren() }) do Walk(child, depth + 1) end
+			end
+			if SettingsPanel then Walk(SettingsPanel, 0) end
+			if not slider then
+				r:Verdict(false, "the page's Size slider (110-180) found: no")
+				return pcall(HideUIPanel, SettingsPanel)
+			end
+			local function Drag(value)
+				slider:SetValue(value)
+				r:Sleep(0.4)
+				local ring = ns.CooldownRingOf(icon)
+				local okH, hw = pcall(ring.holder.GetWidth, ring.holder)
+				local okB, bw = pcall(ring.box.GetWidth, ring.box)
+				hw, bw = okH and Plain(hw) or ring.known, okB and Plain(bw)
+				r:Log(("  slider %d: saved %s, ring.width %s, box %s, icon %s, shown %s"):format(value,
+					tostring(ns.db.cdmRingScale), tostring(ring.width), tostring(bw), tostring(hw),
+					tostring(ring.holder:IsVisible())))
+				return hw and bw and hw > 0 and bw / hw or nil
+			end
+			local s1 = Drag(110)
+			local s2 = Drag(180)
+			r:Shot("the page's slider at 180%", { behind = SettingsPanel })
+			r:Verdict(s1 and math.abs(s1 - 1.1) < 0.03, ("page slider 110%%: ring %s x the icon"):format(tostring(s1)))
+			r:Verdict(s2 and math.abs(s2 - 1.8) < 0.03, ("page slider 180%%: ring %s x the icon"):format(tostring(s2)))
+			pcall(HideUIPanel, SettingsPanel)
 		end },
 		-- The Style page (Style/CdmStyle.lua): opened from the Style hub, its
 		-- switch on and off (rows greyed), and the ring keeping its own look off.

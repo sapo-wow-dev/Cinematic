@@ -324,6 +324,15 @@ do
 	Check("saved count only: it fits, its most is 5", ns.CooldownRingFits(777) == true
 		and ns.CooldownRingMostCharges(nil, 777) == 5)
 	db.cdmRingCharges[777] = nil
+	-- (After a /reload with a charge used: saved 3, first count seen 2. The
+	-- ring stays 3 pips, not 2; the user 2026-11-23.)
+	db.cdmRingCharges[778] = 3
+	local used = Icon(778, { 778 }, true)
+	used.auraDataCached = { applications = 2 }
+	Check("reload, a charge used: most stays the saved 3, not the 2 seen",
+		ns.CooldownRingMostCharges(used, 778) == 3, ns.CooldownRingMostCharges(used, 778))
+	Check("the saved 3 not lowered", db.cdmRingCharges[778] == 3, db.cdmRingCharges[778])
+	db.cdmRingCharges[778] = nil
 	-- (Inner Fire, 20 charges: 20 pips; more than 20: the 8.)
 	fire.auraDataCached = { applications = 20 }
 	ns.SetCooldownRow(588, "ring", "on")

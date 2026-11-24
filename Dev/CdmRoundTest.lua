@@ -137,6 +137,7 @@ ns.TestKit.Define({
 	key = "cdmRoundTest",
 	title = "Round Cooldown Manager icons",
 	about = "Round shape: every CDM icon cut round and cropped, through one fight",
+	needs = "A mob or training dummy to fight",
 	putBack = function() Shape(nil) return "shape: your own look" end,
 	steps = {
 		{ key = "round", title = "Round: each icon cut and cropped",
