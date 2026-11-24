@@ -6,7 +6,7 @@
 -- When they show at all: the Letterbox tab (ns.CreateEffectPanel). Both in the
 -- Atmosphere hub under one icon.
 
-local _, ns = ...
+local ADDON_NAME, ns = ...
 -- (Up to the Letterbox Style page: the Atmosphere hub's effect pages, their
 -- first tab, loaded with Atmosphere, Style or not. Then the Style tab's page,
 -- with Style; with Atmosphere left out Options.lua builds none. Modules.lua.)
@@ -393,9 +393,96 @@ function ns.CreateLetterboxStylePanel(kit)
 		{ "height", L["Height"], L["Each bar a share of the screen's height."] },
 		{ "aspect", L["A film's frame"], L["Shapes the space between the bars like a movie screen, on any monitor."] },
 	})
-	rows.Slider("letterboxSize", L["Bar height"], 0, 25, 1, "%d%%", 100,
-		L["How tall each bar is, as a share of the screen's height."],
-		function(db) return db.letterboxStyle and db.letterboxSizeBy ~= "aspect" end)
+	-- Top bar, a link, Bottom bar (2026-11-24). Linked (the start): the bottom
+	-- goes by the top, its number paler, and either box sets both. Unlinked:
+	-- each its own, the bottom keeping what it showed.
+	do
+		local byHeight = function(db) return db.letterboxStyle and db.letterboxSizeBy ~= "aspect" end
+		local function Linked()
+			local db = ns.GetDB()
+			return not db or db.letterboxLinked ~= false
+		end
+		local line = rows.Boxes()
+		local topBox, bottomBox, link
+		local function Draw()
+			local linked = Linked()
+			if topBox then topBox:Refresh() end
+			if bottomBox then
+				bottomBox:Refresh()
+				local c = linked and 0.6 or 1
+				bottomBox:SetTextColor(c, c, c)
+			end
+			if link then
+				link.icon:SetVertexColor(linked and 1 or 0.4, linked and 0.82 or 0.4, linked and 0 or 0.4)
+			end
+		end
+		local function BottomShown()
+			local db = ns.GetDB()
+			return Linked() and db.letterboxSize or db.letterboxSizeBottom or db.letterboxSize
+		end
+		topBox = line:Box(L["Top bar"], {
+			key = "letterboxSize",
+			get = function() return ns.GetDB().letterboxSize end,
+			set = function(value)
+				local db = ns.GetDB()
+				db.letterboxSize = value
+				if Linked() then db.letterboxSizeBottom = value end
+				if bottomBox then bottomBox:Refresh() end
+			end,
+		}, 0, 25, 1, "%d%%", 100, L["How tall the top bar is, as a share of the screen's height."], byHeight)
+		local at = line:Gap(26)
+		link = CreateFrame("Button", nil, line)
+		link:SetSize(18, 18)
+		link:SetPoint("LEFT", line, "LEFT", at - 14, 0)
+		link.icon = link:CreateTexture(nil, "ARTWORK")
+		link.icon:SetAllPoints()
+		local LINK_TEX = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\Link" -- (Media/make_link.py)
+		link.icon:SetTexture(LINK_TEX)
+		link:SetHighlightTexture(LINK_TEX, "ADD")
+		link.settingKey = "letterboxLinked" -- (/cine find, the Why window's links)
+		-- (The page's Reset, profiles: { get, set } boxes record none themselves.)
+		for _, key in ipairs({ "letterboxSize", "letterboxSizeBottom", "letterboxLinked" }) do
+			kit.RecordKey(content, key)
+		end
+		link:SetScript("OnClick", function()
+			local db = ns.GetDB()
+			if db.letterboxLinked ~= false then
+				-- (Unlinked: the bottom keeps the height it showed, its own now.)
+				db.letterboxSizeBottom = db.letterboxSize
+				db.letterboxLinked = false
+			else
+				-- (Linked again: the bottom takes the top's.)
+				db.letterboxLinked = true
+				db.letterboxSizeBottom = db.letterboxSize
+			end
+			Draw()
+			Changed()
+		end)
+		kit.Tooltip(link, L["Click to link or unlink the two bars. Linked, they're the same height."])
+		-- (Greyed and unclickable with the boxes: Set by a film's frame, or the
+		-- page off. Its own Refresh, as GreyUnless wraps one, and the page's to
+		-- refresh it: release review 2026-11-24.)
+		link.Refresh = function(self) self.icon:SetAlpha(byHeight(ns.GetDB()) and 1 or 0.35) end
+		kit.GreyUnless(link, byHeight)
+		kit.AddControl(link)
+		bottomBox = line:Box(L["Bottom bar"], {
+			key = "letterboxSizeBottom",
+			get = BottomShown,
+			set = function(value)
+				local db = ns.GetDB()
+				db.letterboxSizeBottom = value
+				if Linked() then db.letterboxSize = value end
+				if topBox then topBox:Refresh() end
+			end,
+		}, 0, 25, 1, "%d%%", 100, L["How tall the bottom bar is, as a share of the screen's height."], byHeight)
+		-- (And after the page's Reset, or a profile loaded.)
+		local drawer = CreateFrame("Frame", nil, line)
+		drawer.Refresh = Draw
+		kit.AddControl(drawer)
+		-- (/cine debug worldview: the controls, and the values the boxes show.)
+		ns.letterboxSizeControls = { top = topBox, bottom = bottomBox, link = link }
+		ns.LetterboxSizeShown = function() return ns.GetDB().letterboxSize, BottomShown() end
+	end
 	rows.Choices(L["Frame:"], "letterboxAspect", {
 		{ 2.39, L["2.39:1 (cinema)"] },
 		{ 2, L["2:1"] },

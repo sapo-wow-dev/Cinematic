@@ -954,7 +954,7 @@ local function Director(run)
 	function d.Caption(text, seconds)
 		if not Settings().captions then return end
 		Overlay()
-		local bar = UIParent:GetHeight() * (ns.db.letterboxSize or 0)
+		local _, bar = ns.LetterboxHeight(ns.LetterboxLook(), UIParent:GetWidth(), UIParent:GetHeight()) -- (the bottom bar's)
 		overlay.caption:ClearAllPoints()
 		overlay.caption:SetPoint("BOTTOM", overlay, "BOTTOM", 0, (bar + 40) / 1.5)
 		captionText:SetText(text)

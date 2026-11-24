@@ -87,20 +87,28 @@ end
 -- cutscene places it (CinematicFrame.lua). Engine rule
 -- forever.worldframe.move-out-of-fights. Never touched by players who don't
 -- turn it on. (at: the offset now, WorldFrame units, 0 = whole screen;
--- ns.worldSqueeze: the same, for ns.NotchGap; wanted, elapsed: the last call
+-- ns.worldSqueeze: the same; wanted, elapsed: the last call
 -- held, played after the fight; p: the switch's 0-1, eased when it's flipped.)
-local world = { at = 0 }
+-- (The bars can differ, top and bottom (the page's link): at is the bottom's
+-- offset, ns.worldSqueeze the same (what's read from the world's own bottom);
+-- atTop and ns.worldSqueezeTop the top's, for ns.NotchGap.)
+local world = { at = 0, atTop = 0 }
 
-local function PlaceWorld(offset)
-	if offset < 0.5 then offset = 0 end
+local function Squeezed() return world.at > 0 or world.atTop > 0 end
+
+local function PlaceWorld(top, bottom)
+	bottom = bottom or top
+	if top < 0.5 then top = 0 end
+	if bottom < 0.5 then bottom = 0 end
 	if InCombatLockdown() or (CinematicFrame and CinematicFrame:IsShown()) then return end
-	if math.abs(offset - world.at) < 0.25 then return end
-	world.at = offset
-	ns.worldSqueeze = offset > 0 and offset or nil
+	if math.abs(bottom - world.at) < 0.25 and math.abs(top - world.atTop) < 0.25 then return end
+	world.at, world.atTop = bottom, top
+	ns.worldSqueeze = bottom > 0 and bottom or nil
+	ns.worldSqueezeTop = top > 0 and top or nil
 	WorldFrame:ClearAllPoints()
-	if offset > 0 then
-		WorldFrame:SetPoint("TOPLEFT", nil, "TOPLEFT", 0, -offset)
-		WorldFrame:SetPoint("BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, offset)
+	if top > 0 or bottom > 0 then
+		WorldFrame:SetPoint("TOPLEFT", nil, "TOPLEFT", 0, -top)
+		WorldFrame:SetPoint("BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, bottom)
 	else
 		WorldFrame:SetAllPoints()
 	end
@@ -108,7 +116,7 @@ end
 
 -- The whole screen again (Cinematic shutting down; in a fight: after it).
 function ns.LetterboxWorldBack()
-	if world.at > 0 then PlaceWorld(0) end
+	if Squeezed() then PlaceWorld(0, 0) end
 end
 
 local function WatchWorld()
@@ -127,7 +135,9 @@ local function WatchWorld()
 	end
 	world.watch:SetScript("OnEvent", function(_, event)
 		-- (The cutscene's end put it on the whole screen itself.)
-		if event == "CINEMATIC_STOP" then world.at, ns.worldSqueeze = 0, nil end
+		if event == "CINEMATIC_STOP" then
+			world.at, world.atTop, ns.worldSqueeze, ns.worldSqueezeTop = 0, 0, nil, nil
+		end
 		ns.letterboxDirty = true
 		-- The fight held the bars: what was asked meanwhile, at once if it was
 		-- Cinematic shutting down (no tick comes after that).
@@ -159,7 +169,7 @@ local bars = { untilAt = 0, key = nil, keyCine = false, wanted = false, forced =
 -- place's, the key's), with some height: Cards.lua's No letterbox: Don't show.
 function ns.LetterboxUp()
 	if not (bars.target == 1 or letterboxProgress > 0) then return false end
-	return ns.LetterboxHeight(ns.LetterboxLook(), UIParent:GetWidth(), UIParent:GetHeight()) >= 1
+	return ns.LetterboxTallest(ns.LetterboxLook(), UIParent:GetWidth(), UIParent:GetHeight()) >= 1
 end
 
 function ns.LetterboxOnDiscover()
@@ -196,7 +206,7 @@ end
 
 function ns.UpdateLetterbox(cinematic, elapsed)
 	-- (The world between the bars in a fight: the bars held till it ends.)
-	if world.at > 0 and InCombatLockdown() then
+	if Squeezed() and InCombatLockdown() then
 		world.wanted, world.elapsed = cinematic and true or false, elapsed or 0
 		return
 	end
@@ -219,13 +229,15 @@ function ns.UpdateLetterbox(cinematic, elapsed)
 	local screenW, screenH = UIParent:GetWidth(), UIParent:GetHeight() + (ns.letterbox.gap or 0)
 	if immersiveProgress > 0 then
 		local g = immersiveProgress * immersiveProgress * (3 - 2 * immersiveProgress)
-		local share = screenH > 0 and ns.LetterboxHeight(look, screenW, screenH) / screenH or 0
-		look = setmetatable({ letterboxSizeBy = "height", letterboxSize = share * (1 + g) }, { __index = look })
+		local top, bottom = ns.LetterboxHeight(look, screenW, screenH)
+		local per = screenH > 0 and (1 + g) / screenH or 0
+		look = setmetatable({ letterboxSizeBy = "height", letterboxLinked = false,
+			letterboxSize = top * per, letterboxSizeBottom = bottom * per }, { __index = look })
 	end
 
 	-- Smoothstep so the bars ease in and out.
 	local t = letterboxProgress * letterboxProgress * (3 - 2 * letterboxProgress)
-	local height = ns.DrawLetterbox(ns.letterbox, look, screenW, screenH, t)
+	local topH, bottomH = ns.DrawLetterbox(ns.letterbox, look, screenW, screenH, t)
 	ns.letterbox:SetShown(letterboxProgress > 0)
 	-- The switch flipped with the bars up: the world eases in or out over the
 	-- bars' own time (with the bars out it just takes the new side).
@@ -233,16 +245,18 @@ function ns.UpdateLetterbox(cinematic, elapsed)
 		ns.LetterboxTime(look, squeeze > (world.p or 0))) or squeeze
 	if world.p > 0 and letterboxProgress > 0 then
 		WatchWorld()
-		-- (Fading bars are full height at once: the world eases in with them.)
-		local inset = look.letterboxMotion == "fade" and height * t or height
+		-- (Fading bars are full height at once: the world eases in with them.
+		-- Each side by its own bar's height.)
+		local fade = look.letterboxMotion == "fade" and t or 1
 		local e = world.p * world.p * (3 - 2 * world.p)
-		PlaceWorld(inset * e * ns.letterbox:GetEffectiveScale() / WorldFrame:GetEffectiveScale())
+		local k = fade * e * ns.letterbox:GetEffectiveScale() / WorldFrame:GetEffectiveScale()
+		PlaceWorld(topH * k, bottomH * k)
 	else
 		ns.LetterboxWorldBack()
 	end
-	-- The frame rate counter hangs on WorldFrame: the world between the bars
-	-- has lifted it that much already.
+	-- The frame rate counter hangs on WorldFrame (at the bottom): the world
+	-- between the bars has lifted it that much already.
 	local lifted = world.at * WorldFrame:GetEffectiveScale() / ns.letterbox:GetEffectiveScale()
-	LiftFramerate(letterboxProgress > 0 and math.max(0, height - lifted) or 0)
+	LiftFramerate(letterboxProgress > 0 and math.max(0, bottomH - lifted) or 0)
 end
 end)

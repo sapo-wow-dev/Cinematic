@@ -30,3 +30,6 @@ Picked branch: Q1 yes + Q6 yes + Q7 no -> squeeze out of fights, put back in PLA
 Design change 2026-11-24 (the user): a fight keeps the world between the bars and holds the bars (no leaving till it ends) instead of putting the world back as it starts. Step 9 reworked, unproven.
 | 3 | 2026-11-24 | /cine debug worldview (qa8a3: step 9 reworked) | 4/4 PASS, 0 blocked: world between the bars through the fight, bars held even asked out (key, off-in-combat default), out and whole after | retail (Q10); full run before the commit |
 | 4 | 2026-11-24 | /cine debug worldview (q644e: step 8, eased switch) | 7/7 PASS: switch off eased over 170 frames (biggest step 19.3 of 192), on over 163 (20.8), 0 blocked | retail (Q10); full run before the commit |
+
+Top and bottom bars apart 2026-11-24 (the user): Letterbox Style's Top bar / link / Bottom bar (letterboxSizeBottom, letterboxLinked, linked by default). New step 9 apart (fight is step 10 now). Run qafed hung: CineMode's bars still going out as the step began, the key flipped them out; the step now waits them out first and every wait gives up.
+| 5 | 2026-11-24 | /cine debug worldview (q6656: step 9 apart) | 11/11 PASS, 0 blocked: 3%/9% each bar its own, the world in by each, notch gap same; page's Top bar, link, Bottom bar clear; link on: even, off: bottom keeps its height | retail (Q10); full run before the commit |

@@ -12,7 +12,9 @@
 --   the switch off, and the bars out: the whole screen;
 --   the notch gap reads the same with the world squeezed; the frame rate
 --   counter (on WorldFrame) lifted only by what the world didn't;
---   a cutscene starting: the whole screen before the game measures it.
+--   a cutscene starting: the whole screen before the game measures it;
+--   top and bottom bars apart (the page's link): linked the same, unlinked
+--   each its own, the world in by each, a film's frame even, /cine size both.
 -- PASS or FAIL per check; exits 1 on any FAIL.
 -- luacheck: push ignore 111 112 113 121 122 212 431
 local fails = 0
@@ -153,6 +155,67 @@ local function RunClient(client)
 	Tick()
 	ns.LetterboxWorldBack()
 	Check(client, "LetterboxWorldBack: the whole screen", Full())
+
+	-- Top and bottom bars apart (the page's link, 2026-11-24).
+	local function Heights() return ns.LetterboxHeight(ns.LetterboxLook(), 1835, 768) end
+	local t0, b0 = Heights()
+	Check(client, "linked (the start): both bars the same", math.abs(t0 - b0) < 0.01 and math.abs(t0 - bar) < 0.01,
+		("%.2f / %.2f"):format(t0, b0))
+	db.letterboxSizeBottom = 0.10
+	local t1, b1 = Heights()
+	Check(client, "linked: a stale bottom setting ignored", math.abs(b1 - t1) < 0.01, ("%.2f / %.2f"):format(t1, b1))
+	local styleWas, generalWas = db.letterboxStyle, db.styleGeneral
+	db.letterboxStyle, db.styleGeneral = true, true -- (the page's own sizes: its switch chain on)
+	db.letterboxLinked = false
+	db.letterboxSize, db.letterboxSizeBottom = 0.02, 0.08
+	local top, bottom = Heights()
+	Check(client, "unlinked: each its own height", math.abs(top - 768 * 0.02) < 0.01 and math.abs(bottom - 768 * 0.08) < 0.01,
+		("%.2f / %.2f"):format(top, bottom))
+	db.letterboxWorld = true
+	Tick()
+	Check(client, "unlinked: the world in by each bar", math.abs(W.top + top) < 0.5 and math.abs(W.bottom - bottom) < 0.5,
+		("top %s bottom %s"):format(W.top, W.bottom))
+	Check(client, "unlinked: notch gap still 0", ns.NotchGap() == 0, ns.NotchGap())
+	Check(client, "unlinked: frame rate counter not lifted again", math.abs(fps.y) < 0.5, fps.y)
+	Check(client, "unlinked: bars up", ns.LetterboxUp())
+	db.letterboxSize = 0
+	Check(client, "top 0, bottom up: still bars up", ns.LetterboxUp())
+	db.letterboxSize = 0.02
+	db.letterboxWorld = false
+	Tick()
+	Check(client, "unlinked, world switch off: frame rate counter over the bottom bar", math.abs(fps.y - bottom) < 0.5, fps.y)
+	db.letterboxSizeBy = "aspect"
+	local at, ab = Heights()
+	Check(client, "a film's frame: even bars, unlinked or not", math.abs(at - ab) < 0.01, ("%.2f / %.2f"):format(at, ab))
+	db.letterboxSizeBy = nil
+	-- /cine size: both bars, linked again.
+	if ns.SlashCommand then ns.SlashCommand("size 5") elseif SlashCmdList and SlashCmdList.CINEMATIC then SlashCmdList.CINEMATIC("size 5") end
+	if db.letterboxSize == 0.05 then
+		Check(client, "/cine size: both bars, linked", db.letterboxLinked == true and db.letterboxSizeBottom == 0.05)
+	end
+	-- The page's link greyed with its two boxes (a film's frame, or the page
+	-- off): it stayed lit and clickable till the release review, 2026-11-24.
+	if not ns.letterboxSizeControls and ns.MakeLazyPages then ns.MakeLazyPages("letterboxworld test") end
+	local link = ns.letterboxSizeControls and ns.letterboxSizeControls.link
+	if link then
+		local enabled
+		link.SetEnabled = function(_, on) enabled = on end -- (the stand-in keeps none)
+		db.letterboxStyle, db.letterboxSizeBy = true, "aspect"
+		link:Refresh()
+		Check(client, "a film's frame: the link greyed with the boxes", enabled == false, tostring(enabled))
+		db.letterboxStyle = false
+		db.letterboxSizeBy = nil
+		link:Refresh()
+		Check(client, "page off: the link greyed", enabled == false, tostring(enabled))
+		db.letterboxStyle = true
+		link:Refresh()
+		Check(client, "by height, page on: the link clickable", enabled == true, tostring(enabled))
+		link.SetEnabled = nil
+	else
+		Check(client, "the Letterbox Style page's link found", false)
+	end
+	db.letterboxLinked, db.letterboxSize, db.letterboxSizeBottom, db.letterboxStyle = nil, nil, nil, styleWas
+	db.styleGeneral = generalWas
 	db.letterbox, db.letterboxWorld = nil, nil
 end
 

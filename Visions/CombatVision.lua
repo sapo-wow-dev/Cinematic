@@ -269,7 +269,7 @@ local function Setup(cue, look, enter, width, height, scale, boss)
 	if fallback == true then fallback = "third" elseif fallback ~= "third" and fallback ~= "screen" then fallback = nil end
 	if (place == "top" or place == "bottom") and fallback
 		and not (ns.db.letterbox and (scale ~= 1 or ns.lastCinematic)
-		and ns.LetterboxHeight(ns.LetterboxLook(), width, height) >= 1) then
+		and select(place == "top" and 1 or 2, ns.LetterboxHeight(ns.LetterboxLook(), width, height)) >= 1) then
 		place = fallback
 	end
 	local size = look.combatSize * scale
@@ -300,7 +300,8 @@ local function Setup(cue, look, enter, width, height, scale, boss)
 		-- its bar. Else in a bar of our own, as tall as the letterbox's. The
 		-- text scales with the bar (combatBarScale).
 		local barLook = ns.LetterboxLook()
-		local full = ns.LetterboxHeight(barLook, width, height)
+		-- (Its own side's bar: the two can differ, the Letterbox page's link.)
+		local full = select(place == "top" and 1 or 2, ns.LetterboxHeight(barLook, width, height))
 		local active = ns.db.letterbox and (scale ~= 1 or ns.lastCinematic) and full >= 1
 		local want = full >= 1 and full or size * 1.5
 		size = math.max(want * look.combatBarScale, 6 * scale)
@@ -617,7 +618,7 @@ local function Setup(cue, look, enter, width, height, scale, boss)
 	cue.picture:SetShown(picture and true or false)
 	cue.look, cue.enter, cue.width, cue.height, cue.scale = look, enter, width, height, scale
 	cue.barLook = cue.barSide and setmetatable({ letterboxSizeBy = "height", letterboxSize = cue.barShare,
-		letterboxMotion = "slide" }, { __index = ns.LetterboxLook() })
+		letterboxLinked = true, letterboxMotion = "slide" }, { __index = ns.LetterboxLook() })
 	-- (With a bar of its own: the words wait for it.)
 	cue.barLead = cue.barSide and cue.ownBar and BAR_IN or 0
 end

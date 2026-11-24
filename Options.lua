@@ -861,6 +861,14 @@ local function BoxLine(parent)
 		if tip then Tooltip(pick, tip) end
 		return pick, name
 	end
+	-- (Room for a frame of its own between two boxes, px wide: the Letterbox
+	-- page's link. Gives where it starts, from the line's left.)
+	function line.Gap(_, px)
+		local at = right
+		right = right + px
+		line:SetWidth(right)
+		return at
+	end
 	return line
 end
 

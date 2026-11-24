@@ -97,7 +97,9 @@ local DEFAULTS = {
 	weatherRainR = 0.62, weatherRainG = 0.66, weatherRainB = 0.74,
 	weatherSnowR = 0.86, weatherSnowG = 0.91, weatherSnowB = 1,
 	weatherSandstormR = 1, weatherSandstormG = 0.82, weatherSandstormB = 0.6,
-	letterboxSize = 0.03,  -- fraction of screen height per bar
+	letterboxSize = 0.03,  -- fraction of screen height: the top bar (both while linked)
+	letterboxSizeBottom = 0.03, -- ...the bottom bar's, with letterboxLinked false
+	letterboxLinked = true, -- the bottom bar goes by the top's (the Letterbox page's link, 2026-11-24)
 	letterboxAlpha = 1,    -- bar opacity
 	-- The bars' look: the Style hub's Letterbox page (letterboxStyle: on; off,
 	-- these defaults, whatever the page's set to). Size and opacity are its too.

@@ -5412,22 +5412,38 @@ function ns.MakeLetterboxBars(frame)
 	frame.bottom, frame.bottomFeather, frame.bottomLine = Side("BOTTOM", "TOP")
 end
 
--- How tall look's bars are, all the way in, on a screen width x height.
+-- How tall look's bars are, all the way in, on a screen width x height: the
+-- top's, the bottom's. A film's frame leaves them even; by height the bottom
+-- goes by the top's while linked (letterboxLinked), else its own.
 function ns.LetterboxHeight(look, width, height)
 	if look.letterboxSizeBy == "aspect" then
-		return math.max(0, (height - width / look.letterboxAspect) / 2)
+		local bar = math.max(0, (height - width / look.letterboxAspect) / 2)
+		return bar, bar
 	end
-	return height * look.letterboxSize
+	local top = height * (tonumber(look.letterboxSize) or 0)
+	if look.letterboxLinked == false then
+		return top, height * (tonumber(look.letterboxSizeBottom) or tonumber(look.letterboxSize) or 0)
+	end
+	return top, top
+end
+
+-- The taller of look's two bars (one number: "are there bars at all").
+function ns.LetterboxTallest(look, width, height)
+	local top, bottom = ns.LetterboxHeight(look, width, height)
+	return math.max(top, bottom)
 end
 
 -- Draws frame's bars (ns.MakeLetterboxBars) as look says, on a screen
 -- width x height, t of the way in (0-1, eased). scale: the frame's size next
 -- to the real screen's (the preview's smaller), for the feather. Gives the
--- bars' height now.
+-- bars' heights now: the top's, the bottom's.
 function ns.DrawLetterbox(frame, look, width, height, t, scale)
-	local bar = ns.LetterboxHeight(look, width, height)
+	local topBar, bottomBar = ns.LetterboxHeight(look, width, height)
 	local slide = look.letterboxMotion ~= "fade"
-	local shown = math.max(slide and t * bar or bar, 0.01)
+	local shownAt = {
+		top = math.max(slide and t * topBar or topBar, 0.01),
+		bottom = math.max(slide and t * bottomBar or bottomBar, 0.01),
+	}
 	local r, g, b = 0, 0, 0
 	if look.letterboxColor == "custom" then
 		r, g, b = look.letterboxR, look.letterboxG, look.letterboxB
@@ -5446,7 +5462,7 @@ function ns.DrawLetterbox(frame, look, width, height, t, scale)
 		if effective and effective > 0 then px = PixelUtil.GetPixelToUIUnitFactor() / effective end
 	end
 	for _, side in ipairs({ "top", "bottom" }) do
-		frame[side]:SetHeight(shown)
+		frame[side]:SetHeight(shownAt[side])
 		frame[side]:SetColorTexture(r, g, b, 1)
 		local fade = frame[side .. "Feather"]
 		fade:SetShown(feather > 0)
@@ -5462,7 +5478,7 @@ function ns.DrawLetterbox(frame, look, width, height, t, scale)
 		end
 	end
 	frame:SetAlpha(look.letterboxAlpha * (slide and 1 or t))
-	return shown
+	return shownAt.top, shownAt.bottom
 end
 
 -- How long the bars take to come in (or go): the page's time, else the UI's fades.
@@ -5482,7 +5498,7 @@ function ns.NotchGap()
 	if type(top) ~= "number" or type(uiTop) ~= "number" or type(scale) ~= "number" or scale <= 0 then
 		return 0
 	end
-	top = top + (ns.worldSqueeze or 0) -- (the world drawn between the bars: Letterbox.lua)
+	top = top + (ns.worldSqueezeTop or 0) -- (the world drawn between the bars: Letterbox.lua)
 	local gap = top * WorldFrame:GetEffectiveScale() / scale - uiTop
 	return gap > 0.5 and gap or 0
 end

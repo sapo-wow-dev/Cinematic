@@ -423,7 +423,7 @@ local function HandleSlash(msg)
 			ns.Print(L["(still stopped after an error: /cine resume starts it again)"])
 		end
 	elseif cmd == "size" and num and num >= 0 and num <= 40 then
-		ns.db.letterboxSize = num / 100
+		ns.db.letterboxSize, ns.db.letterboxSizeBottom, ns.db.letterboxLinked = num / 100, num / 100, true -- (both bars)
 		ns.db.letterboxStyle, ns.db.letterboxSizeBy = true, "height" -- (the Style hub's Letterbox page's)
 		ns.letterboxDirty = true
 		ns.Print(L["letterbox size set to %s%%"]:format(num))

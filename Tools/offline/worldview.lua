@@ -3,7 +3,9 @@
 -- A stand-in WorldFrame that keeps its points: steps 1-4 pass (squeezed
 -- between the bars, the ease in follows every frame, put back), a pretend
 -- fight takes steps 5-7 through PLAYER_REGEN_DISABLED / _ENABLED, and the
--- whole screen is put back at the end. PASS or FAIL per check.
+-- whole screen is put back at the end. Then step 9 (top and bottom bars
+-- apart, the Letterbox Style page's link) on its own, the letterbox ticked
+-- here as Core.lua's loop does. PASS or FAIL per check.
 -- luacheck: push ignore 111 112 113 121 122 212 431
 local fails = 0
 local function Check(name, ok, detail)
@@ -44,6 +46,11 @@ local function RunClient(client)
 				local fn = f:GetScript("OnUpdate")
 				if fn then fn(f, 0.05) end
 			end
+			-- (Step 9: the letterbox ticked as Core.lua's loop does, out of CineMode.)
+			if ns.driveLetterbox then
+				local on = ns.IsCineModeOn()
+				ns.UpdateLetterbox(ns.LetterboxExtra(on, InCombatLockdown(), on), 0.05)
+			end
 			local due = {}
 			for i = #timers, 1, -1 do
 				if timers[i].at <= now then due[#due + 1] = table.remove(timers, i) end
@@ -83,7 +90,7 @@ local function RunClient(client)
 	WorldFrame.GetNumPoints = function() return wf.n end
 	WorldFrame.IsIgnoringParentScale = function() return true end
 
-	ns.HandleSlash("debug worldview 1 2 3 4 5 6 7") -- (the probe; 8-9, the switch: letterboxworld.lua)
+	ns.HandleSlash("debug worldview 1 2 3 4 5 6 7") -- (the probe; 8 and 10, the switch: letterboxworld.lua; 9 below)
 	Advance(30) -- steps 1-4, then waiting for the fight
 	local log = CinematicDB.worldViewTestLog
 	Check("steps 1-4 pass, waiting on the fight", Count(log, "^%s*FAIL") == 0 and Count(log, "PASS") >= 7,
@@ -102,6 +109,39 @@ local function RunClient(client)
 	Check("DONE line", Count(log, "DONE") + Count(log, "done") > 0)
 	Check("whole screen at the end", wf.bottom == 0 and wf.top == 0 and wf.n == 2)
 	if fail > 0 then for _, line in ipairs(log) do print("  | " .. line) end end
+
+	-- Step 9, apart (top and bottom bars apart, the page's link): its own run.
+	UIParent.GetWidth = function() return 1835 end
+	local bars = {}
+	for _, side in ipairs({ "top", "bottom" }) do
+		local tex = ns.letterbox and ns.letterbox[side]
+		if tex then
+			tex.SetHeight = function(_, h) bars[side] = h end
+			tex.GetHeight = function() return bars[side] or 0 end
+		end
+	end
+	CinematicDB.worldViewTestLog = nil
+	ns.driveLetterbox = true
+	ns.noRealLayout = true -- (the stand-in places every frame alike: r:Overlaps can't judge them)
+	-- (As run 1 in game, qafed: CineMode's bars up as the step starts, CineMode
+	-- off at once. The key would flip them out, not in, and the step hung.)
+	ns.db.letterbox, cine = true, true
+	Advance(2)
+	Check("step 9 apart: CineMode's bars up before it", ns.LetterboxUp(),
+		("shown %s, top %s, letterbox %s"):format(tostring(ns.letterbox:IsShown()), tostring(bars.top), tostring(ns.db.letterbox)))
+	cine = false
+	ns.HandleSlash("debug worldview 9")
+	Advance(30)
+	log = CinematicDB.worldViewTestLog or {}
+	fail = Count(log, "^%s*FAIL")
+	Check("step 9 apart: passes", fail == 0 and Count(log, "PASS") >= 8,
+		("%d PASS, %d FAIL"):format(Count(log, "PASS"), fail))
+	Check("step 9 apart: whole screen at the end", wf.bottom == 0 and wf.top == 0)
+	if fail > 0 or Count(log, "PASS") < 8 then
+		for _, line in ipairs(log) do print("  | " .. line) end
+		print(("  bars %s / %s, world top %s bottom %s, shown %s"):format(tostring(bars.top), tostring(bars.bottom),
+			wf.top, wf.bottom, tostring(ns.letterbox and ns.letterbox:IsShown())))
+	end
 end
 
 RunClient("forever")

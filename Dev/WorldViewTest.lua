@@ -18,7 +18,11 @@
 --               between them (their height), notch gap unchanged, shot;
 --               switch off with the bars up: eased out to the whole screen;
 --               on again: eased in; bars out: whole screen
---   9 fight     (you: start a fight, then end it) the world between the
+--   9 apart     top and bottom bars apart (3% / 9%, unlinked): each bar
+--               and the world in by its own; the Letterbox Style page's
+--               Top bar, link, Bottom bar shown clear; the link clicked:
+--               even again; clicked again: the bottom keeps its height
+--  10 fight     (you: start a fight, then end it) the world between the
 --               bars through it, the bars held (out for fights by default,
 --               asked out mid-fight too), nothing blocked; out and whole after
 -- A move that is blocked fails its step by itself (the kit's BLOCKED count):
@@ -91,14 +95,15 @@ local function Full()
 end
 
 -- Is WorldFrame now between bars of this share (within 2 screen units)?
-local function IsSqueezed(share)
+-- (share: the top bar's, a share of the screen; bottomShare: the bottom's,
+-- the same if not given.)
+local function IsSqueezed(share, bottomShare)
 	local s = WorldFrame:GetEffectiveScale()
 	local top, bottom = WorldFrame:GetTop(), WorldFrame:GetBottom()
 	local ui = UIParent:GetEffectiveScale()
 	local screenH = UIParent:GetHeight() * ui
 	if type(top) ~= "number" or type(bottom) ~= "number" then return false end
-	local want = screenH * share
-	return math.abs(bottom * s - want) < 2 and math.abs(screenH - top * s - want) < 2
+	return math.abs(bottom * s - screenH * (bottomShare or share)) < 2 and math.abs(screenH - top * s - screenH * share) < 2
 end
 
 local function IsFull()
@@ -314,6 +319,104 @@ ns.TestKit.Define({
 			r:WaitFor(nil, { check = function() return not ns.LetterboxUp() end })
 			r:Sleep(0.3)
 			State(r, "bars out")
+			r:Verdict(IsFull(), "bars out: the world on the whole screen")
+		end },
+		{ key = "apart", proven = "run q6656: 3%/9% apart, world in by each, page's link on/off; 11 pass", title = "top and bottom bars apart (the Letterbox Style page's link)", run = function(r)
+			if not (ns.LetterboxWorldBack and ns.letterbox and Cinematic_ToggleLetterbox) then
+				r:Skip("Atmosphere left out (Modules.lua): no letterbox to test")
+				return
+			end
+			local TOP, BOTTOM = 0.03, 0.09
+			r:Set("visualEffects", true)
+			r:Set("letterboxPage", true)
+			r:Set("letterboxWorld", true)
+			r:Set("styleGeneral", true)
+			r:Set("letterboxStyle", true)
+			r:Set("letterboxSizeBy", "height")
+			r:Set("letterboxMotion", "slide")
+			r:Set("letterboxSize", TOP)
+			r:Set("letterboxSizeBottom", BOTTOM)
+			r:Set("letterboxLinked", false)
+			local H = UIParent:GetHeight()
+			local function Near(a, b) return type(a) == "number" and math.abs(a - b) < 0.5 end
+			-- (A wait that gives up after seconds: the verdicts after it say what's wrong,
+			-- not a step stuck for good. Run 1, qafed: stuck, the user skipped it.)
+			local function Until(seconds, check)
+				local deadline = GetTime() + seconds
+				return r:WaitFor(nil, { check = function()
+					if check() then return true end
+					return GetTime() > deadline and "gave up" or nil
+				end })
+			end
+			-- (The key flips the bars from where they are: CineMode's bars, turned
+			-- off by the kit as the run starts, still on their way out would have
+			-- been flipped out, not in. Run 1, qafed. So out first.)
+			ns.letterboxDirty = true
+			Until(5, function() return not ns.LetterboxUp() and not ns.letterbox:IsShown() end)
+			local gapBefore = ns.NotchGap()
+			ns.worldViewKey = true
+			Cinematic_ToggleLetterbox()
+			Until(8, function()
+				return Near(ns.letterbox.top:GetHeight(), H * TOP) and Near(ns.letterbox.bottom:GetHeight(), H * BOTTOM)
+					and IsSqueezed(TOP, BOTTOM)
+			end)
+			r:Sleep(0.3)
+			State(r, "unlinked, 3% top 9% bottom")
+			r:Log(("bars: top %.1f bottom %.1f (want %.1f, %.1f)"):format(ns.letterbox.top:GetHeight(),
+				ns.letterbox.bottom:GetHeight(), H * TOP, H * BOTTOM))
+			r:Verdict(Near(ns.letterbox.top:GetHeight(), H * TOP) and Near(ns.letterbox.bottom:GetHeight(), H * BOTTOM),
+				"unlinked: each bar its own height")
+			r:Verdict(IsSqueezed(TOP, BOTTOM), "unlinked: the world in by each bar's own height")
+			r:Verdict(math.abs(ns.NotchGap() - gapBefore) < 0.5,
+				("notch gap unchanged: %.1f vs %.1f"):format(ns.NotchGap(), gapBefore))
+			r:Shot("unlinked: a thin top bar, a tall bottom bar, the world between")
+			-- The page as shown: Top bar, the link, Bottom bar.
+			local ok, err = pcall(ns.OpenOptions, "Letterbox Style")
+			r:Sleep(1)
+			r:Verdict(ok, "Letterbox Style opened" .. (ok and "" or (": " .. tostring(err))))
+			local c = ns.letterboxSizeControls
+			local panel = _G.SettingsPanel or UIParent
+			if not (c and c.top and c.bottom and c.link) then
+				r:Verdict(false, "the page's Top bar, link and Bottom bar built")
+				return
+			end
+			local function Page(label)
+				local clear = 0
+				for name, control in pairs(c) do
+					-- (Offline: no real layout to judge, shown is all.)
+					local hits = not control:IsVisible() and { "not shown" }
+						or ns.noRealLayout and {} or r:Overlaps(control, panel)
+					if #hits == 0 then clear = clear + 1 else r:Log(("%s: %s"):format(name, table.concat(hits, ", "))) end
+				end
+				r:Verdict(clear == 3, ("%s: Top bar, link, Bottom bar shown, nothing over them (%d of 3)"):format(label, clear))
+				local top, bottom = ns.LetterboxSizeShown()
+				r:Log(("%s: boxes %q / %q (values %s / %s)"):format(label, tostring(c.top:GetText()),
+					tostring(c.bottom:GetText()), tostring(top), tostring(bottom)))
+				return top, bottom
+			end
+			local top, bottom = Page("unlinked")
+			r:Verdict(top == TOP and bottom == BOTTOM, "unlinked: the boxes show each bar's own")
+			r:Shot("the page unlinked: 3% and 9%", { behind = panel })
+			local function ClickLink() c.link:GetScript("OnClick")(c.link, "LeftButton") end
+			ClickLink()
+			Until(8, function() return Near(ns.letterbox.bottom:GetHeight(), H * TOP) and IsSqueezed(TOP) end)
+			r:Sleep(0.3)
+			local db = ns.GetDB()
+			top, bottom = Page("linked")
+			r:Verdict(db.letterboxLinked == true and db.letterboxSizeBottom == TOP and top == TOP and bottom == TOP,
+				"link clicked: the bottom takes the top's, both boxes the same")
+			r:Verdict(IsSqueezed(TOP) and Near(ns.letterbox.bottom:GetHeight(), H * TOP),
+				"linked: both bars and the world even")
+			r:Shot("the page linked: both 3%", { behind = panel })
+			ClickLink()
+			r:Sleep(0.5)
+			r:Verdict(db.letterboxLinked == false and db.letterboxSizeBottom == TOP,
+				"unlinked again: the bottom keeps the height it showed")
+			if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+			ns.worldViewKey = nil
+			Cinematic_ToggleLetterbox()
+			Until(5, function() return not ns.LetterboxUp() end)
+			r:Sleep(0.3)
 			r:Verdict(IsFull(), "bars out: the world on the whole screen")
 		end },
 		{ key = "fight", proven = "run 3 (qa8a3): bars held through the fight, asked out too; out and whole after; 0 blocked", title = "the switch through a fight: the bars held", run = function(r)
