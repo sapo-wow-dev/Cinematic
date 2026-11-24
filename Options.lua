@@ -18172,22 +18172,29 @@ local function CreateVisionPanel()
 			L["How much of offline members still shows."])
 		Cell(Row(FAR_ICON, L["Far away"]), 2, Field("healVisionFarAlpha"), L["Far away opacity"],
 			L["How much of members out of your healing range still shows."])
-		-- Ready check marks (HealVisionFrames.lua's ReadyMark): ticked, they
-		-- show on hidden members too; unticked, they fade with their member.
-		do
-			local field = Field("healVisionReadyCheck")
-			local row = Row("|TInterface\\RaidFrame\\ReadyCheck-Ready:16:16|t", L["Ready check"], 12)
-			local check = Check(content, "healVisionReadyCheck", L["Show while hidden"],
-				L["Shows ready check marks on hidden members too."], function(value)
-					field.set(value)
-					ApplyFrames()
-				end)
+		-- A row with a Show while hidden tick in the opacity column.
+		local function ShowWhileHidden(key, icon, name, tip, gap)
+			local field = Field(key)
+			local row = Row(icon, name, gap)
+			local check = Check(content, key, L["Show while hidden"], tip, function(value)
+				field.set(value)
+				ApplyFrames()
+			end)
 			check.Refresh = function(self) self:SetChecked(field.get() and true or false) end
-			check.searchLabel = L["Ready check"] .. ": " .. L["Show while hidden"]
+			check.searchLabel = name .. ": " .. L["Show while hidden"]
 			check:SetPoint("LEFT", row, "LEFT", NAME_W + COLUMN_W - 4, 0)
 			GreyUnless(check, Editable)
 			roleWidgets[#roleWidgets + 1] = check
 		end
+		-- Ready check marks (HealVisionFrames.lua's ReadyMark): ticked, they
+		-- show on hidden members too; unticked, they fade with their member.
+		ShowWhileHidden("healVisionReadyCheck", "|TInterface\\RaidFrame\\ReadyCheck-Ready:16:16|t", L["Ready check"],
+			L["Shows ready check marks on hidden members too."], 12)
+		-- Aura icons and the dispel glow (HealVisionFrames.lua's KeepAuras,
+		-- 2026-11-23): ticked, a hidden member is faded by its parts, its
+		-- icons and glow left at full; unticked, faded whole.
+		ShowWhileHidden("healVisionKeepAuras", "|TInterface\\Icons\\Spell_Holy_DispelMagic:16:16:0:0:64:64:5:59:5:59|t",
+			L["Debuffs"], L["Hidden members still show their aura icons and dispel glow."])
 		-- The Nameplates tab, in the same panel: friendly players' and minions'
 		-- plates (HealVisionFrames.lua's plates), by the picker and the plates'
 		-- own table. Not by the grid's places.

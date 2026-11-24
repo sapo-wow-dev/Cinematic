@@ -339,11 +339,45 @@ local function HookPart(part)
 	end
 end
 
--- A member's parts: its regions and child frames, less the ones that ignore its alpha.
+-- Debuffs: Show while hidden (the Unit Frames tab, off to start with,
+-- 2026-11-23): a raid-style member is faded by its parts too, not as a
+-- whole, so its aura icons and dispel glow (forbidden or drawn by the game,
+-- out of our reach) keep the frame's full alpha: a healthy member shows only
+-- those. The game's own range dimming stays on the frame then (nothing
+-- reasserts it). Proven on retail (rule retail.compactunitframe.auras-keep-
+-- frame-alpha); Forever assumed the same (no aura frames reachable there either).
+local function KeepAuras()
+	return Setting("healVisionKeepAuras") == true
+end
+ns.HealVisionKeepAuras = KeepAuras
+
+-- A member's aura icons and dispel glow we can reach (fields as the game's
+-- CompactUnitFrame names them): never faded with Keep auras shown.
+local AURA_LISTS = { "debuffFrames", "dispelDebuffFrames", "buffFrames" }
+local AURA_FIELDS = { "DispelOverlay", "CenterDefensiveBuff", "PrivateAuraAnchors" }
+local function AuraParts(frame)
+	local set = {}
+	for _, key in ipairs(AURA_LISTS) do
+		local list = rawget(frame, key)
+		if type(list) == "table" then
+			for _, icon in pairs(list) do if type(icon) == "table" then set[icon] = key end end
+		end
+	end
+	for _, key in ipairs(AURA_FIELDS) do
+		local value = rawget(frame, key)
+		if type(value) == "table" then set[value] = key end
+	end
+	return set
+end
+ns.HealVisionAuraParts = AuraParts
+
+-- A member's parts: its regions and child frames, less the ones that ignore
+-- its alpha (and, with Keep auras shown, its aura icons).
 local function Parts(frame)
 	local parts = {}
+	local auras = KeepAuras() and AuraParts(frame) or {}
 	local function Add(part)
-		if Forbidden(part) or not part.SetAlpha then return end
+		if auras[part] or Forbidden(part) or not part.SetAlpha then return end
 		local ignoring = part.IsIgnoringParentAlpha and part:IsIgnoringParentAlpha()
 		if not Secret(ignoring) and ignoring then return end
 		parts[#parts + 1] = part
@@ -370,6 +404,7 @@ local function AddMember(frame, kind, found, whole)
 	if not frame or Forbidden(frame) or not Wanted(kind) then return end
 	local unit, beside = Unit(frame)
 	if not unit then return end
+	if whole and KeepAuras() then whole = nil end -- (by its parts: see KeepAuras)
 	-- (Found afresh each time: the game adds parts as it needs them.)
 	-- (mark: its ready check mark, raid-style frames: see ReadyMark.)
 	local mark = whole and ns.RaidReadyCheckIcon and ns.RaidReadyCheckIcon(frame)
@@ -778,6 +813,11 @@ end
 -- Whether it's handling any frames now (the minimap button's glow).
 function ns.HealVisionActive()
 	return next(members) ~= nil
+end
+
+-- The members faded now (frame -> { unit, parts, whole, alpha }), for tests.
+function ns.HealVisionMembers()
+	return members
 end
 
 local applyPending = false

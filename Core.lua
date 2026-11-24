@@ -1432,6 +1432,10 @@ DEFAULTS.healVisionMouseoverAlpha = 0 -- the member under the mouse fades in to 
 -- Ready check marks on the raid frames: shown on hidden members too (the
 -- game's mark ignores the frame's fade), or off: faded with their member.
 DEFAULTS.healVisionReadyCheck = true
+-- Aura icons and the dispel glow on raid-style frames: shown on hidden
+-- members too (faded by parts, HealVisionFrames.lua's KeepAuras), or off:
+-- faded with their member. Off to start with (2026-11-23).
+DEFAULTS.healVisionKeepAuras = false
 DEFAULTS.healVisionDispel = true -- so do members with a debuff you can dispel
 DEFAULTS.healVisionAnyDebuff = false -- or with any debuff
 -- The page's Tank, Healer and Damage tabs: while you're that role, with
@@ -1442,7 +1446,8 @@ ns.HEAL_VISION_ROLE_KEYS = { "healVisionTankBelow", "healVisionTankAlpha", "heal
 	"healVisionHealerAlpha", "healVisionShowBelow", "healVisionMinAlpha", "healVisionPetBelow",
 	"healVisionPetAlpha", "healVisionTargetAlpha", "healVisionMouseoverAlpha", "healVisionDeadAlpha",
 	"healVisionOfflineAlpha",
-	"healVisionFarAlpha", "healVisionDispel", "healVisionAnyDebuff", "healVisionFadeRange", "healVisionReadyCheck" }
+	"healVisionFarAlpha", "healVisionDispel", "healVisionAnyDebuff", "healVisionFadeRange", "healVisionReadyCheck",
+	"healVisionKeepAuras" }
 ns.HEAL_VISION_ROLES = { "TANK", "HEALER", "DAMAGER" }
 -- Its tabs, each a container (2026-11-17, the user's rule): off, Heal Vision
 -- does nothing while it's the one your role goes by (a role on Default's
