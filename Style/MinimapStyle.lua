@@ -536,8 +536,11 @@ function ns.RefreshMinimapStyle()
 	local color = pageOn and ns.ThemeRing()
 	local on = color and not others and true or false
 	TintRings(on and not squared and color or nil)
-	-- (A theme with no ring color: the buttons take the border's.)
-	TintButtons(mine and look.mmButtons ~= false and (color or edge) or nil)
+	-- (A theme with no ring color, the game's look: the buttons take the border's
+	-- only when one's picked or the square map has one; otherwise the game's rings.)
+	local picked = look.mmBorderColor ~= nil and look.mmBorderColor ~= "theme"
+	local buttonColor = color or ((picked or (squared and size > 0)) and edge) or nil
+	TintButtons(mine and look.mmButtons ~= false and buttonColor or nil)
 	local hideZone = mine and look.mmHideZoneBar == true
 	DressZoneBar(on and look.mmZoneBar ~= false and not hideZone)
 	DressParts(map, mine and look, squared, hideZone)

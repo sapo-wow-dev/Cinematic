@@ -180,7 +180,17 @@ ns.TestKit.Define({
 			Apply()
 			local state = ns.MinimapPartsState()
 			r:Log(("buttons colored %d, theme ring %s"):format(state.buttons, tostring(ns.ThemeRing() ~= nil)))
-			r:Verdict(state.buttons > 0, "the buttons' rings colored")
+			-- (Colored only by a theme's ring color, a picked border color or a
+			-- square map's border; the game's look on a round map keeps the
+			-- game's rings: the user OK'd 2026-11-23, Tools/audits/2026-11-23-minimap-buttons-tint.md.)
+			local db = ns.db
+			local squared = not ns.isRetail and db.mmSquare == true and (tonumber(db.mmSquareBorderSize) or 2) > 0
+			local picked = db.mmBorderColor ~= nil and db.mmBorderColor ~= "theme"
+			if ns.ThemeRing() ~= nil or picked or squared then
+				r:Verdict(state.buttons > 0, "the buttons' rings colored")
+			else
+				r:Verdict(state.buttons == 0, "the game's look: the buttons keep the game's rings (none tinted)")
+			end
 			MapShot(r, "buttons' rings colored")
 		end },
 		{ key = "size", title = "the minimap at 150%, then back", run = function(r)
