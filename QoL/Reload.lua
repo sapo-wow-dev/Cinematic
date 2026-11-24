@@ -80,12 +80,21 @@ end
 
 local LoadAddOn = C_AddOns and C_AddOns.LoadAddOn or LoadAddOn
 
--- Opens again what was open, if it was saved just now (this reload's).
-local function Restore()
-	if not ns.db then return end
-	local state = ns.db.reloadState
-	ns.db.reloadState = nil
-	if not state or not state.at or time() - state.at > STALE or not ns.Setting("reloadKeepWindows") then return end
+-- In a fight (a reload in one): no window or bag opened from our code. Forever's
+-- gamepad code (Blizzard_GamepadSmartNavigation, loaded with the gamepad off
+-- too) hears every bag and UI panel shown, and from our code its secure helper
+-- refuses that under the combat restriction: an "Interface action failed"
+-- line each (Tools/errors/known.lua reload-restore-in-fight). They wait for
+-- the fight's end. (The settings window doesn't: ns.OpenOptions has its own
+-- fight path.)
+local function FightLocked()
+	local restricted = C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive
+	local combat = Enum and Enum.AddOnRestrictionType and Enum.AddOnRestrictionType.Combat
+	if restricted and combat and restricted(combat) then return true end
+	return InCombatLockdown() and true or false
+end
+
+local function OpenWindows(state)
 	local byName = {}
 	for _, window in ipairs(WINDOWS) do byName[window[1]] = window end
 	for _, name in ipairs(state.windows or {}) do
@@ -102,6 +111,41 @@ local function Restore()
 		end
 	end
 	if state.bags then Try("bags", OpenAllBags) end
+	if state.category and not state.page then
+		Try("the settings", function()
+			if type(state.category) == "number" and Settings and Settings.OpenToCategory then
+				ns.OpenSettingsCategory(state.category)
+			elseif SettingsPanel then
+				ShowUIPanel(SettingsPanel)
+			elseif InterfaceOptionsFrame then
+				ShowUIPanel(InterfaceOptionsFrame)
+			end
+		end)
+	end
+end
+
+local afterFight -- (what's still to open once the fight ends)
+local fightWait = CreateFrame("Frame")
+fightWait:SetScript("OnEvent", function(self)
+	if not afterFight or FightLocked() then return end
+	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	local state = afterFight
+	afterFight = nil
+	OpenWindows(state)
+end)
+
+-- Opens again what was open, if it was saved just now (this reload's).
+local function Restore()
+	if not ns.db then return end
+	local state = ns.db.reloadState
+	ns.db.reloadState = nil
+	if not state or not state.at or time() - state.at > STALE or not ns.Setting("reloadKeepWindows") then return end
+	if FightLocked() then
+		afterFight = state
+		fightWait:RegisterEvent("PLAYER_REGEN_ENABLED")
+	else
+		OpenWindows(state)
+	end
 	if state.page then
 		Try("the settings", function() ns.OpenOptions(state.page ~= "" and state.page or nil) end)
 		-- (Scrolled once the page has laid itself out: tried again a moment later.)
@@ -115,16 +159,6 @@ local function Restore()
 			C_Timer.After(0.1, Scroll)
 			C_Timer.After(0.5, Scroll)
 		end
-	elseif state.category then
-		Try("the settings", function()
-			if type(state.category) == "number" and Settings and Settings.OpenToCategory then
-				ns.OpenSettingsCategory(state.category)
-			elseif SettingsPanel then
-				ShowUIPanel(SettingsPanel)
-			elseif InterfaceOptionsFrame then
-				ShowUIPanel(InterfaceOptionsFrame)
-			end
-		end)
 	end
 end
 

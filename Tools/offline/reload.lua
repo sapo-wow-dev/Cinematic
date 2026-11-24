@@ -10,8 +10,9 @@ local client = arg and arg[1] or "forever"
 local reloads, printed = 0, {}
 local popups = {}
 local anchored, placed -- (the cover's anchors and size)
+local inFight, opened = false, {} -- (the restore after a reload: what it opened)
 -- luacheck: push ignore 111 112 113 121 122 212
-local ns = dofile("Tools/offline/load.lua")(client, nil, function()
+local ns, wow = dofile("Tools/offline/load.lua")(client, nil, function()
 	-- (A real hooksecurefunc for the popup hook only: the stand-in's does nothing.)
 	hooksecurefunc = function(a, b, c)
 		local t, name, fn = _G, a, b
@@ -50,7 +51,16 @@ local ns = dofile("Tools/offline/load.lua")(client, nil, function()
 		local d = popups[which]
 		return d and d:IsShown() and d or nil
 	end
-	InCombatLockdown = function() return false end
+	InCombatLockdown = function() return inFight end
+	-- (Timers at once: the restore after a reload runs on PLAYER_ENTERING_WORLD.)
+	C_Timer.After = function(_, fn) fn() end
+	OpenAllBags = function() opened[#opened + 1] = "bags" end
+	ToggleFriendsFrame = function() opened[#opened + 1] = "FriendsFrame" end
+	-- (The combat restriction: the stand-in's missing names are truthy stubs.)
+	C_RestrictedActions = { IsAddOnRestrictionActive = function(kind) return kind == 0 and inFight end }
+	Enum = Enum or {}
+	Enum.AddOnRestrictionType = { Combat = 0 }
+	GetBindingKey = function() end -- (the stand-in's returns a table: BindKey, run before the restore)
 	-- (The cover's anchoring, watched: Forever refuses a secure frame anchored
 	-- to the popup's own button, "Cannot anchor protected frames to regions".)
 	local create = CreateFrame
@@ -149,6 +159,29 @@ else
 	Check("retail: Reload key button not made", rawget(_G, "CinematicReloadKey") == nil)
 	Check("retail: Reload button clicks as before", _G.CinematicReloadButton:GetScript("OnClick") ~= nil)
 end
+
+-- A reload in a fight: bags and windows wait for its end (pasted 2026-11-23:
+-- OpenAllBags from the restore in a fight, the gamepad helper's blocked line;
+-- known.lua reload-restore-in-fight).
+local setting = ns.Setting -- (its page may be off on the stand-in: this one on)
+ns.Setting = function(key) if key == "reloadKeepWindows" then return true end return setting(key) end
+local function Reloaded(fight)
+	opened = {}
+	ns.db.reloadState = { at = time(), windows = { "FriendsFrame" }, bags = true }
+	inFight = fight
+	wow.Fire("PLAYER_ENTERING_WORLD", false, true)
+end
+Reloaded(false)
+Check("restore out of a fight opens bags + window", #opened == 2, table.concat(opened, ","))
+Reloaded(true)
+Check("restore in a fight opens nothing yet", #opened == 0, table.concat(opened, ","))
+wow.Fire("PLAYER_REGEN_ENABLED")
+Check("still in the fight at REGEN_ENABLED: still nothing", #opened == 0, table.concat(opened, ","))
+inFight = false
+wow.Fire("PLAYER_REGEN_ENABLED")
+Check("fight over: bags + window open", #opened == 2, table.concat(opened, ","))
+wow.Fire("PLAYER_REGEN_ENABLED")
+Check("opened once only", #opened == 2, table.concat(opened, ","))
 
 -- Every popup of ours whose button reloads is marked.
 for _, which in ipairs({ "CINEMATIC_LANGUAGE_RELOAD", "CINEMATIC_SUPPORT_RELOAD", "CINEMATIC_LAYOUT_RELOAD",

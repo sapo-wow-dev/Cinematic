@@ -533,4 +533,37 @@ return {
 [CinematicDev/UI/CooldownGrid.lua]:2313: in function <CinematicDev/UI/CooldownGrid.lua:1973>
 [CinematicDev/Options.lua]:16847: in function <CinematicDev/Options.lua:16799>]],
   },
+
+  -- Reload ---------------------------------------------------------------------
+  {
+    id = "reload-restore-in-fight",
+    status = "fixed",
+    title = "A reload in a fight: the bags (and windows) reopened from our code got a blocked line (Forever, gamepad off too)",
+    match = { all = { "SecureHelper.lua", "Reload.lua" }, any = { "OpenBackpack", "OpenAllBags", "ShowUIPanel", "FrameShown" } },
+    why = {
+      call = "SmartNavigationSecureHelper's \"invoke\" of GamepadFrameControlsManagerMixin.FrameShown (SecureHelper:WrapFunction); its validate IsSecureOrOutOfCombatRestriction (issecure() or not C_RestrictedActions.IsAddOnRestrictionActive(Combat)) fails, so DisplayInterfaceActionBlockedMessage",
+      caller = "QoL/Reload.lua Restore -> Try(\"bags\", OpenAllBags), 0.5 s after PLAYER_ENTERING_WORLD (isReload)",
+      path = "Keep windows open across a reload: the player reloaded in a fight (or the fight was still on 0.5 s after), so the restore ran under the combat restriction; OpenAllBags -> OpenBackpack -> ContainerFrame_OnShow fires EventRegistry ContainerFrame.OpenBag, which FrameControlsManager turns into FrameShown under our taint",
+      rule = "Forever's Blizzard_GamepadSharedUtility FrameControlsManager hears every bag opened (ContainerFrame.OpenBag) and every UI panel (UIParentPanelManager.ShowUIPanel), gamepad mode on or off (Init, not behind IsGamepadUIEnabled); FrameShown goes through SecureHelper, refused from addon code under the combat restriction: one line, no event",
+      pattern = "our code opening bags or ShowUIPanel windows with no fight check (a restore, a timer, an event)",
+    },
+    dont = "Don't open bags or UI panels from our code in a fight: wait for PLAYER_REGEN_ENABLED (and C_RestrictedActions combat restriction off), as Reload.lua's FightLocked / afterFight does.",
+    check = { pattern = [[(?<![\w"'.:])(OpenAllBags|OpenBackpack|ToggleAllBags|ToggleBackpack|OpenBag|ToggleBag)\b(?!["'])]], allow = { "QoL/Reload.lua", "Dev/" } },
+    fix = "2026-11-23: Reload.lua Restore checks FightLocked() (combat restriction or InCombatLockdown); in a fight the windows, bags and game settings page wait for PLAYER_REGEN_ENABLED (afterFight), Cinematic's settings page opens at once (ns.OpenOptions' own fight path). Tools/offline/reload.lua",
+    engine = { "forever.bags-panels.smartnav-frameshown-combat" },
+    seen = { "2026-11-23" },
+    example = [[blocked (no event)  (Blizzard_GamepadSmartNavigation)
+  Interface action failed line, (in combat)
+[C]: in function 'DisplayInterfaceActionBlockedMessage'
+[Blizzard_GamepadSmartNavigation/SecureHelper.lua]:124: in function <...Ons/Blizzard_GamepadSmartNavigation/SecureHelper.lua:47>
+[C]: in function 'SetAttribute'
+[Blizzard_GamepadSmartNavigation/SecureHelper.lua]:182: in function 'FrameShown'
+[Blizzard_GamepadSharedUtility/FrameControlsManager.lua]:218: in function <...izzard_GamepadSharedUtility/FrameControlsManager.lua:217>
+[Blizzard_UIPanels_Game/Mainline/ContainerFrame.lua]:814: in function 'ContainerFrame_OnShow'
+[Blizzard_UIPanels_Game/Mainline/ContainerFrame.lua]:384: in function 'OpenBackpack'
+[C]: in function 'pcall'
+[CinematicDev/QoL/Reload.lua]:77: in function <CinematicDev/QoL/Reload.lua:76>
+[CinematicDev/QoL/Reload.lua]:104: in function <CinematicDev/QoL/Reload.lua:84>]],
+    source = "pasted 2026-11-23 (after a /reload in a fight, Forever)",
+  },
 }
