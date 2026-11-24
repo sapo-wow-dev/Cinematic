@@ -350,7 +350,8 @@ end
 -- takes it, or a function giving it as clicked). Icon: Media/make_style_palette.py.
 -- Hidden on a client without that page. 2026-11-17.
 local PALETTE = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\StylePalette"
-function ns.StyleIcon(parent, anchor, page, Tooltip)
+local GEAR = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\SettingsGear"
+local function LinkIcon(parent, anchor, page, Tooltip, art, tip)
 	local button = CreateFrame("Button", nil, parent)
 	button:SetSize(20, 20)
 	button:SetPoint("LEFT", anchor, "RIGHT", 6, 0)
@@ -358,22 +359,47 @@ function ns.StyleIcon(parent, anchor, page, Tooltip)
 	button.searchSkip = true
 	local icon = button:CreateTexture(nil, "ARTWORK")
 	icon:SetAllPoints()
-	icon:SetTexture(PALETTE)
+	icon:SetTexture(art)
 	local glow = button:CreateTexture(nil, "HIGHLIGHT")
 	glow:SetAllPoints()
-	glow:SetTexture(PALETTE)
+	glow:SetTexture(art)
 	glow:SetBlendMode("ADD")
 	glow:SetAlpha(0.5)
 	button:SetScript("OnMouseDown", function() icon:SetPoint("TOPLEFT", 1, -1) end)
 	button:SetScript("OnMouseUp", function() icon:SetAllPoints() end)
 	Tooltip = Tooltip or ns.GRID_KIT.Tooltip
-	Tooltip(button, ns.L["Opens how these look, on the Style page."])
+	Tooltip(button, tip)
+	button.linkPage = page -- (/cine debug stylelinks and Tools/offline/stylebacklinks.lua: where it goes)
+	ns.allLinkIcons = ns.allLinkIcons or {}
+	table.insert(ns.allLinkIcons, button)
 	button:SetScript("OnClick", function()
 		ns.OpenOptions(type(page) == "function" and page() or page)
 	end)
 	if type(page) == "string" then
 		button:SetScript("OnShow", function(self)
-			if ns.settingsCanvases and not ns.settingsCanvases[page] then self:Hide() end
+			if ns.PageMade and not ns.PageMade(page) then self:Hide() end
+		end)
+	end
+	return button
+end
+function ns.StyleIcon(parent, anchor, page, Tooltip)
+	local button = LinkIcon(parent, anchor, page, Tooltip, PALETTE, ns.L["Opens how these look, on the Style page."])
+	button.linkKind = "style"
+	return button
+end
+-- The way back: a small gear on a Style page opening its frame's settings
+-- page (the page whose palette led here). Icon: Media/make_settings_gear.py.
+-- 2026-11-24.
+-- section: a HUD section's key (page: its icon's page), opened at its own
+-- sub-tab, not the one last picked there: Your Cast Bar's gear opens Unit
+-- Frames' Cast bar (the user, 2026-11-24).
+function ns.SettingsIcon(parent, anchor, page, Tooltip, section)
+	local button = LinkIcon(parent, anchor, page, Tooltip, GEAR, ns.L["Opens its settings: when it shows, and what it does."])
+	button.linkKind = "settings"
+	button.linkSection = section
+	if section then
+		button:SetScript("OnClick", function()
+			if ns.OpenFramesSection then ns.OpenFramesSection(section) else ns.OpenOptions(page) end
 		end)
 	end
 	return button
@@ -392,6 +418,10 @@ function ns.PageTabs(content, list, picked, noPalette)
 	-- one left: named as its icon is, not "Vision" or "Style".)
 	local at, hub = {}, ns.PageHub and list[picked] and ns.PageHub(list[picked][2])
 	local stylePage -- (the first of them in the Style hub: a palette after the tabs links it)
+	-- (On a Style page, the way back: the first tab in another hub, its icon's
+	-- landing tab, or the picked tab's back (SHOW_IN_TABS): a gear, 2026-11-24.)
+	local backPage = hub == "Style" and list[picked].back or nil
+	local backSection = hub == "Style" and list[picked].backSection or nil -- (a HUD sub-tab: ns.SettingsIcon)
 	if hub then
 		local kept = {}
 		for i, each in ipairs(list) do
@@ -401,6 +431,8 @@ function ns.PageTabs(content, list, picked, noPalette)
 				at[i] = #kept
 			elseif other == "Style" and not stylePage and ns.ModuleLoaded("style") then -- (no link: Style left out, Modules.lua)
 				stylePage = each[2]
+			elseif hub == "Style" and not backPage then
+				backPage = each[2]
 			end
 		end
 		if #kept == 1 and #list > 1 then
@@ -451,8 +483,17 @@ function ns.PageTabs(content, list, picked, noPalette)
 	-- (noPalette: none either, the Unit Frames and PRD tabs: the user's call,
 	-- their Show tab's section switch has one, 2026-11-17.)
 	local lastTab = tabFrames[#tabFrames]
+	-- (content.styleLinkIcons: each made, a page with two tab lines has two:
+	-- Tools/offline/stylebacklinks.lua)
+	local made
 	if stylePage and lastTab and not content.headingStyleIcons and not noPalette then
-		ns.StyleIcon(lastTab, lastTab, stylePage)
+		made = ns.StyleIcon(lastTab, lastTab, stylePage)
+	elseif backPage and lastTab then
+		made = ns.SettingsIcon(lastTab, lastTab, backPage, nil, backSection)
+	end
+	if made then
+		content.styleLinkIcons = content.styleLinkIcons or {}
+		table.insert(content.styleLinkIcons, made)
 	end
 	-- (kept on screen over the page's off card, to reach the other tabs)
 	content.pageTabs = { panel = panel, frames = tabFrames }
@@ -529,11 +570,13 @@ local SHOW_IN_TABS = {
 		{ "Show Advanced", "Personal Resources", "Brings your hidden player and pet frames back while your health or " ..
 			"power is low." },
 		-- (UnitStyle.lua's page, a tab here too: its look by its rows, 2026-11-16)
-		{ "Unit Frames", "Unit Style", "How the unit frames look." },
+		-- (backSection: its gear opens Show at that sub-tab, not the last one
+		-- picked there: Your Cast Bar's at Cast bar. The user, 2026-11-24.)
+		{ "Unit Frames", "Unit Style", "How the unit frames look.", backSection = "units" },
 		-- (PlateCastStyle.lua's unit frames' page: target & focus, boss & arena, and the Default row)
-		{ "Cast Bars", "Unit Cast Style", "How the unit frames' cast bars look." },
+		{ "Cast Bars", "Unit Cast Style", "How the unit frames' cast bars look.", backSection = "units" },
 		-- (...and yours, its own tab since 2026-11-20)
-		{ "Your Cast Bar", "Player Cast Style", "How your cast bar looks." },
+		{ "Your Cast Bar", "Player Cast Style", "How your cast bar looks.", backSection = "playercast" },
 	},
 	-- (The personal resource display: the HUD's PRD section, PersonalResources.lua's
 	-- page at its PRD parts, PersonalStyle.lua's look.)
@@ -566,7 +609,8 @@ local SHOW_IN_TABS = {
 		{ "Show", "HUD:chat", "CineMode hides the chat window: pick when it shows." },
 		{ "Show Advanced", "Chat", "What brings the hidden chat up, like new messages or typing." },
 		{ "Bubbles", "Chat bubbles", "Where chat bubbles show in CineMode." },
-		{ "Bubble Style", "Bubble Style", "How chat bubbles look, and speech from behind you." },
+		-- (back: its gear's page, not the first tab's: the bubbles' own, 2026-11-24)
+		{ "Bubble Style", "Bubble Style", "How chat bubbles look, and speech from behind you.", back = "Chat bubbles" },
 	},
 	-- (The HUD page's Timers section (Trackers till 2026-11-18). Cooldown Manager and Swing Timer its
 	-- tabs till 2026-11-17, their own icons since; Breath Bar's parked then.)
@@ -611,7 +655,7 @@ local SHOW_IN_TABS = {
 	mouse = {
 		{ "Hover Groups", "Mouseover groups", "Frames that come up together when you point at one of them." },
 		{ "Tooltips", "Tooltips", "Which tooltips show in CineMode, and when." },
-		{ "Tooltip Style", "Tooltip Style", "How the game's tooltips look." },
+		{ "Tooltip Style", "Tooltip Style", "How the game's tooltips look.", back = "Tooltips" },
 		{ "Cursor", "Cursor Hide", "In CineMode, the cursor gets out of the way." },
 	},
 	-- (ActionBarStyle.lua's. Gamepad's page its own icon since 2026-11-17.)
@@ -631,7 +675,9 @@ end
 function ns.ShowInTabs(key)
 	local L, list = ns.L, {}
 	for _, each in ipairs(SHOW_IN_TABS[key]) do
-		if not each.has or each.has() then list[#list + 1] = { L[each[1]], each[2], L[each[3]] } end
+		if not each.has or each.has() then
+			list[#list + 1] = { L[each[1]], each[2], L[each[3]], back = each.back, backSection = each.backSection }
+		end
 	end
 	return list
 end

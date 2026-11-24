@@ -1078,6 +1078,10 @@ local PAGE_STYLES = {
 	["Visions General"] = "Visions Style", ["Vitals Vision"] = "Vitals Style",
 	["Quest Vision"] = "Quest Talk Style", ["Roll Vision"] = "Roll Style",
 }
+-- The way back, a gear by the switch (ns.SettingsIcon), on a Style page without
+-- tabs: the rest go back by theirs (ns.PageTabs). 2026-11-24.
+local PAGE_BACKS = { ["Visions Style"] = "Visions General" }
+ns.PAGE_BACKS = PAGE_BACKS -- (Tools/offline/stylebacklinks.lua)
 local function MakeHeaderSwitch(content, switch)
 	-- (switch.at: { parent, anchor }, a part of a page with its own switch, by
 	-- its heading: the HUD's sections, 2026-11-17. switch.tip: its tooltip.)
@@ -1129,12 +1133,44 @@ local function MakeHeaderSwitch(content, switch)
 	else
 		link = nil
 	end
-	-- (A palette past them to the page's Style page, 2026-11-17: on the
-	-- switch, hidden with it.)
-	local canvas = content:GetParent() and content:GetParent():GetParent()
-	local stylePage = PAGE_STYLES[canvas and canvas.pageName or ""]
-	if stylePage then
-		ns.StyleIcon(toggle, link or toggle, stylePage, Tooltip)
+	-- (A palette past them to the page's Style page, 2026-11-17, or a gear
+	-- back from a Style page, 2026-11-24: on the switch, hidden with it. By the
+	-- page's name, which a page shown as it's made has only once it's
+	-- registered: then on its next show. Till 2026-11-24 Visions General's
+	-- palette was never made: Tools/offline/stylebacklinks.lua.)
+	local function AddLinkIcon()
+		-- (Up to the page's canvas: the switch's frame can be a holder in it.)
+		local canvas = content
+		while canvas and not canvas.pageName do canvas = canvas:GetParent() end
+		local pageName = canvas and canvas.pageName
+		if not pageName then return false end
+		if content.tabbedPage then return true end -- (its tabs have its link: ns.PageTabs)
+		-- (Only with Style loaded, as ns.PageTabs' palettes; and shown as made
+		-- only if its page is there, as this can be a frame after the page
+		-- showed (its own OnShow check missed): release review 2026-11-24.)
+		local made, target
+		if PAGE_STYLES[pageName] and ns.ModuleLoaded("style") then
+			target = PAGE_STYLES[pageName]
+			made = ns.StyleIcon(toggle, link or toggle, target, Tooltip)
+		elseif PAGE_BACKS[pageName] and ns.SettingsIcon then
+			target = PAGE_BACKS[pageName]
+			made = ns.SettingsIcon(toggle, link or toggle, target, Tooltip)
+		end
+		if made and ns.PageMade and not ns.PageMade(target) then made:Hide() end
+		if made then
+			content.styleLinkIcons = content.styleLinkIcons or {}
+			table.insert(content.styleLinkIcons, made)
+		end
+		return true
+	end
+	if not AddLinkIcon() then
+		-- (Next frame too: it's registered by then, and on screen already.)
+		local added = false
+		local function Retry()
+			if not added then added = AddLinkIcon() end
+		end
+		content:HookScript("OnShow", Retry)
+		C_Timer.After(0, Retry)
 	end
 	switch.header = toggle
 	content.pageHeaderSwitch = toggle -- (for pages in other files: shown or not as their part says)
@@ -4645,6 +4681,24 @@ do
 		end
 		local tile = byName[name]
 		return tile and tile.hub and tile.hub.name or nil
+	end
+	-- Whether a page is there to open on this client: a page of its own, or a
+	-- hub tab of one (Nameplate Names, Nameplate Marks). ns.StyleIcon's and
+	-- ns.SettingsIcon's links hide without it.
+	function ns.PageMade(name)
+		if ns.settingsCanvases and ns.settingsCanvases[name] then return true end
+		local tile = byName[name]
+		return tile ~= nil and tile.canvas ~= nil
+	end
+	-- Whether that page is the one on screen now (a hub tab: its tab picked).
+	-- /cine debug stylelinks: where a link's click landed.
+	function ns.PageOnScreen(name)
+		local tile = byName[name]
+		if tile and tile.canvas then
+			return tile.canvas:IsVisible() and tile.hub.current == tile
+		end
+		local canvas = ns.settingsCanvases and ns.settingsCanvases[name]
+		return canvas ~= nil and canvas:IsVisible()
 	end
 	-- A page's name as its icon shows it, its hidden icons' too (Names).
 	function ns.PageTileLabel(name)
@@ -9447,6 +9501,8 @@ local function CreateCombatPanel()
 			local icon = IconOf(key)
 			ns.OpenOptions(icon and IconName(icon) or "Standard Frames")
 		end
+		-- (The section's key picked now: /cine debug stylelinks, where a gear landed.)
+		function ns.FramesSectionOpen() return picked.open end
 		resetHooks[content] = function()
 			Layout()
 			ns.ApplyHideKeybinds()
@@ -11487,12 +11543,14 @@ local function CreatePlatesPanel()
 			HostileNPCs = "npcs", NeutralNPCs = "npcs", Critters = "npcs",
 			-- (Friendly NPCs with Service NPCs on the Friendly NPCs tab, 2026-11-16.)
 			FriendlyNPCs = "service", ServiceNPCs = "service", Guild = "extras" }
-		local targetGroup
+		local targetGroup, mouseGroup
 		local function AddRows(top, which)
 			local count = 0
 			for _, group in ipairs(ns.NAME_GROUPS) do
 				if group.rows then
 					targetGroup = group
+				elseif group.mouse then
+					mouseGroup = group -- (on the Target tab: see below)
 				elseif (GROUP_SECTION[group.key] or "extras") == which then
 					count = count + 1
 					local tip = group.plateOnly and group.tip
@@ -11656,8 +11714,10 @@ local function CreatePlatesPanel()
 		AddPlateRow(targetTop, 1, { "YourTarget", L["Nameplates"] })
 		local targetNameTip = L[" Your target's name, even with its kind's names off."] .. nameTip
 		AddNameRow(targetTop, 2, targetGroup, "YourTarget", L["Names"], nil, targetNameTip)
-		-- (The unit under the mouse: its whole plate. Off to start.)
-		AddPlateRow(targetTop, 3, { "YourMouseover", L["Mouseover"] })
+		-- (The unit under the mouse: its whole plate, and its name alone. Off to start.)
+		AddPlateRow(targetTop, 3, { "YourMouseover", L["Mouseover nameplates"] })
+		AddNameRow(targetTop, 4, mouseGroup, "YourMouseover", L["Mouseover names"], nil,
+			L[" The name of the unit under your mouse, even with its kind's names off."] .. nameTip)
 		EndSection(targetSection, lastLabel)
 
 		ns.PageBuildStep(true) -- (made ahead: the next frame from here)
@@ -16402,7 +16462,11 @@ function ns.LoadPartBox(content, title, intro, part, texts)
 			loadNote:SetJustifyH("RIGHT")
 			return
 		end
-		load:SetPoint("LEFT", content.pageSwitch or content.pageHelpLast or content.pageHelp or title, "RIGHT", 12, 0)
+		-- (Past the switch's palette, if it has one: Visions General's, made a
+		-- frame after the page (MakeHeaderSwitch), 2026-11-24 /cine debug stylelinks.)
+		local link = content.styleLinkIcons and content.styleLinkIcons[1]
+		if link and not link:IsShown() then link = nil end -- (hidden: its page not there)
+		load:SetPoint("LEFT", link or content.pageSwitch or content.pageHelpLast or content.pageHelp or title, "RIGHT", 12, 0)
 		if texts.beside then
 			loadNote:SetPoint("LEFT", loadText, "RIGHT", 12, 0)
 			loadNote:SetWidth(320)
@@ -16413,6 +16477,7 @@ function ns.LoadPartBox(content, title, intro, part, texts)
 		loadNote:SetJustifyH("LEFT")
 	end
 	PlaceLoad()
+	C_Timer.After(0, PlaceLoad) -- (after the switch's palette, made then too: asked first)
 	content:HookScript("OnShow", PlaceLoad) -- (after the switch's own OnShow: hooked later)
 	local function LoadState()
 		local wanted, loaded = ns.ModuleWanted(part), ns.ModuleLoaded(part)

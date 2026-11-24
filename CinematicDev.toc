@@ -310,6 +310,7 @@ Dev\FavoritesTest.lua
 Dev\FavStarsTest.lua
 Dev\PreviewLoopTest.lua
 Dev\AtmosphereTest.lua
+Dev\StyleLinksTest.lua
 Dev\WholeManaTest.lua
 Dev\GradientTest.lua
 Dev\QuestFocusTest.lua
