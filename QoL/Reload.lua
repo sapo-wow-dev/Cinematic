@@ -124,14 +124,26 @@ local function OpenWindows(state)
 	end
 end
 
+-- (The fight's end: PLAYER_REGEN_ENABLED, or the combat restriction lifting a
+-- moment after it, ADDON_RESTRICTION_STATE_CHANGED, as Damage Vision waits for.
+-- IsAddOnRestrictionActive answers false while that event is dispatched, so
+-- it's asked a moment later. Not opened if "reopen" was turned off meanwhile.)
 local afterFight -- (what's still to open once the fight ends)
 local fightWait = CreateFrame("Frame")
-fightWait:SetScript("OnEvent", function(self)
+local function OpenAfterFight()
 	if not afterFight or FightLocked() then return end
-	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	fightWait:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	pcall(fightWait.UnregisterEvent, fightWait, "ADDON_RESTRICTION_STATE_CHANGED")
 	local state = afterFight
 	afterFight = nil
-	OpenWindows(state)
+	if ns.Setting("reloadKeepWindows") then OpenWindows(state) end
+end
+fightWait:SetScript("OnEvent", function(_, event)
+	if event == "ADDON_RESTRICTION_STATE_CHANGED" then
+		C_Timer.After(0.2, OpenAfterFight)
+	else
+		OpenAfterFight()
+	end
 end)
 
 -- Opens again what was open, if it was saved just now (this reload's).
@@ -143,6 +155,8 @@ local function Restore()
 	if FightLocked() then
 		afterFight = state
 		fightWait:RegisterEvent("PLAYER_REGEN_ENABLED")
+		-- (Not on every client: pcall'd.)
+		pcall(fightWait.RegisterEvent, fightWait, "ADDON_RESTRICTION_STATE_CHANGED")
 	else
 		OpenWindows(state)
 	end
