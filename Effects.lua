@@ -5482,6 +5482,7 @@ function ns.NotchGap()
 	if type(top) ~= "number" or type(uiTop) ~= "number" or type(scale) ~= "number" or scale <= 0 then
 		return 0
 	end
+	top = top + (ns.worldSqueeze or 0) -- (the world drawn between the bars: Letterbox.lua)
 	local gap = top * WorldFrame:GetEffectiveScale() / scale - uiTop
 	return gap > 0.5 and gap or 0
 end

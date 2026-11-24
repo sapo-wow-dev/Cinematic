@@ -1508,4 +1508,18 @@ return {
     proof = "/cine debug ahdress run 1 (Forever 71037): DressUpLink err DressUpFrames.lua:316 'ModelBackground' nil",
     source = "Tools/tests/logs/2026-11-23-forever-testQueue_q52a0Log-74393c91.txt",
   },
+  {
+    id = "forever.worldframe.move-out-of-fights",
+    area = "protected",
+    clients = { "forever" },
+    api = { "WorldFrame", "WorldFrame:SetPoint", "WorldFrame:ClearAllPoints", "WorldFrame:SetAllPoints", "PLAYER_REGEN_DISABLED" },
+    when = "always",
+    rule = "WorldFrame is protected (IsProtected true) but an addon may re-anchor it out of fights: ClearAllPoints + SetPoint(\"TOPLEFT\", nil, \"TOPLEFT\", 0, -h) / (\"BOTTOMRIGHT\", nil, \"BOTTOMRIGHT\", 0, h) draws the world only in that strip, a wider view (not stretched), black in the strips left; UIParent stays on the whole screen and the game leaves it there. Moving it every frame costs ~0.01 ms a call, no frame time. In PLAYER_REGEN_DISABLED's handler lockdown is still off and SetAllPoints() works; inside a fight SetPoint is blocked (ADDON_ACTION_BLOCKED, no move).",
+    works = { "WorldFrame:SetPoint out of fights", "WorldFrame:SetAllPoints() in PLAYER_REGEN_DISABLED" },
+    fails = { "WorldFrame:SetPoint in a fight (blocked)" },
+    status = "tested",
+    tested = "2026-11-24",
+    proof = "/cine debug worldview run 1 (queue qbd76, Forever 71037): 11 pass, the 2 fails are the in-fight block",
+    source = "Tools/tests/logs/2026-11-24-forever-testQueue_qbd76Log-cc7bca9d.txt",
+  },
 }

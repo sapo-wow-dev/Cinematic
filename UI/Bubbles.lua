@@ -868,7 +868,9 @@ function ns.IsBubbleOnScreen(text)
 			end
 			local scale = box:GetEffectiveScale() / WorldFrame:GetEffectiveScale()
 			if Readable(left) and Readable(bottom) then
-				left, right, bottom, top = left * scale, right * scale, bottom * scale, top * scale
+				-- (From the world's own bottom: between the letterbox bars, Letterbox.lua.)
+				local up = ns.worldSqueeze or 0
+				left, right, bottom, top = left * scale, right * scale, bottom * scale - up, top * scale - up
 				local lifting = ns.db and ns.db.handleBubbles and ns.db.bubblesOffTop
 				if ns.speechWatch and placeTold ~= text then
 					placeTold = text -- (once a line: this is asked each frame while chat waits)

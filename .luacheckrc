@@ -31,6 +31,7 @@ read_globals = {
 	-- (KeyboardMap.lua)
 	"ActionButton_CalculateAction", "PlaceAction", "SetBindingSpell", "SetBindingMacro", "SetBindingItem", "GetBinding", "GetMacroInfo", "GetNumBindings", "GetActionText", "GetActionInfo", "C_ActionBar", "CooldownFrame_Set", "GetActionCooldown", "GetActionTexture", "GetNumShapeshiftForms", "GetPetActionCooldown", "GetPetActionInfo", "GetShapeshiftFormCooldown", "GetShapeshiftFormInfo", "HasAction",
 	"CinematicFrame",
+	"EventRegistry",
 	"C_CombatText", -- (Dev/SelfTextProbe.lua)
 	"GetZoneText", "DELETE", "CLOSE", -- (the camera trigger editor and My Shots)
 	"MovieFrame",

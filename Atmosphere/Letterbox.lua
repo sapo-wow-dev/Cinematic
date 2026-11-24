@@ -76,6 +76,69 @@ local function LiftFramerate(height)
 	framerate.moving = false
 end
 
+-- The world between the bars (the Letterbox page's "Draw the world between
+-- the bars", letterboxWorld): WorldFrame moved in from the top and bottom by
+-- the bars' height, so the game draws the world only in the strip between
+-- them, a wider view with nothing behind the bars. WorldFrame is protected:
+-- it can't move in a fight, so a fight that starts with the world between the
+-- bars holds the bars as they are (not out, not in, not taller) till it ends
+-- (the user, 2026-11-24: "combat prevents us from leaving it"); a fight that
+-- starts with the world whole keeps it whole. Left alone while the game's own
+-- cutscene places it (CinematicFrame.lua). Engine rule
+-- forever.worldframe.move-out-of-fights. Never touched by players who don't
+-- turn it on. (at: the offset now, WorldFrame units, 0 = whole screen;
+-- ns.worldSqueeze: the same, for ns.NotchGap; wanted, elapsed: the last call
+-- held, played after the fight; p: the switch's 0-1, eased when it's flipped.)
+local world = { at = 0 }
+
+local function PlaceWorld(offset)
+	if offset < 0.5 then offset = 0 end
+	if InCombatLockdown() or (CinematicFrame and CinematicFrame:IsShown()) then return end
+	if math.abs(offset - world.at) < 0.25 then return end
+	world.at = offset
+	ns.worldSqueeze = offset > 0 and offset or nil
+	WorldFrame:ClearAllPoints()
+	if offset > 0 then
+		WorldFrame:SetPoint("TOPLEFT", nil, "TOPLEFT", 0, -offset)
+		WorldFrame:SetPoint("BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, offset)
+	else
+		WorldFrame:SetAllPoints()
+	end
+end
+
+-- The whole screen again (Cinematic shutting down; in a fight: after it).
+function ns.LetterboxWorldBack()
+	if world.at > 0 then PlaceWorld(0) end
+end
+
+local function WatchWorld()
+	if world.watch then return end
+	world.watch = CreateFrame("Frame")
+	for _, event in ipairs({ "PLAYER_REGEN_ENABLED", "CINEMATIC_STOP", "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED" }) do
+		world.watch:RegisterEvent(event)
+	end
+	-- A cutscene about to start: the whole screen first, as the game works out
+	-- its own shape from WorldFrame's size (CinematicFrame.lua fires this just
+	-- before it places it).
+	if EventRegistry and EventRegistry.RegisterCallback then
+		EventRegistry:RegisterCallback("CinematicFrame.CinematicStarting", function()
+			ns.LetterboxWorldBack()
+		end, world.watch)
+	end
+	world.watch:SetScript("OnEvent", function(_, event)
+		-- (The cutscene's end put it on the whole screen itself.)
+		if event == "CINEMATIC_STOP" then world.at, ns.worldSqueeze = 0, nil end
+		ns.letterboxDirty = true
+		-- The fight held the bars: what was asked meanwhile, at once if it was
+		-- Cinematic shutting down (no tick comes after that).
+		if event == "PLAYER_REGEN_ENABLED" and world.wanted ~= nil then
+			local wanted, elapsed = world.wanted, world.elapsed
+			world.wanted = nil
+			if elapsed >= 1e5 then ns.UpdateLetterbox(wanted, elapsed) end
+		end
+	end)
+end
+
 -- Chat Cam's Ultra immersive (ChatCam.lua): through a conversation the bars
 -- come in (CineMode or not) and grow to twice their height, room for its
 -- subtitles; back to as they were after.
@@ -132,11 +195,18 @@ function Cinematic_ToggleLetterbox()
 end
 
 function ns.UpdateLetterbox(cinematic, elapsed)
+	-- (The world between the bars in a fight: the bars held till it ends.)
+	if world.at > 0 and InCombatLockdown() then
+		world.wanted, world.elapsed = cinematic and true or false, elapsed or 0
+		return
+	end
 	local immersive = ns.ChatCamImmersive and ns.ChatCamImmersive() or false
 	-- (Show me's demo, ShowMe.lua: the bars with the setting off, too)
 	local target = ((cinematic and (ns.db.letterbox or ns.effectsDemo or bars.forced)) or immersive) and 1 or 0
 	local grow = immersive and 1 or 0
-	if letterboxProgress == target and immersiveProgress == grow and not ns.letterboxDirty then
+	local squeeze = ns.db.letterboxWorld and 1 or 0
+	if letterboxProgress == target and immersiveProgress == grow and (world.p or 0) == squeeze
+		and not ns.letterboxDirty then
 		return
 	end
 	ns.letterboxDirty = false
@@ -157,6 +227,22 @@ function ns.UpdateLetterbox(cinematic, elapsed)
 	local t = letterboxProgress * letterboxProgress * (3 - 2 * letterboxProgress)
 	local height = ns.DrawLetterbox(ns.letterbox, look, screenW, screenH, t)
 	ns.letterbox:SetShown(letterboxProgress > 0)
-	LiftFramerate(letterboxProgress > 0 and height or 0)
+	-- The switch flipped with the bars up: the world eases in or out over the
+	-- bars' own time (with the bars out it just takes the new side).
+	world.p = letterboxProgress > 0 and ns.Approach(world.p or 0, squeeze, elapsed,
+		ns.LetterboxTime(look, squeeze > (world.p or 0))) or squeeze
+	if world.p > 0 and letterboxProgress > 0 then
+		WatchWorld()
+		-- (Fading bars are full height at once: the world eases in with them.)
+		local inset = look.letterboxMotion == "fade" and height * t or height
+		local e = world.p * world.p * (3 - 2 * world.p)
+		PlaceWorld(inset * e * ns.letterbox:GetEffectiveScale() / WorldFrame:GetEffectiveScale())
+	else
+		ns.LetterboxWorldBack()
+	end
+	-- The frame rate counter hangs on WorldFrame: the world between the bars
+	-- has lifted it that much already.
+	local lifted = world.at * WorldFrame:GetEffectiveScale() / ns.letterbox:GetEffectiveScale()
+	LiftFramerate(letterboxProgress > 0 and math.max(0, height - lifted) or 0)
 end
 end)

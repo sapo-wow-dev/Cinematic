@@ -746,6 +746,7 @@ for _, effect in ipairs(ns.EFFECT_GRID) do
 	DEFAULTS[effect .. "OnlyInCameras"] = false
 end
 DEFAULTS.letterboxOffInCombat = true -- (the bars slide away for fights)
+DEFAULTS.letterboxWorld = false -- the world drawn only between the bars, out of fights (Letterbox.lua)
 DEFAULTS.letterboxOnDiscover = false -- the bars for a while on a place new to you (Effects.lua)
 DEFAULTS.letterboxDiscoverTime = 8   -- ...this many seconds
 DEFAULTS.tintOffInCombat = false
@@ -4579,6 +4580,7 @@ local function RestoreEverything()
 	if not pcall(ns.UpdateLetterbox, false, 1e6) and ns.letterbox then
 		ns.letterbox:Hide()
 	end
+	if ns.LetterboxWorldBack then Try(ns.LetterboxWorldBack) end -- (the world on the whole screen)
 	if not pcall(ns.UpdateTint, false, 1e6) and _G.CinematicTint then
 		ns.HideTintWash()
 	end

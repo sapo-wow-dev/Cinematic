@@ -651,7 +651,9 @@ local function Place(object)
 		return nil
 	end
 	scale = scale / WorldFrame:GetEffectiveScale()
-	return x * scale, y * scale
+	-- (From the world's own bottom: drawn between the letterbox bars, it starts
+	-- higher, Letterbox.lua.)
+	return x * scale, y * scale - (ns.worldSqueeze or 0)
 end
 
 local function BubbleAngle(text)

@@ -397,3 +397,4 @@ Dev\ManaVisionTest.lua
 # (The test queue: TestQueueList.lua is written by Tools/testqueue.py, not kept in git)
 Dev\TestQueueList.lua
 Dev\TestQueue.lua
+Dev\WorldViewTest.lua

@@ -182,6 +182,13 @@ end
 -- Under the Letterbox tab's row: the bars for a few seconds on a place new
 -- to you (CineMode or not: Effects.lua, ns.LetterboxOnDiscover).
 EFFECT_PAGES.letterbox.More = function(kit, content, stack)
+	-- (Letterbox.lua: WorldFrame between the bars, out of fights only.)
+	stack:Header(content, L["The world"])
+	stack:Add(kit.Check(content, "letterboxWorld", L["Draw the world between the bars"],
+		L["Shows the whole view between the bars instead of hiding its top and bottom (it changes only out of fights)."], function(value)
+			ns.GetDB().letterboxWorld = value
+			ns.letterboxDirty = true
+		end), "check")
 	stack:Header(content, L["New places"])
 	stack:Add(kit.Check(content, "letterboxOnDiscover", L["Show bars on discovering a new place"],
 		L["Brings the bars in for a few seconds when you find a new place."], function(value)
