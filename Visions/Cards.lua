@@ -562,9 +562,19 @@ function ns.CardAllowed(id, edge)
 	if not ns.Setting(event.on) then
 		-- (Ticked, but its situation's tab on the Events page is switched off:
 		-- that tab is a container, 2026-11-23.)
+		-- (Said only when that tab's switch really is off, found up its
+		-- switches: Tools/offline/cardwhytab.lua.)
 		local db = ns.GetDB()
 		if db and db[event.on] then
-			return false, L["%s is ticked, but its tab on Card Vision's Events page is off"]:format(L[event.name])
+			local page = ns.PageSwitchOf and ns.PageSwitchOf(event.on)
+			for _ = 1, 10 do
+				if not page or page == "cards" then break end
+				if db[page] == false and page:find("^tabOn:Card Vision/events:") then
+					return false, L["%s is ticked, but its tab on Card Vision's Events page is off"]:format(L[event.name])
+				end
+				page = ns.PageSwitchOf(page)
+			end
+			return false, L["%s is ticked, but a switch over it is off"]:format(L[event.name])
 		end
 		return false, L["%s is unticked"]:format(L[event.name])
 	end
