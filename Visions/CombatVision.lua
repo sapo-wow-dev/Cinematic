@@ -1098,11 +1098,14 @@ local function FightCard(enter, reads)
 	local edge = enter and "enter" or "leave"
 	local id, words = enter and "combatIn" or "combatOut", enter and "combatTextIn" or "combatTextOut"
 	-- (Against players, with its row on and its Show in row saying yes: its
-	-- card in place of Entering combat's.)
+	-- card in place of Entering combat's, so only where Entering combat's
+	-- own Show in row says yes too: Tools/offline/pvpcardrowmatrix.lua.)
 	if enter and ns.CardOn("combatPvp") then
 		local how = ns.CardPvpFight(reads)
 		ns.Log("card", "fight started: " .. (how and ("against players (" .. how .. ")") or "no enemy player seen"))
-		if how and ns.CardAllowed("combatPvp", edge) then id, words = "combatPvp", "combatTextPvp" end
+		if how and ns.CardAllowed("combatIn", edge) and ns.CardAllowed("combatPvp", edge) then
+			id, words = "combatPvp", "combatTextPvp"
+		end
 	end
 	ns.Cards.Fire(id, {
 		name = ns.CardWords(words), edge = edge,
