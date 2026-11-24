@@ -804,6 +804,9 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		local live = game and ns.GamePlateReady(game)
 		plate:SetShown(not live)
 		if game then game:SetShown(live and true or false) end
+		-- (The plate a page draws over, the one shown: the copy not built,
+		-- the drawn one. Fix card Tools/audits/2026-11-23-ct-preview-plate.md.)
+		self.plate = live and game or plate
 		if stateDrop then stateDrop:SetShown(live and true or false) end
 		-- (Their shown words again: a pick changed them.)
 		for _, drop in ipairs({ unitDrop, stateDrop }) do
@@ -936,8 +939,10 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 	holder:SetScript("OnShow", function(self) self:Refresh() end)
 	-- (For a page drawing over the plate, Combat Text Style's numbers: the
 	-- plate, and the unit picked under it, "Hostile", "Friendly"...)
+	-- (holder.plate: the one shown, set again by each Refresh; drawnPlate and
+	-- gamePlate each, for a page placing both.)
 	holder.plate = game or plate
-	holder.gamePlate = game
+	holder.gamePlate, holder.drawnPlate = game, plate
 	function holder.SampleKind() return SAMPLES[sampleNow][1] end
 	return holder
 end

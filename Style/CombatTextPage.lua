@@ -108,10 +108,16 @@ function ns.CreateCombatTextStylePanel(kit)
 	if ns.MakePlateRowLookPreview then
 		preview = ns.MakePlateRowLookPreview(content, 480, "others")
 		preview:SetHeight(170) -- (room over the plate for the numbers' climb)
-		plate = preview.plate
+		-- (Over the picks: the game plate at plateLift; the drawn one, shown
+		-- when the game's copy isn't built, at its scale over its cast bar. The
+		-- numbers go on preview.plate, the one shown, read as they play.)
+		plate = preview.drawnPlate or preview.plate
 		plate:ClearAllPoints()
-		-- (Over the picks: the game plate says where, plateLift; the drawn one at its scale, over its cast bar.)
-		plate:SetPoint("BOTTOM", preview, "BOTTOM", 0, preview.gamePlate and preview.plateLift or 44 / 1.6)
+		plate:SetPoint("BOTTOM", preview, "BOTTOM", 0, 44 / 1.6)
+		if preview.gamePlate then
+			preview.gamePlate:ClearAllPoints()
+			preview.gamePlate:SetPoint("BOTTOM", preview, "BOTTOM", 0, preview.plateLift)
+		end
 	else
 		preview = CreateFrame("Frame", nil, content)
 		preview:SetSize(480, 150)
@@ -167,7 +173,9 @@ function ns.CreateCombatTextStylePanel(kit)
 		local this = round
 		for _, step in ipairs(steps) do
 			C_Timer.After(step[1], function()
-				if this == round and preview:IsVisible() then ns.CombatTextSample(plate, step[2], layer, step[3], step[4]) end
+				if this == round and preview:IsVisible() then
+					ns.CombatTextSample(preview.plate or plate, step[2], layer, step[3], step[4])
+				end
 			end)
 		end
 	end
@@ -1090,8 +1098,14 @@ function ns.ShowCombatTextDemo(on)
 		local preview = ns.MakePlateRowLookPreview(demo, 480, "others")
 		preview:SetPoint("TOPLEFT")
 		preview:SetHeight(170) -- (room over the plate for the numbers' climb, as on the page)
-		preview.plate:ClearAllPoints()
-		preview.plate:SetPoint("BOTTOM", preview, "BOTTOM", 0, preview.gamePlate and preview.plateLift or 44 / 1.6)
+		-- (Both plates placed as on the page; the numbers on the one shown.)
+		local drawn = preview.drawnPlate or preview.plate
+		drawn:ClearAllPoints()
+		drawn:SetPoint("BOTTOM", preview, "BOTTOM", 0, 44 / 1.6)
+		if preview.gamePlate then
+			preview.gamePlate:ClearAllPoints()
+			preview.gamePlate:SetPoint("BOTTOM", preview, "BOTTOM", 0, preview.plateLift)
+		end
 		-- (the numbers over it, past its top: not in it, which clips)
 		local layer = CreateFrame("Frame", nil, demo)
 		layer:SetAllPoints(preview)
