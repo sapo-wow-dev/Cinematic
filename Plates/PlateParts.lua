@@ -442,8 +442,11 @@ local bandOf = {} -- (unused: left from the old bands, no band is set)
 -- The size's curve (yards; size close: SIZE_CLOSE from you, camera right in;
 -- far: FAR_YARDS from the camera), the UI scale it was measured at, and the
 -- pixel hold. (On ns: this file's main chunk is at Lua's cap of 200 locals.)
--- (FIXED_ZOOM: the camera distance a Fixed size is taken at, a middle zoom.)
-ns.PLATE_NAME_REACH = { PAD = 3.4, SIZE_CLOSE = 8, REF_SCALE = 0.64, PIXEL_HOLD = 0.35, FIXED_ZOOM = 8 }
+-- (FIXED_ZOOM: the camera distance a Fixed size is taken at. 4 since
+-- 2026-11-24, size ~0.96: v2.1.27's names at a usual zoom of 5-7. It was 8,
+-- 0.76, 10-30% smaller than v2.1.27's at those zooms: the user, "the default
+-- too small".)
+ns.PLATE_NAME_REACH = { PAD = 3.4, SIZE_CLOSE = 8, REF_SCALE = 0.64, PIXEL_HOLD = 0.35, FIXED_ZOOM = 4 }
 local swaps = {} -- [plate] = { started = time, to = band }
 local zoom = 0 -- the camera's distance from you, this frame
 

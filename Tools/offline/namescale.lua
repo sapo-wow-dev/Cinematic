@@ -222,6 +222,10 @@ if ns.PlateNameZoom then
 	local middle = Look()
 	Check(fixedIn == fixedOut and fixedIn == middle, ("Size by Fixed: one size at any zoom (%.3f, %.3f), the middle "
 		.. "zoom's (%.3f)"):format(fixedIn, fixedOut, middle))
+	-- (Its size: about v2.1.27's at a usual zoom, 0.84-1.10 at zoom 4-8;
+	-- 0.76 at FIXED_ZOOM 8 was "too small", the user 2026-11-24.)
+	Check(ns.PLATE_NAME_REACH.FIXED_ZOOM == 4 and fixedIn >= 0.9 and fixedIn <= 1.0,
+		("Size by Fixed: as at zoom 4, about v2.1.27's size (%.3f, 0.90-1.00)"):format(fixedIn))
 	ns.PlateNameZoom(0)
 end
 

@@ -1255,7 +1255,7 @@ DEFAULTS.plateNameFarSize = 0.27
 DEFAULTS.plateNameFarY = -38
 -- Forever: how names are sized (Name Style page's Size, 2026-11-23, for the
 -- user's A/B): "zoom" by the camera's zoom (the close and far points
--- above), "fixed" one size, as at a middle zoom (PlateParts' FIXED_ZOOM).
+-- above), "fixed" one size, as at zoom 4 (PlateParts' FIXED_ZOOM).
 -- Fixed to start (the user, 2026-11-23: "make fixed zoom default").
 DEFAULTS.plateNameSizeBy = "fixed"
 -- Forever: Far names smaller's one step past ~40 yards from the camera
