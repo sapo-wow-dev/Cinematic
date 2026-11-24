@@ -216,9 +216,72 @@ Before handing it over: luacheck, compile, an offline run through the kit on
 the stand-in where it can reach the code (`Tools/offline/testkit.lua` shows
 how: pretend timers, `ns.HandleSlash("debug <name>")`, then check the log).
 Count the user's actions: everything proven costs none (leave it out). Then
-the reply is only: the one command in its own block (`full` only for the final
-run), what the box will ask, that there's no time limit, and "say check log".
-Log the run in the ledger.
+hand it over through the **test queue** (below). Log the run in the ledger.
+
+### Hand over through the test queue
+
+Several sessions work at once; each queues its kit test instead of handing the
+user a command, and the user runs them all from one click
+(`Dev/TestQueue.lua`, `Tools/testqueue.py`):
+
+```
+python -I Tools/testqueue.py add <test> [steps | full] --session "<this session's short name>" --note "<what it checks>" [--needs "<where to be / what to have>"]
+python -I Tools/testqueue.py wait <id>      (run_in_background: it ends when the game saved the result)
+```
+
+- The game shows a picker: queued tests first, then every kit test, each with
+  Hands off / Needs you and what it asks (scanned from the test's
+  r:WaitFor / r:Prompt / r:Click words). A wait with no words that still needs
+  the user (a fight, a place) can't be seen: give the test `needs = "..."`
+  in its Define, or `--needs` here. The user checks groups (Hands off, Needs
+  me) and runs them.
+- **Report issue**: the user can flag a test while it runs (the button on
+  every step's row, and on the older-test strip): the test, its step, what
+  it asked, and their message. `wait` prints each as `ISSUE the user
+  reported (client, step): ...` and exits 1 even on a clean result; the
+  test's log has an `ISSUE reported by you at step ...` line where it
+  happened. Treat it as a FAIL of that step: answer it before anything else.
+- Which client: `--client forever | retail | both` (default: either, the
+  first client that runs it). Each client's picker runs only its own and
+  lists the rest under "Waiting for ..."; `wait` holds until every client
+  asked for has saved a result. `testqueue.py list --client retail` is what
+  retail still owes. A fix for one client that must not change the other:
+  queue it `--client both`.
+- Kit tests and older tests (Dev/TestKitWrap.lua's OLD list) can both be
+  queued. An older test never says when it's done: the game runs its
+  command and the user clicks Done on a strip at the top when its box says
+  it's finished; its result is RAN with its PASS / FAIL lines counted, its
+  log copied to testQueue_<id>Log like the rest. Give an older test
+  `--needs` (the picker can't scan it).
+- The reply is then: queued as `<id>`, "/reload, then click Run all" (the box
+  offers every session's tests; it also says the box will ask for, if
+  anything), and that the results come back on their own after the Reload
+  button at the end. No "check log" needed: the background `wait` wakes you.
+- **Queued group**: right after `add`, file this session under the sidebar's
+  **Queued** group: `mcp__ccd_sidebar__list_groups`, take the id of the group
+  named `Queued` (none: `create_group` "Queued"), then
+  `mcp__ccd_sidebar__move_sessions` `["self"]` to it (moving "self" asks
+  nothing). When `wait` ends (result or timeout), or the entry is removed,
+  move "self" back with `section_id: "sessions"` (Ungrouped; `group_id: null`
+  fails) before reading the log.
+  Several tests queued from one session: move back after the last `wait`.
+- When `wait` ends: `read_log.py testQueue_<id>` (it prints the command) is the
+  check log for this run, the test's log copied apart under its id, so another
+  session running the same test can't take it. `wait` takes the entry off the
+  queue; a code change after queuing needs a new `add`.
+- **Requeue button (USER RULE, 2026-11-23: "sometimes i just mess it up").**
+  Any result that isn't clean (a FAIL, STOPPED, CUT-OFF, DID-NOT-START or a
+  reported issue): `wait` prints `requeue: <add command>`. The turn's
+  `wrap_up` ALWAYS offers a **Requeue** reply button (first, unless a fix is
+  clearly needed first: then "Fix + requeue" first, "Requeue" second). On the
+  click, run that exact add command (and a background `wait` on the new id);
+  never requeue on your own.
+- `list` shows every queued test and result; `remove <id>` or
+  `--session "<name>"` takes them off; `/cine debug testqueue` brings the
+  offer back in game, `testqueue clear` drops what's waiting.
+- Dev/TestQueue.lua and Dev/TestQueueList.lua are in CinematicDev.toc: the
+  first time after that line was added, the game needs a restart, not a
+  /reload.
 
 ## 5. Check log
 

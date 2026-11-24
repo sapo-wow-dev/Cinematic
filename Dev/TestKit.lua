@@ -45,6 +45,7 @@
 --     consoleWords = { "camera" },               -- every CVar/command with the word: value, default, flags
 --     console = false,                           -- (only to leave out the live console: / cvar: lines)
 --     cineMode = true,                           -- (only to leave CineMode alone)
+--     needs = "be in a city",                    -- where to be / what to have: the test queue shows it
 --     context = function(run) return "..." end,  -- more for the context line
 --     putBack = function(extra) return "..." end, -- puts back run.undo.extra
 --     steps = {
@@ -486,6 +487,11 @@ end
 
 local function Box(run, text, sub, r, g, b)
 	ns.debugNoCopyWindow = true
+	-- (A run from the test queue: which of the queue's tests this is, always.)
+	if Kit.boxPrefix then
+		local ok, prefix = pcall(Kit.boxPrefix)
+		if ok and prefix then text = prefix .. text end
+	end
 	if ns.PadTestBox then
 		ns.PadTestBox(text, sub, r, g, b)
 		ns.padTestRun = run
@@ -544,6 +550,13 @@ function Run:Buttons(extra)
 	end
 	if run.step then entries[#entries + 1] = { label = "Skip step", fn = function() run:SkipStep() end } end
 	entries[#entries + 1] = { label = "Stop", fn = function() Kit.Finish(run, false) end }
+	-- (A run from the test queue, Dev/TestQueue.lua: stops the rest too.)
+	if Kit.queueStop then entries[#entries + 1] = { label = "Stop queue", fn = function() Kit.queueStop(run) end } end
+	-- (Messed it up: this one stopped, unrecorded, and run again at the queue's end.)
+	if Kit.queueRequeue then entries[#entries + 1] = { label = "Requeue", fn = function() Kit.queueRequeue(run) end } end
+	-- (Something wrong with the test itself: say so, with its step. The
+	-- report box is the test queue's, Dev/TestQueue.lua.)
+	if Kit.reportIssue then entries[#entries + 1] = { label = "Report issue", fn = function() Kit.reportIssue(run) end } end
 	self.buttons = Kit.ShowButtons(entries)
 	local labels = {}
 	for label in pairs(self.buttons) do labels[#labels + 1] = label end
@@ -562,6 +575,7 @@ function Run:Prompt(text, sub, seconds, buttons)
 	Box(self, ("%s, step %d/%d: %s"):format(self.def.title, n, #self.def.steps, text), sub or "No time limit.", 1, 0.82, 0)
 	local labels = self:Buttons(buttons)
 	Say(self, "  asked: " .. text .. (buttons and (" [buttons: " .. table.concat(labels, ", ") .. "]") or ""))
+	self.asked = text -- (the report box shows it)
 end
 
 -- A call the game only takes from your click (a hardware event):
@@ -758,7 +772,8 @@ end
 -- side-by-side run 8, 2026-11-21). Its still timer kept fresh each second.)
 local function KeepCineOff(run)
 	if ns.stillSince then ns.stillSince = GetTime() end
-	if run.def.cineMode or not ns.IsCineModeOn then return end
+	-- (run.cineAllowed: a step that turns CineMode on itself, to test in it.)
+	if run.def.cineMode or run.cineAllowed or not ns.IsCineModeOn then return end
 	if ns.IsCineModeOn() and Cinematic_ToggleCineMode then
 		pcall(Cinematic_ToggleCineMode)
 		Say(run, "  CineMode came on: turned off again for the test")
@@ -829,7 +844,10 @@ function Kit.Finish(run, done)
 	-- (The timers stop on the run's time.)
 	local took = ns.PadTestTime(GetTime() - (run.began or GetTime()))
 	if ns.PadTestBoxClock then ns.PadTestBoxClock(function() return "took " .. took end) end
-	if done then
+	if Kit.queueStop then
+		-- (In the test queue: its own box says what's next; "/reload" here
+		-- read as the end of the queue while more were to come, 2026-11-23.)
+	elseif done then
 		Box(run, ("%s DONE: %d pass, %d fail, %d skip."):format(title, run.pass, run.fail, run.skip),
 			"/reload, then say \"check log\".", run.fail > 0 and 1 or 0.3, run.fail > 0 and 0.4 or 1, 0.3)
 	else
@@ -837,6 +855,11 @@ function Kit.Finish(run, done)
 	end
 	ns.Print(("%s %s"):format(title, summary))
 	C_Timer.After(60, function() if not current and ns.PadTestBoxHide then ns.PadTestBoxHide(run) end end)
+	-- (The test queue, Dev/TestQueue.lua: records it and starts the next.)
+	if Kit.onFinish then
+		local ok, err = pcall(Kit.onFinish, run, done, summary)
+		if not ok then ns.Print("test queue: " .. tostring(err)) end
+	end
 end
 
 -- The steps to run: the numbers given, else every step not proven (all with
@@ -1012,6 +1035,12 @@ function Kit.Define(def)
 end
 
 function Kit.Running() return current end
+function Kit.Has(name) return defs[name] end
+function Kit.Names()
+	local names = {}
+	for i, name in ipairs(order) do names[i] = name end
+	return names
+end
 -- (A block named resume() while a run goes: the step's own call, see Run:Click.)
 do
 	local watch = CreateFrame("Frame")

@@ -276,7 +276,9 @@ page.kindRows.combo:Refresh()
 Check("a kind the game's tick turns off: its badge", page.kindRows.combo.badgeText == "off in the game's options",
 	page.kindRows.combo.badgeText)
 page.kindRows.damage:Refresh()
-Check("a kind with no tick: no badge", page.kindRows.damage.badgeText == "")
+-- (An empty FontString reads nil, as the game's does (rule
+-- all.fontstring.empty-text-nil, the stand-in since 6e4dcfa). The user OK'd 2026-11-23.)
+Check("a kind with no tick: no badge", (page.kindRows.damage.badgeText or "") == "")
 
 -- Drag to place (snapped to 5, kept in range).
 db.selfTextHeight, db.selfTextAcross = 0, 0

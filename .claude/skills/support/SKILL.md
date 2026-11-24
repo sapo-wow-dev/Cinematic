@@ -135,8 +135,10 @@ widen it to the player's setup (their client, addons, the settings from their
 `/cine log`, in and out of combat), probe every open question in the same
 run, and build it with the test kit (`Dev/TestKit.lua`,
 `ns.TestKit.Define`), which makes the `/cine debug <name>` command, the box,
-the undo and the context line. The user runs it and says "check log", and I
-read it with `python -I .claude/skills/test/read_log.py <key>`. If the run
+the undo and the context line. Hand it over through the test queue (/test
+skill, "Hand over through the test queue": `Tools/testqueue.py add`, then
+`wait <id>` in the background); when the wait ends I read it with
+`python -I .claude/skills/test/read_log.py testQueue_<id>`. If the run
 needs new debug code, say what it would log and ask before writing it. In the report, offer
 the local test as the next step, ahead of any player diagnostic. A draft
 reply asking the player for something is only for when we can't test it, or
@@ -224,6 +226,11 @@ Short, in chat:
 3. **The draft reply**: one plain ```text block, nothing nested, commands on
    their own lines. Also saved as `<short-slug>-reply.md` in the repo root.
    The reply's voice:
+   - human first: written like a person talking to a fellow player, a
+     warm hello or thanks, "you" and "I", contractions, plain game words
+     ("jump into a fight with other players"), no settings jargon or
+     how-it-works detail they don't need to act; read it aloud, and if it
+     sounds like a changelog, rewrite it
    - short and simple: a few plain sentences, no step lists unless needed
    - say what changed or what to set, and the version it's in
    - not fixed or not found yet: say what we tried and that we couldn't make

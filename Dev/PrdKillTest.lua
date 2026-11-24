@@ -251,6 +251,7 @@ ns.TestKit.Define({
 	key = "prdKillTest",
 	title = "Resource bars through a kill",
 	about = "your personal resource bars, own nameplate and our stand-ins logged through one kill in CineMode",
+	needs = "One mob to kill that hits you",
 	settings = { "personalResources", "prdKeepUp", "prHealthPrd", "prHealthPrdLinkCalm", "prHealthPrdLinkAlways",
 		"prPowerPrd", "prPowerPrdLinkCalm", "prPowerPrdLinkAlways", "prPowerPrdAlways", "fightWaitPull" },
 	cvars = CVARS,

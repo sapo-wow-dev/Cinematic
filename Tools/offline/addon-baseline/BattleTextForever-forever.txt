@@ -1,0 +1,6 @@
+# version v1.37.1
+frame BattleTextForever
+frame BattleTextForever*
+frame BattleTextForeverConfirm
+frame BattleTextForeverMinimapButton
+frame BattleTextForeverStart

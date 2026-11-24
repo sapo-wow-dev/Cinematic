@@ -121,6 +121,7 @@ ns.TestKit.Define({
 	key = "wholeManaTest",
 	title = "Whole mana test",
 	about = "mana words (after a cast, remaining) are whole numbers on your real mana, nothing to do",
+	needs = "A class with mana and a spell that costs it",
 	context = function()
 		local ok, maxMana = pcall(UnitPowerMax, "player", MANA)
 		return ("max mana %s, CreateAbbreviateConfig %s, UnitPowerPercent %s, Mana text %s"):format(

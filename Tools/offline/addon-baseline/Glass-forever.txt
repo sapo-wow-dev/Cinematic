@@ -1,0 +1,13 @@
+# version 2.2.0
+EnableMouse(false or a variable) in Glass/Glass/Components/ExtraWindow.lua
+EnableMouse(false or a variable) in Glass/Glass/Components/MessageLine.lua
+EnableMouse(false or a variable) in Glass/Glass/Components/MoverDialog.lua
+EnableMouse(false or a variable) in Glass/Glass/Components/MoverFrame.lua
+EnableMouse(false or a variable) in Glass/Glass/Components/NewMessageAlertFrame.lua
+EnableMouse(false or a variable) in Glass/Glass/Components/ScrollOverlayFrame.lua
+EnableMouse(false or a variable) in Glass/Glass/Components/SlidingMessageFrame.lua
+EnableMouse(false or a variable) in Glass/Glass/Components/SocialButton.lua
+frame GlassSocialMover
+frame GlassUpdaterFrame
+hooks SetItemRef
+sets CVar chatStyle

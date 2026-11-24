@@ -5,6 +5,8 @@ before every release.
 
 ## Status (2026-11-20): cast bars done, the rest to go
 
+Nameplates (2026-11-23): plan, questions and runs in Tools/tests/plate-preview-match.md; probe `/cine debug platematch`.
+
 Done and committed (ee3d51f, b86a5bf, 5c584c6, d17755a2, 289d3821; in v2.1.17 up to 5c584c6):
 - Step 0 on both clients (`/cine debug templates`, results below).
 - The match test, `/cine debug previewmatch` (Dev/PreviewMatch.lua): runs itself, never opens Settings (on Forever

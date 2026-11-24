@@ -397,6 +397,7 @@ ns.TestKit.Define({
 	key = "plateMatchTest",
 	title = "Nameplate preview match",
 	about = "the nameplate previews built on the game's own plate: every sample and state, the page, a real plate",
+	needs = "A mob with a nameplate to target, out of a fight",
 	cvars = CVARS,
 	settings = { "combatTextStyle", "handlePlateStyle" },
 	context = function()

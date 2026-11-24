@@ -1,16 +1,15 @@
-# version v4.11.37
+# version v4.11.39
 EnableMouse(false or a variable) in RXPGuides/GuideWindow.lua
 EnableMouse(false or a variable) in RXPGuides/InventoryManager.lua
+EnableMouse(false or a variable) in RXPGuides/LevelingTracker.lua
 EnableMouse(false or a variable) in RXPGuides/UI/V2/Core.lua
 EnableMouse(false or a variable) in RXPGuides/UI/V2/GuideImporter.lua
 SetIgnoreParentAlpha(true) in RXPGuides/LevelingTracker.lua
 frame $parentBarContainer
-frame $parentButton
 frame $parentCheck
 frame $parentCogwheel
 frame $parentCooldown
 frame $parentGuideName
-frame $parentItemFrame
 frame $parentRXP
 frame $parentRXPTalents
 frame $parentResize
@@ -30,19 +29,18 @@ frame RXPDangerFrame
 frame RXPDeleteJunk
 frame RXPFrame
 frame RXPG_ARROW
-frame RXPG_LevelMenuFrame
 frame RXPG_MenuFrame
 frame RXPG_SplitsMenuFrame
+frame RXPGuidesNpcScanTooltip
 frame RXPGuidesTrainerFrame
 frame RXPInventory_DeleteJunk
-frame RXPItemFrame
+frame RXPItemFrameButton
+frame RXPItemFrameButton*
 frame RXPItemUpgradesComparison
 frame RXPJunkHandler
-frame RXPLevelSplits
 frame RXPQuestLogCleanupButton
 frame RXPTELEPORTHOME
 frame RXPTELEPORTTO
-frame RXPTargetFrame
 frame RXPTargetFrame_EnemyButton
 frame RXPTargetFrame_EnemyButton*
 frame RXPTargetFrame_FriendlyButton

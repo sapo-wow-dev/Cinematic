@@ -155,7 +155,7 @@ local function RunClient(client)
 	local labels = {}
 	for label in pairs(run.buttons or {}) do labels[#labels + 1] = label end
 	table.sort(labels)
-	Check("row: answers, Edit Mode, Skip step, Stop", table.concat(labels, ",") == "No,Open Edit Mode,Skip step,Stop,Yes",
+	Check("row: answers, Edit Mode, Skip step, Stop, Report issue", table.concat(labels, ",") == "No,Open Edit Mode,Report issue,Skip step,Stop,Yes",
 		table.concat(labels, ","))
 	Click(run.buttons.Yes)
 	Advance(0.5)

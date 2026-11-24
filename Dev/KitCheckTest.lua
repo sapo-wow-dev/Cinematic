@@ -25,6 +25,8 @@ ns.TestKit.Define({
 	key = "kitCheckTest",
 	title = "Test kit check",
 	about = "the test kit proving itself: probes, undo, CineMode off, waits, screenshots, nothing to do",
+	-- needs = "A mob to fight", -- where to be or what to have: the test queue's picker shows it
+	-- (none here: hands off). Say it whenever a step waits on you without words, r:WaitFor(nil, ...).
 	settings = { SETTING },
 	cvars = { "nameplateShowAll", "Sound_EnableAllSound" },
 	context = function() return "kit check: no setup needed" end,

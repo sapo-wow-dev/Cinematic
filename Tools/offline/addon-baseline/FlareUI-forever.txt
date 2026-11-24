@@ -1,0 +1,180 @@
+# version 7.0.10
+EnableMouse(false or a variable) in FlareUI/EditModeOverlays.lua
+EnableMouse(false or a variable) in FlareUI/Modules/ActionBars.lua
+EnableMouse(false or a variable) in FlareUI/Modules/Bags.lua
+EnableMouse(false or a variable) in FlareUI/Modules/BuffReminders.lua
+EnableMouse(false or a variable) in FlareUI/Modules/Chat.lua
+EnableMouse(false or a variable) in FlareUI/Modules/CooldownManager.lua
+EnableMouse(false or a variable) in FlareUI/Modules/DamageMeter.lua
+EnableMouse(false or a variable) in FlareUI/Modules/LootRolls.lua
+EnableMouse(false or a variable) in FlareUI/Modules/Minimap.lua
+EnableMouse(false or a variable) in FlareUI/Modules/MinimapBag.lua
+EnableMouse(false or a variable) in FlareUI/Modules/MinimapDurability.lua
+EnableMouse(false or a variable) in FlareUI/Modules/MinimapEye.lua
+EnableMouse(false or a variable) in FlareUI/Modules/MinimapVehicle.lua
+EnableMouse(false or a variable) in FlareUI/Modules/Movers.lua
+EnableMouse(false or a variable) in FlareUI/Modules/ObjectiveTracker.lua
+EnableMouse(false or a variable) in FlareUI/Modules/PadGroupTargeting.lua
+EnableMouse(false or a variable) in FlareUI/Modules/PadTracker.lua
+EnableMouse(false or a variable) in FlareUI/Modules/PartyFrames.lua
+EnableMouse(false or a variable) in FlareUI/Modules/RadialMenu.lua
+EnableMouse(false or a variable) in FlareUI/Modules/Tooltips.lua
+EnableMouse(false or a variable) in FlareUI/Modules/Tweaks.lua
+EnableMouse(false or a variable) in FlareUI/Modules/UnitFrames.lua
+EnableMouse(false or a variable) in FlareUI/Modules/UnitFramesRing.lua
+EnableMouse(false or a variable) in FlareUI/Modules/Visibility.lua
+EnableMouse(false or a variable) in FlareUI/Modules/XPBar.lua
+EnableMouse(false or a variable) in FlareUI/Settings/Preview.lua
+EnableMouse(false or a variable) in FlareUI/Settings/RadialEditor.lua
+SetAlpha hook in FlareUI/Modules/Chat.lua
+SetAlpha hook in FlareUI/Modules/MinimapBag.lua
+SetAlpha hook in FlareUI/Modules/MinimapDurability.lua
+SetAlpha hook in FlareUI/Modules/MinimapEye.lua
+SetAlpha hook in FlareUI/Modules/MinimapVehicle.lua
+SetAlpha hook in FlareUI/Modules/Nameplates.lua
+SetAlpha hook in FlareUI/Modules/ResourceBars.lua
+SetAlpha hook in FlareUI/Modules/XPBar.lua
+SetAlphaFromBoolean (secret alpha) in FlareUI/Modules/ProcGlow.lua
+SetIgnoreParentAlpha(true) in FlareUI/Modules/UnitFrames.lua
+UIFrameFadeIn/Out in FlareUI/Modules/BuffReminders.lua
+frame FlareUIDialog
+frame FlareUIDialogPadAlt
+frame FlareUIDialogPadNo
+frame FlareUIDialogReload
+frame FlareUIDurability
+frame FlareUIFinderEye
+frame FlareUIKeyringBackpackClick
+frame FlareUIMinimapButton
+frame FlareUIPadGroupNav
+frame FlareUIPadGroupWatch
+frame FlareUIPadTrackerWatch
+frame FlareUIQuestPick
+frame FlareUIReagentBackpackClick
+frame FlareUIVehicleExit
+frame FlareUI_
+frame FlareUI_*
+frame FlareUI_BagBarToggle
+frame FlareUI_BagButton
+frame FlareUI_BagButton*
+frame FlareUI_BattlegroundObjectivesBox
+frame FlareUI_BlizzOptionsPanel
+frame FlareUI_Boss
+frame FlareUI_Boss*
+frame FlareUI_BuffReminder
+frame FlareUI_BuffReminder*
+frame FlareUI_BuffReminders
+frame FlareUI_ColorPickerWindow
+frame FlareUI_CopyChat
+frame FlareUI_CopyLink
+frame FlareUI_DrawerButton
+frame FlareUI_EditModeEye
+frame FlareUI_FishingCast
+frame FlareUI_FlagCarrier
+frame FlareUI_FlagCarrier*
+frame FlareUI_FlagCarriers
+frame FlareUI_HiddenBarParent
+frame FlareUI_ImportPicker
+frame FlareUI_LootFeed
+frame FlareUI_LootRolls
+frame FlareUI_LootWindow
+frame FlareUI_LootWindowHolder
+frame FlareUI_MinimapBag
+frame FlareUI_MinimapMenu
+frame FlareUI_ObjectiveTracker
+frame FlareUI_PadNav
+frame FlareUI_Party
+frame FlareUI_PerfReport
+frame FlareUI_PreviewActionButton*
+frame FlareUI_Radial
+frame FlareUI_RadialAim*
+frame FlareUI_RadialCaster
+frame FlareUI_RadialCatcher
+frame FlareUI_RadialEditorNewRadial
+frame FlareUI_RadialPad
+frame FlareUI_RadialWheel
+frame FlareUI_Raid
+frame FlareUI_RaidTanks
+frame FlareUI_ReloadParent
+frame FlareUI_SettingsPanel
+frame FlareUI_SettingsReload
+frame FlareUI_ThreatMeter
+frame FlareUI_Totems
+frame FlareUI_TourReload
+frame FlareUI_TrackerItem
+frame FlareUI_TrackerItem*
+frame FlareUI_UF_
+frame FlareUI_UF_*
+frame FlareUI_UF_PlayerCastBar
+frame FlareUI_XPBar
+frame MerchantItem
+hooks ActionButtonDown
+hooks ActionButtonUp
+hooks ClassTrainerFrame_Update
+hooks Cluster:SetEditModeScale
+hooks Cluster:SetHeaderUnderneath
+hooks Cluster:SetRotateMinimap
+hooks Cluster:SetSize
+hooks Cluster:UpdateMinimapConfig
+hooks CompactRaidFrameManager_UpdateShown
+hooks ConfirmLootRoll
+hooks ContainerFrame_GenerateFrame
+hooks EditModeManagerFrame:SelectSystem
+hooks FCFDock_SelectWindow
+hooks FCF_OpenTemporaryWindow
+hooks FCF_Tab_OnClick
+hooks GameTime_UpdateTooltip
+hooks GameTooltip_SetDefaultAnchor
+hooks HelpTip:Show
+hooks MerchantFrame_UpdateBuybackInfo
+hooks MerchantFrame_UpdateMerchantInfo
+hooks MerchantItemButton_OnModifiedClick
+hooks MiniMapIndicatorFrame_UpdatePosition
+hooks MinimapCluster:SetAlpha
+hooks MinimapFrame:AdjustPointsOffset
+hooks MinimapFrame:SetMaskTexture
+hooks MinimapFrame:SetMouseClickEnabled
+hooks MinimapFrame:SetParent
+hooks MinimapFrame:SetZoom
+hooks MultiActionButtonDown
+hooks MultiActionButtonUp
+hooks PetHitIndicator:Show
+hooks QuickJoinToastButton:ShowToast
+hooks SendMailFrame_SendMail
+hooks SetItemButtonDesaturated
+hooks SharedTooltip_SetBackdropStyle
+hooks SpellBookItemMixin:UpdateActionBarAnim
+hooks StaticPopup_Show
+hooks TakeTaxiNode
+hooks TaxiNodeOnButtonEnter
+hooks TaxiRequestEarlyLanding
+hooks TimeManagerClockButton_Update
+hooks ToggleBackpack_Combined
+hooks ToggleMinimap
+hooks UpdateContainerFrameAnchors
+hooks UpdateUIPanelPositions
+partial mouse handling in FlareUI/Modules/Auras.lua
+partial mouse handling in FlareUI/Modules/Bags.lua
+partial mouse handling in FlareUI/Modules/Minimap.lua
+partial mouse handling in FlareUI/Modules/MinimapBag.lua
+partial mouse handling in FlareUI/Modules/PartyFrames.lua
+partial mouse handling in FlareUI/Modules/UnitFrames.lua
+sets CVar AutoPushSpellToActionBar
+sets CVar Sound_MasterVolume
+sets CVar chatStyle
+sets CVar combinedBags
+sets CVar cooldownViewerEnabled
+sets CVar rotateMinimap
+sets CVar showArenaEnemyFrames
+sets CVar uiscale
+sets CVar useUiScale
+state driver in FlareUI/Dialog.lua
+state driver in FlareUI/Modules/ActionBars.lua
+state driver in FlareUI/Modules/Bags.lua
+state driver in FlareUI/Modules/BossFrames.lua
+state driver in FlareUI/Modules/BuffReminders.lua
+state driver in FlareUI/Modules/Fishing.lua
+state driver in FlareUI/Modules/MinimapVehicle.lua
+state driver in FlareUI/Modules/PartyFrames.lua
+state driver in FlareUI/Modules/RaidFrames.lua
+state driver in FlareUI/Modules/UnitFrames.lua
+state driver in FlareUI/Modules/XPBar.lua

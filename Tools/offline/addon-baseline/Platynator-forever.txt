@@ -1,0 +1,22 @@
+# version 550
+SetAlphaFromBoolean (secret alpha) in Platynator/Display/CannotInterruptMarker.lua
+SetAlphaFromBoolean (secret alpha) in Platynator/Display/FactionMarker.lua
+frame PlatynatorCustomiseDialog
+frame PlatynatorCustomiseDialog*
+frame PlatynatorCustomiseDialogImportDialog
+frame PlatynatorNameplateBuffButtonTemplate
+frame PlatynatorPropagateMouseTemplate
+frame PlatynatorUnitGuildTooltip
+hooks NamePlateDriverFrame:OnNamePlateAdded
+sets CVar nameplateBottomInset
+sets CVar nameplateMotionSpeed
+sets CVar nameplateOccludedAlphaMult
+sets CVar nameplateOtherAtBase
+sets CVar nameplateSelectedScale
+sets CVar nameplateShowAll
+sets CVar nameplateShowOnlyNameForFriendlyPlayerUnits
+sets CVar nameplateSimplifiedScale
+sets CVar nameplateSize
+sets CVar nameplateTopInset
+sets CVar nameplateUseClassColorForFriendlyPlayerUnitNames
+sets CVar tooltipShowAuraSpellIDs

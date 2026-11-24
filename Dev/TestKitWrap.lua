@@ -37,7 +37,6 @@ local OLD = {
 	{ cmd = "chatreveal", fn = "ChatRevealTest", file = "ChatRevealTest.lua", category = "chatreveal" },
 	{ cmd = "chattab", fn = "ChatTabTest", file = "ChatTabTest.lua", category = "chattab" },
 	{ cmd = "chatdefault", fn = "ChatDefaultTest", file = "ChatDefaultTest.lua", category = "chatdefault" },
-	{ cmd = "tintlayer", fn = "TintLayerTest", file = "TintLayerTest.lua", category = "tintlayer" },
 	{ cmd = "shoulder", fn = "ShoulderTest", file = "ShoulderCamTest.lua", category = "shoulder" },
 	{ cmd = "dueltarget", fn = "DuelTargetTest", file = "DuelTargetTest.lua", log = "duelTargetLog" },
 	{ cmd = "mappin", fn = "MapPinTest", file = "MapPinTest.lua", log = "mapPinLog" },
@@ -238,6 +237,23 @@ function Kit.WrapState()
 end
 
 Kit.CloseOld = Close -- (Tools/offline/testkit.lua: a /reload's closing lines)
+
+-- The older tests for the test queue (Dev/TestQueue.lua): cmd, file and the
+-- log their lines end up in. Kit.extraOld: stand-ins the offline check adds.
+Kit.extraOld = {}
+function Kit.OldTests()
+	local out = {}
+	for _, list in ipairs({ OLD, Kit.extraOld }) do
+		for _, entry in ipairs(list) do
+			out[#out + 1] = { cmd = entry.cmd, file = entry.file,
+				logKey = entry.log or (entry.category and MirrorKey(entry)) or nil }
+		end
+	end
+	return out
+end
+function Kit.OldTest(cmd)
+	for _, entry in ipairs(Kit.OldTests()) do if entry.cmd == cmd then return entry end end
+end
 
 function Kit.ListWrapped()
 	print(("old tests (%d wrapped: context lines, the run before kept, totals at /reload; rewritten onto the kit when next worked on):"):format(wrapped))

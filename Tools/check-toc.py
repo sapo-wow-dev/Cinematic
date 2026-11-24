@@ -68,8 +68,11 @@ def main():
     for f in dev:
         if f not in release and not ignored(f, ignores) and f != "ChangelogCommits.dev.lua":
             problems.append("%s: dev copy only, but not in .pkgmeta's ignore (it would ship)" % f)
+    # (Dev/TestQueueList.lua is written by Tools/testqueue.py and not kept in git
+    # either: a fresh checkout has none till a test is queued.)
+    made = ("ChangelogCommits.dev.lua", "Dev/TestQueueList.lua")
     for f in set(release + dev):
-        if f != "ChangelogCommits.dev.lua" and not os.path.exists(os.path.join(ROOT, f)):
+        if f not in made and not os.path.exists(os.path.join(ROOT, f)):
             problems.append("%s: named in a TOC, no such file" % f)
     for p in problems:
         print("toc: " + p)

@@ -1059,6 +1059,15 @@ function ns.ResetAddon(settingsOnly)
 	-- fresh install to Core.lua.)
 	local kept = {}
 	kept.vitalsThemeEdits = ns.isDev and CinematicDB and CinematicDB.vitalsThemeEdits or nil
+	-- (The dev copy's test queue, both resets: its done marks, results and
+	-- logs, Dev/TestQueue.lua. Wiped, a test already run came back checked in
+	-- the picker at the reset's reload, and its session never got its result.
+	-- The user, 2026-11-23: "i keep needing to do this test on reset".)
+	if ns.isDev and type(CinematicDB) == "table" then
+		for k, v in pairs(CinematicDB) do
+			if type(k) == "string" and k:find("^testQueue") then kept[k] = v end
+		end
+	end
 	-- (What the game's floating text draws until a restart: not a setting.
 	-- Hide all floating text reset off still says "log out and back in to apply".)
 	kept.worldTextLive = ns.db.worldTextLive or nil

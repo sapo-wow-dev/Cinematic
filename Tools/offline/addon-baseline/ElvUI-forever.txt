@@ -1,0 +1,665 @@
+# version v16.02
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/ActionBars/MicroBar.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/Auras/Containers.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/Bags/Bags.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/Blizzard/AlertFrame.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/DataBars/DataBars.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/DataBars/Experience.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/Maps/Minimap.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/Maps/Worldmap.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/Nameplates/Elements/Plugins.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/Nameplates/Nameplates.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/UnitFrames/ConfigEnvironment.lua
+EnableMouse(false or a variable) in ElvUI/Game/Shared/Modules/UnitFrames/UnitFrames.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/Ace3-ElvUI/AceGUIWidget-EditBox-ElvUI.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/Ace3-ElvUI/AceGUIWidget-MultiLineEditBox-ElvUI.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/Ace3-ElvUI/AceGUIWidget-Slider-ElvUI.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/Ace3/AceGUI-3.0/widgets/AceGUIContainer-TreeGroup.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/Ace3/AceGUI-3.0/widgets/AceGUIWidget-EditBox.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/Ace3/AceGUI-3.0/widgets/AceGUIWidget-InteractiveLabel.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/Ace3/AceGUI-3.0/widgets/AceGUIWidget-MultiLineEditBox.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/Ace3/AceGUI-3.0/widgets/AceGUIWidget-Slider.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/oUF/ouf.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/oUF_Plugins/oUF_AuraBars.lua
+EnableMouse(false or a variable) in ElvUI_Libraries/Game/Shared/oUF_Plugins/oUF_AuraWatch.lua
+SetAlpha hook in ElvUI/Game/Shared/Modules/Chat/Chat.lua
+SetAlpha hook in ElvUI/Game/Shared/Modules/UnitFrames/Elements/Portrait.lua
+SetAlpha hook in ElvUI/Game/Shared/Skins/Alerts.lua
+SetAlpha hook in ElvUI/Game/Shared/Skins/DamageMeter.lua
+SetAlphaFromBoolean (secret alpha) in ElvUI_Libraries/Game/Shared/oUF/elements/assistantindicator.lua
+SetAlphaFromBoolean (secret alpha) in ElvUI_Libraries/Game/Shared/oUF/elements/auras.lua
+SetAlphaFromBoolean (secret alpha) in ElvUI_Libraries/Game/Shared/oUF/elements/castbar.lua
+SetAlphaFromBoolean (secret alpha) in ElvUI_Libraries/Game/Shared/oUF/elements/healthprediction.lua
+SetAlphaFromBoolean (secret alpha) in ElvUI_Libraries/Game/Shared/oUF/elements/leaderindicator.lua
+SetAlphaFromBoolean (secret alpha) in ElvUI_Libraries/Game/Shared/oUF/elements/range.lua
+SetAlphaFromBoolean (secret alpha) in ElvUI_Libraries/Game/Shared/oUF/elements/totems.lua
+SetAlphaFromBoolean (secret alpha) in ElvUI_Libraries/Game/Shared/oUF_Plugins/oUF_Fader.lua
+SetIgnoreParentAlpha(true) in ElvUI/Game/Shared/Modules/Blizzard/WidgetsUI.lua
+SetIgnoreParentAlpha(true) in ElvUI/Game/Shared/Modules/Nameplates/Nameplates.lua
+SetIgnoreParentAlpha(true) in ElvUI/Game/Shared/Modules/UnitFrames/Elements/Portrait.lua
+SetIgnoreParentAlpha(true) in ElvUI_Libraries/Game/Shared/oUF/ouf.lua
+UIFrameFadeIn/Out in ElvUI/Game/Mainline/DataBars/Azerite.lua
+UIFrameFadeIn/Out in ElvUI/Game/Mainline/DataBars/Honor.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/General/Animation.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/General/Install.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/General/Movers.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/General/PluginInstaller.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Layout/Layout.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/ActionBars/ActionBars.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/ActionBars/ExtraAB.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/ActionBars/MicroBar.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/ActionBars/TotemBar.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/Bags/BagBar.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/DataBars/DataBars.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/DataBars/Experience.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/DataBars/PetExperience.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/DataBars/Reputation.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/DataTexts/DataTexts.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/UnitFrames/Elements/CastBar.lua
+UIFrameFadeIn/Out in ElvUI/Game/Shared/Modules/UnitFrames/UnitFrames.lua
+UIFrameFadeIn/Out in ElvUI_Libraries/Game/Shared/oUF_Plugins/oUF_Cutaway.lua
+UIFrameFadeIn/Out in ElvUI_Libraries/Game/Shared/oUF_Plugins/oUF_Fader.lua
+frame $parent
+frame $parentAuraHighlight
+frame $parentAuraWatch
+frame $parentAuras
+frame $parentBuffs
+frame $parentCastbar
+frame $parentCooldown
+frame $parentCover
+frame $parentDebuffs
+frame $parentDisableButton
+frame $parentHeader
+frame $parentHideButton
+frame $parentHighlight
+frame $parentIconBackdrop
+frame $parentNextButton
+frame $parentPrevButton
+frame $parentRow
+frame $parentTargetIndicator
+frame $parent_
+frame $parent_AbsorbDamageBar
+frame $parent_AbsorbHealBar
+frame $parent_AdditionalPowerBar
+frame $parent_AlphaUpdater
+frame $parent_AlternativePower
+frame $parent_AuraBars
+frame $parent_CastBar
+frame $parent_ClassBar
+frame $parent_ClassificationIndicator
+frame $parent_EclipsePowerBar
+frame $parent_HealingOtherBar
+frame $parent_HealingPlayerBar
+frame $parent_Health
+frame $parent_HealthBar
+frame $parent_HealthPrediction
+frame $parent_InfoPanel
+frame $parent_PVPRole
+frame $parent_PVPSpecIcon
+frame $parent_Portrait
+frame $parent_Power
+frame $parent_PowerBar
+frame $parent_PvPClassificationIndicator
+frame $parent_PvPIndicator
+frame $parent_QuestIcons
+frame $parent_RaidTargetIndicator
+frame $parent_RaisedElement
+frame $parent_Runes
+frame $parent_StackingBounds
+frame $parent_Stagger
+frame $parent_TargetIcon
+frame $parent_TextureParent
+frame $parent_ThirdPower
+frame $parent_ThreatIndicator
+frame AceAddon30Frame
+frame AceComm30Frame
+frame AceEvent30Frame
+frame AceGUI-3.0EditBox
+frame AceGUI30DropDown
+frame AceGUI30DropDownItem
+frame AceGUI30Pullout
+frame AceGUI30PulloutScrollbar
+frame AceGUITooltip
+frame AlertFrameHolder
+frame AltPowerBarHolder
+frame ArenaHeader
+frame BossHeader
+frame ColorPPBox
+frame ColorPPClass
+frame ColorPPCopy
+frame ColorPPDefault
+frame ColorPPPaste
+frame DataTextTooltip
+frame ElvLootFrame
+frame ElvLootFrameHolder
+frame ElvLootSlot
+frame ElvNP_StaticSecure
+frame ElvUF_
+frame ElvUF_*
+frame ElvUI
+frame ElvUI*
+frame ElvUIAFKChat
+frame ElvUIAFKFrame
+frame ElvUIAFKPlayerModel
+frame ElvUIAceConfigDialogTooltip
+frame ElvUIAceGUI-3.0EditBox
+frame ElvUIAceGUI-3.0EditBox*
+frame ElvUIAceGUI30DragDropButton
+frame ElvUIAceGUI30DropDown
+frame ElvUIAceGUI30DropDown*
+frame ElvUIAceGUIWidgetDragTooltip
+frame ElvUIBagBar
+frame ElvUIBindPopupWindow
+frame ElvUIBindPopupWindowCheckButton
+frame ElvUIBindPopupWindowDiscardButton
+frame ElvUIBindPopupWindowHeader
+frame ElvUIBindPopupWindowSaveButton
+frame ElvUIChatHeadFrame
+frame ElvUIChatHeadFrame*
+frame ElvUIChatVoicePanel
+frame ElvUIGrid
+frame ElvUIInstallFrame
+frame ElvUIParent
+frame ElvUIPetBattleActionBar
+frame ElvUIPlayerNamePlateAnchor
+frame ElvUIPluginVC*
+frame ElvUIQueueStatus
+frame ElvUIQueueStatusDisplay
+frame ElvUIStatusPlugins
+frame ElvUIStatusReport
+frame ElvUITutorialWindow
+frame ElvUIVendorGraysFrame
+frame ElvUIVendorGraysFrameStatusbar
+frame ElvUI_AltPowerBar
+frame ElvUI_BarPet
+frame ElvUI_BottomPanel
+frame ElvUI_ConfigTooltip
+frame ElvUI_CoordsHolder
+frame ElvUI_CopyChatFrame
+frame ElvUI_CopyChatFrameCloseButton
+frame ElvUI_CopyChatFrameEditBox
+frame ElvUI_CopyChatFrameScrollFrame
+frame ElvUI_Distributor_StatusBar
+frame ElvUI_EasyMenu
+frame ElvUI_ExperienceBar_Quest
+frame ElvUI_ExperienceBar_Rested
+frame ElvUI_ExtraActionBarHolder
+frame ElvUI_GameMenuButton
+frame ElvUI_KeyBinder
+frame ElvUI_LootRollFrame
+frame ElvUI_LootRollFrame*
+frame ElvUI_MicroBar
+frame ElvUI_MinimapClickHandler
+frame ElvUI_MinimapClusterBackdrop
+frame ElvUI_MinimapClusterHolder
+frame ElvUI_MinimapHolder
+frame ElvUI_OverlayButton_
+frame ElvUI_OverlayButton_*
+frame ElvUI_PrivateRaidWarning
+frame ElvUI_QuestRewardGoldIconFrame
+frame ElvUI_ScanTooltip
+frame ElvUI_SpellBookTooltip
+frame ElvUI_StanceBar
+frame ElvUI_TooltipAnchor
+frame ElvUI_TopPanel
+frame ElvUI_TotemBar
+frame ElvUI_TotemTracker
+frame ElvUI_ZoneAbilityHolder
+frame Elv_ABFade
+frame InstallCloseButton
+frame InstallNextButton
+frame InstallOption1Button
+frame InstallOption2Button
+frame InstallOption3Button
+frame InstallOption4Button
+frame InstallPrevButton
+frame InstallSlider
+frame InstallStatus
+frame InstallStepComplete
+frame LAB10ChargeCooldown
+frame LABFlyoutHandlerFrame
+frame LeftChatDataPanel
+frame LeftChatPanel
+frame LeftChatTab
+frame LeftChatToggleButton
+frame LunarBar
+frame MinimapPanel
+frame MinimapRightClickMenu
+frame ObjectiveFrameHolder
+frame PluginInstallCloseButton
+frame PluginInstallFrame
+frame PluginInstallNextButton
+frame PluginInstallOption1Button
+frame PluginInstallOption2Button
+frame PluginInstallOption3Button
+frame PluginInstallOption4Button
+frame PluginInstallPendingButton
+frame PluginInstallPrevButton
+frame PluginInstallStatus
+frame PluginInstallStepComplete
+frame PluginInstallTitleFrame
+frame RaidUtilityPanel
+frame RaidUtilityRoleIcons
+frame RaidUtilityTargetIcons
+frame RaidUtility_ShowButton
+frame RightChatDataPanel
+frame RightChatPanel
+frame RightChatTab
+frame RightChatToggleButton
+frame SolarBar
+frame VehicleLeaveButtonHolder
+hooks AchievementAlertSystem:setUpFunction
+hooks AchievementButton_DisplayAchievement
+hooks AchievementButton_GetProgressBar
+hooks AchievementFrameSummary_UpdateAchievements
+hooks AchievementFrame_SetTabs
+hooks AchievementFrame_UpdateTabs
+hooks AchievementObjectives_DisplayCriteria
+hooks ActionBarButtonEventsFrame:RegisterFrame
+hooks ActionBarController_UpdateAllSpellHighlights
+hooks AddonList_InitAddon
+hooks AlertFrame:AddAlertFrameSubSystem
+hooks AlertFrame:ResetBaseAnchorFrame
+hooks AlertFrame:SetBaseAnchorFrame
+hooks ApplicantList:BuildList
+hooks AssistedCombatManager:UpdateAllAssistedHighlightFramesForSpell
+hooks AuctionHouseFilterButton_SetUp
+hooks BNSendGameData
+hooks BackpackTokenFrame:Update
+hooks BagsBar:Layout
+hooks BankFrameItemButton_Update
+hooks BattlePetToolTip_Show
+hooks BelowMinimapContainer:ProcessWidget
+hooks BlackMarketFrame_UpdateHotItem
+hooks BlackMarketScrollFrame_Update
+hooks Blizzard_CombatLog_Update_QuickButtons
+hooks BonusRollFrame_StartBonusRoll
+hooks BrowseList:RefreshScrollFrame
+hooks Button:HideToast
+hooks Button:SetDisabledTexture
+hooks Button:SetHighlightTexture
+hooks Button:SetNormalTexture
+hooks Button:SetPushedTexture
+hooks Button:ShowToast
+hooks Button:ToastToFriendFinished
+hooks Button:UpdateQueueIcon
+hooks C_BattleNet:SendGameData
+hooks C_ChatInfo:SendAddonMessage
+hooks C_ChatInfo:SendAddonMessageLogged
+hooks C_ChatInfo:SendChatMessage
+hooks C_ClassTalents:UpdateLastSelectedSavedConfigID
+hooks C_CurrencyInfo:SetCurrencyBackpack
+hooks C_TradeSkillUI:CraftRecipe
+hooks C_UnitAuras:SetPrivateWarningTextAnchor
+hooks CalendarFrame_SetToday
+hooks ChallengeModeAlertSystem:setUpFunction
+hooks ChallengesFrame:Update
+hooks ChallengesFrameWeeklyInfoMixin:SetUp
+hooks ChannelButtonHeaderMixin:Update
+hooks CharacterFrame:Collapse
+hooks CharacterFrame:Expand
+hooks CharacterFrame:UpdateRightPaneToggleButton
+hooks CharacterFrame:UpdateTabLayout
+hooks ChatConfigFrameChatTabManager:UpdateWidth
+hooks ChatConfig_CreateBoxes
+hooks ChatConfig_CreateTieredCheckboxes
+hooks ChatConfig_UpdateCheckboxes
+hooks ChatConfig_UpdateSwatches
+hooks ChatEdit_InsertLink
+hooks ChatFrameUtil:InsertLink
+hooks CinematicFrame_UpdateLettboxForAspectRatio
+hooks ClassTrainer_SetSelection
+hooks ClearNewActionHighlight
+hooks ClearOnBarHighlightMarks
+hooks Clique:BLACKLIST_CHANGED
+hooks CollectionsJournal_CheckAndDisplayHeirloomsTab
+hooks CollectionsJournal_CheckAndDisplayTabs
+hooks CommunitiesFrame:UpdateCommunitiesTabs
+hooks CommunitiesGuildInfoFrame_HideChallenges
+hooks CommunitiesListEntryMixin:SetAddCommunity
+hooks CommunitiesListEntryMixin:SetFindCommunity
+hooks CommunitiesListEntryMixin:SetGuildFinder
+hooks CommunitiesNotificationSettingsStreamEntryMixin:SetFilter
+hooks CompactRaidGroup_InitializeForGroup
+hooks CompactUnitFrame_SetUnit
+hooks CompactUnitFrame_SetUpFrame
+hooks CompanionAbilityListFrame:UpdatePaginatedButtonDisplay
+hooks CompositorMixin:AttachTemplate
+hooks CompositorMixin:AttachTexture
+hooks CompositorMixin:Detach
+hooks ContainerFrame_GenerateFrame
+hooks ContainerFrame_Update
+hooks ContributionMixin:AddReward
+hooks ContributionMixin:SetupContributeButton
+hooks CovenantMissionFrame:SetupTabs
+hooks CraftFrame_SetSelection
+hooks CraftFrame_Update
+hooks CriteriaAlertSystem:setUpFunction
+hooks CustomSetDetailsPanel:Refresh
+hooks DamageMeter:SetupSessionWindow
+hooks DigsiteCompleteAlertSystem:setUpFunction
+hooks DressUpFrame:ConfigureSize
+hooks Dropdown:SetWidth
+hooks DungeonCompletionAlertSystem:setUpFunction
+hooks E:Initialize
+hooks EJSuggestFrame_RefreshDisplay
+hooks EJSuggestFrame_UpdateRewards
+hooks EJ_HideNonInstancePanels
+hooks EncounterJournal_CheckAndDisplaySuggestedContentTab
+hooks EncounterJournal_CheckAndDisplayTradingPostTab
+hooks EncounterJournal_DisplayInstance
+hooks EncounterJournal_OnShow
+hooks EncounterJournal_SetBullets
+hooks EncounterJournal_SetUpOverview
+hooks EncounterJournal_ToggleHeaders
+hooks EntitlementDeliveredAlertSystem:setUpFunction
+hooks EquipmentFlyoutPopoutButton_RefreshVisualState
+hooks EquipmentFlyout_DisplayButton
+hooks EquipmentFlyout_SetBackgroundTexture
+hooks EquipmentFlyout_UpdateItems
+hooks ExpansionLandingPageMinimapButton:UpdateIcon
+hooks ExtraAbilityContainer:AddFrame
+hooks ExtraActionBarFrame:SetParent
+hooks Follower:ShowFollower
+hooks FollowerList:ShowFollower
+hooks FormatProfession
+hooks FriendsFrame_CheckBattlenetStatus
+hooks FriendsFrame_Update
+hooks FriendsFrame_UpdateFriendButton
+hooks FriendsFrame_UpdateFriendInviteButton
+hooks FriendsFrame_UpdateFriendInviteHeaderButton
+hooks FriendsFrame_UpdateGuildTabVisibility
+hooks GameMenuFrame:InitButtons
+hooks GameMenuFrame:Layout
+hooks GarrisonBuildingAlertSystem:setUpFunction
+hooks GarrisonCapacitiveDisplayFrame_Update
+hooks GarrisonFollowerAlertSystem:setUpFunction
+hooks GarrisonFollowerButton_AddAbility
+hooks GarrisonFollowerList_InitButton
+hooks GarrisonFollowerTabMixin:ShowFollower
+hooks GarrisonFollowerTooltipTemplate_SetGarrisonFollower
+hooks GarrisonFollowerTooltipTemplate_SetShipyardFollower
+hooks GarrisonLandingPageReport_SetTab
+hooks GarrisonMissionAlertSystem:setUpFunction
+hooks GarrisonMissionButton_SetRewards
+hooks GarrisonMissionPage_SetReward
+hooks GarrisonMissionPortrait_SetFollowerPortrait
+hooks GarrisonRandomMissionAlertSystem:setUpFunction
+hooks GarrisonShipFollowerAlertSystem:setUpFunction
+hooks GarrisonShipMissionAlertSystem:setUpFunction
+hooks GarrisonShipyardFollowerList_InitButton
+hooks GarrisonShipyardFrameFollowers:ShowFollower
+hooks GarrisonTalentAlertSystem:setUpFunction
+hooks GlowEmitterFactory:Hide
+hooks GlowEmitterFactory:Show
+hooks GlyphFrame_Update
+hooks GroupLootContainer_Update
+hooks GuildBankFrame:Update
+hooks GuildChallengeAlertSystem:setUpFunction
+hooks GuildControlUI_BankTabPermissions_Update
+hooks GuildControlUI_Discord_Update
+hooks GuildControlUI_RankOrder_Update
+hooks GuildNewsButton_SetNews
+hooks GuildStatus_Update
+hooks HappinessInfo:UpdateHappiness
+hooks HeirloomsJournal:LayoutCurrentPage
+hooks HeirloomsJournal:UpdateButton
+hooks HelpTip:Show
+hooks HonorAwardedAlertSystem:setUpFunction
+hooks HousingItemEarnedAlertFrameSystem:setUpFunction
+hooks HybridScrollFrame_CreateButtons
+hooks InboxFrame:Update
+hooks InboxFrame_Update
+hooks InitiativeTaskCompleteAlertFrameSystem:setUpFunction
+hooks InspectPaperDollItemSlotButton_Update
+hooks InvasionAlertSystem:setUpFunction
+hooks ItemBuyList:RefreshScrollFrame
+hooks ItemSocketingFrame_Update
+hooks ItemTextPageText:SetTextColor
+hooks KeyRing:UpdateTextures
+hooks KeyStoneFrame:OnKeystoneSlotted
+hooks KeyStoneFrame:Reset
+hooks LFGDungeonListButton_SetDungeon
+hooks LFGListApplicationDialog_UpdateRoles
+hooks LFGListApplicationViewer_UpdateApplicant
+hooks LFGListApplicationViewer_UpdateInfo
+hooks LFGListCategorySelection_AddButton
+hooks LFGListSearchEntry_Update
+hooks LFGListSearchPanel_UpdateAutoComplete
+hooks LFGListingActivityView_InitActivityButton
+hooks LFGListingActivityView_InitActivityGroupButton
+hooks LFGListingCategorySelection_AddButton
+hooks LFGRewardsFrame_SetItemButton
+hooks LFG_DisableRoleButton
+hooks LFG_EnableRoleButton
+hooks LFG_PermanentlyDisableRoleButton
+hooks LSM:Register
+hooks LegendaryItemAlertSystem:setUpFunction
+hooks LibStub:NewLibrary
+hooks LootAlertSystem:setUpFunction
+hooks LootFrame_UpdateButton
+hooks LootHistoryFrame_FullUpdate
+hooks LootUpgradeAlertSystem:setUpFunction
+hooks LossOfControlFrame:SetUpDisplay
+hooks MainMenuBarBagManager:OnExpandBarChanged
+hooks ManageFramePositions
+hooks MarkNewActionHighlight
+hooks MasterLooterFrame:Hide
+hooks MasterLooterFrame_Show
+hooks MasterLooterFrame_UpdatePlayers
+hooks MenuTemplates:SetHierarchyEnabled
+hooks MenuVariants:CreateCheckbox
+hooks MenuVariants:CreateRadio
+hooks MerchantBuyBackItemItemButton:SetItemButtonAnchorPoint
+hooks MerchantBuyBackItemItemButton:SetItemButtonScale
+hooks MerchantFrame_UpdateBuybackInfo
+hooks MerchantFrame_UpdateMerchantInfo
+hooks MerchantFrame_UpdateRepairButtons
+hooks Minimap:SetZoom
+hooks MinimapCluster:SetPoint
+hooks MinimapCluster:SetSize
+hooks MirrorTimerContainer:SetupTimer
+hooks MoneyWonAlertSystem:setUpFunction
+hooks MonthlyActivityAlertSystem:setUpFunction
+hooks MovieFrame:ShowCloseDialog
+hooks NamePlateDriverFrame:SetupClassNameplateBars
+hooks NavBar_AddButton
+hooks NewCosmeticAlertFrameSystem:setUpFunction
+hooks NewMountAlertSystem:setUpFunction
+hooks NewPetAlertSystem:setUpFunction
+hooks NewRecipeLearnedAlertSystem:setUpFunction
+hooks NewToyAlertSystem:setUpFunction
+hooks NewWarbandSceneAlertSystem:setUpFunction
+hooks OpenMailFrame:Update
+hooks OpenMail_Update
+hooks OpenProfessionsItemFlyout
+hooks OrderHallTalentFrame:RefreshAllData
+hooks OrdersPage:SetupTable
+hooks PVPReadyDialog_Display
+hooks PVPUIFrame_ConfigureRewardFrame
+hooks PanelTemplates_SetNumTabs
+hooks PanelTemplates_UpdateTabs
+hooks PaperDollEquipmentManagerPane_InitButton
+hooks PaperDollFrame_SetResistance
+hooks PaperDollFrame_ShowSidebar
+hooks PaperDollFrame_UpdateSidebarTabs
+hooks PaperDollFrame_UpdateStats
+hooks PaperDollItemSlotButton_Update
+hooks PetBattleAbilityTooltip_Show
+hooks PetBattleAuraHolder_Update
+hooks PetBattleFrame_Display
+hooks PetBattleFrame_UpdateActionBarLayout
+hooks PetBattleFrame_UpdateSpeedIndicators
+hooks PetBattlePetSelectionFrame_Show
+hooks PetBattleUnitFrame_UpdateDisplay
+hooks PetBattleUnitFrame_UpdatePetType
+hooks PetBattleWeatherFrame_Update
+hooks PetStable_Update
+hooks PlayerChoiceFrame:SetupOptions
+hooks PlayerMovementFrameFader:AddDeferredFrame
+hooks PlayerTalentFrame_UpdateSpecFrame
+hooks PlayerTalentFrame_UpdateTabs
+hooks ProfessionsBookFrame_Update
+hooks ProfessionsFrame:RefreshRightTabs
+hooks QuestFrameGreetingPanel_OnShow
+hooks QuestFrameProgressItems_Update
+hooks QuestFrameRewardPanel:Hide
+hooks QuestFrame_SetTextColor
+hooks QuestFrame_SetTitleTextColor
+hooks QuestFrame_ShowQuestPortrait
+hooks QuestInfoItem_OnClick
+hooks QuestInfo_Display
+hooks QuestInfo_ShowRewards
+hooks QuestLogQuests_Update
+hooks QuestLogUpdateQuestCount
+hooks QuestLog_Update
+hooks QuestLog_UpdateQuestDetails
+hooks QuestSessionManager:NotifyDialogShow
+hooks QuestWatch_Update
+hooks QueueStatusEntry_SetFullDisplay
+hooks QueueStatusEntry_SetMinimalDisplay
+hooks RafRewardDeliveredAlertSystem:setUpFunction
+hooks RaidPullout_GetFrame
+hooks RaidPullout_Update
+hooks ReagentSlot:SetBarExpanded
+hooks ReagentSlot:UpdateTextures
+hooks RecruitFrame:ShowSplashScreen
+hooks ReforgingFrame_Update
+hooks RenownFrame:SetUpMajorFactionData
+hooks RewardProgressFrame:Init
+hooks ScenarioAlertSystem:setUpFunction
+hooks ScenarioQueueFrameSpecificScrollFrame:Update
+hooks ScrollBox:SetPoint
+hooks ScrollBox:Update
+hooks SelectionPanel:RefreshTreeButtons
+hooks SendChatMessage
+hooks SendMailFrame_Update
+hooks SetCheckButtonIsRadio
+hooks SetCurrencyBackpack
+hooks SetLookingForGroupUIAvailable
+hooks SetsCollectionFrame:SetItemFrameQuality
+hooks SituationsFrame:Init
+hooks SituationsFrame:Refresh
+hooks SkillLineSpecsUnlockedAlertSystem:setUpFunction
+hooks Slot:DisplayAsAzeriteEmpoweredItem
+hooks Slot:DisplayAsAzeriteItem
+hooks SpecPage:UpdateTabs
+hooks SpellBookFrame:UpdateAttic
+hooks SpellBook_UpdateCoreAbilitiesTab
+hooks SpellBook_UpdateWhatHasChangedTab
+hooks SpellFlyout:Toggle
+hooks Stopwatch_Clear
+hooks Stopwatch_Pause
+hooks Stopwatch_Play
+hooks StorePurchaseAlertSystem:setUpFunction
+hooks TabardCharacterModelRotateLeftButton:SetPoint
+hooks TabardCharacterModelRotateRightButton:SetPoint
+hooks TableInspectorMixin:OnLoad
+hooks TableInspectorMixin:RefreshAllData
+hooks TalentFrame_LoadUI
+hooks TalentFrame_Update
+hooks TalentsFrame:RefreshTreeHeaders
+hooks TalentsFrame:UpdateButtonFrameLevel
+hooks TalentsSelect:ShowDialog
+hooks TextToSpeechFrame_UpdateMessageCheckboxes
+hooks TimerTracker_StartTimerOfType
+hooks ToggleCollapseButton:RefreshIcon
+hooks ToggleDropDownMenu
+hooks TokenFrameContainer:update
+hooks TokenFrame_Update
+hooks TorghastPlayerChoiceToggleButton:StartEffect
+hooks ToySpellButton_UpdateButton
+hooks TrackerHeader:SetCollapsed
+hooks TradeSkillFrame_SetSelection
+hooks TraitPanel:UpdateButtonFrameLevel
+hooks UIDropDownMenu_CreateFrames
+hooks UIDropDownMenu_SetIconImage
+hooks UIParent_ManageFramePositions
+hooks UIWidgetTemplateCaptureBarMixin:Setup
+hooks UIWidgetTemplateStatusBarMixin:Setup
+hooks UnitPowerBarAlt_SetUp
+hooks UpdateOnBarHighlightMarksByFlyout
+hooks UpdateOnBarHighlightMarksBySpell
+hooks UpdateProfessionButton
+hooks WarbandSceneEntryMixin:UpdateWarbandSceneData
+hooks WorldMapFrame:OnFrameSizeChanged
+hooks WorldMapFrame_SaveOpacity
+hooks WorldQuestCompleteAlertSystem:setUpFunction
+hooks WorldStateScoreFrame_Update
+hooks ZoneAbilityFrame:SetParent
+hooks ZoneAbilityFrame:UpdateDisplayedZoneAbilities
+partial mouse handling in ElvUI/Game/Shared/Modules/Auras/Containers.lua
+partial mouse handling in ElvUI/Game/Shared/Modules/Maps/Minimap.lua
+sets CVar ActionButtonUseKeyDown
+sets CVar AutoPushSpellToActionBar
+sets CVar NameplatePersonalHideDelayAlpha
+sets CVar NameplatePersonalHideDelaySeconds
+sets CVar ShowAllSpellRanks
+sets CVar Sound_OutputDriverIndex
+sets CVar UberTooltips
+sets CVar alwaysShowActionBars
+sets CVar autoClearAFK
+sets CVar autoSelfCast
+sets CVar bankAutoDepositReagents
+sets CVar cameraDistanceMaxZoomFactor
+sets CVar chatClassColorOverride
+sets CVar chatMouseScroll
+sets CVar chatStyle
+sets CVar countdownForCooldowns
+sets CVar enableMouseoverCast
+sets CVar fstack_preferParentKeys
+sets CVar lockActionBars
+sets CVar minimapTrackingShowAll
+sets CVar nameplateBottomInset
+sets CVar nameplateMaxAlpha
+sets CVar nameplateMaxAlphaDistance
+sets CVar nameplateMaxDistance
+sets CVar nameplateMaxScale
+sets CVar nameplateMaxScaleDistance
+sets CVar nameplateMinAlpha
+sets CVar nameplateMinAlphaDistance
+sets CVar nameplateMinScale
+sets CVar nameplateMinScaleDistance
+sets CVar nameplateOccludedAlphaMult
+sets CVar nameplateOtherAtBase
+sets CVar nameplateOverlapH
+sets CVar nameplateOverlapV
+sets CVar nameplatePlayerLargerScale
+sets CVar nameplatePlayerMaxDistance
+sets CVar nameplateSelectedAlpha
+sets CVar nameplateSelectedScale
+sets CVar nameplateSelfAlpha
+sets CVar nameplateShowFriendlyRealmName
+sets CVar nameplateShowSelf
+sets CVar nameplateTargetBehindMaxDistance
+sets CVar nameplateTopInset
+sets CVar rotateMinimap
+sets CVar screenshotQuality
+sets CVar scriptErrors
+sets CVar scriptProfile
+sets CVar showInGameNavigation
+sets CVar showNPETutorials
+sets CVar showTutorials
+sets CVar statusTextDisplay
+sets CVar taintLog
+sets CVar threatWarning
+sets CVar tooltipShowAuraCasterNames
+sets CVar tooltipShowAuraSpellIDs
+sets CVar whisperMode
+sets CVar wholeChatWindowClickable
+sets CVar worldMapShowCursorCoords
+sets CVar worldMapShowPlayerCoords
+state driver in ElvUI/Game/Shared/Modules/ActionBars/ActionBars.lua
+state driver in ElvUI/Game/Shared/Modules/ActionBars/MicroBar.lua
+state driver in ElvUI/Game/Shared/Modules/ActionBars/PetBar.lua
+state driver in ElvUI/Game/Shared/Modules/ActionBars/StanceBar.lua
+state driver in ElvUI/Game/Shared/Modules/ActionBars/TotemBar.lua
+state driver in ElvUI/Game/Shared/Modules/Auras/Auras.lua
+state driver in ElvUI/Game/Shared/Modules/Bags/BagBar.lua
+state driver in ElvUI/Game/Shared/Modules/Blizzard/ObjectiveFrame.lua
+state driver in ElvUI/Game/Shared/Modules/DataTexts/DataTexts.lua
+state driver in ElvUI/Game/Shared/Modules/UnitFrames/ConfigEnvironment.lua
+state driver in ElvUI/Game/Shared/Modules/UnitFrames/Groups/Assist.lua
+state driver in ElvUI/Game/Shared/Modules/UnitFrames/Groups/Tank.lua
+state driver in ElvUI/Game/Shared/Modules/UnitFrames/UnitFrames.lua
+state driver in ElvUI_Libraries/Game/Shared/oUF/ouf.lua

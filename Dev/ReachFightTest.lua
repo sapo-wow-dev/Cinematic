@@ -198,6 +198,7 @@ ns.TestKit.Define({
 	key = "reachFightTest",
 	title = "Reachable in a fight",
 	about = "ns.Reachable and ns.NumPoints in a real fight: what refuses, what we'd skip, what it costs",
+	needs = "A mob to fight, a few others near (EllesmereUI if installed)",
 	context = function()
 		return ("EllesmereUIChat loaded: %s, nameplates now: %d, managed frames: %d"):format(
 			tostring(C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("EllesmereUIChat") or false),

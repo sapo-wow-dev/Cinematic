@@ -117,6 +117,7 @@ ns.TestKit.Define({
 	key = KEY,
 	title = "Reset gives game settings back",
 	about = "the real Reset Settings with two features holding Damage numbers, then your setup put back",
+	needs = "Out of fights",
 	settings = { "combatTextStyle", "combatTextDamageBy", "hideCombatText" },
 	cvars = DAMAGES,
 	cineMode = true,

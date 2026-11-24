@@ -125,7 +125,10 @@ ok = ns.FollowHudSetUp(picks)
 Check("player root: set up", ok)
 Check("player root: player frame up in fights", db.combatShow.player == true)
 Check("player root: up with an enemy", db.enemyShow.player == true)
-Check("player root: up while recovering", db.prHealthPlayer == 0.99 and db.prPowerPlayer == 0.99)
+-- (Keep up's three columns since dff3c34: "up while recovering" is the Calm
+-- column's 0.99, In combat 1. The user OK'd 2026-11-23.)
+Check("player root: up while recovering", db.prHealthPlayerCalm == 0.99 and db.prPowerPlayerCalm == 0.99
+	and db.prHealthPlayer == 1 and db.prPowerPlayer == 1)
 Check("player root: PRD switch left alone", db.prdOn == prdOnBefore)
 Check("player root: PRD fight rows left alone", db.combatShow.prd == false, tostring(db.combatShow.prd))
 hud = Find("Follow HUD")

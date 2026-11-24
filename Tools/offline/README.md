@@ -59,8 +59,15 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `testkit.lua`: the test kit (Dev/TestKit.lua) through `/cine debug kitcheck` with pretend time, both clients: every
   step passes, context and probe lines (mana secret on Forever), the undo put back at the end, on a stop and at the
   next login after a cut-off run, CineMode kept off and back after. Copy it for a kit test's own offline run.
+- `testqueue.lua`: the test queue (Dev/TestQueue.lua) with kitcheck as the queued test, both clients: the offer at
+  login, Run all with a result line and a log copy per id, a name that isn't a kit test passed over, Stop queue,
+  a test's Reload button carrying the queue over, a /reload of your own cutting it off, tidy and clear. The
+  sessions' side, `Tools/testqueue.py`, has its own `selftest`.
 - `healtworules.lua`: Heal Vision's Unit Frames and Nameplates tabs each have their own Show in rule (frames start in
   dungeons and raids, plates everywhere but cities), the saved rules' once-only update and the page's Reset.
+- `healauras.lua`: Heal Vision's Debuffs: Show while hidden tick (healVisionKeepAuras, off to start with): raid-style members faded by their parts,
+  not whole, their aura icons and forbidden parts left at full, the game's own frame alpha left alone; the page's tick found and clicked on; and
+  `/cine debug healauras` (Dev/HealAurasTest.lua) through to DONE, settings and the row's rule put back. Both clients.
 - `loopsoff.lua`: a feature loop runs no update loop with its page off, even with the page's rows ticked, and
   starts again with the page (Heal Vision's kept going every frame). And the settings pages made ahead wait while
   `/cine debug loops` measures, so their time isn't counted as the loops'.

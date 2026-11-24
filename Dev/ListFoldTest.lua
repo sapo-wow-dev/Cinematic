@@ -140,6 +140,7 @@ ns.TestKit.Define({
 	key = "listFoldTest",
 	title = "Left list test",
 	about = "settings left list: group lines open on every click (1-4, nothing to do); never made again in a fight (5-9)",
+	needs = "An enemy or training dummy to fight",
 	context = function()
 		return ("left list: %s, gamepad UI %s"):format(List() and "found" or "NOT found",
 			_G.SmartNavigation and "there" or "not there")

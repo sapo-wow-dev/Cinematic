@@ -1,4 +1,4 @@
-# version 9.9.1
+# version 9.9.2
 EnableMouse(false or a variable) in EllesmereUI/EUI_SpecOverrides_Session.lua
 EnableMouse(false or a variable) in EllesmereUI/EUI_UnlockMode_PointPicker.lua
 EnableMouse(false or a variable) in EllesmereUI/EUI_UnlockMode_PointVisuals.lua
@@ -118,6 +118,7 @@ EnableMouse(false or a variable) in EllesmereUIResourceBars/EUI_ResourceBars_Upd
 EnableMouse(false or a variable) in EllesmereUIUnitFrames/EUI_PlayerAuraBars_Preview.lua
 EnableMouse(false or a variable) in EllesmereUIUnitFrames/EUI_UnitFrames_AuraContainers.lua
 EnableMouse(false or a variable) in EllesmereUIUnitFrames/EUI_UnitFrames_Castbar.lua
+EnableMouse(false or a variable) in EllesmereUIUnitFrames/EUI_UnitFrames_ForeverEmptyPower.lua
 EnableMouse(false or a variable) in EllesmereUIUnitFrames/EUI_UnitFrames_Init.lua
 EnableMouse(false or a variable) in EllesmereUIUnitFrames/EUI_UnitFrames_Layout.lua
 EnableMouse(false or a variable) in EllesmereUIUnitFrames/EUI_UnitFrames_StockStyles.lua
@@ -439,6 +440,7 @@ hooks InspectFrame:SetPoint
 hooks InspectSwitchTabs
 hooks InspectUnit
 hooks ItemSocketingFrame_Update
+hooks LFGBrowseSearchEntry_Update
 hooks LFGListApplicationDialog_UpdateRoles
 hooks LFGListCategorySelectionButton_OnClick
 hooks LFGListCategorySelection_AddButton

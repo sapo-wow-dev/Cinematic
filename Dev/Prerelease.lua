@@ -96,19 +96,35 @@ local function FirstLine(text)
 end
 
 -- Game settings changed since before (the sweep's list: the ones the game
--- doesn't change as you play), each put back.
+-- doesn't change as you play), each put back. Music on/off and volume while
+-- Cinematic's own music plays (a camera started it; it plays on as long as
+-- CineMode is on) with your value saved to come back afterwards aren't
+-- changes: left alone, in held (writing them back cut its music off,
+-- 2026-11-23's vista check).
+local MUSIC_CVARS = { Sound_EnableMusic = true, Sound_MusicVolume = true }
+local function MusicHolds(name, value)
+	local saved = ns.db and ns.db.savedCVars and ns.db.savedCVars[name]
+	return MUSIC_CVARS[name] and ns.music and ns.music.managing and saved ~= nil
+		and tonumber(saved) ~= nil and tonumber(saved) == tonumber(value)
+end
 local function CVarsBack(before)
-	if not (before and ns.SweepCVars) then return {} end
-	local after, changed = ns.SweepCVars() or {}, {}
+	if not (before and ns.SweepCVars) then return {}, {} end
+	local after, changed, held = ns.SweepCVars() or {}, {}, {}
 	for name, value in pairs(before) do
 		if after[name] ~= nil and after[name] ~= value then
-			changed[#changed + 1] = ("%s %s -> %s"):format(name, value, after[name])
-			pcall(SetCVar, name, value)
+			if MusicHolds(name, value) then
+				held[#held + 1] = name
+			else
+				changed[#changed + 1] = ("%s %s -> %s"):format(name, value, after[name])
+				pcall(SetCVar, name, value)
+			end
 		end
 	end
 	table.sort(changed)
-	return changed
+	table.sort(held)
+	return changed, held
 end
+ns.PrereleaseCVarsBack = CVarsBack -- (for Tools/offline/prereleasecvars.lua)
 
 local function Shot(what)
 	if not run then return end
@@ -306,10 +322,11 @@ Smoke("camera: vista starts and stops, camera back", function(done)
 			Cinematic_StartCam("vista", true, "prerelease")
 			Later(6, function()
 				local still = ns.activeCam or (ns.PlayingCameraScript and ns.PlayingCameraScript())
-				local changed = CVarsBack(cvars)
+				local changed, held = CVarsBack(cvars)
 				local zoomNow = GetCameraZoom()
 				local detail = ("started %s, stopped %s, zoom %.1f -> %.1f"):format(tostring(started or false),
 					tostring(not still), zoom, zoomNow)
+				if #held > 0 then detail = detail .. "; music playing on, yours saved: " .. List(held, 4) end
 				if #changed > 0 then detail = detail .. "; game settings not back (put back): " .. List(changed, 4) end
 				if not started then return done("fail", "never started: " .. detail) end
 				done((not still and #changed == 0 and math.abs(zoomNow - zoom) < 1.5) and "pass" or "fail", detail)

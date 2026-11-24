@@ -130,6 +130,11 @@ Add or update its line in `Tools/features/requests.md`:
 3. **The plan** (step 5), short.
 4. **The draft reply**: one plain ```text block, commands on their own lines,
    also saved as `<short-slug>-reply.md` in the repo root. Voice:
+   - human first: written like a person talking to a fellow player, a
+     warm hello or thanks, "you" and "I", contractions, plain game words
+     ("jump into a fight with other players"), no settings jargon or
+     how-it-works detail they don't need to act; read it aloud, and if it
+     sounds like a changelog, rewrite it
    - short and simple, American spelling, no colons in the text
    - already there: `/cine find <id>` and one line on what it does
    - planned: "good idea, I'll look into it" and hedge, never promise a
@@ -146,10 +151,14 @@ Add or update its line in `Tools/features/requests.md`:
   before any commit (new feature = likely a What's new entry). No locale edits
   till release.
 - **Every build ends with the in-game test handed over**, never "done" without
-  it: the offline check's PASS lines, then `/reload` and the ONE
-  `/cine debug <name>` command, each in its own code block (the /test
-  skill's rules: self-running, at most one real action). When the user says
-  "check log", read it (`read_log.py <key>`), fix and rerun until it passes.
+  it: the offline check's PASS lines, then the kit test queued through the
+  test queue (/test skill, "Hand over through the test queue":
+  `Tools/testqueue.py add <name> --session ... --note ... [--needs ...]`,
+  `wait <id>` in the background), and the reply "queued as <id>: /reload,
+  then Run checked". The /test skill's rules hold: self-running, at most one
+  real action. When the wait ends, read `read_log.py testQueue_<id>`, fix and
+  queue again until it passes. (A test not on the kit: `/reload` and the ONE
+  `/cine debug <name>` command, each in its own code block, and "check log".)
 - Update the ledger line (built, the version it will be in) and the draft
   reply ("in the next update (vX.Y.Z)", flagged as a forecast).
 - Never post the reply, never close or label a GitHub issue, never write

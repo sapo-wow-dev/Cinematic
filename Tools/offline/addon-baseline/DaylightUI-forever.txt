@@ -1,4 +1,4 @@
-# version 2.0
+# version 2.2.3
 EnableMouse(false or a variable) in DaylightUI/Book/Fight.lua
 EnableMouse(false or a variable) in DaylightUI/Character/List.lua
 EnableMouse(false or a variable) in DaylightUI/Character/Slots.lua
@@ -92,7 +92,7 @@ SetIgnoreParentAlpha(true) in DaylightUI_InfoPanel/Minimap.lua
 SetIgnoreParentAlpha(true) in DaylightUI_QoL/Afk.lua
 frame DaylightUIAfkScreen
 frame DaylightUIArenaHolder
-frame DaylightUIAskReload
+frame DaylightUIBagUse
 frame DaylightUIBar
 frame DaylightUIBar*Button*
 frame DaylightUIBarKeys
@@ -122,6 +122,7 @@ frame DaylightUIChatSidePanel
 frame DaylightUIChatTalk
 frame DaylightUIChatTiles
 frame DaylightUIClickCastOpener
+frame DaylightUIComboPoints
 frame DaylightUICraftTrack
 frame DaylightUICursorRing
 frame DaylightUIDamageMeter
@@ -144,7 +145,6 @@ frame DaylightUIInfoPanel
 frame DaylightUIInfoPanelBody
 frame DaylightUIInfoPanelEdge
 frame DaylightUIInstaller
-frame DaylightUIInstallerReload
 frame DaylightUILeaderCard
 frame DaylightUILeaderTab
 frame DaylightUILevelUp
@@ -234,6 +234,7 @@ hooks UpdateUIPanelPositions
 partial mouse handling in DaylightUI_ActionBars/BuffBars.lua
 partial mouse handling in DaylightUI_ActionBars/CdmAuras.lua
 partial mouse handling in DaylightUI_ActionBars/CdmBars.lua
+partial mouse handling in DaylightUI_QoL/Flight.lua
 partial mouse handling in DaylightUI_QoL/LootFeed.lua
 partial mouse handling in DaylightUI_Skins/MapPins.lua
 partial mouse handling in DaylightUI_UnitFrames/Auras.lua

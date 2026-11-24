@@ -180,6 +180,7 @@ ns.TestKit.Define({
 	key = "zoneCardTest",
 	title = "Zone card test",
 	about = "a place's name once: DaylightUI's Discovered line goes with our card (1-6 run themselves; 7 = walk)",
+	needs = "An inn or other subzone nearby to walk in and out of",
 	settings = { "cards", "cardDiscoverOn", "cardNewZoneOn", "storyZoneCard", "storyZoneGap", "storyZoneNotFlying" },
 	-- (What step 1 turned on, off again: DaylightUI as it was (off for this
 	-- character, or for all where only that turned it on), Visions left out.)

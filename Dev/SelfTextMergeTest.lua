@@ -25,6 +25,7 @@ ns.TestKit.Define({
 	key = "selfTextMergeTest",
 	title = "Text on You merge test",
 	about = "Merge repeats on real (secret) hits: fight a mob, let it hit you a few times",
+	needs = "A mob that hits you a few times",
 	settings = { "styleGeneral", "selfTextStyle", "selfTextBy", "selfTextMerge", "selfTextLife", "selfText_damageShow",
 		"selfText_healShow" },
 	cvars = { "enableFloatingCombatText" },

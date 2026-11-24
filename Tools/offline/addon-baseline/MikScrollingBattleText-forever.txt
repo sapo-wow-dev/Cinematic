@@ -1,0 +1,25 @@
+# version 2.1.1
+EnableMouse(false or a variable) in MikScrollingBattleText_Forever/MSBTOptions/MSBTOptionsControls.lua
+EnableMouse(false or a variable) in MikScrollingBattleText_Forever/MSBTOptions/MSBTOptionsMain.lua
+EnableMouse(false or a variable) in MikScrollingBattleText_Forever/MSBTOptions/MSBTOptionsPopups.lua
+EnableMouse(false or a variable) in MikScrollingBattleText_Forever/MSBTOptions/MSBTOptionsTabs.lua
+frame MSBTAnimationFrame
+frame MSBTForeverMinimapButton
+frame MSBTMainOptionsFrame
+frame MSBTProfileFrame
+hooks C_Container:UseContainerItem
+hooks C_Item:UseItemByName
+hooks CombatText:UpdateDisplayedMessages
+hooks CombatText_UpdateDisplayedMessages
+hooks UseAction
+hooks UseInventoryItem
+sets CVar enableFloatingCombatText
+sets CVar floatingCombatTextCombatDamage
+sets CVar floatingCombatTextCombatDamage_v2
+sets CVar floatingCombatTextCombatHealing
+sets CVar floatingCombatTextCombatHealing_v2
+sets CVar floatingCombatTextCombatLogPeriodicSpells_v2
+sets CVar floatingCombatTextEnergyGains_v2
+sets CVar floatingCombatTextPeriodicEnergyGains_v2
+sets CVar floatingCombatTextPetMeleeDamage_v2
+sets CVar floatingCombatTextPetSpellDamage_v2
