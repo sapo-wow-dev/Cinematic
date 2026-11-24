@@ -4067,6 +4067,8 @@ do
 	-- first, melee ones last: OutOfRange asks them in turn.)
 	local farSpells = { harmful = {}, helpful = {} }
 	local farYards = {}
+	-- (Each bar spell's least and most range, for SpellReaches: Charge's 8-25.)
+	local spellMin, spellMax = {}, {}
 	local function ByRange(a, b)
 		if farYards[a] ~= farYards[b] then return farYards[a] > farYards[b] end
 		return a < b
@@ -4077,6 +4079,8 @@ do
 		wipe(farSpells.harmful)
 		wipe(farSpells.helpful)
 		wipe(farYards)
+		wipe(spellMin)
+		wipe(spellMax)
 		local best = {}
 		for slot = 1, 180 do
 			local ok, kind, id = pcall(GetActionInfo, slot)
@@ -4095,6 +4099,11 @@ do
 				if type(minRange) == "number" and not (issecretvalue and issecretvalue(minRange))
 					and (type(maxRange) ~= "number" or (not (issecretvalue and issecretvalue(maxRange)) and minRange > maxRange)) then
 					maxRange = minRange
+				end
+				local plainMin = type(minRange) == "number" and not (issecretvalue and issecretvalue(minRange))
+				local plainMax = type(maxRange) == "number" and not (issecretvalue and issecretvalue(maxRange))
+				if plainMin and plainMax and minRange > 0 and minRange < maxRange then
+					spellMin[id], spellMax[id] = minRange, maxRange
 				end
 				-- (Melee spells say 0 or nothing: still asked last, for the reach of your weapon.)
 				local yards = type(maxRange) == "number" and not (issecretvalue and issecretvalue(maxRange))
@@ -4134,7 +4143,12 @@ do
 		table.sort(farSpells.harmful, ByRange)
 		table.sort(farSpells.helpful, ByRange)
 	end
-	-- Whether a spell reaches a unit: true, false, or nil when it can't say.
+	-- Whether a unit is within a spell's most range: true, false, or nil when
+	-- it can't say. A spell with a least range (Charge, 8-25) says "not in
+	-- range" too close as well as too far: out of fights the ~11-yard
+	-- interact distance tells them apart; in a fight (it can't be asked
+	-- there) its "no" is nil, so the next spell answers (2026-11-24: a
+	-- warrior's plates faded as far away within 8 yards).
 	local function SpellReaches(id, unit)
 		local inRange = C_Spell and C_Spell.IsSpellInRange or IsSpellInRange
 		if not id or not inRange then return nil end
@@ -4142,7 +4156,12 @@ do
 		local spell = C_Spell and C_Spell.IsSpellInRange and id or (GetSpellInfo and GetSpellInfo(id))
 		local ok, answer = pcall(inRange, spell, unit)
 		if ok and answer ~= nil and not (issecretvalue and issecretvalue(answer)) then
-			return answer == true or answer == 1
+			local reaches = answer == true or answer == 1
+			if reaches or not spellMin[id] then return reaches end
+			local near = InteractDistance(unit, 2)
+			if near == nil then return nil end
+			if near then return spellMax[id] >= 11 or nil end
+			return false
 		end
 	end
 	local function LookForRangeSpells()

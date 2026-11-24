@@ -95,6 +95,8 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
   change wins" set still lets go.
 - `servicefardim.lua [forever|retail]`: the Friendly NPCs tab's "Far, behind walls" slider (nameServiceFarDim):
   past 28 yards only Service NPCs names fade to it while their plates are dimmed; near ones hide; none in fights.
+- `minrangefar.lua [forever|retail]`: Smart Style's Out of range with a least-range spell on the bars (a warrior's
+  Charge, 8-25): within 8 yards counts as in range (its most range counts), out of fights and in them.
 - `notchgap.lua <forever|retail>`: full-screen effects (ns.CoverWorld: letterbox, tint edges, death screen, Focus,
   low health, teleport) reach up over a Mac's camera notch strip above UIParent, at UI scale 1 and 0.8, and come back
   down when it goes.
