@@ -3749,7 +3749,7 @@ ns.RULE_WORDS = {
 	-- (2026-11-23, for the Atmosphere effects' rows: fully under water, not
 	-- swimming on top (IsSubmerged); faster than a 60% mount, 12 yards a
 	-- second (a glide's speed skyriding). The weather here, outdoors only:
-	-- rain, snow, sandstorm, storm (rain or snow at 60% or more), weather
+	-- rain, snow, sandstorm, storm (rain at 60% or more), weather
 	-- (any of them). The time of day by the tint's clock: dawn, day, dusk, night.)
 	underwater = "underwater", submerged = "underwater", fast = "fast",
 	rain = "rain", raining = "rain", snow = "snow", snowing = "snow", sandstorm = "sandstorm", sand = "sandstorm",
@@ -4907,7 +4907,9 @@ do
 		local weather, intensity = ns.WeatherNow()
 		facts.rain, facts.snow, facts.sandstorm = weather == "rain", weather == "snow", weather == "sandstorm"
 		facts.weather = weather ~= nil
-		facts.storm = (weather == "rain" or weather == "snow") and intensity >= 0.6 or false
+		-- (Heavy rain only: the game reports light-looking snow near 1, and
+		-- snow brought the Lightning row's thunder, 2026-11-24.)
+		facts.storm = weather == "rain" and intensity >= 0.6 or false
 		local time = ns.TimeOfDayWord()
 		facts.dawn, facts.day, facts.dusk, facts.night = time == "dawn", time == "day", time == "dusk", time == "night"
 		-- (Casting or channeling. Secret in a fight on some clients, so false there.)

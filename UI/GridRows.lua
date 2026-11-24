@@ -79,7 +79,7 @@ function ns.RulePieces()
 	local world = { { "rain", L["Rain"] }, { "snow", L["Snow"] } }
 	if C_Weather and C_Weather.GetCurrentWeather then
 		world[#world + 1] = { "sandstorm", L["Sandstorm"] }
-		world[#world + 1] = { "storm", L["Storm (heavy rain or snow)"] }
+		world[#world + 1] = { "storm", L["Storm (heavy rain)"] }
 		world[#world + 1] = { "weather", L["Any weather"] }
 	else
 		world = {} -- (no weather on this client: the time of day only)

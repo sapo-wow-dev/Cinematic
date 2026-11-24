@@ -473,12 +473,29 @@ ns.TestKit.Define({
 			local kind, intensity = ns.WeatherNow()
 			local time = ns.TimeOfDayWord()
 			local ok = f.rain == (kind == "rain") and f.snow == (kind == "snow") and f.sandstorm == (kind == "sandstorm")
-				and f.weather == (kind ~= nil) and f.storm == ((kind == "rain" or kind == "snow") and intensity >= 0.6)
+				and f.weather == (kind ~= nil) and f.storm == (kind == "rain" and intensity >= 0.6)
 				and f[time] == true and f.underwater == (IsSubmerged() and true or false)
 				and f.fast == (not f.taxi and speed >= 12)
 			local times = (f.dawn and 1 or 0) + (f.day and 1 or 0) + (f.dusk and 1 or 0) + (f.night and 1 or 0)
 			r:Verdict(ok and times == 1, ("the words match the game's answers (weather %s, time %s)"):format(
 				tostring(kind), tostring(time)))
+			-- (storm = heavy rain only, 2026-11-24: a player's light-looking snow
+			-- read 0.995 and brought Lightning's thunder. The game's weather
+			-- stood in for each reading, put back right after.)
+			if not r:Proven("storm heavy rain only: queue qe5fd 2026-11-24, snow 0.995 false, rain 0.9 true") then
+			local realWeather = ns.WeatherNow
+			local stormFor = {}
+			for _, case in ipairs({ { "snow", 0.995 }, { "rain", 0.9 }, { "rain", 0.3 } }) do
+				ns.WeatherNow = function() return case[1], case[2] end
+				r:Sleep(0.6) -- (the facts are held up to 0.5 s, FACTS_SLOW_HOLD)
+				local okFacts, facts = pcall(ns.RuleFacts, false)
+				stormFor[#stormFor + 1] = okFacts and facts and facts.storm
+			end
+			ns.WeatherNow = realWeather
+			r:Verdict(stormFor[1] == false and stormFor[2] == true and stormFor[3] == false,
+				("storm: snow 0.995 %s, rain 0.9 %s, rain 0.3 %s (want false, true, false)"):format(
+				tostring(stormFor[1]), tostring(stormFor[2]), tostring(stormFor[3])))
+			end
 			-- The editor: opened on the Haze row with a stand-in that saves nothing.
 			ns.OpenOptions("Effects")
 			r:Sleep(0.5)
@@ -535,6 +552,9 @@ ns.TestKit.Define({
 			r:Verdict(#missing == 0 and cut == 0 and covered == 0,
 				("editor's World and Travel lines: %d of %d buttons, %d cut short, %d with something over them%s"):format(
 				#lines - #missing, #lines, cut, covered, #missing > 0 and (" (missing " .. table.concat(missing, ", ") .. ")") or ""))
+			local storm = found.storm
+			r:Verdict(storm ~= nil and tostring(storm:GetText() or ""):find(ns.L["Storm (heavy rain)"], 1, true) ~= nil,
+				"the World line's storm button reads " .. ns.L["Storm (heavy rain)"])
 			r:Shot("rule editor: World line", { behind = editor })
 			editor:Hide()
 		end },

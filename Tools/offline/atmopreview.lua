@@ -314,7 +314,9 @@ do
 	Expect("light rain", { kind = 1, intensity = 0.3 }, { rain = true, weather = true, storm = false, snow = false })
 	Expect("heavy rain: storm", { kind = 1, intensity = 0.9 }, { rain = true, storm = true })
 	Expect("rain under a roof: none", { indoors = true }, { rain = false, weather = false, storm = false })
-	Expect("snow", { indoors = false, kind = 2, intensity = 0.7 }, { snow = true, storm = true, rain = false })
+	Expect("snow: no storm", { indoors = false, kind = 2, intensity = 0.7 }, { snow = true, storm = false, rain = false })
+	Expect("near-full snow (a player's light snowfall): no storm", { kind = 2, intensity = 0.995 },
+		{ snow = true, weather = true, storm = false })
 	Expect("sandstorm: no storm", { kind = 3, intensity = 1 }, { sandstorm = true, weather = true, storm = false })
 	Expect("dawn 6:00", { kind = 0, hour = 6 }, { dawn = true, day = false, weather = false })
 	Expect("dusk 18:30", { hour = 18, minute = 30 }, { dusk = true, day = false })
