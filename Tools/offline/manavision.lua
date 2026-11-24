@@ -26,6 +26,36 @@ local function Has(log, pattern)
 	end
 end
 
+-- Whether Mana Vision's check loop runs: a frame's update loop made in
+-- ManaVision.lua that calls its Update (the pages' Test buttons and preview
+-- have loops of their own there, which don't).
+local function ManaLoopOn(wow)
+	for _, frame in ipairs(wow.frames) do
+		local update = frame._scripts and frame._scripts.OnUpdate
+		local seen = {}
+		local function Walk(f, depth)
+			if depth > 8 or seen[f] or type(f) ~= "function" then return false end
+			seen[f] = true
+			local info = debug.getinfo(f, "S")
+			if info.source:find("ManaVision.lua", 1, true) then
+				for i = 1, 60 do
+					local name = debug.getupvalue(f, i)
+					if not name then break end
+					if name == "Update" then return true end
+				end
+			end
+			for i = 1, 60 do
+				local name, value = debug.getupvalue(f, i)
+				if not name then break end
+				if Walk(value, depth + 1) then return true end
+			end
+			return false
+		end
+		if update and Walk(update, 0) then return true end
+	end
+	return false
+end
+
 local function RunClient(client)
 	print("== " .. client)
 	CinematicDB = nil -- (a fresh install each client)
@@ -219,10 +249,84 @@ local function RunClient(client)
 	for key, value in pairs(before) do
 		Check("put back " .. key, db[key] == value, tostring(db[key]) .. " vs " .. tostring(value))
 	end
+
+	-- The check loop only while it can show (release review 2026-11-23, fix
+	-- card Tools/audits/2026-11-23-mana-vision-loop.md; every state in
+	-- manavisionloopmatrix.lua): on at once from the page, a form giving mana;
+	-- energy ticks skipped; painted again only when the look changes.
+	local function LoopOn() return ManaLoopOn(wow) end
+	ns.StopManaVisionTest()
+	db.lowHealth, db[TAB], db.lowManaAlways = true, false, true
+	mana = 100
+	ns.RefreshManaVision()
+	ns.SyncFeatureLoops()
+	Check("loop: Mana tab off, no loop", not LoopOn())
+	db[TAB] = true
+	ns.RefreshManaVision() -- (the page's switch: Apply)
+	Check("loop: turned on from the page, on at once", LoopOn())
+	MAX = 0
+	wow.Fire("UNIT_MAXPOWER", "player")
+	Check("loop: no mana (a warrior form), hidden and no loop", not LoopOn() and not State().shown)
+	MAX = 1000
+	wow.Fire("UNIT_DISPLAYPOWER", "player")
+	Check("loop: a form giving mana, on at once", LoopOn())
+	ns.TestManaVision()
+	db[TAB] = false
+	ns.SyncFeatureLoops()
+	Check("loop: the test runs it with the tab off", LoopOn())
+	ns.StopManaVisionTest()
+	ns.SyncFeatureLoops()
+	Check("loop: test stopped, tab off, no loop", not LoopOn())
+
+	db[TAB] = true
+	mana = 100
+	ns.RefreshManaVision()
+	local was = State().alpha
+	mana = 900
+	wow.Fire("UNIT_POWER_UPDATE", "player", "ENERGY")
+	Check("energy tick: not checked again", Near(State().alpha, was), State().alpha)
+	wow.Fire("UNIT_POWER_UPDATE", "player", "MANA")
+	Check("mana tick: checked again", Near(State().alpha, 0), State().alpha)
+	mana = 100
+	local painted = 0
+	local realColor = wow.Methods.SetVertexColor
+	wow.Methods.SetVertexColor = function(...)
+		painted = painted + 1
+		if realColor then return realColor(...) end
+	end
+	wow.Fire("UNIT_POWER_UPDATE", "player", "MANA")
+	wow.Fire("UNIT_POWER_UPDATE", "player", "MANA")
+	Check("mana ticks, the same look: not painted again", painted == 0, painted)
+	db.lowManaVisionStrength = 0.4
+	ns.RefreshManaVision()
+	Check("look changed: painted again", painted > 0, painted)
+	Check("look changed: the new strength", Near(State().strength, 0.4 * (fighting and 1 or db.lowManaVisionCalm)),
+		State().strength)
+	wow.Methods.SetVertexColor = realColor
+	db[TAB] = false
+	ns.RefreshManaVision()
+end
+
+-- Logging in with the Mana tab on: the loop on from the start.
+local function LoginOn(client)
+	print("== " .. client .. " (login with it on)")
+	CinematicDB = { lowHealth = true, ["tabOn:VitalsVision:mana"] = true }
+	local ns, wow = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc", function()
+		_G.UnitPowerMax = function() return 1000 end
+		_G.UnitPower = function() return 100 end
+	end)
+	if not ns.ManaVisionState then
+		Check("ManaVision loaded", false)
+		return
+	end
+	Check("login with the Mana tab on: the loop runs", ManaLoopOn(wow))
+	Check("login with the Mana tab on: shown", ns.ManaVisionState().shown)
 end
 
 RunClient("forever")
 RunClient("retail")
+LoginOn("forever")
+LoginOn("retail")
 print(fails == 0 and "ALL PASS" or (fails .. " FAIL"))
 if fails > 0 then os.exit(1) end
 -- luacheck: pop

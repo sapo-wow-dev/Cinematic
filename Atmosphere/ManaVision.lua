@@ -124,12 +124,24 @@ local function Paint(d, calm, w, h)
 	local colors = LOOKS[look.lowManaVisionLook] or LOOKS.cold
 	local strength = (look.lowManaVisionStrength or DEFAULTS.lowManaVisionStrength)
 		* (calm and (db.lowManaVisionCalm or DEFAULTS.lowManaVisionCalm) or 1)
+	local edgeAlpha = look.lowManaVisionEdges and math.min(1, strength * EDGE_MOST) or 0
+	local reach = look.lowManaVisionReach or DEFAULTS.lowManaVisionReach
+	local width, height = w or UIParent:GetWidth(), h or UIParent:GetHeight()
+	-- (Painted again only when something of it changed: it was painted at
+	-- every check and every mana tick, each edge piece. Release review 2026-11-23.)
+	local p = d.painted
+	if p and p.colors == colors and p.strength == strength and p.edgeAlpha == edgeAlpha and p.reach == reach
+		and p.width == width and p.height == height then
+		return
+	end
 	local v = colors.veil
 	d.veil:SetVertexColor(v[1], v[2], v[3], math.min(1, strength * VEIL_MOST))
 	local e = colors.edge
-	local edgeAlpha = look.lowManaVisionEdges and math.min(1, strength * EDGE_MOST) or 0
-	ns.SetVignette(d.edges, look.lowManaVisionReach or DEFAULTS.lowManaVisionReach, edgeAlpha, e[1], e[2], e[3], w, h)
+	ns.SetVignette(d.edges, reach, edgeAlpha, e[1], e[2], e[3], width, height)
 	d.strength, d.edgeAlpha = strength, edgeAlpha
+	p = p or {}
+	p.colors, p.strength, p.edgeAlpha, p.reach, p.width, p.height = colors, strength, edgeAlpha, reach, width, height
+	d.painted = p
 end
 
 -- Whether this character has mana at all (a warrior, a rogue: none). Max
@@ -230,7 +242,9 @@ function ns.RefreshManaVision()
 	if not screen then return end
 	wipe(curves) -- (their points follow Starts and Full)
 	rowReadAt = -1
+	screen.painted = nil
 	Update()
+	if driver then ns.WakeFeatureLoop(driver) end -- (turned on from the page, a test: its checks at once)
 end
 
 -- The page's test: your mana falling to nothing over 8 seconds on the
@@ -264,7 +278,9 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function(_, event)
+events:SetScript("OnEvent", ns.Profiled("Mana Vision events", function(_, event, _, powerType)
+	-- (Mana only: energy, rage and the rest tick several times a second.)
+	if event == "UNIT_POWER_UPDATE" and not Secret(powerType) and powerType ~= nil and powerType ~= "MANA" then return end
 	if event == "PLAYER_LOGIN" then
 		db = ns.GetDB()
 		local holder = CreateFrame("Frame", nil, UIParent)
@@ -277,12 +293,18 @@ events:SetScript("OnEvent", function(_, event)
 		screen.frame:Hide()
 		driver = CreateFrame("Frame")
 		local wait = 0
-		ns.SetOnUpdate(driver, ns.Profiled("Mana Vision", function(_, elapsed)
+		-- (Only while it can show: a test, or the Mana tab on for a character
+		-- with mana, or still shown and to be hidden. It ran every frame for
+		-- everyone, off by default. Release review 2026-11-23.)
+		ns.FeatureLoop(driver, ns.Profiled("Mana Vision", function(_, elapsed)
 			wait = wait - elapsed
 			if wait > 0 then return end
 			wait = CHECK_EVERY
 			Update()
-		end))
+		end), function()
+			if test or shownMode then return true end
+			return ns.Setting(TAB) and HasMana() and true or false
+		end)
 		events:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
 		events:RegisterUnitEvent("UNIT_MAXPOWER", "player")
 		events:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
@@ -292,7 +314,9 @@ events:SetScript("OnEvent", function(_, event)
 		end
 	end
 	Update()
-end)
+	-- (A form or spec giving mana, a new zone: its checks on or off at once.)
+	if event ~= "UNIT_POWER_UPDATE" and driver then ns.WakeFeatureLoop(driver) end
+end))
 
 -- The Vision tab's Mana tab: where it shows, from how low, and a test.
 -- (LowHealth.lua's CreateVitalsVisionPanel, inside the tab's section.)
