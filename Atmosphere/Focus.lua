@@ -84,12 +84,17 @@ haze:SetBlendMode("BLEND")
 haze:SetAlpha(0)
 haze:Hide()
 
--- (Runs only while it's on and in CineMode, or a demo or a fade's still
--- going. CineMode starting: on within the second, before its slow pull in.)
+-- (Runs only while it's on and in CineMode with a haze to draw (Haze strength
+-- up, or a script's Edge haze), or a demo or a fade's still going. CineMode
+-- starting: on within the second, before its slow pull in. At Haze strength
+-- 0, the default, it ran every frame in CineMode drawing nothing: release
+-- review 2026-11-23.)
 ns.FeatureLoop(frame, ns.Profiled("Depth of field", OnUpdate), function()
+	if level > 0 or GetTime() < stopAt then return true end
 	local db = ns.db
-	return level > 0 or GetTime() < stopAt
-		or (db and db.enabled and db.visualEffects and db.depthOfField and ns.lastCinematic) and true or false
+	if not (db and db.enabled and db.visualEffects and db.depthOfField and ns.lastCinematic) then return false end
+	if (tonumber(db.dofScale) or 0) > 0 then return true end
+	return ns.CameraScriptHaze and ns.CameraScriptHaze() and true or false
 end)
 
 -- Shows the haze for a while (default 30 seconds), at `value` (0-1) or the
