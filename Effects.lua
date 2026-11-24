@@ -2569,7 +2569,7 @@ ns.plates.hoverWatch = CreateFrame("Frame")
 ns.plates.hoverWatch:Hide()
 do
 	local at = 0
-	ns.SetOnUpdate(ns.plates.hoverWatch, function(self)
+	ns.SetOnUpdate(ns.plates.hoverWatch, ns.Profiled("Plate mouseover watch", function(self)
 		local now = GetTime()
 		if now < at then return end
 		at = now + 0.1
@@ -2577,7 +2577,7 @@ do
 			ns.plates.seen.at = nil -- (the next pass runs: the plate goes back down)
 			self:Hide()
 		end
-	end)
+	end))
 end
 function ns.plates.UpdateHover(elapsed)
 	local hover = ns.plates.hover

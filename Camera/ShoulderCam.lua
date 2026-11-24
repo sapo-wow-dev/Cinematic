@@ -299,14 +299,17 @@ local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 local SAME_MODEL = { [17] = true, [18] = true, [19] = true, [28] = true, [30] = true }
 local SWAP_WAIT = 0.4 -- seconds: the longest the old form's factor is kept without the model's event
 local lastForm -- (the form at the last plain read: kept if a read comes back secret)
+-- (One function, not a new one each read: ~100 reads a second with the
+-- Shoulder Cam on made 6.6 KB/s of garbage. Tools/perf/ledger.md 2026-11-23.)
+local function ReadForm()
+	local id = GetShapeshiftFormID()
+	if id == nil then return false end
+	if id + 0 ~= id then return nil end -- (a secret one errors here: the last one's kept)
+	return not SAME_MODEL[id] and id
+end
 local function FormNow()
 	if not GetShapeshiftFormID then return nil end
-	local ok, form = pcall(function()
-		local id = GetShapeshiftFormID()
-		if id == nil then return false end
-		if id + 0 ~= id then return nil end -- (a secret one errors here: the last one's kept)
-		return not SAME_MODEL[id] and id
-	end)
+	local ok, form = pcall(ReadForm)
 	if ok then lastForm = form or nil end
 	return lastForm
 end

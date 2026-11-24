@@ -216,7 +216,9 @@ function Drain()
 	-- the next root that needs it.)
 	local want = queue[1] ~= nil
 	if want ~= (walker:GetScript("OnUpdate") ~= nil) then
-		ns.SetOnUpdate(walker, want and Drain or nil)
+		-- (Timed, made once: this file loads before Profiler.lua.)
+		if want and not walker.timedDrain then walker.timedDrain = ns.Profiled("Detached parts walk", Drain) end
+		ns.SetOnUpdate(walker, want and walker.timedDrain or nil)
 	end
 end
 

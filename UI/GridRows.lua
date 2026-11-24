@@ -290,7 +290,9 @@ end
 -- a row without (a nameplate row, a unit frame part), whose rule just stays;
 -- follow (nil: none): { key, the row's; choices() the rows it may follow, as
 -- { key, label }; leader(), the one it follows; set(key), nil for none } }.
--- Built the first time.
+-- Only label, Text and Close are needed: SetText and ResetToGrid are called
+-- only when there (a stand-in without SetText errored as you typed, 2026-11-23;
+-- known error rule-editor-optional-callback). Built the first time.
 local editor, target
 local EDIT_W = 560
 
@@ -401,7 +403,7 @@ local function BuildEditor()
 
 	local Refresh
 	local function Changed()
-		if target then target.SetText(box:GetText()) end
+		if target and target.SetText then target.SetText(box:GetText()) end
 		Refresh()
 	end
 	box:SetScript("OnTextChanged", function(_, userInput)
@@ -556,7 +558,7 @@ local function BuildEditor()
 	resetGrid:SetPoint("BOTTOMLEFT", 14, 12)
 	resetGrid:SetText(L["Reset to grid"])
 	resetGrid:SetScript("OnClick", function()
-		if target then target.ResetToGrid() end
+		if target and target.ResetToGrid then target.ResetToGrid() end
 		target = nil -- (nothing to put back as it closes)
 		editor:Hide()
 	end)

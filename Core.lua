@@ -4022,7 +4022,21 @@ for _, key in ipairs(GRID_EFFECTS) do EFFECT_ROWS[key] = "effect:" .. key end
 local effectWanted = {}
 ns.effectWanted = effectWanted -- (read only: /cine debug atmosphere's "live" step)
 local effectAsk = { at = -math.huge } -- (the effects' rows' answers, when last asked, and for what)
-local EFFECT_ASK = 0.1 -- (seconds, out of CineMode)
+local EFFECT_ASK = 0.1 -- (seconds, in CineMode too: every tick, 10 rows were ~6 RowOnNow a frame, ledger 2026-11-23)
+-- Whether the effects' rows are asked this tick (and if so, noted as asked):
+-- every EFFECT_ASK, or at once on a fight's start or end, CineMode coming on
+-- or off, and while the effects demo runs and as it ends.
+-- (ns.effectAsk: for Tools/offline/effectask.lua.)
+function effectAsk.Due(now, inCombat, effectsOn, demo)
+	if not (demo or effectAsk.demo or effectAsk.fight ~= inCombat or effectAsk.on ~= effectsOn
+		or now - effectAsk.at >= EFFECT_ASK) then
+		return false
+	end
+	effectAsk.fight, effectAsk.on, effectAsk.at = inCombat, effectsOn, now
+	effectAsk.demo = demo and true or nil
+	return true
+end
+ns.effectAsk = effectAsk
 local lastFightAt = -math.huge
 ns.OnCalmEnd(function(cut) lastFightAt = math.min(lastFightAt, cut) end)
 local calmHealthySince -- (Exit Calm Timer when healthy: when you were last back to full)
@@ -4280,16 +4294,14 @@ local function OnUpdate(_, elapsed)
 		-- (Each on while its Show in row, effect:<effect>, is: Visual Effects page;
 		-- the letterbox and tint while their own page's Enable Page is on too.)
 		-- (Show me's effects demo, ShowMe.lua: just its effects, for its few seconds.)
-		-- (Out of CineMode, the Subtle profile's effects over the normal UI,
-		-- their rows asked only every EFFECT_ASK seconds, or at once when the
-		-- fight or effectsOn changes: their fades still run every tick.)
+		-- (The rows asked only every EFFECT_ASK seconds, in CineMode or not, or
+		-- at once when the fight or effectsOn (CineMode) changes: their fades
+		-- still run every tick. Asked every tick in CineMode, the 10 rows were
+		-- ~6 RowOnNow + RuleFacts a frame, Tools/perf/ledger.md 2026-11-23.)
 		-- (Atmosphere left out, Modules.lua: no effect's row asked at all, none
 		-- wanted; the tint's call still runs Death Vision's screen, a Vision.)
 		local atmo = not LEFT_OUT.visualEffects
-		local ask = atmo and (cinematic or ns.effectsDemo or effectAsk.fight ~= inCombat or effectAsk.on ~= effectsOn
-			or now - effectAsk.at >= EFFECT_ASK)
-		if ask then
-			effectAsk.fight, effectAsk.on, effectAsk.at = inCombat, effectsOn, now
+		if atmo and effectAsk.Due(now, inCombat, effectsOn, ns.effectsDemo) then
 			for _, key in ipairs(GRID_EFFECTS) do
 				if ns.effectsDemo then
 					effectAsk[key] = ns.effectsDemo[key] or false

@@ -29,6 +29,14 @@ Tools/perf/reports/.
 | 2026-11-23 | 8. Friendly rows' key list relisted (~8,300 keys, 3.8 ms) on the first plates pass out of every fight: the fight sound cue adds combatHeldAmbience, and ANY new key marked the list stale | Only a new plate.../name... key marks it (Effects.lua NewKey); test friendrows.lua (+4 checks: a cue's key 3 times, another new key: list kept; new name/plate keys: relisted and seen) | ~3.8 ms off the slow frame at each fight's end (6 in the 17:10 run) | - | 17:57 normal run (fixes 8-10 loaded, 17:41 reload): UpdatePlates worst 1.43 ms, UpdateCVars 3.89 (the name sets, lead 1). Only ONE fight end in it: likely, not confirmed |
 | 2026-11-23 | 9. Plates pass never quiet in the Calm Timer with a kind ticked for fights (~27 full passes a second, ~0.23 ms a frame deep) | Kinds held at 0 after a fight count as settled like a fight's; SameAsBefore has the Calm Timer in its inputs (its end brings a pass at once); card 2026-11-23-calm-plates-settle.md, test calmplatesmatrix.lua | ~0.08-0.15 ms a frame real in Calm Timers | - | - |
 | 2026-11-23 | 10. Target of target's frame dressed whole twice a frame (its OnUpdate resets the power bar's fill and color; ~38 StyleLook a frame) | A game set on a bar with nothing of ours dresses the frame once 0.2 s later (at once for a new unit, a green mana color, or a bar with ours); card 2026-11-23-tot-redress.md, test totredressmatrix.lua | est. 0.06-0.15 ms a frame real while a ToT shows (~0.48 deep) | - | Not measurable in a normal run (DressFrame untimed). Limit: an enemy ToT's name is secret in Forever fights (secrets-combat rule): then still dressed at once, no saving |
+| 2026-11-23 | 11. Plate parts keeper put back every faded part of every plate each frame (~17 a plate; 0.134 ms a frame at 15 plates, 18:34 deep run), gone plates' parts too (old leads 5, 4) | Only parts the game fades itself polled each frame: threat glows (animations), the cast bar where there's no CastBarsContainer (the game fades the bar inside, read in the Forever source); the rest swept every 0.5 s ("plate parts: put back by the sweep" counts any the game did set); a removed plate lets go (Plates/PlateParts.lua); test platekeeper.lua | ~0.10-0.11 ms a frame at 15 plates (60 of 135 parts a frame offline); more after a long session | - | - |
+| 2026-11-23 | 12. Camera speed writes: ns.SetHeldSpeed 0.76 ms a call (the game's XP bar redraws on every CVAR_UPDATE, our bar hooks after), ~7/s in the Chat Cam's drift | Speed step 2% -> 5% in ChatCam, QuestCam, ShowMe, the fly-by (as CameraScripts); test speedwrites.lua (slow drift 220 -> 100 writes, a quick swing 122 -> 89) | ~0.03-0.04 ms a frame while the Chat Cam drifts; less on quick swings | - | - |
+| 2026-11-23 | 13. Shoulder Cam FormNow made a closure per read (~100/s with the cam on) | One ReadForm function (Camera/ShoulderCam.lua); test shoulderformread.lua: 0.09 KB per 1000 reads | ~6.6 KB/s with the Shoulder Cam on | - | - |
+| 2026-11-23 | 14. ns.FindCameraScript made every built-in camera script to find one (~220 KB a look) | Makes only the one asked for (Camera/CameraScripts.lua BuiltinScript); test findcamerascript.lua: same script as the list's for every id, 0 KB a look (the list 230 KB) | the 220 KB garbage bursts per camera start / script page look; lowers the floating memory figure | - | - |
+| 2026-11-23 | 15. Visual Effects rows asked every tick in CineMode (the cinematic bypass); 4 -> 10 effects on 11-23 (inn, haze, frost, rainlens, lightning, density): ns.RowOnNow from the tick 0.2 -> 6.4 a frame, with RuleFacts ~0.18 ms a frame (18:53 deep run) | Every EFFECT_ASK (0.1 s) in CineMode too, at once on a fight start/end, CineMode on/off, the effects demo and its end (Core.lua effectAsk.Due); test effectask.lua: 20 asks in 2 s at 80 fps (was 160) | most of ~0.18 ms a frame deep while the tick runs at full pace (moving, tooltip, fading) | - | - |
+| 2026-11-23 | 16. Centered Cooldown Manager bars: PlaceBar made two closures (Goal, FadedGoal) per bar per pass, ~0.7 KB a bar; 10 passes a second in fights (utility = "recharge" keeps `any` on), up to 3 bars: ~21 KB/s (19:47 normal fight run, UpdateReadyOnly 20.8 KB/s) | Made once on shownIn (Frames.lua is at 200 locals), the bar's numbers in shownIn.placing; test centerbar.lua: 528 bar layouts, every goal the same as the old code (kept in the test), 1000 bars 0 KB (old 703 KB) | ~14-21 KB/s in fights | - | - |
+| 2026-11-23 | 17. Vitals drew every layer every frame with secret health (fights on Forever: it can't sleep, can't tell full from low), "Vitals: apply" 0.092 ms a frame at 113 fps | Drawn every SECRET_DRAW (1/40 s) then, at once on a hit, a flash, a test or the quick look; Apply's motion goes by GetTime, so it moves as fast (Atmosphere/LowHealth.lua); test vitalsdraw.lua: 40 draws a second secret, 120 plain, a hit drawn the frame it lands | ~0.06 ms a frame in fights at 113 fps | - | - |
+| 2026-11-23 | 18. Timers on 11-23's untimed code ("not wrapped" 0.39-0.56 ms) | "Unit frame dress" + "Unit power keep" (Style/UnitStyle.lua, the best suspect), "Cooldown Missing pass"/"show", "Drain ring watcher", "Plate mouseover watch", "Mana Vision events", "Feature loop gates" (Profiler.lua wraps ns.SyncFeatureLoops), "Detached parts walk"; Chat's copy watch set once till cleared (was per chat line); test newtimers.lua | names the untimed cost in the next normal run | - | - |
 | 2026-11-22 | 4. FindQuestieIcon closure + table per plate | Children as varargs (PickQuestieIcon); test questieicon.lua: 0 KB per 1000 looks | ~14 KB/s at 40 plates, with Questie loaded only (the sweep is gated on QuestieLoader; never ran without it) | - | - |
 
 ## Open leads
@@ -260,6 +268,31 @@ compare steps within a run, or several runs). Quest walk 0.933 ms, walked
 - Analyzer bug: the "Vitals" section's source is found by the bare function
   name ("Update"), first match wins (Effects.lua duels.Update); it's
   Atmosphere/LowHealth.lua's Update.
+
+2026-11-23 18:34 Forever, DEEP, open world, CineMode, calm, 15 plates, 79 fps:
+0.959 ms/frame real (game 1.210, wrappers 0.251), 63 KB/s, 0.6% over 5 ms.
+The AddOn list's 8% = ~1 ms at 80 fps (12.5 ms frames). /perf dig (5 agents,
+each checked in code): fixes 11-14. Left as leads:
+1. UpdateFrames' 1 s timer pass in settled CineMode (Core.lua CINE_SLOW_PASS):
+   all ~170 entries run the whole target chain, all ending where they were;
+   ~1.5 ms real a pass. Fast path for plain settled entries (old lead 8) or a
+   cursor spreading it over frames; needs an old-vs-new equivalence test.
+2. SetHeldSpeed: mute StatusTrackingBarManager's CVAR_UPDATE while a speed
+   is held (untested for taint), or call C_CVar.SetCVar (one hook pass, not
+   two); measure the split first: /cine debug cvarcost with XP bar looks on/off.
+3. Memory: the AddOn list's 91 MB is about half uncollected garbage (41-61 MB
+   live measured collected before). Release Cinematic.lua SavedVariables is
+   6 MB, ufDriftLog alone 4.5 MB: drop it in a migration. Dev/*.lua tests
+   ~4-5 MB compiled in the dev copy only. /cine debug pagecost = the collected figure.
+
+2026-11-23 18:53 Forever, DEEP, city, CineMode, calm, 5 plates, 40 fps, 32 s
+after /reload (fixes 11-14 loaded): 1.263 ms/frame real, 59 KB/s. Fix 11
+confirmed: Plate parts keeper 0.034 ms a frame at 5 plates (0.10 on 11-22 at
+5), no "put back by the sweep" count. Like-for-like normal runs: 11-22 15:01
+0.42 ms (game) -> 11-23 17:57 1.23 ms; time no timer covers 0.13 -> 0.56 ms:
+11-23's new per-frame code is untimed (weather screen effects, the Mouseover
+row's hoverWatch, CooldownRing/CooldownStacks watchers, CooldownMissing
+ticker, FadeDetached walker). Next: time them, then one normal run.
 
 ## Ruled out
 

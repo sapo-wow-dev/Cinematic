@@ -961,18 +961,21 @@ end
 
 -- Every script: the built-in ones (builtin = true; edited: yours of it) then
 -- yours, in order.
+local function BuiltinScript(each, edits)
+	local script = edits[each.id]
+	if type(script) == "table" then
+		script.edited = true -- (the table kept: the page changes it as it does yours)
+	else
+		script = ns.CleanCameraScript(WithRuleEdits(each.make(), each.id), each.id, true)
+	end
+	script.name, script.builtin = each.name, true
+	return script
+end
 function ns.CameraScripts()
 	local list = {}
 	local edits = BuiltinEdits() or {}
 	for _, each in ipairs(BUILT_IN) do
-		local script = edits[each.id]
-		if type(script) == "table" then
-			script.edited = true -- (the table kept: the page changes it as it does yours)
-		else
-			script = ns.CleanCameraScript(WithRuleEdits(each.make(), each.id), each.id, true)
-		end
-		script.name, script.builtin = each.name, true
-		list[#list + 1] = script
+		list[#list + 1] = BuiltinScript(each, edits)
 	end
 	local store = Store()
 	for _, script in ipairs(store and store.list or {}) do
@@ -1047,9 +1050,16 @@ function ns.BuiltinEndMusicSecs(id)
 	return type(script) == "table" and EndMusicIn(script.ending) or nil
 end
 
+-- The same script ns.CameraScripts() has first for this id, but only that one
+-- made: making every built-in camera's script was ~220 KB of garbage a look
+-- (Tools/perf/ledger.md 2026-11-23).
 function ns.FindCameraScript(id)
-	for _, script in ipairs(ns.CameraScripts()) do
-		if script.id == id then return script end
+	for _, each in ipairs(BUILT_IN) do
+		if each.id == id then return BuiltinScript(each, BuiltinEdits() or {}) end
+	end
+	local store = Store()
+	for _, script in ipairs(store and store.list or {}) do
+		if type(script) == "table" and script.id == id then return script end
 	end
 end
 

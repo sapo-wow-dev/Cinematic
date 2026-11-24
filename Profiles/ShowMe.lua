@@ -1019,7 +1019,7 @@ local ORBIT_EASE = 1      -- seconds to full speed, and from it at the end
 local MIN_SETTING = 1     -- the lowest speed setting sent
 local PRIME_SHARE = 0.001 -- the creep's share of the setting
 local PRIME_TIME = 0.2    -- seconds the creep runs before the move
-local SETTING_CHANGE = 0.02 -- setting changes smaller than this share aren't sent
+local SETTING_CHANGE = 0.05 -- setting changes smaller than this share aren't sent (each write costs the game ~0.7 ms)
 local RESTORE_DELAY = 0.3 -- seconds after the move stops before your setting's back
 local orbitFrame = CreateFrame("Frame")
 local orbit -- { startAt, endAt, speed, moving, sent }

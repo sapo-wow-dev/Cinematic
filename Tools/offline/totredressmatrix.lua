@@ -93,6 +93,9 @@ local function Upvalue(fn, name)
 end
 local DressFrame = Upvalue(ns.RefreshUnitStyle, "DressFrame")
 local Dress = DressFrame and Upvalue(DressFrame, "Dress")
+-- (Dress timed by the profiler (ns.Profiled, 2026-11-23): the wrapper's "fn" is
+-- the Dress that calls DressFrame. Reach only: the same function counted.)
+if Dress and not Upvalue(Dress, "DressFrame") and Upvalue(Dress, "fn") then Dress = Upvalue(Dress, "fn") end
 local dressed = 0
 if Dress then
 	local _, index = Upvalue(Dress, "DressFrame")

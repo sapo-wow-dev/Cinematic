@@ -19,9 +19,11 @@ local ns, wow = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc")
 local function Find(name)
 	local seen = {}
 	local function Walk(fn, depth)
-		if depth > 9 or seen[fn] then return nil end
+		-- (seen keeps the shallowest depth: one met first down a long path, such
+		-- as through ns.Profiled's wrappers, is walked again when met nearer.)
+		if depth > 9 or (seen[fn] and seen[fn] <= depth) then return nil end
 		if type(fn) == "table" then -- (the feature loops' list: the numbers' update loop waits there)
-			seen[fn] = true
+			seen[fn] = depth
 			for _, value in pairs(fn) do
 				local found = Walk(value, depth + 1)
 				if found then return found end
@@ -29,7 +31,7 @@ local function Find(name)
 			return nil
 		end
 		if type(fn) ~= "function" then return nil end
-		seen[fn] = true
+		seen[fn] = depth
 		for i = 1, 80 do
 			local upName, value = debug.getupvalue(fn, i)
 			if not upName then break end

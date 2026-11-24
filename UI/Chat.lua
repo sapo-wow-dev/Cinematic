@@ -819,7 +819,9 @@ local function ShowCopy(chatFrame, line, r, g, b, text)
 	local newest = count and count > 0 and chatFrame.GetMessageInfo and chatFrame:GetMessageInfo(count)
 	copy.count = Plain(newest) and newest == line and count or nil
 	copy.mark = copy.count and WindowMark(chatFrame) or nil
-	ns.SetOnUpdate(copyWatch, OnCopyWatch)
+	-- (Set once till it's cleared: set per chat line, each made a new
+	-- protected wrapper, as FadeDetached's walk did.)
+	if copyWatch:GetScript("OnUpdate") == nil then ns.SetOnUpdate(copyWatch, OnCopyWatch) end
 end
 
 -- Whether a peek shows just its line (the setting, with the Chat page on).
@@ -1173,7 +1175,7 @@ local function ChatPeekFilter(chatFrame, event, text, author, _, channelString, 
 		return false
 	end
 	local wanted
-	local hiddenOwn =ns.db.chatHideOwn and (SENT_LINES[event] or IsFromPlayer(author, guid))
+	local hiddenOwn = ns.db.chatHideOwn and (SENT_LINES[event] or IsFromPlayer(author, guid))
 	local typedOwn = hiddenOwn and ns.db.chatOwnNoBubble and TYPED_LINES[event]
 	if typedOwn then
 		wanted = true -- (rows that are off are for other people's lines)

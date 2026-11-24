@@ -1614,6 +1614,7 @@ end
 -- after that Update keeps running with secret health.
 local healthEventAt = 0
 local SECRET_STILL = 3
+local SECRET_DRAW = 1 / 40 -- (seconds: how often the layers are drawn with secret health, see Update)
 local secretAwakeLogAt, secretEvents = nil, {} -- (dev copy's log of why it's awake: Update)
 -- (Timed for the Profiler: it runs every frame while your health is secret,
 -- WoW Forever all the time, 0.14 ms a frame by /cine debug loops,
@@ -1712,8 +1713,21 @@ local function Update(_, elapsed)
 				tostring(on), secret and "secret" or tostring(share), level, flash, tostring(ns.ActiveProfile())))
 		end
 	end
-	if shown then
+	-- (Secret health, in fights on WoW Forever always: it can't tell full from
+	-- low, so every layer was drawn every frame under the game's alpha, 0.09 ms
+	-- a frame at 113 fps, Tools/perf/ledger.md 2026-11-23. Then drawn 40 times
+	-- a second, and at once on a hit, a flash or a test: Apply's motion goes
+	-- by GetTime, so it moves as fast, in steps 25 ms apart at most.)
+	local drawNow = true
+	if shown and secret and not hit and flash == 0 and not test and not glimpse then
+		screen.drawWait = (screen.drawWait or 0) + elapsed
+		drawNow = screen.drawWait >= SECRET_DRAW
+	end
+	if shown and drawNow then
+		screen.drawWait = 0
 		Apply(screen, look, k, fade, heart, secret)
+	elseif shown then
+		-- (Not drawn this frame: as drawn last.)
 	else
 		ClearSparks(screen)
 	end

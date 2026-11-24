@@ -73,7 +73,7 @@ local MOVE_MIN_TIME = 1.5 -- seconds: the shortest turn or tilt
 local MOVE_EASE = 0.35   -- share of a move spent speeding up (and again slowing down)
 local MOVE_MIN_SPEED = 1 -- degrees per second: the slowest step sent (lower, the game uses its full speed)
 local MOVE_MIN_SETTING = 1 -- the lowest speed setting sent (the start's speed is this times the move's share)
-local MOVE_CHANGE = 0.02 -- speed changes smaller than this share aren't sent
+local MOVE_CHANGE = 0.05 -- speed changes smaller than this share aren't sent (each write costs the game ~0.7 ms)
 local MOVE_PRIME_TIME = 0.2 -- seconds the starting speed is set before the move starts
 -- ...creeping meanwhile at this share of it, too slow to see; the move is sent
 -- over the creep. (From rest, the Chat Cam's swings jumped 2-3 pixels in their

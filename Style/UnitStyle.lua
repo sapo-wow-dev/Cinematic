@@ -2719,7 +2719,9 @@ local function DressFrame(info)
 						later.GameSet(power, info, frame)
 					end)
 					-- (And whatever else turns it: checked as the power changes.)
-					local function Keep() KeepColor(power, frame.unit, function() Dress(info) end) end
+					local Keep = ns.Profiled("Unit power keep", function()
+						KeepColor(power, frame.unit, function() Dress(info) end)
+					end)
 					hooksecurefunc(power, "SetValue", Keep)
 					hooksecurefunc(power, "SetMinMaxValues", Keep)
 					local fill = power:GetStatusBarTexture()
@@ -2734,6 +2736,9 @@ function Dress(info)
 	if dressing then return end
 	DressFrame(info)
 end
+-- (Timed: the game's bar hooks above call it through this upvalue. Untimed,
+-- it was likely most of the profiler's "not wrapped" time, 2026-11-23.)
+Dress = ns.Profiled("Unit frame dress", Dress)
 
 -- Every frame again (the page's settings changing, a new target...).
 -- For /cine debug themecheck: where the parts we move are, as text to compare.

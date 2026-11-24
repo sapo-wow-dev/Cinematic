@@ -108,6 +108,8 @@ local function Finish(name, isSection, parentName, started, memory, pausedMs, pa
 end
 
 local wrappers = setmetatable({}, { __mode = "k" }) -- the functions ns.Profiled made
+-- (Diagnostics.lua loads before this file: its once-a-second check of every
+-- feature loop's want is timed here, wrapped below once ns.Profiled exists.)
 
 -- fn wrapped to be timed as `name` while profiling. Return values pass through.
 function ns.Profiled(name, fn)
@@ -507,3 +509,6 @@ ns.SetOnUpdate(watcher, function(_, elapsed)
 		ns.StopProfile()
 	end
 end)
+
+-- (See wrappers: Diagnostics.lua loads first.)
+if ns.SyncFeatureLoops then ns.SyncFeatureLoops = ns.Profiled("Feature loop gates", ns.SyncFeatureLoops) end

@@ -160,7 +160,9 @@ local STOP_TIME = 0.8  -- seconds a move under way takes to ease to a stop for a
 -- read as a lurch at each start. A move already under way takes the new
 -- share without a jump: the drift carry does it.)
 local SPEED_MIN_SETTING = 1 -- the lowest speed setting sent (lower, the game uses its full speed)
-local SPEED_CHANGE = 0.02   -- setting changes smaller than this share aren't sent
+local SPEED_CHANGE = 0.05   -- setting changes smaller than this share aren't sent (each write
+                            -- costs the game ~0.7 ms, its XP bar redrawn: 2% had ~7 a second;
+                            -- the turn adds up the speed sent, so it ends where it should)
 local SPEED_PRIME_TIME = 0.2 -- seconds the lowest setting is in before the move starts
 local PRIME_SHARE = 0.001   -- the creep's share of the setting (even at your 180: 0.18 deg/sec)
 local SPEED_RESTORE_DELAY = 0.3 -- seconds after a move stops before your setting comes back

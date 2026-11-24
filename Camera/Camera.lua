@@ -4551,7 +4551,7 @@ local FLYBY = {
 	SPEED_CVAR = "cameraYawMoveSpeed",
 	WHO = "modes:flyby", -- (its hold on your turn speed: ns.HoldSpeed, Core.lua)
 	MIN_SETTING = 1,    -- the lowest turn speed setting sent (lower, the game uses its full speed)
-	SETTING_CHANGE = 0.02, -- speed setting changes smaller than this share aren't sent
+	SETTING_CHANGE = 0.05, -- speed setting changes smaller than this share aren't sent (each write costs ~0.7 ms)
 	PRIME_TIME = 0.2,   -- seconds the starting speed is set before the turn starts...
 	-- ...creeping meanwhile at this share of it, too slow to see. (From rest, the
 	-- Chat Cam's swings jumped 2-3 pixels in their first frame, about a frame at

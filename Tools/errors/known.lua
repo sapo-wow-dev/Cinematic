@@ -534,6 +534,30 @@ return {
 [CinematicDev/Options.lua]:16847: in function <CinematicDev/Options.lua:16799>]],
   },
 
+  -- Rule editor ----------------------------------------------------------------
+  {
+    id = "rule-editor-optional-callback",
+    status = "fixed",
+    title = "Rule editor: attempt to call a nil value in SetText as you type (a target without SetText)",
+    match = { all = { "attempt to call a nil value", "GridRows.lua" }, any = { "in function 'SetText'", "in function 'ResetToGrid'" } },
+    why = {
+      call = "target.SetText(box:GetText()) in the editor's Changed() (UI/GridRows.lua), from the box's OnTextChanged with userInput",
+      caller = "ns.OpenRuleEditor's target table: Dev/AtmosphereTest.lua's stand-in Haze row had label, Text and Close but no SetText (patched by its session a minute later)",
+      path = "the editor's comment listed SetText and ResetToGrid as fields every target has, and called them unchecked; any caller that leaves one out (rows that save only on Close, a test stand-in) errors on the first key typed, or on Reset to grid",
+      rule = "Lua: calling a missing table field is calling nil; the game's trace names it as \"[C]: in function '<field>'\"",
+      pattern = "a callback table handed to a shared window, its optional fields called without a check",
+    },
+    dont = "Don't call a rule editor target's SetText / ResetToGrid unchecked: `if target and target.SetText then`. Only label, Text and Close are needed.",
+    check = { pattern = [[^(?!.*target\.(SetText|ResetToGrid) then).*\btarget\.(SetText|ResetToGrid)\(]] },
+    fix = "2026-11-23: GridRows.lua calls SetText and ResetToGrid only when there; header comment says only label, Text and Close are needed. Tools/offline/ruleeditortarget.lua",
+    seen = { "2026-11-23" },
+    example = [[Interface/AddOns/CinematicDev/UI/GridRows.lua:404: attempt to call a nil value
+[C]: in function 'SetText'
+[CinematicDev/UI/GridRows.lua]:404: in function <CinematicDev/UI/GridRows.lua:403>
+[CinematicDev/UI/GridRows.lua]:409: in function <CinematicDev/UI/GridRows.lua:407>]],
+    source = "pasted 2026-11-23 (Atmosphere test, Haze row's editor)",
+  },
+
   -- Reload ---------------------------------------------------------------------
   {
     id = "reload-restore-in-fight",
