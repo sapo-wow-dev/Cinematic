@@ -34,6 +34,16 @@ Check("2 Chattynator: no lines only (window peeks)", ns.ChatPeekLinesOnly() == f
 C_AddOns.IsAddOnLoaded = IsLoaded -- luacheck: ignore 122
 Check("2 back to default", ns.ChatPeekLinesOnly() == true)
 
+-- DaylightUI's chat: the game's windows at alpha 0 under its own window, our
+-- copy drew every new line twice (a player, 2026-11-24).
+C_AddOns.IsAddOnLoaded = function(name) return name == "DaylightUI_Chat" end -- luacheck: ignore 122
+Check("2b DaylightUI chat: not default", ns.ChatIsDefault() == false)
+Check("2b DaylightUI chat: no lines only (window peeks)", ns.ChatPeekLinesOnly() == false)
+-- (DaylightUI's core alone, chat part off: the game's chat is still the game's.)
+C_AddOns.IsAddOnLoaded = function(name) return name == "DaylightUI" end -- luacheck: ignore 122
+Check("2b DaylightUI without its chat: default", ns.ChatIsDefault() == true)
+C_AddOns.IsAddOnLoaded = IsLoaded -- luacheck: ignore 122
+
 -- EllesmereUI's chat (Support/EllesmereUI.lua): its panel claims the window.
 ns.ClaimLinkPart("EllesmereUI", "chatwindow", {}, { window = {} })
 Check("3 EllesmereUI chat: not default", ns.ChatIsDefault() == false)

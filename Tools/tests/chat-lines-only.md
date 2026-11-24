@@ -12,6 +12,7 @@ Audit 2026-11-23: fix cards Tools/audits/2026-11-23-chat-copy-full-window.md (b3
 | Q4 | With a full window (128 lines), a newer line under the copy: quick fade on mouse over? | forever | YES: other and same line under it, copy gone by 0.4 s; nothing newer, copy at 0.50 crossing | run 1 step full |
 | Q5 | An achievement (Achievements row on) shows just its line, not the window? | forever | YES: copy = the window's line, window stayed faded (GetAchievementLink(6) read nil at level 2: a stand-in link) | run 1 step achieve |
 | Q6 | A message a filter addon blocks after ours: no older line shown? | forever | YES: landed shows the new line; blocked shows no old line, the whole window peeks | run 1 step blocked |
+| Q8 | With DaylightUI's chat (game windows at alpha 0 under its own window), does a message peek show once, in its window? | forever | YES after two fixes: DaylightUI_Chat in OTHER_CHAT_ADDONS (no copy), and DaylightUIChat claimed as ChatFrame1's chatwindow panel (it comes up: 0.93 in 0.6 s) | chatdefault runs q5a6f, q7612 |
 | Q7 | Any line on Forever reading secret, so the mark is nil (falls back to the old search)? | forever | out of fights NO: 20 of 20 of your chat's lines plain, GetMaxLines 128; in fights open (not needed: a secret mark falls back to the old search) | run 1 step setup |
 
 ## Plan tree (step 3)
@@ -22,3 +23,5 @@ Test: Dev/ChatLinesTest.lua (/cine debug chatlines, kit, hands off): a test wind
 | Run | Date | Command | Answered | Still open, and why this run couldn't |
 |-----|------|---------|----------|---------------------------------------|
 | 1 | 2026-11-23 | /cine debug chatlines (queue qd892) | Q4-Q7 on Forever, 7 PASS, 0 errors/blocked | retail not run (Forever is the test client); Q7 in fights not reached |
+| 2 | 2026-11-24 | /cine debug chatdefault (kit, queue q5a6f) | no copy with DaylightUI's chat, 5 PASS | its shot showed nothing: DaylightUI's window never came up (the test only checked ChatFrame1's peek); test now checks the panel |
+| 3 | 2026-11-24 | /cine debug chatdefault (queue q7612) | Q8: DaylightUI's window up, line once, 7 PASS, 0 errors/blocked; steps marked proven | DaylightUI's classic style not run (untested: game windows on its holder) |

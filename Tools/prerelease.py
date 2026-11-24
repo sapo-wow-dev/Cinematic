@@ -126,6 +126,7 @@ OFFLINE_TESTS = [
     ("game's zone text shows when no Zone card replaces it, retail", "Tools/offline/zonecardgame.lua", "retail"),
     ("a v2.1.23 share string or backup keeps its Cooldown Manager lines", "Tools/offline/cooldownoldshare.lua"),
     ("chat lines-only peeks only with the game's own chat", "Tools/offline/chatdefault.lua"),
+    ("/cine debug chatdefault passes, game's chat and DaylightUI's", "Tools/offline/chatdefaultkit.lua"),
     ("combat text keeps the game's numbers as its rows say", "Tools/offline/combattextkeep.lua"),
     ("combat text: a totem's hit matched to its cast", "Tools/offline/totemcast.lua"),
     ("totem test (/cine debug totemhit) steps and verdicts", "Tools/offline/totemhit.lua"),

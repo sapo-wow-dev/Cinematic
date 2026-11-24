@@ -438,6 +438,23 @@ ns.WhenAddonLoads("DaylightUI_Tooltip", function()
 		onPick = function() if ns.RefreshTooltipStyle then ns.RefreshTooltipStyle() end end })
 end)
 
+-- Its chat (DaylightUI_Chat/Chat.lua): one holder, DaylightUIChat, that its
+-- fade area hands out in every style. In its own-window styles it draws the
+-- lines there and keeps the game's windows at alpha 0 (Box.lua); in its
+-- classic style the game's windows sit on it. Either way it's the panel of
+-- the main chat window: a message peeking chat brings it up (ns.ClaimLinkPart,
+-- UI/FrameLinks.lua), as for Glass. Unclaimed, the peek raised only the game's
+-- window at alpha 0 and nothing showed (test q5a6f, 2026-11-24). (Its being
+-- loaded also turns off Show just those messages: UI/Chat.lua.)
+ns.WhenAddonLoads("DaylightUI_Chat", function()
+	ns.AddScanner(function()
+		local holder, window = _G.DaylightUIChat, _G.ChatFrame1
+		if type(holder) == "table" and type(window) == "table" and ns.Reachable(holder) then
+			ns.ClaimLinkPart("DaylightUI", "chatwindow", holder, { window = window })
+		end
+	end)
+end)
+
 ns.WhenAddonLoads("DaylightUI_Chat", function()
 	ns.AddConflict({ key = "style:bubbles", addon = LABEL, label = "Chat bubble look", group = "style", noBoth = true,
 		styleSwitch = "bubblesStyle",

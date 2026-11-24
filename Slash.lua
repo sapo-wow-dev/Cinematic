@@ -159,7 +159,7 @@ local function PrintDebugHelp()
 	print("  /cine debug bubbleshot | off - a real chat bubble in each style theme: run it four times, outdoors, it says a line each go")
 	print("  /cine debug chattab - dev copy: a line in a chat tab you haven't selected (Combat Log crafting) must not bring chat up; one run, four rounds (a real whisper too), logs every window's state (again to stop)")
 	print("  /cine debug chatreveal | off - dev copy: a revealed chat line, then you mouse over chat; logs the handoff (with and without a newer line under it)")
-	print("  /cine debug chatdefault | off - dev copy: Show just those messages only with the game's own chat; runs itself, two test lines (your chat, then the other way round)")
+	print("  /cine debug chatdefault [full] - dev copy, test kit: Show just those messages only with the game's own chat (DaylightUI, EllesmereUI...); runs itself, two test lines (your chat, then the other way round); again to stop")
 	print("  /cine debug pageshots [first] [last] | [page words] | off - a screenshot of every settings page, top to bottom, and its layout checked (cut words, text over text)")
 	print("  /cine debug themeshots [unitframes] [theme] | off - screenshots of every style theme's frames; your settings come back after")
 	print("  /cine debug cardchat - plays a zone card and prints how it's kept clear of the chat windows")
@@ -838,12 +838,6 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "chattab" then
 		if ns.ChatTabTest then ns.ChatTabTest()
 		else ns.Print("/cine debug chattab is in the dev copy only.") end
-	elseif cmd == "debug" and (arg == "chatdefault" or arg:match("^chatdefault ")) then
-		if ns.ChatDefaultTest then
-			ns.ChatDefaultTest(arg:match("^chatdefault%s*(.-)$"))
-		else
-			ns.Print("/cine debug chatdefault is in the dev copy only.")
-		end
 	elseif cmd == "debug" and arg == "heal" and ns.ReportHealForecast then
 		-- (In 3 seconds: time to start casting a heal on yourself.)
 		ns.Print("Measuring the heal bar in 3 seconds: start casting a heal on yourself.")

@@ -36,7 +36,6 @@ local OLD = {
 	{ cmd = "screenfx", fn = "ScoutScreenEffects", file = "ScreenEffectScout.lua" },
 	{ cmd = "chatreveal", fn = "ChatRevealTest", file = "ChatRevealTest.lua", category = "chatreveal" },
 	{ cmd = "chattab", fn = "ChatTabTest", file = "ChatTabTest.lua", category = "chattab" },
-	{ cmd = "chatdefault", fn = "ChatDefaultTest", file = "ChatDefaultTest.lua", category = "chatdefault" },
 	{ cmd = "shoulder", fn = "ShoulderTest", file = "ShoulderCamTest.lua", category = "shoulder" },
 	{ cmd = "dueltarget", fn = "DuelTargetTest", file = "DuelTargetTest.lua", log = "duelTargetLog" },
 	{ cmd = "mappin", fn = "MapPinTest", file = "MapPinTest.lua", log = "mapPinLog" },

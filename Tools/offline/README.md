@@ -76,7 +76,10 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
   starts again with the page (Heal Vision's kept going every frame). And the settings pages made ahead wait while
   `/cine debug loops` measures, so their time isn't counted as the loops'.
 - `chatdefault.lua`: the Chat page's Show just those messages copies lines only with the game's own chat; with
-  EllesmereUI's, ElvUI's or Glass's window (a chat window link claim) or Chattynator a message shows the window.
+  EllesmereUI's, ElvUI's or Glass's window (a chat window link claim), Chattynator or DaylightUI's chat a message
+  shows the window.
+- `chatdefaultkit.lua`: /cine debug chatdefault through the kit with pretend time, the game's chat (a copy) and
+  DaylightUI's chat loaded (the window, no copy): every verdict passes, settings and CineMode put back.
 - `zonecardnewzone.lua`: /cine debug zonecard 10 (New zone off by default) through the kit on both stand-ins, pretend time and card fades: passes, fails for a player still on, puts back.
 - `newzonedefault.lua`: the New zone card off to start with and turned off once by the update (here, profiles, reset points), so a new zone gets Discovered's small card ("DUN MOROGH", 2026-11-23); ticked again it stays on.
 - `discoverinstance.lua`: out of a dungeon, the game's zone name still the dungeon's a few seconds: no card for it (the big New zone card for "Stormwind Stockade", 2026-11-23); a new zone after still gets New zone's, a dungeon new to you Discovered's. Optional .toc argument runs it on older code.

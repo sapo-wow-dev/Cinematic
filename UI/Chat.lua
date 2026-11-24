@@ -829,7 +829,10 @@ end
 -- window (a "chatwindow" link claim: EllesmereUI, ElvUI, Glass) or replaces it
 -- (Chattynator). Lines-only peeks only then: over another addon's window the
 -- copy showed next to its own line, two lines (EllesmereUI, 2026-11-20).
-local OTHER_CHAT_ADDONS = { "Chattynator" }
+-- DaylightUI's chat keeps the game's windows at alpha 0 under a window of its
+-- own (or restyles them, its classic style): the copy showed over it, every
+-- new line twice (a player, 2026-11-24).
+local OTHER_CHAT_ADDONS = { "Chattynator", "DaylightUI_Chat" }
 function ns.ChatIsDefault()
 	if ns.LinkClaimants and ns.LinkClaimants("chatwindow") then return false end
 	local IsLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
