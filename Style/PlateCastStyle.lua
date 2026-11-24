@@ -903,7 +903,7 @@ local function Apply(bar, look, sample, sized)
 		state.timer:Hide()
 	end
 	Size(bar, state, look, sized)
-	DressAs(bar, state, look.plateCastGameAs, look)
+	DressAs(bar, state, look.plateCastGameAs, look, sample)
 	state.on = true
 end
 ns.StylePlateCastBar = Apply
@@ -1046,7 +1046,7 @@ local function Copies(bar, state)
 	end
 	return copy, copyIcon
 end
-function DressAs(bar, state, which, look)
+function DressAs(bar, state, which, look, sample)
 	local text, icon, spark = Part(bar, "Text"), Part(bar, "Icon"), Part(bar, "Spark")
 	if state.as and state.as ~= which then
 		-- (Off, or the other one: ours hidden; the game's name and icon are
@@ -1114,16 +1114,19 @@ function DressAs(bar, state, which, look)
 	else
 		ShowPart(state, Part(bar, "Border"), false)
 		ShowPart(state, Part(bar, "TextBorder"), false)
-		-- (As your nameplates lay theirs out: in the bar or under it, by your
-		-- nameplate style, ns.PlateCastLayout.)
-		local layout = ns.PlateCastLayout()
+		-- (A preview's: as your nameplates lay theirs out, in the bar or under
+		-- it by your nameplate style, ns.PlateCastLayout. The real bars keep
+		-- v2.1.27's by client, whatever your nameplate settings: the user,
+		-- 2026-11-23, "previews only"; card 2026-11-23-cast-plate-look-live.md.)
+		local layout = sample and ns.PlateCastLayout()
+			or { icon = 12, inside = not ns.isRetail, under = ns.isRetail and -1 or 0 }
 		copyIcon:SetSize(layout.icon, layout.icon)
 		if layout.classic then
 			copyIcon:SetPoint("CENTER", bar, "LEFT", -9.25 * layout.h, 0)
 		elseif layout.inside then
 			copyIcon:SetPoint("LEFT", bar, "LEFT", 0, 0)
 		else
-			copyIcon:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
+			copyIcon:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, layout.under or 0)
 		end
 		-- (Beside the icon, or where it would be when the game shows none: yours.)
 		if copyIcon:IsShown() and not layout.classic then
@@ -1131,7 +1134,7 @@ function DressAs(bar, state, which, look)
 		elseif layout.inside then
 			copy:SetPoint("LEFT", bar, "LEFT", 2, 0)
 		else
-			copy:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, 0)
+			copy:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, layout.under or 0)
 		end
 		copy:SetJustifyH("LEFT")
 		Resize(spark, 4, 12)
