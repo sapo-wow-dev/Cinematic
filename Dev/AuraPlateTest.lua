@@ -190,6 +190,7 @@ ns.TestKit.Define({
 	key = "auraPlateTest",
 	title = "Buffs over the name plate",
 	about = "confirm: target frame buffs on top lifted off a Style theme's name plate (Neon Coast)",
+	needs = "A target with a buff or debuff, out of a fight",
 	settings = { "styleGeneral", "ufStyle" },
 	cvars = { "uiScale", "useUiScale" },
 	context = function()
