@@ -50,6 +50,10 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `partyflicker.lua`: a stand-in for DaylightUI's party tile dimming itself by a secret range answer
   (SetAlphaFromBoolean), checked against our fade: its dim kept while not faded, our fade back at once while faded.
   An optional .toc argument runs it on other code (a copy with an older Frames.lua, say).
+- `boxwords.lua <forever|retail>`: a number box that shows words (Letterbox Style's How long, "With the UI" at 0)
+  holds and fits its whole text, with the game's letter cap kept on the stand-in.
+- `previewwatchon.lua`: the dev copy watches the Style previews by itself from login (Dev/PreviewWatch.lua), logs
+  their moves, and stays off once turned off.
 - `tooltiplocation.lua`: the Tooltips page's Location row. A party member's zone on their short tooltip goes
   by it, apart from Spec and class, and a full tooltip's faction line under the class isn't taken for the zone; the
   update starts Location as Spec was set.

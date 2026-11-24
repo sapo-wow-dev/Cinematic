@@ -108,6 +108,9 @@ end
 
 local db = ns.db
 db.selfTextStyle, db.selfTextSide, db.selfText_damageSize = false, "over", 1.3
+-- (The stand-in can't place frames on a screen: steps that read the screen
+-- check what they can without it when this is set.)
+ns.TestKit.offline = true
 ns.HandleSlash("debug selftextpage")
 Check("/cine debug selftextpage starts the kit test", ns.TestKit.Running() ~= nil)
 Check("CineMode off", cine == false)
@@ -116,14 +119,15 @@ Check("settings kept for a reload", undo and undo.extra and undo.extra.selfText
 	and undo.extra.selfText.selfTextSide == "over")
 Tick(90)
 for _, step in ipairs({ "model", "where", "bold", "kind", "merge", "crits", "games", "screen", "center", "page", "docked",
-	"kinds", "tabs", "mark", "off" }) do
-	Check("verdict " .. step .. ": PASS", Has("verdict PASS " .. step .. ":") ~= nil, Has(" " .. step .. ":"))
+	"kinds", "tabs", "positions", "mark", "off" }) do
+	Check("verdict " .. step .. ": PASS", Has("verdict PASS " .. step .. ":") ~= nil,
+		Has("verdict FAIL " .. step .. ":") or Has(" " .. step .. ":"))
 end
-Check("DONE: 15 pass, 0 fail", Has("DONE: 15 pass, 0 fail") ~= nil, Has("DONE"))
+Check("DONE: 16 pass, 0 fail", Has("DONE: 16 pass, 0 fail") ~= nil, Has("DONE"))
 Check("settings back", db.selfTextStyle == false and db.selfTextSide == "over" and db.selfText_damageSize == 1.3
 	and CinematicDB.selfTextPageTestUndo == nil)
 Check("CineMode back", cine == true)
-Check("14 screenshots", shots == 14, shots)
+Check("15 screenshots", shots == 15, shots)
 
 -- A step that can't pass fails: no model loaded.
 modelFile = 0

@@ -38,7 +38,8 @@ DEFAULTS.selfTextStyle = false   -- the page's Enable Page
 DEFAULTS.selfTextAlways = true   -- its Show in row's Always (the rest: ROW_KEY's ticks and rule)
 DEFAULTS.selfTextBy = "ours"     -- who draws your combat text: "ours", "game" (as it is) or "none"
 DEFAULTS.selfTextFollow = true   -- beside you while the Shoulder Cam is over your shoulder
-DEFAULTS.selfTextSide = "free"   -- "over" you, your "free" side (away from the screen's middle), "split"
+DEFAULTS.selfTextSide = "free"   -- "over" you, your "free" side (away from the screen's middle), "split",
+                                 -- "lanes" (each kind's lane: heals left, damage right, the rest over you)
 DEFAULTS.selfTextMotion = "up"   -- "up", "down", "arc", "pop"
 DEFAULTS.selfTextHeight = 0      -- UI units up from your spot
 DEFAULTS.selfTextAcross = 0      -- UI units right from your spot
@@ -57,15 +58,16 @@ DEFAULTS.selfTextLook = "game"   -- the quick look last picked (the page's tiles
 ns.SELF_TEXT_ROW = "style:selfText" -- its Show in row
 
 -- The kinds of text, each a group. crit: it can crit (its Crit size row).
--- taken: on the taken side when Split. tick: the game's Text on Me setting
+-- taken: on the taken side when Split. lane: its side when Lanes (-1 left,
+-- 1 right; none: over you). tick: the game's Text on Me setting
 -- that decides whether it makes this kind at all (read, never set).
 local GROUPS = {
-	{ id = "damage", label = L["Damage taken"], taken = true, crit = true, color = { 1, 0.1, 0.1 },
+	{ id = "damage", label = L["Damage taken"], taken = true, lane = 1, crit = true, color = { 1, 0.1, 0.1 },
 		sample = "-26", critSample = "-74" },
-	{ id = "miss", label = L["Misses on you"], taken = true, color = { 1, 1, 1 }, sample = "Dodge",
+	{ id = "miss", label = L["Misses on you"], taken = true, lane = 1, color = { 1, 1, 1 }, sample = "Dodge",
 		tick = { "floatingCombatTextDodgeParryMiss_v2" } },
-	{ id = "heal", label = L["Heals"], crit = true, color = { 0.1, 1, 0.1 }, sample = "+120", critSample = "+412" },
-	{ id = "shield", label = L["Shields"], color = { 0.6, 0.85, 1 }, sample = "Absorb" },
+	{ id = "heal", label = L["Heals"], lane = -1, crit = true, color = { 0.1, 1, 0.1 }, sample = "+120", critSample = "+412" },
+	{ id = "shield", label = L["Shields"], lane = -1, color = { 0.6, 0.85, 1 }, sample = "Absorb" },
 	{ id = "power", label = L["Power gains"], color = { 0.3, 0.55, 1 }, sample = "+20 Mana",
 		tick = { "floatingCombatTextEnergyGains_v2" } },
 	{ id = "combo", label = L["Combo points"], color = { 1, 0.82, 0 }, sample = "<2 Combo Points>",
@@ -226,6 +228,8 @@ SideOf = function(group, youX)
 	if own == "right" then return 1 end
 	local side = DB().selfTextSide or "free"
 	if side == "over" then return 0 end
+	-- (Lanes: from you, wherever the camera puts you; a kind with no lane over you.)
+	if side == "lanes" then return BY_ID[group] and BY_ID[group].lane or 0 end
 	-- (Away from the screen's middle. In it (no Shoulder Cam, or Follow off):
 	-- over you, there's no free side; it sat 90 to your right and read off
 	-- center, the user 2026-11-21. Split keeps its two sides there: right and left.)

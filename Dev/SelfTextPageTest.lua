@@ -453,6 +453,51 @@ ns.TestKit.Define({
 			ClickTab(r, "General")
 			return good, table.concat(results, "; ")
 		end),
+		-- Quick positions (2026-11-24): the Lanes tile clicked on the real page;
+		-- heals left of you, damage right, combo over you, the tile lit.
+		Step("positions", "Quick positions: Lanes, heals left, damage right", function(r)
+			Defaults()
+			page = page or OpenPage(r)
+			if not page then return false, "the page didn't open" end
+			ClickTab(r, "General")
+			local lanes, shown = nil, 0
+			for _, tile in ipairs(page.positionButtons or {}) do
+				if tile:IsVisible() then shown = shown + 1 end
+				if tile.value == "lanes" then lanes = tile end
+			end
+			if not lanes then return false, "no Lanes tile" end
+			lanes:Click()
+			r:Sleep(0.3)
+			local lit = page.PositionOn("lanes") and lanes.on
+			local board = page.board
+			-- (Play paused while it measures, as Fitted: a sample in the wait is
+			-- one more text on a side.)
+			local wasPlaying = page.view and page.view.playing
+			if page.SetPlaying then page.SetPlaying(false) end
+			board:Clear()
+			r:Sleep(0.6) -- (your spot settled)
+			local made = {}
+			for _, sample in ipairs({ { "+120", "heal" }, { "-26", "damage" }, { "<2 Combo Points>", "combo" } }) do
+				made[sample[2]] = ns.SelfTextSample(sample[1], sample[2], false, board)
+				r:Sleep(0.12)
+			end
+			r:Sleep(0.03)
+			-- (Across on the screen: Middle, as Fitted reads the mark.)
+			local function X(text) return text and (Middle(text)) end
+			local hx, dx, cx = X(made.heal), X(made.damage), X(made.combo)
+			local function Side(text) return text and text.side end
+			local lanes3 = Side(made.heal) == -1 and Side(made.damage) == 1 and Side(made.combo) == 0
+			local numbers = type(hx) == "number" and type(dx) == "number" and type(cx) == "number"
+			-- (On the screen too: left to right heal, combo, damage. The offline
+			-- stand-in puts every frame's middle at one spot: there, sides only.)
+			local ordered = numbers and (hx < cx and cx < dx or (hx == cx and cx == dx and ns.TestKit.offline))
+			if page.SetPlaying and wasPlaying then page.SetPlaying(true) end
+			r:Shot("14 positions")
+			return ns.db.selfTextSide == "lanes" and lit and shown == 5 and lanes3 and ordered,
+				("side %s, lit %s, %d of 5 tiles shown, sides heal %s combo %s damage %s, across heal %s combo %s damage %s"):format(
+				tostring(ns.db.selfTextSide), tostring(lit), shown, tostring(Side(made.heal)), tostring(Side(made.combo)),
+				tostring(Side(made.damage)), tostring(hx), tostring(cx), tostring(dx))
+		end),
 		Step("mark", "right-click the mark: back where it starts", function(r)
 			Defaults()
 			page = page or OpenPage(r)

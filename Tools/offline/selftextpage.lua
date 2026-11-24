@@ -160,6 +160,29 @@ if page and page.preview then
 	if page.Fit then page.Fit() end
 end
 Check("three tabs", page.hosts and #page.hosts == 3)
+-- (General said "Who draws it" twice: a heading, then the row naming itself.)
+do
+	local general = page.hosts and page.hosts[1]
+	local count, top = 0, nil
+	local function Walk(frame)
+		for _, region in ipairs(frame._regions or {}) do
+			if region._text == ns.L["Who draws it"] then count = count + 1 end
+		end
+		for _, child in ipairs(frame._children or {}) do
+			Walk(child)
+		end
+	end
+	if general then Walk(general) end
+	-- (Places aren't kept here: the first line made on the tab, past its
+	-- switch, is the row; the heading came first before.)
+	for _, child in ipairs(general and general._children or {}) do
+		local id = child.settingKey
+		if not (type(id) == "string" and id:find("^tabOn:")) then top = child break end
+	end
+	Check("General says Who draws it once", count == 1, count)
+	Check("General's top line is the Who draws it row", top and top.settingKey == "selfTextBy",
+		top and tostring(top.settingKey))
+end
 local db = ns.db
 db.styleGeneral, db.selfTextStyle = true, true
 local refreshed, refreshErr = pcall(pageKit.Refresh)
@@ -234,6 +257,60 @@ Check("Bold sets its parts", db.selfTextFont == "lilita" and db.selfTextEdge == 
 	and db.selfTextLook == "bold", db.selfTextFont)
 Check("an unknown look: nothing", page.ApplyLook("nope") == false)
 page.ApplyLook("game")
+
+-- Quick positions (2026-11-24): each tile sets Side, Height and Across; the
+-- lit tile follows the settings, not the last click; Lanes puts heals and
+-- shields left, damage and misses right, the rest over you, wherever you are.
+do
+	local tiles = page.positionButtons or {}
+	Check("five quick positions", #tiles == 5, #tiles)
+	local function Lit()
+		local lit = {}
+		for _, tile in ipairs(tiles) do
+			tile:Refresh()
+			if tile.on then lit[#lit + 1] = tile.value end
+		end
+		return table.concat(lit, ",")
+	end
+	db.selfTextSide, db.selfTextHeight, db.selfTextAcross = "free", 0, 0
+	Check("the start: Free side lit", Lit() == "free", Lit())
+	for _, tile in ipairs(tiles) do
+		if tile.value == "lanes" then tile:GetScript("OnClick")(tile) end
+	end
+	Check("Lanes sets Side", db.selfTextSide == "lanes" and db.selfTextHeight == 0 and db.selfTextAcross == 0)
+	Check("Lanes lit alone", Lit() == "lanes", Lit())
+	local want = { heal = -1, shield = -1, damage = 1, miss = 1, combo = 0, alert = 0, aura = 0, power = 0, low = 0,
+		combat = 0, reward = 0, other = 0 }
+	for _, you in ipairs({ 0, -0.1 * 520 / page.SCALE, 60 }) do
+		local wrong = {}
+		for group, side in pairs(want) do
+			if ns.SelfTextSideOf(group, you) ~= side then wrong[#wrong + 1] = group end
+		end
+		Check(("Lanes: each kind its lane (you at %d)"):format(you), #wrong == 0, table.concat(wrong, ","))
+	end
+	db.selfText_healSide = "right"
+	Check("Lanes: a kind's own Side still wins", ns.SelfTextSideOf("heal", 0) == 1)
+	db.selfText_healSide = "general"
+	page.DragTo(0, 40)
+	Check("dragged: no tile lit", Lit() == "", Lit())
+	page.ApplyPosition("high")
+	Check("High: over you, higher", db.selfTextSide == "over" and db.selfTextHeight == 80 and Lit() == "high", Lit())
+	page.ApplyPosition("over")
+	Check("Over you: lit alone (not High)", Lit() == "over", Lit())
+	Check("an unknown position: nothing", page.ApplyPosition("nope") == false)
+	-- (The preview plays it: a heal's text on the left of a damage's.)
+	local board = page.board
+	board.layer.CreateFontString = NewText
+	db.selfTextSide, db.selfTextMerge = "lanes", false
+	board:Clear()
+	local heal = ns.SelfTextSample("+120", "heal", false, board)
+	local hit = ns.SelfTextSample("-26", "damage", false, board)
+	local combo = ns.SelfTextSample("<2 Combo Points>", "combo", false, board)
+	Check("Lanes in the preview: heal left, damage right, combo over you",
+		heal and hit and combo and heal.side == -1 and hit.side == 1 and combo.side == 0)
+	board:Clear()
+	db.selfTextSide, db.selfTextHeight, db.selfTextAcross, db.selfTextMerge = "free", 0, 0, true
+end
 
 -- Kinds: click one, its own Look panel opens (docked, as Combat Text's
 -- texts'), its settings the kind's; its row follows it; Clear in the panel.

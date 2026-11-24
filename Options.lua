@@ -564,11 +564,30 @@ local function BoxLine(parent)
 		name:SetPoint("LEFT", line, "LEFT", right, 0)
 		name.searchSkip = true
 		local box = ns.SkinEditBox(CreateFrame("EditBox", nil, line, "InputBoxTemplate"))
+		-- (A box that shows words, "With the UI" at 0: as many letters and as
+		-- wide as its longest, in the box's own font; the cap of 6 cut it to "With t".)
+		local letters = 6
+		if type(fmt) == "function" then
+			local measure = line:CreateFontString(nil, "ARTWORK")
+			local font, size, flags = box:GetFont()
+			if font then measure:SetFont(font, size, flags) else measure:SetFontObject("ChatFontNormal") end
+			local count = math.min(math.floor((maxV - minV) / step + 0.5), 200)
+			for i = 0, count do
+				local ok, text = pcall(fmt, math.min(maxV, minV + i * step))
+				if ok and text then
+					text = tostring(text)
+					letters = math.max(letters, #text) -- (bytes: never fewer than its letters)
+					measure:SetText(text)
+					width = math.max(width or 36, math.ceil(measure:GetStringWidth() or 0) + 14)
+				end
+			end
+			measure:Hide()
+		end
 		box:SetSize(width or 36, 20)
 		box:SetPoint("LEFT", name, "RIGHT", label ~= "" and 8 or 0, 0)
 		box:SetAutoFocus(false)
 		box:SetJustifyH("RIGHT")
-		box:SetMaxLetters(6)
+		box:SetMaxLetters(letters)
 		box:EnableMouseWheel(true)
 		box.searchLabel = label
 		-- (its id, as Remember gives a checkbox: the Why window's links, /cine find <key>; a { get, set }

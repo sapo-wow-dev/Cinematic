@@ -1,7 +1,7 @@
 -- /cine debug previewwatch [off]: records how the Style previews move while
 -- you use the settings as usual, to find how one ends up over a page's rows
 -- (2026-11-17: the Smart tab's preview over its rows, seen once, not on
--- purpose). On till turned off, across reloads. Logged, into
+-- purpose). On by itself (dev copy), till turned off. Logged, into
 -- CinematicDB.previewWatchLog (the last 400 lines):
 --   - every move StylePages.lua makes (ns.PreviewTrace): pop out, put back,
 --     the window placed (which side), the settings slid down or back, the
@@ -121,7 +121,7 @@ end
 
 function ns.PreviewWatch(arg)
 	if arg == "off" then
-		CinematicDB.previewWatchOn = nil
+		CinematicDB.previewWatchOn = false -- (kept off: else it's on by itself)
 		ns.PreviewTrace = nil
 		if ticker then ticker:Cancel() end
 		ticker, overlap = nil, nil
@@ -136,9 +136,13 @@ end
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_LOGIN")
+-- (On by itself in the dev copy since 2026-11-24: the preview over the rows
+-- comes "sometimes", and a command to catch it was one too many. Its check
+-- does nothing while our settings are closed. Off only by "off".)
 loader:SetScript("OnEvent", function()
-	if CinematicDB and CinematicDB.previewWatchOn then
-		Say("--- after a reload: still watching")
+	if CinematicDB and CinematicDB.previewWatchOn ~= false then
+		CinematicDB.previewWatchLog = CinematicDB.previewWatchLog or {}
+		Say("--- login: watching")
 		Start(true)
 	end
 end)

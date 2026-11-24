@@ -37,6 +37,17 @@ local LOOKS = {
 	{ id = "small", label = L["Small"], font = "bebas", edge = "game", size = 0.8, crit = 1.3, motion = "up" },
 }
 ns.SELF_TEXT_LOOKS = LOOKS
+-- Quick positions: each sets Side, Height and Across at once. pic: its tile's
+-- picture, where heals, damage and the rest sit (-1 left, 0 over you, 1 right),
+-- as over your shoulder (you left of the middle: your free side is left).
+local POSITIONS = {
+	{ id = "over", label = L["Over you"], side = "over", height = 0, pic = { 0, 0, 0 } },
+	{ id = "free", label = L["Free side"], side = "free", height = 0, pic = { -1, -1, -1 } },
+	{ id = "split", label = L["Split"], side = "split", height = 0, pic = { 1, -1, 1 } },
+	{ id = "lanes", label = L["Lanes"], side = "lanes", height = 0, pic = { -1, 1, 0 } },
+	{ id = "high", label = L["High"], side = "over", height = 80, pic = { 0, 0, 0 }, lift = true },
+}
+ns.SELF_TEXT_POSITIONS = POSITIONS
 local LOOK_KEYS = { font = "selfTextFont", edge = "selfTextEdge", size = "selfTextSize", crit = "selfTextCrit",
 	motion = "selfTextMotion" }
 
@@ -162,6 +173,24 @@ function page.ApplyLook(id)
 		end
 	end
 	return false
+end
+
+local function PositionOf(id)
+	for _, place in ipairs(POSITIONS) do if place.id == id then return place end end
+end
+function page.ApplyPosition(id)
+	local place = PositionOf(id)
+	if not place then return false end
+	local db = DB()
+	db.selfTextSide, db.selfTextHeight, db.selfTextAcross = place.side, place.height, 0
+	return true
+end
+-- (Lit by the settings as they are, not the last click: dragged away from
+-- it, or Side changed below, no tile says it's in use.)
+function page.PositionOn(id)
+	local place, db = PositionOf(id), DB()
+	return place ~= nil and (db.selfTextSide or ns.DEFAULTS.selfTextSide) == place.side
+		and (db.selfTextHeight or 0) == place.height and (db.selfTextAcross or 0) == 0
 end
 
 function ns.CreateSelfTextStylePanel(kit)
@@ -582,17 +611,71 @@ function ns.CreateSelfTextStylePanel(kit)
 	end
 
 	-- General ---------------------------------------------------------------------------
-	local generalTop = stack:Header(content, L["Who draws it"])
+	-- (No heading over it: the row names itself, and "Who draws it" twice read
+	-- as a mistake. The row's own heading tops the tab.)
+	local before = select("#", content:GetChildren())
 	rows.Choices(L["Who draws it"], "selfTextBy", {
 		{ "ours", L["Ours"], L["Ours, with this page's look and place."] },
 		{ "game", L["The game's"], L["The game's own, as it normally is."] },
 		{ "none", L["None"], L["No combat text about you."] },
 	})
+	local generalTop = select(before + 1, content:GetChildren())
+	-- Quick positions: tiles as Quick looks', each a picture of where heals
+	-- (green), damage (red) and the rest (gold) sit by you.
+	stack:Header(content, L["Quick positions"])
+	local placesRow = CreateFrame("Frame", nil, content)
+	placesRow:SetSize(560, 50)
+	stack:Add(placesRow, "label")
+	page.positionButtons = {}
+	local PIC_COLORS = { { 0.1, 1, 0.1 }, { 1, 0.15, 0.15 }, { 1, 0.82, 0 } }
+	local lastPlace
+	for _, place in ipairs(POSITIONS) do
+		local tile = CreateFrame("Button", nil, placesRow)
+		tile:SetSize(100, 48)
+		local back = tile:CreateTexture(nil, "BACKGROUND")
+		back:SetAllPoints()
+		back:SetColorTexture(0.1, 0.1, 0.12, 0.95)
+		tile.edges = ns.MakeStyleEdges and ns.MakeStyleEdges(tile)
+		-- You: a small figure at the bottom; the bars above, by lane.
+		local you = tile:CreateTexture(nil, "ARTWORK")
+		you:SetSize(10, 12)
+		you:SetPoint("BOTTOM", tile, "BOTTOM", 0, 18)
+		you:SetColorTexture(0.42, 0.35, 0.24, 1)
+		for index, lane in ipairs(place.pic) do
+			local bar = tile:CreateTexture(nil, "ARTWORK")
+			bar:SetSize(16, 3)
+			bar:SetPoint("BOTTOM", tile, "BOTTOM", lane * 26, (place.lift and 36 or 31) + (index - 1) * 4)
+			local c = PIC_COLORS[index]
+			bar:SetColorTexture(c[1], c[2], c[3], 1)
+		end
+		local name = tile:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		name:SetPoint("BOTTOM", 0, 4)
+		name:SetText(place.label)
+		kit.Tooltip(tile, (L["Sets Side, Height and Across to %s."]):format(place.label))
+		tile:SetScript("OnClick", function()
+			page.ApplyPosition(place.id)
+			Changed()
+			kit.Refresh()
+		end)
+		tile.Refresh = function(self)
+			local on = page.PositionOn(place.id)
+			if self.edges and self.edges.SetColor then self.edges:SetColor(on and 1 or 0.3, on and 0.82 or 0.3, on and 0 or 0.3) end
+			name:SetTextColor(on and 1 or 0.85, on and 0.82 or 0.85, on and 0 or 0.85)
+			self:SetEnabled(Ours() and true or false)
+			self.on = on
+		end
+		tile.value = place.id
+		if lastPlace then tile:SetPoint("LEFT", lastPlace, "RIGHT", 8, 0) else tile:SetPoint("LEFT", placesRow, "LEFT", 0, 0) end
+		lastPlace = tile
+		kit.AddControl(tile)
+		page.positionButtons[#page.positionButtons + 1] = tile
+	end
 	rows.Section(L["Where"])
 	rows.Choices(L["Side"], "selfTextSide", {
 		{ "over", L["Over you"], L["Right over you."] },
 		{ "free", L["Free side"], L["On your side away from the screen's middle."] },
 		{ "split", L["Split"], L["Taken on one side, gained on the other."] },
+		{ "lanes", L["Lanes"], L["Heals on your left, damage on your right, the rest over you."] },
 	}, Ours)
 	rows.Check("selfTextFollow", L["Follow the Shoulder Cam"], L["Sits beside you while the camera is over your shoulder."], Ours)
 	rows.Slider("selfTextHeight", L["Height"], -300, 300, 5, "%d", nil, L["Moves it up or down from your spot."], Ours)
