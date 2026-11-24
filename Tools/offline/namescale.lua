@@ -160,6 +160,44 @@ if Update and ns.PlateNameZoom then
 	end
 	ns.plateNameSizeTest = nil
 	Check(flips == 0, ("zooming: a size hovering at a pixel line holds one height (%d flips in 3 s)"):format(flips))
+	-- A plate measured while still scaling in (2026-11-24, a merchant's
+	-- title many times its size): its name back to the zoom's size once the
+	-- plate is its size, and never past it meanwhile.
+	ns.PlateNameZoom(8)
+	local want = Look()
+	local effective = 0.001
+	GetPhysicalScreenSize = function() return 2560, 1440 end -- luacheck: ignore 111 121
+	local stuck = { pxBase = 14, GetEffectiveScale = function() return effective end }
+	ns.PlateNamePxPer(stuck)
+	Update(stuck)
+	local early = stuck.size
+	stuck.pxPer = 0.05 -- (a measure taken before the guard: the old way in)
+	stuck.px = nil
+	Update(stuck)
+	local tiny = stuck.size
+	effective = 0.64
+	for _ = 1, 3 do
+		ns.PlateNamePxPer(stuck)
+		Update(stuck)
+	end
+	local late = stuck.size
+	Check(early <= want * 1.25 and tiny <= want * 1.25,
+		("scaling in: the name no bigger than the zoom's size (%.2f, %.2f; zoom's %.2f)"):format(early, tiny, want))
+	Check(math.abs(late / want - 1) < 0.1 and stuck.px ~= nil,
+		("scaling in: at its size, the zoom's size on a whole pixel (%.2f; zoom's %.2f)"):format(late, want))
+	-- Walking with plates not held at one size (CineMode off, your own scale
+	-- CVars): the plate's scale drifts a little each draw. Once settled, the
+	-- name keeps its size (no new font set, no steps while walking: the
+	-- user's rule, 2026-11-23); a 10x wrong measure still comes undone above.
+	local steps, last = 0, stuck.size
+	for i = 1, 60 do
+		effective = 0.64 * (1 + 0.25 * math.sin(i / 6))
+		ns.PlateNamePxPer(stuck)
+		Update(stuck)
+		if stuck.size ~= last then steps = steps + 1 end
+		last = stuck.size
+	end
+	Check(steps == 0, ("walking: the name's size held while its plate's scale drifts 25%% (%d steps)"):format(steps))
 	ns.PlateNameZoom(0)
 end
 

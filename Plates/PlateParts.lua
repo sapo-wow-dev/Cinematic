@@ -774,13 +774,8 @@ local function DrawName(text, name, unit)
 		local rim = outline > 0 and NameStyle(row, "OutlineColor") == "custom"
 		local scale = text.size * (tonumber(NameStyle(row, "Size")) or 1) * (look and look.size or 1)
 		SetNameFont(text, object, file, size, scale, Outlined(flags, rim and 0 or outline))
-		-- (Pixels of letter height per unit of text.size: the game draws
-		-- whole-pixel heights only, UpdateLook.)
-		local _, screenHigh = GetPhysicalScreenSize()
-		local okScale, effective = pcall(text.GetEffectiveScale, text)
-		if okScale and Known(effective) and screenHigh then
-			text.pxPer = size * (scale / text.size) * effective * screenHigh / 768
-		end
+		-- (Its font's height per unit of text.size, for pxPer below.)
+		text.pxBase = text.size > 0 and size * (scale / text.size) or nil -- (0: no NaN measure)
 		if text.SetTextScale then text:SetTextScale(1) end
 		if rim then
 			ns.SetTextRim(text, outline, ns.NameLookColor(row, "OutlineColor"))
@@ -808,6 +803,12 @@ local function DrawName(text, name, unit)
 		text:ClearAllPoints()
 		text:SetPoint("BOTTOM", name, "BOTTOM", 0, text.y)
 	end
+	-- (Pixels of letter height per unit of text.size: the game draws
+	-- whole-pixel heights only, UpdateLook. Measured every draw, not only as
+	-- the font is set: taken once while a plate was still scaling in, its
+	-- tiny scale stuck, and the name (and its title) drew many times its size,
+	-- 2026-11-24. ns.PlateNamePxPer.)
+	ns.PlateNamePxPer(text)
 	-- (The game's own words: a secret name shows all the same.)
 	local ok, words = pcall(name.GetText, name)
 	if not ok then
@@ -908,8 +909,15 @@ local function UpdateLook(text)
 		if not (held and math.abs(px - held) < 0.5 + ns.PLATE_NAME_REACH.PIXEL_HOLD) then
 			held = math.max(1, math.floor(px + 0.5))
 		end
-		text.px = held
-		size = held / text.pxPer
+		-- (Never far from the zoom's size: a whole pixel is a few percent of
+		-- a name. A wrong measure (a name a pixel high, raised to 1) drew
+		-- names many times their size: the zoom's size as it is then.)
+		if math.abs(held / px - 1) > 0.25 then
+			text.px = nil
+		else
+			text.px = held
+			size = held / text.pxPer
+		end
 	else
 		text.px = nil
 	end
@@ -917,6 +925,28 @@ local function UpdateLook(text)
 	text.size, text.y, text.dirty = size, y, true
 end
 ns.PlateNameUpdateLook = UpdateLook -- (Tools/offline/namescale.lua)
+
+-- A text's pixels of letter height per unit of size (pxPer), from its font
+-- (pxBase, set with it) and its scale on screen now. A new measure drops the
+-- held pixel height, so the next UpdateLook snaps afresh. A measure too small
+-- to be a name (its plate scaling in from nothing): none, no snapping.
+function ns.PlateNamePxPer(text)
+	local base = text.pxBase
+	if not base then return end
+	local _, screenHigh = GetPhysicalScreenSize()
+	local ok, effective = pcall(text.GetEffectiveScale, text)
+	local pxPer = ok and Known(effective) and screenHigh and base * effective * screenHigh / 768 or nil
+	if pxPer and pxPer < 2 then pxPer = nil end
+	local old = text.pxPer
+	if pxPer == old or (pxPer and old and math.abs(pxPer / old - 1) < 0.01) then return end
+	-- (Settled on a whole pixel (text.px): kept unless the measure is off by
+	-- 2x or more, the wrong one taken while scaling in (10x). A plate's scale
+	-- drifting as a unit walks, plates not held at one size, set no new size:
+	-- no steps while walking, the user's rule 2026-11-23. Release review
+	-- 2026-11-24, Tools/offline/namescale.lua's walking case.)
+	if pxPer and old and text.px and pxPer / old > 0.5 and pxPer / old < 2 then return end
+	text.pxPer, text.px = pxPer, nil
+end
 function ns.PlateNameZoom(yards) zoom = yards end -- (the same: the camera's zoom, which farWatch reads in game)
 
 -- Shows or hides our text for a plate, at alpha (nil: hidden), and while
