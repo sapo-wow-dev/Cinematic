@@ -4001,23 +4001,75 @@ for kind, cvars in pairs(PLATE_KIND_CVARS) do
 		end
 	end
 end
--- Far names smaller (WoW Forever, names over heads on: the Name Style page):
--- ours are sized by the camera's zoom only, as big far off as at 8 yards,
--- where the game's own shrink (2026-11-23). The game can shrink plates by
--- their distance from the camera itself (rule forever.plate.no-distance-scale,
--- changed: /cine debug nameconsole), and our names on them shrink too. Set as
--- ONE step, not a gradual scale (each size change pops a whole pixel: rule
--- all.fontstring.scale-steps-by-font-size; the user won't have names
--- resizing as they walk): full size out to 40 yards from the camera, MIN
--- past it (min scale reached at nameplateMaxDistance less 5, so the two
--- distances cross and the game jumps). Held with every plate on; kept
--- through fights (plate settings can't change in one, and a let go then
--- would shrink every far name at once). /cine debug farnames.
-ns.plates.FAR_NAME_CVARS = ns.CVarSet("Far names smaller", "Forever names over heads: plates past 40 yards from the "
-	.. "camera at 0.65 size, in one step", { secure = true, playerWins = true, values = {
-		nameplateMinScale = "0.65", nameplateMaxScale = "1", nameplateMaxScaleDistance = "41",
-		nameplateMinScaleDistance = "5",
-	} })
+-- Plates one size (WoW Forever, names over heads on: the Name Style page).
+-- The game scales plates by their distance from the CAMERA (rule
+-- forever.plate.no-distance-scale; its default nameplateMinScale 0.8 shrinks
+-- them gradually), so zooming alone resized our names on them (/cine debug
+-- zoomstep run 1: you moved 0.00 yd, 0.64 -> 0.42 between zoom 4 and 5).
+-- Held at one size (min = max = 1) with every plate on, our names styled;
+-- kept through fights (plate settings can't change in one). Far names is our
+-- own step past 28 yards from YOU (PlateParts' plateSightNear.out). Till
+-- 2026-11-23 this set was the game's one step at ~40 yards from the camera
+-- (min 0.65 / 0.8, distances 41 and 5): fix card
+-- Tools/audits/2026-11-23-far-names-step.md. /cine debug farnames, zoomstep.
+ns.plates.FAR_NAME_CVARS = ns.CVarSet("Plates one size", "Forever names over heads: the game's plates one size at "
+	.. "any camera distance (our own Far names step goes by your distance)", { secure = true, playerWins = true,
+	values = { nameplateMinScale = "1", nameplateMaxScale = "1" } })
+-- The Name Style page's Far names: the step's size (1: no step). 0.8 when
+-- unset or not a number from 0.5 to 1.
+function ns.plates.FarStep()
+	local step = tonumber(ns.db and ns.db.plateNameFarStep)
+	if not step or step < 0.5 or step > 1 then return 0.8 end
+	return step
+end
+-- Whether plates are held one size now: every plate on (CineMode), names
+-- styled, Forever (the name jump test's walk without it aside). "Names
+-- styled" as PlateParts styles them: Enable Style on (the Style part loaded)
+-- and Name Style, its default when unset (a page switch off gates all: fix
+-- card Tools/audits/2026-11-23-far-names-style-gate.md).
+function ns.plates.FarWanted()
+	if ns.farNamesTestOff or not platesForced or ns.isRetail then return false end
+	if not (ns.StyleOn and ns.StyleOn()) then return false end
+	local named = ns.db.plateNameStyle
+	if named == nil then named = ns.DEFAULTS.plateNameStyle end
+	return named and true or false
+end
+-- The old set's leftovers (once): the game kept its distances 41 and 5 with
+-- no saved value of yours to put back (zoomstep and farnames runs,
+-- 2026-11-23: nameplateMinScale 0.8, 41, 5 with nothing held), so they go
+-- back to the game's own defaults. 41 and 5 were only ever the old set's,
+-- so a saved "yours" of 41 / 5 is a leftover too: V1 skipped when one was
+-- saved and never ran again (farnames run 14 still had 41 / 5), so V2 puts
+-- both back and logs what it found either way.
+-- (On ns.plates: this file's main chunk is at Lua's 200 locals.)
+-- Forever only: the old set was Forever's, so no other client has leftovers
+-- (fix card Tools/audits/2026-11-23-far-names-leftovers.md); no default to
+-- read (no GetCVarDefault): left as they are.
+function ns.plates.FarLeftovers()
+	if ns.isRetail or ns.isClassicEra or ns.db.farNamesLeftoversV2 or InCombatLockdown() then return end
+	if GetCVar("nameplateMaxScaleDistance") == nil then return end
+	ns.db.farNamesLeftoversV2, ns.db.farNamesLeftoversV1 = true, nil
+	local saved = ns.db.savedCVars or {}
+	local found = {}
+	local GetDefault = C_CVar and C_CVar.GetCVarDefault or GetCVarDefault
+	for name, old in pairs({ nameplateMaxScaleDistance = 41, nameplateMinScaleDistance = 5 }) do
+		local ok, default = false, nil
+		if type(GetDefault) == "function" then ok, default = pcall(GetDefault, name) end
+		if not ok then default = nil end
+		if default and tonumber(saved[name]) == old then saved[name] = default end
+		local now = GetCVar(name)
+		found[#found + 1] = ("%s %s (saved %s)"):format(name, tostring(now), tostring(saved[name]))
+		if tonumber(now) == old and default then pcall(SetCVar, name, default) end
+	end
+	ns.Log("cvar", "Far names smaller leftovers: " .. table.concat(found, ", ") .. "; 41 / 5 put back to the game's")
+end
+-- Plates one size held or let go as wanted (a secure set: in a fight, it
+-- waits like the rest). Called by each plate pass and the page's choice.
+function ns.plates.FarStepChanged()
+	if InCombatLockdown() then return end
+	ns.plates.FarLeftovers()
+	ns.ApplyCVarSet(ns.plates.FAR_NAME_CVARS, ns.plates.FarWanted())
+end
 -- Two parts of it only where a row can show them here: friendly players'
 -- whole plates (else their plates stay names only, as your setting says),
 -- and their pets', guardians', totems' and minions' plates (else as your
@@ -4473,7 +4525,10 @@ function ns.UpdatePlates(cinematic, elapsed)
 	-- (Let go before the other plate switches take hold, and taken up after
 	-- they let go: they share settings, and each puts back what it saved.)
 	-- (Far names smaller: with every plate on, names over heads styled, Forever.)
-	ns.ApplyCVarSet(ns.plates.FAR_NAME_CVARS, platesForced and not ns.isRetail and ns.db.plateNameStyle and true or false)
+	-- (ns.farNamesTestOff: the name jump test's walk without it, NameScaleTest.lua.
+	-- Its step: the Name Style page's Far names, 1 = none.)
+	-- (FarStepChanged holds or lets go the set itself; in a fight both waited.)
+	ns.plates.FarStepChanged()
 	if not platesForced then
 		ns.ApplyCVarSet(FORCED_PLATE_CVARS, false)
 		ns.ApplyCVarSet(ns.plates.FRIEND_BODY_CVARS, false)

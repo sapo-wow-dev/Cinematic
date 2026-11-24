@@ -97,24 +97,51 @@ function ns.PlatePartFrames(unitFrame, part)
 	return list
 end
 
--- The game sets some of these parts' alpha itself (the cast bar fades out
--- after a cast), so while a part is faded its alpha is put back to ours every
--- frame, as with the plates. [part frame] = alpha.
-local held = {}
+-- The parts faded: [part frame] = our alpha. The game sets a few of these
+-- parts' alpha itself, so those are put back to ours every frame (polled:
+-- [part frame] = true): the threat glows (their fade animations), and the cast
+-- bar where a client has no CastBarsContainer (the game fades the bar inside
+-- it, not the container; read in the Forever source, 2026-11-23). The rest are
+-- only checked every SWEEP seconds, in case: all ~17 parts of 15 plates every
+-- frame were 0.134 ms a frame (Tools/perf/ledger.md 2026-11-23).
+-- (The file's main chunk is at Lua's 200 locals: the keeper's own are in a
+-- do block.)
+local held, polled = {}, {}
 local keeper = CreateFrame("Frame")
 keeper:Hide()
-ns.SetOnUpdate(keeper, ns.Profiled("Plate parts keeper", function(self)
-	for frame, wanted in pairs(held) do
-		-- (A secret alpha can't be compared: set ours again.)
-		local alpha = frame:GetAlpha()
-		if (issecretvalue and issecretvalue(alpha)) or alpha ~= wanted then
-			frame:SetAlpha(wanted)
+-- (For Tools/offline/platekeeper.lua.)
+ns.platePartsKept = { held = held, polled = polled, keeper = keeper }
+do
+local SWEEP = 0.5
+local sweepAt = 0
+local function PutBack(frame, wanted)
+	-- (A secret alpha can't be compared: set ours again.)
+	local alpha = frame:GetAlpha()
+	if (issecretvalue and issecretvalue(alpha)) or alpha ~= wanted then
+		frame:SetAlpha(wanted)
+		return true
+	end
+end
+function ns.platePartsKept.Tick(self)
+	local now = GetTime()
+	if now >= sweepAt then
+		sweepAt = now + SWEEP
+		for frame, wanted in pairs(held) do
+			if PutBack(frame, wanted) and not polled[frame] then
+				ns.ProfileCount("plate parts: put back by the sweep")
+			end
+		end
+	else
+		for frame in pairs(polled) do
+			PutBack(frame, held[frame])
 		end
 	end
 	if not next(held) then
 		self:Hide()
 	end
-end))
+end
+end
+ns.SetOnUpdate(keeper, ns.Profiled("Plate parts keeper", ns.platePartsKept.Tick))
 
 -- WoW Forever's personal resource bars are a plate too: theirs are left alone.
 local function PersonalPlate()
@@ -126,16 +153,17 @@ end
 -- solid white when let go at 1). [part frame] = alpha.
 local own = {}
 
-local function Fade(frame, alpha)
+local function Fade(frame, alpha, poll)
 	if alpha < 1 then
 		if not held[frame] then
 			local base = frame:GetAlpha()
 			own[frame] = type(base) == "number" and not (issecretvalue and issecretvalue(base)) and base or 1
 		end
 		held[frame] = alpha * own[frame]
+		polled[frame] = poll or nil
 		frame:SetAlpha(held[frame])
 	elseif held[frame] then
-		held[frame] = nil -- (let go: back to the game's own, then the game's again)
+		held[frame], polled[frame] = nil, nil -- (let go: back to the game's own, then the game's again)
 		local base = own[frame] or 1
 		frame:SetAlpha(base)
 		own[frame] = nil
@@ -148,6 +176,27 @@ local function Fade(frame, alpha)
 			trp.a = base
 		end
 	end
+end
+
+ns.platePartsKept.Fade = Fade
+
+-- Whether a part's frames are put back every frame (see polled).
+function ns.platePartsKept.Polled(unitFrame, part)
+	return part == "Threat" or (part == "CastBar" and not Usable(unitFrame.CastBarsContainer))
+end
+
+-- A plate gone: its parts let go (back to the game's own alpha), so the keeper
+-- no longer checks a pooled plate nobody sees. A new unit on it is faded again
+-- at once (NAME_PLATE_UNIT_ADDED's ApplyPlate).
+do
+local function LetGoHeld(frame)
+	if held[frame] then Fade(frame, 1) end
+end
+function ns.platePartsKept.LetGo(unitFrame)
+	for _, part in ipairs(ns.PLATE_PARTS) do
+		EachPartFrame(unitFrame, part, LetGoHeld)
+	end
+end
 end
 
 -- A plate showing its name alone has it centred over where the health bar
@@ -393,7 +442,8 @@ local bandOf = {} -- (unused: left from the old bands, no band is set)
 -- The size's curve (yards; size close: SIZE_CLOSE from you, camera right in;
 -- far: FAR_YARDS from the camera), the UI scale it was measured at, and the
 -- pixel hold. (On ns: this file's main chunk is at Lua's cap of 200 locals.)
-ns.PLATE_NAME_REACH = { PAD = 3.4, SIZE_CLOSE = 8, REF_SCALE = 0.64, PIXEL_HOLD = 0.35 }
+-- (FIXED_ZOOM: the camera distance a Fixed size is taken at, a middle zoom.)
+ns.PLATE_NAME_REACH = { PAD = 3.4, SIZE_CLOSE = 8, REF_SCALE = 0.64, PIXEL_HOLD = 0.35, FIXED_ZOOM = 8 }
 local swaps = {} -- [plate] = { started = time, to = band }
 local zoom = 0 -- the camera's distance from you, this frame
 
@@ -435,6 +485,34 @@ local SIGHT_CLEAR = 0.2 -- seconds (the fade itself: the page's Fade time)
 -- titles showing through a whole building were worse (the user, 2026-11-23).
 -- far: [plate] = true while faded that way (for /cine debug npcnames).
 ns.plateSightNear = { is = {}, at = {}, left = {}, back = {}, service = {}, far = {}, RETURN = 1.5, pruneAt = 0 }
+-- Far names (the Name Style page, 2026-11-23: the user's "from your
+-- character"): past 28 yards from YOU (the same check as near) a name is a
+-- step smaller, ns.plates.FarStep (1: no step). Not the game's plate step,
+-- which goes by the camera, so zooming moved it (/cine debug zoomstep).
+-- out: [plate] = true past 28 yards, false within (nil: not known yet: taken
+-- at once); outAt: [plate] = since when a change has been seen, applied after
+-- OUT_HOLD (a unit walking on the line doesn't flip). Out of fights only:
+-- in a fight the check can't be read and a name keeps its size.
+ns.plateSightNear.out, ns.plateSightNear.outAt, ns.plateSightNear.OUT_HOLD = {}, {}, 1
+-- A reading (out: past 28 yards) for a plate at now: the first taken at
+-- once, a change once it has held OUT_HOLD. True when a known one changed
+-- (its name to size again). (Tools/offline/namescale.lua.)
+function ns.plateSightNear.Decide(plate, out, now)
+	local near = ns.plateSightNear
+	local was = near.out[plate]
+	if was == out then
+		near.outAt[plate] = nil
+		return false
+	end
+	if was == nil then
+		near.out[plate], near.outAt[plate] = out, nil
+		return false
+	end
+	near.outAt[plate] = near.outAt[plate] or now
+	if now - near.outAt[plate] < near.OUT_HOLD then return false end
+	near.out[plate], near.outAt[plate] = out, nil
+	return true
+end
 
 -- How far down a plate's name fades while its plate is dimmed: 0 within 28
 -- yards; past them only a Service NPCs name (out of fights), to its setting;
@@ -453,7 +531,9 @@ local function Look(away, smooth)
 	if not FAR_USED then
 		return 1, Style("plateNameY") -- (the size: the row's, in DrawName)
 	end
-	local camera = math.max(1, zoom + (away or UNIT_YARDS)) + ns.PLATE_NAME_REACH.PAD
+	-- (Size by Fixed, the Name Style page: one size, as at FIXED_ZOOM.)
+	local cameraZoom = Style("plateNameSizeBy") == "fixed" and ns.PLATE_NAME_REACH.FIXED_ZOOM or zoom
+	local camera = math.max(1, cameraZoom + (away or UNIT_YARDS)) + ns.PLATE_NAME_REACH.PAD
 	local far = FAR_YARDS + ns.PLATE_NAME_REACH.PAD
 	-- (No bigger or higher than the close point: with the camera pushed in by
 	-- a wall, perspective past it grew names to the size cap, seen on video.)
@@ -811,6 +891,10 @@ local function UpdateLook(text)
 	local smooth = FAR_USED and not ns.plateNameSteps
 	local size, y = Look(nil, smooth)
 	if ns.plateNameSizeTest then size = ns.plateNameSizeTest(text, smooth) or size end
+	-- (Far names: past 28 yards from you, a step smaller. See plateSightNear.out.)
+	if FAR_USED and text.plate and ns.plateSightNear.out[text.plate] and ns.plates and ns.plates.FarStep then
+		size = size * ns.plates.FarStep()
+	end
 	-- Whole pixels: the game draws letters at whole-pixel heights only (rule
 	-- all.fontstring.scale-steps-by-font-size, /cine debug fontstep), so the
 	-- size is set on one (every font set is one that shows) and held there
@@ -864,6 +948,7 @@ local function OwnName(plate, alpha, lineAlpha)
 	end
 	local share = SwapFade(plate)
 	local into, out = SwapShares(share)
+	text.plate = plate -- (its plate: UpdateLook's far step, plateSightNear.out)
 	UpdateLook(text)
 	DrawName(text, name, unit)
 	text:SetAlpha(alpha * into)
@@ -987,9 +1072,9 @@ local function ApplyPlate(plate, personal)
 		-- going on it, HealVisionFrames.lua's PlateLayersOf; let go of here
 		-- without touching its alpha, or the keeper put ours back over it.)
 		if healHeld and part == "CastBar" then
-			EachPartFrame(unitFrame, part, function(frame) held[frame], own[frame] = nil, nil end)
+			EachPartFrame(unitFrame, part, function(frame) held[frame], own[frame], polled[frame] = nil, nil, nil end)
 		else
-			EachPartFrame(unitFrame, part, Fade, level)
+			EachPartFrame(unitFrame, part, Fade, level, ns.platePartsKept.Polled(unitFrame, part))
 		end
 	end
 	-- (And the guild line under a name shown alone: PlateGuild.lua. It sits
@@ -3354,9 +3439,11 @@ watcher:SetScript("OnEvent", function(_, event, unit)
 		sight[plate], dimSince[plate], clearSince[plate] = nil, nil, nil
 		ns.plateSightNear.is[plate], ns.plateSightNear.at[plate] = nil, nil
 		ns.plateSightNear.service[plate], ns.plateSightNear.far[plate] = nil, nil
+		ns.plateSightNear.out[plate], ns.plateSightNear.outAt[plate] = nil, nil
 		if Usable(plate.UnitFrame) then
 			CentreName(plate.UnitFrame, false)
 			OwnName(plate, nil)
+			ns.platePartsKept.LetGo(plate.UnitFrame)
 		end
 		if icons[plate] then
 			icons[plate]:Hide()
@@ -3456,6 +3543,15 @@ ns.SetOnUpdate(farWatch, ns.Profiled("Plate names", function(self, elapsed)
 				close = okNear and Known(answer) and answer == true or false
 			end
 			near.is[plate], near.at[plate] = close, now + FAR_CHECK
+			-- Far names' step (from you, out of fights): a change held OUT_HOLD
+			-- first, the first reading at once. Its name sized again.
+			if unit and not fighting and near.Decide(plate, not close, now) then
+				local text = plate.UnitFrame and texts[plate.UnitFrame]
+				if text and text:IsShown() and Usable(plate.UnitFrame.name) then
+					UpdateLook(text)
+					if text.dirty then DrawName(text, plate.UnitFrame.name, unit) end
+				end
+			end
 		end
 		-- (The names test's no sight check step: never dimmed. NamesTest.lua.)
 		-- (floor: how far down it fades, nil for not at all: past 28 yards only

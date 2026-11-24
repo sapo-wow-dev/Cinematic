@@ -41,6 +41,9 @@ local function Check(ok, text)
 end
 
 local Look = ns.PlateNameSizeAt
+-- (The curve and zoom checks below are Size by Zoom's: Fixed is the default
+-- since 2026-11-23, checked with the Size by checks further down.)
+ns.db.plateNameSizeBy = "zoom"
 Check(Look ~= nil and ns.PlateNameReach == nil, "ns.PlateNameSizeAt found; no per-distance guess (ns.PlateNameReach) any more")
 if not Look then return print("1 FAILED") end
 
@@ -159,5 +162,161 @@ if Update and ns.PlateNameZoom then
 	Check(flips == 0, ("zooming: a size hovering at a pixel line holds one height (%d flips in 3 s)"):format(flips))
 	ns.PlateNameZoom(0)
 end
+
+-- Size by (the Name Style page, 2026-11-23): Zoom follows the camera, Fixed
+-- keeps one size at any zoom (as at a middle zoom), and back.
+if ns.PlateNameZoom then
+	Check(ns.DEFAULTS.plateNameSizeBy == "fixed", "Size by: Fixed to start (the user, 2026-11-23)")
+	ns.plateNameNoUiFix = true
+	ns.PlateNameZoom(2)
+	local zoomedIn = Look()
+	ns.PlateNameZoom(30)
+	local zoomedOut = Look()
+	Check(zoomedIn > zoomedOut,
+		("Size by Zoom: bigger zoomed in (%.3f) than out (%.3f)"):format(zoomedIn, zoomedOut))
+	ns.db.plateNameSizeBy = "fixed"
+	ns.PlateNameZoom(2)
+	local fixedIn = Look()
+	ns.PlateNameZoom(30)
+	local fixedOut = Look()
+	ns.PlateNameZoom(ns.PLATE_NAME_REACH.FIXED_ZOOM)
+	ns.db.plateNameSizeBy = "zoom"
+	local middle = Look()
+	Check(fixedIn == fixedOut and fixedIn == middle, ("Size by Fixed: one size at any zoom (%.3f, %.3f), the middle "
+		.. "zoom's (%.3f)"):format(fixedIn, fixedOut, middle))
+	ns.PlateNameZoom(0)
+end
+
+-- Far names from you (2026-11-23, "from your character"): past 28 yards a
+-- name is FarStep smaller, whatever the zoom; the first reading at once, a
+-- change after a second; never the game's camera step any more.
+if Update and ns.plateSightNear and ns.plateSightNear.Decide then
+	local near, Decide = ns.plateSightNear, ns.plateSightNear.Decide
+	local plateA = {}
+	Check(Decide(plateA, true, 10) == false and near.out[plateA] == true, "first reading (past 28) taken at once")
+	Check(Decide(plateA, false, 10.2) == false and near.out[plateA] == true, "a change waits: still past at 0.2 s")
+	Check(Decide(plateA, true, 10.6) == false and near.outAt[plateA] == nil, "the change undone before 1 s: nothing, wait reset")
+	Decide(plateA, false, 11)
+	Check(Decide(plateA, false, 12.1) == true and near.out[plateA] == false, "a change held 1 s: applied, its name to size again")
+	-- The size: past 28 a step smaller at any zoom, within full; Same size: none.
+	ns.plateNameNoUiFix = true
+	local PX = 14 * 1.2
+	local inText, outText = { pxPer = PX, plate = {} }, { pxPer = PX, plate = {} }
+	near.out[inText.plate], near.out[outText.plate] = false, true
+	ns.db.plateNameFarStep = 0.8
+	local ratios = {}
+	for _, z in ipairs({ 2, 8, 15 }) do
+		ns.PlateNameZoom(z)
+		inText.px, outText.px = nil, nil
+		Update(inText)
+		Update(outText)
+		ratios[#ratios + 1] = outText.size / inText.size
+	end
+	local good = true
+	for _, ratio in ipairs(ratios) do if math.abs(ratio - 0.8) > 0.08 then good = false end end
+	Check(good, ("past 28 yards 0.8 of near at zoom 2, 8, 15 (%.2f, %.2f, %.2f; whole pixels)"):format(ratios[1], ratios[2],
+		ratios[3]))
+	ns.db.plateNameFarStep = 1
+	inText.px, outText.px = nil, nil
+	Update(inText)
+	Update(outText)
+	Check(inText.size == outText.size, "Far names Same size: past 28 the same size")
+	ns.db.plateNameFarStep = nil
+	ns.PlateNameZoom(0)
+end
+
+-- Plates one size (since 2026-11-23): while wanted, the game's plates held at
+-- min = max = 1 whatever Far names says (our step is our own); yours back
+-- when let go; the old set's leftover distances 41 / 5 put back to the
+-- game's defaults once.
+do
+	-- luacheck: push ignore 111 112 113 121 122
+	local cvars = { nameplateMinScale = "0.8", nameplateMaxScale = "1", nameplateMaxScaleDistance = "41",
+		nameplateMinScaleDistance = "5" }
+	local defaults = { nameplateMaxScaleDistance = "10", nameplateMinScaleDistance = "10" }
+	local oldGet, oldSet, oldCSet, oldDefault = GetCVar, SetCVar, C_CVar, GetCVarDefault
+	GetCVar = function(name) return cvars[name] end
+	SetCVar = function(name, value) if cvars[name] ~= nil then cvars[name] = tostring(value) end end
+	GetCVarDefault = function(name) return defaults[name] end
+	C_CVar = { SetCVar = SetCVar, GetCVar = GetCVar }
+	local far = ns.plates.FAR_NAME_CVARS
+	local wanted = true
+	local oldWanted = ns.plates.FarWanted
+	ns.plates.FarWanted = function() return wanted end
+	-- (V1 already ran and skipped, a 41 saved as yours: farnames run 14's case.)
+	ns.db.farNamesLeftoversV1, ns.db.farNamesLeftoversV2 = true, nil
+	ns.db.savedCVars = { nameplateMaxScaleDistance = "41" }
+	ns.plates.FarStepChanged()
+	Check(cvars.nameplateMaxScaleDistance == "10" and cvars.nameplateMinScaleDistance == "10" and ns.db.farNamesLeftoversV2
+		and ns.db.savedCVars.nameplateMaxScaleDistance == "10",
+		("the old set's leftovers 41 / 5 put back to the game's 10 / 10 (%s / %s, saved %s), V1 run or not"):format(
+		cvars.nameplateMaxScaleDistance, cvars.nameplateMinScaleDistance, tostring(ns.db.savedCVars.nameplateMaxScaleDistance)))
+	Check(cvars.nameplateMinScale == "1" and cvars.nameplateMaxScale == "1" and far.active,
+		"wanted: plates held one size (min " .. cvars.nameplateMinScale .. ", max " .. cvars.nameplateMaxScale .. ")")
+	for _, step in ipairs({ 1, 0.9, 0.65 }) do
+		ns.db.plateNameFarStep = step
+		ns.plates.FarStepChanged()
+		Check(cvars.nameplateMinScale == "1" and far.active, ("Far names %s: plates still one size (%s)"):format(step,
+			cvars.nameplateMinScale))
+	end
+	wanted = false
+	ns.plates.FarStepChanged()
+	Check(cvars.nameplateMinScale == "0.8" and not far.active, "not wanted (CineMode off): let go, yours back ("
+		.. cvars.nameplateMinScale .. ")")
+	cvars.nameplateMaxScaleDistance = "41"
+	cvars.nameplateMinScaleDistance = "5"
+	ns.plates.FarStepChanged()
+	Check(cvars.nameplateMaxScaleDistance == "41", "the leftovers cleanup runs once only (a later 41 is yours)")
+	ns.db.plateNameFarStep = 0.3
+	Check(ns.plates.FarStep() == 0.8, "a value out of range reads as 0.8")
+	ns.db.plateNameFarStep, ns.db.farNamesLeftoversV1, ns.db.farNamesLeftoversV2 = nil, nil, nil
+	ns.plates.FarWanted = oldWanted
+	GetCVar, SetCVar, C_CVar, GetCVarDefault = oldGet, oldSet, oldCSet, oldDefault
+	-- luacheck: pop
+end
+
+-- The ruler (/cine debug namescale ruler): marks your spot, shows yards
+-- walked from it, and logs what our name does with its yards. A walk 0 to
+-- 32 yards, our name dimming at 29.
+-- luacheck: push ignore 111 112 113 121 122
+do
+	local px, py, now, shots, tick = 0, 0, 100, 0, nil
+	local oldTicker, oldTime = C_Timer.NewTicker, GetTime
+	C_Timer.NewTicker = function(_, fn) tick = fn return { Cancel = function() tick = nil end } end
+	GetTime = function() return now end
+	UnitPosition = function() return py, px end
+	UnitExists = function() return true end
+	UnitName = function() return "Fishing Supplier" end
+	UnitDistanceSquared = function() return nil, false end
+	CheckInteractDistance = function(_, n) return px < (n == 4 and 28 or 10) end
+	GetCameraZoom = function() return 12 end
+	Screenshot = function() shots = shots + 1 end
+	local ourAlpha = 1
+	local ours = { IsVisible = function() return true end, GetAlpha = function() return ourAlpha end }
+	local plate = { GetAlpha = function() return 1 end, UnitFrame = {} }
+	C_NamePlate = { GetNamePlateForUnit = function() return plate end }
+	local oldState = ns.PlateNameState
+	ns.PlateNameState = function() return nil, 8, 0.69, -41, ours end
+	local chunk = assert(loadfile("Dev/NameScaleTest.lua"))
+	chunk("Cinematic", ns)
+	ns.NameScaleTest("ruler")
+	Check(tick ~= nil, "ruler: started, ticking")
+	for x = 0, 32, 0.5 do
+		px, now = x, now + 0.1
+		if x >= 29 then ourAlpha = 0.4 end
+		if tick then tick() end
+	end
+	local log = table.concat(CinematicDB.nameScaleLog, "\n")
+	Check(log:find("29.0 yd: our name alpha 1 %-> 0.4") ~= nil, "ruler: our name dimming logged at 29.0 yd")
+	Check(log:find("28.0 yd: game's range <28yd %-> >28yd") ~= nil, "ruler: the game's 28-yard band logged where it changed")
+	Check(log:find("  30.0 yd: range >28yd", 1, true) ~= nil and log:find("  31.0 yd: range", 1, true) == nil,
+		"ruler: a line every 2 yards")
+	Check(shots == 2, ("ruler: a screenshot per change (%d)"):format(shots))
+	ns.NameScaleTest("ruler")
+	Check(tick == nil and log ~= "" and CinematicDB.nameScaleLog[#CinematicDB.nameScaleLog] :find("ruler stopped") ~= nil,
+		"ruler: typed again, stops")
+	C_Timer.NewTicker, GetTime, ns.PlateNameState = oldTicker, oldTime, oldState
+end
+-- luacheck: pop
 
 print(failed == 0 and "ALL PASS" or (failed .. " FAILED"))

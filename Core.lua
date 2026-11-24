@@ -1250,6 +1250,15 @@ DEFAULTS.plateNameCloseSize = 1.3
 DEFAULTS.plateNameCloseY = -45
 DEFAULTS.plateNameFarSize = 0.27
 DEFAULTS.plateNameFarY = -38
+-- Forever: how names are sized (Name Style page's Size, 2026-11-23, for the
+-- user's A/B): "zoom" by the camera's zoom (the close and far points
+-- above), "fixed" one size, as at a middle zoom (PlateParts' FIXED_ZOOM).
+-- Fixed to start (the user, 2026-11-23: "make fixed zoom default").
+DEFAULTS.plateNameSizeBy = "fixed"
+-- Forever: Far names smaller's one step past ~40 yards from the camera
+-- (Effects.lua FAR_NAME_CVARS' nameplateMinScale): 1 = no step; 0.9, 0.8
+-- (since 2026-11-23, fix card 2026-11-23-far-names-step) or 0.65 (before).
+DEFAULTS.plateNameFarStep = 0.8
 DEFAULTS.plateNameShadow = "inherit" -- (the game's: off, it barely shows)
 DEFAULTS.plateNameShadowX = 1
 DEFAULTS.plateNameShadowY = -1

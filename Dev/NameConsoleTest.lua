@@ -135,6 +135,7 @@ ns.TestKit.Define({
 	key = "nameConsoleTest",
 	title = "Name console settings",
 	about = "the game's name and nameplate distance settings read, the plate scale ones tried: nothing to do",
+	needs = "A city street with NPCs near and far, out of a fight",
 	cvars = CANDIDATES,
 	putBack = function(extra)
 		if InCombatLockdown() then return "in a fight: settings not put back, /cine debug nameconsole restore after it" end

@@ -11724,6 +11724,8 @@ local function CreateNameStylePanel()
 		if ns.ServiceKindsChanged then ns.ServiceKindsChanged() end
 		if ns.RefreshAllPlates then ns.RefreshAllPlates() end
 		if ns.RefreshPlateGuilds then ns.RefreshPlateGuilds() end
+		-- (Far names' step: at once, not at the next plate pass.)
+		if ns.plates and ns.plates.FarStepChanged then ns.plates.FarStepChanged() end
 		if scene then scene:Refresh() end
 		for _, button in pairs(rowButtons) do button:Refresh() end
 	end
@@ -11733,6 +11735,16 @@ local function CreateNameStylePanel()
 	local switch = PageSwitch(content, "plateNameStyle", L["Enable Page"],
 		L["Names look as this page says. When it's off, they look the way the nameplate draws them."], subtitle, Changed)
 	local stack = Stack(switch, "check")
+	-- Two tabs on WoW Forever (2026-11-23): Look (all the page had) and Size
+	-- (Size by, Far names: built at the page's end, NameTabsAdopt there).
+	local nameTabsHosts, NameTabsPick, NameTabsShown, NameTabsAdopt
+	if not ns.isRetail then
+		nameTabsHosts, NameTabsPick, NameTabsShown, NameTabsAdopt = ns.PageTabsBelow(content, switch, {
+			{ L["Look"], L["How each kind of name looks."] },
+			{ L["Size"], L["How big names are, near and far."] },
+		}, "Name Style/page", nil, nil, 1)
+		ns.nameStylePickTab = NameTabsPick -- (/cine debug namesize opens the Size tab)
+	end
 
 	-- A sample name of each kind, drawn as its row says (NameRowLook.lua):
 	-- its font, size, outline (in its color), shadow, opacity, color, glow,
@@ -12499,6 +12511,41 @@ local function CreateNameStylePanel()
 		controls[#controls + 1] = button
 	end
 
+	-- The Size tab (WoW Forever, 2026-11-23, the user: "add these as a tab in
+	-- the page"): names by the camera's zoom or one size, and Far names' step
+	-- past 28 yards from you (our own, PlateParts' plateSightNear.out: zooming
+	-- never moves it; was the game's plate step by the camera's distance).
+	-- Everything above goes onto the Look tab first. Retail's plates size
+	-- themselves: no Size tab, no tabs there.
+	if nameTabsHosts then
+		NameTabsAdopt(switch)
+		local sizeHost = nameTabsHosts[2]
+		local top = CreateFrame("Frame", nil, sizeHost)
+		top:SetSize(1, 1)
+		top:SetPoint("TOPLEFT", sizeHost, "TOPLEFT", 0, 1)
+		local sizeStack = Stack(top, "check")
+		local sizeRows = ns.StyleRows(ns.lowHealthKit, sizeHost, sizeStack, Changed, "plateNameStyle")
+		-- (Its choices kept for /cine debug namesize: the ones made below.)
+		local made = select("#", sizeHost:GetChildren())
+		-- (Joined buttons, not rows.Choices' checkboxes: those wrapped and sat on
+		-- the row above, namesize run 1's shot.)
+		sizeRows.Segments(L["Size by"], "plateNameSizeBy", {
+			{ "zoom", L["Zoom"], L["Names grow as you zoom in and shrink as you zoom out."] },
+			{ "fixed", L["Fixed"], L["Names keep one size at any zoom."] },
+		})
+		sizeRows.Segments(L["Far names"], "plateNameFarStep", {
+			{ 1, L["Same size"], L["Far names stay the size of near ones."] },
+			{ 0.9, L["A bit smaller"], L["Names more than 28 yards from you get 10% smaller, in one step."] },
+			{ 0.8, L["Smaller"], L["Names more than 28 yards from you get 20% smaller, in one step."] },
+			{ 0.65, L["Much smaller"], L["Names more than 28 yards from you get 35% smaller, in one step."] },
+		})
+		ns.nameSizeChoices = {}
+		local children = { sizeHost:GetChildren() }
+		for i = made + 1, #children do
+			if children[i].value ~= nil then ns.nameSizeChoices[#ns.nameSizeChoices + 1] = children[i] end
+		end
+	end
+
 	-- Distance and timing. Retail's plates scale themselves: one size, and
 	-- names raised as a whole. WoW Forever's don't, so names are sized and
 	-- placed by the camera's zoom (PlateParts' Look): set at two points,
@@ -12554,7 +12601,10 @@ local function CreateNameStylePanel()
 		end)
 	end
 
-	canvas:SetScript("OnShow", PageShown(Refresh, content))
+	canvas:SetScript("OnShow", PageShown(function()
+		Refresh()
+		if NameTabsShown then NameTabsShown() end
+	end, content))
 	canvas:Hide()
 	RegisterSubpage(canvas, "Name Style", L["Name Style"])
 end
