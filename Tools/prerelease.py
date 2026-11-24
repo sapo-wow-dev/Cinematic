@@ -26,6 +26,10 @@ Runs side by side, each a PASS or FAIL line, then one line for all of it:
 - the offline tests of fixed bugs (OFFLINE_TESTS: no FAIL line), and every
   other offline test found in Tools/offline (found_tests: one printing PASS /
   FAIL / ok lines that isn't an audit matrix), so none is left out;
+- the player impact scan (Tools/release-audit.py impact): player text,
+  pages, /cine words, key bindings, CVars, TOC files, hooks and busy-event
+  handlers added or gone since the last tag (listed, never a FAIL: the
+  review raises each with the user), and the script's own selftest;
 - other addons as installed against Support/ (Tools/addon-check.py: a name
   our support uses gone fails; what changed since its baseline is listed);
 - the audit kit (Tools/audit.py): its selftest, every fix card's matrix
@@ -143,6 +147,7 @@ OFFLINE_TESTS = [
     ("addon test: steps that showed nothing skipped, frames never made can't pass", "Tools/offline/addontestsmarts.lua"),
     ("test kit (/cine debug kitcheck): steps, undo, stop, login put back", "Tools/offline/testkit.lua"),
     ("old tests on the kit's logs (Dev/TestKitWrap.lua): context, run before kept, totals", "Tools/offline/testkitwrap.lua"),
+    ("test queue (Dev/TestQueue.lua): offer, Run all, results apart, Stop queue, reload pickup, cut-off", "Tools/offline/testqueue.lua"),
     ("a part the Show-in rows let go comes back at the alpha it was given (theme's name strip)", "Tools/offline/parthold.lua"),
     ("the side-by-side test's probe finds every part on both target frames of you", "Tools/offline/selfpairprobe.lua"),
     ("the test box's timers: step, run, time left, took", "Tools/offline/testboxclock.lua"),
@@ -261,7 +266,10 @@ def judge_test(ok, output):
     # (PASS lines or "ok" ones (servicefardim's), or none but an all-passed end
     # (enginerules' OK, shelforder's ALL PASS); any FAIL line or exit 1 fails.)
     lines = [l.strip() for l in output.splitlines()]
-    failed = [l for l in lines if l.startswith("FAIL")]
+    # (A test's own FAIL line is "FAIL <name>" or a bare "FAIL"; "FAIL: ..." is
+    # a dev test's verdict text the test echoes and checks on purpose, as
+    # totemhit.lua does with "FAIL: 0 numbers drawn", 2026-11-23.)
+    failed = [l for l in lines if l == "FAIL" or l.startswith(("FAIL ", "FAIL\t"))]
     passed = sum(1 for l in lines if l.startswith(("PASS ", "ok ")))
     if failed or not ok:
         return False, "; ".join(failed[:4]) or last_line(output)
@@ -288,6 +296,12 @@ def judge_since(ok, output):
     shown = [l.strip() for l in lines if l.startswith("  ")]
     detail = last_line(output, "expectations changed")
     return True, detail + "".join("\n      " + l[:220] for l in shown[:20])
+
+
+def judge_impact(ok, output):
+    # (Never a FAIL: each line is a flag the release review raises with the user. All shown.)
+    lines = [l.strip() for l in output.splitlines() if l.startswith("  ")]
+    return ok, last_line(output, "impact scan:") + "".join("\n      " + l[:220] for l in lines)
 
 
 def judge_addons(ok, output):
@@ -362,6 +376,11 @@ def selftest():
     --nogame. PASS/FAIL per check."""
     global WOW
     real, failed = WOW, 0
+    for name, output, want in (("a test's FAIL line fails it", "PASS a\nFAIL b\n", False),
+                               ("an echoed 'FAIL: ...' verdict text doesn't", "PASS a\nFAIL: 0 drawn\nALL PASS\n", True)):
+        got = judge_test(True, output)[0]
+        print("%s  test lines: %s" % ("PASS" if got == want else "FAIL", name))
+        failed += 0 if got == want else 1
     run = ('{ kind = "%s", when = "%s", finished = true, summary = "s", new = {%s}, '
            'results = { ["x"] = { detail = "d" } } }')
     cases = [
@@ -508,6 +527,10 @@ def main():
                         judge_since))
         jobs.append(Job("upgrade check (existing players' settings)", [PY, "-I", "Tools/upgrade-check.py"],
                         judge_upgrade))
+        jobs.append(Job("release audit's own checks (Tools/release-audit.py selftest)",
+                        [PY, "-I", "Tools/release-audit.py", "selftest"], judge_test))
+        jobs.append(Job("player impact scan (labels, pages, commands, keys, CVars, hooks, load)",
+                        [PY, "-I", "Tools/release-audit.py", "impact"], judge_impact))
         jobs.append(Job("other addons vs our support", [PY, "-I", "Tools/addon-check.py"], judge_addons))
         scratch = tempfile.mkdtemp(prefix="cine-prerelease-")
         for client in CLIENTS:

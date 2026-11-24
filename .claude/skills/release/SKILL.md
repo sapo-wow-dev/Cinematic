@@ -1,6 +1,6 @@
 ---
 name: release
-description: The user typed /release. Gather everything uncommitted in C:\dev\Cinematic, run the checks, review it (with `full`, also find missing translations and guidebook updates), and stop for the user's review; on their go-ahead, commit it in player-readable commits, push, tag the next version and push the tag (the GitHub Action uploads to CurseForge).
+description: The user typed /release. Gather everything uncommitted in C:\dev\Cinematic, run the checks, audit all shipped code since the last release (one subagent per area) and raise every change existing players could notice as a flag for the user, review it (with `full`, also find missing translations and guidebook updates), and stop for the user's review; on their go-ahead, commit it in player-readable commits, push, tag the next version and push the tag (the GitHub Action uploads to CurseForge).
 argument-hint: "[quick|full] [nogame] [version, default next patch] [anything to leave out or note]"
 disable-model-invocation: true
 ---
@@ -144,13 +144,54 @@ without asking.
      theme's, a row's or a wheel's value).
    Fix nothing yet; failures go in the review.
 
-4. **Review the diff.** Read the whole `git diff` plus the new files, topic by
-   topic. Look for real problems: bugs, nil errors, wrong client branches
-   (`ns.isRetail` lumps Classic Era in), secret values used in comparisons on
-   retail/Forever, raw `SetScript("OnUpdate")` instead of `ns.SetOnUpdate`,
-   leftover debug prints, half-finished work, player text in British spelling
-   or missing from `Locales/esES.lua`, a dev-only feature that leaked into
-   `Cinematic.toc`. Note what each change does for players.
+4. **Release code audit: last tag -> this release** (not in `/release quick`).
+   The whole release, not only what's uncommitted: commits made between
+   releases were never reviewed by one. Only what ships counts:
+   `python -I Tools/release-audit.py areas --out <scratchpad>/release-audit`
+   writes one diff per area (a big area in parts), with the commits since
+   the tag that touched it at the top. Start one subagent per part, all in
+   one message (general-purpose; run them while step 3 runs), each told:
+   - read its diff file in full, and the code around each hunk (the whole
+     function, its callers, the settings it reads) in the working tree;
+   - look for real problems: bugs, nil errors, wrong client branches
+     (`ns.isRetail` lumps Classic Era in), secret values compared or used as
+     keys on retail/Forever, raw `SetScript("OnUpdate")` instead of
+     `ns.SetOnUpdate`, code that runs with its addon or page off
+     (`ns.AddonUp`, page switch gates all), taint (protected frames moved or
+     shown in fights), Lua traps (the wow-api and lua-multireturn memories),
+     leftover debug prints, half-finished work, dev-only code reachable in the
+     player copy, player text in British spelling;
+   - and, separately, **what a player who already has the addon would
+     notice** (step 4a): something on screen that looks, sits or behaves
+     differently with no setting changed, something gone, a new thing shown
+     they never turned on, a changed control or label, more CPU in fights;
+   - report, no edits: each finding with file:line, what goes wrong (inputs ->
+     what the player sees), severity (bug / risk / nit), the fix; each player
+     change with the commit that made it; "nothing" is a fine answer.
+   Check each reported finding yourself (read the code) before it goes in
+   the review: drop what doesn't hold. A fix the user picks goes through
+   the /audit skill (a card, its own commit) when it changes behavior;
+   step 9.
+
+4a. **Player impact audit** (not in `/release quick`). Everything an update
+   could change for players who already have the addon, from three places:
+   - the upgrade check (step 3: their saved settings);
+   - the player impact scan (step 3's line, alone:
+     `python -I Tools/release-audit.py impact`): `LABEL GONE` (an option,
+     page or message renamed or removed: guides, `/cine find`, what they
+     learned), `PAGE`, `COMMAND`, `BINDING` (a gone one loses their key),
+     `CVAR` (a game setting Cinematic now sets, or stops setting), `TOC`,
+     `HOOK` (a new hook on a game frame: taint, other addons), `LOAD` (more
+     busy-event handlers or OnUpdates: CPU in fights and cities);
+   - the subagents' "a player would notice" notes (step 4).
+   Merge them into one list of **flags**, one per change (a scan line and an
+   agent note about the same change are one flag), each: what the player
+   sees, which commit, and a verdict: **meant and told** (the commit subject
+   or What's new says it), **meant but not told** (needs a subject, What's new
+   or a once-only update), or **a finding** (with the fix). Every flag goes
+   to the user, even ones that look meant: the user decides, never the
+   review. A `LABEL GONE` that's only a reworded tooltip may be grouped
+   ("5 tooltips reworded") but still listed.
 
 5. **Translations** (`full` only). `python -I .claude/skills/release/translations.py`
    lists, per language (all nine in `Locales/`, esES included), the new
@@ -183,8 +224,11 @@ without asking.
    - the version it will be (vX.Y.Z),
    - each planned commit: subject + its files,
    - check results (pass, or the exact failure),
-   - **for existing players**: each upgrade check line with its verdict
-     (meant, and what they'll see; or a finding), or "nothing changes",
+   - **Flags for existing players** (step 4a), its own section near the
+     top, worst first: each flag with what they'll see, the commit, and its
+     verdict; or "nothing changes for existing players",
+   - the release code audit (step 4): how many parts were read, and its
+     findings below with the rest,
    - in game: each client's NEW FAIL lines, or "skipped", or "running:
      say check log with your answer" (then phase 2 starts by reading them,
      and stops again if there's a NEW FAIL),
@@ -192,10 +236,15 @@ without asking.
    - `full` only: guidebook, each page and what it needs (one line each),
    - review findings, worst first, each with file:line and a proposed fix,
    - untracked files you'd leave out, and why.
-   Then ask with AskUserQuestion what to do: fix the findings first
-   (recommended when there are any), release as is, or stop. They may also
-   reword subjects or drop things. **End the turn there.** Never go on to
-   phase 2 in the same turn as the review.
+   Then ask with AskUserQuestion: first, for the flags that aren't "meant
+   and told", one question per flag (up to 4 per call; more: the first 4,
+   the rest listed and asked after) with its choices: keep it and tell
+   players (a subject / What's new line), keep the old behavior for existing
+   players (a once-only update or a gate), fix it, or leave it; then what to
+   do with the release: fix the findings first (recommended when there are
+   any), release as is, or stop. They may also reword subjects or drop
+   things. **End the turn there.** Never go on to phase 2 in the same turn
+   as the review.
 
 ## Phase 2: on the user's go-ahead
 
@@ -271,7 +320,11 @@ without asking.
 
 For a fix that has to go out now. Typing `/release quick` is the go-ahead:
 no review, no stop, no questions unless something below blocks it. Skipped
-on purpose: diff review, translations, guidebook, What's new. The full
+on purpose: the release code audit and player impact audit (steps 4, 4a),
+translations, guidebook, What's new. So the next plain or full release
+audits from the last tag a reviewed release made, not the quick one: in
+step 4 and 4a, pass that tag (`areas <tag> --out ...`, `impact <tag>`), and
+say so in its review. The full
 offline check still runs (step 2a): GitHub runs it on every push.
 
 1. `main`, not behind `origin/main` (fetch first), identity `sapo` +
