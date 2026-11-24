@@ -1695,7 +1695,7 @@ for page, keys in pairs({
 		"cardDiscoverOn", "cardNewZoneOn", "cardDepartureOn", "cardArrivalOn", "cardRestedOn", "cardSleepBagOn", "cardAchievementOn", "cardExploreOn", "cardAlmostOn", "cardStepOn",
 		"cardReputationOn", "cardCollectOn",
 		"cardProfessionOn", "cardQuestOn", "cardClearedOn", "cardRareOn", "cardBattlegroundOn", "cardStreakOn",
-		"cardBossDownOn", "cardFelledOn", "cardRevivedOn" },
+		"cardBossDownOn", "cardFelledOn", "cardRevivedOn", "cardCombatPvpOn" },
 	cameraModes = { "shoulderCam", "skyrideCam" }, -- Cameras > General's Enable Cameras: Shoulder Cam, Skyriding Cam
 	visualEffects = { "letterboxPage", "tintPage", "weatherPage", "graphicsPlus", "musicInCinematic" }, -- (the Atmosphere hub's pages' switches)
 	-- Style > General's Enable Style: the Style hub's pages' switches.
