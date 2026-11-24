@@ -10573,6 +10573,44 @@ do
 		return slotA[4] < slotB[4]
 	end
 
+	-- The bar being placed: its grid's numbers, for Goal and FadedGoal. (Made
+	-- once, not as two closures per bar per pass: ~0.7 KB a bar, 10 passes a
+	-- second in fights, ~21 KB/s. Tools/perf/ledger.md 2026-11-23.)
+	-- (On shownIn, no new locals: Frames.lua's main chunk is at Lua's 200.)
+	shownIn.placing = {}
+	function shownIn.Goal(icon, line, along)
+		local p = shownIn.placing
+		local cross = lineCross[line + 1] or lineCross[#lineCross]
+		if p.across then
+			SetGoal(icon, p.first[4] + along * p.stepX, cross)
+		else
+			SetGoal(icon, cross, p.first[5] + along * p.stepY)
+		end
+	end
+	-- The faded ones stay inside the game's own grid: the game sizes the
+	-- bar to its icons when it lays it out again (centered on its anchor),
+	-- so ones queued past its edge widened it and pulled the shown ones
+	-- off center. First the game's lines after the last shown, then the
+	-- whole places either side of the shown in theirs; any left over
+	-- share the first faded one's place (or, with none, go just after
+	-- the shown: on one line that's still inside the bar's width).
+	function shownIn.FadedGoal(icon, k)
+		local p, Goal = shownIn.placing, shownIn.Goal
+		if p.count == 0 then
+			Goal(icon, math.floor(k / p.lineLength), k % p.lineLength)
+		elseif k < p.below then
+			Goal(icon, p.lastLine + 1 + math.floor(k / p.lineLength), k % p.lineLength)
+		elseif k - p.below < p.side then
+			Goal(icon, p.lastLine, p.start + p.inLast + (k - p.below))
+		elseif k - p.below < 2 * p.side then
+			Goal(icon, p.lastLine, p.start - 1 - (k - p.below - p.side))
+		elseif p.below + 2 * p.side > 0 then
+			shownIn.FadedGoal(icon, 0)
+		else
+			Goal(icon, p.lastLine, p.start + p.inLast + (k - p.below - 2 * p.side))
+		end
+	end
+
 	-- A bar's icons (each with its game place) to their goals.
 	local function PlaceBar(icons)
 		table.sort(icons, ByPlace)
@@ -10593,41 +10631,14 @@ do
 			shownIn[icon] = readyTargets[icon] ~= 0 and not shownIn.hidden[icon]
 			if shownIn[icon] then count = count + 1 end
 		end
-		local function Goal(icon, line, along)
-			local cross = lineCross[line + 1] or lineCross[#lineCross]
-			if across then
-				SetGoal(icon, first[4] + along * stepX, cross)
-			else
-				SetGoal(icon, cross, first[5] + along * stepY)
-			end
-		end
 		local lastLine = math.max(0, math.floor((count - 1) / lineLength))
 		local inLast = count - lastLine * lineLength
-		-- The faded ones stay inside the game's own grid: the game sizes the
-		-- bar to its icons when it lays it out again (centered on its anchor),
-		-- so ones queued past its edge widened it and pulled the shown ones
-		-- off center. First the game's lines after the last shown, then the
-		-- whole places either side of the shown in theirs; any left over
-		-- share the first faded one's place (or, with none, go just after
-		-- the shown: on one line that's still inside the bar's width).
 		local below = count == 0 and 0 or math.max(0, #lineCross - 1 - lastLine) * lineLength
 		local start = (lineLength - inLast) / 2
-		local side = math.floor(start)
-		local function FadedGoal(icon, k)
-			if count == 0 then
-				Goal(icon, math.floor(k / lineLength), k % lineLength)
-			elseif k < below then
-				Goal(icon, lastLine + 1 + math.floor(k / lineLength), k % lineLength)
-			elseif k - below < side then
-				Goal(icon, lastLine, start + inLast + (k - below))
-			elseif k - below < 2 * side then
-				Goal(icon, lastLine, start - 1 - (k - below - side))
-			elseif below + 2 * side > 0 then
-				FadedGoal(icon, 0)
-			else
-				Goal(icon, lastLine, start + inLast + (k - below - 2 * side))
-			end
-		end
+		local p, Goal, FadedGoal = shownIn.placing, shownIn.Goal, shownIn.FadedGoal
+		p.first, p.stepX, p.stepY, p.across = first, stepX, stepY, across
+		p.count, p.lineLength, p.lastLine, p.inLast = count, lineLength, lastLine, inLast
+		p.below, p.start, p.side = below, start, math.floor(start)
 		local shown, faded = 0, 0
 		for _, icon in ipairs(icons) do
 			wanted[icon] = true
