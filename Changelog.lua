@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-24", title = "Search Cinematic",
+		text = "Type /cine find and a few words, or search in the settings, to get a list of every matching option; " ..
+			"click one to go straight to it." },
 	{ date = "2026-11-23", page = "Weather", title = "Weather on the screen",
 		text = "Frost creeps in on the screen's edges in snow, rain runs down the lens, and lightning flashes with " ..
 			"thunder in storms. Off to start with: turn each up on the Weather page." },

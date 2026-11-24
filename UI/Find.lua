@@ -23,6 +23,13 @@ local STOP = { a = true, an = true, the = true, of = true, to = true, ["for"] = 
 	["do"] = true, can = true, with = true, ["and"] = true, ["or"] = true, from = true, this = true,
 	that = true, when = true, what = true, where = true, your = true, you = true }
 
+-- Words that say what's done, not to what: a heading that's only one of them
+-- (Minimap Style's "Hide", over its zoom buttons, zone bar and dial) is worth
+-- a tooltip's word, not a label's, so "hide minimap" is the Minimap page (it
+-- hides the minimap), not that heading on the page with minimap in its name
+-- (70613ac). (Letterbox size's Size is a thing: still first.)
+local DOING = { hide = true, show = true }
+
 -- Other names for things, as typed (lower case) to the words the settings use.
 local SYNONYMS = {
 	["black bars"] = { "letterbox" }, ["cinematic bars"] = { "letterbox" }, ["taxi"] = { "flight" },
@@ -282,6 +289,10 @@ local function Score(entry, reading, fits)
 	local total, matched, own, labelHit = 0, 0, false, false
 	local covered = {}
 	local hits = {}
+	local field = FIELD[entry.rank] or 4
+	-- (A heading that's only a doing word: see DOING.)
+	local doing = entry.rank == 1 and entry.kind == "Frame" and entry.words.count == 1 and DOING[entry.words[1]]
+	if doing then field = TIP end
 	for _, word in ipairs(words) do
 		local fit = fits[word]
 		local label, at = Best(fit, entry.words)
@@ -291,7 +302,7 @@ local function Score(entry, reading, fits)
 		end
 		local tip = Best(fit, entry.tipWords)
 		local path = Best(fit, entry.pathWords)
-		local value = math.max(label * (FIELD[entry.rank] or 4), tip * TIP, path * PATH)
+		local value = math.max(label * field, tip * TIP, path * PATH)
 		if value > 0 then
 			total, matched = total + value, matched + 1
 			if label >= 0.6 or tip >= 0.6 then own = true end
@@ -325,7 +336,7 @@ local function Score(entry, reading, fits)
 			if covered[token] then kept = kept + 1 end
 		end
 	end
-	if size > 0 then total = total + 6 * kept / size end
+	if size > 0 and not doing then total = total + 6 * kept / size end
 	-- What it is: a page, a control, a long text; a tooltip's word only;
 	-- inside a tab or section that isn't open; a dev page; What's new.
 	if entry.rank == 0 then total = total + 8
