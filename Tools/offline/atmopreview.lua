@@ -203,7 +203,11 @@ Check("Haze strength 0 to start with, the modes' own gone", ns.DEFAULTS.dofScale
 do
 	local old = { dofScale = 2, dofIdle = 0.15, dofWalk = 0, depthOfField = true }
 	ns.HazeToOneStrength(old)
-	Check("an old save's haze: 0, the modes' own gone, its switch kept", old.dofScale == 0 and old.dofIdle == nil
+	-- (A picked 200% with Idle at 15%: the strongest haze it showed, 30%, kept.
+	-- Was 0 till the user's "keep hand-picked haze", 2026-11-23,
+	-- Tools/audits/2026-11-23-haze-keep-picked.md.)
+	Check("an old save's picked haze: kept as 30%, the modes' own gone, its switch kept",
+		math.abs((tonumber(old.dofScale) or -1) - 0.3) < 1e-6 and old.dofIdle == nil
 		and old.dofWalk == nil and old.depthOfField == true)
 	local file = io.open("Camera/CameraScripts.lua")
 	local text = file:read("*a")

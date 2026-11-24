@@ -5754,20 +5754,45 @@ end
 -- The haze: one strength for every camera, 0-100% (2026-11-23, the user:
 -- "haze seems to be doing nothing", "a scale from 0-100"). Haze strength was
 -- a 0-200% scale on each camera mode's own Edge haze (2.5% by default, the
--- haze hardly seen at any setting): it's the new default here and in every
--- saved profile and reset point, and the modes' own strengths go. Once.
--- (Before it, dofStrengthV1 raised the modes' 2.5% to 15%: dropped with them.)
+-- haze hardly seen at any setting). Here and in every saved profile and
+-- reset point the modes' own strengths go, and Haze strength becomes:
+-- - at the old defaults (Haze strength 100%, each mode's 2.5%, Walk and Run
+--   0): the new default, 0 (no haze);
+-- - a haze you'd picked yourself kept (the user, 2026-11-23: "keep
+--   hand-picked haze"): the strongest haze you saw, old mode strength times
+--   old scale (each mode's, a Haze strength of your own times every mode's;
+--   at most 100%). A strength you'd lowered to Off stays Off. Once.
+-- (Before it, the dev copy's dofStrengthV1 raised the modes' 2.5% to 15%,
+-- never in a release: 15% there is that default too, devRaised.)
 ns.OLD_DOF_MODE_KEYS = { "dofIdle", "dofCozy", "dofVista", "dofFish", "dofFlight", "dofWalk", "dofRun" }
-function ns.HazeToOneStrength(t)
+-- (v2.1.27's defaults: Core.lua then.)
+local OLD_DOF_MODE_DEFAULT = { dofIdle = 0.025, dofCozy = 0.025, dofVista = 0.025, dofFish = 0.025,
+	dofFlight = 0.025, dofWalk = 0, dofRun = 0 }
+local function Same(a, b) return math.abs(a - b) < 1e-6 end
+function ns.HazeToOneStrength(t, devRaised)
 	if type(t) ~= "table" then return end
-	t.dofScale = ns.DEFAULTS.dofScale -- (0, the default: set, not nil, as the live settings aren't filled again)
-	for _, key in ipairs(ns.OLD_DOF_MODE_KEYS) do t[key] = nil end
+	local scale = tonumber(t.dofScale)
+	local scalePicked = scale ~= nil and not Same(scale, 1)
+	local strongest
+	for _, key in ipairs(ns.OLD_DOF_MODE_KEYS) do
+		local old, value = OLD_DOF_MODE_DEFAULT[key], tonumber(t[key])
+		local picked = value ~= nil and not Same(value, old)
+			and not (devRaised and old > 0 and Same(value, 0.15))
+		if picked or scalePicked then
+			local seen = (value or old) * (scale or 1)
+			if not strongest or seen > strongest then strongest = seen end
+		end
+		t[key] = nil
+	end
+	-- (Set, not nil, as the live settings aren't filled again.)
+	t.dofScale = strongest and math.max(0, math.min(1, strongest)) or ns.DEFAULTS.dofScale
 end
 STEPS[#STEPS + 1] = function()
 	if ns.db.dofScaleV2 then return end
-	ns.HazeToOneStrength(ns.db)
+	local devRaised = ns.db.dofStrengthV1 and true or false
+	ns.HazeToOneStrength(ns.db, devRaised)
 	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
-		for _, saved in pairs(type(list) == "table" and list or {}) do ns.HazeToOneStrength(saved) end
+		for _, saved in pairs(type(list) == "table" and list or {}) do ns.HazeToOneStrength(saved, devRaised) end
 	end
 	ns.db.dofScaleV2 = true
 end

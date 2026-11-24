@@ -2280,7 +2280,8 @@ DEFAULTS.taxiZoomPauseVary = 3
 -- Visual Effects page's Haze (its row: the camera modes to start with). One
 -- switch (depthOfField) and one strength for every camera since 2026-11-23,
 -- dofScale 0-1 (it was 0-2 times each mode's own dof<Mode>, 2.5% then 15%:
--- the haze could hardly be seen). Migrations.lua's dofScaleV2 sets it once.
+-- the haze could hardly be seen). Migrations.lua's dofScaleV2 sets it once
+-- (a haze you'd picked yourself carried over, the old defaults to this one).
 -- 0 to start with (the user, 2026-11-23: "default should be 0 going
 -- forward"): no haze till you set one.
 DEFAULTS.depthOfField = true
