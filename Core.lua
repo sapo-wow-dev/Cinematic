@@ -1602,6 +1602,10 @@ DEFAULTS.plateAlwaysYourTarget = true
 -- Your target's name row, the Target section's Names: YourTarget, as its
 -- plate's (its rule names kinds), the Names grid's Target row. See Effects.
 ns.NAME_TARGET_ROWS = { "YourTarget" }
+-- The Target section's Mouseover names row (YourMouseover, a Names group of
+-- its own in Effects): the unit under the mouse shows its name while it's
+-- there, whatever its kind's names row says. Off to start.
+ns.NAME_MOUSE_ROWS = { "YourMouseover" }
 DEFAULTS.plateAlwaysGroupMembers = true
 DEFAULTS.plateAlwaysGroupMinions = true
 -- The Plate parts grid's rows (see PlateParts): each part of the plates that
@@ -1939,7 +1943,7 @@ for _, key in ipairs({ "Self", "HostileNPCs", "NeutralNPCs", "FriendlyNPCs", "Se
 		DEFAULTS["nameIn" .. suffix .. key] = false
 	end
 end
-for _, key in ipairs(ns.NAME_TARGET_ROWS) do
+for _, key in ipairs({ ns.NAME_TARGET_ROWS[1], ns.NAME_MOUSE_ROWS[1] }) do
 	for _, prefix in ipairs({ "nameAlways", "nameGroup", "nameCombat", "nameCombatPvP", "nameKeep" }) do
 		DEFAULTS[prefix .. key] = false
 	end

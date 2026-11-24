@@ -82,6 +82,11 @@ ns.NAME_GROUPS = {
 	-- naming kinds), which the game's one setting follows. On a plate: your
 	-- target's, as its row says, whatever its kind's row says.
 	{ key = "Target", label = L["Target"], plate = true, cvars = { "UnitNameFocused" }, rows = ns.NAME_TARGET_ROWS },
+	-- The Target section's Mouseover names row: the unit under the mouse shows
+	-- its name on its plate while the mouse is on it (ns.plates.hover), whatever
+	-- its kind's row says. No game setting of its own (plateOnly). Laid out on
+	-- the Target tab (mouse), not with the kinds.
+	{ key = "YourMouseover", label = L["Mouseover names"], plate = true, plateOnly = true, mouse = true, cvars = {} },
 }
 ns.OnLanguage(function() ns.TranslateFields(ns.NAME_GROUPS, "label") end)
 -- (The Names rows for your group's units: see PlateAlphas. On ns: this file's
@@ -2548,9 +2553,20 @@ ns.plates.hover = { plate = nil, level = 0, leaving = {} }
 function ns.plates.HoverWanted()
 	return ns.db.handlePlates and UnitRowWanted("YourMouseover") or false
 end
--- The plate under the mouse now, for the row (not your own).
+-- The Mouseover names row's (YourMouseover in the Names groups): the same
+-- watcher, the name alone. (nameLevel: its row's fade, see PlateAlphas.)
+function ns.plates.HoverNameWanted()
+	return ns.db.handlePlates and (nameLevel.YourMouseover or 0) > 0 or false
+end
+-- How far the Mouseover nameplates row lifts a plate: only while that row is
+-- on (the names row alone tracks the same plate for its name).
+function ns.plates.HoverBodyLevel(plate)
+	return ns.plates.HoverWanted() and ns.plates.HoverLevel(plate) or 0
+end
+-- The plate under the mouse now, for the rows (not your own).
 function ns.plates.HoverPlate()
-	if not (ns.plates.HoverWanted() and Ask(UnitExists, "mouseover")) or Ask(UnitIsUnit, "mouseover", "player") then
+	if not ((ns.plates.HoverWanted() or ns.plates.HoverNameWanted()) and Ask(UnitExists, "mouseover"))
+		or Ask(UnitIsUnit, "mouseover", "player") then
 		return nil
 	end
 	local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, "mouseover")
@@ -2754,7 +2770,7 @@ local function PlateAlpha(unit, plate, besidesHeal)
 		return 1
 	end
 	-- (The Target section's Mouseover row: the plate under the mouse, whole.)
-	alpha = math.max(alpha, ns.plates.HoverLevel(plate))
+	alpha = math.max(alpha, ns.plates.HoverBodyLevel(plate))
 	if plate == targetFade.plate and not (unit and IsTarget(unit) and AlwaysShownTarget(unit)) then
 		-- a frame before the target fade catches up with a new target
 		return math.max(alpha, duels.Level(plate))
@@ -2773,7 +2789,7 @@ local function PlateAlpha(unit, plate, besidesHeal)
 	-- hiding it after a fight left it a name alone, every part at 0, user
 	-- 2026-11-20. Dev/DuelTargetTest.lua.) The Mouseover row's too, under Your
 	-- target's hold: the mouse on it asks for it.
-	return math.max(alpha, duels.Level(plate), ns.plates.HoverLevel(plate))
+	return math.max(alpha, duels.Level(plate), ns.plates.HoverBodyLevel(plate))
 end
 -- (For Dev/DuelTargetTest.lua: a plate's duel level, and Your Target's hold
 -- on it: held, and how far down.)
@@ -2836,6 +2852,12 @@ function PlateAlphas(unit, plate, besidesHeal)
 			and not (ns.HasTarget() and AlwaysShownTarget(unit)) then
 			name = nameLevel.YourTarget
 		end
+		-- (The Mouseover names row's: the unit under the mouse, its name faded
+		-- in and out with the mouse, as far as the row's own fade says.)
+		local hover = (nameLevel.YourMouseover or 0) > 0 and ns.plates.HoverLevel(plate) * nameLevel.YourMouseover or 0
+		if hover > name then
+			name = hover
+		end
 	end
 	-- Quest Vision's Name: a quest mob's name kept on its plate. Its Quest
 	-- mark: the plate kept up for a quest mark.
@@ -2885,7 +2907,7 @@ function ns.DescribePlateNameKept(unit, plate)
 	local kind = unit and PlateKind(unit)
 	local targetRow = unit and IsTarget(unit) and ns.TargetNameRow(unit)
 	return ("kind=%s group=%s level=%s service=%s/%s/%s %s soft=%s forced=%s body=%.2f targetRow=%s targetLevel=%s " ..
-		"kept=%s plateWins=%s alphas=%s"):format(tostring(kind),
+		"kept=%s plateWins=%s mouseName=%s/%s alphas=%s"):format(tostring(kind),
 		tostring(kind and KIND_NAME_GROUP[kind]), tostring(kind and nameLevel[KIND_NAME_GROUP[kind]]),
 		tostring(nameLevel.ServiceNPCs), tostring(unit and ns.PlateServiceMatch(plate, unit)), tostring(ns.db.nameServiceShow),
 		ns.DescribePlateTitle and ns.DescribePlateTitle(plate, unit) or "",
@@ -2893,6 +2915,7 @@ function ns.DescribePlateNameKept(unit, plate)
 		tostring(unit and IsTarget(unit) and (targetRow or "none")), tostring(targetRow and nameLevel.YourTarget),
 		tostring(targetRow and NameKeptHere("YourTarget", InCombatLockdown())),
 		tostring(targetRow and ns.HasTarget() and AlwaysShownTarget(unit) or false),
+		tostring(nameLevel.YourMouseover), tostring(ns.plates.HoverLevel(plate)),
 		table.concat({ PlateAlphas(unit, plate) }, "/"))
 end
 
@@ -3565,6 +3588,9 @@ function ns.PlateItemsWhy()
 					if target and ns.TargetNameRow(unit) and (nameLevel.YourTarget or 0) > 0.05
 						and not (ns.HasTarget() and AlwaysShownTarget(unit)) then
 						Add("on", L["Names: the Target row keeps your target's name on its plate"])
+					end
+					if (nameLevel.YourMouseover or 0) > 0.05 and ns.plates.HoverLevel(plate) > 0.05 then
+						Add("on", L["Names: the Mouseover names row shows its name while your mouse is on it"])
 					end
 					if (kind == "FriendlyNPCs" or kind == "NeutralNPCs") and (nameLevel.ServiceNPCs or 0) > 0.05
 						and ns.PlateServiceMatch(plate, unit) then
@@ -4324,6 +4350,9 @@ local function SideShown(side)
 		if (nameLevel[row] or 0) > 0 then
 			return true
 		end
+	end
+	if (nameLevel.YourMouseover or 0) > 0 then
+		return true -- (the Mouseover names row: either side)
 	end
 	for kind in pairs(side.kinds) do
 		if (keptLevel[kind] or 0) > 0 or (combatCap[kind] or 0) > 0 or (nameLevel[KIND_NAME_GROUP[kind]] or 0) > 0

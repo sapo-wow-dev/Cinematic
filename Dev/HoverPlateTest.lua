@@ -19,6 +19,10 @@
 --            the other plates under it; shot
 --   4 leave  waits for the mouse to leave THAT plate: fading (not cut) at
 --            0.3 s, back down with the others and its hold let go after; shot
+--   5 names  the Mouseover names row alone (2026-11-24, the same player's
+--            wish): on a hovered NPC whose name is hidden, its name shows,
+--            its health bar stays hidden, the other plates as they were;
+--            mouse off: the name gone; shots
 -- Everything changed is put back at the end. Into CinematicDB.hoverPlateTestLog.
 -- Dev copy only.
 local _, ns = ...
@@ -57,7 +61,13 @@ local function PlateParts(plate)
 	local frame = plate and plate.UnitFrame
 	if not frame then return nil end
 	local bar = frame.healthBar or frame.HealthBar or (frame.HealthBarsContainer and frame.HealthBarsContainer.healthBar)
-	return Drawn(frame), Drawn(bar), Drawn(frame.name), bar ~= nil, frame.name ~= nil
+	-- (The name as drawn: the game's, or Name Style's own text in its place,
+	-- ns.PlateNameText: the game's is hidden then. Run 10 read only the game's.)
+	local name = Drawn(frame.name)
+	local ours = ns.PlateNameText and ns.PlateNameText(plate)
+	local oursAlpha = ours and Drawn(ours)
+	if oursAlpha and (not name or oursAlpha > name) then name = oursAlpha end
+	return Drawn(frame), Drawn(bar), name, bar ~= nil, frame.name ~= nil or ours ~= nil
 end
 
 local function OwnPlate()
@@ -118,6 +128,30 @@ end
 
 local heldPlate, heldColor -- (the plate step 3 read and its bar's color, for step 4)
 
+-- Waits for the mouse on an untargeted NPC with a plate, saying in the box
+-- why what's under it isn't taken (run 6 waited 90 s with no word why).
+local ASK = "Put your mouse on an NPC STANDING STILL (not a player walking by) and hold it there."
+local TELL = { target = "That's your TARGET: press Escape to clear it, then hover it again.",
+	you = "That's you: hover an NPC.",
+	player = "That's a PLAYER with no plate here: hover an NPC instead.",
+	none = "It has no nameplate here: try another NPC (a guard or a vendor)." }
+local function WaitHover(r, ask)
+	local said
+	r:WaitFor(ask or ASK, { check = function()
+		local plate = MousePlate()
+		if plate or not UnitExists("mouseover") then return plate end
+		local why = UnitIsUnit("mouseover", "player") and "you"
+			or (UnitExists("target") and UnitIsUnit("mouseover", "target")) and "target"
+			or UnitIsPlayer("mouseover") and "player" or "none"
+		local line = Who() .. ": " .. why
+		if line ~= said then
+			said = line
+			r:Log("  under the mouse, not taken: " .. line)
+			r:Prompt(ask or ASK, TELL[why])
+		end
+	end })
+end
+
 -- Every change of what the game says is under the mouse, every 0.05 s, from
 -- step 3's hold to step 4's end (runs 7 and 8: "no plate under the mouse"
 -- while the tooltip still showed the unit, then held again: a game blip or
@@ -163,7 +197,7 @@ ns.TestKit.Define({
 	title = "Mouseover nameplate",
 	about = "the Mouseover row: its page row, then one hover with it off and on, then the mouse off",
 	needs = "An NPC standing still to mouse over",
-	settings = { "plateAlwaysYourMouseover", "handlePlates" },
+	settings = { "plateAlwaysYourMouseover", "nameAlwaysYourMouseover", "handlePlates" },
 	cvars = { "nameplateShowAll", "nameplateShowEnemies", "nameplateShowFriendlyNPCs" },
 	cineMode = true,
 	context = function()
@@ -180,27 +214,42 @@ ns.TestKit.Define({
 		return "nothing of its own"
 	end,
 	steps = {
-		{ key = "page", title = "the Mouseover row on the Nameplates page", proven = "run 2, 2026-11-23: 2/2", run = function(r)
+		{ key = "page", title = "the Mouseover rows on the Nameplates page", proven = "run 11 (queue q1757), 2026-11-24: 5/5",
+			run = function(r)
 			local panel = SettingsPanel or UIParent
 			for _, on in ipairs({ true, false }) do
 				r:Set("handlePlates", on)
 				local text, pageName = ns.FindSetting("row:plate:YourMouseover")
-				r:Sleep(0.8)
+				-- (Up to 5 s for the page: run 10 read it at 0.8 s with the panel
+				-- still on the last page shown, Info's Bubbles.)
+				local label
+				for _ = 1, 20 do
+					r:Sleep(0.25)
+					label = FindText(panel, ns.L["Mouseover nameplates"])
+					if label or not on then break end
+				end
 				r:Log(("Nameplates page %s: find opened %s on %s"):format(on and "on" or "off", tostring(text),
 					tostring(pageName)))
-				local label = FindText(panel, ns.L["Mouseover"])
 				-- (Your target's row in the same grid: not the page's own title.)
 				local grid = label and label:GetParent() and label:GetParent():GetParent()
-				local above = grid and FindText(grid, ns.L["Nameplates"])
+				local above = grid and FindText(grid, ns.L["Names"])
+				local names = grid and FindText(grid, ns.L["Mouseover names"])
 				if not label then
-					r:Shot("Nameplates page, no Mouseover row seen", { behind = panel })
-					r:Fail("no Mouseover row shown (page " .. (on and "on" or "off") .. ")")
+					r:Shot("Nameplates page, no Mouseover nameplates row seen", { behind = panel })
+					r:Fail("no Mouseover nameplates row shown (page " .. (on and "on" or "off") .. ")")
 				else
 					if on then
 						r:Verdict(above ~= nil and above:GetTop() > label:GetTop(),
-							"under the Target section's Nameplates row (Your target's)")
+							"Mouseover nameplates under the Target section's Names row (Your target's)")
+						r:Verdict(names ~= nil and names:GetTop() < label:GetTop(),
+							"Mouseover names right under it")
 						local hits = r:Overlaps(label:GetParent(), panel)
 						r:Verdict(#hits == 0, "nothing over its row" .. (#hits > 0 and (": " .. table.concat(hits, ", ")) or ""))
+						local nameHits = names and r:Overlaps(names:GetParent(), panel) or {}
+						r:Verdict(#nameHits == 0, "nothing over the names row"
+							.. (#nameHits > 0 and (": " .. table.concat(nameHits, ", ")) or ""))
+						local _, namePage = ns.FindSetting("row:name:YourMouseover")
+						r:Verdict(namePage ~= nil, "/cine find row:name:YourMouseover opens it (" .. tostring(namePage) .. ")")
 					else
 						local a = Drawn(label)
 						r:Log(("its label drawn at %s with the page off"):format(Text(a)))
@@ -232,25 +281,8 @@ ns.TestKit.Define({
 			-- (Off for the row-off reads: steps 1-2, which set it, are left out
 			-- once proven, and run 7 had the player's own Always on.)
 			r:Set("plateAlwaysYourMouseover", false)
-			local ASK = "Put your mouse on an NPC STANDING STILL (not a player walking by) and hold it there."
-			local TELL = { target = "That's your TARGET: press Escape to clear it, then hover it again.",
-				you = "That's you: hover an NPC.",
-				player = "That's a PLAYER with no plate here: hover an NPC instead.",
-				none = "It has no nameplate here: try another NPC (a guard or a vendor)." }
-			local said
-			r:WaitFor(ASK, { check = function()
-				local plate = MousePlate()
-				if plate or not UnitExists("mouseover") then return plate end
-				local why = UnitIsUnit("mouseover", "player") and "you"
-					or (UnitExists("target") and UnitIsUnit("mouseover", "target")) and "target"
-					or UnitIsPlayer("mouseover") and "player" or "none"
-				local line = Who() .. ": " .. why
-				if line ~= said then
-					said = line
-					r:Log("  under the mouse, not taken: " .. line)
-					r:Prompt(ASK, TELL[why])
-				end
-			end })
+			r:Set("nameAlwaysYourMouseover", false)
+			WaitHover(r)
 			-- Row off: every 0.25 s for 2 s, whatever plate is under the mouse.
 			local offMax, offSeen = 0, 0
 			for i = 1, 8 do
@@ -349,6 +381,81 @@ ns.TestKit.Define({
 			r:Verdict(ns.plates.HoverLevel(plate) == 0, "its hold let go")
 			r:Verdict(frame ~= nil and frame < 0.05, ("back down to hidden (%s)"):format(Text(frame)))
 			StopTrace()
+		end },
+		-- The Mouseover names row alone (the plate row off): the name shows on
+		-- the plate under the mouse, its health bar stays hidden, the other
+		-- plates stay as they were, and the name goes once the mouse leaves.
+		{ key = "names", title = "Mouseover names: the name alone under the mouse",
+			proven = "run 11 (queue q1757), 2026-11-24: 4/4", run = function(r)
+			r:Set("handlePlates", true)
+			r:Set("plateAlwaysYourMouseover", false)
+			r:Set("nameAlwaysYourMouseover", false)
+			if not (ns.IsCineModeOn and ns.IsCineModeOn()) and Cinematic_ToggleCineMode then
+				r:Keep("cineTurnedOn", true)
+				Cinematic_ToggleCineMode()
+			end
+			r:Sleep(1)
+			WaitHover(r)
+			local start = MousePlate()
+			r:Sleep(0.5)
+			local _, _, baseName = PlateParts(start)
+			r:Log(("rows off, %s under the mouse: name %s"):format(Who(), Text(baseName)))
+			if baseName and baseName > 0.5 then
+				return r:Skip("its kind's names already show here: hover an NPC whose name is hidden")
+			end
+			local _, _, before = LogOthers(r, "names row off", start)
+			r:Set("nameAlwaysYourMouseover", true)
+			ns.plates.seen.at = nil -- (wake the plates' pass, as the mouse coming on would)
+			local since, at, best = nil, nil, nil
+			local wait = ns.FadeInTime() + 0.6
+			for i = 1, 32 do
+				local plate = MousePlate()
+				if plate ~= at then at, since = plate, GetTime() end
+				local frame, bar, name, hasBar, hasName = PlateParts(plate)
+				if i % 2 == 0 then
+					-- (With the sight check's reading: run 10's name stayed at 0 with
+					-- every share right, frame whole: dimmed as out of sight?)
+					r:Log(("  %.2f s: %s, frame %s bar %s name %s, hover level %.2f | %s"):format((i - 1) * 0.25,
+						plate and Who() or "no plate under the mouse", Text(frame), Text(bar), Text(name),
+						ns.plates.HoverLevel(plate), plate and ns.DescribePlateSight and ns.DescribePlateSight(plate) or "-"))
+				end
+				if plate and GetTime() - since >= wait then
+					best = { plate = plate, bar = bar, name = name, hasBar = hasBar, hasName = hasName }
+					r:Log("  " .. tostring(ns.DescribePlateNameKept(plate.namePlateUnitToken
+						or (plate.UnitFrame and plate.UnitFrame.unit), plate)))
+					r:Shot("Mouseover names: the name under the mouse", { behind = plate.UnitFrame })
+					break
+				end
+				r:Sleep(0.25)
+			end
+			if not best then
+				return r:Skip(("no plate stayed under the mouse for %.1f s: pick an NPC standing still"):format(wait))
+			end
+			local _, _, during = LogOthers(r, "names row on", best.plate)
+			local changed = {}
+			for plate, alpha in pairs(during) do
+				local was = before[plate]
+				if was and alpha and math.abs(alpha - was) > 0.05 then
+					changed[#changed + 1] = ("%s -> %s"):format(Text(was), Text(alpha))
+				end
+			end
+			r:Verdict(best.hasName and best.name ~= nil and best.name > 0.9,
+				("its name shows (%s)"):format(Text(best.name)))
+			r:Verdict(not best.hasBar or (best.bar ~= nil and best.bar < 0.1),
+				("its health bar stays hidden: name alone (%s)"):format(Text(best.bar)))
+			r:Verdict(#changed == 0, "the other plates left as they were"
+				.. (#changed > 0 and (" (" .. table.concat(changed, ", ") .. ")") or ""))
+			local plate = best.plate
+			local offSince
+			r:WaitFor("Now move the mouse OFF it, onto the ground or sky.", { check = function()
+				if MousePlate() == plate then offSince = nil return nil end
+				offSince = offSince or GetTime()
+				return GetTime() - offSince >= 0.5
+			end })
+			r:Sleep(ns.FadeOutTime() + 0.3)
+			local _, _, after = PlateParts(plate)
+			r:Shot("Mouseover names: the mouse gone")
+			r:Verdict(after ~= nil and after < 0.05, ("its name gone after the mouse left (%s)"):format(Text(after)))
 		end },
 	},
 })

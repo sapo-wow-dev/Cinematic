@@ -137,5 +137,70 @@ else
 	Check(false, "ns.PlateRowNow loaded")
 end
 
+-- The Mouseover names row (YourMouseover in the Names groups): the same
+-- watcher, the name alone. The plate row off: the plate under the mouse is
+-- tracked for its name, but its body isn't lifted.
+local function Upvalue(fn, name)
+	for i = 1, 200 do
+		local n, v = debug.getupvalue(fn, i)
+		if not n then return nil end
+		if n == name then return v, i end
+	end
+end
+local mouseGroup
+for _, group in ipairs(ns.NAME_GROUPS) do
+	if group.key == "YourMouseover" then mouseGroup = group end
+end
+Check(mouseGroup and mouseGroup.plateOnly and mouseGroup.mouse and #mouseGroup.cvars == 0,
+	"names: its own Names group, no game setting (plateOnly)")
+Check(mouseGroup and ns.HasNameSettings(mouseGroup), "names: the row is never greyed")
+Check(ns.DEFAULTS.nameAlwaysYourMouseover == false and ns.DEFAULTS.nameCombatYourMouseover == false
+	and ns.DEFAULTS.nameKeepYourMouseover == false, "names: its boxes are settings, off to start")
+local nameLevel = Upvalue(p.HoverNameWanted, "nameLevel")
+Check(type(nameLevel) == "table", "names: the names' fade table read")
+nameLevel = nameLevel or {}
+ns.db.handlePlates, ns.db.plateAlwaysYourMouseover = true, false
+mouse = "A"
+clock = clock + 1
+nameLevel.YourMouseover = 0
+Check(not p.HoverNameWanted() and p.HoverPlate() == nil, "names: row down, nothing tracked")
+nameLevel.YourMouseover = 1
+clock = clock + 1
+Check(p.HoverNameWanted() and not p.HoverWanted(), "names: row up, the plate row still off")
+Check(p.HoverPlate() == plateA, "names: the plate under the mouse is tracked")
+for _ = 1, 100 do Step(0.05) end
+Check(p.HoverLevel(plateA) == 1, "names: the mouse's level whole after the fade in")
+Check(p.HoverBodyLevel(plateA) == 0, "names: the plate itself not lifted (plate row off)")
+Check(p.HoverBodyLevel(plateB) == 0 and p.HoverLevel(plateB) == 0, "names: another plate untouched")
+ns.db.plateAlwaysYourMouseover = true
+clock = clock + 1
+Check(p.HoverBodyLevel(plateA) == 1, "names + plate rows: the plate whole")
+ns.db.plateAlwaysYourMouseover = false
+clock = clock + 1
+-- (CineMode's fade all the way down: every plate out but what a row keeps.)
+local levelWas = p.level
+p.level = 0
+-- The name share PlateAlphas gives the plate under the mouse, plates forced on.
+local PlateAlphas = Upvalue(ns.DescribePlateNameKept, "PlateAlphas")
+local _, forcedAt = Upvalue(ns.DescribePlateNameKept, "platesForced")
+if PlateAlphas and forcedAt then
+	debug.setupvalue(ns.DescribePlateNameKept, forcedAt, true)
+	local ok, alpha, body, name = pcall(PlateAlphas, "mouseover", plateA)
+	Check(ok and alpha and alpha > 0.99 and name and name > 0.99 and body == 0,
+		("names: the plate under the mouse shows its name (alpha %s, body %s, name %s)")
+			:format(tostring(alpha), tostring(body), tostring(name)))
+	local okB, alphaB = pcall(PlateAlphas, "nameplate2", plateB)
+	Check(okB and alphaB == 0, "names: another plate keeps no name (" .. tostring(alphaB) .. ")")
+	mouse = nil
+	for _ = 1, 100 do Step(0.05) end
+	local okC, alphaC = pcall(PlateAlphas, "mouseover", plateA)
+	Check(okC and alphaC == 0, "names: the mouse gone, the name fades back out (" .. tostring(alphaC) .. ")")
+	debug.setupvalue(ns.DescribePlateNameKept, forcedAt, false)
+else
+	Check(false, "names: PlateAlphas and platesForced read")
+end
+nameLevel.YourMouseover = 0
+p.level = levelWas
+
 print(failed == 0 and "ALL PASS" or (failed .. " FAILED"))
 if failed > 0 then os.exit(1) end
