@@ -110,8 +110,79 @@ local function ColorAt(look, t)
 	return 0.95, 0.95, 0.95
 end
 
+-- (Other languages, release review 2026-11-23: the English "absorb N" and
+-- "N charges" found nothing on a German or Russian client, so no shield got
+-- a size and the page hid every Ring. There: the number nearest the word, in
+-- the same sentence, before or after it (German "44 Schaden absorbiert"),
+-- whole with that language's thousands marks (1.234, 1 234). Not a percent.
+-- English clients keep the English patterns alone. Fix card
+-- 2026-11-23-cdm-ring-locale.md, Tools/offline/cdmringlocalematrix.lua.)
+local ABSORB_WORDS = { "absor", "assorb", "поглощ", "Поглощ", "흡수", "吸收" }
+local CHARGE_WORDS = { "charge", "aufladung", "carga", "caric", "заряд", "Заряд", "충전", "充能" }
+local THOUSANDS = { ",", ".", " ", "\194\160", "\226\128\175", "\226\128\137" } -- (no-break, narrow, thin spaces)
+local function English()
+	local locale = GetLocale and GetLocale()
+	return type(locale) ~= "string" or locale:sub(1, 2) == "en"
+end
+-- Each number in a text: { start, end, value }.
+local function Numbers(text)
+	local list, at = {}, 1
+	while true do
+		local s, e = text:find("%d+", at)
+		if not s then break end
+		local digits, grouped = text:sub(s, e), true
+		while grouped do
+			grouped = false
+			for _, mark in ipairs(THOUSANDS) do
+				if text:sub(e + 1, e + #mark) == mark then
+					local group = text:match("^%d%d%d", e + #mark + 1)
+					if group and not text:find("^%d", e + #mark + 4) then
+						digits, e, grouped = digits .. group, e + #mark + 3, true
+						break
+					end
+				end
+			end
+		end
+		local rest = text:sub(e + 1, e + 4)
+		if not (rest:find("^%s?%%") or rest:find("^\194\160%%") or rest:find("^\226\128\175%%")
+			or rest:find("^\239\188\133")) then
+			list[#list + 1] = { s, e, tonumber(digits) }
+		end
+		at = e + 1
+	end
+	return list
+end
+local function OneSentence(gap)
+	return #gap <= 40 and not (gap:find("[%.!?;]%s") or gap:find("\n") or gap:find("。", 1, true))
+end
+-- The number nearest one of the words (nil if none in its sentence).
+local function NearWord(text, words)
+	text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "")
+	local lower = text:gsub("[A-Z]", string.lower) -- (ASCII only: lower() may change UTF-8 bytes)
+	local numbers = Numbers(text)
+	local best, bestGap
+	for _, word in ipairs(words) do
+		local from = 1
+		while true do
+			local ws, we = lower:find(word, from, true)
+			if not ws then break end
+			for _, number in ipairs(numbers) do
+				local gap
+				if number[1] > we then gap = text:sub(we + 1, number[1] - 1)
+				elseif number[2] < ws then gap = text:sub(number[2] + 1, ws - 1) end
+				if gap and OneSentence(gap) and (not bestGap or #gap < bestGap) then
+					best, bestGap = number[3], #gap
+				end
+			end
+			from = we + 1
+		end
+	end
+	return best
+end
+
 local function AbsorbNumber(text)
 	if type(text) ~= "string" or Secret(text) then return nil end
+	if not English() then return NearWord(text, ABSORB_WORDS) end
 	local number = text:match("[Aa]bsorb%a*%s+(%d[%d,]*)")
 	return number and tonumber((number:gsub(",", ""))) or nil
 end
@@ -124,6 +195,7 @@ end
 -- by the charges left, the aura's count. Planned in the ledger, built now.)
 local function ChargesNumber(text)
 	if type(text) ~= "string" or Secret(text) then return nil end
+	if not English() then return NearWord(text, CHARGE_WORDS) end
 	local number = text:match("(%d+)%s+[Cc]harges?")
 	return number and tonumber(number) or nil
 end

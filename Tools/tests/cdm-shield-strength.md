@@ -17,6 +17,7 @@ Code: Dev/ShieldProbeTest.lua (probe + first build); planned UI/CooldownShields.
 | Q11 | Is a shield in the game's Tracked Buffs catalog at all (can players track Power Word: Shield)? | forever | YES: Power Word: Shield 17 (cooldown 200047, known) and Fear Ward are in the catalog; just not added on the user's priest | run 3 |
 | Q12 | Color without a curve: a StatusBar (0..start, SetValue(secret)) under or behind the number, its fill green-to-red cropped so the visible end shows how much is left, or a green copy of the number clipped by the fill edge over a red one (memory secret-health-clip) | forever | open: the user picks first | run 4 (the built feature) |
 | Q10 | Two shields at once: one total (UnitGetTotalAbsorbs sums) | both | by design of the API; priest has one shield, not testable here | - |
+| Q13 | A non-English client: does Power Word: Shield get its size (the drain ring's number read from the description in that language; card 2026-11-23-cdm-ring-locale.md) | both | open | later |
 
 ## Plan tree
 - Q1 plain + Q4 works: start size = the absorb at the out-of-fight cast (or Q5's description number for in-fight casts); color = curve red at 0 to green at start, Evaluate(secret) into SetTextColor. Build both.
