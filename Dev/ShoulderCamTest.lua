@@ -7819,3 +7819,86 @@ function ns.ShoulderTest(arg)
 			"on, off, left, right, spot <percent>, strength <percent>, layout")
 	end
 end
+
+-- Ghost Wolf's size, measured: the player copy's Calibrate run (Camera/
+-- ShoulderCalibrate.lua) in form 16, then the Shoulder Cam going by it.
+-- Its number goes in MEASURED_SCALES as "form16" (one wolf, every race).
+if ns.TestKit then ns.TestKit.Define({
+	name = "ghostwolfcal",
+	key = "ghostWolfCalTest",
+	title = "Ghost Wolf calibration",
+	about = "the Shoulder Cam's size for Ghost Wolf: a Calibrate run in the form, saved and in use",
+	needs = "a shaman with Ghost Wolf, outdoors on open flat ground, out of combat, somewhere quiet (it says lines in /say)",
+	cvars = { "test_cameraOverShoulder", "CameraKeepCharacterCentered", "chatBubbles", "cameraFov" },
+	context = function()
+		local key = ns.ShoulderModelKey and ns.ShoulderModelKey() or "?"
+		local scale, from = 0, "?"
+		if ns.ShoulderModelScale then scale, from = ns.ShoulderModelScale() end
+		return ("key %s, size %.2f (%s), zoom %.1f"):format(tostring(key), scale or 0, tostring(from), GetCameraZoom() or 0)
+	end,
+	steps = {
+		{ key = "form", title = "in Ghost Wolf", run = function(r)
+			local function InWolf()
+				local _, form = ns.ShoulderModelKey()
+				return form == 16
+			end
+			if not InWolf() then
+				r:WaitFor("Shift into GHOST WOLF on open flat ground (clear your target with Esc).", { check = InWolf })
+			end
+			r:Sleep(1) -- (the model in: ModelForm's wait)
+			local key = ns.ShoulderModelKey()
+			local scale, from = ns.ShoulderModelScale()
+			r.wolf = { key = key, before = scale }
+			r:Log(("before: key %s, size %.2f (%s)"):format(tostring(key), scale, tostring(from)))
+			r:Verdict(tostring(key):find("%-form16$") ~= nil, "the key is Ghost Wolf's: " .. tostring(key))
+		end },
+		{ key = "calibrate", title = "the Calibrate run", run = function(r)
+			local function Why() return ns.ShoulderCalibrateCantStart() end
+			if Why() then
+				r:WaitFor(("Can't start yet: %s"):format(Why()), { check = function() return not Why() end })
+			end
+			-- (Run 1, 2026-11-24: "im in ghost wolf and it stuck": "(about 10 s)"
+			-- read as it starting on its own; the button was never clicked.)
+			-- (Runs 1-2: no click reached it, by the queue's 6-button row. A second
+			-- in: where the button is, whether it's on screen and on top, a shot;
+			-- a press on it logged before its click, so a lost click shows.)
+			C_Timer.After(1, function()
+				local b = r.buttons and r.buttons.Calibrate
+				if not b then return r:Log("calibrate button: none in the row") end
+				local l, bt, w, h = b:GetRect()
+				local sw, sh = UIParent:GetWidth() * UIParent:GetEffectiveScale(), UIParent:GetHeight() * UIParent:GetEffectiveScale()
+				local s = b:GetEffectiveScale()
+				local on = l and l * s >= 0 and bt * s >= 0 and (l + w) * s <= sw and (bt + h) * s <= sh
+				local focus = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+				r:Log(("calibrate button: shown %s, enabled %s, mouse %s, rect %s,%s %sx%s x%.2f, screen %.0fx%.0f, on screen %s, strata %s level %s, mouse over %s")
+					:format(tostring(b:IsVisible()), tostring(b:IsEnabled()), tostring(b:IsMouseEnabled()), tostring(l), tostring(bt),
+					tostring(w), tostring(h), s, sw, sh, tostring(on), b:GetFrameStrata(), b:GetFrameLevel(),
+					tostring(focus and focus[1] and (focus[1]:GetName() or focus[1]:GetObjectType()))))
+				if not b.cineCalWatched then
+					b.cineCalWatched = true
+					b:HookScript("OnMouseDown", function(_, button) r:Log("calibrate button: pressed " .. tostring(button)) end)
+				end
+				pcall(Screenshot)
+				r:Log("calibrate button: screenshot WoWScrnShot_" .. date("%m%d%y_%H%M%S"))
+			end)
+			local ok, err = r:Click("CLICK the Calibrate button below to start (it can't start on its own). "
+				.. "Then stand still for 10 s, hands off the camera.",
+				function() ns.ShoulderCalibrateStart() end, "Calibrate")
+			if not ok then return r:Fail("didn't start: " .. tostring(err)) end
+			r:Sleep(0.5)
+			if not ns.ShoulderCalibrateRunning() then return r:Fail("the run didn't start (/cine log shoulder)") end
+			-- (Its own box asks for a click if a bubble ends early.)
+			r:WaitFor(nil, { check = function() return not ns.ShoulderCalibrateRunning() end })
+			local key = r.wolf and r.wolf.key or ns.ShoulderModelKey()
+			local c = ns.db.shoulderCalibrations and ns.db.shoulderCalibrations[key]
+			if not c then return r:Fail("nothing saved for " .. tostring(key) .. " (stopped? /cine log shoulder)") end
+			r:Log(("result: %s = %.2f, spread %.3f, %d readings, zoom %s"):format(key, c.factor, c.spread or 0,
+				c.readings or 0, tostring(c.zoom)))
+			r:Verdict(c.good == true, ("readings agree (spread %.3f, good under 0.06)"):format(c.spread or 0))
+			local scale, from = ns.ShoulderModelScale()
+			r:Verdict(not c.good or (math.abs(scale - c.factor) < 0.005 and from == "measured here"),
+				("the Shoulder Cam goes by it now: %.2f (%s)"):format(scale, tostring(from)))
+			r:Shot("ghost wolf after calibrate")
+		end },
+	},
+}) end

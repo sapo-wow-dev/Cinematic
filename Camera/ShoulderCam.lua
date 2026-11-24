@@ -289,8 +289,15 @@ local MEASURED_SCALES = { ["Dwarf-2"] = 1, ["Dwarf-3"] = 0.82, ["Skyborne-2"] = 
 	["NightElf-form1"] = 1.63, ["NightElf-form5"] = 1.76,
 	-- (Form 4: 2.32 in five runs, 2.29 at 8 yards and 2.35 at 12, just over
 	-- the spread a run calls good; one run said 2.20, the odd one out.)
-	["NightElf-form4"] = 2.32 }
+	["NightElf-form4"] = 2.32,
+	-- (Ghost Wolf, every race's (ONE_MODEL_FORMS): a Dwarf shaman's calibrate
+	-- run, 2026-11-24, 1.76-1.80 at 8 and 12 yards, spread 0.036.)
+	["form16"] = 1.78 }
 local BORROW_FORMS_FROM = "NightElf" -- (a form not measured for your race: this race's, ScaleOf)
+-- Forms with one model whatever your race (Ghost Wolf, 16: the same spirit
+-- wolf for every shaman): measured once as any race, it's every race's
+-- (ScaleOf). Built in as "formN" (Ghost Wolf 1.78).
+local ONE_MODEL_FORMS = { [16] = true }
 -- bear, cat, dire bear: off the recordings till the sweep's run in them
 local FORM_SCALES = { [5] = 1.70, [1] = 1.55, [8] = 1.70 }
 -- Forms that keep your own model (warrior stances 17-19, shadowform 28,
@@ -461,6 +468,18 @@ local function ScaleOf(form, foot, mount)
 		local race = foot:match("^(.-)%-%d+$") or foot
 		local both = MEASURED_SCALES[("%s-form%d"):format(race, form)]
 		if both then return both, "built in, this race's" end
+		if ONE_MODEL_FORMS[form] then
+			-- (Measured here as another race, on an alt: the same model, and
+			-- this player's own run, so ahead of the built-in one.)
+			local tail = ("-form%d"):format(form)
+			for other, value in pairs(scales or {}) do
+				if type(other) == "string" and other:sub(-#tail) == tail and type(value) == "number" and value > 0.2 then
+					return value, "measured here, as " .. other:sub(1, -#tail - 1)
+				end
+			end
+			local any = MEASURED_SCALES[("form%d"):format(form)]
+			if any then return any, "built in, every race's" end
+		end
 		-- (Not measured for this race: the Night Elf's, the one race measured
 		-- so far, 2026-11-14. Closer than the race's on-foot size (a Troll in
 		-- form 4 went by 0.95 for a form near 2.3) while the others wait for

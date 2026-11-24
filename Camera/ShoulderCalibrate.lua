@@ -377,6 +377,8 @@ function ns.ShoulderCalibrateAsk()
 end
 -- (The dev command: typed, so it can talk without the popup's click.)
 ns.ShoulderCalibrateStart = Start
+-- (Whether a run's going: the kit test waits on it.)
+function ns.ShoulderCalibrateRunning() return run ~= nil end
 
 -- Your measurements on one line, to paste to us:
 -- CINECAL1 <client> <version> <key>=<factor>/<spread>/<readings>[/redo][/rider] ...
