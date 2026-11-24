@@ -71,11 +71,38 @@ local function RunClient(client)
 	end
 	local function Step(seconds) now = now + (seconds or 0.02) end
 
+	-- 0. No rule names a mouse word (the 2026-11-24 release review): nothing
+	-- read, every word false, even with a unit under the mouse. Then one rule
+	-- does, as the player's Tooltips row's would: read from then on.
+	local reads = 0
+	local isDead = UnitIsDeadOrGhost
+	UnitIsDeadOrGhost = function(unit) if unit == "mouseover" then reads = reads + 1 end return isDead(unit) end
+	ns.hoverState.used = nil
+	mo, focus = { guid = "Creature-0", attack = true, reaction = 2 }, WorldFrame
+	wow.Fire("UPDATE_MOUSEOVER_UNIT")
+	Step(1)
+	local ok0, wrong0 = Is(Facts(), {})
+	Check("no rule with a mouse word: every word false", ok0, wrong0)
+	Step()
+	Facts()
+	Check("no rule with a mouse word: the mouseover unit not read", reads == 0, reads .. " reads")
+	ns.CompileRule("hoverdead or hoverframe")
+	Check("a rule with a mouse word compiled: read from then on", ns.hoverState.used == true)
+	UnitIsDeadOrGhost = isDead
+
 	-- 1. Nothing under the mouse.
 	mo, focus = nil, WorldFrame
 	Step(1)
 	local ok, wrong = Is(Facts(), {})
 	Check("nothing under the mouse: every mouse word false", ok, wrong)
+	-- (Still nothing a frame later: kept, not worked out again. The release
+	-- review 2026-11-24: false GUID vs a kept nil never matched.)
+	ns.hoverState.values.hover = "kept"
+	Step()
+	Facts()
+	Check("nothing under the mouse, next frame: kept, not worked out again",
+		ns.hoverState.values.hover == "kept", tostring(ns.hoverState.values.hover))
+	ns.hoverState.values.hover = false
 
 	-- 2. A hostile NPC out in the world (the game's event first, as it sends).
 	mo, focus = { guid = "Creature-1", attack = true, reaction = 2 }, WorldFrame

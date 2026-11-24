@@ -3799,18 +3799,40 @@ end
 ns.hoverState = { fields = { "hover", "hoverself", "hoverdead", "hoverenemy", "hoverfriendly", "hoverenemyplayer",
 	"hoverhostilenpc", "hoverneutralplayer", "hoverneutralnpc", "hoverfriendlyplayer", "hoverfriendlynpc",
 	"hoverframe" }, values = {} }
+ns.hoverState.isField = {}
+for _, field in ipairs(ns.hoverState.fields) do ns.hoverState.isField[field] = true end
 ns.hoverState.watch = CreateFrame("Frame")
 ns.hoverState.watch:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 ns.hoverState.watch:SetScript("OnEvent", function() ns.hoverState.at, ns.hoverState.read = nil, false end)
+-- (Read only while a rule names a mouse word, ns.hoverState.used, set by
+-- ns.CompileRule: kept till a /reload; or while the rule editor is up, for
+-- its lit dots. Otherwise every mouse word reads false and nothing is read:
+-- the 2026-11-24 release review, every player paying for it each frame, and
+-- in instances, where the GUID is secret, the full working out every frame.)
 function ns.HoverWords(facts, now, force)
 	local state = ns.hoverState
+	local editor = _G.CinematicRuleEditor
+	if not state.used and not (editor and editor:IsShown()) then
+		state.read, state.at = false, nil
+		-- (Already cleared: hover false means every mouse word is, as each
+		-- needs a unit under the mouse. Called many times a frame.)
+		if facts.hover == false then return false end
+		local changed = false
+		for _, field in ipairs(state.fields) do
+			if facts[field] ~= false then facts[field], changed = false, true end
+		end
+		return changed
+	end
 	if not force and state.at == now then return false end
 	state.at = now
 	local exists = ns.Flag(UnitExists("mouseover")) and true or false
 	local focus = exists and ns.MouseFocus() or nil
-	local guid = exists and UnitGUID("mouseover") or nil
-	local plain = guid == nil or not (issecretvalue and issecretvalue(guid))
-	if not force and plain and state.read and exists == state.exists and guid == state.guid
+	-- (Secret first: in instances the GUID is secret even out of fights, and
+	-- no test or compare may touch it. "exists and" only tests exists.)
+	local guid = exists and UnitGUID("mouseover")
+	local plain = not (issecretvalue and issecretvalue(guid))
+	-- ("guid or nil": nothing under the mouse is false here, kept as nil.)
+	if not force and plain and state.read and exists == state.exists and (guid or nil) == state.guid
 		and focus == state.focus then
 		return false
 	end
@@ -3887,6 +3909,7 @@ do
 		end
 		local tokens, err = Tokens(text)
 		local pos = 1
+		local usesHover = false -- (a mouse word in it: ns.HoverWords reads from then on)
 		local Or
 		local function Unary()
 			local token = tokens[pos]
@@ -3913,6 +3936,7 @@ do
 			elseif ns.RULE_WORDS[token] then
 				local field = ns.RULE_WORDS[token]
 				pos = pos + 1
+				if ns.hoverState.isField[field] then usesHover = true end
 				return function(f) return f[field] end
 			else
 				err = err or ("\"%s\" isn't a word it knows"):format(token)
@@ -3943,6 +3967,7 @@ do
 				test, err = nil, ("\"%s\" is out of place"):format(tokens[pos])
 			end
 		end
+		if test and usesHover then ns.hoverState.used = true end
 		compiled[text] = { test, not test and err or nil }
 		return test, not test and err or nil
 	end

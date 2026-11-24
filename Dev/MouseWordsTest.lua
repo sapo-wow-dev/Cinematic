@@ -212,6 +212,7 @@ ns.TestKit.Define({
 			r:Keep("ruleWas", was == nil and "<none>" or was)
 			r:Keep("ruleKept", true)
 			ns.db.frameRules[ROW] = RULE
+			ns.CompileRule(RULE) -- (its mouse words read from now, ns.hoverState.used, not at the first tooltip)
 			r:Set("handleTooltips", true)
 			r:Set("tooltipStillMode", "off")
 			if not (ns.IsCineModeOn and ns.IsCineModeOn()) and Cinematic_ToggleCineMode then

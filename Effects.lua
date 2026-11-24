@@ -2560,8 +2560,11 @@ function ns.plates.HoverNameWanted()
 end
 -- How far the Mouseover nameplates row lifts a plate: only while that row is
 -- on (the names row alone tracks the same plate for its name).
+-- (Its level first: 0 on nearly every plate, so the row's check, run twice
+-- per plate a pass, only where a plate is lifted.)
 function ns.plates.HoverBodyLevel(plate)
-	return ns.plates.HoverWanted() and ns.plates.HoverLevel(plate) or 0
+	local level = ns.plates.HoverLevel(plate)
+	return level > 0 and ns.plates.HoverWanted() and level or 0
 end
 -- The plate under the mouse now, for the rows (not your own).
 function ns.plates.HoverPlate()
