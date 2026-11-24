@@ -155,20 +155,25 @@ end
 -- (Once a place per character, whichever says it: 2026-11-23, Redridge
 -- Mountains carded twice 57 s apart, the game's line and then a border
 -- crossing back in, each new to the other.)
-local function Discovered(name, sub, whole, from)
+-- key: what it's kept as, the name unless given: a dungeon or raid's is its
+-- own ("instance:209"), so one named like the place at its door (Zul'Farrak,
+-- a subzone of Tanaris too) and that place each get their card once
+-- (Tools/offline/discoversamenamematrix.lua).
+local function Discovered(name, sub, whole, from, key)
+	key = key or name
 	-- (30 sec: the game's "Discovered:" line can come seconds after its card.)
-	if name == "" or (name == lastFound and GetTime() - lastFoundAt < 30) then return end
+	if name == "" or (key == lastFound and GetTime() - lastFoundAt < 30) then return end
 	local seen = Seen()
 	if seen then
 		seen.found = seen.found or {}
-		if seen.found[name] then
+		if seen.found[key] then
 			ns.Log("card", ("Discovered: %s again (%s): skipped, its card was had before"):format(name, from or "?"))
 			return
 		end
-		seen.found[name] = true
+		seen.found[key] = true
 		if whole then seen.zones[name] = true end
 	end
-	lastFound, lastFoundAt = name, GetTime()
+	lastFound, lastFoundAt = key, GetTime()
 	ns.Log("card", "Discovered: " .. name .. (whole and " (a zone)" or "") .. " (" .. (from or "?") .. ")")
 	if ns.AchievementProgress then ns.AchievementProgress.Discovered(name) end
 	if ns.LetterboxOnDiscover then ns.LetterboxOnDiscover() end
@@ -206,7 +211,7 @@ local function ZoneEntered()
 			seen.instances[key] = true
 			if Wanted() and name then
 				zoneFoundAt = GetTime()
-				Discovered(name, kind == "raid" and L["Raid"] or L["Dungeon"], nil, "instance entered")
+				Discovered(name, kind == "raid" and L["Raid"] or L["Dungeon"], nil, "instance entered", "instance:" .. key)
 			end
 		end
 		return
