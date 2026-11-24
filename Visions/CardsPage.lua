@@ -1321,7 +1321,20 @@ function ns.CreateCardsPanel(kit)
 		end
 		-- (A small screen, PREVIEW_W wide, the picked type's settings beside it:
 		-- the user, 2026-11-23, its full width pushed every row below the window.)
-		jumbo = ns.MakeStyleJumbotron(kit, content, stack, 480, cells, PREVIEW_W)
+		-- (Style left out, Load Style unticked: no jumbotron (GeneralStyle.lua
+		-- isn't loaded), an empty stand-in in its place so the type's settings
+		-- still sit where they go. It was a Lua error building this page since
+		-- v2.1.30: release review 2026-11-24, Tools/offline/stylebacklinks.lua nostyle.)
+		if ns.MakeStyleJumbotron then
+			jumbo = ns.MakeStyleJumbotron(kit, content, stack, 480, cells, PREVIEW_W)
+		else
+			jumbo = CreateFrame("Frame", nil, content)
+			jumbo:SetSize(1, 1)
+			jumbo.headHeight = 0
+			local function Nothing() end
+			jumbo.SetLocked, jumbo.Jump, jumbo.Refresh = Nothing, Nothing, Nothing
+			stack:Add(jumbo, "label")
+		end
 		jumbo.pageSwitch = false
 		jumbo:SetLocked(true)
 		jumbo.onStep = function(style)
