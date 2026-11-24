@@ -26,6 +26,7 @@ CLIENTS = ["_forever_", "_retail_", "_classic_era_"]
 KNOWN_REPOS = {
     "daylightui": "dayightt/DaylightUI",
     "ellesmereui": "EllesmereGaming/EllesmereUI",
+    "flareui": "malkkav/FlareUI",
     "questie": "Questie/Questie",
     "rxpguides": "RestedXP/RXPGuides",
 }

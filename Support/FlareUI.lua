@@ -8,7 +8,8 @@
 -- It sets alphas itself: its unit frames' fade-out (out of combat with no
 -- target) and its quest items' are its own frames, so they're hooked; its
 -- Show choices (Mouseover, Combat...) set the game's action bars, bag bar and
--- micro menu, and its damage meter fade the game's meter: followed.
+-- micro menu, and its damage meter fade the game's meter: followed. The
+-- game's TargetFrame it keeps up, invisible, in the Gamepad UI is left alone.
 local _, ns = ...
 local L = ns.L
 
@@ -50,6 +51,27 @@ local FOLLOWED = {
 	"DamageMeter",
 }
 
+-- In the Gamepad UI it can't park the game's TargetFrame (the gamepad's
+-- target menu opens on it and closes if it's hidden), so it keeps it shown,
+-- at alpha 0, events off and mouse off, over its own target frame. We used to
+-- fade it with the Target row like any game frame: each time the row came
+-- back, it was put back to full, a frozen copy of the game's target frame
+-- drawn over FlareUI's ("super glitchy", a player's report 2026-11-23). So
+-- once it's kept that way, it's left alone and back at 0. (Without the
+-- Gamepad UI it's hidden for good: nothing to do.)
+local keptTarget = false
+local function LeaveKeptTargetAlone()
+	local frame = _G.TargetFrame
+	if keptTarget or not frame or not rawget(frame, "FlareUI_Hidden") or not ns.Flag(frame:IsShown()) then
+		return
+	end
+	keptTarget = true
+	-- (Letting go puts it back to the alpha it had when first faded: 1.)
+	ns.LeaveAlone({ "TargetFrame" })
+	ns.SetFrameAlpha(frame, 0)
+end
+ns.FlareKeptTarget = function() return keptTarget end -- (Dev/FlareUISupportTest.lua)
+
 ns.WhenAddonLoads("FlareUI", function()
 	ns.FadeWithRows(ROWS)
 	-- Kept up by the Health & Resources page like the game's frames (Show
@@ -70,6 +92,9 @@ ns.WhenAddonLoads("FlareUI", function()
 	-- Its raid frames (the main tanks' apart) fade with the game's, as Players.
 	ns.FadeFoundByName("raidplayers", { "FlareUI_Raid", "FlareUI_RaidTanks" })
 	ns.AddScanner(function()
+		-- (It keeps the TargetFrame at login or, after a /reload in a fight, once
+		-- the fight ends: checked with each scan till then.)
+		LeaveKeptTargetAlone()
 		-- Its quest item buttons, numbered as they're made (on UIParent: they're
 		-- secure, so not in the tracker).
 		local i = 1

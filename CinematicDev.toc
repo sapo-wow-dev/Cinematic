@@ -349,6 +349,7 @@ Dev\DuelTargetTest.lua
 Dev\EuiSwingTest.lua
 Dev\EuiCastTest.lua
 Dev\ElvFishBarTest.lua
+Dev\FlareUISupportTest.lua
 Dev\AddonTest.lua
 Dev\EuiCooldownTest.lua
 Dev\BuffFadeTest.lua
