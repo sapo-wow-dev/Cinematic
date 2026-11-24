@@ -3285,9 +3285,13 @@ function ns.NoteOwnSpeed(cvar, value)
 end
 
 local function WriteCVar(cvar, value)
+	-- (pcall: a write that errors still lets the flag go, or the held
+	-- settings' change check above stayed off for the session. The error
+	-- goes on to the caller as before.)
 	writingCVar = true
-	SetCVar(cvar, value)
+	local ok, err = pcall(SetCVar, cvar, value)
 	writingCVar = false
+	if not ok then error(err, 0) end
 	for _, hook in ipairs(ns.cvarWrittenHooks) do
 		hook(cvar)
 	end
