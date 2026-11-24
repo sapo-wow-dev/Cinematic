@@ -7902,3 +7902,81 @@ if ns.TestKit then ns.TestKit.Define({
 		end },
 	},
 }) end
+
+-- Your tooltip on the self-target stand-in (CinematicShoulderSelfButton,
+-- Keep the shoulder when selecting yourself): it sits over your player
+-- frame, and with no OnEnter of its own your portrait showed no tooltip (the
+-- mousewords run qf726, Forever 2026-11-24: mouseover you, focus our button,
+-- no GameTooltip). First hands off: its hover and leave run by the test, and
+-- its secure click attributes checked unchanged; then ONE real hover on your
+-- portrait: your tooltip, on our button, of you. Offline: selfbuttontip.lua.
+if ns.TestKit then ns.TestKit.Define({
+	name = "selfbuttontip",
+	key = "selfButtonTipTest",
+	title = "Self-target stand-in tooltip",
+	about = "hovering your portrait with Shoulder Cam's self-target stand-in on shows your tooltip",
+	needs = "out of combat, your player frame on screen",
+	settings = { "shoulderCam", "shoulderCamFakeSelf" },
+	cvars = { "autoSelfCast" },
+	context = function()
+		local state = ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState() or {}
+		return ("stand-in want %s (%s), covered %s, rect %s"):format(tostring(state.want), tostring(state.why),
+			tostring(state.covered), tostring(state.rect))
+	end,
+	steps = {
+		{ key = "placed", title = "the stand-in over your frame, hover run by the test", run = function(r)
+			if InCombatLockdown() then
+				r:WaitFor("Leave the fight first.", { events = { "PLAYER_REGEN_ENABLED" } })
+			end
+			if not ns.Setting("shoulderCam") then r:Set("shoulderCam", true) end
+			r:Set("shoulderCamFakeSelf", true)
+			local state
+			for _ = 1, 25 do
+				state = ns.ShoulderFakeSelfState()
+				if state.want and state.covered then break end
+				r:Sleep(0.2)
+			end
+			r:Log(("state: want %s (%s), covered %s, rect %s"):format(tostring(state.want), tostring(state.why),
+				tostring(state.covered), tostring(state.rect)))
+			if not (state.want and state.covered) then
+				return r:Fail("the stand-in isn't over your frame: " .. tostring(state.why))
+			end
+			local button = state.button
+			r.tipButton = button
+			local attrs = {}
+			for _, key in ipairs({ "*type1", "*macrotext1", "unit", "*type2" }) do attrs[key] = button:GetAttribute(key) end
+			r:Log(("attributes before: type1 %s, macrotext1 %s, unit %s, type2 %s, protected %s"):format(tostring(attrs["*type1"]),
+				tostring(attrs["*macrotext1"]), tostring(attrs.unit), tostring(attrs["*type2"]), tostring(button:IsProtected())))
+			local enter, leave = button:GetScript("OnEnter"), button:GetScript("OnLeave")
+			r:Verdict(type(enter) == "function" and type(leave) == "function", "the stand-in has OnEnter and OnLeave")
+			if not (enter and leave) then return end
+			local tip = GameTooltip
+			local ok, err = pcall(enter, button)
+			local unit = select(2, tip:GetUnit())
+			r:Verdict(ok and tip:IsShown() and tip:GetOwner() == button and unit ~= nil and ns.Flag(UnitIsUnit(unit, "player")),
+				("its hover shows your tooltip (ok %s %s, shown %s, ours %s)"):format(tostring(ok), tostring(err),
+				tostring(tip:IsShown()), tostring(tip:GetOwner() == button)))
+			pcall(leave, button)
+			r:Verdict(not (tip:IsShown() and tip:GetOwner() == button), "its leave puts it away")
+			local same = true
+			for key, was in pairs(attrs) do if button:GetAttribute(key) ~= was then same = false end end
+			r:Verdict(same and button:IsProtected(), "its secure click attributes unchanged, still protected")
+		end },
+		{ key = "hover", title = "a real hover on your portrait", run = function(r)
+			local button = r.tipButton or (ns.ShoulderFakeSelfState and ns.ShoulderFakeSelfState().button)
+			if not (button and button:IsShown()) then return r:Skip("no stand-in up (the step before)") end
+			r:WaitFor("Move the mouse onto your own portrait (your player frame) and hold it there.",
+				{ check = function() return ns.MouseFocus() == button or nil end })
+			r:Sleep(0.6)
+			local tip = GameTooltip
+			local unit = select(2, tip:GetUnit())
+			r:Log(("mouse on %s, mouseover you %s, tooltip shown %s, alpha %.2f, owner ours %s"):format(
+				tostring(ns.MouseFocus() == button and "the stand-in" or "something else"),
+				tostring(ns.Flag(UnitIsUnit("mouseover", "player"))), tostring(tip:IsShown()), tip:GetAlpha() or 0,
+				tostring(tip:GetOwner() == button)))
+			r:Verdict(tip:IsShown() and (tip:GetAlpha() or 0) > 0.5 and tip:GetOwner() == button and unit ~= nil
+				and ns.Flag(UnitIsUnit(unit, "player")), "your tooltip shows over your portrait, of you")
+			r:Shot("your tooltip on the stand-in", { behind = tip })
+		end },
+	},
+}) end

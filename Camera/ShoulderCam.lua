@@ -1350,6 +1350,38 @@ do
 	fake:SetAttribute("unit", "player")
 	fake:SetAttribute("*type2", "togglemenu") -- (your menu, as your frame's right-click)
 	fake:Hide()
+	-- (Your tooltip on hovering it, where the game puts a unit's, as hovering
+	-- your frame shows it: it had none, so with it on your portrait showed no
+	-- tooltip (the mousewords run, 2026-11-24: mouseover you, focus this
+	-- button, no tooltip). Hooked, not the game's UnitFrame_OnEnter (taint);
+	-- only the tooltip, so the secure clicks stay as they were.)
+	fake:HookScript("OnEnter", function(self)
+		ns.Guard(function()
+			local tip = _G.GameTooltip
+			if not tip then return end
+			if _G.GameTooltip_SetDefaultAnchor then
+				_G.GameTooltip_SetDefaultAnchor(tip, self)
+			else
+				tip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+			end
+			tip:SetUnit("player")
+			tip:Show()
+		end)
+	end)
+	-- (Kept up to date while it stays, as the game's own unit frames do: the
+	-- tooltip calls its owner's UpdateTooltip now and then. Only while it's ours.)
+	fake.UpdateTooltip = function(self)
+		ns.Guard(function()
+			local tip = _G.GameTooltip
+			if tip and tip:GetOwner() == self then tip:SetUnit("player") end
+		end)
+	end
+	local function TipAway(self)
+		local tip = _G.GameTooltip
+		if tip and tip:GetOwner() == self then tip:Hide() end
+	end
+	fake:HookScript("OnLeave", TipAway)
+	fake:HookScript("OnHide", TipAway) -- (put away under the mouse: its tooltip with it)
 	-- (ns.shoulderSelfHoldFront: /cine debug shoulder selffront holds this
 	-- off, to show your frame in front first.)
 	local function Front()
