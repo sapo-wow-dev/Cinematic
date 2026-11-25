@@ -78,7 +78,9 @@ local function RunClient(client)
 	local log, done = Run("after the update")
 	Check("finished", done ~= nil, done)
 	Check("no FAIL", done and done:find(" 0 fail", 1, true) ~= nil, done)
-	Check("8 checks pass", done and done:find("8 pass", 1, true) ~= nil, done)
+	Check("9 checks pass", done and done:find("9 pass", 1, true) ~= nil, done)
+	Check("the big card matches the others' look", Has(log, "verdict PASS newzoneoff: New zone's font, color and outline match") ~= nil,
+		Has(log, "New zone's font"))
 	Check("the small card for a new zone", Has(log, "verdict PASS newzoneoff: New zone off, a new zone: discover") ~= nil,
 		Has(log, "New zone off, a new zone"))
 	Check("the big card once ticked", Has(log, "verdict PASS newzoneoff: New zone ticked again, a new zone: newZone") ~= nil,
@@ -107,6 +109,16 @@ local function RunClient(client)
 		Has(log, "New zone off, a new zone"))
 	Check("put back on as it was", ns.db.cardNewZoneOn == true)
 	ns.db.cardNewZoneOn = false
+
+	-- 4: can't pass by accident: Headline's old look (white Outfit Bold, no outline).
+	local old = { Font = "outfitbold", R = 0.96, G = 0.96, B = 0.94, Outline = 0 }
+	-- (The shipped look swapped: CardValue reads it while Style is off.)
+	local look, was = ns.CARD_STYLE_BY_ID.headline.look, {}
+	for field, value in pairs(old) do was[field], look[field] = look[field], value end
+	log = Run("the old white look")
+	Check("the old white look: FAIL", Has(log, "verdict FAIL newzoneoff: New zone's font, color and outline match") ~= nil,
+		Has(log, "New zone's font"))
+	for field in pairs(old) do look[field] = was[field] end
 end
 
 RunClient("forever")

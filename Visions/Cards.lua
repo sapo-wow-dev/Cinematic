@@ -295,11 +295,13 @@ local STYLES = {
 	{ id = "arcade", name = "Arcade", look = { Place = "screen", Style = "title", Font = "skurri", Size = 46,
 		Outline = 2, Pulse = 0.9, IconShow = true, R = 0.94, G = 0.62, B = 0.15, PulseR = 0.94, PulseG = 0.62,
 		PulseB = 0.15 } },
-	-- (A place's name big and plain, as a game's chapter title: heavy white
-	-- capitals, a word to a line, slammed onto the middle of the screen.)
-	{ id = "headline", name = "Headline", look = { Place = "screen", Style = "title", Anim = "slam", Font = "outfitbold",
-		Size = 96, Caps = true, Stack = true, Outline = 0, Shadow = "on", Hold = 3.5, SmallSize = 1.2,
-		R = 0.96, G = 0.96, B = 0.94, PulseR = 0.96, PulseG = 0.96, PulseB = 0.94 } },
+	-- (A place's name big, as a game's chapter title: capitals, a word to a
+	-- line, slammed onto the middle of the screen. In Milestone's font (General's),
+	-- gold and thin outline, so it matches the other cards: 2026-11-25, its own
+	-- white Outfit Bold read as plain white text beside the game's look.)
+	{ id = "headline", name = "Headline", look = { Place = "screen", Style = "title", Anim = "slam",
+		Size = 96, Caps = true, Stack = true, Outline = 1, Hold = 3.5, SmallSize = 1.2,
+		R = 1, G = 0.82, B = 0.35, PulseR = 1, PulseG = 0.82, PulseB = 0.35 } },
 	{ id = "quiet", name = "Quiet", look = { Place = "top", Align = "right", Style = "chapter", BarScale = 0.45,
 		Hold = 2 } },
 }

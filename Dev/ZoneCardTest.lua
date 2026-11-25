@@ -608,6 +608,15 @@ ns.TestKit.Define({
 			card = Enter(BIG)
 			r:Verdict(card and card.id == "newZone" and card.name == BIG, ("New zone ticked again, a new zone: %s \"%s\" (want newZone)"):format(
 				tostring(card and card.id), tostring(card and card.name)))
+			-- (2026-11-25, a player's "plain white text": its Headline look
+			-- matches the other cards, Discovered's font, color and outline.)
+			local differ = {}
+			for _, field in ipairs({ "Font", "R", "G", "B", "Outline" }) do
+				local big, small = ns.CardValue("newZone", field), ns.CardValue("discover", field)
+				if big ~= small then differ[#differ + 1] = ("%s %s vs %s"):format(field, tostring(big), tostring(small)) end
+			end
+			r:Verdict(#differ == 0, "New zone's font, color and outline match Discovered's" ..
+				(#differ > 0 and (": " .. table.concat(differ, ", ")) or (": font " .. tostring(ns.CardValue("newZone", "Font")))))
 			r:Sleep(0.6)
 			r:Shot("the big New zone card (ticked again)", { behind = _G.CinematicCard })
 			if card then ns.Cards.Cut(card.id) end
