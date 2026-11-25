@@ -451,6 +451,68 @@ ns.TestKit.Define({
 			r:Verdict(x and math.abs(x * scale - ns.DEFAULTS.rangeHintX * w) < 2, "unticked: back on its spot")
 			RH.Demo(0)
 		end },
+		-- Shoulder Cam's own height per frame: ±300 (±100 before, the user,
+		-- 2026-11-25: Range hint at +100 still sat low). Hands off; the lift
+		-- itself needs the camera over your shoulder.
+		{ key = "shoulderheight", title = "Follow HUD heights reach ±300, and +250 lifts the mark",
+			proven = "q3202 2026-11-25 (span 600 read as 0..600; lifted 250)", run = function(r)
+			local RH = ns.RangeHint
+			r:Set("showInRange", true)
+			r:Set("handleRangeHint", true)
+			local ok = pcall(ns.OpenOptions, "Shoulder Cam")
+			r:Sleep(1)
+			r:Verdict(ok, "Shoulder Cam page opened")
+			local slider
+			local function Walk(frame, depth)
+				if slider or depth > 18 then return end
+				for _, child in ipairs({ frame:GetChildren() }) do
+					if child.settingKey == "shoulderCamFollowRangeHintHeight" then slider = child return end
+					Walk(child, depth + 1)
+				end
+			end
+			if _G.SettingsPanel then Walk(_G.SettingsPanel, 0) end
+			local lo, hi
+			if slider then lo, hi = slider:GetMinMaxValues() end -- (not "slider and ...": that keeps one value)
+			-- (Options.lua's Slider shifts a range below 0 up by its minimum: -300..300 reads 0..600, run q3202.)
+			if lo == 0 and hi == 600 then lo, hi = -300, 300 end
+			r:Verdict(lo == -300 and hi == 300, ("Range hint's own height goes -300 to +300 (%s to %s)"):format(
+				tostring(lo), tostring(hi)))
+			if _G.SettingsPanel and _G.SettingsPanel:IsShown() then HideUIPanel(_G.SettingsPanel) end
+			local shift = ns.ShoulderYouShift and ns.ShoulderYouShift() or 0
+			if not (ns.db.shoulderCam and ns.db.shoulderCamFrames and math.abs(shift) > 5) then
+				return r:Skip("Shoulder Cam not over your shoulder now: the lift isn't measured")
+			end
+			r:Set("shoulderCamFollowRangeHint", true)
+			r:Set("shoulderCamFramesHeight", 0)
+			r:Set("shoulderCamFollowRangeHintHeight", 0)
+			RH.Demo(5)
+			r:Sleep(1.5)
+			local _, y0 = RH.frame:GetCenter()
+			r:Set("shoulderCamFollowRangeHintHeight", 250)
+			r:Sleep(1.5)
+			local _, y1 = RH.frame:GetCenter()
+			local scale = RH.frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			local lifted = y0 and y1 and (y1 - y0) * scale
+			r:Log(("mark middle %s -> %s, lifted %s"):format(tostring(y0), tostring(y1), tostring(lifted)))
+			r:Verdict(lifted and math.abs(lifted - 250) < 12, "+250 lifts the mark 250 over your shoulder")
+			r:Shot("Range Hint lifted +250 over the shoulder")
+			RH.Demo(0)
+		end },
+		-- Its Interface hub icon in the Info band, not Combat (the user,
+		-- 2026-11-25). Hands off.
+		{ key = "infoband", title = "Range Hint's icon is in the Interface hub's Info band",
+			proven = "q3202 2026-11-25 2/2", run = function(r)
+			local ok = pcall(ns.OpenOptions, "HUD:rangehint")
+			r:Sleep(1)
+			r:Verdict(ok, "Range Hint opened")
+			local band
+			for _, entry in ipairs(ns.HubOverview and ns.HubOverview("UI Manager") or {}) do
+				if entry.name == "HUD:rangehint" then band = entry.band end
+			end
+			r:Verdict(band == "Info", "in the Info band: " .. tostring(band))
+			r:Shot("Interface hub, Range Hint in Info", { behind = _G.SettingsPanel })
+			if _G.SettingsPanel and _G.SettingsPanel:IsShown() then HideUIPanel(_G.SettingsPanel) end
+		end },
 		-- The Show tab (the HUD's Range Hint section): a palette by its switch
 		-- opening Range Hint Style (the user, 2026-11-25), and no sound left
 		-- anywhere (removed the same day). Hands off.

@@ -3103,7 +3103,8 @@ do
 				["HUD:hud"] = false, ["HUD:units"] = "Combat", ["HUD:prd"] = "Combat", ["HUD:party"] = "Combat", ["HUD:bars"] = "Combat",
 				-- (Timers, the rows once called Trackers: in Info since 2026-11-18, user.)
 				["HUD:buffs"] = "Combat", ["HUD:combat"] = "Info", ["HUD:cdm"] = "Combat",
-				["HUD:swingtimer"] = "Combat", ["HUD:rangehint"] = "Combat", Gamepad = "Combat",
+				-- (Range Hint: in Info since 2026-11-25, the user.)
+				["HUD:swingtimer"] = "Combat", ["HUD:rangehint"] = "Info", Gamepad = "Combat",
 				Nameplates = "Nameplates", ["Nameplate Names"] = "Nameplates" },
 			colors = {
 			["Combat"] = { 0.35, 0.6, 0.9 }, Nameplates = { 0.85, 0.55, 0.25 }, Info = { 0.45, 0.75, 0.45 },
