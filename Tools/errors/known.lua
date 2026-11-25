@@ -616,4 +616,52 @@ return {
 [Blizzard_PlayerSpells/Blizzard_PlayerSpellsFrame.lua]:53: in function <...Blizzard_PlayerSpells/Blizzard_PlayerSpellsFrame.lua:42>]],
     source = "pasted 2026-11-24 18:48-18:53 (Forever, a fight, spellbook not opened by hand)",
   },
+
+  -- Style Studio --------------------------------------------------------------
+  {
+    id = "studio-stage-at-load",
+    status = "fixed",
+    title = "Every reload: a card's preview reads ns.db before it exists (CombatVision.lua:321, ZoneCard.lua), from Style Studio's page made at load",
+    match = { any = { "CombatVision.lua:321: attempt to index field 'db'", "ZoneCard.lua:%d+: attempt to index field 'db'" } },
+    why = {
+      call = "Setup reads ns.db.cardThirdX for the lower-third place; ns.db is nil",
+      caller = "Style Studio's Host:ShowStage (Style/Studio/Studio.lua) refreshing the Cards page's preview",
+      path = "ADDON_LOADED > Locales.lua's language callbacks > Options.lua makes every page > CreateCardStylesPanel > Studio's StyleEditorPage > its first Redraw > ShowStage > preview:Refresh > ns.PlayCard, all before Core.lua sets ns.db = CinematicDB",
+      rule = "the options pages are made at load, before ns.db; a page's controls may lay out then, but nothing that reads settings or plays may run until the page shows",
+      pattern = "any page's draw at build time that reaches a preview, a card or a setting read",
+    },
+    dont = "Don't play or refresh a preview while its page is made: draw the stage only when the host shows (its OnShow redraws).",
+    fix = "2026-11-25: Host:ShowStage draws the stage only when the host IsVisible (Style/Studio/Studio.lua). Found by testqueue.py's queue-wide error sweep.",
+    seen = { "2026-11-25" },
+    example = [[caught: ...terface/AddOns/CinematicDev/Visions/CombatVision.lua:321: attempt to index field 'db' (a nil value) [in test queue, between tests]
+[CinematicDev/Visions/CombatVision.lua]:1042: in function 'PlayCard'
+[CinematicDev/Visions/CardsPage.lua]:351: in function <CinematicDev/Visions/CardsPage.lua:315>
+[CinematicDev/Style/Studio/Studio.lua]:471: in function 'ShowStage'
+[CinematicDev/Style/Studio/Studio.lua]:769: in function 'StyleEditorPage'
+[CinematicDev/Visions/CardsPage.lua]:1841: in function 'CreateCardStylesPanel']],
+    source = "the dev error window and the saved log, 2026-11-25 12:31-12:41 (every reload of the test queue)",
+  },
+
+  -- Chat --------------------------------------------------------------------
+  {
+    id = "speech-edges-ipairs-nil",
+    status = "fixed",
+    title = "The lines from behind you: arithmetic on a nil chat window edge (Speech.lua:351) while ChatFrame1 has no place yet",
+    match = { all = { "Speech.lua:", "attempt to perform arithmetic on local" },
+      any = { "local 'left'", "local 'right'", "local 'top'" } },
+    why = {
+      call = "Edges(ChatFrame1) multiplies the window's GetLeft/GetRight/GetTop by the scale",
+      caller = "PlaceSpot (UI/Speech.lua), as the speech-behind holder is made or placed (ns.SpeechBehindSpot, a bubble line, Emote Vision's card asking where it sits)",
+      path = "ChatFrame1 with no place yet (moved or let go by a HUD switch flip, in the gating test's HUD step) -> GetLeft() nil -> the check, an ipairs over { left, right, top }, stops at the first nil and passes -> left * scale errors",
+      rule = "ipairs stops at the first nil: a table of maybe-nil values can't be checked with it",
+      pattern = "any `for _, v in ipairs({ a, b, c })` used to test that a, b and c are all set",
+    },
+    dont = "Don't check several maybe-nil values with ipairs over a table of them: test each one.",
+    fix = "2026-11-25: Edges tests each edge itself (UI/Speech.lua). Tools/offline/speechedges.lua: each edge nil in turn, a spot and no error.",
+    seen = { "2026-11-25" },
+    example = [[Lua Error: Interface/AddOns/CinematicDev/UI/Speech.lua:351: attempt to perform arithmetic on local 'left' (a nil value)
+[Interface/AddOns/CinematicDev/UI/Speech.lua]:351: in function <Interface/AddOns/CinematicDev/UI/Speech.lua:343>
+[Interface/AddOns/CinematicDev/UI/Speech.lua]:375: in function <Interface/AddOns/CinematicDev/UI/Speech.lua:357>]],
+    source = "the game's console, 2026-11-25 12:43 (Forever, /cine debug gating run 4, step 2 hud)",
+  },
 }

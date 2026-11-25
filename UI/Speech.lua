@@ -342,10 +342,14 @@ local OnHolderUpdate = ns.Profiled("Speech behind", OnUpdate)
 -- A frame's edges in the holder's units (nil if they can't be read).
 local function Edges(frame)
 	local left, right, top = frame:GetLeft(), frame:GetRight(), frame:GetTop()
-	for _, value in ipairs({ left, right, top }) do
-		if type(value) ~= "number" or (issecretvalue and issecretvalue(value)) then
-			return nil
-		end
+	-- (Each one looked at: an ipairs over them stopped at the first nil, so a
+	-- chat window with no place yet (its left nil) passed and errored below. The
+	-- in-game gating test, 2026-11-25: Speech.lua:351, left nil.)
+	local function Readable(value)
+		return type(value) == "number" and not (issecretvalue and issecretvalue(value))
+	end
+	if not (Readable(left) and Readable(right) and Readable(top)) then
+		return nil
 	end
 	local scale = frame:GetEffectiveScale() / holder:GetEffectiveScale()
 	return left * scale, right * scale, top * scale
