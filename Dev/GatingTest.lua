@@ -407,7 +407,10 @@ ns.TestKit.Define({
 				for _, off in ipairs({ "showInChat", "handleFrames" }) do
 					Apply(r, { { off, false } }, 2.5)
 					local audit = Loops(r, 2.2)
-					local running = Running(audit, { ["Bubbles.lua"] = true })
+					-- (The page's own loop only: its settings ticker, Bubbles.lua ~1015. The
+					-- bubble watcher further down, ~1057-1062, is also Bubble Style's, a
+					-- Style page of its own, and runs as people talk: run 3 saw it x15.)
+					local running = Running(audit, { ["Bubbles.lua"] = { 990, 1030 } })
 					r:Verdict(Saved("chatBubbles") == nil and Saved("chatBubblesParty") == nil
 						and (yours == nil or GetCVar("chatBubbles") == yours) and #running == 0,
 						("%s off: chatBubbles %s (yours %s), still saved %s, the page's loop: %s"):format(off,
