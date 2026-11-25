@@ -631,8 +631,8 @@ return {
       pattern = "any page's draw at build time that reaches a preview, a card or a setting read",
     },
     dont = "Don't play or refresh a preview while its page is made: draw the stage only when the host shows (its OnShow redraws).",
-    fix = "2026-11-25: Host:ShowStage draws the stage only when the host IsVisible (Style/Studio/Studio.lua). Found by testqueue.py's queue-wide error sweep.",
-    seen = { "2026-11-25" },
+    fix = "2026-11-25: Host:ShowStage draws the stage only when the host IsVisible (Style/Studio/Studio.lua). Found by testqueue.py's queue-wide error sweep. Seen again in the 12:47-13:04 queue runs: now also at the root, the card preview's own Refresh (Visions/CardsPage.lua) and ShowStage return while ns.db is nil, so no path that reaches the preview at load can play a card.",
+    seen = { "2026-11-25", "2026-11-25 12:47-13:04 (reloads)" },
     example = [[caught: ...terface/AddOns/CinematicDev/Visions/CombatVision.lua:321: attempt to index field 'db' (a nil value) [in test queue, between tests]
 [CinematicDev/Visions/CombatVision.lua]:1042: in function 'PlayCard'
 [CinematicDev/Visions/CardsPage.lua]:351: in function <CinematicDev/Visions/CardsPage.lua:315>

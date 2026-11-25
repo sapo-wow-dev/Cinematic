@@ -313,7 +313,9 @@ function ns.MakeCardPreview(parent, width, fixedH, which, lookOf, opts)
 		caption.searchSkip = true
 	end
 	function preview:Refresh()
-		if not self:IsVisible() then
+		-- (Not before the settings exist: the pages are made at load and ns.PlayCard reads
+		-- ns.db, CombatVision.lua:321; known.lua studio-stage-at-load, seen again 2026-11-25.)
+		if not ns.db or not self:IsVisible() then
 			return -- (the kit refreshes every page's controls)
 		end
 		if ns.FitStylePreview(self) then return end -- (resized: it played from there)
