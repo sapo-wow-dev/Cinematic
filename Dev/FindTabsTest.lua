@@ -1,33 +1,25 @@
--- /cine debug findtabs: one run on /cine find landing on the wrong tab
--- (2026-11-20: /cine find row:plate:FriendlyNPCs opened the Nameplates page
--- on its Dungeons & raids tab, the glow where the Friendly tab's row would
--- be). Hands off: it runs /cine find on ids from the Nameplates and Names
--- icons' tabs, one after another, each from the tab the last one left. For
--- each: the tab saved before and after, what /cine find said, whether the
--- id's control is on screen (its frame visible, its page shown), and a
--- screenshot. Traced as it happens: every save of a page's picked tab
--- (SectionState.Save, with who called it) and every Nameplates or Names icon
--- pick (ns.PickPlatesIcon). A verdict per id: PASS when its control is
--- visible. Out of a fight. Into CinematicDB.findTabsLog. Dev copy only.
+-- /cine debug findtabs: /cine find landing on the wrong tab or card. Nothing
+-- to do: it runs /cine find on ids one after another, each from where the
+-- last one left the settings, and says DONE. (A test kit test, Dev/TestKit.lua,
+-- since 2026-11-25: before, the queue couldn't tell it had ended.)
+--   1 plates  ids on the Nameplates and Names icons' tabs (2026-11-20:
+--             /cine find row:plate:FriendlyNPCs opened the Nameplates page on
+--             its Dungeons & raids tab, the glow where the Friendly tab's row
+--             would be). Traced: every save of the page's picked tab (with
+--             who called it) and every Nameplates or Names icon pick.
+--   2 cards   Card Vision's Settings tab shows one event's settings at a
+--             time: /cine find on another event's setting opened it on the
+--             last event, the glow on an empty spot (2026-11-25). Now it
+--             picks the setting's event first.
+--   3 off     the flight line's slider at 0 reads Off (your value put back)
+-- For each id: what /cine find said, whether its control is on screen (its
+-- frame visible, its page shown), and a screenshot. PASS when visible. Out of
+-- a fight. Into CinematicDB.findTabsTestLog. Dev copy only.
 local _, ns = ...
 
-local WAIT, SETUP = 1.5, 4 -- seconds
-local CASES = {
-	-- (First right after a /reload, the page not built yet: the player's way.
-	-- The Dungeons & raids tab's dropdowns have no ids: none of them here.)
-	{ id = "row:plate:FriendlyNPCs", where = "Nameplates, Friendly (page not built yet)" },
-	{ id = "row:plate:EnemyNPCs", where = "Nameplates, Enemy" },
-	{ id = "row:name:ServiceNPCs", where = "Names, Friendly NPCs" },
-	{ id = "row:plate:FriendlyNPCs", where = "Nameplates, Friendly (from Names)" },
-	{ id = "row:name:ServiceNPCs", where = "Names, Friendly NPCs (from Nameplates)" },
-}
+local WAIT = 1.5 -- seconds after each /cine find (it glows once the page settles)
 
-local run -- { at, index, caseAt, pass, fail, ticker }
-
-local function Say(text)
-	local log = CinematicDB and CinematicDB.findTabsLog
-	if log then log[#log + 1] = ("%.2f %s"):format(run and GetTime() - run.at or 0, text) end
-end
+local tracing -- the run's r while a step traces
 
 local function SavedTab()
 	local open = ns.db and ns.db.sectionsOpen
@@ -45,7 +37,7 @@ local function Caller()
 	return table.concat(lines, " < ")
 end
 
--- The traces, put in once (they log only while a run is on).
+-- The traces, put in once (they log only while a step traces).
 local traced
 local function Trace()
 	if traced then return end
@@ -54,8 +46,8 @@ local function Trace()
 	if kit and kit.Save then
 		local save = kit.Save
 		kit.Save = function(section, open, ...)
-			if run and type(section) == "table" and section.id == "Nameplates/tab" then
-				Say(("    tab saved: %s -> %s (%s)"):format(tostring(section.open), tostring(open), Caller()))
+			if tracing and type(section) == "table" and section.id == "Nameplates/tab" then
+				tracing:Log(("    tab saved: %s -> %s (%s)"):format(tostring(section.open), tostring(open), Caller()))
 			end
 			return save(section, open, ...)
 		end
@@ -69,98 +61,85 @@ local function TracePick()
 	local pick = ns.PickPlatesIcon
 	if pick and pick ~= pickWrap then
 		pickWrap = function(names, ...)
-			if run then
-				Say(("    icon picked: %s, tab before %s (%s)"):format(names and "Names" or "Nameplates", SavedTab(),
+			if tracing then
+				tracing:Log(("    icon picked: %s, tab before %s (%s)"):format(names and "Names" or "Nameplates", SavedTab(),
 					Caller()))
 			end
 			local results = { pick(names, ...) }
-			if run then Say("      tab after the pick: " .. SavedTab()) end
+			if tracing then tracing:Log("      tab after the pick: " .. SavedTab()) end
 			return unpack(results)
 		end
 		ns.PickPlatesIcon = pickWrap
 	end
 end
 
-local function Shot(what)
-	local ok = pcall(function() Screenshot() end)
-	Say(ok and ("  screenshot (%s) at %s"):format(what, date("%m%d%y_%H%M%S")) or "  screenshot failed")
-end
-
-local function Check(case)
-	local entry = ns.FindEntryOf and ns.FindEntryOf(case.id)
+-- One /cine find, waited on, checked.
+local function Find(r, id, where)
+	r:Log(("--- /cine find %s (should open %s); tab before %s ---"):format(id, where, SavedTab()))
+	TracePick()
+	local ok, text, pageName = pcall(ns.FindSetting, id)
+	r:Log(("  /cine find said: %s"):format(ok and (tostring(text) .. " on " .. tostring(pageName))
+		or ("error " .. tostring(text))))
+	r:Sleep(WAIT)
+	TracePick()
+	local entry = ns.FindEntryOf and ns.FindEntryOf(id)
 	local frame = entry and entry.edges and entry.edges.top
 	local page = entry and entry.page and entry.page.canvas
 	local visible = frame and frame:IsVisible() and true or false
-	Say(("  after: tab %s; control %s (shown flag %s, visible %s), its page %s shown %s"):format(SavedTab(),
-		frame and "found" or "NOT in the index", tostring(frame and frame:IsShown()), tostring(visible),
-		tostring(entry and entry.page and entry.page.key), tostring(page and page:IsVisible())))
-	run[visible and "pass" or "fail"] = run[visible and "pass" or "fail"] + 1
-	Say(("  %s %s: its control %s on screen"):format(visible and "PASS" or "FAIL", case.id,
-		visible and "is" or "is NOT"))
-	Shot(case.id)
+	r:Verdict(visible, ("%s: its control %s on screen (tab %s; control %s, shown flag %s; its page %s shown %s)"):format(
+		id, visible and "is" or "is NOT", SavedTab(), frame and "found" or "NOT in the index",
+		tostring(frame and frame:IsShown()), tostring(entry and entry.page and entry.page.key),
+		tostring(page and page:IsVisible())))
+	r:Shot(id, { behind = SettingsPanel })
 end
 
-local function Finish(done)
-	if run.ticker then run.ticker:Cancel() end
-	Say(("done: %d PASS, %d FAIL%s"):format(run.pass, run.fail, done and "" or " (stopped early)"))
-	run = nil
-	ns.TestPrompt(done and "Find test done. /reload, then say \"check log\"." or "Find test stopped.", 10)
+local function Cases(cases)
+	return function(r)
+		if InCombatLockdown() then return r:Fail("in a fight: settings can't open") end
+		if not ns.FindSetting then return r:Fail("no ns.FindSetting") end
+		Trace()
+		tracing = r
+		for _, case in ipairs(cases) do Find(r, case[1], case[2]) end
+		tracing = nil
+	end
 end
 
-local function Tick()
-	if InCombatLockdown() then
-		Say("stopped: a fight started")
-		Finish(false)
-		return
-	end
-	TracePick()
-	local now = GetTime()
-	if now - run.at < SETUP then return end
-	local case = CASES[run.index]
-	if case and not case.checked and now - run.caseAt >= WAIT then
-		case.checked = true
-		Check(case)
-		return
-	end
-	if case and now - run.caseAt < WAIT + 0.5 then return end
-	run.index = run.index + 1
-	case = CASES[run.index]
-	if not case then
-		Finish(true)
-		return
-	end
-	case.checked = nil
-	run.caseAt = now
-	Say(("--- %d/%d: /cine find %s (should open %s); tab before %s ---"):format(run.index, #CASES, case.id,
-		case.where, SavedTab()))
-	TracePick()
-	local ok, text, pageName = pcall(ns.FindSetting, case.id)
-	Say(("  /cine find said: %s"):format(ok and (tostring(text) .. " on " .. tostring(pageName))
-		or ("error " .. tostring(text))))
-end
-
-function ns.FindTabsTest()
-	if run then
-		Finish(false)
-		return
-	end
-	if InCombatLockdown() then
-		ns.Print("find tabs test: not in a fight")
-		return
-	end
-	Trace()
-	CinematicDB.findTabsLog = {}
-	run = { at = GetTime(), index = 0, caseAt = 0, pass = 0, fail = 0 }
-	for _, case in ipairs(CASES) do case.checked = nil end
-	Say(("start: %s (game %s), tab saved %s, traces: save %s, icon pick %s"):format(ns.isRetail and "retail" or
-		"Forever", tostring((select(4, GetBuildInfo()))), SavedTab(), tostring(ns.lowHealthKit
-		and ns.lowHealthKit.SectionState ~= nil), tostring(ns.PickPlatesIcon ~= nil and "now" or "once built")))
-	ns.TestPrompt("Find test: hands off, it opens the settings by itself (about 15 sec). Run it right after a /reload.", 4)
-	run.ticker = C_Timer.NewTicker(0.25, function()
-		local ok, err = pcall(Tick)
-		if not ok then
-			Say("error: " .. tostring(err))
-			if run then Finish(false) end
-		end
-	end)
-end
+ns.TestKit.Define({
+	name = "findtabs",
+	key = "findTabsTest",
+	title = "/cine find lands on its tab",
+	about = "/cine find on ids in Nameplates, Names and Card Vision tabs: each control on screen, nothing to do",
+	settings = { "cardDepartureLineEdges" },
+	finish = function()
+		tracing = nil
+		if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+	end,
+	steps = {
+		{ key = "plates", title = "Nameplates and Names tabs", run = Cases({
+			-- (First right after a /reload, the page not built yet: the player's
+			-- way. The Dungeons & raids tab's dropdowns have no ids.)
+			{ "row:plate:FriendlyNPCs", "Nameplates, Friendly (page not built yet)" },
+			{ "row:plate:EnemyNPCs", "Nameplates, Enemy" },
+			{ "row:name:ServiceNPCs", "Names, Friendly NPCs" },
+			{ "row:plate:FriendlyNPCs", "Nameplates, Friendly (from Names)" },
+			{ "row:name:ServiceNPCs", "Names, Friendly NPCs (from Nameplates)" },
+		}) },
+		{ key = "cards", title = "Card Vision events", run = Cases({
+			{ "storyZoneGap", "Card Vision, Settings, New zone" },
+			{ "cardDepartureLineEdges", "Card Vision, Settings, Flight departure (from New zone)" },
+		}) },
+		-- (The flight line's slider all the way left reads Off, the line up the
+		-- whole way: "0 s" read as never shown, 2026-11-25.)
+		{ key = "off", title = "flight line slider at 0 reads Off", run = function(r)
+			local entry = ns.FindEntryOf and ns.FindEntryOf("cardDepartureLineEdges")
+			local slider = entry and entry.edges and entry.edges.bottom
+			if not (slider and slider.Refresh and slider.title) then return r:Fail("the slider wasn't found") end
+			r:Set("cardDepartureLineEdges", 0)
+			slider:Refresh()
+			local off = slider.title:GetText() or ""
+			r:Verdict(off:find(ns.L["Off"], 1, true) ~= nil and slider:IsVisible(), ("at 0 it reads %q, on screen %s"):format(
+				off, tostring(slider:IsVisible())))
+			r:Shot("slider at 0", { behind = SettingsPanel })
+		end },
+	},
+})

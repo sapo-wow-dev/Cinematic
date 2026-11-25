@@ -1565,7 +1565,10 @@ end
 -- What a page builds for each event, shown only while it's the one picked
 -- (Now()): Part(id, build) then Finish() once the page is built. Each part
 -- starts where the first began. A control that shows and hides itself
--- (ownVisibility) is left to do so on its event.
+-- (ownVisibility) is left to do so on its event. A search match on a part's
+-- control picks its event first (ShowMatch's openSection): /cine find
+-- cardDepartureLineEdges opened the page on Entering combat, the glow on an
+-- empty spot, 2026-11-25.
 local function Parts(kit, content, stack, Now)
 	local owner, hidden, start = {}, {}, nil
 	local function Each(fn)
@@ -1578,7 +1581,19 @@ local function Parts(kit, content, stack, Now)
 		local before = {}
 		Each(function(object) before[object] = true end)
 		build()
-		Each(function(object) if not before[object] then owner[object] = id end end)
+		Each(function(object)
+			if not before[object] then
+				owner[object] = id
+				if not object.openSection then
+					object.openSection = function()
+						if Now() ~= id then
+							CARD.now = id
+							kit.Refresh()
+						end
+					end
+				end
+			end
+		end)
 	end
 	function parts.Finish()
 		local apply = CreateFrame("Frame", nil, content)
@@ -2146,9 +2161,11 @@ function ns.CreateCardSettingsPanel(kit)
 				"up."])
 			kit.GreyUnless(where, function(db) return db.cardDepartureLine end)
 		end
+		-- (0 reads Off: the limit's off, the line up the whole way. "0 s" read as
+		-- never shown, 2026-11-25.)
 		local edges = stack:Add(kit.Slider(content, "cardDepartureLineEdges", L["Only at the start and end"], 0, 30, 1,
-			"%d s"), "slider")
-		kit.Tooltip(edges, L["Shows the line only this long at the start and end. Set to 0 to show it the whole way."])
+			function(value) return value <= 0 and L["Off"] or ("%d s"):format(value) end), "slider")
+		kit.Tooltip(edges, L["Shows the line only this long at the start and end. All the way left (Off) shows it the whole way."])
 		kit.GreyUnless(edges, function(db) return db.cardDepartureLine end)
 		local clock = kit.Dropdown(content, "cardDepartureClock", List({
 			{ "minutes", L["Minutes only"], L["\"2 min\", rounded up, then \"under a minute\"."] },

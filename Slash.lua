@@ -2066,9 +2066,6 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "themeart" then
 		-- (Dev copy: a style theme's box going with the Frame art rows and overrides, ThemeArtTest.lua.)
 		if ns.ThemeArtTest then ns.ThemeArtTest() else ns.Print("/cine debug themeart is in the dev copy only.") end
-	elseif cmd == "debug" and arg == "findtabs" then
-		-- (Dev copy: /cine find on ids in each Nameplates and Names tab, FindTabsTest.lua.)
-		if ns.FindTabsTest then ns.FindTabsTest() else ns.Print("/cine debug findtabs is in the dev copy only.") end
 	elseif cmd == "debug" and arg == "cvartrace" then
 		-- (Dev copy: who changes plate, name and soft target settings at login, CVarTraceTest.lua.)
 		if ns.CVarTraceTest then ns.CVarTraceTest() else ns.Print("/cine debug cvartrace is in the dev copy only.") end

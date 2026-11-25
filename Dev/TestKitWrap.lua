@@ -104,7 +104,6 @@ local OLD = {
 	{ cmd = "namescale", fn = "NameScaleTest", file = "NameScaleTest.lua", log = "nameScaleLog" },
 	{ cmd = "npctitle", fn = "NpcTitleTest", file = "NpcTitleTest.lua", log = "npcTitleLog" },
 	{ cmd = "themeart", fn = "ThemeArtTest", file = "ThemeArtTest.lua", log = "themeArtLog" },
-	{ cmd = "findtabs", fn = "FindTabsTest", file = "FindTabsTest.lua", log = "findTabsLog" },
 	{ cmd = "cvartrace", fn = "CVarTraceTest", file = "CVarTraceTest.lua", log = "cvarTraceLog" },
 	{ cmd = "dotnumbers", fn = "DotNumbersTest", file = "DotNumbersTest.lua", log = "dotNumbersLog" },
 	{ cmd = "anytime", fn = "ReadyAnyTimeTest", file = "ReadyAnyTimeTest.lua", log = "anyTimeLog" },
