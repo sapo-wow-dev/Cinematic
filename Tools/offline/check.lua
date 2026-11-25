@@ -67,6 +67,54 @@ if arg[1] and not update then
 			for _, gap in ipairs(gaps) do print("problem\tWhy window: " .. gap) end
 		end
 	end
+	-- Update loops in a file that draws over the screen (ns.AddOverlay,
+	-- ns.CoverWorld) give a clean-up (ns.SetOnUpdate's / ns.FeatureLoop's
+	-- clear), run if the loop's breaker turns it off or on a safety stop: a
+	-- loop turned off without one left its overlay frozen on screen (a player's
+	-- teleport filter till Alt+F4, audit 2026-11-25). Those without one are
+	-- listed by their call's text in loop-clears-allowed.txt, each with why.
+	do
+		local paths, overlay = {}, {}
+		for line in io.lines(toc) do
+			line = line:gsub("\r", "")
+			if line ~= "" and not line:find("^#") then
+				local path = line:gsub("\\", "/")
+				local name = path:match("[^/]+$")
+				paths[name] = path
+				local f = io.open(path)
+				if f then
+					local text = f:read("*a")
+					f:close()
+					if text:find("ns%.AddOverlay%(") or text:find("ns%.CoverWorld%(") then overlay[name] = true end
+				end
+			end
+		end
+		local allowed = {}
+		local list = io.open("Tools/offline/loop-clears-allowed.txt")
+		if list then
+			for line in list:lines() do
+				local key = line:gsub("\r$", ""):match("^([^#|]-)%s*|")
+				if key and key ~= "" then allowed[key] = true end
+			end
+			list:close()
+		end
+		for label, hasClear in pairs(ns.LoopsSet and ns.LoopsSet() or {}) do
+			local file, at = label:match("^([^:]+):(%d+)$")
+			if file and overlay[file] and not hasClear then
+				local code, n = "?", 0
+				for line in io.lines(paths[file]) do
+					n = n + 1
+					if n == tonumber(at) then code = line:gsub("\r$", ""):match("^%s*(.-)%s*$") break end
+				end
+				local key = file .. ": " .. code
+				if not allowed[key] then
+					print(("problem\tloop clean-up: %s:%s sets an update loop with no clear in a file that draws over " ..
+						"the screen (pass one, or list \"%s | why\" in Tools/offline/loop-clears-allowed.txt)")
+						:format(file, at, key))
+				end
+			end
+		end
+	end
 	-- Combat Text Style, whose hit (2026-11-19): on Forever hits wait for the
 	-- combat log's lines from login on, so others' hits and heals stay out
 	-- before your first line of the session (they all showed). Retail waits

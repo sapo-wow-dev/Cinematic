@@ -1,0 +1,25 @@
+# Update loops with no clean-up (clear) in a file that draws over the screen,
+# allowed by Tools/offline/check.lua's "loop clean-up" check. One per line:
+#   <File.lua>: <the call's line, trimmed> | why it needs none
+# A new loop in such a file gives a clear (ns.SetOnUpdate's 3rd argument,
+# ns.FeatureLoop's 5th) that hides what it draws and resets its state, or is
+# listed here with why. Audit 2026-11-25 (a player's teleport filter frozen
+# on screen till Alt+F4).
+Camera.lua: ns.FeatureLoop(recastWatcher, ns.Profiled("Right-click cast watch", function() | watches casts, draws nothing
+Camera.lua: ns.WakeSeatWatch = ns.FeatureLoop(seatWatcher, ns.Profiled("Seat watch", function() | watches sitting, draws nothing
+DamageVision.lua: ns.SetOnUpdate(button, function(self) | a settings page button's label
+DeathVision.lua: ns.SetOnUpdate(button, Label) | a settings page button's label
+Effects.lua: ns.SetOnUpdate(castWatcher, function(self) | watches casts, draws nothing
+Effects.lua: ns.SetOnUpdate(ns.plates.hoverWatch, ns.Profiled("Plate mouseover watch", function(self) | watches the mouse over plates, draws nothing
+Effects.lua: ns.SetOnUpdate(ns.plates.nearFrame, ns.Profiled("Enemies in yd fade", ns.plates.NearUpdate)) | follow-up: fades game plates (a safety stop gives them back: ns.ShowPlatesNow)
+Effects.lua: ns.SetOnUpdate(plateKeeper, ns.Profiled("Plate keeper", function(self) | follow-up: keeps game plates (a safety stop gives them back: ns.plates.Release)
+EmoteVision.lua: ns.SetOnUpdate(move, function(self) self:SetText(ns.EmoteVisionMoving() and L["Done"] or L["Move"]) end) | a settings page button's label
+FlightLine.lua: ns.SetOnUpdate(line, Update) | follow-up: the flight line could stay frozen; hides itself off the taxi only while its loop runs
+LowHealth.lua: ns.SetOnUpdate(preview, function(self, elapsed) | a settings page preview
+LowHealth.lua: ns.SetOnUpdate(testButton, function(self, elapsed) | a settings page button's label
+ManaVision.lua: ns.SetOnUpdate(button, function(self, elapsed) | a settings page button's label
+ManaVision.lua: ns.SetOnUpdate(preview, function(self, elapsed) | a settings page preview
+ManaVision.lua: ns.SetOnUpdate(testButton, function(self, elapsed) | a settings page button's label
+SleepingBag.lua: ns.FeatureLoop(catchUp, function() | reads auras, draws nothing
+TeleportVision.lua: ns.SetOnUpdate(button, Label) | a settings page button's label
+WindGuide.lua: ns.SetOnUpdate(driver, Update) | dev-only Wind Guide

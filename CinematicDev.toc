@@ -308,6 +308,7 @@ Dev\PerfTest.lua
 Dev\ResetPopupTest.lua
 Dev\ResetCvarsTest.lua
 Dev\KeybindSwitchTest.lua
+Dev\OverlayGuardTest.lua
 Dev\CdmRoundTest.lua
 Dev\LoadPartsTest.lua
 Dev\GatingTest.lua

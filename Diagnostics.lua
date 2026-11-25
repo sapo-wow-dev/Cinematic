@@ -307,6 +307,12 @@ end
 -- few seconds. Each loop is named by the file and line that set it (read once,
 -- when it's set). ns.loopAudit is nil except while measuring.
 local function LoopLabel()
+	-- (Offline, no debugstack: Lua's own, for check.lua's loop clean-up check.)
+	if not debugstack and debug and debug.getinfo then
+		local info = debug.getinfo(3, "Sl")
+		local file = info and tostring(info.source):match("([%w_]+%.lua)$")
+		return file and (file .. ":" .. tostring(info.currentline)) or "?"
+	end
 	local stack = debugstack and debugstack(3, 1, 0) or ""
 	-- (Secret when set from inside a hook on the game's own secret work, its
 	-- combat text's SetText: reading it errored, Forever 2026-11-20.)
@@ -386,6 +392,11 @@ end
 -- its breaker turns it off (and on a safety stop); /cine resume then starts it
 -- again (ns.ReviveLoops).
 local setLoops = setmetatable({}, { __mode = "k" }) -- frame -> { wrapped, state }
+-- (Every loop set, by the file:line that set it, and whether it has a
+-- clean-up: Tools/offline/check.lua fails a loop in a file that draws over
+-- the screen with none. Audit 2026-11-25.)
+local loopLabels = {}
+function ns.LoopsSet() return loopLabels end
 function ns.SetOnUpdate(frame, fn, clear)
 	if not fn then
 		setLoops[frame] = nil
@@ -394,7 +405,9 @@ function ns.SetOnUpdate(frame, fn, clear)
 	end
 	if clear then loopClears[frame] = clear end
 	local state = { dead = false, windowStart = 0, inWindow = 0, clear = clear }
-	local wrapped = Protect(fn, false, LoopLabel(), state)
+	local label = LoopLabel()
+	loopLabels[label] = loopLabels[label] or clear ~= nil
+	local wrapped = Protect(fn, false, label, state)
 	setLoops[frame] = { wrapped = wrapped, state = state }
 	frame:SetScript("OnUpdate", wrapped)
 end
@@ -461,7 +474,9 @@ end
 function ns.FeatureLoop(frame, fn, wanted, every, clear)
 	if clear then loopClears[frame] = clear end
 	local state = { dead = false, windowStart = 0, inWindow = 0, clear = clear }
-	local loop = { frame = frame, run = Protect(fn, false, LoopLabel(), state), state = state, wanted = wanted, on = nil,
+	local label = LoopLabel()
+	loopLabels[label] = loopLabels[label] or clear ~= nil
+	local loop = { frame = frame, run = Protect(fn, false, label, state), state = state, wanted = wanted, on = nil,
 		every = every }
 	if every then
 		loop.tick = function()
