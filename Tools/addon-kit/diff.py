@@ -253,8 +253,8 @@ def compare(base, run, addon, expects, risk=None):
     return fails, expected, notes
 
 
-def cmd_baseline(client, log):
-    run = load_run(client, log, "none")
+def cmd_baseline(client, log, run=None):
+    run = run or load_run(client, log, "none")
     if run.addons:
         print("FAIL a baseline needs no other addon loaded; this run had: %s (/cine debug solo with no addon)" %
               ",".join(run.addons))
@@ -283,13 +283,13 @@ def cmd_baseline(client, log):
     return 0
 
 
-def cmd_check(addon, client, log, use_expect=True, base_file=None):
+def cmd_check(addon, client, log, use_expect=True, base_file=None, run=None):
     path = base_file or baseline_path(client)
     if not os.path.exists(path):
         print("FAIL no baseline for %s yet: diff.py baseline %s, after a run with no other addon" % (client, client))
         return 1
     base = Run(read_lines(path), path)
-    run = load_run(client, log, addon)
+    run = run or load_run(client, log, addon)
     fails, expected, notes = compare(base, run, addon, expectations() if use_expect else [], at_risk())
     for x in expected:
         print("EXPECTED " + x)
@@ -302,40 +302,53 @@ def cmd_check(addon, client, log, use_expect=True, base_file=None):
     return 1 if fails else 0
 
 
-def cmd_all(client):
-    """After /cine debug addonkit: the baseline from its none run, then every addon it ran, judged."""
+RUN_KEY = re.compile(r"^addonKitR(\d+)_(\w+?)(Rows)?Log$")
+
+
+def runs_in(tables):
+    """{run stamp: {target key part: {"log": lines, "rows": lines}}} from per-run keys (Dev/AddonKitTest.lua)."""
+    out = {}
+    for key, lines in tables.items():
+        m = RUN_KEY.match(key)
+        if not m or not lines:
+            continue
+        entry = out.setdefault(m.group(1), {}).setdefault(m.group(2), {})
+        entry["rows" if m.group(3) else "log"] = lines
+    return out
+
+
+def cmd_all(client, stamp=None):
+    """After /cine debug addonkit: one run (the newest, or the one named) judged against its own baseline."""
     tables, path = saved_logs(client)
-    if not tables.get(log_key("none")):
-        print("FAIL no %s in %s: the run's baseline step didn't happen" % (log_key("none"), path))
+    runs = {k: v for k, v in runs_in(tables).items() if v.get("none", {}).get("log")}
+    if not runs:
+        print("FAIL no addon kit run with a baseline stage in %s (run /cine debug addonkit, then /reload)" % path)
         return 1
-    code = cmd_baseline(client, None)
-    base_run = Run(tables[log_key("none")], "none").head.get("run")
-    bad, older = 0, []
-    for key in sorted(tables):
-        m = re.match(r"^addonKit(\w+?)Log$", key)
-        if (not m or key in (log_key("none"), "addonKitLog", "addonKitTestLog") or key.endswith("RowsLog")
-                or key.endswith("PrevLog") or not (tables[key] and tables[key][0].startswith("H "))):
+    stamp = stamp or max(runs)
+    if stamp not in runs:
+        print("FAIL no run %s; runs there: %s" % (stamp, ", ".join(sorted(runs))))
+        return 1
+    stages = runs[stamp]
+    others = sorted(set(runs) - {stamp})
+    print("run %s: %s%s" % (stamp, ", ".join(sorted(stages)),
+                             ("; other runs kept: " + ", ".join(others)) if others else ""))
+    code = cmd_baseline(client, None, Run(stages["none"]["log"], "run %s none" % stamp))
+    bad = 0
+    for part in sorted(stages):
+        if part == "none" or not stages[part].get("log"):
             continue
-        run = Run(tables[key], key)
-        addon = run.head.get("label") or m.group(1)
-        # (Only the stages of the baseline's own run: an older run's addon,
-        # judged against a newer baseline, showed the baseline's drift as its
-        # FAILs, 2026-11-25. Logs from before run ids: older too.)
-        if not base_run or run.head.get("run") != base_run:
-            older.append(addon)
-            continue
+        run = Run(stages[part]["log"], "run %s %s" % (stamp, part))
+        addon = run.head.get("label") or part
         print("--- %s" % addon)
-        bad += 1 if cmd_check(addon, client, None) else 0
-        rows = tables.get(key[:-3] + "RowsLog") or []
+        bad += 1 if cmd_check(addon, client, None, run=run) else 0
+        rows = stages[part].get("rows") or []
         # (A FAIL verdict, or a frame's own NOT COVERED line: "  NOT COVERED <frame>". Not the
         # "0 NOT COVERED" inside a PASS verdict, which the first game run counted, 2026-11-25.)
         fails = [l for l in rows if re.search(r"VERDICT .*: FAIL|\s\sNOT COVERED \S", l)]
         for line in fails[:20]:
             print("FAIL rows: " + line)
         bad += 1 if fails else 0
-    if older:
-        print("note not judged, from an older run than this baseline (run them again): %s" % ", ".join(older))
-    print("addon kit all %s: %d addons with a FAIL" % (client, bad))
+    print("addon kit all %s, run %s: %d addons with a FAIL" % (client, stamp, bad))
     return 1 if (bad or code) else 0
 
 
@@ -461,7 +474,9 @@ def selftest():
     one = ["H format=1 client=forever build=16001 label=none addons= run=A", "R touch.X	shown	true	v1", "D 1"]
     same = ["H format=1 client=forever build=16001 label=Same addons=Same run=A", "R touch.X	shown	true	v1", "D 1"]
     old = ["H format=1 client=forever build=16001 label=Old addons=Old run=B", "R touch.X	shown	false	v1", "D 1"]
-    globals()["saved_logs"] = lambda c: ({"addonKitnoneLog": one, "addonKitSameLog": same, "addonKitOldLog": old}, "x")
+    oldbase = ["H format=1 client=forever build=16001 label=none addons= run=B", "R touch.X	shown	false	v1", "D 1"]
+    globals()["saved_logs"] = lambda c: ({"addonKitR2_noneLog": one, "addonKitR2_SameLog": same,
+                                          "addonKitR1_noneLog": oldbase, "addonKitR1_OldLog": old}, "x")
     import io
     import contextlib
     out = io.StringIO()
@@ -470,7 +485,7 @@ def selftest():
     globals()["saved_logs"], globals()["baseline_path"] = saved
     text = out.getvalue()
     check("all: an addon from an older run isn't judged against a newer baseline",
-          code == 0 and "--- Same" in text and "--- Old" not in text and "not judged" in text and "Old" in text, text[-300:])
+          code == 0 and "--- Same" in text and "--- Old" not in text and "other runs kept: 1" in text, text[-300:])
     check("expectations read across lines", any(e[2] == "linesOnly" and "2979131" in e[3] for e in expects))
     print("diff selftest: %d FAIL" % len(bad))
     return 1 if bad else 0
@@ -486,7 +501,7 @@ def main():
     if len(args) >= 2 and args[0] == "baseline":
         sys.exit(cmd_baseline(args[1], log))
     if len(args) >= 2 and args[0] == "all":
-        sys.exit(cmd_all(args[1]))
+        sys.exit(cmd_all(args[1], args[2] if len(args) >= 3 else None))
     if len(args) >= 3 and args[0] == "check":
         sys.exit(cmd_check(args[1], args[2], log, use_expect="--no-expect" not in sys.argv))
     print(__doc__)
