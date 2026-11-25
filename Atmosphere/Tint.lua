@@ -404,7 +404,7 @@ end
 -- day's phases, the clock): yours while its Enable Page is on, else the
 -- defaults (no zone or phase of your own).
 local function Look()
-	if db and ns.PageOn("tintStyle") then return db end
+	if db and ns.StyleOn("tintStyle", db) then return db end -- (and Enable Style's, Style loaded. Audit 2026-11-25)
 	return ns.DEFAULTS
 end
 

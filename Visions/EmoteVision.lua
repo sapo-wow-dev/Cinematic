@@ -10,6 +10,9 @@
 -- border). Its pages are at the bottom.
 
 local _, ns = ...
+-- (Its Nameplates tab off with Emote Vision, whichever parts load: the switch
+-- tree's shape the same. Audit 2026-11-25)
+ns.SetPageMaster({ "emoteVisionPlates" }, "emoteVision")
 ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
@@ -23,7 +26,7 @@ DEFAULTS.emoteVisionGroupBuffs = false -- buffs from your own party or raid igno
 DEFAULTS.emoteVisionHold = 10          -- seconds a card stays (paused while the mouse is over it)
 DEFAULTS.emoteVisionPadGrab = "PADRSTICK" -- gamepad: the button that lets the face buttons pick the card's emotes
 DEFAULTS.emoteVisionPlates = true     -- its Nameplates tab (the cards that need a plate: plates = true) at all
-ns.SetPageMaster({ "emoteVisionPlates" }, "emoteVision") -- (Emote Vision off: that tab off too)
+-- (Its master: set above ns.Module. Audit 2026-11-25)
 DEFAULTS.emoteSettings = true         -- its Settings tab at all (that tab's switch; off: its settings as they start)
 DEFAULTS.emoteStyle = true            -- its Look tab at all (that tab's switch; off: the starting look and spot)
 DEFAULTS.emoteVisionScale = 1
@@ -548,7 +551,7 @@ local function DB() return ns.GetDB() or DEFAULTS end
 
 -- (Look tab's Enable Page off: the words and frame at their defaults.)
 local function Look()
-	return ns.StyleLook("emoteVision", ns.db ~= nil and not ns.PageOn("emoteStyle"))
+	return ns.StyleLook("emoteVision", ns.db ~= nil and not ns.StyleOn("emoteStyle")) -- (Audit 2026-11-25: Enable Style's too)
 end
 
 -- A setting of the Settings or Look tab as its Enable Page leaves it

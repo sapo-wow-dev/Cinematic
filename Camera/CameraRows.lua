@@ -67,6 +67,9 @@ local function CamOf(value)
 end
 function ns.CameraValueMode(value) return CamOf(value) end
 
+-- (The Scenes, Triggers, Scripts and My Shots pages' switches under Enable
+-- Cameras whichever parts load: the switch tree's shape the same. Audit 2026-11-25)
+ns.SetPageMaster({ "cameraScenes", "cameraTriggers", "cameraScriptsPage", "cameraShots" }, "cameraModes")
 ns.Module("cameras", function() -- (the rest of this file: only with Cameras loaded, Modules.lua)
 local L = ns.L
 
@@ -74,7 +77,7 @@ local L = ns.L
 -- (ns.TriggerRowNow). It and the Triggers, Scripts and My Shots pages'
 -- switches (their own files' defaults) go under Enable Cameras.
 ns.DEFAULTS.cameraScenes = true
-ns.SetPageMaster({ "cameraScenes", "cameraTriggers", "cameraScriptsPage", "cameraShots" }, "cameraModes")
+-- (Their master: set above ns.Module, whichever parts load. Audit 2026-11-25)
 
 ns.CAMERA_ROW_COPIES = 5 -- (a trigger's own row and four copies: <key>2 to <key>5)
 

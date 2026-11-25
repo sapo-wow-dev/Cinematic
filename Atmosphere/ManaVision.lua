@@ -12,16 +12,19 @@
 -- panels call ns.ManaVisionRows and ns.ManaVisionStyleRows).
 
 local _, ns = ...
+-- (The Vision tab's Mana tab under the Vision's, and the Style tab's Mana tab
+-- (LowHealth.lua's ns.VITALS_TABS.mana) under it, whichever parts load: the
+-- switch tree's shape the same. Data only. Audit 2026-11-25)
+ns.VITALS_MANA_TAB = "tabOn:VitalsVision:mana"
+ns.SetPageMaster({ ns.VITALS_MANA_TAB }, "lowHealth")
+if ns.VITALS_TABS and ns.VITALS_TABS.mana then ns.SetPageMaster({ ns.VITALS_TABS.mana }, ns.VITALS_MANA_TAB) end
 ns.Module("visions", function() -- (only with Visions loaded, Modules.lua)
 local L = ns.L
 
 local DEFAULTS = ns.DEFAULTS
-local TAB = "tabOn:VitalsVision:mana" -- the Vision tab's Mana tab: low mana at all (off to start)
-ns.VITALS_MANA_TAB = TAB
+local TAB = ns.VITALS_MANA_TAB -- the Vision tab's Mana tab: low mana at all (off to start)
 DEFAULTS[TAB] = false
-ns.SetPageMaster({ TAB }, "lowHealth")
--- (The Style tab's Mana tab, LowHealth.lua's ns.VITALS_TABS.mana: off with this one.)
-if ns.VITALS_TABS and ns.VITALS_TABS.mana then ns.SetPageMaster({ ns.VITALS_TABS.mana }, TAB) end
+-- (Its master and the Style tab's Mana tab's: above ns.Module. Audit 2026-11-25)
 DEFAULTS.lowManaAlways = true         -- its Show in row's Always (the rest: ROW_KEY's ticks and rule)
 DEFAULTS.lowManaVisionStart = 0.3     -- mana (0-1) it starts showing below
 DEFAULTS.lowManaVisionFull = 0.05     -- ...and is all the way in at

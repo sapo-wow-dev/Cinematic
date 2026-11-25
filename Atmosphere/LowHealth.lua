@@ -8,6 +8,15 @@
 -- takes over as you die. This is Vitals Vision: its page is at the bottom.
 
 local ADDON_NAME, ns = ...
+-- (Its tabs' switches, each under the Vision's (the Style tab's and the
+-- Vision tab's Health), whichever parts load: the switch tree's shape the
+-- same. Data only. Audit 2026-11-25)
+ns.VITALS_TABS = { general = "tabOn:Vitals:general", blizzard = "tabOn:Vitals:blizzard",
+	cinematic = "tabOn:Vitals:cinematic", swirl = "tabOn:Vitals:swirl", effect = "tabOn:Vitals:effect",
+	mana = "tabOn:Vitals:mana" } -- (Mana: low mana's look, ManaVision.lua; under the Vision tab's Mana tab)
+ns.VITALS_HEALTH_TAB = "tabOn:VitalsVision:health"
+for _, key in pairs(ns.VITALS_TABS) do ns.SetPageMaster({ key }, "lowHealth") end
+ns.SetPageMaster({ ns.VITALS_HEALTH_TAB }, "lowHealth")
 ns.Module("visions", function() -- (the rest of this file: only with Visions loaded, Modules.lua)
 local L = ns.L
 
@@ -203,18 +212,13 @@ local themed = {}
 -- is off (its opacity 0, its ticks off), under the Vision's switch (not the
 -- Style page's: that one off is the theme as written, not no effect).
 -- (On ns: this file's main chunk is near Lua's 200 locals.)
-ns.VITALS_TABS = { general = "tabOn:Vitals:general", blizzard = "tabOn:Vitals:blizzard",
-	cinematic = "tabOn:Vitals:cinematic", swirl = "tabOn:Vitals:swirl", effect = "tabOn:Vitals:effect",
-	mana = "tabOn:Vitals:mana" } -- (Mana: low mana's look, ManaVision.lua; under the Vision tab's Mana tab)
+-- (ns.VITALS_TABS and their masters: above ns.Module. Audit 2026-11-25)
 for _, key in pairs(ns.VITALS_TABS) do
 	DEFAULTS[key] = true
-	ns.SetPageMaster({ key }, "lowHealth")
 end
 -- The Vision tab's tabs (2026-11-23): Health, the edges here, and Mana
 -- (ManaVision.lua's, off to start). Health off: no edges.
-ns.VITALS_HEALTH_TAB = "tabOn:VitalsVision:health"
 DEFAULTS[ns.VITALS_HEALTH_TAB] = true
-ns.SetPageMaster({ ns.VITALS_HEALTH_TAB }, "lowHealth")
 ns.VITALS_TAB_OFF = { lowHealthGameAlpha = "blizzard", lowHealthBloodAlpha = "cinematic", lowHealthPortalAlpha = "cinematic",
 	lowHealthSparks = "cinematic", lowHealthSwirlAlpha = "swirl", lowHealthDark = "general", lowHealthPulse = "general" }
 local function ThemeLook(base, wanted)

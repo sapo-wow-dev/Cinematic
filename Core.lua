@@ -1750,7 +1750,11 @@ for page, keys in pairs({
 	visualEffects = { "letterboxPage", "tintPage", "weatherPage", "graphicsPlus", "musicInCinematic" }, -- (the Atmosphere hub's pages' switches)
 	-- Style > General's Enable Style: the Style hub's pages' switches.
 	styleGeneral = { "ufStyle", "rfStyle", "abStyle", "prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle",
-		"plateCastStyle", "bubblesStyle", "irStyle", "minimapStyle", "combatTextStyle", "cdmStyle" },
+		"plateCastStyle", "bubblesStyle", "irStyle", "minimapStyle", "combatTextStyle", "cdmStyle",
+		-- (Audit 2026-11-25: the Visions' and Atmosphere's Style pages too, and
+		-- Text on You: off with Enable Style, as ns.StyleOn already read them.)
+		"selfTextStyle", "damageVisionLook", "lowHealthStyle", "questTalkStyled", "questItemStyle", "rollStyle",
+		"emoteStyle", "tintStyle", "letterboxStyle", "weatherStyle" },
 }) do
 	for _, key in ipairs(keys) do PAGE_SWITCH[key] = page end
 end
@@ -1855,10 +1859,10 @@ function ns.Setting(key)
 	local db = ns.db
 	if not db then return false end
 	if LEFT_OUT[key] or OutsideBlocked(db, key) then return false end
-	local page = PAGE_SWITCH[key]
-	while page do
+	local page, steps = PAGE_SWITCH[key], 0
+	while page and steps < 10 do -- (10 steps at most, as ns.MasterOff: a loop in the tree can't hang it. Audit 2026-11-25)
 		if db[page] == false or LEFT_OUT[page] or OutsideBlocked(db, page) then return false end
-		page = PAGE_SWITCH[page]
+		page, steps = PAGE_SWITCH[page], steps + 1
 	end
 	return db[key]
 end
@@ -1868,10 +1872,10 @@ function ns.PageSetting(key)
 	local db = ns.db
 	if not db then return false end
 	if LEFT_OUT[key] then return false end
-	local page = PAGE_SWITCH[key]
-	while page do
+	local page, steps = PAGE_SWITCH[key], 0
+	while page and steps < 10 do -- (capped too. Audit 2026-11-25)
 		if db[page] == false or LEFT_OUT[page] then return false end
-		page = PAGE_SWITCH[page]
+		page, steps = PAGE_SWITCH[page], steps + 1
 	end
 	return db[key]
 end
@@ -1895,6 +1899,7 @@ end
 -- the HUD's General over an icon's Show over that icon's other tabs).
 function ns.MasterOff(key, db)
 	db = db or ns.db
+	if LEFT_OUT[key] then return true end -- (its own part left out too, as ns.Setting reads it. Audit 2026-11-25)
 	local master, steps = PAGE_SWITCH[key], 0
 	while master and steps < 10 do
 		if db and db[master] == false or LEFT_OUT[master] then return true end

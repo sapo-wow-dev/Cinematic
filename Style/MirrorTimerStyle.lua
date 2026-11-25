@@ -7,6 +7,9 @@
 -- its words), not by name, so a client that names them otherwise still works.
 
 local _, ns = ...
+-- (The Breath Bar page's switch under the Standard Frames page's, whichever
+-- parts load: the switch tree's shape is the same either way. Audit 2026-11-25)
+ns.SetPageMaster({ "breathBar" }, "handleFrames")
 ns.Module("style", function() -- (the rest of this file: only with Style loaded, Modules.lua)
 
 -- [timer] = { bar, fill, texture, atlas, grey, texts = { { text, fontObject, file, size, flags } } }:
@@ -97,7 +100,7 @@ end
 -- page's, over it) leaves them: off, the game's own look (no texture, font or
 -- size of ours, nothing hidden).
 ns.DEFAULTS.breathBar = true
-ns.SetPageMaster({ "breathBar" }, "handleFrames")
+-- (Its switch under the Standard Frames page's: above, with the file's data. Audit 2026-11-25)
 -- (Parked 2026-11-17, the user still deciding what it's for: no Breath Bar
 -- page (Options.lua doesn't make it), and the game's own look whatever was
 -- saved. Code and settings kept; false brings it back.)
