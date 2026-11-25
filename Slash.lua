@@ -1149,6 +1149,12 @@ local function HandleSlash(msg)
 		end
 	elseif cmd == "timetest" then
 		-- Shows the time-of-day change title now; /cine timetest dusk shows "Dusk".
+		-- (Visions' title: left out, says so now, not as errors from the timers
+		-- below, past the left-out catch. Audit 2026-11-25.)
+		if not ns.TestTimeChangeTitle then
+			ns.Print(ns.ModuleLeftOutLine("visions"))
+			return
+		end
 		if arg == "all" then
 			-- Each time of day in turn, one after the other finishes.
 			local phases = { "Dawn", "Morning", "Midday", "Afternoon", "Evening", "Dusk", "Night" }

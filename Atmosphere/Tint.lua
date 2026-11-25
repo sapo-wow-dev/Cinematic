@@ -1131,7 +1131,8 @@ local function UpdateTint(cinematic, elapsed, vignetteOn, weatherOn)
 			ns.DaySweep() -- done: stop
 		elseif index ~= daySweep.shown then
 			daySweep.shown = index
-			if not daySweep.quiet then ns.TestTimeChangeTitle(daySweep.stops[index][1]) end
+			-- (The title is Visions': left out, the tint alone. Audit 2026-11-25.)
+			if not daySweep.quiet and ns.TestTimeChangeTitle then ns.TestTimeChangeTitle(daySweep.stops[index][1]) end
 		end
 		tintDirty = true
 	end
