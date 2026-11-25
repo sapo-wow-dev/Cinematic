@@ -143,7 +143,7 @@ for i = 1, MAX do
 			r:Log("CineMode came on at login: off before the probes")
 		end
 		r:Sleep(((ns.db and tonumber(ns.db.fadeInTime)) or 1.5) + 1)
-		local lines = ns.AddonKit.Run(target)
+		local lines = ns.AddonKit.Run(target, plan.at)
 		CinematicDB[LogKey(target)] = lines
 		local errors = 0
 		for _, line in ipairs(lines) do

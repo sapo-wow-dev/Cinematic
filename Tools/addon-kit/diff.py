@@ -301,7 +301,8 @@ def cmd_all(client):
         print("FAIL no %s in %s: the run's baseline step didn't happen" % (log_key("none"), path))
         return 1
     code = cmd_baseline(client, None)
-    bad = 0
+    base_run = Run(tables[log_key("none")], "none").head.get("run")
+    bad, older = 0, []
     for key in sorted(tables):
         m = re.match(r"^addonKit(\w+?)Log$", key)
         if (not m or key in (log_key("none"), "addonKitLog", "addonKitTestLog") or key.endswith("RowsLog")
@@ -309,6 +310,12 @@ def cmd_all(client):
             continue
         run = Run(tables[key], key)
         addon = run.head.get("label") or m.group(1)
+        # (Only the stages of the baseline's own run: an older run's addon,
+        # judged against a newer baseline, showed the baseline's drift as its
+        # FAILs, 2026-11-25. Logs from before run ids: older too.)
+        if not base_run or run.head.get("run") != base_run:
+            older.append(addon)
+            continue
         print("--- %s" % addon)
         bad += 1 if cmd_check(addon, client, None) else 0
         rows = tables.get(key[:-3] + "RowsLog") or []
@@ -318,6 +325,8 @@ def cmd_all(client):
         for line in fails[:20]:
             print("FAIL rows: " + line)
         bad += 1 if fails else 0
+    if older:
+        print("note not judged, from an older run than this baseline (run them again): %s" % ", ".join(older))
     print("addon kit all %s: %d addons with a FAIL" % (client, bad))
     return 1 if (bad or code) else 0
 
@@ -438,6 +447,22 @@ def selftest():
     check("Settings open in one run only: it and the dimmed micro buttons can't tell, the buffs still FAIL",
           not any("SettingsPanel" in f or "MicroButton" in f for f in fails) and any("BuffFrame" in f for f in fails)
           and any("window true then" in n for n in notes), "; ".join(fails))
+    saved = (saved_logs, baseline_path)
+    tmpb = os.path.join(tmp, "b.txt")
+    globals()["baseline_path"] = lambda c: tmpb
+    one = ["H format=1 client=forever build=16001 label=none addons= run=A", "R touch.X	shown	true	v1", "D 1"]
+    same = ["H format=1 client=forever build=16001 label=Same addons=Same run=A", "R touch.X	shown	true	v1", "D 1"]
+    old = ["H format=1 client=forever build=16001 label=Old addons=Old run=B", "R touch.X	shown	false	v1", "D 1"]
+    globals()["saved_logs"] = lambda c: ({"addonKitnoneLog": one, "addonKitSameLog": same, "addonKitOldLog": old}, "x")
+    import io
+    import contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = cmd_all("forever")
+    globals()["saved_logs"], globals()["baseline_path"] = saved
+    text = out.getvalue()
+    check("all: an addon from an older run isn't judged against a newer baseline",
+          code == 0 and "--- Same" in text and "--- Old" not in text and "not judged" in text and "Old" in text, text[-300:])
     check("expectations read across lines", any(e[2] == "linesOnly" and "2979131" in e[3] for e in expects))
     print("diff selftest: %d FAIL" % len(bad))
     return 1 if bad else 0

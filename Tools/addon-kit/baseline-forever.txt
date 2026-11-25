@@ -278,12 +278,12 @@ R frame.player	PlayerFrame.forbidden	false	v1
 R frame.player	PlayerFrame.parent	UIParent	v1
 R frame.player	PlayerFrame.shown	true	v1
 R frame.player	PlayerFrame.visible	true	v1
-R frame.prd	PersonalResourceDisplayFrame.alpha	1	v1
+R frame.prd	PersonalResourceDisplayFrame.alpha	0	v1
 R frame.prd	PersonalResourceDisplayFrame.exists	true	v1
 R frame.prd	PersonalResourceDisplayFrame.forbidden	false	v1
 R frame.prd	PersonalResourceDisplayFrame.parent	UIParent	v1
-R frame.prd	PersonalResourceDisplayFrame.shown	true	v1
-R frame.prd	PersonalResourceDisplayFrame.visible	true	v1
+R frame.prd	PersonalResourceDisplayFrame.shown	false	v1
+R frame.prd	PersonalResourceDisplayFrame.visible	false	v1
 R frame.quests	ObjectiveTrackerFrame.alpha	1	v1
 R frame.quests	ObjectiveTrackerFrame.exists	true	v1
 R frame.quests	ObjectiveTrackerFrame.forbidden	false	v1
@@ -604,7 +604,7 @@ R touch.ActionButton_	members	12	v1
 R touch.ActionButton_	parent	MainActionBarButtonContainer1	v1
 R touch.ActionButton_	shown	true	v1
 R touch.ActionButton_	visible	true	v1
-R touch.ActionStatus	alpha	0.010	v1
+R touch.ActionStatus	alpha	1	v1
 R touch.ActionStatus	forbidden	false	v1
 R touch.ActionStatus	kind	frame	v1
 R touch.ActionStatus	parent	UIParent	v1
@@ -1630,12 +1630,12 @@ R touch.PartyFrame	kind	frame	v1
 R touch.PartyFrame	parent	UIParent	v1
 R touch.PartyFrame	shown	true	v1
 R touch.PartyFrame	visible	true	v1
-R touch.PersonalResourceDisplayFrame	alpha	1	v1
+R touch.PersonalResourceDisplayFrame	alpha	0	v1
 R touch.PersonalResourceDisplayFrame	forbidden	false	v1
 R touch.PersonalResourceDisplayFrame	kind	frame	v1
 R touch.PersonalResourceDisplayFrame	parent	UIParent	v1
-R touch.PersonalResourceDisplayFrame	shown	true	v1
-R touch.PersonalResourceDisplayFrame	visible	true	v1
+R touch.PersonalResourceDisplayFrame	shown	false	v1
+R touch.PersonalResourceDisplayFrame	visible	false	v1
 R touch.PetActionBar	alpha	1	v1
 R touch.PetActionBar	forbidden	false	v1
 R touch.PetActionBar	kind	frame	v1
@@ -2272,4 +2272,4 @@ R touch.ZoneTextString	kind	frame	v1
 R touch.ZoneTextString	parent	ZoneTextFrame	v1
 R touch.ZoneTextString	shown	true	v1
 R touch.ZoneTextString	visible	false	v1
-D 616 probes, 0 errors; saved 2026-11-25 10:42
+D 616 probes, 0 errors; saved 2026-11-25 11:46

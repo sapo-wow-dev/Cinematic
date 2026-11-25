@@ -8,9 +8,9 @@ After each run: `python -I Tools/addon-kit/diff.py all <client>`, then fix what 
 | # | Addons | Client | Status |
 |---|---|---|---|
 | 1 | DaylightUI, EllesmereUI, FlareUI (the user's pick, 2026-11-25; then /addon-support on each) | forever | ran 2026-11-25 (qb025): DaylightUI 174 FAIL + 87 frames NOT COVERED, EllesmereUI 120 + 1 + 64 blocked, FlareUI 93 + 5; runs/2026-11-25-forever-qb025.txt |
-| 2 | ElvUI, NaowhForever, ClassicUIForever, FramesForever (whole-UI suites) | forever | |
-| 3 | Glass, Prat (chat) | forever | |
-| 4 | Questie, RXPGuides, TomTom (quests) | forever | |
+| 2 | ElvUI, NaowhForever, ClassicUIForever, Frames_Forever (whole-UI suites) | forever | ran q9ef0 (2026-11-25) with 3 and 4 as one run, runs/2026-11-25-forever-q9ef0.txt: ElvUI 175 FAIL + 3 rows lines. NaowhForever, ClassicUIForever, Frames_Forever, Prat and TomTom aren't installed |
+| 3 | Glass, Prat (chat) | forever | q9ef0: Glass 21 FAIL (puts its own ChatFrame1.AddMessage, FCF_OpenTemporaryWindow and SetItemRef in place after our hooks), rows clean |
+| 4 | Questie, RXPGuides, TomTom (quests) | forever | q9ef0: Questie 6 FAIL (replaces StaticPopup_Show after our hook; hides the game's tracker), RXPGuides 3 (replaces ToggleAllBags, ToggleBag, ToggleQuestLog), rows clean |
 | 5 | Plater, Platynator, ThreatPlates (nameplates) | forever | |
 | 6 | Bartender4, Details, BigWigs, DBM, WeakAuras, HealBot, ShamanPower (bars, meters, bosses) | forever | |
 | 7 | the rest installed (none named: every installed supported addon) | forever | |

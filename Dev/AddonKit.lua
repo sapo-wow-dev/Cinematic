@@ -96,13 +96,15 @@ function Run:PutBack()
 	for key, was in pairs(self.saved) do ns.db[key] = was[1] end
 end
 
-function kit.Run(label)
+-- runId: which /cine debug addonkit run it's a stage of (its plan's time), so
+-- diff.py all judges an addon only against the baseline of its own run.
+function kit.Run(label, runId)
 	if kit.MakeGenerated then kit.MakeGenerated() end
 	local _, _, _, build = GetBuildInfo()
 	local lines = {}
-	lines[1] = ("H format=%d client=%s build=%s label=%s addons=%s"):format(FORMAT,
+	lines[1] = ("H format=%d client=%s build=%s label=%s addons=%s run=%s"):format(FORMAT,
 		ns.isRetail and "retail" or "forever", tostring(build), (tostring(label or "run"):gsub("%s", "_")),
-		table.concat(Loaded(), ","))
+		table.concat(Loaded(), ","), (tostring(runId or "none"):gsub("%s", "_")))
 	local errors = 0
 	local order = {}
 	for _, probe in ipairs(kit.probes) do order[#order + 1] = probe end
