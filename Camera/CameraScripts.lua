@@ -3340,8 +3340,10 @@ zoomer.watcher = watcher
 -- in-game gating test saw it work out the scene every frame. Audit 2026-11-25.)
 local function WatcherWanted()
 	if not ns.db then return false end
+	-- (Not a scene you stopped (stoppedFor): with Enable Cameras off nothing can
+	-- start again, so it waits; run 4 saw the loop run on its 2 s clear-out.)
 	return ns.Setting("cameraModes") ~= false or run ~= nil or zoomer.yours ~= nil or zoomer.release ~= nil
-		or zoomer.moving or maxHeldTo ~= nil or stoppedFor ~= nil or (exitBox ~= nil and exitBox:IsShown())
+		or zoomer.moving or maxHeldTo ~= nil or (exitBox ~= nil and exitBox:IsShown())
 end
 ns.FeatureLoop(watcher, function(_, elapsed)
 	if not ns.db then return end

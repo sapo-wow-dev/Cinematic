@@ -12,6 +12,10 @@ Base: d6145ed
   zoom, your zoom held, a raised max, its Stop button). On again within a second of Enable Cameras, and at
   once when a script starts (Start wakes it).
 
+- Follow-up (run 4, 2026-11-25): a scene you stopped (stoppedFor) no longer keeps the loop wanted with
+  Enable Cameras off: its 2 s clear-out (zoomer.OFF_CLEAR) waits till cameras are on again, when nothing
+  could have started meanwhile anyway. Run 4 saw the loop run 24 frames on that clear-out.
+
 ## Who relies on the old behavior
 (`python -I Tools/audit.py refs zoomer.TriggerNowSeen PlayCameraScript`)
 - Players: none; with Enable Cameras on (the default) the loop runs every frame as before.
