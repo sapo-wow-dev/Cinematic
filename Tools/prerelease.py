@@ -32,6 +32,13 @@ Runs side by side, each a PASS or FAIL line, then one line for all of it:
   review raises each with the user), and the script's own selftest;
 - other addons as installed against Support/ (Tools/addon-check.py: a name
   our support uses gone fails; what changed since its baseline is listed);
+- the addon kit (Tools/addon-kit): every game frame our code touches against
+  touchpoints.txt (a new one, a new file on one or a setting newly reaching
+  one fails until --update), and the past addon misses replayed (each test
+  must fail on the code before its fix and pass now), and the rule walk
+  (every row's show logic for every rule word and tick column, against its
+  baseline per client), with each tool's selftest (the rule walk's: each
+  mutant must FAIL);
 - the audit kit (Tools/audit.py): its selftest, every fix card's matrix
   against the last tag (a changed cell no card declares fails), and every
   test, ledger or rule expectation changed since the tag (listed, with
@@ -536,6 +543,15 @@ def main():
         jobs.append(Job("player impact scan (labels, pages, commands, keys, CVars, hooks, load)",
                         [PY, "-I", "Tools/release-audit.py", "impact"], judge_impact))
         jobs.append(Job("other addons vs our support", [PY, "-I", "Tools/addon-check.py"], judge_addons))
+        jobs.append(Job("addon kit: game frames we touch vs Tools/addon-kit/touchpoints.txt",
+                        [PY, "-I", "Tools/addon-kit/touchpoints.py"], lambda ok, out: (ok, last_line(out))))
+        jobs.append(Job("addon kit: past addon misses replayed (Tools/addon-kit/misses)",
+                        [PY, "-I", "Tools/addon-kit/misses.py"], lambda ok, out: (ok, last_line(out))))
+        jobs.append(Job("addon kit: rule walk, every row x word x tick vs its baseline (both clients)",
+                        [PY, "-I", "Tools/addon-kit/rulewalk.py"], lambda ok, out: (ok, last_line(out))))
+        for kit in ("touchpoints", "misses", "rulewalk"):
+            jobs.append(Job("addon kit: %s.py's own checks" % kit, [PY, "-I", "Tools/addon-kit/%s.py" % kit,
+                                                                     "--selftest"], judge_test))
         scratch = tempfile.mkdtemp(prefix="cine-prerelease-")
         for client in CLIENTS:
             for name, toc in (("Cinematic.lua", "Cinematic.toc"), ("CinematicDev.lua", "CinematicDev.toc")):

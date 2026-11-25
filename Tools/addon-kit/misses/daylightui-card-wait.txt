@@ -1,0 +1,5 @@
+# addon-kit miss, format 1
+fix 69b9627
+test Tools/offline/cardwait.lua
+addon DaylightUI
+what The Rested card showed behind DaylightUI's zone title instead of waiting for it

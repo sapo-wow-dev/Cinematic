@@ -9,10 +9,17 @@ return function(client, toc, onInstall)
 	package.path = "Tools/offline/?.lua;" .. package.path
 	local wow = dofile("Tools/offline/wow.lua")
 	wow.Install(client)
+	-- (Touch mode: Tools/addon-kit/touchmap.lua sets CINE_TOUCH_MODE to a table.)
+	local touchMode = rawget(_G, "CINE_TOUCH_MODE")
+	local ns = {}
+	if type(touchMode) == "table" then
+		touchMode.wow, touchMode.ns = wow, ns
+		wow.touchSetting = function() return ns.SweepCurrentKey and ns.SweepCurrentKey() or nil end
+		wow.StartTouches()
+	end
 	if onInstall then onInstall(wow) end -- (Tools/style-lab: real layout, before any frame is made)
 	toc = toc or "Cinematic.toc"
 	local addonName = toc:match("([^/]+)%.toc$")
-	local ns = {}
 	for line in io.lines(toc) do
 		line = line:gsub("\r", "")
 		if line ~= "" and not line:find("^#") then

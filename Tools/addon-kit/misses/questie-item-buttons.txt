@@ -1,0 +1,5 @@
+# addon-kit miss, format 1
+fix a098af4
+test Tools/offline/questieitembuttons.lua
+addon Questie
+what Questie's quest item buttons 36-40 stayed up while the Quest tracker row faded (40 on Forever, we faded 35)

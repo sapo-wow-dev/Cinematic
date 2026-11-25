@@ -32,6 +32,83 @@ rawset(Stub, "IsShown", function() return false end)
 rawset(Stub, "IsVisible", function() return false end)
 M.Stub = Stub
 
+-- Touch mode (Tools/addon-kit/touchmap.lua, off for every other tool): which
+-- of the game's frames and globals the addon's own code reaches, and how.
+-- M.StartTouches() before the files load; then each unknown global hands out
+-- a recorder of its own instead of the shared stub. A recorder acts as the
+-- stub does (indexing gives a recorder of the field, calling gives the stub,
+-- IsShown false...), and each method call on it from the addon's code
+-- (not Dev/, Tools/ or Libs/) is noted in M.touches:
+--   M.touches[path][method][file][setting] = true
+-- path: "ChatFrame1" or "ChatFrame1.Background"; method: "SetAlpha", or
+-- "(hook) AddMessage" for hooksecurefunc; setting: M.touchSetting() (the
+-- sweep's setting being changed then), "(load)" outside one. The stand-in's
+-- own game frames (UIParent, WorldFrame, Minimap, GameTooltip) are noted too.
+M.touches = {}
+M.touchOn = false
+M.touchSetting = nil
+local MAX_DEPTH = 4
+local function SourceFile(level)
+	local info = debug.getinfo(level + 1, "S")
+	local source = info and info.source
+	if type(source) ~= "string" or source:sub(1, 1) ~= "@" then return nil end
+	local file = source:sub(2):gsub("\\", "/"):gsub("^%./", "")
+	if file:find("^Tools/") or file:find("^Dev/") or file:find("^Libs/") or file:find("/Libs/") then return nil end
+	return file
+end
+local function Record(path, method, level)
+	local file = SourceFile(level + 1)
+	if not file then return end
+	local setting = M.touchSetting and M.touchSetting() or nil
+	setting = type(setting) == "string" and setting or "(load)"
+	local byMethod = M.touches[path]
+	if not byMethod then byMethod = {} M.touches[path] = byMethod end
+	local byFile = byMethod[method]
+	if not byFile then byFile = {} byMethod[method] = byFile end
+	local settings = byFile[file]
+	if not settings then settings = {} byFile[file] = settings end
+	settings[setting] = true
+end
+M.Record = Record
+local recorders, recorderPath = {}, setmetatable({}, { __mode = "k" })
+M.recorderPath = recorderPath
+local function Recorder(path, parent, key, depth)
+	local recorder = recorders[path]
+	if recorder then return recorder end
+	local meta = {}
+	for k, v in pairs(stubMeta) do meta[k] = v end
+	meta.__index = function(_, field)
+		if type(field) ~= "string" or depth >= MAX_DEPTH then return Stub end
+		return Recorder(path .. "." .. field, path, field, depth + 1)
+	end
+	meta.__call = function(_, ...)
+		-- (A method or a field called: noted on what it's called on. The
+		-- global itself called, UnitName(), is an API call: not noted.)
+		if parent then Record(parent, key, 2) end
+		local real = key and rawget(Stub, key)
+		if real then return real(...) end
+		return Stub
+	end
+	meta.__tostring = function() return "stub" end
+	recorder = setmetatable({}, meta)
+	recorders[path] = recorder
+	recorderPath[recorder] = path
+	return recorder
+end
+function M.StartTouches()
+	M.touchOn = true
+	-- (After Install: its hooksecurefunc does nothing; this one notes the hook
+	-- and still does nothing, so hooks never run offline, as before.)
+	rawset(_G, "hooksecurefunc", function(a, b)
+		if type(a) == "string" then
+			Record(a, "(hook)", 2)
+		elseif type(a) == "table" and type(b) == "string" then
+			local path = recorderPath[a] or rawget(a, "_game") and rawget(a, "_name")
+			if path then Record(path, "(hook) " .. b, 2) end
+		end
+	end)
+end
+
 -- Frames: methods named in Methods work; any other Capitalised one is a
 -- stub; other fields are the frame's own (nil until set).
 local frames = {}
@@ -40,7 +117,10 @@ local Methods = {}
 M.Methods = Methods -- (Tools/style-lab/frames.lua puts real layout on these)
 local frameMeta = {
 	__index = function(self, key)
-		if Methods[key] then return Methods[key] end
+		if Methods[key] then
+			if M.touchOn and rawget(self, "_game") then Record(rawget(self, "_name"), key, 2) end
+			return Methods[key]
+		end
 		-- (a template's own regions, made by the code when missing)
 		if key == "Text" then return nil end
 		if type(key) == "string" and key:find("^%u") then return Stub end
@@ -257,6 +337,8 @@ function M.Install(client)
 		CinematicPersonalPower = nil,
 	}
 	for k, v in pairs(env) do _G[k] = v end
+	-- (The game's own frames, for touch mode.)
+	for _, name in ipairs({ "UIParent", "WorldFrame", "Minimap", "GameTooltip" }) do rawset(env[name], "_game", true) end
 	-- (the saved settings: none yet, a fresh install)
 	local unset = { CinematicDB = true, CinematicCharDB = true }
 	-- (The game's font objects, GameFontNormal: a file and size from GetFont,
@@ -267,7 +349,10 @@ function M.Install(client)
 		if unset[key] then return nil end
 		if type(key) == "string" and (key:find("^GameFont") or key:find("^SystemFont")) then return fontObject end
 		-- (CamelCase: the API's functions and frames; ALL_CAPS constants: none.)
-		if type(key) == "string" and key:find("^%u") and key:find("%l") then return Stub end
+		if type(key) == "string" and key:find("^%u") and key:find("%l") then
+			if M.touchOn then return Recorder(key, nil, nil, 1) end
+			return Stub
+		end
 		return nil
 	end })
 end

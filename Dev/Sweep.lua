@@ -61,6 +61,16 @@ end
 
 local run
 
+-- The setting being changed now ("page" while a page opens, nil between):
+-- the addon kit's touch map (Tools/addon-kit/touchmap.lua) files each game
+-- frame the change reached under it.
+function ns.SweepCurrentKey()
+	local current = run and run.current
+	if not current then return nil end
+	if current.id == "page" then return "(page " .. tostring(current.page) .. ")" end
+	return current.id
+end
+
 local function Say(text)
 	local log = CinematicDB and CinematicDB.sweepLog
 	if log then log[#log + 1] = ("%.1f %s"):format(run and GetTime() - run.at or 0, text) end

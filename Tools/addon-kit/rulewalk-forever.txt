@@ -1,0 +1,255 @@
+# addon-kit rule walk, format 1, client forever. States: calm,fight-stays,fight-goes,enemy,friend. Saved by --update: never by hand.
+CELL addon:bigwigsAltPower none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bigwigsBars none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bigwigsBattleRes none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bigwigsInfo none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bigwigsProximity none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bt4Bar10 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bt4Bar11 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bt4Bar12 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bt4Bar2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bt4Bar7 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bt4Bar8 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:bt4Bar9 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:cmcBuffs none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:cmcEssential none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:cmcOverlays none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:cmcTrackers none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:cmcUtility none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dbmArrow none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dbmBars none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dbmBattleRes none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dbmInfo none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dbmRadar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dbmRange none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:details none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlCursorRing none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlDataBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlFlightTimer none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlLeaderTab none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlLootFeed none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlMeter1 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlMeter2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlPull none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlQuestArrow none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlQuestMarker none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlQuestProgress none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlReminder none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:dlThreat none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:elvBar10 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:elvBar2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:elvBar7 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:elvBar8 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:elvBar9 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:elvBottomPanel none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:elvThreat none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:elvTopPanel none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiActiveForm none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiAfkScreen none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBar10 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBar6 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBar7 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBar8 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBar9 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBattleRes none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBeaconReminders none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBloodlust none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiBuffReminders none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCallTotemBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCombatReminders none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCombatText none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCooldowns none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCrosshair none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCursor none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCursorCast none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCursorGCD none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCursorReminders none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiCursorTrail none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiDataBars none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiDistance none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiFPSCounter none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiFlightTimer none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiFocusCastBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiGCDBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiGatewayShard none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiJunkList none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiKickBars none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiLootFeed none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiMeters none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiMovementAlert none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiMythicTimer none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiRaidToolsGroup none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiRaidToolsIcon none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiRaidToolsMarkers none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiSecondaryStats none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiTalentReminders none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiTargetCastBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiTargetedSpells none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiThreatMeter none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiTimeSpiral none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:euiTotemBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:fecm none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:fecmAuras none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=addon:fecm+
+CELL addon:flareBoss none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot1 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot10 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot3 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot4 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot5 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot6 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot7 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot8 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:healbot9 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:leatrixFlightBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:lorePin none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:lorePlayer none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:loreSlip none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:loreSubtitles none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhBlessings none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhBuffReminders none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhCampNearby none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhCampfire none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhCoTank none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhCombatTimer none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhCrosshair none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhDurability none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhFlightPoint none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhFlightTimer none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhGcd none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhGearBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhGearReminders none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhGroupButtons none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhGroupXP none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhHealerMana none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhLayer none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhLegacyPoints none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhLootFeed none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhPvPFlag none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhRestock none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhSwing none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhTalentPoints none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhThreat none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhTopBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhTrinkets none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhXPBar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:naowhXPTicker none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:rarescanner none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:rxpArrow none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:rxpGuide none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=quests+
+CELL addon:rxpItem none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=quests+
+CELL addon:rxpSplits none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=quests+
+CELL addon:rxpTarget none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=quests+
+CELL addon:shamanPowerCooldowns none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:spokenMinimal none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:spokenNarrator none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:spokenSubtitles none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanBottom none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanBottom2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort1 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort10 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort3 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort4 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort5 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort6 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort7 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort8 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanShort9 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanTop none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:titanTop2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:tomtomArrow none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:tomtomCoords none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:weakauras none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:weakaurasMouse none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:weakaurasPRD none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL art none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=mainbar+
+CELL bags none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=micro+
+CELL bar6 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL bar7 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL bar8 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL belowminimap none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL bottomleft none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL bottomright none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL buffcollapse none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL buffs none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL castbar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL chat none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL chatbackground none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=chat+
+CELL chatchannels none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=chat+
+CELL chatdeafen none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=chat+
+CELL chatfriends none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=chat+
+CELL chatmenu none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=chat+
+CELL chatmute none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=chat+
+CELL chatquickjoin none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=chat+
+CELL chattabs none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=chat+
+CELL cooldowns none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL cooldownsbars none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=cooldowns+
+CELL cooldownsbuffs none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=cooldowns+
+CELL cooldownsutility none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=cooldowns+
+CELL encounter none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL extra none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL flags none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL focus none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL focustot none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=focus+
+CELL gamepadbars none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL gamepadlegend none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL gamepadreticle none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL mainbar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL meters none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL micro none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL minimap none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL minimapaddons none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimapcalendar none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimapclock none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimapcompartment none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimapcoords none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimapdial none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimapheader none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimapmail none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimaptracking none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL minimapzone none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=minimap+
+CELL mirror none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL party none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL partynames none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL partyroles none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL partystatus none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL pet none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL petframe none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=player+
+CELL player none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL prd none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL prdmana none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL prdpower none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=prd+
+CELL quests none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidbuffs none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raiddebuffs none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidmanager none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidnames none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidpetnames none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidpets none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidplayers none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidready none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidroles none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidtarget none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidthreat none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL raidtitles none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL right1 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL right2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL rspartybuffs none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raidbuffs+
+CELL rspartydebuffs none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raiddebuffs+
+CELL rspartynames none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raidnames+
+CELL rspartypetnames none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raidpetnames+
+CELL rspartypets none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raidpets+
+CELL rspartyplayers none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raidplayers+
+CELL rspartyroles none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raidroles+
+CELL rspartythreat none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raidthreat+
+CELL rspartytitles none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=raidtitles+
+CELL stance none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL swing none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL target none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL topcenter none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=quests+
+CELL tot none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL totems none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL voice none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL waypoint none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL xp none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+

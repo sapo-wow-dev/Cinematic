@@ -1,0 +1,5 @@
+# addon-kit miss, format 1
+fix 69b9627
+test Tools/offline/partyflicker.lua
+addon DaylightUI
+what DaylightUI's party frames flickered for a member out of range (its secret range fade against ours)

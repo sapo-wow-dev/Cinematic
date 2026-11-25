@@ -1,0 +1,5 @@
+# addon-kit miss, format 1
+fix 2979131
+test Tools/offline/chatdefault.lua
+addon DaylightUI
+what Show just those messages drew each new chat line twice: our copy under DaylightUI's own chat window (a player, 2026-11-24)

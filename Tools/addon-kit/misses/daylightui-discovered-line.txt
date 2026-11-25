@@ -1,0 +1,5 @@
+# addon-kit miss, format 1
+fix 35d83b3
+test Tools/offline/discoveredline.lua
+addon DaylightUI
+what The Discovered card and DaylightUI's own Discovered line showed at once
