@@ -38,6 +38,16 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 KIT = os.path.join(ROOT, "Tools", "addon-kit")
 FORMAT = 1
+OWNED_PREFIXES = ("frame.", "addons.")
+# Frames that follow the game's state whatever addon is loaded (context.state's fields).
+STATE_FRAMES = {
+    "pet": (r"\bpet", r"PetFrame", r"PetActionBar", r"PetActionButton"),
+    "vehicle": (r"vehicle", r"OverrideActionBar", r"PossessBar"),
+    "mounted": (r"mount",),
+    "group": (r"party", r"raid", r"CompactRaid", r"CompactParty"),
+    "combat": (r"combat",),
+    "instance": (r"instance", r"boss", r"arena"),
+}
 sys.path.insert(0, os.path.join(ROOT, ".claude", "skills", "test"))
 
 EXPECT = re.compile(r'ns\.AddonKitExpect\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"((?:[^"\\]|\\.)*)"', re.S)
@@ -163,6 +173,11 @@ def compare(base, run, addon, expects, risk=None):
     for probe, err in sorted(run.errors.items()):
         fails.append("%s errored: %s" % (probe, err))
     loaded = set(run.addons)
+    # (Owned: an addon's own rows. The O lines, and always the frame probes
+    # (their fields are frame names: one the baseline lacks is a frame the
+    # addon's Support file put on our row, 845 of them in the first game run,
+    # 2026-11-25) and the addons.* rows.)
+    owned = set(run.owned) | {p for p in set(run.versions) | set(base.versions) if p.startswith(OWNED_PREFIXES)}
     mine = [e for e in expects if e[0] in loaded]
     used = set()
 
@@ -173,10 +188,21 @@ def compare(base, run, addon, expects, risk=None):
                 return "%s (%s, %s)" % (note, a, src)
         return None
 
+    # (The game's state, context.state: where it differs from the baseline's,
+    # differences on the frames that follow it can't be put down to the addon.)
+    ctx_a, ctx_b = base.records.get("context.state", {}), run.records.get("context.state", {})
+    moved = sorted(k for k in set(ctx_a) | set(ctx_b) if ctx_a.get(k) != ctx_b.get(k))
+    for k in moved:
+        notes.append("the game's state differed from the baseline's: %s %s then, %s now (frames that follow it "
+                     "can't tell)" % (k, ctx_a.get(k, "?"), ctx_b.get(k, "?")))
+    volatile = [re.compile(p, re.I) for k in moved for p in STATE_FRAMES.get(k, ())]
     probes = sorted(set(base.versions) | set(run.versions))
     for probe in probes:
         if probe not in base.versions:
-            fails.append("%s: the baseline doesn't have it (a new probe): rerun the baseline" % probe)
+            if probe in owned:
+                expected.append("%s: the addon's own row (a probe the baseline can't have)" % probe)
+            else:
+                fails.append("%s: the baseline doesn't have it (a new probe): rerun the baseline" % probe)
             continue
         if probe not in run.versions:
             fails.append("%s: not in the run (the probes changed since): rerun it" % probe)
@@ -192,8 +218,13 @@ def compare(base, run, addon, expects, risk=None):
             was, now = a.get(field, "(none)"), b.get(field, "(none)")
             if was == now:
                 continue
+            if probe == "context.state":
+                continue
             why = declared(probe, field)
-            if not why and was == "(none)" and probe in run.owned:
+            if not why and any(v.search(probe + " " + field) for v in volatile):
+                notes.append("can't tell: %s %s: %s then, %s now (the game's state moved)" % (probe, field, was, now))
+                continue
+            if not why and was == "(none)" and probe in owned:
                 why = "the addon's own row (an owned probe)"
             line = "%s %s: %s with no addon, %s now" % (probe, field, was, now)
             if why:
@@ -263,14 +294,17 @@ def cmd_all(client):
     bad = 0
     for key in sorted(tables):
         m = re.match(r"^addonKit(\w+?)Log$", key)
-        if not m or key in (log_key("none"), "addonKitLog", "addonKitTestLog") or key.endswith("RowsLog"):
+        if (not m or key in (log_key("none"), "addonKitLog", "addonKitTestLog") or key.endswith("RowsLog")
+                or key.endswith("PrevLog") or not (tables[key] and tables[key][0].startswith("H "))):
             continue
         run = Run(tables[key], key)
         addon = run.head.get("label") or m.group(1)
         print("--- %s" % addon)
         bad += 1 if cmd_check(addon, client, None) else 0
         rows = tables.get(key[:-3] + "RowsLog") or []
-        fails = [l for l in rows if re.search(r"VERDICT.*FAIL|NOT COVERED", l)]
+        # (A FAIL verdict, or a frame's own NOT COVERED line: "  NOT COVERED <frame>". Not the
+        # "0 NOT COVERED" inside a PASS verdict, which the first game run counted, 2026-11-25.)
+        fails = [l for l in rows if re.search(r"VERDICT .*: FAIL|\s\sNOT COVERED \S", l)]
         for line in fails[:20]:
             print("FAIL rows: " + line)
         bad += 1 if fails else 0
@@ -357,6 +391,23 @@ def selftest():
           not any("Fake:style" in f for f in fails) and any("Fake:style" in e for e in expected), "; ".join(fails))
     check("an owned probe: a row the baseline had, changed, still FAILs",
           any("Other:x.theirs" in f for f in fails))
+    newrow = ["H format=1 client=forever build=16001 label=x addons=Fake", "R frame.prdpower	FakeBar.exists	true	v1",
+              "R touch.X	shown	true	v1", "D 2 probes, 0 errors"]
+    nbase = ["H format=1 client=forever build=16001 label=x addons=", "R touch.X	shown	true	v1",
+             "R frame.player	PlayerFrame.exists	true	v1", "D 2 probes, 0 errors"]
+    fails, expected, _ = compare(Run(nbase), Run(newrow), "Fake", [])
+    check("a frame probe the baseline lacks (the addon's frame on our row) is its own, not a FAIL",
+          not any("prdpower" in f for f in fails) and any("prdpower" in e for e in expected), "; ".join(fails))
+    sbase = ["H format=1 client=forever build=16001 label=x addons=", "R context.state	pet	false	v1",
+             "R frame.petframe	PetFrame.shown	false	v1", "R frame.player	PlayerFrame.shown	true	v1",
+             "D 2 probes, 0 errors"]
+    srun = ["H format=1 client=forever build=16001 label=x addons=Fake", "R context.state	pet	true	v1",
+            "R frame.petframe	PetFrame.shown	true	v1", "R frame.player	PlayerFrame.shown	false	v1",
+            "D 2 probes, 0 errors"]
+    fails, _, notes = compare(Run(sbase), Run(srun), "Fake", [])
+    check("a pet out in one run only: the pet frame can't tell, the player frame still FAILs",
+          not any("PetFrame" in f for f in fails) and any("PlayerFrame" in f for f in fails)
+          and any("pet false then" in n for n in notes), "; ".join(fails))
     check("expectations read across lines", any(e[2] == "linesOnly" and "2979131" in e[3] for e in expects))
     print("diff selftest: %d FAIL" % len(bad))
     return 1 if bad else 0

@@ -202,6 +202,24 @@ function ns.AddonKit.MakeGenerated()
 	TouchProbes()
 end
 
+-- The game's state, which some frames follow whatever addon is loaded: a pet
+-- out shows the pet frame and bar, a vehicle its bar. diff.py marks such
+-- frames' differences "can't tell" when this differs from the baseline's
+-- (the first game run's pet frame, 2026-11-25), instead of a FAIL.
+Probe({
+	id = "context.state", v = 1, touches = { "UIParent" },
+	about = "pet out, vehicle, mounted, in a group, in a fight, in an instance",
+	run = function(r)
+		r:Set("pet", UnitExists("pet") and true or false)
+		r:Set("vehicle", UnitInVehicle and UnitInVehicle("player") and true or false)
+		r:Set("mounted", IsMounted and IsMounted() and true or false)
+		r:Set("group", IsInGroup and IsInGroup() and true or false)
+		r:Set("combat", InCombatLockdown() and true or false)
+		local inInstance = IsInInstance and IsInInstance()
+		r:Set("instance", inInstance and true or false)
+	end,
+})
+
 -- Chat ------------------------------------------------------------------------
 
 -- Show just those messages: our copy of a new line, drawn where the game's

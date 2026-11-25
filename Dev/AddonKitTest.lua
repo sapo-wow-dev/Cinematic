@@ -129,7 +129,7 @@ for i = 1, MAX do
 		if not target then return r:Skip("no target " .. i) end
 		local loaded = ns.AddonKit.Loaded()
 		if target == "none" then
-			r:Verdict(#loaded == 0, "no other addon loaded", #loaded > 0 and table.concat(loaded, ", ") or nil)
+			r:Verdict(#loaded == 0, "no other addon loaded" .. (#loaded > 0 and (": " .. table.concat(loaded, ", ")) or ""))
 		else
 			r:Verdict(Loaded(target), target .. " loaded")
 		end
@@ -145,12 +145,19 @@ for i = 1, MAX do
 			r:WaitFor("The addon test is hiding and showing " .. target .. "'s rows: hands off", {
 				check = function() return not ns.AddonTestRunning() end })
 			CinematicDB[LogKey(target, true)] = CinematicDB.addonTestLog
-			local fails = 0
-			for _, line in ipairs(CinematicDB.addonTestLog or {}) do
-				if line:find("VERDICT.*FAIL") or line:find("NOT COVERED") then fails = fails + 1 end
+			local fails, log = 0, CinematicDB.addonTestLog or {}
+			for _, line in ipairs(log) do
+				-- (A FAIL verdict or a frame's own "  NOT COVERED <frame>" line, not the
+				-- "0 NOT COVERED" a PASS verdict says. Each one counted is logged:
+				-- 2026-11-25's run said FAIL with a rows log of PASS lines only.)
+				if line:find("VERDICT .*: FAIL") or line:find("%s%sNOT COVERED %S") then
+					fails = fails + 1
+					r:Log("counted as a fail: " .. line)
+				end
 			end
-			r:Verdict(fails == 0, ("%s: its rows hide, stay hidden and come back, every frame covered"):format(target),
-				fails > 0 and (fails .. " FAIL or NOT COVERED lines: read " .. LogKey(target, true)) or nil)
+			r:Log(("rows log: %d lines, its last: %s"):format(#log, tostring(log[#log])))
+			r:Verdict(fails == 0, ("%s: its rows hide, stay hidden and come back, every frame covered (%s)"):format(target,
+				fails > 0 and (fails .. " FAIL or NOT COVERED lines: read " .. LogKey(target, true)) or "none failed"))
 		end
 	end }
 end

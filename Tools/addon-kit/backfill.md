@@ -7,7 +7,7 @@ After each run: `python -I Tools/addon-kit/diff.py all <client>`, then fix what 
 
 | # | Addons | Client | Status |
 |---|---|---|---|
-| 1 | DaylightUI, EllesmereUI, FlareUI (the user's pick, 2026-11-25; then /addon-support on each) | forever | queued qb025 |
+| 1 | DaylightUI, EllesmereUI, FlareUI (the user's pick, 2026-11-25; then /addon-support on each) | forever | ran 2026-11-25 (qb025): DaylightUI 174 FAIL + 87 frames NOT COVERED, EllesmereUI 120 + 1 + 64 blocked, FlareUI 93 + 5; runs/2026-11-25-forever-qb025.txt |
 | 2 | ElvUI, NaowhForever, ClassicUIForever, FramesForever (whole-UI suites) | forever | |
 | 3 | Glass, Prat (chat) | forever | |
 | 4 | Questie, RXPGuides, TomTom (quests) | forever | |
