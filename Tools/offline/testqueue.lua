@@ -229,6 +229,26 @@ local function RunClient(client)
 	Check("qe DONE after the reload", (Result("qe") or ""):find("result=DONE", 1, true) ~= nil, Result("qe"))
 	Check("then qf ran too", (Result("qf") or ""):find("result=DONE", 1, true) ~= nil, Result("qf"))
 
+	-- The last test ends within 3 s of its Reload (resumed at 2 s, the queue
+	-- looks at 5 s): the queue still wraps up (2026-11-25: stuck on "That was
+	-- the last one. Wrapping up..." after Gating audit fixes).
+	ns.TestQueueList = { { id = "qr", test = "kitcheck", args = "", session = "S" } }
+	Q.Start()
+	Advance(4)
+	run = Kit.Running()
+	run:SaveResume()
+	run.stopped = true -- (the reload)
+	Login(false, true)
+	Advance(2.5)
+	local resumed = Kit.Running()
+	if resumed then Kit.Finish(resumed, true) end
+	Check("quick end after the Reload: the last one's box", resumed ~= nil and box:find("That was the last one", 1, true) ~= nil, box)
+	Advance(10)
+	Check("quick end after the Reload: the queue still wraps up", box:find("^Test queue done: 1 of 1 run") ~= nil
+		and CinematicDB.testQueueRun == nil and (Result("qr") or ""):find("result=DONE", 1, true) ~= nil, box)
+	Check("quick end after the Reload: not called cut off", Has(CinematicDB.testQueueLog, "already moved on: 1/1") ~= nil
+		and not (Result("qr") or ""):find("CUT%-OFF"), Result("qr"))
+
 	-- A /reload of your own mid-test: cut off, the rest offered.
 	ns.TestQueueList = { { id = "qg", test = "kitcheck", args = "", session = "S" }, { id = "qh", test = "kitcheck", args = "", session = "S" } }
 	Q.Start()

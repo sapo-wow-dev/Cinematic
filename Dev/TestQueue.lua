@@ -212,6 +212,13 @@ end
 
 local function State() return CinematicDB.testQueueRun end
 
+-- The queue moved on since this login (a test resumed by its Reload button
+-- ended, the next one started): it's going, not cut off. (The kit resumes a
+-- test 2 s after the reload, Q.Login looks at 5 s: a test whose last steps
+-- took under 3 s had ended by then, and Login wiped the queue under its own
+-- "Wrapping up...", which then never wrapped up. The user, 2026-11-25.)
+local live
+
 -- "Queue 2/3 (Name scaling calibration)": where the queue is and whose test
 -- it is (the user, 2026-11-23: "see also the session name ... so i can tell
 -- what we are testing"). A long name cut to fit the box.
@@ -327,6 +334,7 @@ function Q.Next()
 	local state = State()
 	if not state or state.stopped then return end
 	if Going() then return end -- (one at a time)
+	live = true
 	state.index = (state.index or 0) + 1
 	local id = state.ids[state.index]
 	if not id then return Q.Finish("done") end
@@ -657,6 +665,7 @@ Kit.onFinish = function(run, done, summary)
 	local entry = ById(state.current)
 	if not entry or entry.test ~= run.def.name then return end
 	state.current = nil
+	live = true
 	if run.fail > 0 then state.failed = state.failed or {}; state.failed[entry.id] = true end
 	Record(entry, ("%s pass=%d fail=%d skip=%d (%s)"):format(done and "DONE" or "STOPPED", run.pass, run.fail, run.skip,
 		tostring(summary or "")), run)
@@ -1081,6 +1090,11 @@ function Q.Login()
 			Note(("picked up after the reload: id=%s (%d/%d)"):format(entry.id, state.index or 0, #state.ids))
 			return
 		end
+		if live then
+			Hook(true)
+			Note(("after the reload, the queue had already moved on: %d/%d"):format(state.index or 0, #state.ids))
+			return
+		end
 		if entry and state.old then
 			-- (An older test may reload on its own: it goes on, the strip back.)
 			Hook(true)
@@ -1099,7 +1113,7 @@ end
 do
 	local login = CreateFrame("Frame")
 	login:RegisterEvent("PLAYER_ENTERING_WORLD")
-	Q.ResetLogin = function() login:RegisterEvent("PLAYER_ENTERING_WORLD") end
+	Q.ResetLogin = function() live = nil login:RegisterEvent("PLAYER_ENTERING_WORLD") end
 	login:SetScript("OnEvent", function(self, _, isLogin, isReload)
 		if isLogin == false and isReload == false then return end -- (a zone change)
 		self:UnregisterAllEvents()
