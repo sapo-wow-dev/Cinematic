@@ -3804,10 +3804,24 @@ local questIconsAt = 0
 -- plates (CineMode, its master switch on).
 function ns.UpdatePlateParts(active, elapsed, cinematic)
 	local changed = false
+	-- (The Style hub's Overrides tab over the rows, read once a tick, not once
+	-- a kind. With the Nameplates page off, no override set and every part
+	-- settled at the last pass, nothing below the quest icons can change but
+	-- the target marks' own row: those loops wait. Audit 2026-11-25)
+	local overs, anyOver = kindParts.overs or {}, false
+	kindParts.overs = overs
 	for _, part in ipairs(ns.PLATE_PARTS) do
+		overs[part] = ns.StyleOverride("platePart" .. part) or false
+		anyOver = anyOver or overs[part] ~= false
+	end
+	local pageOff = not ns.db.handlePlates
+	local arrow = pageOff and ns.PlateIconWanted("TargetArrow", cinematic) and 1 or 0
+	local idle = pageOff and not anyOver and kindParts.idle and levels.TargetArrow == arrow
+	kindParts.none = kindParts.none or {}
+	for _, part in ipairs(idle and kindParts.none or ns.PLATE_PARTS) do
 		local target = (not active or ns.PlateRowWanted("Part" .. part)) and 1 or 0
 		-- (The Style hub's Overrides tab over the row, in CineMode or out of it.)
-		local over = ns.StyleOverride("platePart" .. part)
+		local over = overs[part]
 		if over then target = over == "show" and 1 or 0 end
 		local level = levels[part]
 		if level == nil then
@@ -3820,7 +3834,7 @@ function ns.UpdatePlateParts(active, elapsed, cinematic)
 	end
 	-- Kinds with parts of their own likewise, each part starting from the
 	-- default one's level as Use custom parts is ticked (no jump).
-	for _, kind in ipairs(ns.PLATE_OWN_PART_KINDS) do
+	for _, kind in ipairs(idle and kindParts.none or ns.PLATE_OWN_PART_KINDS) do -- (Audit 2026-11-25)
 		local mine = kindParts.levels[kind]
 		if ns.db["plateOwnParts" .. kind] then
 			if not mine then
@@ -3829,7 +3843,7 @@ function ns.UpdatePlateParts(active, elapsed, cinematic)
 			end
 			for _, part in ipairs(ns.PLATE_PARTS) do
 				local target = (not active or ns.PlateRowWanted("Part" .. kind .. part)) and 1 or 0
-				local over = ns.StyleOverride("platePart" .. part)
+				local over = overs[part] -- (read once above. Audit 2026-11-25)
 				if over then target = over == "show" and 1 or 0 end
 				local level = mine[part] or levels[part] or target
 				if level ~= target then
@@ -3851,7 +3865,7 @@ function ns.UpdatePlateParts(active, elapsed, cinematic)
 	-- Icons and Nameplate Style pages: PlateIcons.lua). The quest icon: shown
 	-- nowhere with the Nameplates page's master switch off, else by its row.
 	local iconsChanged = false
-	for _, part in ipairs(ns.PLATE_ICON_PARTS) do
+	for _, part in ipairs(idle and kindParts.none or ns.PLATE_ICON_PARTS) do -- (Audit 2026-11-25)
 		local wanted = ns.PlateIconWanted(part, cinematic)
 		if wanted == nil then
 			if not ns.db.handlePlates or (part == "QuestIcon" and not ns.Setting("questVision")) then
@@ -3872,6 +3886,8 @@ function ns.UpdatePlateParts(active, elapsed, cinematic)
 			iconsChanged = true
 		end
 	end
+	-- (Settled with the page off: the next passes may skip the loops above. Audit 2026-11-25)
+	kindParts.idle = pageOff and not anyOver and not changed and not iconsChanged
 	if iconsChanged then
 		RefreshPlateLooks()
 	elseif ((levels.QuestIcon or 0) > 0 or ns.QuestMarkLevel() > 0 or next(markShare)) and GetTime() >= questIconsAt then

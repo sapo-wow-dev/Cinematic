@@ -121,6 +121,50 @@ local NPC_ALL = "UnitNameNPC"
 CVAR_SETS[#CVAR_SETS + 1] = ns.CVarSet("Names: All NPCs", "off unless all three NPC name rows stay up",
 	{ key = "AllNPCs", values = { [NPC_ALL] = "0" }, secure = true, playerWins = true })
 
+-- The Nameplates and Names icons' tabs (Options.lua's folder tabs, each a
+-- switch: tabOn:Nameplates:<key>, a right-click). Their rows are list rows,
+-- read raw, so a tab off did nothing. Off now: none of its rows hides or adds
+-- anything, its units left to the game, as with the page's own switch off
+-- (the page's switch is read by the callers). Audit 2026-11-25.
+do
+	local TAB = "tabOn:Nameplates:"
+	local plateTab = { YourTarget = TAB .. "Target", YourMouseover = TAB .. "Target", PartMarker = TAB .. "NamesExtras" }
+	for _, row in ipairs({ "NearbyEnemies", "Enemies", "EnemyMinions", "EnemyNPCs", "EnemyMinor", "NeutralNPCs",
+		"NeutralMinor" }) do
+		plateTab[row] = TAB .. "Enemy"
+	end
+	for _, row in ipairs({ "MyPet", "Friends", "FriendlyMinions", "FriendlyNPCs", "GroupMembers", "GroupMinions" }) do
+		plateTab[row] = TAB .. "Friendly"
+	end
+	-- (Parts: the Default parts tab's, and a kind's own on its kind's tab.)
+	for _, part in ipairs(ns.PLATE_PARTS) do
+		plateTab["Part" .. part] = TAB .. "Parts"
+		for _, kind in ipairs(ns.PLATE_OWN_PART_KINDS) do plateTab["Part" .. kind .. part] = plateTab[kind] end
+	end
+	local nameTab = { Guild = TAB .. "NamesExtras", YourTarget = TAB .. "NamesTarget",
+		YourMouseover = TAB .. "NamesTarget", Target = TAB .. "NamesTarget", HostileNPCs = TAB .. "Names",
+		NeutralNPCs = TAB .. "Names", Critters = TAB .. "Names", FriendlyNPCs = TAB .. "NamesService",
+		ServiceNPCs = TAB .. "NamesService", InteractiveNPCs = TAB .. "NamesService" }
+	for _, key in ipairs({ "Self", "Friends", "FriendlyMinions", "GroupMembers", "GroupMinions", "Enemies",
+		"EnemyMinions" }) do
+		nameTab[key] = TAB .. "NamesPlayers"
+	end
+	-- Whether a Nameplates row's tab (row: a plates row's key) is off.
+	function ns.PlateTabOff(row)
+		local tab = plateTab[row]
+		return tab ~= nil and ns.db[tab] == false
+	end
+	-- And a Names row's (key: a names row's or names setting set's).
+	function ns.NameTabOff(key)
+		local tab = nameTab[key]
+		return tab ~= nil and ns.db[tab] == false
+	end
+	-- The Friendly plates in dungeons and raids tab's.
+	function ns.InstancePlatesTabOff()
+		return ns.db[TAB .. "Instances"] == false
+	end
+end
+
 -- Whether CineMode keeps every nameplate switched on (see FORCED_PLATE_CVARS),
 -- leaving what shows to the plates' fades: everywhere but dungeons and raids,
 -- where the game locks friendly plates away from addons.
@@ -458,6 +502,10 @@ local pvpNamesFight = false
 -- to an NPC). Asked once a frame. (On ns: this file's main chunk is at 200 locals.)
 ns.allNamesGate = { at = -1, up = true, combat = false }
 local function NameKeptHere(key, inCombat)
+	-- (Its tab off: kept nowhere, nor are its names held off: ns.UpdateCVars. Audit 2026-11-25)
+	if ns.NameTabOff(key) then
+		return false
+	end
 	if key ~= "AllNames" then
 		local gate, now = ns.allNamesGate, GetTime()
 		if gate.at ~= now or gate.combat ~= (inCombat and true or false) then
@@ -469,8 +517,12 @@ local function NameKeptHere(key, inCombat)
 		end
 	end
 	if key == "AllNPCs" then
-		return NameKeptHere("HostileNPCs", inCombat) and NameKeptHere("NeutralNPCs", inCombat)
-			and NameKeptHere("FriendlyNPCs", inCombat)
+		-- (A row whose tab is off has no say over the game's All NPCs: all
+		-- three off, it's the game's. Audit 2026-11-25)
+		local TabOff = ns.NameTabOff
+		return (TabOff("HostileNPCs") or NameKeptHere("HostileNPCs", inCombat))
+			and (TabOff("NeutralNPCs") or NameKeptHere("NeutralNPCs", inCombat))
+			and (TabOff("FriendlyNPCs") or NameKeptHere("FriendlyNPCs", inCombat))
 	end
 	if key == "Target" then
 		return NameKeptHere("YourTarget", inCombat) -- (the Target section's Names row)
@@ -585,8 +637,9 @@ function ns.UpdateCVars(cinematic, fightStarting)
 		-- raids, plates locked, do the rows keep them up. (Past the 40 plates up
 		-- at once in a city crowd, a vendor close by has no name: the user's call.)
 		local forcedOff = set.key == "InteractiveNPCs" and ns.PageOn("handleNames") and ns.PlatesForcedHere(cinematic)
+		-- (Nor with its row's tab off: the game's own names. Audit 2026-11-25)
 		local want = forcedOff or (ns.PlatesCinematic(cinematic) and ns.PageOn("handleNames")
-			and not NameKeptHere(set.key, inCombat)
+			and not ns.NameTabOff(set.key) and not NameKeptHere(set.key, inCombat)
 			and not (ns.db.handlePlates and ns.plates.NamesOnPlates(set.key, inCombat))) or immersive
 		ns.ApplyCVarSet(set, want or false)
 	end
@@ -1069,7 +1122,16 @@ local PLATE_RULE_KEY = setmetatable({}, { __index = function(keys, kind)
 	keys[kind] = "plate:" .. kind
 	return keys[kind]
 end })
+-- (A row whose tab is off goes by neither: its units are the game's. A kind's
+-- plates as your own settings show them, a part shown, a unit row (your pet,
+-- your target, raid markers) adding nothing. Audit 2026-11-25)
+ns.plates.tabOffKinds = {}
+for _, kind in ipairs(ns.PLATE_KINDS) do ns.plates.tabOffKinds[kind] = true end
 local function RuleSays(kind)
+	if ns.PlateTabOff(kind) then
+		if ns.plates.tabOffKinds[kind] then return ns.plates.OwnKindShown(kind) and true or false end
+		return kind ~= "PartMarker" and kind:find("^Part") ~= nil
+	end
 	local test = ns.RuleTest(PLATE_RULE_KEY[kind])
 	if test then
 		return test(ns.RuleFactsNow()) and true or false
@@ -2480,7 +2542,8 @@ local function MarkersHiddenOverFriends()
 	if not platesActive or placeSuffix == "Instances" then
 		return false
 	end
-	if UnitRowWanted("PartMarker") then
+	-- (Nor with its tab off: markers as the game has them. Audit 2026-11-25)
+	if UnitRowWanted("PartMarker") or ns.PlateTabOff("PartMarker") then
 		return false
 	end
 	return ns.InGroup() or markerWatcher.solo or false
@@ -2508,7 +2571,8 @@ local function TargetHeldDown()
 	if ns.testTargetHeldDown then
 		return TargetRow("target") ~= nil
 	end
-	return TargetRow("target") ~= nil and not UnitRowWanted("YourTarget")
+	-- (The Target tab off: its kind's row decides, nothing held down. Audit 2026-11-25)
+	return TargetRow("target") ~= nil and not UnitRowWanted("YourTarget") and not ns.PlateTabOff("YourTarget")
 end
 
 local function TargetFadeTime(fadeIn)
@@ -2868,7 +2932,8 @@ function PlateAlphas(unit, plate, besidesHeal)
 	-- only adds, as before. 2026-11-24: "not interacting" there left a
 	-- vendor's title up through the talk, Service NPCs keeping it.)
 	local targetDecides = platesForced and unit and plate ~= PersonalPlate() and IsTarget(unit)
-		and ns.TargetNameRow(unit) ~= nil and ns.RuleTest(ns.NameRuleKey("YourTarget")) ~= nil or false
+		and ns.TargetNameRow(unit) ~= nil and ns.RuleTest(ns.NameRuleKey("YourTarget")) ~= nil
+		and not ns.NameTabOff("YourTarget") or false -- (its tab off: no say. Audit 2026-11-25)
 	if body <= 0 and unit and ns.SoftPlateHidden(unit) then
 		-- (A plate only soft targeting gave it: its name stays, as without one.)
 		name = GameNameShown(unit) and 1 or 0
@@ -3533,7 +3598,11 @@ function ns.PlatesWhy()
 		local up = (fighting and ShownInFights(kind)) or (not fighting and KeptHere(kind))
 			or (lingering and ShownInFights(kind))
 		local label = L[labels[kind] or kind]
-		if ns.RuleTest(PLATE_RULE_KEY[kind]) then label = L["%s (by its rule)"]:format(label) end
+		if ns.PlateTabOff(kind) then -- (its tab off: the game's own. Audit 2026-11-25)
+			label = L["%s (its tab is off, so the game's own options decide)"]:format(label)
+		elseif ns.RuleTest(PLATE_RULE_KEY[kind]) then
+			label = L["%s (by its rule)"]:format(label)
+		end
 		if up then shown[#shown + 1] = label else hidden[#hidden + 1] = label end
 	end
 	local when = (fighting and L["in this fight"]) or (lingering and L["just after a fight"])
@@ -3692,7 +3761,7 @@ function ns.PlateItemsWhy()
 					Add("block", L["Names: the All names row hides every name here"])
 				end
 				if target and platesForced and ns.TargetNameRow(unit) and ns.RuleTest(ns.NameRuleKey("YourTarget"))
-					and (nameLevel.YourTarget or 0) < 0.95 then
+					and not ns.NameTabOff("YourTarget") and (nameLevel.YourTarget or 0) < 0.95 then -- (Audit 2026-11-25)
 					Add("block", L["Names: the Target names rule hides your target's name, whatever its kind's rows say"])
 				end
 				-- Its name alone, kept by a Names row.
@@ -4003,6 +4072,7 @@ local function OwnKindShown(kind)
 	end
 	return true
 end
+ns.plates.OwnKindShown = OwnKindShown -- (a kind whose tab is off: RuleSays. Audit 2026-11-25)
 
 -- Whether a unit would have a plate up without Quest Vision's soft targeting
 -- (see QuestGlow): always in CineMode (every plate is kept on there, its fade
@@ -4059,13 +4129,15 @@ function ns.EnsurePlateRows()
 	for _, kind in ipairs(ns.PLATE_KINDS) do rows[#rows + 1] = kind end
 	for _, row in ipairs(ns.PLATE_UNIT_ROWS) do rows[#rows + 1] = row end
 	for _, kind in ipairs(rows) do
-		if ns.RuleTest(PLATE_RULE_KEY[kind]) then
+		-- (A row whose tab is off: your settings left as they are. Audit 2026-11-25)
+		local tabOff = ns.PlateTabOff(kind)
+		if not tabOff and ns.RuleTest(PLATE_RULE_KEY[kind]) then
 			ns.EnablePlateRow(kind) -- (a rule may show it)
 		end
 		for _, prefix in ipairs({ "plateAlways", "plateGroup", "plateCombat", "plateCombatPvP",
 			"plateCinematic", "plateInCities", "plateInInstances", "plateInPvP", "plateInBGs", "plateTargetEnemy",
 			"plateTargetFriendly" }) do
-			if ns.db[prefix .. kind] then
+			if not tabOff and ns.db[prefix .. kind] then
 				ns.EnablePlateRow(kind)
 				break
 			end
@@ -4073,7 +4145,7 @@ function ns.EnsurePlateRows()
 	end
 	-- (And friendly kinds shown in dungeons and raids, by their own setting.)
 	for _, kind in ipairs(ns.PLATE_INSTANCE_KINDS) do
-		if ns.db["plateInstance" .. kind] ~= "hide" then
+		if ns.db["plateInstance" .. kind] ~= "hide" and not ns.InstancePlatesTabOff() then -- (Audit 2026-11-25)
 			ns.EnablePlateRow(kind)
 		end
 	end
@@ -4105,7 +4177,8 @@ local TARGET_ROW_KIND = { MyFriendlyPlayerTarget = "Friends", MyFriendlyNPCTarge
 local lockedHidden = {} -- (kept: made each tick, it was garbage)
 
 local function UpdateLockedPlates()
-	local locked = platesActive and placeSuffix == "Instances"
+	-- (Its tab off: the game's own. Audit 2026-11-25)
+	local locked = platesActive and placeSuffix == "Instances" and not ns.InstancePlatesTabOff()
 	local targetKind = locked and Ask(UnitExists, "target") and TARGET_ROW_KIND[TargetRow("target") or ""]
 	local hidden = lockedHidden
 	-- (A kind's Grouped tick counts here too: grouped is grouped, wherever.)
@@ -4332,13 +4405,17 @@ end
 end
 -- (ticked: FriendRowsTicked's answer, when asking for several row sets at once.)
 function ns.plates.FriendRowWanted(rows, names, suffix, ticked)
+	-- (A row whose tab is off asks for nothing. Audit 2026-11-25)
+	local PlateOff, NameOff = ns.PlateTabOff, ns.NameTabOff
 	for _, row in ipairs(rows) do
-		if ns.RuleTest(PLATE_RULE_KEY[row]) then return true end
-		if names and ns.RuleTest(ns.NameRuleKey(row)) then return true end
+		if not PlateOff(row) and ns.RuleTest(PLATE_RULE_KEY[row]) then return true end
+		if names and not NameOff(row) and ns.RuleTest(ns.NameRuleKey(row)) then return true end
 	end
 	ticked = ticked or ns.plates.FriendRowsTicked(suffix)
 	for _, row in ipairs(rows) do
-		if ticked.plate[row] or (names and ticked.name[row]) then return true end
+		if (ticked.plate[row] and not PlateOff(row)) or (names and ticked.name[row] and not NameOff(row)) then
+			return true
+		end
 	end
 	return false
 end
@@ -4347,8 +4424,11 @@ function ns.plates.FriendWants(suffix)
 	local wants = ns.plates.friendWants
 	local now = GetTime()
 	if InCombatLockdown() then return wants.shownBody, wants.shownMinions, wants.shownPlayers end
-	if wants.place ~= suffix or now - wants.at >= 10 then
-		wants.place, wants.at = suffix, now
+	-- (And at once as a tab its rows are on flips: Audit 2026-11-25.)
+	local tabs = (ns.PlateTabOff("Friends") and 1 or 0) + (ns.PlateTabOff("YourTarget") and 2 or 0)
+		+ (ns.NameTabOff("Friends") and 4 or 0)
+	if wants.place ~= suffix or now - wants.at >= 10 or wants.tabs ~= tabs then
+		wants.place, wants.at, wants.tabs = suffix, now, tabs
 		local rows, Wanted = ns.plates.FRIEND_ROWS, ns.plates.FriendRowWanted
 		local ticked = ns.plates.FriendRowsTicked(suffix)
 		wants.body = Wanted(rows.body, false, suffix, ticked)
