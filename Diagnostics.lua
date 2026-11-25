@@ -363,9 +363,28 @@ local function Protect(fn, hooked, label, state)
 	return wrapped
 end
 
+-- A safety stop (ns.Suspend: an error that kept repeating, /cine panic) puts
+-- away everything on screen the addon draws: fn() for each overlay with no
+-- loop clear of its own (the death screen, cards), and every loop's clear
+-- (below). Only the letterbox, tint, haze and weather were hidden before;
+-- the rest stayed as they were, frozen if the error was theirs. Audit 2026-11-25.
+local safetyClears, loopClears = {}, setmetatable({}, { __mode = "k" }) -- frame -> clear
+function ns.OnSafetyStop(fn)
+	safetyClears[#safetyClears + 1] = fn
+end
+function ns.RunSafetyClears()
+	local function Run(fn)
+		local ok, err = pcall(fn)
+		if not ok then ns.Log("safety", "a clean-up failed: " .. tostring(err)) end
+	end
+	for _, fn in ipairs(safetyClears) do Run(fn) end
+	for _, fn in pairs(loopClears) do Run(fn) end
+end
+
 -- frame:SetScript("OnUpdate", fn), protected (nil clears it as usual).
 -- clear (optional): hides what the loop draws and resets its state, run if
--- its breaker turns it off; /cine resume then starts it again (ns.ReviveLoops).
+-- its breaker turns it off (and on a safety stop); /cine resume then starts it
+-- again (ns.ReviveLoops).
 local setLoops = setmetatable({}, { __mode = "k" }) -- frame -> { wrapped, state }
 function ns.SetOnUpdate(frame, fn, clear)
 	if not fn then
@@ -373,6 +392,7 @@ function ns.SetOnUpdate(frame, fn, clear)
 		frame:SetScript("OnUpdate", nil)
 		return
 	end
+	if clear then loopClears[frame] = clear end
 	local state = { dead = false, windowStart = 0, inWindow = 0, clear = clear }
 	local wrapped = Protect(fn, false, LoopLabel(), state)
 	setLoops[frame] = { wrapped = wrapped, state = state }
@@ -439,6 +459,7 @@ end
 -- something still shows, a loop turned off left it there, frozen, and never
 -- came back; cleared, the feature starts afresh as it's next wanted.
 function ns.FeatureLoop(frame, fn, wanted, every, clear)
+	if clear then loopClears[frame] = clear end
 	local state = { dead = false, windowStart = 0, inWindow = 0, clear = clear }
 	local loop = { frame = frame, run = Protect(fn, false, LoopLabel(), state), state = state, wanted = wanted, on = nil,
 		every = every }

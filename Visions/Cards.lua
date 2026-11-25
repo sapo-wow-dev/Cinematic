@@ -813,6 +813,14 @@ function ns.Cards.Cut(id)
 	if current and current.id == id then ns.CutCard(screen) end
 end
 
+-- (A safety stop: the card on screen put away, none waiting behind it.
+-- Left, it stayed frozen if its drawing was what failed. Audit 2026-11-25.)
+ns.OnSafetyStop(function()
+	wipe(waiting)
+	current = nil
+	if screen and ns.ClearCard then ns.ClearCard(screen) end
+end)
+
 -- The card playing now ({ id, name... }), for Inspect (Why.lua).
 function ns.Cards.Current()
 	return current

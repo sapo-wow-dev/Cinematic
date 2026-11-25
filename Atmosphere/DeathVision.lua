@@ -376,6 +376,14 @@ function ns.TestDeathVision()
 	ns.deathVisionTest = { endsAt = GetTime() + (db.deathVignetteTime or 10) + 5 }
 end
 function ns.DeathVisionTesting() return ns.deathVisionTest ~= nil end
+-- (A safety stop: the death screen put away, its test with it. The tint's
+-- step that draws it stops with the rest, so it stayed on, frozen. After
+-- /cine resume it comes back if you're still dead. Audit 2026-11-25.)
+ns.OnSafetyStop(function()
+	ns.deathVisionTest = nil
+	deathLevel, deathCreep = 0, 0
+	if deathFrame then deathFrame:Hide() end
+end)
 -- Its overlay (made with the tint at login): the welcome window's demo keeps it
 -- out of the whole UI's fade (ShowMe.lua).
 function ns.DeathScreenFrame() return deathFrame end

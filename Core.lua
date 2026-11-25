@@ -4657,6 +4657,10 @@ local function RestoreEverything()
 	if _G.CinematicWeatherFX then
 		_G.CinematicWeatherFX:Hide()
 	end
+	-- (Every other overlay: the Visions, the death screen, cards, the camera
+	-- wheel... each put away and reset by its own clean-up. They stayed as they
+	-- were, frozen if the error was theirs. Audit 2026-11-25.)
+	Try(ns.RunSafetyClears)
 	Try(GameTooltip.SetAlpha, GameTooltip, 1)
 	if not UIParent:IsShown() then
 		Try(ns.BringBackUI) -- hidden with the Hide the UI key (in a fight: once it ends)

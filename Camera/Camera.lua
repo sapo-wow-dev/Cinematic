@@ -3346,6 +3346,9 @@ do
 	end
 
 	local box
+	-- (A safety stop: put away. Only the camera's loop hid it, and that stops
+	-- with the rest. Audit 2026-11-25.)
+	ns.OnSafetyStop(function() if box then box:Hide() end end)
 	function ns.UpdateDeathExit(on)
 		if not (on and ns.db.deathExitButton) then
 			if box then box:Hide() end

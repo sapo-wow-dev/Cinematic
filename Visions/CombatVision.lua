@@ -1022,6 +1022,19 @@ local function Play(frame, look, enter, width, height, scale, boss, after)
 	end)
 end
 
+-- The card on frame put away at once, its loop stopped, its click off (a
+-- safety stop: Cards.lua). Audit 2026-11-25.
+function ns.ClearCard(frame)
+	local cue = frame and frame.cue
+	if not cue then return end
+	cue.click, cue.cut = nil, nil
+	for _, part in ipairs({ cue.bars, cue.pulse, cue.over }) do
+		if part then pcall(part.Hide, part) end
+	end
+	ns.SetOnUpdate(frame, nil)
+	PlaceClick(cue)
+end
+
 -- A card { name, sub, meta } (or a banner's picture: Setup's) in look (a
 -- card's, Cards.lua's ns.CardLook), on frame (the screen's, or a preview's),
 -- width x height, scale next to the real screen.
