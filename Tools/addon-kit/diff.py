@@ -267,8 +267,16 @@ def cmd_baseline(client, log):
     for probe in sorted(run.records):
         for field in sorted(run.records[probe]):
             lines.append("R %s\t%s\t%s\t%s" % (probe, field, run.records[probe][field], run.versions[probe]))
+    # (The same records as saved: left as it is, so a diff.py all run on the
+    # same log doesn't change the file by its saved time alone.)
+    path = baseline_path(client)
+    if os.path.exists(path):
+        was = read_lines(path)
+        if was[:-1] == lines:
+            print("baseline %s: unchanged (%d probes, build %s)" % (client, len(run.records), run.head.get("build")))
+            return 0
     lines.append("D %s; saved %s" % (run.done, time.strftime("%Y-%m-%d %H:%M")))
-    with open(baseline_path(client), "w", encoding="utf-8", newline="\n") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
     print("baseline %s: %d probes saved (build %s) to %s" % (client, len(run.records), run.head.get("build"),
                                                             os.path.relpath(baseline_path(client), ROOT)))
