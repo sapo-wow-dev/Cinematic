@@ -1377,9 +1377,10 @@ watcher:SetScript("OnEvent", function(_, event, ...)
 		if Plain(tostring, success) == "1" then bossRun.preAt = -math.huge end -- (a boss down: the next may show before its pull)
 		BossLog(("encounter ended, success %s: %s"):format(Plain(tostring, success) or "secret",
 			Plain(tostring, success) == "1" and "the next boss's card may show before its pull" or "a card before a pull stays held"))
-		-- (The Boss event's sounds for a kill or a wipe.)
+		-- (The Boss event's sounds for a kill or a wipe. Not with its Sounds tab
+		-- off, as a card's own sound: Cards.lua's Show. Audit 2026-11-25.)
 		local result = Plain(tostring, success)
-		if ns.CardOn("boss") and result then
+		if ns.CardOn("boss") and not ns.CardPartOff("boss", "sounds") and result then
 			ns.PlayCombatCueSound(result == "1" and "kill" or "wipe")
 		end
 	elseif event == "PLAYER_TARGET_CHANGED" then

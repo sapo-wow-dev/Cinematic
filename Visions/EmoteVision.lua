@@ -2725,6 +2725,40 @@ for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "RESUR
 end
 pcall(watcher.RegisterUnitEvent, watcher, "UNIT_AURA", "player")
 watcher:SetScript("OnEvent", function(_, event, ...)
+	-- (Emote Vision off, or held to CineMode out of it: only the cheap state
+	-- kept (loading, dead, the setup once), and the queue's next look, for
+	-- the campfire cards that come anyway. No auras, roster or levels read:
+	-- learnt again, quietly, as it's back on. Audit 2026-11-25.)
+	if not ns.Setting("emoteVision") then
+		if event == "LOADING_SCREEN_ENABLED" then
+			loading = true
+		elseif event == "LOADING_SCREEN_DISABLED" then
+			loading = nil
+		elseif event == "PLAYER_DEAD" then
+			dead = true
+		elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
+			C_Timer.After(0, AliveCheck)
+		elseif event == "PLAYER_STOPPED_MOVING" then
+			C_Timer.After(0.2, Next)
+		elseif event == "PLAYER_REGEN_ENABLED" then
+			C_Timer.After(1, Next)
+		elseif event == "PLAYER_ENTERING_WORLD" then
+			SetUpOnce()
+			dead = ns.Flag(UnitIsDeadOrGhost("player")) and true or false
+		end
+		if not nameLink.wasOff then
+			nameLink.wasOff = true
+			wipe(nameLink.stalk)
+		end
+		return
+	end
+	if nameLink.wasOff then
+		nameLink.wasOff = nil
+		ScanOld(true)
+		LearnEnds()
+		LearnLevels()
+		RosterChanged(true)
+	end
 	if event == "UNIT_AURA" then
 		AurasChanged(select(2, ...))
 	elseif event == "UNIT_TARGET" or event == "NAME_PLATE_UNIT_REMOVED" then

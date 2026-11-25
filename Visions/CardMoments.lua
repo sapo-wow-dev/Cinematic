@@ -392,8 +392,17 @@ function explore.Index()
 	explore.ticker = C_Timer.NewTicker(0, function() explore.Step() end)
 	return index
 end
--- (Started a little after login, so it's ready by the first zone change.)
-C_Timer.After(10, function() explore.Index() end)
+-- (Whether anything reads it: Discovered's card or the Letterbox's bars on a
+-- new place (the zone card asks it then), Explore progress, Achievement step.
+-- Audit 2026-11-25.)
+function explore.Wanted()
+	return ns.CardOn("discover") or ns.CardOn("explore") or ns.CardOn("step")
+		or (ns.db and ns.db.letterboxOnDiscover) and true or false
+end
+-- (Started a little after login, so it's ready by the first zone change.
+-- Only if something reads it: else built on first use. Audit 2026-11-25:
+-- every login walked the whole achievement list for nothing.)
+C_Timer.After(10, function() if explore.Wanted() then explore.Index() end end)
 -- True: the game says this character's discovered the place; false: not yet
 -- (it's being discovered now); nil: the game keeps no count of it.
 function ns.PlaceExplored(place)
@@ -646,6 +655,9 @@ end
 function progress.StepDone(id, step)
 	id = Plain(id)
 	if not id then return end
+	-- (None of the three cards on: nothing to say, the index not built for
+	-- it. Audit 2026-11-25.)
+	if not (ns.CardOn("almost") or ns.CardOn("explore") or ns.CardOn("step")) then return end
 	explore.Index() -- (built first: which achievements are Explore ones, explore.areaAch)
 	local name, completed = progress.Name(id)
 	if not name or completed then return end -- (all done: the Achievement card's)

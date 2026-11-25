@@ -1891,7 +1891,8 @@ function ns.RefreshOutsideCine(force)
 	end
 	if not any then return end
 	for _, name in ipairs({ "RefreshNameCVars", "ApplyHealVisionFrames", "ApplyHealVisionPlates", "RefreshPlateNameStyle",
-		"RefreshTargetQuestIcon", "UpdateQuestGlow", "RefreshQuestItemButton", "RefreshRollWindow" }) do
+		"RefreshTargetQuestIcon", "UpdateQuestGlow", "RefreshQuestItemButton", "RefreshRollWindow",
+		"WakeQuestTalkLoops" }) do -- (Quest Talk's loops, by Allow outside CineMode: Audit 2026-11-25)
 		if ns[name] then ns.Guard(ns[name]) end
 	end
 end
@@ -5766,10 +5767,12 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		-- session either way).
 		if arg1 or arg2 then
 			local recap = ns.RecapLogin and ns.RecapLogin(arg1)
-			if not ns.Setting("storyRecap") or InCombatLockdown() or UnitAffectingCombat("player") then
+			-- (Each by its event's Settings tab too, a container: Last time's
+			-- own, and the Zone event's for the time of day. Audit 2026-11-25.)
+			if not (ns.CardOn and ns.CardOn("login")) or InCombatLockdown() or UnitAffectingCombat("player") then
 				recap = nil
 			end
-			local timeOfDay = ns.Setting("timeOfDayMessage")
+			local timeOfDay = ns.Setting("timeOfDayMessage") and not (ns.CardPartOff and ns.CardPartOff("zone", "settings"))
 			-- (With Story Vision's zone card, the time of day goes on it.)
 			if timeOfDay and ns.ProfileChosen() and ns.ZoneCardTime and ns.ZoneCardTime() then timeOfDay = false end
 			if (timeOfDay or recap) and ns.ProfileChosen() then

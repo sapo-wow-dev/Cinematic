@@ -2121,7 +2121,7 @@ events:SetScript("OnEvent", function(_, event, _, action, _, amount)
 		if Secret(max) or type(max) ~= "number" or max <= 0 then return end
 		if action == "HEAL" then
 			if healthGuess then healthGuess = math.min(1, healthGuess + amount / max) end
-			Wake()
+			if ns.Setting(ns.VITALS_HEALTH_TAB) or test or glimpse then Wake() end -- (as below, Audit 2026-11-25)
 			return
 		end
 		if healthGuess then healthGuess = math.max(0, healthGuess - amount / max) end
@@ -2151,7 +2151,11 @@ events:SetScript("OnEvent", function(_, event, _, action, _, amount)
 		autoTheme, autoGameTheme = nil, nil -- (picked again)
 		autoZeroTries = 0
 	end
-	Wake()
+	-- (Only with the Health tab on (the page and Allow outside CineMode in
+	-- it), or a test or quick look: off, every hit ran a whole update for
+	-- nothing. Turned off live, ns.RefreshLowHealth wakes it to settle; a test
+	-- wakes it itself. Audit 2026-11-25.)
+	if event == "PLAYER_LOGIN" or ns.Setting(ns.VITALS_HEALTH_TAB) or test or glimpse then Wake() end
 end)
 
 -- Is it showing now? (The minimap button's Minimap Glow Helper.) Only once your

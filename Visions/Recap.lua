@@ -184,7 +184,9 @@ function ns.RecapCard(parts)
 	parts = parts or lastParts
 	local db = ns.db
 	if db.storyRecapUnder or not parts then
-		if parts and ns.PlayCardCueSound then ns.PlayCardCueSound("login") end -- (its sound: a page turning, to start with)
+		-- (Its sound: a page turning, to start with. Not with its Sounds tab
+		-- off, as the card's: Cards.lua's Show. Audit 2026-11-25.)
+		if parts and ns.PlayCardCueSound and not ns.CardPartOff("login", "sounds") then ns.PlayCardCueSound("login") end
 		return false
 	end
 	local card = ns.RecapCardText(parts, db)
@@ -255,7 +257,9 @@ function ns.RecapDemo()
 	end
 	local carded = ns.RecapCard(parts)
 	if ns.ShowTimeOfDayTitle then
-		local showTime = ns.Setting("timeOfDayMessage") and not (ns.ZoneCardTime and ns.ZoneCardTime())
+		-- (Not with the Zone event's Settings tab off, as at login. Audit 2026-11-25.)
+		local showTime = ns.Setting("timeOfDayMessage") and not ns.CardPartOff("zone", "settings")
+			and not (ns.ZoneCardTime and ns.ZoneCardTime())
 		ns.ShowTimeOfDayTitle(showTime, not carded and line or nil)
 	end
 	return line, sample

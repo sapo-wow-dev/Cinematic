@@ -628,14 +628,25 @@ ns.FeatureLoop(watcher, function(self)
 	local now = GetTime()
 	if now >= self.at then
 		self.at = now + CHECK_EVERY
-		if self.anyway or ns.db and (ns.db.questItemButton or button:IsShown()) then
+		if self.anyway or ns.db and (ns.QuestVisionSetting("questItemButton") or button:IsShown()) then
 			ns.RefreshQuestItemButton()
 		end
 		self.anyway = false
 	end
+-- (By the tick as its page leaves it (Quest Vision, Allow outside CineMode),
+-- not the raw tick: off, it refreshed every 2 s for nothing. Audit 2026-11-25.)
 end, function()
-	return watcher.anyway or (ns.db and ns.db.questItemButton) or button:IsShown() and true or false
+	return watcher.anyway or ns.db and ns.QuestVisionSetting("questItemButton") or button:IsShown() and true or false
 end)
+-- (Its page, CineMode or the tick changing (Options.lua, ns.RefreshOutsideCine
+-- call this): the loop asked again at once. Audit 2026-11-25.)
+do
+	local Refresh = ns.RefreshQuestItemButton
+	function ns.RefreshQuestItemButton()
+		Refresh()
+		ns.WakeFeatureLoop(watcher)
+	end
+end
 -- The zone ability can come and go with no event of its own we hear.
 for _, name in ipairs({ "ExtraActionBarFrame", "ZoneAbilityFrame" }) do
 	local frame = _G[name]

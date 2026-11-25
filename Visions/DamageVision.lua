@@ -1302,7 +1302,10 @@ events:SetScript("OnEvent", function(_, event, ...)
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		encounter = nil
 	end
-	Wake()
+	-- (Only while it can show (its page, Allow outside CineMode), a test, or
+	-- it's up and may need to go: off, each fight's edge placed and dressed it
+	-- and ran its update for nothing. Audit 2026-11-25.)
+	if test or ns.Setting("damageVision") or (frame and frame:IsShown()) then Wake() end
 end)
 
 -- The Damage Vision pages (in the Visions hub, the dev copy's), three folder

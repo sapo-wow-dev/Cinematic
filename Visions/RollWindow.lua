@@ -1641,6 +1641,10 @@ end
 
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnEvent", function(_, event, encounterID, lootListID)
+	-- (Off: nothing at all, first: a roll starting scanned the loot history,
+	-- hooked the game's roll frames and set a timer, and each loot event
+	-- logged "Roll Vision is off". Audit 2026-11-25.)
+	if not Enabled() then return end
 	if event == "START_LOOT_ROLL" then
 		-- (only for the log: does the loot history have it yet, as you're asked?)
 		local open = 0
@@ -1652,8 +1656,8 @@ watcher:SetScript("OnEvent", function(_, event, encounterID, lootListID)
 				end
 			end
 		end
-		ns.Log("rolls", ("roll %s starts (Roll Vision %s): loot history has %d unfinished drop(s)"):format(
-			tostring(encounterID), Enabled() and "on" or "off", open))
+		ns.Log("rolls", ("roll %s starts (Roll Vision on): loot history has %d unfinished drop(s)"):format(
+			tostring(encounterID), open)) -- (on: asked above, Audit 2026-11-25)
 		-- (the game's roll frame up a moment in? Not: another addon has it)
 		HookRollFrames()
 		C_Timer.After(0.5, function()
@@ -1668,10 +1672,6 @@ watcher:SetScript("OnEvent", function(_, event, encounterID, lootListID)
 				Close()
 			end
 		end)
-		return
-	end
-	if not Enabled() then
-		ns.Log("rolls", event .. ": Roll Vision is off")
 		return
 	end
 	if event == "LOOT_HISTORY_UPDATE_DROP" and encounterID and lootListID then

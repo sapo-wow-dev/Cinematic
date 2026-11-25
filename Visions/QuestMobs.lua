@@ -632,6 +632,13 @@ castWatcher:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
 castWatcher:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 castWatcher:SetScript("OnEvent", function(_, event, _, a, b, c)
 	if event == "UNIT_SPELLCAST_SENT" then
+		-- (No quest in your log with an item to use: no NPC can be spent, so
+		-- no unit or tooltip read for this cast. The item quests are kept till
+		-- the log changes. Audit 2026-11-25.)
+		if #ItemQuests().all == 0 then
+			aimed = nil
+			return
+		end
 		-- (unit, target name, castGUID, spellID)
 		local name = type(a) == "string" and Known(a) and a ~= "" and a or nil
 		local guid, mob, unit = AimedAt(name)
@@ -641,8 +648,11 @@ castWatcher:SetScript("OnEvent", function(_, event, _, a, b, c)
 		for _, questID in ipairs(guid and ItemQuests().all or {}) do
 			aimed.have[questID] = Fulfilled(questID)
 		end
-		Report(("cast %s sent at %s: %s (%s)"):format(tostring(c), tostring(name or "no name"),
-			tostring(unit or "no unit found"), mob and "a quest mob" or "not a quest mob"))
+		-- (The lines made only for /cine debug questitem. Audit 2026-11-25.)
+		if ns.questItemDebug then
+			Report(("cast %s sent at %s: %s (%s)"):format(tostring(c), tostring(name or "no name"),
+				tostring(unit or "no unit found"), mob and "a quest mob" or "not a quest mob"))
+		end
 		return
 	end
 	-- (unit, castGUID, spellID)
@@ -652,9 +662,11 @@ castWatcher:SetScript("OnEvent", function(_, event, _, a, b, c)
 	local quests = ItemQuests()
 	local quest = type(b) == "number" and Known(b) and quests[b]
 	local list = quest and { quest } or (aimed.mob and quests.all) or {}
-	Report(("cast %s done: %s"):format(tostring(b), quest and ("the item spell of quest " .. quest)
-		or (#list > 0 and ("not an item spell; watching %d quests with items"):format(#list))
-		or "not an item spell, not at a quest mob: ignored"))
+	if ns.questItemDebug then -- (Audit 2026-11-25: as above)
+		Report(("cast %s done: %s"):format(tostring(b), quest and ("the item spell of quest " .. quest)
+			or (#list > 0 and ("not an item spell; watching %d quests with items"):format(#list))
+			or "not an item spell, not at a quest mob: ignored"))
+	end
 	for _, questID in ipairs(list) do
 		pending[#pending + 1] = { guid = aimed.guid, name = aimed.name, quest = questID, have = aimed.have[questID] or Fulfilled(questID),
 			at = GetTime() }
@@ -1011,13 +1023,24 @@ targetWatcher:RegisterEvent("PLAYER_TARGET_CHANGED")
 targetWatcher:SetScript("OnEvent", ns.RefreshTargetQuestIcon)
 -- (Runs only while the target's quest icon is on, or still shows: no loop
 -- at all otherwise.)
+-- (By the tick as its page leaves it (Quest Vision, Allow outside CineMode),
+-- not the raw tick: off, it ran twice a second for nothing. Audit 2026-11-25.)
 ns.FeatureLoop(targetWatcher, function()
-	if (ns.db and ns.db.targetQuestIcon) or (targetIcon and targetIcon:IsShown()) then
+	if ns.QuestVisionSetting("targetQuestIcon") or (targetIcon and targetIcon:IsShown()) then
 		ns.RefreshTargetQuestIcon()
 	end
 end, function()
-	return (ns.db and ns.db.targetQuestIcon) or (targetIcon and targetIcon:IsShown()) and true or false
+	return ns.QuestVisionSetting("targetQuestIcon") or (targetIcon and targetIcon:IsShown()) and true or false
 end, TARGET_EVERY)
+-- (Its page, CineMode or the tick changing (Options.lua, ns.RefreshOutsideCine
+-- call this): the loop asked again at once. Audit 2026-11-25.)
+do
+	local Refresh = ns.RefreshTargetQuestIcon
+	function ns.RefreshTargetQuestIcon()
+		Refresh()
+		ns.WakeFeatureLoop(targetWatcher)
+	end
+end
 
 -- For /cine debug plates: what the target's quest lines say.
 function ns.DescribeQuestMob(unit)

@@ -2605,6 +2605,7 @@ local function Open(kind)
 		if panel then panel:SetAlpha(0) end
 	end
 	talk.kind = kind
+	ns.WakeQuestTalkLoops() -- (its loops on at once, Audit 2026-11-25)
 	-- (Whether "npc" is there to go: some talks never have it, see Ending.)
 	talk.hadNpc = ns.Flag(UnitExists("npc"))
 	-- Anything going wrong: the game's window, so the conversation can go on.
@@ -2657,8 +2658,10 @@ local watcher = CreateFrame("Frame")
 local unseen, hiddenFor, stray = 0, 0, 0
 -- (This and the follower below run only while Quest talk is on, or ours
 -- still show: no loop at all otherwise.)
+-- (By its setting as this file reads it: the page, Allow outside CineMode
+-- and gamepad mode too, not the raw tick. Audit 2026-11-25.)
 local function QuestTalkLoopWanted()
-	return (ns.db and ns.db.questTalk) or talk.kind ~= nil or fade.closing
+	return Setting("questTalk") or talk.kind ~= nil or fade.closing
 end
 ns.FeatureLoop(watcher, function(_, elapsed)
 	local step = elapsed -- (every WATCH_EVERY, on a game timer)
@@ -2767,6 +2770,12 @@ ns.FeatureLoop(follower, function(_, elapsed)
 	bubble:SetAlpha(camMove.alpha * fade.alpha)
 	panel:SetAlpha(((panel.following or mode == "wait") and camMove.alpha or 1) * fade.alpha)
 end, QuestTalkLoopWanted)
+-- (Both asked again now, not at the next second's check: a talk opening, the
+-- page or CineMode changing. Audit 2026-11-25.)
+function ns.WakeQuestTalkLoops()
+	ns.WakeFeatureLoop(watcher)
+	ns.WakeFeatureLoop(follower)
+end
 
 -- A plate came or went while ours show. A quest accepted refreshes the
 -- NPC's plate (its mark goes) as the talk ends, when "npc" is gone: ours
@@ -2932,6 +2941,7 @@ function ns.RefreshQuestTalk()
 	elseif talk.kind then
 		Show(true)
 	end
+	ns.WakeQuestTalkLoops() -- (Audit 2026-11-25)
 end
 
 -- The Style hub's Quest talk page changed: dressed again, if it's up.

@@ -551,6 +551,11 @@ ns.Listen("CAMP_BENEFITS_DONE", function()
 	camp.since, camp.gotAt, camp.waitUp = nil, nil, true
 end, CampWanted)
 
+-- (Whether the bag's auras are worth reading: its row or the camp timer on.
+-- Audit 2026-11-25.)
+local function BagWanted()
+	return not ns.isRetail and (ns.CardOn("sleepBag") or CampWanted()) and true or false
+end
 local watcher = CreateFrame("Frame")
 watcher:RegisterUnitEvent("UNIT_AURA", "player")
 watcher:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
@@ -568,6 +573,22 @@ watcher:SetScript("OnEvent", ns.Profiled("UNIT_AURA (sleeping bag)", function(_,
 		if id == UNROLL then Unrolled() end
 		return
 	end
+	-- (Not read while nothing can show it: the Sleeping bag row and the camp
+	-- timer both off. Read once as either comes on: catchUp below. Audit 2026-11-25.)
+	if not BagWanted() then
+		-- (And not left "in the bag" unread: its frame would stay up, updating.)
+		state.unread, state.inBag = true, false
+		return
+	end
+	state.unread = nil
 	Read()
 end))
+-- (Audit 2026-11-25: the read skipped while off, done once as it comes on,
+-- not at the next aura change; then this loop's off again.)
+local catchUp = CreateFrame("Frame")
+ns.FeatureLoop(catchUp, function()
+	if not state.unread or InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")) then return end
+	state.unread = nil
+	Read()
+end, function() return state.unread == true and BagWanted() end, 0.5)
 end) -- (ns.Module "visions")
