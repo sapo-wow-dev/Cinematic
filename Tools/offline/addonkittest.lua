@@ -186,6 +186,32 @@ log = CinematicDB.addonKitTestLog
 Check("an addon solo didn't keep, still loaded: the stage FAILs and names it",
 	Has(log, "FAIL.-nothing loaded that solo didn't keep: SomeOtherAddon") ~= nil, Has(log, "FAIL"))
 Check("and keeps no probes for it", RunLog("DaylightUI") == nil)
+
+-- 6 the first time, it tries again (qe822, 2026-11-25: every character's addon
+-- list rewritten between solo and the reload): solo's list set again, one more
+-- Reload asked, and the stage's probes in the step after that Reload.
+Check("the first time: solo's list set again", Has(log, "isn't solo's: solo again, one more Reload") ~= nil)
+Check("and one more Reload asked", Has(log, "Reload, for DaylightUI alone") ~= nil)
+Check("and the stage noted for the step after it", CinematicDB.addonKitRetry == 2, CinematicDB.addonKitRetry)
+Check("SomeOtherAddon turned off by that solo", not Find("SomeOtherAddon").enabled)
+ns.HandleSlash("debug addonkit") -- (stops, as the Reload would)
+Advance(3)
+for _, a in ipairs(addons) do a.loaded = a.enabled end -- (the Reload)
+ns.HandleSlash("debug addonkit 6") -- (the step it picks up at: solo3, no target 3 here)
+Advance(10)
+log = CinematicDB.addonKitTestLog
+Check("after it: the stage's probes, in the step the run picks up at", RunLog("DaylightUI") ~= nil
+	and Has(log, "again: target 2's probes") ~= nil, Has(log, "FAIL"))
+Check("and no retry left noted", CinematicDB.addonKitRetry == nil)
+
+-- 7 the second time, it gives up: FAIL, no probes.
+CinematicDB[ns.AddonKitLogKey("DaylightUI")] = nil
+Find("SomeOtherAddon").loaded = true
+ns.HandleSlash("debug addonkit 5")
+Advance(10)
+log = CinematicDB.addonKitTestLog
+Check("a second time for the same stage: FAIL, left out", Has(log, "FAIL.-the addon list isn't solo's") ~= nil
+	and RunLog("DaylightUI") == nil and CinematicDB.addonKitRetry == nil, Has(log, "FAIL"))
 Find("SomeOtherAddon").loaded = false
 
 if fails > 0 then
