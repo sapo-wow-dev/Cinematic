@@ -9838,26 +9838,35 @@ local function CreateCombatPanel()
 			end
 			-- (Under the action bars' rows: their key names hidden.)
 			if page == "bars" then
-				local keys = Check(content, "hideKeybinds", L["Hide keybinds"],
-					L["Hides the key names on the action bar buttons (1, a-Q, s-2...), CineMode or not."],
-					function(value)
-						ns.GetDB().hideKeybinds = value
-						ns.ApplyHideKeybinds()
-					end)
-				keys:SetParent(section.body)
-				keys:SetPoint("TOPLEFT", section.last, "BOTTOMLEFT", -4, -8)
-				local macros = Check(content, "hideMacroText", L["Hide macro names"],
-					L["Hides the macro names on the action bar buttons, CineMode or not."],
-					function(value)
-						ns.GetDB().hideMacroText = value
-						ns.ApplyHideKeybinds()
-					end)
-				macros:SetParent(section.body)
-				macros:SetPoint("TOPLEFT", keys, "BOTTOMLEFT", 0, 0)
+				-- (Not there while another addon's bars draw their own key and
+				-- macro texts for good, with no pick: DaylightUI's, which has its own
+				-- switches. Support/DaylightUI.lua. A Conflicts pick keeps them.)
+				local who, yieldRow
+				if ns.FeatureYieldedTo then who, yieldRow = ns.FeatureYieldedTo("hideKeybinds") end
+				local above, x, y = section.last, -4, -8
+				if not (who and not yieldRow) then
+					local keys = Check(content, "hideKeybinds", L["Hide keybinds"],
+						L["Hides the key names on the action bar buttons (1, a-Q, s-2...), CineMode or not."],
+						function(value)
+							ns.GetDB().hideKeybinds = value
+							ns.ApplyHideKeybinds()
+						end)
+					keys:SetParent(section.body)
+					keys:SetPoint("TOPLEFT", above, "BOTTOMLEFT", x, y)
+					local macros = Check(content, "hideMacroText", L["Hide macro names"],
+						L["Hides the macro names on the action bar buttons, CineMode or not."],
+						function(value)
+							ns.GetDB().hideMacroText = value
+							ns.ApplyHideKeybinds()
+						end)
+					macros:SetParent(section.body)
+					macros:SetPoint("TOPLEFT", keys, "BOTTOMLEFT", 0, 0)
+					above, x, y = macros, 0, 0
+				end
 				local book = Check(content, "barsWithSpellbook", L["Show while the spellbook is open"],
 					L["Keeps your action bars up while the spellbook or macros window is open."])
 				book:SetParent(section.body)
-				book:SetPoint("TOPLEFT", macros, "BOTTOMLEFT", 0, 0)
+				book:SetPoint("TOPLEFT", above, "BOTTOMLEFT", x, y)
 				section.last = book
 			end
 			-- (The breath bar's look and hiding it: the Timers icon's Breath Bar tab, 2026-11-16.)

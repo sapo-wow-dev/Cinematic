@@ -1,4 +1,4 @@
-# version 2.2.3
+# version 2.2.7
 EnableMouse(false or a variable) in DaylightUI/Book/Fight.lua
 EnableMouse(false or a variable) in DaylightUI/Character/List.lua
 EnableMouse(false or a variable) in DaylightUI/Character/Slots.lua
@@ -14,6 +14,7 @@ EnableMouse(false or a variable) in DaylightUI/Tour.lua
 EnableMouse(false or a variable) in DaylightUI/Welcome.lua
 EnableMouse(false or a variable) in DaylightUI/Windows/Follow.lua
 EnableMouse(false or a variable) in DaylightUI_ActionBars/Bars.lua
+EnableMouse(false or a variable) in DaylightUI_ActionBars/CdmEditor.lua
 EnableMouse(false or a variable) in DaylightUI_ActionBars/CdmEffects.lua
 EnableMouse(false or a variable) in DaylightUI_ActionBars/CdmRows.lua
 EnableMouse(false or a variable) in DaylightUI_ActionBars/Park.lua
@@ -91,6 +92,7 @@ SetIgnoreParentAlpha(true) in DaylightUI_Chat/Tiles.lua
 SetIgnoreParentAlpha(true) in DaylightUI_InfoPanel/Minimap.lua
 SetIgnoreParentAlpha(true) in DaylightUI_QoL/Afk.lua
 frame DaylightUIAfkScreen
+frame DaylightUIAfkStage
 frame DaylightUIArenaHolder
 frame DaylightUIBagUse
 frame DaylightUIBar
@@ -111,6 +113,8 @@ frame DaylightUICdmLayout
 frame DaylightUICdmLayout*
 frame DaylightUICdmPiece
 frame DaylightUICdmPiece*_*
+frame DaylightUICdmTether
+frame DaylightUICdmTether*_*
 frame DaylightUIChat
 frame DaylightUIChatCopy
 frame DaylightUIChatDrawer
@@ -148,6 +152,7 @@ frame DaylightUIInstaller
 frame DaylightUILeaderCard
 frame DaylightUILeaderTab
 frame DaylightUILevelUp
+frame DaylightUILevelUpHolder
 frame DaylightUILinkBox
 frame DaylightUILootFeed
 frame DaylightUIMeterBreakdown
@@ -178,6 +183,7 @@ frame DaylightUIQuestMarker
 frame DaylightUIQuestProgress
 frame DaylightUIQuestTracker
 frame DaylightUIRepBanner
+frame DaylightUIRepBannerHolder
 frame DaylightUIReputationBar
 frame DaylightUIRollStack
 frame DaylightUISocialRaidTarget
@@ -193,7 +199,9 @@ frame DaylightUITooltipPill
 frame DaylightUITourAsk
 frame DaylightUITrackerAnchor
 frame DaylightUITrainAllButton
+frame DaylightUIWelcomeHolder
 frame DaylightUIZoneTitle
+frame DaylightUIZoneTitleHolder
 hooks AlertFrame_ShowNewAlert
 hooks Attune_Frame
 hooks Attune_Select

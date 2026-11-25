@@ -423,6 +423,7 @@ local function Coverage(frame, managedBy)
 		if Call(at, "GetObjectType") == "GameTooltip" then return "in a tooltip (shows on hover)" end
 		local name = Call(at, "GetName")
 		if type(name) == "string" and ns.IsLeftAlone and ns.IsLeftAlone(name) then return "left alone" end
+		if ns.IsLeftAloneFrame and ns.IsLeftAloneFrame(at) then return "left alone" end
 		-- (Ignores its parent's alpha: a faded parent doesn't take it.)
 		local ignores = Call(at, "IsIgnoringParentAlpha")
 		if not Secret(ignores) and ignores == true then return nil end

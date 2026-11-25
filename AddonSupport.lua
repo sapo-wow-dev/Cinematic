@@ -163,6 +163,17 @@ function ns.AddonKitExpect(addon, probe, field, note)
 	list[#list + 1] = { probe = probe, field = field, note = note }
 end
 
+-- Unnamed frames of another addon left alone on purpose, for the addon test's
+-- coverage (Dev/AddonTest.lua): ns.LeaveAlone works by name. A window's
+-- screen dim, a login effect: frames nothing of ours touches. Weak keys.
+local leftAloneFrames = setmetatable({}, { __mode = "k" })
+function ns.LeaveAloneFrame(frame)
+	if type(frame) == "table" then leftAloneFrames[frame] = true end
+end
+function ns.IsLeftAloneFrame(frame)
+	return leftAloneFrames[frame] == true
+end
+
 local setups = {} -- addon name -> setup functions still to run
 local supported = {} -- addon name -> true: has a setup (loaded or not)
 local started = false -- (Cinematic itself loaded: the setups can run)

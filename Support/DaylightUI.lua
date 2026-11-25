@@ -300,6 +300,10 @@ ns.WhenAddonLoads("DaylightUI_UnitFrames", function()
 	ns.FadeWithRow("castbar", "castbar", { "DaylightUICastBar_player" }, true, true)
 	ns.FadeWithRow("target", "target", { "DaylightUICastBar_target" }, true, true)
 	ns.FadeWithRow("focus", "target", { "DaylightUICastBar_focus" }, true, true)
+	-- Its combo points (a holder on UIParent its own fade sets with the target
+	-- frame's): named here too, as a class without them never shows its area.
+	ns.FadeWithRow("target", "target", { "DaylightUIComboPoints" }, true, true)
+	named.DaylightUIComboPoints = true
 end)
 
 -- Its Quality of Life part has its own version of some of Cinematic's
@@ -528,6 +532,186 @@ do
 		if type(fonts.Apply) == "function" then hooksecurefunc(fonts, "Apply", Apply) end
 	end)
 end
+
+-- Its loot roll window (Skins, since 2.2: DaylightUIRollStack, on by
+-- default) against Roll Vision's (Visions/RollWindow.lua): both showed at
+-- every roll. One plays, by the Addon Conflicts pick (its own while
+-- unpicked). Ours: its window held hidden. It keeps the game's roll popups
+-- at alpha 0 under it either way. (Off with the controller UI: the game's
+-- gamepad window rolls then.)
+local function RollsTheirs()
+	local dui = DUI()
+	if not (dui and dui.Get and ModuleOn("Skins")) then return false end
+	local input = _G.InputUtil
+	if type(input) == "table" and type(input.IsGamepadUIEnabled) == "function" and input.IsGamepadUIEnabled() == true then
+		return false
+	end
+	local ok, on = pcall(dui.Get, dui, "Skins", "rolls.enabled")
+	return ok and on ~= false
+end
+ns.WhenAddonLoads("DaylightUI_Skins", function()
+	ns.AddConflict({ key = "rolls", addon = LABEL, label = "Loot roll window", group = "windows",
+		about = "Group loot rolls: Roll Vision's window, or DaylightUI's loot roll window",
+		theirs = RollsTheirs,
+		ours = function() return ns.Setting("rollWindow") end,
+		hide = function()
+			local stack = _G.DaylightUIRollStack
+			return type(stack) == "table" and { stack } or {}
+		end,
+		onPick = function() if ns.RefreshRollWindow then ns.RefreshRollWindow() end end })
+end)
+
+-- Its key and macro texts on its own action buttons are its own switches:
+-- the Standard Frames page's Hide keybinds and Hide macro names never reached
+-- them, only the game's pet buttons it keeps in its pet bar. Those stand
+-- aside for good (no pick), and the two checkboxes aren't shown (Options).
+ns.WhenAddonLoads("DaylightUI_ActionBars", function()
+	local function Theirs() return LABEL end
+	ns.AddFeatureYield("hideKeybinds", Theirs)
+	ns.AddFeatureYield("hideMacroText", Theirs)
+	if ns.ApplyHideKeybinds then ns.ApplyHideKeybinds() end
+end)
+
+-- Not HUD frames, left alone: its setup and What's new window (and the
+-- screen dim under it), its lines on the game's Escape menu, the "Welcome
+-- back" line at login, and the outlines and light its login reveal draws
+-- over its frames (unnamed: its Fade.revealOverlays).
+ns.WhenAddonLoads("DaylightUI", function()
+	ns.LeaveAlone({ "DaylightUIInstaller", "DaylightUIWelcomeHolder", "GameMenuFrame" })
+	ns.AddScanner(function()
+		local dui = DUI()
+		local ui = dui and dui.InstallerUI
+		if type(ui) == "table" and type(ui.Veil) == "function" then
+			local ok, veil = pcall(ui.Veil)
+			if ok then ns.LeaveAloneFrame(veil) end
+		end
+		local overlays = dui and type(dui.Fade) == "table" and dui.Fade.revealOverlays
+		for _, overlay in ipairs(type(overlays) == "table" and overlays or {}) do
+			ns.LeaveAloneFrame(overlay)
+			if type(overlay) == "table" then ns.LeaveAloneFrame(overlay.shine) end
+		end
+	end)
+end)
+
+-- Its chat bubbles (DaylightUI_Chat/Bubbles.lua): a frame on UIParent drawn
+-- over each game bubble (its .balloon) while that bubble is up, so it goes
+-- with the game's bubbles and is left alone. Unnamed and kept in its own
+-- list: found among UIParent's children, only while a bubble is up.
+ns.WhenAddonLoads("DaylightUI_Chat", function()
+	local bubbles = _G.C_ChatBubbles
+	local seen = setmetatable({}, { __mode = "k" })
+	ns.AddScanner(function()
+		local all = bubbles and bubbles.GetAllChatBubbles and bubbles.GetAllChatBubbles()
+		if type(all) ~= "table" or next(all) == nil then return end
+		for _, child in ipairs({ UIParent:GetChildren() }) do
+			if not seen[child] then
+				seen[child] = true
+				if ns.Reachable(child) and rawget(child, "balloon") ~= nil and rawget(child, "said") ~= nil then
+					ns.LeaveAloneFrame(child)
+				end
+			end
+		end
+	end)
+end)
+
+-- The addon kit's expectations (Tools/addon-kit/diff.py): game frames it
+-- puts away, moves or holds at alpha 0 because its own stand in (and fade
+-- with those rows, above), and game functions it hooks (all hooksecurefunc:
+-- ours still run).
+ns.AddonKitExpect("DaylightUI_ActionBars", "*MainActionBar", "*", "parked in DaylightUIParkedBars: its bar 1 stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "*MultiBar*", "*", "parked in DaylightUIParkedBars: its bars 2-8 stand in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "touch.ActionButton_", "*", "parked with the main bar: its buttons stand in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "*Stance*", "parent", "parked: its stance bar stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "touch.PossessActionBar", "parent", "parked: its possess bar stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "*PetActionBar", "*", "the game's pet bar kept at alpha 0: its buttons sit in its pet bar")
+ns.AddonKitExpect("DaylightUI_ActionBars", "touch.PetActionButton_", "*", "in DaylightUIPetBar, its pet bar (Pet bar row)")
+ns.AddonKitExpect("DaylightUI_ActionBars", "*MainMenuBarVehicleLeaveButton", "*", "its own leave button stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "*BagsBar", "*", "its bag bar stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "touch.MainMenuBarBackpackButton", "visible", "with the game's bag bar: its bag bar stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "*MicroMenuContainer", "alpha", "its micro menu stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "*TotemFrame", "parent", "its totem bar holds it")
+ns.AddonKitExpect("DaylightUI_ActionBars", "touch.PlayerFrame_ToPlayerArt", "sameAsLogin", "hooksecurefunc: ours still run")
+ns.AddonKitExpect("DaylightUI_ActionBars", "addons.yields", "hideKeybinds", "its bars' own key texts: Hide keybinds stands aside")
+ns.AddonKitExpect("DaylightUI_ActionBars", "addons.yields", "hideMacroText", "its bars' own macro texts: Hide macro names stands aside")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*PlayerFrame", "*", "put away: its player frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*TargetFrame", "parent", "put away: its target frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*FocusFrame", "parent", "put away: its focus frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*PetFrame", "parent", "put away: its pet frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "touch.PetFrameHappiness", "shown", "with the game's pet frame: its pet frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*PartyFrame", "*", "put away: its party frames stand in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*CompactRaidFrame*", "parent", "put away: its raid frames stand in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*ArenaEnemyFramesContainer", "parent", "put away: its arena frames stand in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*CastingBarFrame", "alpha", "at alpha 0: its cast bars stand in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "*SwingTimer*Frame", "alpha", "at alpha 0: its swing timer stands in")
+ns.AddonKitExpect("DaylightUI_Buffs", "*uffFrame", "*", "hidden: its buff and debuff bars stand in")
+ns.AddonKitExpect("DaylightUI_Chat", "*ChatFrameChannelButton", "*", "hidden: its chat window has its own buttons")
+ns.AddonKitExpect("DaylightUI_Chat", "*ChatFrameMenuButton", "*", "hidden: its chat window has its own buttons")
+ns.AddonKitExpect("DaylightUI_Chat", "*QuickJoinToastButton", "*", "hidden: its chat window has its own buttons")
+ns.AddonKitExpect("DaylightUI_Chat", "*GeneralDockManager", "alpha", "at alpha 0: its chat window has its own tabs")
+ns.AddonKitExpect("DaylightUI_Chat", "touch.ChatFrame_", "alpha", "at alpha 0: its chat window draws the lines")
+ns.AddonKitExpect("DaylightUI_Chat", "hook.ChatFrame1.AddMessage", "state", "hooksecurefunc: ours still run")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "*MainStatusTrackingBarContainer", "*", "hidden: its XP bar stands in")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "*UIWidgetBelowMinimapContainerFrame", "parent", "moved under its info panel")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.DurabilityFrame", "parent", "moved under its info panel")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.MinimapCluster", "alpha", "at alpha 0: its info panel holds the minimap")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.MinimapBackdrop", "*", "put away: its info panel draws the minimap's edge")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.MinimapCompassTexture", "*", "put away with the minimap's edge")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.MinimapZoneText", "visible", "its info panel shows the zone")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.TimeManagerClockButton", "*", "put away: its info panel shows the time")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.GameTimeFrame", "*", "on the minimap at alpha 0: its info panel shows the time")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.AddonCompartmentFrame", "*", "put away: its info panel has its own addon list")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "touch.QueueStatusButton", "parent", "moved onto the minimap")
+ns.AddonKitExpect("DaylightUI_Quests", "*ObjectiveTrackerFrame", "alpha", "at alpha 0: its quest tracker stands in")
+ns.AddonKitExpect("DaylightUI_QoL", "touch.*TextString", "alpha", "at alpha 0: its zone title stands in (the zone card's Conflicts row)")
+ns.AddonKitExpect("DaylightUI_QoL", "*TakeTaxiNode", "*", "hooksecurefunc for its flight timer: ours still run")
+ns.AddonKitExpect("DaylightUI", "touch.CombatText", "*", "hidden: its combat text stands in")
+-- (Game windows put out of sight under a hidden frame while its own stand
+-- in: Quest Talk stands aside by itself, QuestTalk.lua's TuckedAway.)
+ns.AddonKitExpect("DaylightUI", "touch.GossipFrame", "parent", "out of sight: its own gossip window stands in")
+ns.AddonKitExpect("DaylightUI", "touch.QuestFrame", "parent", "out of sight: its own quest window stands in")
+ns.AddonKitExpect("DaylightUI", "touch.MerchantFrame", "parent", "out of sight: its own merchant window stands in")
+ns.AddonKitExpect("DaylightUI", "touch.MailFrame", "parent", "out of sight: its own mail window stands in")
+ns.AddonKitExpect("DaylightUI", "touch.CharacterFrame", "parent", "out of sight: its own character window stands in")
+ns.AddonKitExpect("DaylightUI", "touch.LFGParentFrame", "parent", "out of sight: its own group finder stands in")
+ns.AddonKitExpect("DaylightUI_Bags", "touch.BankFrame", "parent", "out of sight: its bank stands in")
+ns.AddonKitExpect("DaylightUI_Bags", "touch.ContainerFrameCombinedBags", "parent", "out of sight: its bags stand in")
+ns.AddonKitExpect("DaylightUI", "*UIPanel*", "*", "hooksecurefunc for its windows: ours still run")
+ns.AddonKitExpect("DaylightUI", "*StaticPopup_Show", "*", "hooksecurefunc: ours still run")
+ns.AddonKitExpect("DaylightUI", "touch.PlaySound", "sameAsLogin", "hooksecurefunc: ours still run")
+ns.AddonKitExpect("DaylightUI_Tooltip", "touch.GameTooltip_SetDefaultAnchor", "sameAsLogin", "hooksecurefunc: ours still run")
+ns.AddonKitExpect("DaylightUI_Bags", "touch.ContainerFrame_", "parent", "put out of sight: its bags stand in")
+ns.AddonKitExpect("DaylightUI_Bags", "touch.*Bag*", "sameAsLogin", "hooksecurefunc for its bags: ours still run")
+ns.AddonKitExpect("DaylightUI_Bags", "touch.*Backpack", "sameAsLogin", "hooksecurefunc for its bags: ours still run")
+ns.AddonKitExpect("DaylightUI_Skins", "touch.GroupLootFrame_", "alpha", "at alpha 0 under its loot roll window (Conflicts: Loot roll window)")
+ns.AddonKitExpect("DaylightUI_Chat", "touch.ChatFrame_Tab", "alpha", "at alpha 0: its chat window has its own tabs")
+ns.AddonKitExpect("DaylightUI_Chat", "link.chatwindow", "*", "its chat holder is the chat window's panel (ns.ClaimLinkPart, above)")
+ns.AddonKitExpect("DaylightUI_Tooltip", "touch.GameTooltip", "*", "up or not by where the mouse was at the probe: not in the first run (qb025)")
+-- The same game frames on the Standard Frames rows' probes (their field is
+-- "<frame>.<field>").
+ns.AddonKitExpect("DaylightUI_ActionBars", "frame.*", "MainActionBar.*", "parked in DaylightUIParkedBars: its bar 1 stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "frame.*", "MultiBar*.*", "parked in DaylightUIParkedBars: its bars 2-8 stand in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "frame.*", "StanceBar.*", "parked: its stance bar stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "frame.*", "PetActionBar.*", "the game's pet bar kept at alpha 0: its buttons sit in its pet bar")
+ns.AddonKitExpect("DaylightUI_ActionBars", "frame.*", "MainMenuBarVehicleLeaveButton.*", "its own leave button stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "frame.*", "BagsBar.*", "its bag bar stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "frame.*", "MicroMenuContainer.alpha", "its micro menu stands in")
+ns.AddonKitExpect("DaylightUI_ActionBars", "frame.*", "TotemFrame.parent", "its totem bar holds it")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "frame.*", "PlayerFrame.*", "put away: its player frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "frame.*", "TargetFrame.parent", "put away: its target frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "frame.*", "FocusFrame.parent", "put away: its focus frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "frame.*", "PetFrame.parent", "put away: its pet frame stands in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "frame.*", "CompactRaidFrame*.parent", "put away: its raid frames stand in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "frame.*", "ArenaEnemyFramesContainer.parent", "put away: its arena frames stand in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "frame.*", "*CastingBarFrame.alpha", "at alpha 0: its cast bars stand in")
+ns.AddonKitExpect("DaylightUI_UnitFrames", "frame.*", "SwingTimer*Frame.alpha", "at alpha 0: its swing timer stands in")
+ns.AddonKitExpect("DaylightUI_Buffs", "frame.*", "*uffFrame.*", "hidden: its buff and debuff bars stand in")
+ns.AddonKitExpect("DaylightUI_Chat", "frame.*", "ChatFrameChannelButton.*", "hidden: its chat window has its own buttons")
+ns.AddonKitExpect("DaylightUI_Chat", "frame.*", "ChatFrameMenuButton.*", "hidden: its chat window has its own buttons")
+ns.AddonKitExpect("DaylightUI_Chat", "frame.*", "QuickJoinToastButton.*", "hidden: its chat window has its own buttons")
+ns.AddonKitExpect("DaylightUI_Chat", "frame.*", "GeneralDockManager.alpha", "at alpha 0: its chat window has its own tabs")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "frame.*", "MainStatusTrackingBarContainer.*", "hidden: its XP bar stands in")
+ns.AddonKitExpect("DaylightUI_InfoPanel", "frame.*", "UIWidgetBelowMinimapContainerFrame.parent", "moved under its info panel")
+ns.AddonKitExpect("DaylightUI_Quests", "frame.*", "ObjectiveTrackerFrame.alpha", "at alpha 0: its quest tracker stands in")
 
 -- Its nameplates are its own frames, one put on each game plate that shows a
 -- unit (parented to it), with the game's unit frame kept at alpha 0 under

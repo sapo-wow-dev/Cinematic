@@ -1,8 +1,8 @@
 # DaylightUI's named frames that Support/DaylightUI.lua doesn't name, each with
 # why it needs no line there (Tools/addon-check.py check 3). A new frame of
 # its that's in neither = a MISS: decide it (a row, a fade, or here with why).
-# One per line: name or glob (*), a space, why. Checked against v1.9.6,
-# 2026-11-19.
+# One per line: name or glob (*), a space, why. Checked against v2.2.7,
+# 2026-11-25 (the addon kit's first run).
 
 # On screen, faded through its fade areas (Support file AREAS: each area's
 # frames are read off its own fade engine).
@@ -37,6 +37,11 @@ DaylightUIDebuffsHolder mover holder the debuff bar is placed by: draws nothing
 DaylightUIFlightWelcomeHolder mover holder its landing welcome is placed by: draws nothing (the welcome itself: the Flight arrival card conflict row)
 DaylightUITrackerAnchor anchor point for the game's quest tracker: draws nothing
 DaylightUITooltipAnchor anchor point for tooltips: draws nothing
+DaylightUICdmTether*_* inside its Cooldown Manager layout (fade area ActionBars.cdm): fades with it
+DaylightUIAfkStage mover holder its AFK screen is placed by: draws nothing (the screen: the AFK scene conflict row)
+DaylightUILevelUpHolder mover holder its level-up banner is placed by: draws nothing (the banner: the Level up card conflict row)
+DaylightUIRepBannerHolder mover holder its reputation banner is placed by: draws nothing (the banner: the Reputation card conflict row)
+DaylightUIZoneTitleHolder mover holder its zone title is placed by: draws nothing (the title: the Zone card conflict row)
 
 # Draws instead of the game's own, which is all Cinematic hides.
 DaylightUIErrorText its error text, in place of the game's (UIErrorsFrame)
@@ -55,7 +60,6 @@ DaylightUIClickCastOpener click-cast binding button: draws nothing
 # Opened by a click (windows, cards, editors, previews): left as they are,
 # like the game's windows.
 DaylightUIOptions its settings window
-DaylightUIInstaller its setup window
 DaylightUIInstallerReload its setup's reload prompt
 DaylightUIAskReload its reload prompt
 DaylightUITourAsk its tour prompt
@@ -78,5 +82,5 @@ DaylightUISocialRaidTarget* its social window's raid page buttons
 DaylightUITrainAllButton a button on the trainer window
 DaylightUISweep its /dui sweep test label (a test command)
 DaylightUIBagUse its invisible use button laid over the bag slot under the pointer (v2.1): draws nothing
-DaylightUIRollStack its loot roll window stack, up only while you roll: a window you act on, as the game's roll frames
+DaylightUIRollStack its loot roll window, up only while you roll: against Roll Vision on the Conflicts page (Loot roll window), held hidden with Ours
 DaylightUITooltipPill its tooltip's rich pill, shown only with a tooltip up (goes with the tooltip)

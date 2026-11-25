@@ -2,6 +2,7 @@
 
     python -I Tools/addon-check.py            check every installed supported addon
     python -I Tools/addon-check.py --update   save what each one looks like now as the baseline
+    python -I Tools/addon-check.py --update DaylightUI   only that Support file's baseline
 
 Two checks per Support file whose addon is installed (in any client: each
 client's copy is read on its own, as their versions can differ):
@@ -38,6 +39,9 @@ WOW = os.environ.get("CINE_WOW", r"C:\Program Files (x86)\World of Warcraft")
 CLIENTS = {"forever": "_forever_", "retail": "_retail_"}
 BASELINE = os.path.join(ROOT, "Tools", "offline", "addon-baseline")
 UPDATE = "--update" in sys.argv
+# (--update DaylightUI: only those Support files' baselines, so a session
+# supporting one addon doesn't rewrite the others'.)
+ONLY = {a for a in sys.argv[1:] if not a.startswith("-")}
 
 # Frame name starts an addon uses besides its own name (none of these is
 # installed yet: add one when a check misses its frames).
@@ -64,7 +68,10 @@ NOT_CHECKED = {
 # "<Support file>": {name: first version}. Not looked for in an older copy (a
 # client's can lag: DaylightUI retail 1.9.5, its flight welcome from 1.9.6).
 SINCE = {
-    "DaylightUI": {"DaylightUIFlightWelcome": "1.9.6"},
+    # (RollStack: its 2.2 loot rolls. ComboPoints: in v2.2.3, maybe earlier.
+    # WelcomeHolder: new after v2.2.3. None in v1.9.5.)
+    "DaylightUI": {"DaylightUIFlightWelcome": "1.9.6", "DaylightUIRollStack": "2.2",
+                   "DaylightUIComboPoints": "2.2.3", "DaylightUIWelcomeHolder": "2.2.4"},
 }
 
 
@@ -505,7 +512,7 @@ def main():
             facts = snapshot(files) | {"frame " + n for n in made}
             path = baseline_path(support, client)
             old_version, old = load_baseline(path)
-            if UPDATE:
+            if UPDATE and (not ONLY or support in ONLY):
                 os.makedirs(BASELINE, exist_ok=True)
                 with open(path, "w", encoding="utf-8", newline="\n") as f:
                     f.write("# version %s\n" % version + "".join(l + "\n" for l in sorted(facts)))
