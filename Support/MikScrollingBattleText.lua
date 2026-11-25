@@ -10,6 +10,12 @@
 
 local _, ns = ...
 
+-- (The addon kit, Tools/addon-kit: with it loaded, the game's CombatText frame
+-- is hidden, as above. Our feature on it, Shoulder Cam's Follow floating
+-- combat text, has nothing to move then: MSBT's own text isn't the game's.)
+ns.AddonKitExpect("MikScrollingBattleText_Forever", "touch.CombatText", "*",
+	"hidden: MSBT turns the game's floating combat text off and draws its own (run q57a1, 2026-11-25)")
+
 ns.WhenAddonLoads("MikScrollingBattleText_Forever", function()
 	ns.AddConflict({ key = "style:selftext", addon = "MikScrollingBattleText", label = "Combat text on you",
 		group = "style", styleSwitch = "selfTextStyle",

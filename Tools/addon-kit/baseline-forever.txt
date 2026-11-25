@@ -1,4 +1,4 @@
-H format=1 client=forever build=16001 label=none addons= run=2026-11-25_13:04:54
+H format=1 client=forever build=16001 label=none addons= run=2026-11-25_13:34:26
 R addons.yields	cooldownCenter	ours	v1
 R addons.yields	cooldownDefaults	ours	v1
 R chat.linesOnly	chatIsDefault	true	v1
@@ -1127,8 +1127,8 @@ R touch.GameTooltip	alpha	1	v1
 R touch.GameTooltip	forbidden	false	v1
 R touch.GameTooltip	kind	frame	v1
 R touch.GameTooltip	parent	UIParent	v1
-R touch.GameTooltip	shown	true	v1
-R touch.GameTooltip	visible	true	v1
+R touch.GameTooltip	shown	false	v1
+R touch.GameTooltip	visible	false	v1
 R touch.GameTooltipHeaderText	alpha	1	v1
 R touch.GameTooltipHeaderText	forbidden	false	v1
 R touch.GameTooltipHeaderText	kind	frame	v1
@@ -2272,4 +2272,4 @@ R touch.ZoneTextString	kind	frame	v1
 R touch.ZoneTextString	parent	ZoneTextFrame	v1
 R touch.ZoneTextString	shown	true	v1
 R touch.ZoneTextString	visible	false	v1
-D 616 probes, 0 errors; saved 2026-11-25 13:15
+D 616 probes, 0 errors; saved 2026-11-25 13:37

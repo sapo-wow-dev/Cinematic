@@ -61,8 +61,62 @@ ns.TestKit.DefineAddonReady("Guidelime", {
 		"In Guidelime's guide window, click the line \"Click here in order to start by loading a guide\".",
 		"Pick any guide in the list and click Load guide.",
 		"Already has one? Click a step that says to go to a place.",
+		"No guides at all? The addon kit's run loads a test guide of its own after its Reload: Can't do it here.",
 	},
 })
+
+-- No guide to load (you have no guide packs: run q57a1, 2026-11-25, "i dont
+-- have guides"): during an addon kit stage for Guidelime, a small guide of
+-- the kit's own is saved as one of Guidelime's custom guides and made this
+-- character's current one, as its own editor's Save does
+-- (GuidelimeData.customGuides[name] = text, currentGuide = "Custom guides
+-- " .. name). Done at login, while Guidelime is loaded but before it reads its
+-- guides (2 s after login), so it loads it itself: one goto step a few yards
+-- away, so its arrow points somewhere. Only when the character has no guide
+-- of its own; taken back out at the next login with no Guidelime stage, and
+-- the current guide too if it's still the kit's. English names only (its
+-- "Custom guides" is translated).
+local TEST_GUIDE = "1-60 Cinematic addon kit test"
+local TEST_KEY = "Custom guides " .. TEST_GUIDE
+local function KitWantsGuidelime()
+	local plan, solo = CinematicDB and CinematicDB.addonKitPlan, CinematicDB and CinematicDB.soloAddons
+	if type(plan) ~= "table" or type(solo) ~= "table" then return false end
+	local inPlan, kept = false, false
+	for _, name in ipairs(plan.targets or {}) do if name == "Guidelime" then inPlan = true end end
+	for _, name in ipairs(solo.keep or {}) do if name == "Guidelime" then kept = true end end
+	return inPlan and kept
+end
+local guideLogin = CreateFrame("Frame")
+guideLogin:RegisterEvent("PLAYER_LOGIN")
+guideLogin:SetScript("OnEvent", function()
+	local IsLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or _G.IsAddOnLoaded
+	if not IsLoaded("Guidelime") then return end -- (no Guidelime code or data touched without it)
+	local data, char = _G.GuidelimeData, _G.GuidelimeDataChar
+	if type(data) ~= "table" or type(char) ~= "table" then return end
+	local added = CinematicDB and CinematicDB.guidelimeKitGuide
+	if not KitWantsGuidelime() then
+		-- (Taken back out once the kit's Guidelime stage is over.)
+		if added then
+			if type(data.customGuides) == "table" then data.customGuides[TEST_GUIDE] = nil end
+			if char.currentGuide == TEST_KEY then char.currentGuide = added.was end
+			CinematicDB.guidelimeKitGuide = nil
+		end
+		return
+	end
+	if added or (char.currentGuide ~= nil and char.currentGuide ~= "") then return end
+	local mapID = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+	local pos = mapID and C_Map.GetPlayerMapPosition and C_Map.GetPlayerMapPosition(mapID, "player")
+	local info = mapID and C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
+	local x, y = pos and pos.x, pos and pos.y
+	if not (info and info.name and type(x) == "number" and type(y) == "number") then return end
+	local text = ("[N 1-60 Cinematic addon kit test]\n[D Made by Cinematic's addon kit test for its arrow. It goes again by itself.]\n"
+		.. "Walk a few steps [G %.1f,%.1f %s]\n"):format(math.min(x * 100 + 3, 99), y * 100, info.name)
+	data.customGuides = type(data.customGuides) == "table" and data.customGuides or {}
+	data.customGuides[TEST_GUIDE] = text
+	CinematicDB.guidelimeKitGuide = { was = char.currentGuide }
+	char.currentGuide = TEST_KEY
+	if ns.Log then ns.Log("addonkit", "Guidelime: no guide of its own, so the kit's test guide is loaded (" .. info.name .. ")") end
+end)
 
 local function Effective(frame)
 	local alpha = frame:GetEffectiveAlpha()
