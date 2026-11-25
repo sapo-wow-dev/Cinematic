@@ -1751,6 +1751,11 @@ for page, keys in pairs({
 		"cardProfessionOn", "cardQuestOn", "cardClearedOn", "cardRareOn", "cardBattlegroundOn", "cardStreakOn",
 		"cardBossDownOn", "cardFelledOn", "cardRevivedOn", "cardCombatPvpOn" },
 	cameraModes = { "shoulderCam", "skyrideCam" }, -- Cameras > General's Enable Cameras: Shoulder Cam, Skyriding Cam
+	-- Visions > General's Enable Visions over every Vision page's switch: a master,
+	-- as Enable Style is (the user, 2026-11-25: it was a cascade that wrote the
+	-- pages' switches, so one ticked back by hand or a profile ran with it off).
+	visionsAll = { "handleHealVision", "damageVision", "lowHealth", "questVision", "rollWindow", "duelPlates",
+		"deathScreen", "teleportVision", "emoteVision", "cards", "windGuide" },
 	visualEffects = { "letterboxPage", "tintPage", "weatherPage", "graphicsPlus", "musicInCinematic" }, -- (the Atmosphere hub's pages' switches)
 	-- Style > General's Enable Style: the Style hub's pages' switches.
 	styleGeneral = { "ufStyle", "rfStyle", "abStyle", "prdStyle", "tooltipStyle", "handlePlateStyle", "plateNameStyle",
@@ -1841,7 +1846,7 @@ local LEFT_OUT = {}
 ns.LEFT_OUT_SWITCHES = LEFT_OUT
 ns.ModuleLeftOut("visions", function()
 	for _, key in ipairs({ "handleHealVision", "questVision", "rollWindow", "duelPlates", "damageVision",
-		"emoteVision", "cards", "lowHealth", "teleportVision", "deathScreen" }) do
+		"emoteVision", "cards", "lowHealth", "teleportVision", "deathScreen", "visionsAll" }) do -- (Enable Visions too: Audit 2026-11-25)
 		LEFT_OUT[key] = true
 	end
 end)
@@ -5801,7 +5806,8 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 			local recap = ns.RecapLogin and ns.RecapLogin(arg1)
 			-- (Each by its event's Settings tab too, a container: Last time's
 			-- own, and the Zone event's for the time of day. Audit 2026-11-25.)
-			if not (ns.CardOn and ns.CardOn("login")) or InCombatLockdown() or UnitAffectingCombat("player") then
+			-- (Visions left out: none, not a call into its stand-in: modules.lua. Audit 2026-11-25)
+			if not (ns.ModuleLoaded("visions") and ns.CardOn("login")) or InCombatLockdown() or UnitAffectingCombat("player") then
 				recap = nil
 			end
 			local timeOfDay = ns.Setting("timeOfDayMessage") and not (ns.CardPartOff and ns.CardPartOff("zone", "settings"))

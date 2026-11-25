@@ -5985,6 +5985,26 @@ STEPS[#STEPS + 1] = function()
 	if not ns.newInstall then ns.KeepAurasOffForOld(ns.db) end
 	ns.db.keepAurasOffV1 = true
 end
+-- Enable Visions a master (2026-11-25, the user: "Make Visions a master"): it
+-- was a cascade that switched every Vision page off as it went off, noting
+-- the ones that were on (hubKept.Visions) to switch back on with it. Those
+-- page switches back on now, once: Enable Visions, still off, keeps them from
+-- running, and turning it on brings back the same Visions it did. (Data only:
+-- runs with Visions left out too.) Audit 2026-11-25.
+STEPS[#STEPS + 1] = function()
+	local db = ns.db
+	-- (V3: V1 and V2 are step 14's, from Enable Visions' first two shapes.)
+	if db.visionsMasterV3 then return end
+	db.visionsMasterV3 = true
+	local kept = type(db.hubKept) == "table" and db.hubKept.Visions
+	if type(kept) == "table" then
+		for key, on in pairs(kept) do
+			if on and type(key) == "string" then db[key] = true end
+		end
+		db.hubKept.Visions = nil
+		if next(db.hubKept) == nil then db.hubKept = nil end
+	end
+end
 
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.

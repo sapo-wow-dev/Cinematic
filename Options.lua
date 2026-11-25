@@ -16756,10 +16756,16 @@ function ns.CreateVisionsGeneralPanel()
 	local loadedNow = ns.ModuleLoaded("visions")
 	local intro = PageIntro(content, title, loadedNow and L["Every Vision at a glance; click a card to open it."]
 		or L["Visions aren't loaded: none of them run, and their pages are gone."])
-	-- (Its switch, 2026-11-16: every Vision page off with it, and back on.)
+	-- (Its switch: a master over every Vision page's, as Enable Style is over its
+	-- pages (Core.lua PAGE_SWITCH). It was a cascade (2026-11-16) that switched
+	-- each page off and back: the user, 2026-11-25, "Make Visions a master". Off,
+	-- no Vision runs; the pages' own switches stay as they are. Audit 2026-11-25.)
 	if loadedNow then
-		PageSwitch(content, "visionsAll", L["Enable Page"], L["Turns all Visions on or off."], intro, function(value)
-			ns.CascadeHub("Visions", "visionsAll", value and true or false)
+		PageSwitch(content, "visionsAll", L["Enable Page"], L["Turns all Visions on or off."], intro, function()
+			-- (What the Visions put on frames and plates, put right now; their loops
+			-- ask again within a second.)
+			if ns.RefreshOutsideCine then ns.RefreshOutsideCine(true) end
+			if ns.PaintPageSwitches then ns.PaintPageSwitches() end
 			if content.RefillCards then content.RefillCards() end -- (its cards' dots as they are now)
 		end)
 	end

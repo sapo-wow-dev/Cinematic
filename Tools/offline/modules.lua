@@ -340,7 +340,9 @@ local LEAK_OK = {
 	['Core.lua ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg1, arg2)'] = {
 		"CreateLetterbox", "CreateTint", "MusicTrace", "RestoreMusicVolume", "StopCombatMusicNow", "StopDeathSongNow",
 		"StopMusicNow", "HookCameraInput", "HookTaxiRoutes", "LoginZoom", "StopIdleZoomNow", "StopOrbitNow",
-		"db.styleGeneral", "ShowTimeOfDayTitle", why = "login and logout: one stand-in call each; styleGeneral behind ModuleLoaded" },
+		"db.styleGeneral", "ShowTimeOfDayTitle",
+		"CardOn", -- (the login's Last time line by its Cards tab: only after ns.ModuleLoaded("visions"). Audit 2026-11-25, OK'd by the user)
+		why = "login and logout: one stand-in call each; styleGeneral and CardOn behind ModuleLoaded" },
 	["Core.lua Guard(function()"] = { "MusicTrace", why = "login/logout trace line: a stand-in" },
 	["Core.lua function ns.CameraOffBesidesRows(cam)"] = { "db.cameraModes", why = "LEFT_OUT.cameraModes returns first" },
 	["Core.lua function ns.IsCameraOffHere(cam)"] = { "CameraRowsOff", why = "a stand-in: off" },
