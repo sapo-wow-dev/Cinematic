@@ -507,25 +507,31 @@ ns.TestKit.Define({
 			if ns.noRealLayout then
 				r:Skip("E5 the error text's alpha: offline, the stand-in's frames keep no alpha")
 			elseif errors and ns.UpdateCVars then
+				-- (ns.UpdateCVars waits between passes with nothing changed: run 1's
+				-- calls all returned early, so the alpha never moved. Its wait cleared first.)
+				local function UpdateNow()
+					if ns.cvarsSeen then ns.cvarsSeen.at = -math.huge end
+					return pcall(ns.UpdateCVars, false)
+				end
 				r:Keep("errorsAlpha", true)
 				Apply(r, { { "hideErrorsInCombat", false }, { "hideErrorsOutOfCombat", false } }, 0.2)
-				pcall(ns.UpdateCVars, false)
+				UpdateNow()
 				errors:SetAlpha(0.5) -- (as another addon hiding it would)
-				pcall(ns.UpdateCVars, false)
+				UpdateNow()
 				r:Sleep(1)
 				local kept = Try(errors.GetAlpha, errors)
 				Apply(r, { { "hideErrorsOutOfCombat", true } }, 0.2)
-				pcall(ns.UpdateCVars, false)
+				UpdateNow()
 				local hidden = Try(errors.GetAlpha, errors)
 				Apply(r, { { "hideErrorsOutOfCombat", false } }, 0.2)
-				pcall(ns.UpdateCVars, false)
+				UpdateNow()
 				local back = Try(errors.GetAlpha, errors)
 				r:Verdict(kept and math.abs(kept - 0.5) < 0.01 and hidden == 0 and back == 1,
 					("E5 both boxes off: another addon's 0.5 kept (%s); ticked, hidden (%s); unticked, ours back to 1 (%s)"):format(
 					tostring(kept), tostring(hidden), tostring(back)))
 				errors:SetAlpha(1)
 				PutBackKeys(r, { "hideErrorsInCombat", "hideErrorsOutOfCombat" }, 0.2)
-				pcall(ns.UpdateCVars, false)
+				UpdateNow()
 				r:Skip("E5 the real error frame in a fight: needs a fight")
 			end
 		end },
@@ -593,10 +599,13 @@ ns.TestKit.Define({
 			end
 			r:Skip("C1 real plates' alphas in a fight, forced plates with your own enemy plates off: needs a fight")
 			-- D15: plate parts rest with the Nameplates page off.
-			Apply(r, { { "handlePlates", false } }, 1.5)
+			-- (The target marks are Nameplate Style's Smart page's, not this page's: their
+			-- When loop runs with Nameplates off while they're wanted, so Smart off too.)
+			Apply(r, { { "handlePlates", false }, { "plateMarks", false } }, 1.5)
 			local running = Running(Loops(r, 2), { ["PlateParts.lua"] = true })
 			r:Verdict(#running == 0, "plate-parts-idle Nameplates off: no plate parts loop: " .. Joined(running))
 			Apply(r, { { "handlePlates", true } }, 1)
+			PutBackKeys(r, { "plateMarks" }, 0.5)
 			-- C6: Chat's Conversations tab off: typing doesn't bring the windows up.
 			local chat, open = _G.ChatFrame1, _G.ChatFrame_OpenChat
 			local function Close()
@@ -723,7 +732,10 @@ ns.TestKit.Define({
 				local extra2 = Try(ns.LetterboxExtra, false, false, false)
 				local ok3, said3 = Said(Cinematic_ToggleLetterbox)
 				local extra3 = Try(ns.LetterboxExtra, false, false, false)
-				r:Verdict(ok2 and ok3 and extra2 == true and extra3 == false, ("page on: the key %q (bars %s), again %q (bars %s)")
+				-- (The key flips the bars from what they are now: run 1 had them wanted
+				-- already, so the first press took them off. Either way round, two presses flip.)
+				r:Verdict(ok2 and ok3 and extra2 ~= nil and extra3 ~= nil and extra2 ~= extra3 and said2 ~= said3,
+					("page on: the key %q (bars %s), again %q (bars %s)")
 					:format(tostring(said2), tostring(extra2), tostring(said3), tostring(extra3)))
 				r:Skip("E1 Ultra immersive with the page off: needs Chat Cam's Ultra immersive in a talk")
 				PutBackKeys(r, { "visualEffects", "letterboxPage" }, 0.3)
