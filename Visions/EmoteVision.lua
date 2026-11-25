@@ -1516,6 +1516,17 @@ local function Create()
 		if button == "RightButton" then Hide() end
 	end)
 
+	-- (Its loop turned off for failing: the card hidden outright (Hide only
+	-- starts a fade this loop runs) and the queue dropped, or the next card
+	-- would come up frozen too. It stayed up, taking clicks. Audit 2026-11-25.)
+	local function Clear()
+		moving, showing = nil, nil
+		wipe(queue)
+		if card.dragging then card:StopMovingOrSizing() end
+		card.leaving, card.dragging = nil, nil
+		card:SetAlpha(0)
+		card:Hide() -- (its OnHide puts the target button and the pad's buttons away)
+	end
 	ns.SetOnUpdate(card, function(self, elapsed)
 		nameLink.Place()
 		if moving or self.dragging then self:SetAlpha(1) return end
@@ -1545,7 +1556,7 @@ local function Create()
 				self.leaving = 0
 			end
 		end
-	end)
+	end, Clear)
 	card:SetScript("OnHide", function()
 		showing = nil
 		nameLink.Arm(nil)

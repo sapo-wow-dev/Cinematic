@@ -89,6 +89,13 @@ haze:Hide()
 -- starting: on within the second, before its slow pull in. At Haze strength
 -- 0, the default, it ran every frame in CineMode drawing nothing: release
 -- review 2026-11-23.)
+-- (Its loop turned off for failing: the haze put away and its pull, strength
+-- and demo reset, so it starts afresh as it's next wanted. Audit 2026-11-25.)
+local function Clear()
+	level, strength, stopAt = 0, 0, 0
+	haze:SetAlpha(0)
+	haze:Hide()
+end
 ns.FeatureLoop(frame, ns.Profiled("Depth of field", OnUpdate), function()
 	if level > 0 or GetTime() < stopAt then return true end
 	local db = ns.db
@@ -98,7 +105,7 @@ ns.FeatureLoop(frame, ns.Profiled("Depth of field", OnUpdate), function()
 	if not (ns.effectWanted and ns.effectWanted.haze) then return false end
 	if (tonumber(db.dofScale) or 0) > 0 then return true end
 	return ns.CameraScriptHaze and ns.CameraScriptHaze() and true or false
-end)
+end, nil, Clear)
 
 -- Shows the haze for a while (default 30 seconds), at `value` (0-1) or the
 -- demo strength. Returns false if a demo was already showing and has now

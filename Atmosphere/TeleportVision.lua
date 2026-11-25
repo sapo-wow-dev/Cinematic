@@ -313,6 +313,16 @@ function ns.TeleportVisionShown()
 	return frame ~= nil and frame:IsShown() and true or false
 end
 
+-- (Its loop turned off for failing: the portal put away, motes, the test and
+-- its timer with it, so it starts afresh as it's next wanted. Left, it stayed
+-- on screen, frozen, till a reload. Audit 2026-11-25.)
+local function Clear()
+	test, lastAt = nil, nil
+	if timer then Timer(nil) end
+	for _, mote in ipairs(motes) do mote.born = nil mote.tex:Hide() end
+	if frame then frame:Hide() end
+end
+
 local driver = CreateFrame("Frame")
 -- (Runs only while Teleport Vision's on, a test plays, or it still shows:
 -- no loop at all otherwise.)
@@ -328,7 +338,7 @@ ns.FeatureLoop(driver, function()
 	Update()
 end, function()
 	return test ~= nil or (frame ~= nil and frame:IsShown()) or (ns.GetDB() and ns.Setting("teleportVision")) and true or false
-end)
+end, nil, Clear)
 
 -- Your cast bar and the tooltip faded out over the cast's first CAST_FADE
 -- seconds while it shows a teleport Tele Vision is showing (teleportVisionHideCast,
@@ -388,13 +398,33 @@ local hookedBars = {}
 -- for a smooth fade. It runs on till both are back.)
 local castFader = CreateFrame("Frame")
 castFader:Hide()
+-- (Its loop turned off for failing: the tooltip and cast bars put back at
+-- full, as a cancel does, not left faded out till a reload. Audit 2026-11-25.)
+local function ClearCastFade()
+	castFader:Hide()
+	if tooltipFaded then
+		tooltipFaded = false
+		GameTooltip:SetAlpha(1)
+	end
+	for bar in pairs(hookedBars) do
+		if bar.cinematicTeleHidden then
+			bar.cinematicTeleHidden = nil
+			if ns.Flag(bar:IsShown()) then
+				bar:SetAlpha(1)
+				-- (Idle, hidden, as UpdateCastBar does: it would show full, stuck.)
+				if not (bar.casting or bar.channeling or bar.reverseChanneling or bar.isInEditMode) then bar:Hide() end
+			end
+			if ns.ReapplyCastBar then ns.ReapplyCastBar(bar) end
+		end
+	end
+end
 ns.SetOnUpdate(castFader, function(self)
 	for bar in pairs(hookedBars) do UpdateCastBar(bar) end
 	UpdateTooltip()
 	if not FadeWanted("teleportVisionHideCast") and not FadeWanted("teleportVisionFadeTooltip") then
 		self:Hide()
 	end
-end)
+end, ClearCastFade)
 local barWatcher = CreateFrame("Frame")
 barWatcher:RegisterEvent("PLAYER_LOGIN")
 for _, event in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_SUCCEEDED",

@@ -1248,6 +1248,18 @@ function ns.DamageVisionDebug()
 	if pending then ns.Print("  recap waiting: " .. pending.kind) end
 end
 
+-- (Its loop turned off for failing: the display put away, its test stopped,
+-- its fade and marker back to the start. It stayed up, frozen. Its recap runs
+-- on its own animation, not this loop: left be. Audit 2026-11-25.)
+local function Clear()
+	test, lastRank, shown, meterShown, nextRead = nil, nil, 0, 1, 0
+	frame.crown.pop:Stop()
+	frame.crown:Hide()
+	frame.ladder.markY, frame.ladder.target = 0, nil
+	frame:SetAlpha(0)
+	frame:Hide()
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(_, event, ...)
@@ -1272,7 +1284,7 @@ events:SetScript("OnEvent", function(_, event, ...)
 	if event == "PLAYER_LOGIN" then
 		db = ns.GetDB()
 		Create()
-		ns.SetOnUpdate(frame, Update)
+		ns.SetOnUpdate(frame, Update, Clear)
 		for _, other in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ENCOUNTER_START", "ENCOUNTER_END",
 			"PLAYER_ENTERING_WORLD", "LFG_COMPLETION_REWARD", "CHALLENGE_MODE_COMPLETED",
 			"DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_RESET", "ADDON_RESTRICTION_STATE_CHANGED", "CVAR_UPDATE" }) do

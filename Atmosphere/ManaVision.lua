@@ -296,6 +296,13 @@ events:SetScript("OnEvent", ns.Profiled("Mana Vision events", function(_, event,
 		screen.frame:Hide()
 		driver = CreateFrame("Frame")
 		local wait = 0
+		-- (Its loop turned off for failing: the veil and edges put away, the
+		-- test stopped, painted afresh as it's next wanted. Audit 2026-11-25.)
+		local function Clear()
+			test, shownMode, wait = nil, nil, 0
+			screen.painted, screen.level = nil, nil
+			screen.frame:Hide()
+		end
 		-- (Only while it can show: a test, or the Mana tab on for a character
 		-- with mana, or still shown and to be hidden. It ran every frame for
 		-- everyone, off by default. Release review 2026-11-23.)
@@ -307,7 +314,7 @@ events:SetScript("OnEvent", ns.Profiled("Mana Vision events", function(_, event,
 		end), function()
 			if test or shownMode then return true end
 			return ns.Setting(TAB) and HasMana() and true or false
-		end)
+		end, nil, Clear)
 		events:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
 		events:RegisterUnitEvent("UNIT_MAXPOWER", "player")
 		events:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")

@@ -644,10 +644,26 @@ local function Wanted()
 	if not (ns.ModuleLoaded("cameras") and ns.Setting("cameraScenes") ~= false) then return false end
 	return ns.TriggerHasCamera("Campfire") or (ns.IsCozy ~= nil and ns.IsCozy()) or false
 end
+-- (Its loop turned off for failing: the button put away and its state reset,
+-- so it starts afresh. It stayed up, frozen, taking clicks. Audit 2026-11-25.)
+local function Clear()
+	alpha, sinceLook, pressed, dismissed = 0, 0, false, false
+	lastSeen, hoverSince, onFireSince, restUntil = -math.huge, nil, nil, 0
+	walkedOff, leftIcon, shownX, shownY = false, false, nil, nil
+	blockedLogged, fadingLogged = false, false
+	button:SetAlpha(0)
+	button:EnableMouse(false)
+	button:Hide()
+	-- (Emote Vision's campfire card waits on this; the loop would have sent it.)
+	if restOut then
+		restOut, restX, restY = false, nil, nil
+		ns.Signal("CAMPFIRE_LEFT")
+	end
+end
 ns.FeatureLoop(driver, ns.Profiled("Campfire sit button", OnUpdate), function()
 	if alpha > 0 or cozy.on then return true end
 	return Wanted()
-end)
+end, nil, Clear)
 
 -- (Nothing wanting it: the tooltip isn't read. Audit 2026-11-25.)
 GameTooltip:HookScript("OnShow", function() if Wanted() then OnTooltipShow() end end)

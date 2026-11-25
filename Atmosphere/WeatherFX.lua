@@ -236,7 +236,22 @@ local function Wanted()
 	end
 	return false
 end
-ns.FeatureLoop(frame, ns.Profiled and ns.Profiled("Weather effects", OnUpdate) or OnUpdate, Wanted)
+-- (Its loop turned off for failing: frost, rain and the flash put away, their
+-- levels and the preview reset, and the game's weather density let go, so it
+-- starts afresh as it's next wanted. Audit 2026-11-25.)
+local function Clear()
+	level.frost, level.rainlens = 0, 0
+	preview.kind, preview.untilT = nil, 0
+	flashAt, nextFlash, thunderAt = -math.huge, nil, nil
+	drawn.frost, drawn.drops, drawn.streaks, drawn.flash, drawn.density = 0, 0, 0, 0, nil
+	frost:Hide()
+	drops:Hide()
+	streaks:Hide()
+	flash:SetAlpha(0)
+	flash:Hide()
+	if densitySet.active then ns.ApplyCVarSet(densitySet, false) end
+end
+ns.FeatureLoop(frame, ns.Profiled and ns.Profiled("Weather effects", OnUpdate) or OnUpdate, Wanted, nil, Clear)
 
 -- The Weather page's previews: kind "frost", "rainlens", "lightning" or
 -- "density" for seconds (default 3), CineMode or not; again with none stops.

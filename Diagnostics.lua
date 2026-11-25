@@ -352,14 +352,31 @@ local function Protect(fn, hooked, label, state)
 		if state.inWindow >= REPEAT_LIMIT then
 			state.dead = true
 			Breaker(not hooked and frame, wrapped, tostring(err):match("^[^\n]*"))
+			-- (What it drew put away: left as it was, a Vision stopped mid-show
+			-- stayed on screen, frozen, till a reload. Audit 2026-11-25.)
+			if state.clear then
+				local cleared, clearErr = pcall(state.clear)
+				if not cleared then ns.Log("safety", "its clean-up failed too: " .. tostring(clearErr)) end
+			end
 		end
 	end
 	return wrapped
 end
 
 -- frame:SetScript("OnUpdate", fn), protected (nil clears it as usual).
-function ns.SetOnUpdate(frame, fn)
-	frame:SetScript("OnUpdate", fn and Protect(fn, false, LoopLabel()) or nil)
+-- clear (optional): hides what the loop draws and resets its state, run if
+-- its breaker turns it off; /cine resume then starts it again (ns.ReviveLoops).
+local setLoops = setmetatable({}, { __mode = "k" }) -- frame -> { wrapped, state }
+function ns.SetOnUpdate(frame, fn, clear)
+	if not fn then
+		setLoops[frame] = nil
+		frame:SetScript("OnUpdate", nil)
+		return
+	end
+	local state = { dead = false, windowStart = 0, inWindow = 0, clear = clear }
+	local wrapped = Protect(fn, false, LoopLabel(), state)
+	setLoops[frame] = { wrapped = wrapped, state = state }
+	frame:SetScript("OnUpdate", wrapped)
 end
 
 -- A feature's update loop that runs only while wanted() says it's needed
@@ -417,8 +434,12 @@ local function SyncFeatureLoop(loop)
 end
 -- every (optional): fn runs every that many seconds, on a game timer, rather
 -- than every frame; fn(frame, seconds since its last run) as for an update loop.
-function ns.FeatureLoop(frame, fn, wanted, every)
-	local state = { dead = false, windowStart = 0, inWindow = 0 }
+-- clear (optional): hides what it draws and resets its state, run if its
+-- breaker turns it off (as for ns.SetOnUpdate). With wanted() saying yes while
+-- something still shows, a loop turned off left it there, frozen, and never
+-- came back; cleared, the feature starts afresh as it's next wanted.
+function ns.FeatureLoop(frame, fn, wanted, every, clear)
+	local state = { dead = false, windowStart = 0, inWindow = 0, clear = clear }
 	local loop = { frame = frame, run = Protect(fn, false, LoopLabel(), state), state = state, wanted = wanted, on = nil,
 		every = every }
 	if every then
@@ -434,9 +455,31 @@ function ns.FeatureLoop(frame, fn, wanted, every)
 	SyncFeatureLoop(loop)
 	return function() SyncFeatureLoop(loop) end
 end
+-- A loop its breaker turned off, while still wanted, started again (/cine
+-- resume). Not on a wake: features wake theirs on many events, so a loop
+-- still failing would start again each time, an error stream. Left on, it
+-- stays off.
+local function ReviveFeatureLoop(loop)
+	if not (loop.on and loop.state.dead) then return end
+	loop.state.dead, loop.state.inWindow = false, 0
+	if not loop.every then loop.frame:SetScript("OnUpdate", loop.run) end
+	ns.Log("safety", "an update loop turned off for failing starts again")
+end
 function ns.WakeFeatureLoop(frame)
 	local loop = featureLoops[frame]
 	if loop then SyncFeatureLoop(loop) end
+end
+-- /cine resume: every loop a breaker turned off starts again (each still
+-- failing turns itself off again after REPEAT_LIMIT errors). A set loop only
+-- if nothing has replaced or cleared its OnUpdate since. Audit 2026-11-25.
+function ns.ReviveLoops()
+	for _, loop in ipairs(featureLoops) do ReviveFeatureLoop(loop) end
+	for frame, set in pairs(setLoops) do
+		if set.state.dead and frame:GetScript("OnUpdate") == nil then
+			set.state.dead, set.state.inWindow = false, 0
+			frame:SetScript("OnUpdate", set.wrapped)
+		end
+	end
 end
 -- A timed loop's next run brought forward to the next frame (once, however
 -- often asked meanwhile): for an event that wants a look at once.

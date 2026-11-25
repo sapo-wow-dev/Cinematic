@@ -1824,6 +1824,25 @@ function ns.StopLowHealthTest()
 	Wake()
 end
 
+-- (Its loop turned off for failing: the edges put away and the game's own
+-- red flash given back, the test or quick look stopped and the level reset,
+-- so it starts afresh as it's next wanted. Left, they stayed on screen,
+-- frozen, till a reload. Audit 2026-11-25.)
+local function ClearVitals()
+	ns.StopVitalsSound()
+	test, lastHealth, glimpse = nil, nil, nil
+	level, flash, liftSpeed, lostAdding = 0, 0, 0, 0
+	woundLost, woundHit = 0, false
+	if screen then
+		ClearSparks(screen)
+		screen.wasShown, screen.wasSecret, screen.shown = nil, nil, nil
+		if screen.portal then screen.portal:Hide() end
+	end
+	GameFlashHidden(false)
+	if frame then frame:Hide() end
+	if driver then driver:Hide() end
+end
+
 -- The page's test's seconds left (nil: none running; not a quick look's).
 function ns.LowHealthTestLeft()
 	if not test or test.quiet then return end
@@ -2084,7 +2103,7 @@ ns.SetOnUpdate(shaker, function(_, elapsed)
 		end
 	end
 	if done or GetTime() - shake.start > 1 then EndShake() end
-end)
+end, EndShake) -- (Its loop turned off for failing: the camera's turning stopped, not left spinning. Audit 2026-11-25.)
 
 function ns.ShakeCamera()
 	if shake then return end
@@ -2136,7 +2155,7 @@ events:SetScript("OnEvent", function(_, event, _, action, _, amount)
 			for key in pairs(CinematicDB.vitalsThemeEdits) do ThemeEdited(key) end
 		end
 		Create()
-		ns.SetOnUpdate(driver, ns.Profiled("Vitals", Update))
+		ns.SetOnUpdate(driver, ns.Profiled("Vitals", Update), ClearVitals)
 		events:RegisterUnitEvent("UNIT_HEALTH", "player")
 		events:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
 		events:RegisterUnitEvent("UNIT_COMBAT", "player")

@@ -4710,6 +4710,7 @@ function ns.Resume()
 	end
 	suspended = false
 	ns.ResetErrorWindows()
+	if ns.ReviveLoops then ns.ReviveLoops() end -- (the loops their breakers turned off: Audit 2026-11-25)
 	lastBusy = GetTime()
 	ns.letterboxDirty = true
 	if ns.RefreshTint then ns.RefreshTint() end

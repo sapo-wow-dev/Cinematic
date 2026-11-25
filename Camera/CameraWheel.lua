@@ -330,7 +330,16 @@ wheel:SetScript("OnHide", function()
 	wheel:EnableMouse(false)
 	Pick(nil)
 end)
-ns.SetOnUpdate(wheel, ns.Profiled("Camera wheel", OnUpdate))
+-- (Its loop turned off for failing: closed as Escape closes it (its OnHide
+-- tidies up), its state reset even if it was hidden already. It stayed over
+-- the whole screen, frozen, taking clicks. Audit 2026-11-25.)
+local function Clear()
+	wheel:Hide()
+	fading, heldSince, clickMode, sinceRefresh = 0, nil, false, 0
+	wheel:EnableMouse(false)
+	Pick(nil)
+end
+ns.SetOnUpdate(wheel, ns.Profiled("Camera wheel", OnUpdate), Clear)
 -- (The other wheels put it away as they open.)
 function ns.CloseCameraWheel()
 	if wheel:IsShown() then

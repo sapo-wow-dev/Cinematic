@@ -435,7 +435,15 @@ local function Update(_, elapsed)
 	frame:SetAlpha(alpha)
 	Draw()
 end
-ns.SetOnUpdate(frame, Update)
+-- (Its loop turned off for failing: the line put away, its Test stopped, so it
+-- starts afresh. It stayed up, frozen. Audit 2026-11-25.)
+local function Clear()
+	test, pulseAt = nil, nil
+	alpha, wanted, sinceCheck = 0, false, CHECK
+	frame:SetAlpha(0)
+	frame:Hide()
+end
+ns.SetOnUpdate(frame, Update, Clear)
 
 -- The frame shows (and so updates) only in the bag, resting by a fire for
 -- Camp Benefits, or on a Test.
