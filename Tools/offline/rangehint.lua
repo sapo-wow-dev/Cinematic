@@ -13,17 +13,19 @@ local client = arg and arg[1] or "forever"
 local wow = dofile("Tools/offline/wow.lua")
 wow.Install(client)
 local ns = {}
-for line in io.lines("Cinematic.toc") do
+-- (The dev copy: Range Hint is dev only since 2026-11-25. The player copy's
+-- side, nothing of it there: Tools/offline/rangehintplayer.lua.)
+for line in io.lines("CinematicDev.toc") do
 	line = line:gsub("\r", "")
 	if line ~= "" and not line:find("^#") then
 		local chunk = loadfile((line:gsub("\\", "/")))
 		if chunk then
-			local ok, err = pcall(chunk, "Cinematic", ns)
+			local ok, err = pcall(chunk, "CinematicDev", ns)
 			if not ok then wow.Warn(line .. ": " .. tostring(err)) end
 		end
 	end
 end
-wow.Fire("ADDON_LOADED", "Cinematic")
+wow.Fire("ADDON_LOADED", "CinematicDev")
 wow.Fire("PLAYER_LOGIN")
 
 -- The game: your bars (slot -> spell), each spell's range and kind, the

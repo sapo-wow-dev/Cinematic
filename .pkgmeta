@@ -13,6 +13,34 @@ ignore:
   # (Wind Guide: a demo, in the dev copy only, CinematicDev.toc)
   - Dev
   - Textures/WindGuide
+  # (Range Hint: dev copy only since 2026-11-25, the user: CinematicDev.toc loads it)
+  - UI/RangeHint.lua
+  - Style/RangeHintStyle.lua
+  - Textures/RangeMark_pill.tga
+  - Textures/RangeMark_chevron_thin.tga
+  - Textures/RangeMark_chevron_normal.tga
+  - Textures/RangeMark_chevron_bold.tga
+  - Textures/RangeMark_chevron_glow.tga
+  - Textures/RangeMark_double_thin.tga
+  - Textures/RangeMark_double_normal.tga
+  - Textures/RangeMark_double_bold.tga
+  - Textures/RangeMark_double_glow.tga
+  - Textures/RangeMark_dot_thin.tga
+  - Textures/RangeMark_dot_normal.tga
+  - Textures/RangeMark_dot_bold.tga
+  - Textures/RangeMark_dot_glow.tga
+  - Textures/RangeMark_ring_thin.tga
+  - Textures/RangeMark_ring_normal.tga
+  - Textures/RangeMark_ring_bold.tga
+  - Textures/RangeMark_ring_glow.tga
+  - Textures/RangeMark_bracket_thin.tga
+  - Textures/RangeMark_bracket_normal.tga
+  - Textures/RangeMark_bracket_bold.tga
+  - Textures/RangeMark_bracket_glow.tga
+  - Textures/RangeMark_arrow_thin.tga
+  - Textures/RangeMark_arrow_normal.tga
+  - Textures/RangeMark_arrow_bold.tga
+  - Textures/RangeMark_arrow_glow.tga
   # (Dev copy only, CinematicDev.toc: the Module Editor, the held settings page
   # and /cine debug flickertest)
   # (Portal scout: /cine debug portal, trying the game's portal models, dev copy only)

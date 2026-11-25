@@ -4220,7 +4220,11 @@ function ns.CreateShoulderCamPanel(kit)
 	-- game's text has a secret place there, even out of a fight (engine rule
 	-- forever.combattext.copy-secret-words). Your text beside you is the Style
 	-- hub's Text on You page now. Retail keeps the row, untested there.)
-	local function RowShown(key) return ns.isRetail or key ~= "shoulderCamFollowCombatText" end
+	local function RowShown(key)
+		-- (Range Hint: dev copy only since 2026-11-25, the user.)
+		if key == "shoulderCamFollowRangeHint" then return ns.isDev and true or false end
+		return ns.isRetail or key ~= "shoulderCamFollowCombatText"
+	end
 	ns.ShoulderFollowRowShown = RowShown -- (Tools/offline/selftextpage.lua)
 	for _, group in ipairs(FOLLOW_GROUPS) do
 		local key = group.key

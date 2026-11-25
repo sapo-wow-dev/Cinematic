@@ -3161,7 +3161,7 @@ do
 				tabOf = "HUD:swingtimer" },
 			-- (Range Hint, after Swing Timer: the user, 2026-11-25. UI/RangeHint.lua.)
 			{ "Range hint", "Interface\\Icons\\INV_Misc_Spyglass_03", label = "Range Hint", section = "Range Hint",
-				tabOf = "HUD:rangehint" },
+				tabOf = "HUD:rangehint", dev = true }, -- (dev copy only since 2026-11-25, the user)
 		} },
 		-- (Cameras: what everyone has; Dev: the dev copy's own, to the right)
 		-- (master: Enable Cameras; its pages with no switch of their own show Off with it)
@@ -4293,7 +4293,7 @@ do
 					end
 						tile.showIn = tab.showIn -- (its Show in list's key: ns.HubOverview's tabs)
 						tile.forget = page.forget -- (one item's page: not saved as the last tab, Select)
-						if page.dev and tile.CreateLine then
+						if (page.dev or tab.dev) and tile.CreateLine then
 							-- (A red X over the icon: dev copy only.)
 							tile.dev = true
 							for _, corners in ipairs({ { "TOPLEFT", "BOTTOMRIGHT" }, { "TOPRIGHT", "BOTTOMLEFT" } }) do
@@ -9259,8 +9259,10 @@ local function CreateCombatPanel()
 			tabs = "cdm", icon = "Interface\\Icons\\Spell_Nature_TimeStop" },
 		{ keys = { "swingtimer" }, label = "Swing Timer", section = "Swing Timer", before = "Swing timer",
 			tabs = "swing", icon = "Interface\\Icons\\INV_Sword_04" },
+		-- (dev: dev copy only since 2026-11-25, the user: a red X on its icon; the
+		-- player copy has no UI/RangeHint.lua, so no row, so no icon.)
 		{ keys = { "rangehint" }, label = "Range Hint", section = "Range Hint", before = "Range hint",
-			tabs = "range", icon = "Interface\\Icons\\INV_Misc_Spyglass_03" },
+			tabs = "range", icon = "Interface\\Icons\\INV_Misc_Spyglass_03", dev = true },
 		{ keys = { "interface" }, label = "Menus & Info", section = "Menus & Info", last = true,
 			icon = "Interface\\Icons\\INV_Misc_Bag_07" },
 		{ keys = { "other" }, label = "Other Frames in CineMode", section = "What Shows", before = "Standard Frames" },
@@ -10066,7 +10068,7 @@ local function CreateCombatPanel()
 		if has then
 			canvas.hubTabs[#canvas.hubTabs + 1] = {
 				name = IconName(icon), label = icon.label, section = icon.section, before = icon.before, last = icon.last, own = true,
-				showIn = icon.tabs,
+				showIn = icon.tabs, dev = icon.dev, -- (dev: its red X, as a dev page's)
 				noDot = not (icon.hud or own), switchLabel = own and (icon.switchLabel or icon.label) or "HUD",
 				switchFrame = own, tabOf = icon.tabOf, groupFrames = not own and #group > 1 and group or nil,
 				-- (its own picture, 2026-11-16; the HUD's and Other's your faction's banner)
@@ -22411,8 +22413,11 @@ ns.OnLanguage(function()
 		CreateSwingPanel()
 		Lap("CreateSwingPanel")
 	end
-	CreateRangeHintPanel()
-	Lap("CreateRangeHintPanel")
+	-- (Dev copy only, UI/RangeHint.lua: the player copy hasn't it.)
+	if ns.RangeHintChoices then
+		CreateRangeHintPanel()
+		Lap("CreateRangeHintPanel")
+	end
 	-- (Only with a Cooldown Manager: the game's, on clients that have it, or the addon.
 	-- ProfileModules.lua.)
 	if ns.HasCooldownManager() then

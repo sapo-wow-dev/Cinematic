@@ -513,6 +513,44 @@ ns.TestKit.Define({
 			r:Shot("Interface hub, Range Hint in Info", { behind = _G.SettingsPanel })
 			if _G.SettingsPanel and _G.SettingsPanel:IsShown() then HideUIPanel(_G.SettingsPanel) end
 		end },
+		-- Dev copy only (the user, 2026-11-25): its icons carry the red X, and
+		-- the Style hub's Info band isn't led by it (shut, a band shows only
+		-- its first icon: Range Hint Style fronted Info, red X and all, the
+		-- user's screenshot). Hands off.
+		{ key = "devonly", title = "dev only: red X on its icons; the Style hub's Info band led by its own first page",
+			proven = "q1425 2026-11-25 5/5", run = function(r)
+			r:Verdict(ns.isDev, "(the dev copy)")
+			local ok = pcall(ns.OpenOptions, "HUD:rangehint")
+			r:Sleep(1)
+			r:Verdict(ok, "Range Hint opened")
+			local hud
+			for _, entry in ipairs(ns.HubOverview and ns.HubOverview("UI Manager") or {}) do
+				if entry.name == "HUD:rangehint" then hud = entry end
+			end
+			r:Verdict(hud and hud.dev, "its Interface icon has the red X")
+			r:Shot("Interface hub: Range Hint with its red X", { behind = _G.SettingsPanel })
+			pcall(ns.OpenOptions, "Style General")
+			r:Sleep(1)
+			-- (The hub's icons left to right: Range Hint Style after every other
+			-- Info page, so never the one a shut Info band shows.)
+			local at, rangeDev = {}, nil
+			for i, entry in ipairs(ns.HubOverview and ns.HubOverview("Style") or {}) do
+				at[entry.name] = i
+				if entry.name == "Range Hint Style" then rangeDev = entry.dev end
+			end
+			r:Verdict(rangeDev, "Range Hint Style has the red X")
+			local behind = at["Range Hint Style"]
+			local others = { "Bubble Style", "Tooltip Style", "Minimap Style" }
+			local ahead = true
+			for _, name in ipairs(others) do
+				if not (behind and at[name] and at[name] < behind) then ahead = false end
+			end
+			r:Log(("Style hub order: Bubble %s, Tooltip %s, Minimap %s, Range Hint %s"):format(tostring(at[others[1]]),
+				tostring(at[others[2]]), tostring(at[others[3]]), tostring(behind)))
+			r:Verdict(ahead, "Range Hint Style comes after the other Info pages: it never leads the Info band")
+			r:Shot("Style hub, Info band shut", { behind = _G.SettingsPanel })
+			if _G.SettingsPanel and _G.SettingsPanel:IsShown() then HideUIPanel(_G.SettingsPanel) end
+		end },
 		-- The Show tab (the HUD's Range Hint section): a palette by its switch
 		-- opening Range Hint Style (the user, 2026-11-25), and no sound left
 		-- anywhere (removed the same day). Hands off.

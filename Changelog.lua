@@ -11,10 +11,6 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
-	{ date = "2026-11-25", page = "Range hint", title = "Range Hint",
-		text = "A small mark under your character shows when your target is out of reach of a spell you pick, " ..
-			"even with the target frame and action bars hidden. It's off to start with: turn it on under Interface > " ..
-			"Range Hint. With Shoulder Cam, it slides over with you." },
 	{ date = "2026-11-25", page = "Combat Text Style", title = "Combat text by spell",
 		text = "A new Spells tab on Combat Text Style gives any of your spells its own color, size and look, its " ..
 			"crits and DoT ticks too." },

@@ -740,7 +740,7 @@ ns.SHOW_IN_SWITCH = {
 	party = "showInParty", rsparty = "showInParty", raid = "showInRaid", bars = "showInBars", chat = "showInChat",
 	minimap = "showInMinimap", quests = "showInQuests", buffs = "showInBuffs", combat = "showInTimers",
 	swingtimer = "showInSwing", cdm = "showInCooldowns", interface = "showInInterface", other = "showInOther",
-	rangehint = "showInRange",
+	rangehint = ns.isDev and "showInRange" or nil, -- (Range Hint: dev copy only since 2026-11-25)
 }
 ns.SHOW_IN_SWITCHES = {}
 do
@@ -767,7 +767,8 @@ ns.SHOW_IN_CHILDREN = {
 	showInUnits = { "personalResources" }, showInPrd = { "prdKeepUp" },
 	showInMinimap = { "handleMinimap", "minimapKeepOpen" }, showInQuests = { "handleQuests" },
 	showInChat = { "handleChat", "handleBubbles" }, showInBuffs = { "handleBuffs" },
-	showInCooldowns = { "handleCooldowns" }, showInSwing = { "handleSwing" }, showInRange = { "handleRangeHint" },
+	showInCooldowns = { "handleCooldowns" }, showInSwing = { "handleSwing" },
+	showInRange = ns.isDev and { "handleRangeHint" } or nil, -- (Range Hint: dev copy only)
 	mouseover = { "handleTooltips", "cursorHide" }, handlePlates = { "handlePlateIcons" },
 	-- (The Style hub's: under Enable Style as before, through their icon's.)
 	-- (plateLayout: Nameplate Style's Layout tab, PlateLayout.lua, 2026-11-25.)
