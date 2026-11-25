@@ -237,6 +237,54 @@ local function Map()
 	end
 	return leadOf
 end
+-- Missing on a spell in the Essential or Utility bar (2026-11-25, a Discord
+-- ask: Corruption only while it's off the target): its icon holds the
+-- spell's aura on you or your target as the tracked buffs' do, so the same
+-- on/off read. Offered only on a spell that leaves an aura: ns.CooldownSpellAura
+-- gives "self" (on you), "target" (a DoT) or nil. From what its icon was seen
+-- holding, the game's info for it (hasAura, selfAura), else these DoTs by name.
+local DOTS = { 172, 980, 603, 348, 707, 30108, 589, 34914, 2944, 8921, 5570, 1978, 772, 8050, 1079, 1822, 703, 1943,
+	44457 }
+ns.COOLDOWN_DOT_SPELLS = DOTS
+local dotIDs = {}
+for _, dot in ipairs(DOTS) do dotIDs[dot] = true end
+local dotNames -- (other ranks go by name)
+local auraKind = {} -- base spell ID -> "self" / "target" (kept once known)
+function ns.CooldownSpellAura(id)
+	if type(id) ~= "number" then return nil end
+	if auraKind[id] then return auraKind[id] end
+	local found
+	if ns.EachCooldownIcon then
+		ns.EachCooldownIcon(function(icon, spell)
+			if found or Base(spell) ~= id then return end
+			local unit = Plain(icon.auraDataUnit)
+			if unit == "target" or unit == "player" then
+				found = unit == "target" and "target" or "self"
+				return
+			end
+			local info = ns.IconCooldownInfo and ns.IconCooldownInfo(icon)
+			if type(info) == "table" and Plain(info.hasAura) == true then
+				found = Plain(info.selfAura) == true and "self" or "target"
+			end
+		end, true)
+	end
+	if not found and dotIDs[id] then found = "target" end
+	if not found then
+		if not dotNames then
+			dotNames = {}
+			for _, dot in ipairs(DOTS) do
+				local ok, name = pcall(GetName, dot)
+				name = ok and Plain(name)
+				if type(name) == "string" then dotNames[name] = true end
+			end
+		end
+		local ok, name = pcall(GetName, id)
+		if ok and dotNames[Plain(name) or false] then found = "target" end
+	end
+	auraKind[id] = found
+	return found
+end
+
 -- A buff's group lead (nil: in no group).
 function ns.CooldownBuffLead(id)
 	if type(id) ~= "number" then return nil end

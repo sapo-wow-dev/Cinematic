@@ -1,9 +1,11 @@
 """The Cooldown Manager grid's small icons (UI/CooldownGrid.lua), our own,
-drawn from scratch here: one strip, 256x32, eight white 32x32 icons on a
-see-through background, tinted in game by each choice's color:
+drawn from scratch here: one strip, 512x32, sixteen slots of white 32x32
+icons on a see-through background (nine used), tinted in game by each
+choice's color:
   0 eye (Always)  1 check (When ready)  2 clock (While recharging)
   3 lightning bolt (When it procs)  4 slashed circle (Never / Hidden)
   5 crossed swords (In combat)  6 moon (Out of combat)  7 plus (Add group)
+  8 broken ring (Missing)
 And a white 32x32 disc (the pills' round ends: its left and right halves).
 usage: make_cdm_icons.py Textures/CdmIcons.tga Textures/CdmDisc.tga"""
 import math
@@ -71,8 +73,17 @@ def plus(d):
     d.line([p(7, 16), p(25, 16)], fill=WHITE, width=int(W * 1.2))
 
 
-strip = Image.new("RGBA", (N * 8, N), (0, 0, 0, 0))
-for i, draw in enumerate((eye, check, clock, spark, never, swords, moon, plus)):
+def gap_ring(d):
+    # Missing (2026-11-25): a ring broken in four, "something's not there".
+    # (It had the procs bolt till then: the two read the same, the user's shot.)
+    for start in (20, 110, 200, 290):
+        d.arc([p(5, 5), p(27, 27)], start=start, end=start + 50, fill=WHITE, width=int(W * 1.1))
+    d.ellipse([p(13.5, 13.5), p(18.5, 18.5)], fill=WHITE)
+
+
+# (16 slots, 512 wide, a power of two: 9 used. Was 8 in 256 till Missing came.)
+strip = Image.new("RGBA", (N * 16, N), (0, 0, 0, 0))
+for i, draw in enumerate((eye, check, clock, spark, never, swords, moon, plus, gap_ring)):
     img, d = canvas()
     draw(d)
     strip.paste(img.resize((N, N), Image.LANCZOS), (i * N, 0))

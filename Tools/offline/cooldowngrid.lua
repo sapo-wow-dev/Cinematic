@@ -417,6 +417,32 @@ do
 		Check("a pick (not When ready) closes the pop-up", not grid.chooser:IsShown()
 			and ns.CooldownCell("spell", IMMOLATE, g1.id) == "never")
 		ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
+		-- Missing: offered on Immolate (a DoT), its tip says off your target;
+		-- not on the bar's own row.
+		Click(im.cells[1])
+		local missingChoice
+		for _, box in ipairs(grid.choices) do
+			if box:IsShown() and box.value == "missing" then missingChoice = box end
+		end
+		Check("Missing offered on a DoT", missingChoice ~= nil)
+		Check("its tip: off your target", missingChoice and missingChoice.tip == ns.L["Shows only while it's off your target."],
+			missingChoice and tostring(missingChoice.tip))
+		if missingChoice then Click(missingChoice) end
+		Check("choosing Missing sets its cell", ns.CooldownCell("spell", IMMOLATE, g1.id) == "missing")
+		ns.SetCooldownCell("spell", IMMOLATE, g1.id, nil)
+		local barRow
+		for _, row in ipairs(grid.rows) do
+			if row.key == grid.state.tab then barRow = row end
+		end
+		if barRow then
+			Click(barRow.cells[1])
+			local onBar = false
+			for _, box in ipairs(grid.choices) do
+				if box:IsShown() and box.value == "missing" then onBar = true end
+			end
+			Check("no Missing on the bar's own row", not onBar)
+			Click(barRow.cells[1])
+		end
 		Click(im.cells[1])
 		local catcher
 		for _, child in ipairs({ grid:GetChildren() }) do
@@ -728,7 +754,7 @@ do
 		ns.CdmShowSpells("buffs")
 		local left = {}
 		for _, name in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow",
-			"cooldownAlwaysShow", "cooldownNeedsPower", "cooldownFlashReady", "cooldownRowSettings", "cooldownSpellCells" }) do
+			"cooldownMissingOnly", "cooldownAlwaysShow", "cooldownNeedsPower", "cooldownFlashReady", "cooldownRowSettings", "cooldownSpellCells" }) do
 			for id in pairs(db[name] or {}) do
 				if type(id) == "number" and id ~= IMMOLATE then left[#left + 1] = name .. "." .. id end
 			end
@@ -799,6 +825,33 @@ pc = Pass()
 Check("ready pass: in the open world, its own Always", pc and pc.target ~= 0, pc and tostring(pc.target))
 ns.SetCooldownCell("spell", CORRUPTION, g1.id, nil)
 
+-- Missing on a spell (2026-11-25): Corruption in the Essential bar, shown
+-- while it's off your target, faded while it's on (the game's icon holds
+-- the aura: auraInstanceID, auraDataUnit "target"); in a fight too, as a
+-- cell, and as its own Otherwise. Offered only on a spell with an aura.
+db.cooldownAlwaysShow[CORRUPTION] = nil
+db.cooldownMissingOnly[CORRUPTION] = true
+Check("Missing: its own Otherwise", (ns.CooldownSpellMode(CORRUPTION, "essential")) == "missing")
+Be("world", true)
+pc = Pass()
+Check("Missing: off the target, shown", pc and pc.target ~= 0, pc and tostring(pc.target))
+cor.auraInstanceID, cor.auraDataUnit = 77, "target"
+pc = Pass()
+Check("Missing: on the target, faded", pc and pc.target == 0, pc and tostring(pc.target))
+cor.auraInstanceID, cor.auraDataUnit = nil, nil
+pc = Pass()
+Check("Missing: a new target without it, shown again", pc and pc.target ~= 0, pc and tostring(pc.target))
+db.cooldownMissingOnly[CORRUPTION] = nil
+ns.SetCooldownCell("spell", CORRUPTION, g1.id, "missing")
+Be("dungeon", true)
+cor.auraInstanceID = 78
+pc = Pass()
+Check("Missing as a scene's cell: on the target, faded", pc and pc.target == 0, pc and tostring(pc.target))
+cor.auraInstanceID = nil
+ns.SetCooldownCell("spell", CORRUPTION, g1.id, nil)
+Check("a DoT leaves an aura on the target", ns.CooldownSpellAura(CORRUPTION) == "target", ns.CooldownSpellAura(CORRUPTION))
+Check("a spell with none: nothing", ns.CooldownSpellAura(5) == nil, ns.CooldownSpellAura(5))
+
 -- The update: numbered lines into scenes, done exactly (audit, 2026-11-22):
 -- each spell decides in every place as its old lines did.
 local function Lines()
@@ -820,8 +873,8 @@ local function Lines()
 end
 local function Fresh()
 	for _, name in ipairs({ "cooldownPlaceGroups", "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells",
-		"cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow",
-		"cooldownBuffMode", "cooldownGroupDefaults" }) do db[name] = {} end
+		"cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownMissingOnly", "cooldownAlwaysShow",
+		"cooldownNeverShow", "cooldownBuffMode", "cooldownGroupDefaults" }) do db[name] = {} end
 end
 Fresh()
 for k, v in pairs(Lines()) do db[k] = v end

@@ -17066,6 +17066,7 @@ local function CreateCooldownPanel()
 	RecordKey(icons, "cooldownReadyAnyTime")
 	RecordKey(icons, "cooldownGroupDefaults")
 	RecordKey(icons, "cooldownProcOnly")
+	RecordKey(icons, "cooldownMissingOnly")
 	RecordKey(icons, "cooldownAlwaysShow")
 	RecordKey(icons, "cooldownNeverShow")
 	RecordKey(icons, "cooldownBuffMode")
@@ -17222,7 +17223,8 @@ local function CreateCooldownPanel()
 			listed[BUFF_GROUP[spell.group] and "buff" or "spell"][spell.id] = true
 		end
 		for _, set in ipairs({
-			{ "other", "spell", { db.cooldownReadyOnly, db.cooldownRechargeOnly, db.cooldownProcOnly, db.cooldownNeverShow,
+			{ "other", "spell", { db.cooldownReadyOnly, db.cooldownRechargeOnly, db.cooldownProcOnly, db.cooldownMissingOnly,
+				db.cooldownNeverShow,
 				store.cooldownAlwaysShow, db.cooldownSpellCells,
 				-- (Its When ready parts, Flash or looks alone kept it unlisted, so they
 				-- couldn't be undone. Audit, 2026-11-22.)
@@ -17316,7 +17318,7 @@ local function CreateCooldownPanel()
 	-- Reset: just the spell icons' settings (the page's Reset does the rest too).
 	local SPELL_ICON_KEYS = { cooldownReadyOnly = true, cooldownReadyEarly = true, cooldownEarlyOn = true,
 		cooldownRechargeOnly = true, cooldownNeedsPower = true, cooldownReadyAnyTime = true, cooldownGroupDefaults = true,
-		cooldownProcOnly = true, cooldownAlwaysShow = true, cooldownNeverShow = true, cooldownBuffMode = true, cooldownBuffGroups = true, cooldownSmartDefaults = true,
+		cooldownProcOnly = true, cooldownMissingOnly = true, cooldownAlwaysShow = true, cooldownNeverShow = true, cooldownBuffMode = true, cooldownBuffGroups = true, cooldownSmartDefaults = true,
 		cooldownFlashReady = true, cooldownPlaceGroups = true, cooldownSpellCells = true, cooldownBuffCells = true,
 		cooldownGroupCells = true,
 		cooldownRowSettings = true }

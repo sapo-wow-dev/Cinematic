@@ -317,5 +317,35 @@ Check("Missing: each counts as Missing anywhere", (function()
 	return ns.CooldownMissingAny()
 end)())
 
+-- A DoT tracked (2026-11-25, Discord: Corruption only while missing): the
+-- game's icon finds your aura on you, then on your target (auraDataUnit
+-- "target"). Missing: shown while the target hasn't got it, faded while it
+-- has, back on a new target; your buffs' read never counts a DoT as on you.
+local CORRUPTION = 172
+NAMES[CORRUPTION] = "Corruption"
+local dot = Icon(CORRUPTION, false)
+icons = { dot }
+GameUpdate(dot)
+db.cooldownBuffMode = { [CORRUPTION] = "missing" }
+Reread()
+Aura("Demon Skin", "player")
+ns.CooldownReadBuffs()
+ns.CooldownMissingPass()
+Check("DoT, no target: the reminder shows", dot.shown == true and ns.CooldownMissingShownHere(dot))
+dot.auraInstanceID, dot.auraDataUnit = 41, "target"
+GameUpdate(dot)
+ns.CooldownMissingPass()
+Check("DoT on the target: the game's, faded", dot.shown == true and not ns.CooldownMissingShownHere(dot)
+	and ns.CooldownBuffShows("missing", false, dot) == false)
+fighting = true
+Check("DoT on the target in a fight: faded", ns.CooldownBuffShows("missing", true, dot) == false)
+-- A new target without it: the game clears the aura and hides the icon.
+dot.auraInstanceID, dot.auraDataUnit = nil, nil
+GameUpdate(dot)
+Check("new target without it, in a fight: shown again at once", dot.shown == true)
+Check("new target without it: shows", ns.CooldownBuffShows("missing", true, dot) == true)
+fighting = false
+Check("a DoT is never read as on you", ns.CooldownBuffOnYou(dot) == false)
+
 
 print(fails == 0 and "ALL PASS" or (fails .. " FAIL"))

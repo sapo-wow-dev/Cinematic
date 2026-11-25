@@ -151,8 +151,8 @@ end
 local function Reset(tab)
 	db.cooldownPlaceGroups = {}
 	for _, name in ipairs({ "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells", "cooldownReadyOnly",
-		"cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow", "cooldownBuffMode",
-		"cooldownFlashReady", "cooldownRowSettings", "cooldownGroupDefaults", "cooldownEarlyOn", "cooldownReadyEarly",
+		"cooldownRechargeOnly", "cooldownProcOnly", "cooldownMissingOnly", "cooldownAlwaysShow", "cooldownNeverShow",
+		"cooldownBuffMode", "cooldownFlashReady", "cooldownRowSettings", "cooldownGroupDefaults", "cooldownEarlyOn", "cooldownReadyEarly",
 		"cooldownNeedsPower", "cooldownReadyAnyTime", "cooldownBuffGroups" }) do
 		db[name] = {}
 	end
@@ -206,6 +206,14 @@ local STATES = {
 		Reset()
 		DUNGEON() TOWN() PVP()
 		Cell("spell", 1978, 1, "ready")
+		ns.CdmShowSpells("essential")
+		Click(RowOf(1978).cells[1])
+	end },
+	{ id = "s25", name = "25 A DoT's pop-up, Missing picked (Serpent Sting: shown while it's off your target)", set = function()
+		Reset()
+		DUNGEON() TOWN()
+		Cell("spell", 1978, 1, "missing")
+		Own(1978, "missing")
 		ns.CdmShowSpells("essential")
 		Click(RowOf(1978).cells[1])
 	end },

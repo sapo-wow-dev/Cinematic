@@ -44,7 +44,7 @@ local PROFILE_TABLES = {
 	"friendlyShow", "bgShow", "worldShow", "cityShow", "groupShow", "instanceShow", "addonFrames", "gamepadPressButtons",
 	"hoverGroups", "cooldownReadyOnly", "cooldownReadyEarly", "cooldownEarlyOn", "cooldownRechargeOnly", "cooldownNeedsPower",
 	"cooldownReadyAnyTime",
-	"cooldownGroupDefaults", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow", "cooldownBuffMode", "cooldownBuffGroups",
+	"cooldownGroupDefaults", "cooldownProcOnly", "cooldownMissingOnly", "cooldownAlwaysShow", "cooldownNeverShow", "cooldownBuffMode", "cooldownBuffGroups",
 	"cooldownFlashReady",
 	-- (the place groups and the rows' cells for them: CooldownRules.lua)
 	"cooldownPlaceGroups", "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells",

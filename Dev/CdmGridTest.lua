@@ -29,6 +29,12 @@
 --              counts), each, none on; the group's row on the page, Ungroup
 --  14 missingalts  the ready-made alternatives' names here; the hint under a
 --              Missing buff on the page (nothing to do)
+--  17 missingdot  Missing on a DoT you track (Corruption): the game's icon
+--              follows it on your target; shown while the target hasn't got
+--              it, faded while it has, back on a new target (one fight)
+--  18 missingspell  Missing on a spell: your DoT in the Essential or Utility
+--              bar; the page offers it (tip, not on the bar's row), then one
+--              fight: shown off the target, faded on it, back on a new one
 -- Its settings and CineMode are put back after (and at the next login if a
 -- /reload cuts it short). Offline: Tools/offline/cooldowngrid.lua. Into
 -- CinematicDB.cdmGridTestLog. Dev copy only.
@@ -36,7 +42,7 @@ local _, ns = ...
 
 local KEYS = { "cooldownPlaceGroups", "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells",
 	"cooldownReadyOnly", "cooldownEarlyOn", "cooldownReadyEarly", "cooldownNeedsPower", "cooldownReadyAnyTime",
-	"cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow", "cooldownGroupDefaults",
+	"cooldownRechargeOnly", "cooldownProcOnly", "cooldownMissingOnly", "cooldownAlwaysShow", "cooldownNeverShow", "cooldownGroupDefaults",
 	"cooldownFlashReady", "cooldownRowSettings", "cooldownBuffMode", "cooldownBuffGroups" }
 local PLACES = { "world", "city", "inn", "dungeon", "raid", "bg" }
 
@@ -144,7 +150,8 @@ local function Setup(r)
 	for _, key in ipairs(KEYS) do r:Set(key, Copy(ns.db[key]) or {}) end
 	ns.db.cooldownPlaceGroups = {}
 	local id = test.spell
-	for _, key in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow" }) do
+	for _, key in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow",
+		"cooldownMissingOnly" }) do
 		ns.db[key][id] = nil
 	end
 	ns.db.cooldownAlwaysShow[id] = true
@@ -317,6 +324,78 @@ local function LogBuffRead(r, label)
 		end
 	end
 end
+-- Missing on a DoT (step 17, 2026-11-25, a Discord ask: Corruption and Bane
+-- of Agony only while missing). The game's tracked buff icon looks for its
+-- aura on you, then on your target (Blizzard_CooldownViewer/CooldownViewer.lua
+-- NeedsTargetUpdateRegistration), so a tracked DoT lights from your DoT on
+-- the target, and Missing shows it while the target hasn't got it.
+local DOTS = { 172, 980, 603, 348, 30108, 589, 34914, 2944, 8921, 5570, 1978, 772, 8050, 1079, 1822, 703, 1943, 44457 }
+local function SpellName(id)
+	local ok, name
+	if C_Spell and C_Spell.GetSpellName then ok, name = pcall(C_Spell.GetSpellName, id)
+	else ok, name = pcall(GetSpellInfo, id) end
+	if not ok or type(name) ~= "string" or (issecretvalue and issecretvalue(name)) then return nil end
+	return name
+end
+local function DotNames()
+	local names = {}
+	for _, id in ipairs(DOTS) do
+		local name = SpellName(id)
+		if name then names[name] = true end
+	end
+	return names
+end
+-- The unit the icon's aura was found on ("player", "target"), or nil.
+local function AuraUnit(icon)
+	local unit = icon.auraDataUnit
+	if issecretvalue and issecretvalue(unit) then return "secret" end
+	return unit
+end
+local seenOnTarget = setmetatable({}, { __mode = "k" }) -- icon -> true once its aura came from the target
+-- The tracked buffs and bars icons that follow one of your DoTs.
+local function DotItems(names)
+	local dots = {}
+	ns.EachCooldownIcon(function(icon, id, bar)
+		if not ns.COOLDOWN_BUFF_GROUPS[bar] or type(icon.cooldownID) == "nil" then return end
+		if AuraUnit(icon) == "target" then seenOnTarget[icon] = true end
+		local dot = seenOnTarget[icon]
+		if not dot then
+			for _, name in ipairs(ns.CooldownBuffNames(icon)) do
+				if names[name] then dot = true end
+			end
+		end
+		if dot then dots[#dots + 1] = { icon = icon, id = id, bar = bar } end
+	end, true)
+	return dots
+end
+-- The game's Tracked Buffs and Tracked Bars catalogs (learned or not): your
+-- DoTs in them, so we know a player can add one.
+local function LogDotCatalog(r, names)
+	local CV, cats = C_CooldownViewer, Enum and Enum.CooldownViewerCategory
+	if not (CV and CV.GetCooldownViewerCategorySet and cats) then return r:Log("catalog: no C_CooldownViewer here") end
+	for _, cat in ipairs({ "TrackedBuff", "TrackedBar" }) do
+		local okSet, set = pcall(CV.GetCooldownViewerCategorySet, cats[cat], true)
+		if okSet and type(set) == "table" and not (issecretvalue and issecretvalue(set)) then
+			local found = {}
+			for _, cooldownID in ipairs(set) do
+				local ok, info = pcall(CV.GetCooldownViewerCooldownInfo, cooldownID)
+				local id = ok and type(info) == "table" and info.spellID
+				if issecretvalue and issecretvalue(id) then id = nil end
+				local name = type(id) == "number" and SpellName(id)
+				if name and names[name] then
+					found[#found + 1] = ("%s %d (known %s)"):format(name, id, tostring(info.isKnown))
+				end
+			end
+			r:Log(("catalog %s: %d entries; DoTs: %s"):format(cat, #set, #found > 0 and table.concat(found, ", ") or "none"))
+		else
+			r:Log(("catalog %s: read ok=%s %s"):format(cat, tostring(okSet), tostring(set)))
+		end
+	end
+end
+local function DotLine(item)
+	return ("%s [%s] unit=%s"):format(IconLine(item), tostring(item.bar), tostring(AuraUnit(item.icon)))
+end
+
 -- The stand-in (way A2): our own texture at a hidden icon's place.
 local standIn
 local function StandIn(r, icon)
@@ -348,7 +427,7 @@ ns.TestKit.Define({
 	key = "cdmGridTest",
 	title = "Cooldown Manager grid",
 	about = "the CDM page's grid: groups, cells, the bar's row, choices, editor, ticks, Look, nothing to do",
-	needs = "A warlock (Demon Skin, imp out) and a mob or training dummy",
+	needs = "A warlock (Demon Skin, imp out, Corruption tracked) and two mobs or training dummies",
 	settings = KEYS,
 	context = function()
 		-- (A new run: nothing kept from the last one, whose groups were put back.)
@@ -527,7 +606,7 @@ ns.TestKit.Define({
 				wipe(db.cooldownGroupCells)
 				for _, id in ipairs(ids) do
 					for _, key in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow",
-						"cooldownAlwaysShow" }) do db[key][id] = nil end
+						"cooldownAlwaysShow", "cooldownMissingOnly" }) do db[key][id] = nil end
 				end
 				wipe(grid.state.selected)
 				grid.state.open, grid.state.editing, grid.state.look = nil, nil, false
@@ -719,7 +798,8 @@ ns.TestKit.Define({
 			-- (Always of its own, set here: the gallery before clears it, and a
 			-- spell whose default is When it procs stayed hidden, a shaman's
 			-- Searing Totem, cdmgrid run 29.)
-			for _, name in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow" }) do
+			for _, name in ipairs({ "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownNeverShow",
+				"cooldownMissingOnly" }) do
 				ns.db[name][test.spell] = nil
 			end
 			ns.db.cooldownAlwaysShow[test.spell] = true
@@ -1016,6 +1096,312 @@ ns.TestKit.Define({
 			r:Verdict(ns.CooldownBuffOnYou(icon) and (Plain(icon.GetAlpha, icon) or 1) < 0.1
 				or not ns.CooldownBuffOnYou(icon) and Plain(icon.IsShown, icon) == true,
 				"after the fight: shown while off you, faded while on")
+		end },
+		{ key = "missingdot", proven = "cdmgrid run 7 (q25f7, 2026-11-25, Forever): Corruption, Agony, Immolate shown before, faded 48/48 on the target, shown 4/4 off, back after 3 target changes, 0 errors", title = "Missing on a DoT: shown while your target hasn't got it, faded while it has", run = function(r)
+			if InCombatLockdown() then return r:Skip("in a fight already: start out of one") end
+			if not ns.PageOn("handleCooldowns") then return r:Skip("the Cooldown Manager page is off") end
+			local names = DotNames()
+			LogDotCatalog(r, names)
+			local dots = DotItems(names)
+			if #dots == 0 then
+				-- (None tracked: the one thing to set up, in the game's own window.)
+				r:WaitFor("Add Corruption (or another DoT of yours) to Tracked Buffs in the game's Cooldown Manager settings, then close them.", {
+					check = function()
+						dots = DotItems(names)
+						local window = _G.CooldownViewerSettings
+						return #dots > 0 and not (window and window:IsShown())
+					end,
+					buttons = { { label = "Open CDM", big = true, fn = function()
+						local _, button = Grid()
+						if button and button:IsVisible() then return button:Click() end
+						ns.OpenOptionsAt("Cooldown Manager")
+						C_Timer.After(0.5, function()
+							local _, later = Grid()
+							if later and later:IsVisible() then later:Click() end
+						end)
+					end } } })
+			end
+			if #dots == 0 then return r:Skip("no DoT in your tracked buffs or bars") end
+			-- Each DoT set Missing; cells and scenes cleared so its own mode decides.
+			for _, key in ipairs(KEYS) do r:Set(key, Copy(ns.db[key]) or {}) end
+			ns.db.cooldownPlaceGroups, ns.db.cooldownBuffCells, ns.db.cooldownGroupCells = {}, {}, {}
+			ns.db.cooldownBuffGroups, ns.db.cooldownBuffMode = {}, {}
+			for _, item in ipairs(dots) do ns.db.cooldownBuffMode[ns.BaseSpell(item.id)] = "missing" end
+			Fresh()
+			ns.CooldownMissingPass()
+			r:Sleep(1.5)
+			local stats = ns.cooldownMissingStats
+			local refusedBefore = stats.refused
+			local function Shown(icon) return Plain(icon.IsShown, icon) == true and (Plain(icon.GetAlpha, icon) or 0) > 0.9 end
+			local function Faded(icon) return (Plain(icon.GetAlpha, icon) or 1) < 0.1 end
+			-- Before the fight: no DoT anywhere, each reminder up.
+			for _, item in ipairs(dots) do
+				r:Log("before the fight: " .. DotLine(item))
+				if not ns.CooldownBuffOnYou(item.icon) then
+					r:Verdict(Shown(item.icon), ("before the fight, no DoT on a target: %s's reminder shows"):format(
+						tostring(SpellName(item.id))))
+				end
+			end
+			r:Shot("Missing DoTs before the fight", { behind = _G.BuffIconCooldownViewer })
+			-- One fight: the DoT on, then a target without it.
+			local targetChanges, changedAt, looks = 0, nil, 0
+			local watcher = CreateFrame("Frame")
+			watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
+			watcher:SetScript("OnEvent", function()
+				targetChanges = targetChanges + 1
+				changedAt = looks
+			end)
+			r:WaitFor("Attack a mob or training dummy and put your DoT on it (Corruption). Fight about 10 seconds, then target another mob (or press Escape) for a few seconds, then end the fight.",
+				{ events = { "PLAYER_REGEN_DISABLED" } })
+			local function Fighting() return InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")) end
+			r:Sleep(0.3)
+			local offLooks, offOk, onLooks, onOk, lastLine = 0, 0, 0, 0, nil
+			local onTarget, units, switchBack = 0, {}, 0
+			local was, settle = {}, {}
+			local started = GetTime()
+			while Fighting() and GetTime() - started < 120 do
+				looks = looks + 1
+				for _, item in ipairs(dots) do
+					local icon = item.icon
+					local on = ns.CooldownBuffOnYou(icon)
+					local unit = AuraUnit(icon)
+					units[tostring(unit)] = (units[tostring(unit)] or 0) + 1
+					if on and unit == "target" then onTarget = onTarget + 1 end
+					-- (Off again right after a target change: the new target's.)
+					if was[icon] == true and not on and changedAt and looks - changedAt <= 3 then switchBack = switchBack + 1 end
+					if was[icon] ~= nil and was[icon] ~= on then settle[icon] = 2 end
+					was[icon] = on
+					if (settle[icon] or 0) > 0 then
+						settle[icon] = settle[icon] - 1
+					elseif on then
+						onLooks = onLooks + 1
+						if Faded(icon) then onOk = onOk + 1 end
+					else
+						offLooks = offLooks + 1
+						if Shown(icon) then offOk = offOk + 1 end
+					end
+				end
+				local parts = { ("target %s, changes %d"):format(tostring(ns.Flag(UnitExists("target"))), targetChanges) }
+				for _, item in ipairs(dots) do parts[#parts + 1] = DotLine(item) end
+				local line = "in the fight: " .. table.concat(parts, "; ")
+				if line ~= lastLine then
+					r:Log(line)
+					lastLine = line
+				end
+				-- (Way B if the icon never follows the target: our own read of
+				-- the target's debuffs in a fight. Probed once, the DoT likely on.)
+				if looks == 6 and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+					r:Probe("target's first debuff of yours (way B)", function()
+						local aura = C_UnitAuras.GetAuraDataByIndex("target", 1, "HARMFUL|PLAYER")
+						return type(aura) == "table" and aura.name or aura
+					end)
+				end
+				if looks == 4 or looks == 16 then r:Shot("Missing DoTs in the fight", { behind = _G.BuffIconCooldownViewer }) end
+				r:Sleep(0.5)
+			end
+			watcher:UnregisterAllEvents()
+			local unitParts = {}
+			for unit, count in pairs(units) do unitParts[#unitParts + 1] = unit .. "=" .. count end
+			table.sort(unitParts)
+			r:Log(("fight %.1f s, %d looks; off %d (shown %d), on %d (faded %d); on from the target %d; aura units %s; target changes %d, off again after one %d"):format(
+				GetTime() - started, looks, offLooks, offOk, onLooks, onOk, onTarget, table.concat(unitParts, " "), targetChanges, switchBack))
+			r:Verdict(looks >= 4, ("the fight was looked at: %d looks"):format(looks))
+			r:Verdict(onTarget > 0, ("the icon followed your DoT on the target (aura unit \"target\"): %d looks"):format(onTarget))
+			if onLooks > 0 then
+				r:Verdict(onOk == onLooks, ("DoT on the target: faded %d of %d looks"):format(onOk, onLooks))
+			else
+				r:Skip("the DoT was never on your target (cast it in the fight)")
+			end
+			if offLooks > 0 then
+				r:Verdict(offOk == offLooks, ("DoT not on the target: shown %d of %d looks"):format(offOk, offLooks))
+			else
+				r:Skip("the DoT was on your target the whole fight")
+			end
+			if targetChanges > 0 then
+				r:Verdict(switchBack > 0, ("a target without it: the reminder came back %d time(s) after %d target change(s)"):format(
+					switchBack, targetChanges))
+			else
+				r:Skip("no target change in the fight")
+			end
+			r:Verdict(stats.refused == refusedBefore, ("Shows refused in the fight: %d"):format(stats.refused - refusedBefore))
+			r:Sleep(2)
+			for _, item in ipairs(dots) do
+				local on = ns.CooldownBuffOnYou(item.icon)
+				r:Log("after the fight: " .. DotLine(item))
+				r:Verdict(on and Faded(item.icon) or not on and Shown(item.icon),
+					("after the fight: %s %s"):format(tostring(SpellName(item.id)), on and "on the target, faded" or "not on one, shown"))
+			end
+			r:Shot("Missing DoTs after the fight", { behind = _G.BuffIconCooldownViewer })
+		end },
+		{ key = "missingspell", title = "Missing on a spell: your DoT in the Essential or Utility bar, shown while it's off your target", run = function(r)
+			if InCombatLockdown() then return r:Skip("in a fight already: start out of one") end
+			if not ns.PageOn("handleCooldowns") then return r:Skip("the Cooldown Manager page is off") end
+			-- Your DoTs in the Essential and Utility bars, and what the game says of each.
+			local dots = {}
+			ns.EachCooldownIcon(function(icon, id, bar)
+				local group = ns.COOLDOWN_BAR_GROUPS[bar]
+				if not group or type(icon.cooldownID) == "nil" then return end
+				local info = ns.IconCooldownInfo and ns.IconCooldownInfo(icon)
+				local base = ns.BaseSpell(id)
+				r:Log(("  %s icon: spell %s (%s) hasAura=%s selfAura=%s aura kind=%s"):format(group, tostring(id),
+					tostring(SpellName(id)), tostring(type(info) == "table" and info.hasAura),
+					tostring(type(info) == "table" and info.selfAura), tostring(ns.CooldownSpellAura(base))))
+				if ns.CooldownSpellAura(base) == "target" then
+					dots[#dots + 1] = { icon = icon, id = base, group = group, bar = bar }
+				end
+			end, true)
+			if #dots == 0 then return r:Skip("no DoT in your Essential or Utility bar (put Corruption or Immolate there)") end
+			for _, key in ipairs(KEYS) do r:Set(key, Copy(ns.db[key]) or {}) end
+			ns.db.cooldownPlaceGroups, ns.db.cooldownSpellCells, ns.db.cooldownGroupCells = {}, {}, {}
+			local first = dots[1]
+			-- The page: Missing offered on the DoT's row, its tip; not on the bar's row.
+			test.spell, test.group = first.id, first.group
+			local grid, panel = OpenPage(r)
+			if not grid then return end
+			local row = RowOf(grid, first.id)
+			if not row then return r:Fail("no row for " .. tostring(SpellName(first.id))) end
+			Click(row.cells[#row.cells])
+			r:Sleep(0.3)
+			local missingBox
+			for _, box in ipairs(grid.choices) do
+				if box:IsShown() and box.value == "missing" then missingBox = box end
+			end
+			r:Verdict(missingBox ~= nil and missingBox.tip == ns.L["Shows only while it's off your target."],
+				("Missing offered on %s, tip: %s"):format(tostring(SpellName(first.id)), tostring(missingBox and missingBox.tip)))
+			-- (Its own mark, the broken ring in slot 8: it had the procs bolt, the
+			-- two read the same in run 8's shot.)
+			if missingBox and missingBox.icon then
+				-- (Eight values, corner by corner: UL x,y, LL x,y, UR x,y, LR x,y.
+				-- Run 9 took the second, UL y, for the right edge: a false FAIL.)
+				local left, _, _, _, right = missingBox.icon:GetTexCoord()
+				r:Verdict(math.abs((left or 0) - 8 / 16) < 0.001 and math.abs((right or 0) - 9 / 16) < 0.001,
+					("Missing's mark: the broken ring (texcoord %s-%s)"):format(tostring(left), tostring(right)))
+			end
+			-- (Hovered: its tip on screen. Its SetText errored, wrap as the alpha,
+			-- 2026-11-25: the run never hovered it.)
+			if missingBox then
+				local onEnter = missingBox:GetScript("OnEnter")
+				local okHover, hoverErr = pcall(onEnter or function() end, missingBox)
+				local tipLine = _G.GameTooltipTextLeft1
+				r:Verdict(okHover and GameTooltip:IsShown() and tipLine and tipLine:GetText() == missingBox.tip,
+					("hovered: its tip shows (%s)"):format(okHover and tostring(tipLine and tipLine:GetText()) or tostring(hoverErr)))
+			end
+			-- (The pop-up lies over the grid by design: no Overlaps on its choice.)
+			r:Shot("a DoT's choices: Missing (broken ring), its tip", { behind = panel })
+			if missingBox then
+				local onLeave = missingBox:GetScript("OnLeave")
+				if onLeave then pcall(onLeave, missingBox) end
+			end
+			if missingBox then Click(missingBox) end
+			r:Sleep(0.3)
+			r:Verdict(ns.db.cooldownMissingOnly[first.id] == true, "picked: saved as its own Missing")
+			local barRow = RowOf(grid, test.group)
+			if barRow then
+				Click(barRow.cells[#barRow.cells])
+				r:Sleep(0.3)
+				local onBar = false
+				for _, box in ipairs(grid.choices) do
+					if box:IsShown() and box.value == "missing" then onBar = true end
+				end
+				r:Verdict(not onBar, "no Missing on the bar's own row")
+				Click(barRow.cells[#barRow.cells])
+			end
+			pcall(HideUIPanel, SettingsPanel)
+			if r:Proven("cdmgrid run 8 (q2743, 2026-11-25, Forever): Agony, Corruption, Immolate in Essential faded 40/40 on the target, shown 45/45 off, back after a target change, 0 errors") then
+				return
+			end
+			-- Every DoT there set Missing; then one fight.
+			for _, item in ipairs(dots) do ns.db.cooldownMissingOnly[item.id] = true end
+			Fresh()
+			r:Sleep(1.5)
+			local function Target(icon) return (ns.CooldownReadyState(icon)) end
+			local function Alpha(icon) return Plain(icon.GetAlpha, icon) end
+			local function Line(item)
+				local icon = item.icon
+				return ("%s on=%s unit=%s target=%s alpha=%s"):format(tostring(SpellName(item.id)),
+					tostring(ns.CooldownBuffActive(icon)), tostring(AuraUnit(icon)), tostring(Target(icon)), tostring(Alpha(icon)))
+			end
+			for _, item in ipairs(dots) do
+				r:Log("before the fight: " .. Line(item))
+				r:Verdict(not ns.CooldownBuffActive(item.icon) and (Alpha(item.icon) or 0) > 0.9,
+					("before the fight, off any target: %s shows"):format(tostring(SpellName(item.id))))
+			end
+			local bars = {}
+			for _, item in ipairs(dots) do bars[#bars + 1] = _G[item.bar] end
+			r:Shot("Missing spells before the fight", { behind = bars })
+			local targetChanges, changedAt, looks = 0, nil, 0
+			local watcher = CreateFrame("Frame")
+			watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
+			watcher:SetScript("OnEvent", function()
+				targetChanges = targetChanges + 1
+				changedAt = looks
+			end)
+			r:WaitFor(("Attack a mob or training dummy and put %s on it. Fight about 10 seconds, then target another mob (or press Escape) for a few seconds, then end the fight."):format(
+				tostring(SpellName(first.id))), { events = { "PLAYER_REGEN_DISABLED" } })
+			local function Fighting() return InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")) end
+			r:Sleep(0.3)
+			-- (Its alpha eases over a moment: the fade's target counted, and the
+			-- alpha two looks after a change.)
+			local offLooks, offOk, onLooks, onOk, lastLine, onTarget, switchBack = 0, 0, 0, 0, nil, 0, 0
+			local was, settle = {}, {}
+			local started = GetTime()
+			while Fighting() and GetTime() - started < 120 do
+				looks = looks + 1
+				for _, item in ipairs(dots) do
+					local icon = item.icon
+					local on = ns.CooldownBuffActive(icon)
+					if on and AuraUnit(icon) == "target" then onTarget = onTarget + 1 end
+					if was[icon] == true and not on and changedAt and looks - changedAt <= 3 then switchBack = switchBack + 1 end
+					if was[icon] ~= nil and was[icon] ~= on then settle[icon] = 2 end
+					was[icon] = on
+					if (settle[icon] or 0) > 0 then
+						settle[icon] = settle[icon] - 1
+					elseif on then
+						onLooks = onLooks + 1
+						if Target(icon) == 0 and (Alpha(icon) or 1) < 0.1 then onOk = onOk + 1 end
+					else
+						offLooks = offLooks + 1
+						if Target(icon) ~= 0 and (Alpha(icon) or 0) > 0.9 then offOk = offOk + 1 end
+					end
+				end
+				local parts = { ("target %s, changes %d"):format(tostring(ns.Flag(UnitExists("target"))), targetChanges) }
+				for _, item in ipairs(dots) do parts[#parts + 1] = Line(item) end
+				local line = "in the fight: " .. table.concat(parts, "; ")
+				if line ~= lastLine then
+					r:Log(line)
+					lastLine = line
+				end
+				if looks == 4 or looks == 16 then r:Shot("Missing spells in the fight", { behind = bars }) end
+				r:Sleep(0.5)
+			end
+			watcher:UnregisterAllEvents()
+			r:Log(("fight %.1f s, %d looks; off %d (shown %d), on %d (faded %d); on from the target %d; target changes %d, off again after one %d"):format(
+				GetTime() - started, looks, offLooks, offOk, onLooks, onOk, onTarget, targetChanges, switchBack))
+			r:Verdict(looks >= 4, ("the fight was looked at: %d looks"):format(looks))
+			r:Verdict(onTarget > 0, ("the Essential/Utility icon held your DoT on the target: %d looks"):format(onTarget))
+			if onLooks > 0 then
+				r:Verdict(onOk == onLooks, ("DoT on the target: faded %d of %d looks"):format(onOk, onLooks))
+			else
+				r:Skip("the DoT was never on your target (cast it in the fight)")
+			end
+			if offLooks > 0 then
+				r:Verdict(offOk == offLooks, ("DoT not on the target: shown %d of %d looks"):format(offOk, offLooks))
+			else
+				r:Skip("the DoT was on your target the whole fight")
+			end
+			if targetChanges > 0 then
+				r:Verdict(switchBack > 0, ("a target without it: back %d time(s) after %d target change(s)"):format(switchBack, targetChanges))
+			else
+				r:Skip("no target change in the fight")
+			end
+			r:Sleep(2)
+			for _, item in ipairs(dots) do
+				local on = ns.CooldownBuffActive(item.icon)
+				r:Log("after the fight: " .. Line(item))
+				r:Verdict(on and (Alpha(item.icon) or 1) < 0.1 or not on and (Alpha(item.icon) or 0) > 0.9,
+					("after the fight: %s %s"):format(tostring(SpellName(item.id)), on and "on the target, faded" or "not on one, shown"))
+			end
+			r:Shot("Missing spells after the fight", { behind = bars })
 		end },
 	},
 })

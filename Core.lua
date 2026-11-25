@@ -5068,6 +5068,7 @@ function ns.EnsureTables()
 	ns.db.cooldownNeedsPower = ns.db.cooldownNeedsPower or {} -- ...spell ID -> true: ready needs its resources
 	ns.db.cooldownReadyAnyTime = ns.db.cooldownReadyAnyTime or {} -- ...spell ID -> true: When ready out of fights too
 	ns.db.cooldownProcOnly = ns.db.cooldownProcOnly or {} -- ...spell ID -> true: only while it glows (a proc)
+	ns.db.cooldownMissingOnly = ns.db.cooldownMissingOnly or {} -- ...spell ID -> true: only while its aura is off (a DoT off your target)
 	ns.db.cooldownAlwaysShow = ns.db.cooldownAlwaysShow or {} -- ...spell ID -> true: Always, whatever its group's
 	ns.db.cooldownNeverShow = ns.db.cooldownNeverShow or {} -- ...spell ID -> true: Never, faded all the time
 	ns.db.cooldownGroupDefaults = ns.db.cooldownGroupDefaults or {} -- ...group -> { mode, power, early, anyTime }

@@ -16,8 +16,10 @@
 local ADDON_NAME, ns = ...
 local L = ns.L
 
+-- (Missing on a spell, 2026-11-25: while its aura's off you or your target, a
+-- DoT's reminder; offered only on a spell that leaves one, ns.CooldownSpellAura.)
 local MODES = { { "always", L["Always"] }, { "ready", L["When ready"] }, { "recharge", L["While recharging"] },
-	{ "proc", L["When it procs"] }, { "never", L["Never"] } }
+	{ "proc", L["When it procs"] }, { "missing", L["Missing"] }, { "never", L["Never"] } }
 -- (Missing: shown while the buff is off you, a reminder; Missing: each, on a
 -- group of buffs that count as one: UI/CooldownMissing.lua, 2026-11-23.)
 local BUFF_MODES = { { "always", L["Always"] }, { "combat", L["In combat"] }, { "quiet", L["Out of combat"] },
@@ -32,7 +34,7 @@ for _, mode in ipairs(BUFF_MODES) do FULL[mode[1]] = mode[2] end
 local BUFF_TAB = { buffs = true, bars = true, otherbuffs = true }
 local NO_LOOK = { other = true, otherbuffs = true }
 local OWN_MODES = { ready = "cooldownReadyOnly", recharge = "cooldownRechargeOnly", proc = "cooldownProcOnly",
-	always = "cooldownAlwaysShow", never = "cooldownNeverShow" }
+	missing = "cooldownMissingOnly", always = "cooldownAlwaysShow", never = "cooldownNeverShow" }
 ns.COOLDOWN_SHORT_MODE = SHORT
 
 -- Sizes (px).
@@ -340,7 +342,8 @@ end
 -- icon (Media/make_cdm_icons.py: Textures/CdmIcons, Textures/CdmDisc).
 local TEXTURES = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Textures\\"
 local ICON_AT = { always = 0, ready = 1, recharge = 2, proc = 3, never = 4, hidden = 4, combat = 5, quiet = 6, add = 7,
-	missing = 3, missingeach = 3 } -- (Missing: the procs spark for now, its own icon later)
+	missing = 8, missingeach = 8 } -- (Missing: a broken ring; the procs bolt till 2026-11-25 read the same as procs)
+local ICON_SLOTS = 16 -- (the strip's slots, 512 px: Media/make_cdm_icons.py)
 local MODE_COLOR = { always = { 0.9, 0.88, 0.83 }, ready = { 0.45, 0.85, 0.48 }, recharge = { 0.42, 0.71, 1 },
 	proc = { 1, 0.69, 0.33 }, never = { 1, 0.48, 0.42 }, hidden = { 1, 0.48, 0.42 }, combat = { 1, 0.6, 0.35 },
 	quiet = { 0.66, 0.72, 1 }, add = { 0.85, 0.83, 0.78 }, missing = { 1, 0.85, 0.35 },
@@ -472,7 +475,7 @@ function SetPill(b, mode, text, how, bright, compact, blank)
 	b.text:ClearAllPoints()
 	local x = 8
 	if at then
-		b.icon:SetTexCoord(at / 8, (at + 1) / 8, 0, 1)
+		b.icon:SetTexCoord(at / ICON_SLOTS, (at + 1) / ICON_SLOTS, 0, 1)
 		b.icon:Show()
 		x = x + 16
 	else
@@ -554,7 +557,7 @@ end
 -- from old situations) moved onto its base ID, the one the page edits; one
 -- already on the base wins. Live reads took the override first, so the page
 -- and the icon disagreed (audit, 2026-11-22). Run as the page lists spells.
-local BASE_TABLES = { "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow",
+local BASE_TABLES = { "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownMissingOnly", "cooldownAlwaysShow",
 	"cooldownNeverShow", "cooldownNeedsPower", "cooldownEarlyOn", "cooldownReadyEarly", "cooldownReadyAnyTime",
 	"cooldownFlashReady", "cooldownRowSettings", "cooldownSpellCells", "cooldownBuffMode", "cooldownBuffCells" }
 function ns.CooldownKeysToBase()
@@ -629,6 +632,13 @@ function ns.CooldownGrid(parent, opts)
 	end
 	-- (On the grid too: Layout is at Lua's 60-upvalue cap.)
 	grid.IsGroup = IsGroup
+	-- Missing's tip on a row: off you, or off your target for a DoT.
+	function grid.MissingTip(key)
+		if BUFF_TAB[state.tab] then return L["Shows only while the buff is off you, or off your target for a DoT."] end
+		local aura = ns.CooldownSpellAura and ns.CooldownSpellAura(key)
+		if aura == "self" then return L["Shows only while its buff is off you."] end
+		return L["Shows only while it's off your target."]
+	end
 	-- A mode's words; on a group's row Missing says it's any one of them.
 	local function ModeText(mode, key, short)
 		if mode == "missing" and IsGroup(key) then return short and L["Missing: any"] or L["Missing: any one"] end
@@ -636,7 +646,17 @@ function ns.CooldownGrid(parent, opts)
 	end
 	-- (Missing: each only on a group's row: one buff has nothing to tell apart.)
 	local function ModesFor(current, key)
-		if not BUFF_TAB[state.tab] then return MODES end
+		if not BUFF_TAB[state.tab] then
+			-- (Missing: on a spell that leaves an aura alone; not on the bar's row
+			-- or the ticked rows' bar, where most spells have none.)
+			local aura = key ~= nil and key ~= state.tab and ns.CooldownSpellAura and ns.CooldownSpellAura(key)
+			if aura or current == "missing" then return MODES end
+			local list = {}
+			for _, mode in ipairs(MODES) do
+				if mode[1] ~= "missing" then list[#list + 1] = mode end
+			end
+			return list
+		end
 		local list = {}
 		for _, mode in ipairs(BUFF_MODES) do
 			local offered = (mode[1] ~= "combat" and mode[1] ~= "quiet") or mode[1] == current
@@ -992,7 +1012,7 @@ function ns.CooldownGrid(parent, opts)
 		end
 		local mark = addCard:CreateTexture(nil, "ARTWORK")
 		mark:SetTexture(TEXTURES .. "CdmIcons")
-		mark:SetTexCoord(0, 1 / 8, 0, 1)
+		mark:SetTexCoord(0, 1 / ICON_SLOTS, 0, 1)
 		mark:SetVertexColor(GREY[1], GREY[2], GREY[3])
 		mark:SetSize(16, 16)
 		mark:SetPoint("LEFT", addCard, "LEFT", 10, 0)
@@ -1530,6 +1550,17 @@ function ns.CooldownGrid(parent, opts)
 			if self.value ~= "ready" or KindOf(state.open.key) == "buff" or col.look then state.open = nil end
 			Changed()
 		end)
+		-- (Its tip, when the choice has one: Missing says off what.)
+		box:HookScript("OnEnter", function(self)
+			if not self.tip then return end
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			-- (r, g, b, alpha, then wrap: true as the 5th errored, "bad argument #5", 2026-11-25.)
+			GameTooltip:SetText(self.tip, 1, 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		box:HookScript("OnLeave", function(self)
+			if GameTooltip:GetOwner() == self then GameTooltip:Hide() end
+		end)
 		choices[i] = box
 		return box
 	end
@@ -1647,7 +1678,8 @@ function ns.CooldownGrid(parent, opts)
 
 	-- A row's Otherwise if it had none of its own (its bar's, or the Smart
 	-- pick): its own mode set aside a moment, read, put back.
-	local OWN_TABLES = { "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow" }
+	local OWN_TABLES = { "cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownMissingOnly",
+		"cooldownAlwaysShow", "cooldownNeverShow" }
 	function FollowedOtherwise(kind, key)
 		local d = db()
 		if kind == "buff" then
@@ -1717,6 +1749,7 @@ function ns.CooldownGrid(parent, opts)
 		for i, item in ipairs(list) do
 			local box = Choice(i)
 			box.value = item[1]
+			box.tip = item[1] == "missing" and grid.MissingTip(key) or nil
 			local chosen = (item[1] == nil and own == nil) or (item[1] ~= nil and own == item[1])
 			box:SetWidth(POP_W - 12)
 			-- (Picked: filled light, dark words: a grey band read as the hover's.)

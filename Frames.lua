@@ -10468,7 +10468,8 @@ function ns.CooldownGroupSettings(group, own)
 	return set.mode or builtIn or "always", set.power, set.early, set.anyTime
 end
 
--- A spell's mode ("always", "ready", "recharge", "proc", "never"), whether it's its
+-- A spell's mode ("always", "ready", "recharge", "proc", "missing": while its
+-- aura is off, a DoT off your target, "never"), whether it's its
 -- own (else its group's), and for "ready" its Resources, Show early on,
 -- seconds (nil: the default share) and Out of fights (shown when ready out of
 -- fights too, not faded). Set under what it's turned into (from
@@ -10509,7 +10510,7 @@ function ns.CooldownSpellMode(id, group, own)
 		return ruled or barCell, ruled and true or false, set.power, true, set.early, set.anyTime
 	end
 	if not (db.cooldownReadyOnly[id] or db.cooldownRechargeOnly[id] or db.cooldownProcOnly[id]
-		or db.cooldownAlwaysShow[id] or db.cooldownNeverShow[id]) then
+		or db.cooldownMissingOnly[id] or db.cooldownAlwaysShow[id] or db.cooldownNeverShow[id]) then
 		id = ns.BaseSpell(id)
 	end
 	if db.cooldownReadyOnly[id] then
@@ -10519,6 +10520,8 @@ function ns.CooldownSpellMode(id, group, own)
 		return "recharge", true
 	elseif db.cooldownProcOnly[id] then
 		return "proc", true
+	elseif db.cooldownMissingOnly[id] then
+		return "missing", true
 	elseif db.cooldownAlwaysShow[id] then
 		return "always", true
 	elseif db.cooldownNeverShow[id] then
@@ -12144,6 +12147,10 @@ local function ReadyTarget(icon, id, bar)
 		readyTargets[icon] = (left and left > 0) and 1 or 0
 	elseif mode == "proc" then
 		readyTargets[icon] = ns.SpellGlowing(id, icon) and 1 or 0
+	elseif mode == "missing" then
+		-- (Its aura on you or your target: the game's icon holds it, its type
+		-- plain in fights: rule forever.cooldownviewer.tracked-dot-follows-target.)
+		readyTargets[icon] = ns.CooldownBuffActive(icon) and 0 or 1
 	elseif mode == "never" then
 		readyTargets[icon] = 0
 		return -- (Never: hidden, its flash too)
@@ -12186,7 +12193,7 @@ function UpdateReadyOnly(elapsed, now)
 		wipe(readyTargets)
 		local db = ns.db
 		local any = next(db.cooldownReadyOnly) or next(db.cooldownRechargeOnly) or next(db.cooldownProcOnly)
-			or next(db.cooldownNeverShow) or next(db.cooldownBuffMode) or ns.CooldownRowAny("notBuff") or ns.CooldownRulesAny()
+			or next(db.cooldownMissingOnly) or next(db.cooldownNeverShow) or next(db.cooldownBuffMode) or ns.CooldownRowAny("notBuff") or ns.CooldownRulesAny()
 		for _, group in pairs(ns.COOLDOWN_BAR_GROUPS) do
 			any = any or ns.CooldownGroupSettings(group) ~= "always"
 		end
@@ -12544,6 +12551,9 @@ function ns.ReportCooldowns()
 				elseif mode == "proc" then
 					print(("    when it procs%s: %s"):format(from,
 						ns.SpellGlowing(id, part) and "glowing, shown" or "no glow, faded"))
+				elseif mode == "missing" then
+					print(("    missing%s: %s"):format(from,
+						ns.CooldownBuffActive(part) and "its aura is up, faded" or "its aura is off, shown"))
 				elseif mode == "never" then
 					print(("    never%s: faded"):format(from))
 				end

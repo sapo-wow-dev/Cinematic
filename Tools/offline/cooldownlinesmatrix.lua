@@ -64,7 +64,8 @@ local function Be(place, fight, boss)
 end
 
 local TABLES = { "cooldownPlaceGroups", "cooldownSpellCells", "cooldownBuffCells", "cooldownGroupCells",
-	"cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownAlwaysShow", "cooldownNeverShow",
+	"cooldownReadyOnly", "cooldownRechargeOnly", "cooldownProcOnly", "cooldownMissingOnly", "cooldownAlwaysShow",
+	"cooldownNeverShow",
 	"cooldownBuffMode", "cooldownGroupDefaults" }
 local function Fresh()
 	for _, name in ipairs(TABLES) do db[name] = {} end
