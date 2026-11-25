@@ -346,6 +346,9 @@ function ns.CloseCameraWheel()
 		wheel:Hide()
 	end
 end
+-- (A loading screen closes it: its key let go during the load never came
+-- in, so it stayed open over the whole screen, held, after it. Audit 2026-11-25.)
+ns.OnLoadingScreen(ns.CloseCameraWheel)
 
 -- For the master wheel: why it can't open now (a fight), or nil.
 function ns.CameraWheelCant()
