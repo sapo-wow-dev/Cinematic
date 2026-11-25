@@ -40,6 +40,9 @@ KIT = os.path.join(ROOT, "Tools", "addon-kit")
 FORMAT = 1
 OWNED_PREFIXES = ("frame.", "addons.")
 # Frames that follow the game's state whatever addon is loaded (context.state's fields).
+# Whether a tooltip is up: the mouse's, never an addon's doing (its look is
+# still compared: its parent, its own alpha set by an addon... are other fields).
+MOUSE_SHOWN = re.compile(r"Tooltip\w*[ .](shown|visible|alpha)$", re.I)
 STATE_FRAMES = {
     "pet": (r"\bpet", r"PetFrame", r"PetActionBar", r"PetActionButton"),
     "vehicle": (r"vehicle", r"OverrideActionBar", r"PossessBar"),
@@ -233,6 +236,12 @@ def compare(base, run, addon, expects, risk=None):
             why = declared(probe, field)
             if not why and any(v.search(probe + " " + field) for v in volatile):
                 notes.append("can't tell: %s %s: %s then, %s now (the game's state moved)" % (probe, field, was, now))
+                continue
+            # (A tooltip is up while the mouse rests on something, whatever addon
+            # is loaded: GameTooltip up in the baseline's stage, not in
+            # Guidelime's, run 20261125142635.)
+            if not why and MOUSE_SHOWN.search(probe + " " + field):
+                notes.append("can't tell: %s %s: %s then, %s now (shows with the mouse)" % (probe, field, was, now))
                 continue
             if not why and was == "(none)" and probe in owned:
                 why = "the addon's own row (an owned probe)"
@@ -486,6 +495,14 @@ def selftest():
     text = out.getvalue()
     check("all: an addon from an older run isn't judged against a newer baseline",
           code == 0 and "--- Same" in text and "--- Old" not in text and "other runs kept: 1" in text, text[-300:])
+    tbase = ["H format=1 client=forever build=16001 label=x addons=", "R touch.GameTooltip	shown	true	v1",
+             "R touch.GameTooltip	parent	UIParent	v1", "D 1"]
+    trun = ["H format=1 client=forever build=16001 label=x addons=Fake", "R touch.GameTooltip	shown	false	v1",
+            "R touch.GameTooltip	parent	FakeHolder	v1", "D 1"]
+    fails, _, notes = compare(Run(tbase), Run(trun), "Fake", [])
+    check("a tooltip up in one stage only: can't tell; its parent changed still FAILs",
+          not any("shown" in f for f in fails) and any("parent" in f for f in fails)
+          and any("shows with the mouse" in n for n in notes), "; ".join(fails))
     check("expectations read across lines", any(e[2] == "linesOnly" and "2979131" in e[3] for e in expects))
     print("diff selftest: %d FAIL" % len(bad))
     return 1 if bad else 0
