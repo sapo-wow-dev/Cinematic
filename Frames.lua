@@ -5016,6 +5016,80 @@ do
 		end
 		factsWatch:SetScript("OnEvent", function() factsAt = nil end)
 	end
+	-- Facts the game announces (the 2026-11-25 audit, fix cards
+	-- Tools/audits/2026-11-25-event-fact-*.md): asked when one of their
+	-- events comes, not on every working out. Each (ns.AddEventFact): name,
+	-- fields (its rule words), events and unitEvents (the player's), read(f,
+	-- entry) setting its fields, and always (other code reads its fields from
+	-- the facts: worked out whether a rule names them or not). Asked on the
+	-- next working out after its event, and again on each one for
+	-- ns.eventFacts.settle seconds after (an answer the game sets a moment
+	-- after its event); also when never asked, or last left out while no rule
+	-- named it. A field no rule names: false, not asked (ns.factsUsed).
+	-- PLAYER_ENTERING_WORLD for each (the game's answers at login and after a
+	-- loading screen). (All on ns: this main chunk is at its 200 locals.)
+	ns.eventFacts = { list = {}, byEvent = {}, watch = CreateFrame("Frame"), settle = 0.5 }
+	function ns.AddEventFact(entry)
+		local ef = ns.eventFacts
+		entry.fresh, entry.settleTill = false, -math.huge
+		ef.list[#ef.list + 1] = entry
+		local function Listen(event, unit)
+			if not ef.byEvent[event] then
+				ef.byEvent[event] = {}
+				if unit then
+					pcall(ef.watch.RegisterUnitEvent, ef.watch, event, unit)
+				else
+					pcall(ef.watch.RegisterEvent, ef.watch, event)
+				end
+			end
+			table.insert(ef.byEvent[event], entry)
+		end
+		Listen("PLAYER_ENTERING_WORLD")
+		for _, event in ipairs(entry.events or {}) do Listen(event) end
+		for _, event in ipairs(entry.unitEvents or {}) do Listen(event, "player") end
+	end
+	-- An entry's answer may have changed (its event; a debug command such as
+	-- /cine debug group): asked again on the next working out. nil: every entry.
+	function ns.EventFactChanged(name)
+		local till = GetTime() + ns.eventFacts.settle
+		for _, entry in ipairs(ns.eventFacts.list) do
+			if name == nil or entry.name == name then entry.fresh, entry.settleTill = false, till end
+		end
+		factsAt = nil
+	end
+	ns.eventFacts.watch:SetScript("OnEvent", function(_, event)
+		local till = GetTime() + ns.eventFacts.settle
+		for _, entry in ipairs(ns.eventFacts.byEvent[event] or {}) do
+			entry.fresh, entry.settleTill = false, till
+		end
+		factsAt = nil
+	end)
+	-- In each full working out of ns.RuleFacts (Want: a rule names the field).
+	function ns.ReadEventFacts(f, Want, now)
+		for _, entry in ipairs(ns.eventFacts.list) do
+			local wanted = entry.always
+			if not wanted then
+				for _, field in ipairs(entry.fields) do
+					if Want(field) then wanted = true break end
+				end
+			end
+			if not wanted then
+				for _, field in ipairs(entry.fields) do f[field] = false end
+				entry.fresh = false
+			elseif not entry.fresh or now <= entry.settleTill then
+				entry.read(f, entry)
+				entry.fresh = true
+			end
+		end
+	end
+	-- Your class: true for its word, false for the others. It never changes
+	-- in a session: asked once (and after a loading screen).
+	ns.AddEventFact({ name = "class", fields = { "warrior", "paladin", "hunter", "rogue", "priest", "deathknight",
+		"shaman", "mage", "warlock", "monk", "druid", "demonhunter", "evoker" }, read = function(f, entry)
+		local _, class = UnitClass("player")
+		for _, field in ipairs(entry.fields) do f[field] = false end
+		if type(class) == "string" then f[class:lower()] = true end
+	end })
 	-- (target, enemy and friendly as worked out, before SetTargetWords.)
 	local anyTarget, enemyTarget = false, false -- (enemyTarget nil: the game won't say)
 	-- target, enemy and friendly mean what the grids' Enemy targeted and
@@ -5227,9 +5301,8 @@ do
 		end
 		local role = (Want("tank") or Want("healer") or Want("damage")) and ns.PlayerRole() or nil
 		facts.tank, facts.healer, facts.damage = role == "TANK", role == "HEALER", role == "DAMAGER"
-		-- (Your class: true for its word; the others never set, so nil.)
-		local _, class = UnitClass("player")
-		if class and Want(class:lower()) then facts[class:lower()] = true end
+		-- (Class and the rest the game announces by event: ns.AddEventFact.)
+		ns.ReadEventFacts(facts, Want, now)
 		-- (The stamp moves only when a fact did: standing still, the rows'
 		-- answers stay kept across workings out.)
 		local changed = false
