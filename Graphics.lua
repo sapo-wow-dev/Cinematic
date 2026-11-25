@@ -186,7 +186,11 @@ function ns.ApplyGraphicsPlus()
 			-- (Its tick through the switch tree: off with its tab on the page,
 			-- the page, or the Atmosphere hub. Audit 2026-11-22: a tab off did
 			-- nothing, only the page's switch was read.)
-			local wanted = ns.Setting("graphicsPlus") and ns.Setting(setting.key .. "On") and db[setting.key] or nil
+			-- (And none while Load Atmosphere is unticked, before the reload: put
+			-- back then, ns.SetModuleWanted, it must stay back, as after the
+			-- reload nothing is here to put it back. Audit 2026-11-25.)
+			local wanted = ns.ModuleWanted("atmosphere") and ns.Setting("graphicsPlus")
+				and ns.Setting(setting.key .. "On") and db[setting.key] or nil
 			ApplyOne(setting.cvar, wanted, false, saved, written, not setting.console and setting.menu or nil,
 				setting.max)
 			for _, cvar in ipairs(setting.also or {}) do
