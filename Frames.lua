@@ -5357,6 +5357,11 @@ do
 		events = { "PLAYER_REGEN_ENABLED" }, read = function(f)
 		f.afk = ns.Flag(UnitIsAFK("player")) and true or false
 	end })
+	-- Resting (an inn or a capital): after PLAYER_UPDATE_RESTING.
+	ns.AddEventFact({ name = "resting", fields = { "resting" }, events = { "PLAYER_UPDATE_RESTING" },
+		read = function(f)
+		f.resting = IsResting and ns.Flag(IsResting()) and true or false
+	end })
 	-- (target, enemy and friendly as worked out, before SetTargetWords.)
 	local anyTarget, enemyTarget = false, false -- (enemyTarget nil: the game won't say)
 	-- target, enemy and friendly mean what the grids' Enemy targeted and
@@ -5524,7 +5529,7 @@ do
 		facts.swimming = Want("swimming") and IsSwimming and ns.Flag(IsSwimming()) and true or false
 		facts.flying = Want("flying") and IsFlying and ns.Flag(IsFlying()) and true or false
 		facts.outdoors = Want("outdoors") and IsOutdoors and ns.Flag(IsOutdoors()) and true or false
-		facts.resting = Want("resting") and IsResting and ns.Flag(IsResting()) and true or false
+		-- (resting: by event, ns.AddEventFact.)
 		facts.stealthed = Want("stealthed") and IsStealthed and ns.Flag(IsStealthed()) and true or false
 		facts.sitting = Want("sitting") and ns.IsSitting ~= nil and ns.IsSitting() and true or false
 		facts.gliding = Want("gliding") and ns.isRetail and ns.GlidingSpeed() ~= nil or false

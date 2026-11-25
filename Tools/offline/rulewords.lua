@@ -285,7 +285,10 @@ local function RunClient(client)
 	local function Flags() wow.Fire("PLAYER_FLAGS_CHANGED", "player") end
 	Word("/afk", function() g.afk = true Flags() end, function() g.afk = false Flags() end, "afk")
 	Word("building", function() g.outdoors = false end, function() g.outdoors = true end, "outdoors")
-	Word("inn", function() g.resting = true end, function() g.resting = false end, "resting")
+	-- (An inn: the game sends PLAYER_UPDATE_RESTING, which the resting word
+	-- waits for since fix card 2026-11-25-event-fact-resting.md.)
+	local function Resting() wow.Fire("PLAYER_UPDATE_RESTING") end
+	Word("inn", function() g.resting = true Resting() end, function() g.resting = false Resting() end, "resting")
 	-- Stealth: skipped.
 	Check("stealth step", Wait("Stealth"))
 	ns.HandleSlash("debug rulewords skip")
