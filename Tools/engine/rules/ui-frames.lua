@@ -548,6 +548,18 @@ return {
 
   -- Minimap ----------------------------------------------------------------
   {
+    id = "forever.minimap.addon-buttons-by-taint",
+    area = "minimap",
+    clients = { "forever" },
+    api = { "Minimap:GetChildren", "issecurevariable", "LibDBIcon10_" },
+    when = "always",
+    rule = "Addon buttons on the minimap's edge are the Minimap's own children: LibDBIcon's (LibDBIcon10_<addon>) and hand-made ones (CreateFrame(\"Button\", \"<Addon>MinimapButton\", Minimap): Journey Tracker, Panorama, MSBT, Battle Text Forever, EllesmereUI). The game's own children of Minimap (source export) are unnamed (ZoomIn, ZoomOut, ZoomHitArea, the instance difficulty) or named Frames (MinimapBackdrop, HybridMinimap); its named buttons (ExpansionLandingPageMinimapButton) sit in MinimapBackdrop, not on Minimap. Addon pins can be named too: Frames (QuestieFrameGroup, ShortestPathForeverMinimapPins) or Buttons (GatherMatePin<n>). issecurevariable(name) on a frame's global name gives false + the addon for a frame an addon made (Dev/AddonTest.lua's coverage list relies on it).",
+    works = { "a named Button on Minimap whose name issecurevariable calls insecure = an addon's button (pins named *Pin<n> excepted)" },
+    status = "inferred",
+    proof = "BlizzardInterfaceCode export (Blizzard_Minimap, Blizzard_HybridMinimap) and a scan of the _forever_ AddOns folder, 2026-11-25; in game: /cine debug addontest JourneyTracker",
+    source = "fix card Tools/audits/2026-11-25-minimap-addon-buttons.md",
+  },
+  {
     id = "forever.minimap.soft-cursor-sweep",
     area = "minimap",
     clients = { "forever" },

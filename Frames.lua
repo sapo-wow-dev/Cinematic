@@ -1573,6 +1573,35 @@ do
 		end)
 	end
 
+	-- An addon's button on the minimap's edge: LibDBIcon's (LibDBIcon10_<addon>)
+	-- or one an addon made itself, as Journey Tracker, Panorama and MSBT do
+	-- (missed till 2026-11-25: they stayed up with the Addon buttons row
+	-- hidden). That's a named Button the game's taint record says an addon
+	-- made, so never the game's own. Not ours (its own line, gathered or not),
+	-- and not a pin: GatherMate's GatherMatePin<n> are named Buttons on the
+	-- map too; unnamed buttons can't be told from pins at all. (Asked once per
+	-- frame: the map's children include every pin an addon put on it.)
+	local addonButtonVerdict = setmetatable({}, { __mode = "k" })
+	local function IsAddonMapButton(frame)
+		local verdict = addonButtonVerdict[frame]
+		if verdict ~= nil then return verdict end
+		verdict = false
+		local ok, name = pcall(frame.GetName, frame)
+		if ok and type(name) == "string" and not (issecretvalue and issecretvalue(name)) then
+			if name:find("^LibDBIcon10_") then
+				verdict = true
+			elseif name ~= "CinematicMinimapButton" and not name:find("Pins?%d*$")
+				and type(issecurevariable) == "function" and not IsForbidden(frame) then
+				local okKind, kind = pcall(frame.GetObjectType, frame)
+				local okSecure, secure = pcall(issecurevariable, name)
+				verdict = okKind and kind == "Button" and okSecure and secure == false
+			end
+		end
+		addonButtonVerdict[frame] = verdict
+		return verdict
+	end
+	ns.IsAddonMapButton = IsAddonMapButton
+
 	local HEADER_GROUPS = { "minimapheader", "minimapzone", "minimaptracking", "minimapdial", "minimapaddons",
 		"minimapcoords", "minimapmail" }
 	local coordsFound -- (the coordinates' frame once found: not looked for again while it's faded)
@@ -1624,14 +1653,14 @@ do
 		else
 			AddFrame(ours, "minimapaddons")
 		end
-		-- Addons' buttons on the minimap (LibDBIcon's: LibDBIcon10_<addon>).
-		-- One an addon gathering minimap buttons took after we found it (no
-		-- longer the map's child) is let go: it shows in that addon's bar, which
-		-- must never fade a button of its own.
+		-- Addons' buttons on the minimap (IsAddonMapButton: LibDBIcon's and
+		-- hand-made ones). One an addon gathering minimap buttons took after we
+		-- found it (no longer the map's child) is let go: it shows in that
+		-- addon's bar, which must never fade a button of its own.
 		local gathered
 		for _, entry in ipairs(ns.managed) do
 			local frame = entry.frame
-			if entry.group == "minimapaddons" and type(entry.name) == "string" and entry.name:find("^LibDBIcon10_")
+			if entry.group == "minimapaddons" and frame ~= ours and IsAddonMapButton(frame)
 				and type(Minimap) == "table" and frame:GetParent() ~= Minimap then
 				gathered = gathered or {}
 				gathered[#gathered + 1] = frame
@@ -1642,8 +1671,7 @@ do
 		end
 		if type(Minimap) == "table" and Minimap.GetChildren and not leftAlone.Minimap and GroupHandled("minimapaddons") then
 			for _, child in ipairs({ Minimap:GetChildren() }) do
-				local ok, name = pcall(child.GetName, child)
-				if ok and type(name) == "string" and name:find("^LibDBIcon10_") and not seen[child] then
+				if not seen[child] and IsAddonMapButton(child) then
 					-- (Its own alpha followed, hooked: shown only on hover, it's 0 or 1.)
 					TameIconFade(child)
 					ownAlphaFrames[child], hookedFrames[child] = true, true
@@ -1666,9 +1694,8 @@ do
 			end
 			if depth > 0 then
 				for _, child in ipairs({ frame:GetChildren() }) do
-					local okName, name = pcall(child.GetName, child)
-					-- (Not the map's pins and addon buttons.)
-					if not (okName and type(name) == "string" and name:find("^LibDBIcon10_")) then
+					-- (Not the map's addon buttons.)
+					if not IsAddonMapButton(child) then
 						FindCoords(child, depth - 1)
 					end
 				end
@@ -12857,7 +12884,8 @@ end
 -- there, biggest first, with owner, layer, art, color and alpha. For a dark
 -- band a player still sees there with the header's rows hidden (2026-11-12).
 -- /cine debug mapicon: our minimap button and every LibDBIcon button (other
--- addons', and the copies Leatrix Plus makes of buttons like ours), each
+-- addons', and the copies Leatrix Plus makes of buttons like ours) or other
+-- addon's own button on the map (ns.IsAddonMapButton), each
 -- with where it is, its alpha and whether the fade has it, plus the map's.
 -- For "our minimap icon isn't fading with the minimap" (2026-11-12).
 function ns.ReportMinimapIcon()
@@ -12888,7 +12916,10 @@ function ns.ReportMinimapIcon()
 	while frame do
 		if not IsForbidden(frame) then
 			local ok, name = pcall(frame.GetName, frame)
-			if ok and type(name) == "string" and name:find("^LibDBIcon10_") then ns.Print("  " .. Line(name, frame)) end
+			if ok and type(name) == "string" and (name:find("^LibDBIcon10_")
+				or (frame:GetParent() == Minimap and ns.IsAddonMapButton(frame))) then
+				ns.Print("  " .. Line(name, frame))
+			end
 		end
 		frame = EnumerateFrames(frame)
 	end
