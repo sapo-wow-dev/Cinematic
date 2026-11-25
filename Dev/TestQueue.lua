@@ -726,13 +726,42 @@ Kit.onFinish = function(run, done, summary)
 	C_Timer.After(GAP, Q.Next)
 end
 
--- Runs the given entries (default: every queued one) in order.
+-- Which group a test runs in (the user, 2026-11-25: "stuff that is quick and
+-- doesnt require a reload could go first"): 1 hands off (and names passed
+-- over), 2 needs you, 3 has a Reload click of its own, 4 leaves parts out
+-- (the test's leavesPartsOut, Gating's: every test after it waits on the
+-- queue's Reload, so it goes last).
+function Q.Group(entry)
+	local def = Kit.Has(entry.test)
+	if def and def.leavesPartsOut then return 4 end
+	local cat = type(ns.TestQueueCatalog) == "table" and ns.TestQueueCatalog[entry.test]
+	local reloads = Q.RunAsks and select(2, Q.RunAsks(entry.test, entry)) or (cat and tonumber(cat.reloads) or 0)
+	if reloads > 0 then return 3 end
+	local kind = Q.Needs(entry.test, entry)
+	if kind == "you" or kind == "older" then return 2 end
+	return 1
+end
+
+-- The entries by group, the queued order kept inside each.
+function Q.Order(list)
+	local keyed = {}
+	for i, entry in ipairs(list) do keyed[i] = { entry = entry, group = Q.Group(entry), at = i } end
+	table.sort(keyed, function(a, b)
+		if a.group ~= b.group then return a.group < b.group end
+		return a.at < b.at
+	end)
+	local out = {}
+	for i, k in ipairs(keyed) do out[i] = k.entry end
+	return out
+end
+
+-- Runs the given entries (default: every queued one): quick ones first (Q.Order).
 function Q.Start(list)
 	if Going() or State() then
 		ns.Print("test queue: a test is running; stop it first.")
 		return
 	end
-	list = list or Q.Pending()
+	list = Q.Order(list or Q.Pending())
 	if #list == 0 then
 		ns.Print("test queue: nothing to run.")
 		return

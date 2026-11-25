@@ -119,6 +119,17 @@ local function RunClient(client)
 	Check("a test that asks: Needs you, with its words", needsRow and Q.Needs("cdmgrid") == "you"
 		and select(2, Q.Needs("cdmgrid")):find('asks: "Right-click one of your tracked buffs off" +1 more', 1, true) ~= nil,
 		select(2, Q.Needs("cdmgrid")))
+	-- (The run's order, 2026-11-25: hands off, needs you, own Reload, leaves parts out; queued order inside each.)
+	local realCards = ns.TestQueueCatalog.cardevents
+	ns.TestQueueCatalog.cardevents = { asks = 0, reloads = 1 }
+	local ordered = Q.Order({ { id = "o1", test = "gating" }, { id = "o2", test = "cardevents" },
+		{ id = "o3", test = "cdmgrid" }, { id = "o4", test = "kitcheck", args = "" }, { id = "o5", test = "nosuchtest" },
+		{ id = "o6", test = "kitcheck", args = "1 2" } })
+	local got = {}
+	for i, entry in ipairs(ordered) do got[i] = entry.id end
+	Check("run order: quick first, Reload ones next, parts left out last",
+		table.concat(got, " ") == "o4 o5 o6 o3 o2 o1", table.concat(got, " "))
+	ns.TestQueueCatalog.cardevents = realCards
 	Click(Q.buttons["None"])
 	Check("None: nothing checked", Count() == 0 and Txt(Q.buttons["Run checked"]) == "Run checked")
 	Click(Q.buttons["Needs me"])
@@ -329,8 +340,8 @@ local function RunClient(client)
 		oldRuns = oldRuns + 1
 		CinematicDB.fakeOldLog = { "start " .. test, "PASS one", "FAIL two", "verdicts: PASS FAIL" }
 	end
-	ns.TestQueueList = { { id = "qo", test = "fakeold", args = "", session = "Old one" }, { id = "qk", test = "kitcheck", args = "1", session = "S" } }
-	Q.Start()
+	ns.TestQueueList = { { id = "qo", test = "fakeold", args = "", session = "Old one" }, { id = "qk", test = "kitcheck", args = "1", session = "S", needs = "Anywhere" } }
+	Q.Start() -- (qk's needs: both Needs you, so the queued order stays, Q.Order)
 	Check("older test: told on the box first", box:find("Queue 1/2 (Old one) - fakeold (older test)", 1, true) ~= nil
 		and box:find("click Done when its box says it's finished", 1, true) ~= nil, box)
 	Advance(4)
