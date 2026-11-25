@@ -259,6 +259,16 @@ function ns.StyleOn(key) return ns.db[key] and true or false end
 function ns.Reachable() return true end
 function ns.Guard(fn, ...) fn(...) end
 function ns.SetOnUpdate(frame, fn) frame:SetScript("OnUpdate", fn) end
+-- (Diagnostics.lua's feature loops: on while wanted() says so, as the game's.)
+local loops = {}
+function ns.FeatureLoop(frame, fn, wanted)
+	loops[frame] = { fn = fn, wanted = wanted }
+	frame:SetScript("OnUpdate", wanted() and fn or nil)
+end
+function ns.WakeFeatureLoop(frame)
+	local loop = loops[frame]
+	if loop then frame:SetScript("OnUpdate", loop.wanted() and loop.fn or nil) end
+end
 function ns.Log(_, text) print("  log: " .. text) end
 function ns.PlateKindOf(unit) return unit == "friend" and "FriendlyNPCs" or "EnemyNPCs" end
 function ns.MakeGamePlate(parent)
@@ -485,6 +495,14 @@ ns.PlateLayoutChanged()
 Flush()
 Check("switch off: plate A the game's", Same(game, Snapshot(ufA)))
 Check("switch off: plate B the game's", Same(gameB, Snapshot(plateB.UnitFrame)))
+-- (Off, the game laying plates out again wakes nothing of ours: no loop running. The
+-- gating audit, 2026-11-25, saw it still running with every switch off.)
+ufA:UpdateAnchors()
+plateB.UnitFrame:UpdateAnchors()
+ufA.CastBarsContainer.castBar:ApplyStyleAndAnchoring()
+Check("switch off: the game's re-layouts leave no loop of ours running",
+	inner.Driver:GetScript("OnUpdate") == nil and not inner.Waiting())
+Check("switch off: still the game's places after its re-layouts", Same(game, Snapshot(ufA)))
 ns.db.plateLayout = true
 ns.PlateLayoutChanged()
 Flush()

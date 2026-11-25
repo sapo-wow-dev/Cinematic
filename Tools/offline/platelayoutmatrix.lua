@@ -245,6 +245,8 @@ function ns.StyleOn(key) return ns.db[key] and true or false end
 function ns.Reachable() return true end
 function ns.Guard(fn, ...) fn(...) end
 function ns.SetOnUpdate(frame, fn) frame:SetScript("OnUpdate", fn) end
+function ns.FeatureLoop() end -- (Diagnostics.lua's: the cells flush by hand)
+function ns.WakeFeatureLoop() end
 function ns.Log() end
 function ns.PlateKindOf() return "EnemyNPCs" end
 function ns.MakeGamePlate(parent)

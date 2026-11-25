@@ -214,7 +214,16 @@ end
 local track = setmetatable({}, { __mode = "k" })
 local busy = false -- (our own SetPoint calls: not the game's)
 local dirty, driver = {}, CreateFrame("Frame")
-driver:Hide()
+-- [plate] = true while Cinematic hides its level box (PlateParts' Level part at
+-- 0: the Plate parts grid, a Nameplate Style row's Look). The box is only
+-- see-through there, so the game keeps crowd control beside it: moved in here.
+local levelHidden = setmetatable({}, { __mode = "k" })
+-- Whether a plate is ours to look after now: the layout on, its level box hidden by
+-- Cinematic, or a preview's copy. Else the game's re-layouts cost nothing here (the
+-- gating audit, 2026-11-25: the layout's loop ran with every switch off).
+local function Wanted(plate)
+	return plate and (plate.gameCopy or levelHidden[plate] or Active()) and true or false
+end
 
 local function Readable(value)
 	return not (issecretvalue and issecretvalue(value))
@@ -238,9 +247,9 @@ end
 
 local ApplyPlate -- (below)
 local function Dirty(plate)
-	if plate and not dirty[plate] then
+	if plate and not dirty[plate] and Wanted(plate) then
 		dirty[plate] = true
-		driver:Show()
+		if ns.WakeFeatureLoop then ns.WakeFeatureLoop(driver) end
 	end
 end
 
@@ -535,30 +544,21 @@ local function Loops(frame, target, unitFrame, depth)
 end
 
 local layoutHooked = setmetatable({}, { __mode = "k" })
--- (Once anything's been moved: a switch over the page turned off elsewhere
--- (Style, Nameplate Style) puts the plates back within a second.)
-local switchWatch
-local function WatchSwitch()
-	if switchWatch or not (C_Timer and C_Timer.NewTicker) then return end
-	local was = SwitchOn()
-	switchWatch = C_Timer.NewTicker(1, function()
-		local now = SwitchOn()
-		if now ~= was then
-			was = now
-			if ns.PlateLayoutChanged then ns.PlateLayoutChanged() end
-		end
-	end)
-end
+-- (A switch over the page turned off elsewhere (Style, Nameplate Style) puts the
+-- plates back within a second: asked in the feature loops' own once-a-second look,
+-- below, not a ticker of its own. The gating audit, 2026-11-25.)
+local anyHooked = false
 local function HookLayout(plate, unitFrame)
 	if layoutHooked[unitFrame] then return end
 	layoutHooked[unitFrame] = true
-	if not plate.gameCopy then WatchSwitch() end
+	if not plate.gameCopy then anyHooked = true end
 	-- (After each of the game's layout passes: ours on at once, no frame of the game's.)
 	for _, method in ipairs({ "UpdateAnchors", "UpdateControlAnchors" }) do
 		if type(unitFrame[method]) == "function" then
 			hooksecurefunc(unitFrame, method, function(self)
 				local owner = track[self] and track[self].plate or plate
-				if owner and ApplyPlate then ApplyPlate(owner) end
+				-- (Only while it's ours: with the layout off, the game's passes cost nothing here.)
+				if owner and ApplyPlate and Wanted(owner) then ApplyPlate(owner) end
 			end)
 		end
 	end
@@ -606,10 +606,7 @@ local function ShownParts(plate, unitFrame, layout)
 	return shown
 end
 
--- [plate] = true while Cinematic hides its level box (PlateParts' Level part at
--- 0: the Plate parts grid, a Nameplate Style row's Look). The box is only
--- see-through there, so the game keeps crowd control beside it: moved in here.
-local levelHidden = setmetatable({}, { __mode = "k" })
+-- (levelHidden: up top, by Dirty.)
 
 -- Puts layout (nil: the plate's own, by its unit's kind) on a plate whose
 -- UnitFrame is the game's (or our copy's). rootOff: no center shift (the
@@ -803,15 +800,33 @@ local function AllPlates(fn)
 	for _, plate in ipairs(plates) do fn(plate) end
 end
 
-ns.SetOnUpdate(driver, function(self)
+-- The plates the game laid out again since the last frame, put right: a feature
+-- loop (Diagnostics.lua) wanted only while one waits, so with none it has no
+-- OnUpdate at all. Its wanted() also asks, once a second with every feature
+-- loop's, whether a switch over the page changed elsewhere (Style, Nameplate
+-- Style): the plates put back or laid out again then. (The gating audit,
+-- 2026-11-25: an OnUpdate of its own and a ticker ran with every switch off.)
+local function FlushDirty()
 	local list = dirty
 	dirty = {}
-	self:Hide()
 	for plate in pairs(list) do
 		ApplyPlate(plate)
 		-- (A preview's copy: its page draws its guides again.)
 		if plate.onLayoutDirty then plate.onLayoutDirty() end
 	end
+	if ns.WakeFeatureLoop then ns.WakeFeatureLoop(driver) end -- (nothing waiting: off at once)
+end
+local switchWas
+ns.FeatureLoop(driver, FlushDirty, function()
+	if anyHooked then
+		local on = SwitchOn()
+		if switchWas ~= nil and on ~= switchWas and ns.PlateLayoutChanged then
+			switchWas = on
+			ns.PlateLayoutChanged()
+		end
+		switchWas = on
+	end
+	return next(dirty) ~= nil
 end)
 
 -- After any change on the page (or a profile loaded): every plate again.
@@ -862,5 +877,5 @@ function ns.PlateLayoutReport()
 end
 -- (For Tools/offline/platelayout.lua.)
 ns.plateLayoutInner = { track = track, Anchor = Anchor, Place = Place, PutBack = PutBack, Seed = Seed,
-	Watch = Watch, Flush = function() driver:GetScript("OnUpdate")(driver) end }
+	Watch = Watch, Flush = FlushDirty, Driver = driver, Waiting = function() return next(dirty) ~= nil end }
 end) -- (ns.Module "style")

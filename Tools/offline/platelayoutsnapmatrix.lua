@@ -15,6 +15,8 @@ issecretvalue = function() return false end
 local ns = { db = {}, isRetail = false, L = setmetatable({}, { __index = function(_, k) return k end }) }
 function ns.Module(_, fn) fn() end
 function ns.SetOnUpdate() end
+function ns.FeatureLoop() end
+function ns.WakeFeatureLoop() end
 assert(loadfile("Plates/PlateLayout.lua"))("Cinematic", ns)
 
 local LEFT, RIGHT, BAR_L, BAR_R = 100, 160, 40, 240
