@@ -6,7 +6,14 @@ loop from Plates/PlateLayout.lua still running
 Code: Plates/PlateLayout.lua: Wanted (new), Dirty, the UpdateAnchors hooks, FlushDirty as an ns.FeatureLoop, the
 switch check in its wanted() (the ticker gone)
 Clients: forever (no layout on retail)
-Base: HEAD
+Base: 473b54c^
+Test: Tools/offline/platelayoutmatrix.lua forever
+
+## Run 2 (gating, 11:54, with 473b54c): still woke with Style off
+A level box marked hidden before Style went off stayed marked, so those plates still woke the flush (3 times in 4 s
+with every switch off, 8 with only Style off). Fixed after: a hidden level box counts only with Style on (Wanted, and
+crowd control's place: back beside the box with Style off), and the once-a-second switch look watches Style's own
+switch too. Tools/offline/platelayout.lua: Style off puts crowd control back and the game's re-layouts wake nothing.
 
 ## Before / after
 - Before: the game laying a plate out again (a target change, a cast's style, plates coming and going) woke the

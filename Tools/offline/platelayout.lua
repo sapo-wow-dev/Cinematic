@@ -255,7 +255,11 @@ C_NamePlate = {
 }
 local ns = { db = { plateLayout = true }, isRetail = false, L = setmetatable({}, { __index = function(_, k) return k end }) }
 function ns.Module(_, fn) fn() end
-function ns.StyleOn(key) return ns.db[key] and true or false end
+function ns.StyleOn(key)
+	if ns.db.styleGeneral == false then return false end -- (Style's own switch, over every page)
+	if key == nil then return true end
+	return ns.db[key] and true or false
+end
 function ns.Reachable() return true end
 function ns.Guard(fn, ...) fn(...) end
 function ns.SetOnUpdate(frame, fn) frame:SetScript("OnUpdate", fn) end
@@ -503,6 +507,20 @@ ufA.CastBarsContainer.castBar:ApplyStyleAndAnchoring()
 Check("switch off: the game's re-layouts leave no loop of ours running",
 	inner.Driver:GetScript("OnUpdate") == nil and not inner.Waiting())
 Check("switch off: still the game's places after its re-layouts", Same(game, Snapshot(ufA)))
+-- (A level box hidden by Cinematic, then Style off: crowd control back beside the box,
+-- and the game's re-layouts wake nothing. Gating run 2, 2026-11-25.)
+ns.PlateLayoutLevelHidden(plateA, true)
+Check("level box hidden, Style on: crowd control beside the bar", Near(L(ufA.AurasFrame.CrowdControlListFrame),
+	R(ufA.HealthBarsContainer) + 5))
+ns.db.styleGeneral = false
+ns.PlateLayoutChanged()
+Flush()
+Check("Style off: crowd control back where the game has it", Near(L(ufA.AurasFrame.CrowdControlListFrame), game.crowd[1]))
+ufA:UpdateAnchors()
+Check("Style off: the game's re-layouts leave no loop of ours running", inner.Driver:GetScript("OnUpdate") == nil
+	and not inner.Waiting())
+ns.db.styleGeneral = nil
+ns.PlateLayoutLevelHidden(plateA, false)
 ns.db.plateLayout = true
 ns.PlateLayoutChanged()
 Flush()

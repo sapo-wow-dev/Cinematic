@@ -222,7 +222,10 @@ local levelHidden = setmetatable({}, { __mode = "k" })
 -- Cinematic, or a preview's copy. Else the game's re-layouts cost nothing here (the
 -- gating audit, 2026-11-25: the layout's loop ran with every switch off).
 local function Wanted(plate)
-	return plate and (plate.gameCopy or levelHidden[plate] or Active()) and true or false
+	-- (A hidden level box is Style's to handle: with Style off, nothing of it. Gating run 2,
+	-- 2026-11-25: a box marked hidden before Style went off still woke the flush.)
+	return plate and (plate.gameCopy or (levelHidden[plate] and ns.StyleOn and ns.StyleOn()) or Active())
+		and true or false
 end
 
 local function Readable(value)
@@ -628,7 +631,7 @@ local function ApplyPlateLayout(plate, layout, rootOff)
 	end
 	-- (Never touched: the game's as it is. A level box hidden by Cinematic still
 	-- moves crowd control in, with no layout too: see ns.PlateLayoutLevelHidden.)
-	local noLevel = levelHidden[plate]
+	local noLevel = levelHidden[plate] and (plate.gameCopy or (ns.StyleOn and ns.StyleOn())) and true or nil
 	if not layout and not layoutHooked[unitFrame] and not noLevel then return end
 	HookLayout(plate, unitFrame)
 	local parts = layout and type(layout.parts) == "table" and layout.parts or {}
@@ -819,7 +822,9 @@ end
 local switchWas
 ns.FeatureLoop(driver, FlushDirty, function()
 	if anyHooked then
-		local on = SwitchOn()
+		-- (The page's switches, and Style's own: a hidden level box's crowd control put back
+		-- with Style off too. Gating run 2, 2026-11-25.)
+		local on = (SwitchOn() and "layout" or "") .. (ns.StyleOn and ns.StyleOn() and "+style" or "")
 		if switchWas ~= nil and on ~= switchWas and ns.PlateLayoutChanged then
 			switchWas = on
 			ns.PlateLayoutChanged()

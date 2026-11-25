@@ -241,7 +241,11 @@ C_NamePlate = {
 }
 local ns = { db = { plateLayout = true }, isRetail = false, L = setmetatable({}, { __index = function(_, k) return k end }) }
 function ns.Module(_, fn) fn() end
-function ns.StyleOn(key) return ns.db[key] and true or false end
+function ns.StyleOn(key)
+	if ns.db.styleGeneral == false then return false end -- (Style's own switch, over every page)
+	if key == nil then return true end
+	return ns.db[key] and true or false
+end
 function ns.Reachable() return true end
 function ns.Guard(fn, ...) fn(...) end
 function ns.SetOnUpdate(frame, fn) frame:SetScript("OnUpdate", fn) end
