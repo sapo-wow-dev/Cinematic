@@ -100,4 +100,14 @@ Check("its own minimap button's row is tested (Addon buttons)", table.concat(row
 Check("no other addon's rows come with it", #ns.AddonTestRows("Panorama") == 0)
 button:SetParent(UIParent)
 
+-- Row fades: while the rows run, both fades take ns.testFadeTime (0.2 s, not
+-- the player's 1.5 s), and the player's own come back once it's cleared.
+ns.db.fadeInTime, ns.db.fadeOutTime, ns.db.combatFadeInTime = 1.5, 1.5, 1.5
+ns.testFadeTime = 0.2
+Check("rows running: fade in and out at 0.2s", ns.FadeInTime() == 0.2 and ns.FadeOutTime() == 0.2,
+	ns.FadeInTime() .. "/" .. ns.FadeOutTime())
+ns.testFadeTime = nil
+Check("rows done: the player's fades back", ns.FadeInTime() == 1.5 and ns.FadeOutTime() == 1.5,
+	ns.FadeInTime() .. "/" .. ns.FadeOutTime())
+
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))

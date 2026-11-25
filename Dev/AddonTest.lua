@@ -317,6 +317,10 @@ local SETTLE = 4 -- seconds a row gets to reach its alpha
 local HOLD = 1.5 -- seconds it must stay there (an addon setting its own back)
 local MADE_WAIT = 20 -- seconds given to frames it makes late (Questie's tracker, seconds after a /reload)
 local MADE_SETTLE = 3 -- then seconds for them to settle (Questie hides and shows its tracker once more)
+-- Fade in and out while the rows run: a row checks it hides, stays hidden and
+-- comes back, not the fade (the player's 1.5 s each way was 3 of a row's 7 s).
+local ROW_FADE = 0.2
+local ROW_GAP = 0.2 -- seconds between rows (one shot a row, already seconds apart)
 local run
 
 local function Log(text)
@@ -708,7 +712,7 @@ local function TestRow(index)
 				#down > 0 and ("still down: " .. table.concat(down, ", ")) or
 				(unclear > 0 and (unclear .. " hidden or at alpha 0 by the addon itself") or nil))
 			Force(item.key, run.forceBefore[item.key])
-			C_Timer.After(1, function() TestRow(index + 1) end)
+			C_Timer.After(ROW_GAP, function() TestRow(index + 1) end)
 		end)
 	end)
 end
@@ -800,6 +804,8 @@ StartRows = function()
 		for _, item in ipairs(run.rows) do keys[#keys + 1] = item.key end
 		return table.concat(keys, ", ")
 	end)()))
+	ns.testFadeTime = ROW_FADE
+	Log(("fades at %.1fs while the rows run"):format(ROW_FADE))
 	TestRow(1)
 end
 
@@ -854,6 +860,7 @@ Finish = function(done)
 	if not run then return end
 	run.ticker:Cancel()
 	events:UnregisterAllEvents()
+	ns.testFadeTime = nil -- (before the rows go back: they fade at the player's own speed)
 	-- (Rows still forced by the test go back to what they were.)
 	for _, item in ipairs(run.forceBefore and run.rows or {}) do
 		if ns.db.frameForce[item.key] ~= run.forceBefore[item.key] then Force(item.key, run.forceBefore[item.key]) end

@@ -2542,8 +2542,10 @@ end
 
 -- How long things take to fade out: always the Fade out time. (After a fight,
 -- the Calm Timer keeps things up first; there's no slower fade on top.)
+-- (ns.testFadeTime, set only while the addon test's rows run, stands in for
+-- both: it checks hide and come back, not the fade. Never saved.)
 function ns.FadeOutTime()
-	return ns.db.fadeOutTime
+	return ns.testFadeTime or ns.db.fadeOutTime
 end
 
 -- How long things take to fade in: the Combat fade in time during a fight
@@ -2551,6 +2553,7 @@ end
 -- otherwise.
 function ns.FadeInTime()
 	local db = ns.db
+	if ns.testFadeTime then return ns.testFadeTime end
 	if InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")) or ns.CastingRuleOn() then
 		return db.combatFadeInTime
 	end
