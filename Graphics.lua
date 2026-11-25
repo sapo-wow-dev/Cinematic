@@ -327,7 +327,10 @@ do
 		if GetTime() < previewUntil and db and db.enabled then
 			return math.min(1, scale)
 		end
-		if scale <= 0 or not (db.enabled and db.visualEffects and ns.lastCinematic and ns.BadWeatherIntensity) then
+		-- (Its slider is on the Weather page: the page off, it's off too, as
+		-- Visual Effects off was. Audit 2026-11-25, C15.)
+		if scale <= 0 or not (db.enabled and ns.PageSetting("weatherPage") and ns.lastCinematic
+			and ns.BadWeatherIntensity) then
 			return 0
 		end
 		return math.min(1, scale * ns.BadWeatherIntensity())
@@ -379,12 +382,20 @@ do
 			WriteView(level)
 		end
 	end
-	C_Timer.NewTicker(TICK, Tick)
+	-- (Its look each second only while it can bring the view in now, or is
+	-- still in or bringing it back, or previewing: a ticker for good ran
+	-- every second for everyone, the slider at 0 (the default) or the page
+	-- off. Audit 2026-11-25, D15.)
+	local loopFrame = CreateFrame("Frame", "CinematicRainView")
+	ns.FeatureLoop(loopFrame, Tick, function()
+		return level > 0 or writtenLevel ~= 0 or next(written) ~= nil or previewUntil > 0 or Wanted() > 0
+	end, TICK)
 
 	-- Starts the preview for seconds (default 5), or stops it (seconds 0).
 	function ns.PreviewRainView(seconds)
 		previewUntil = seconds == 0 and (previewUntil > 0 and GetTime() or 0) or GetTime() + (seconds or 5)
 		Tick()
+		ns.WakeFeatureLoop(loopFrame) -- (Audit 2026-11-25, D15: the look runs on to end it)
 	end
 	function ns.RainViewPreviewing()
 		return GetTime() < previewUntil

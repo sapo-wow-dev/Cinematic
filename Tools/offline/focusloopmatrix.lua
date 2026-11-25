@@ -68,9 +68,11 @@ Matrix.Run({
 	end,
 	pins = {
 		{ "", "loop=off draws=no" },
-		-- (In CineMode with the switch on and a haze: the loop; drawn where its row says.)
-		{ "strength=up cine=on dof=on", "loop=on draws=no" },
-		{ "script=haze cine=on dof=on", "loop=on draws=no" },
+		-- (In CineMode with the switch on and a haze: the loop where its row says,
+		-- and drawn. Off the row, no loop: Audit 2026-11-25, OK'd by the user,
+		-- was loop=on draws=no.)
+		{ "strength=up cine=on dof=on", "loop=off draws=no" },
+		{ "script=haze cine=on dof=on", "loop=off draws=no" },
 		{ "strength=up cine=on dof=on row=yes", "loop=on draws=yes" },
 		{ "script=haze cine=on dof=on row=yes", "loop=on draws=yes" },
 		-- (A demo or preview: shown whatever the switches say.)

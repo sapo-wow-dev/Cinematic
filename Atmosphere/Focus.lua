@@ -93,6 +93,9 @@ ns.FeatureLoop(frame, ns.Profiled("Depth of field", OnUpdate), function()
 	if level > 0 or GetTime() < stopAt then return true end
 	local db = ns.db
 	if not (db and db.enabled and db.visualEffects and db.depthOfField and ns.lastCinematic) then return false end
+	-- (Its Show in row saying no: nothing to draw, as WantedStrength has it.
+	-- It ran every frame there. Audit 2026-11-25, D14.)
+	if not (ns.effectWanted and ns.effectWanted.haze) then return false end
 	if (tonumber(db.dofScale) or 0) > 0 then return true end
 	return ns.CameraScriptHaze and ns.CameraScriptHaze() and true or false
 end)

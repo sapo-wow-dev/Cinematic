@@ -84,8 +84,25 @@ function ns.musicKeep.Yours()
 	return default and default > 0 and default or ns.musicKeep.DEFAULT
 end
 
+-- Nothing of the music handled or held, with the Audio page (or Visual
+-- Effects) off: the watch on the game's music settings below has nothing to
+-- do. (They ran in full, a debugstack each, with the page off. Audit
+-- 2026-11-25, D15.) (deathSong: set on ns.musicKeep below, at Lua's locals cap.)
+function ns.musicKeep.Idle()
+	local db = ns.db
+	if not db or ns.music.managing or ns.PageSetting("musicInCinematic") then return false end
+	local saved = db.savedCVars
+	if saved and (saved.Sound_MusicVolume ~= nil or saved.Sound_EnableMusic ~= nil) then return false end
+	local song = ns.musicKeep.deathSong
+	return not (song and (song.file or song.playing))
+end
+
 local function TraceMusicWrite(name, value)
 	if name ~= "Sound_MusicVolume" and name ~= "Sound_EnableMusic" then
+		return
+	end
+	if ns.musicKeep.Idle() then -- (Audit 2026-11-25, D15: the page off, nothing ours)
+		if name == "Sound_MusicVolume" then ns.musicKeep.own = nil end -- (not ours: nothing of ours writes it now)
 		return
 	end
 	if fadeWriting then
@@ -128,6 +145,7 @@ traceFrame:SetScript("OnEvent", function(_, _, name, value)
 	if fadeWriting then return end
 	if name == "Sound_MusicVolume" or name == "Sound_EnableMusic" or name == "MUSIC_VOLUME"
 		or name == "ENABLE_MUSIC" then
+		if ns.musicKeep.Idle() then return end -- (Audit 2026-11-25, D15: the page off, nothing ours)
 		MusicTrace(("CVAR_UPDATE %s = %s (now %s)"):format(tostring(name), tostring(value),
 			tostring(GetCVar("Sound_MusicVolume"))))
 	end
@@ -429,6 +447,7 @@ end
 
 -- The death song picked for this death (a music file ID), or nil; see SetDeathSong.
 local deathSong = { file = nil, playing = false }
+ns.musicKeep.deathSong = deathSong -- (for ns.musicKeep.Idle. Audit 2026-11-25, D15)
 
 -- Music starts with a camera: as one starts with its music switch on, and
 -- music fatigue allows. The flight, RP walk and auto-run cameras each have a
@@ -484,16 +503,17 @@ end
 -- off; the music manager (UpdateMusic) stands aside meanwhile, and the music
 -- settings it found are put back afterwards.
 function ns.SetDeathSong(on)
-	-- With CineMode music off (musicInCinematic), music is never switched on:
-	-- the song plays only if your game music is on already.
+	-- (The Audio page (musicInCinematic) or Visual Effects off: no song, as
+	-- none of the music plays. It played with your game music on, on purpose
+	-- till the user's call: page off = all off. Audit 2026-11-25, E2.)
 	local musicOn = GetCVar("Sound_EnableMusic") == "1"
-	deathSong.file = on and ns.TriggerSetting("Death", "music") and (musicOn or ns.Setting("musicInCinematic"))
+	deathSong.file = on and ns.TriggerSetting("Death", "music") and ns.Setting("musicInCinematic")
 		and ns.PickDeathSong() or nil
 	if on and ns.DeathTestLog then
 		ns.DeathTestLog(("death song: %s (song option %s, game music %s)"):format(
 			tostring(deathSong.file), tostring(ns.db.deathSong),
-			musicOn and "on" or ns.Setting("musicInCinematic") and "off - switching it on"
-				or "off, and CineMode music off: no song"))
+			not ns.Setting("musicInCinematic") and "-, CineMode music off: no song" -- (Audit 2026-11-25, E2)
+				or musicOn and "on" or "off - switching it on"))
 	end
 end
 
@@ -555,6 +575,7 @@ local function MusicSwitchedByPlayer(name)
 	if name ~= "Sound_EnableMusic" then
 		return
 	end
+	if ns.musicKeep.Idle() then return end -- (Audit 2026-11-25, D15: nothing held to note it in)
 	local stack = debugstack(3) or ""
 	if stack:find("AddOns/" .. ADDON_NAME .. "/", 1, true) then
 		return -- the addon's own switch

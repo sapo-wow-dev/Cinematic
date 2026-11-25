@@ -5012,6 +5012,12 @@ function Cinematic_ToggleVisualEffects()
 	if not ns.db then
 		return
 	end
+	-- (Atmosphere left out: says so, as its letterbox key does, Modules.lua's
+	-- KEY_STAND_INS (this key's global is always here). Audit 2026-11-25.)
+	if ns.ModuleLoaded and not ns.ModuleLoaded("atmosphere") then
+		ns.Print(ns.ModuleLeftOutLine("atmosphere"))
+		return
+	end
 	ns.db.visualEffects = not ns.db.visualEffects
 	ns.letterboxDirty = true
 	if ns.RefreshTint then

@@ -4647,6 +4647,11 @@ local function RestoreEverything()
 	if _G.CinematicFocus then
 		_G.CinematicFocus:Hide()
 	end
+	-- (The weather's frost, rain and lightning too: they drew on, and its
+	-- loop held the density again. Shown again on /cine resume. Audit 2026-11-25, C16.)
+	if _G.CinematicWeatherFX then
+		_G.CinematicWeatherFX:Hide()
+	end
 	Try(GameTooltip.SetAlpha, GameTooltip, 1)
 	if not UIParent:IsShown() then
 		Try(ns.BringBackUI) -- hidden with the Hide the UI key (in a fight: once it ends)
@@ -4704,6 +4709,7 @@ function ns.Resume()
 	ns.letterboxDirty = true
 	if ns.RefreshTint then ns.RefreshTint() end
 	if _G.CinematicFocus then _G.CinematicFocus:Show() end
+	if _G.CinematicWeatherFX then _G.CinematicWeatherFX:Show() end -- (Audit 2026-11-25, C16)
 	if ns.ApplyHealVisionFrames then ns.ApplyHealVisionFrames() end
 	-- (The game settings a safety stop let go (RestoreEverything, every set
 	-- held) and that are written only as a setting changes: written again

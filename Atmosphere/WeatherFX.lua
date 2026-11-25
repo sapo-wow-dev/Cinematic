@@ -98,6 +98,10 @@ end
 -- wanted: its row (or a preview), the page and Visual Effects on.
 local function Strength(kind)
 	local db = ns.db or {}
+	-- (Stopped for the session: none, as the rest of Cinematic. The rows'
+	-- last answers stay as asked, and drew and thundered on, the density
+	-- held again. Audit 2026-11-25, C16.)
+	if ns.IsSuspended() then return 0, false end
 	local value = tonumber(db[KEYS[kind].strength]) or 0
 	if Previewing(kind) then return value > 0 and value or (kind == "density" and 3 or PREVIEW_STRENGTH), true end
 	if not db.enabled or db.visualEffects == false or db.weatherPage == false or db[KEYS[kind].switch] == false then

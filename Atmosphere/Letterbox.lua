@@ -184,12 +184,14 @@ function ns.LetterboxExtra(wanted, inCombat, cinematic)
 	bars.cine = cinematic
 	if bars.key ~= nil and bars.keyCine ~= cinematic then bars.key = nil end
 	local outForFight = inCombat and db.letterboxOffInCombat
-	local discover = GetTime() < bars.untilAt and db.letterboxOnDiscover and db.letterboxPage ~= false
-		and db.visualEffects ~= false
+	-- (The key's bars too only with the Letterbox page and Visual Effects on:
+	-- page off = all off. Audit 2026-11-25, E1.)
+	local pageOn = ns.PageSetting("letterboxPage") and true or false
+	local discover = GetTime() < bars.untilAt and db.letterboxOnDiscover and pageOn
 	bars.forced = false
 	if bars.key == false then
 		wanted = false
-	elseif (bars.key or discover) and not wanted and not outForFight then
+	elseif ((bars.key and pageOn) or discover) and not wanted and not outForFight then
 		wanted, bars.forced = true, true
 	end
 	bars.wanted = wanted and true or false
@@ -198,6 +200,14 @@ end
 
 function Cinematic_ToggleLetterbox()
 	if not ns.db then return end
+	-- (The page or Visual Effects off: no bars, and why. Audit 2026-11-25, E1.)
+	if ns.db.visualEffects == false then
+		ns.Print(L["letterbox bars: Enable Visual Effects is off (Atmosphere > General)"])
+		return
+	elseif not ns.PageSetting("letterboxPage") then
+		ns.Print(L["letterbox bars: the Letterbox page is off"])
+		return
+	end
 	bars.key = not bars.wanted
 	bars.keyCine = bars.cine
 	ns.letterboxDirty = true
@@ -210,7 +220,10 @@ function ns.UpdateLetterbox(cinematic, elapsed)
 		world.wanted, world.elapsed = cinematic and true or false, elapsed or 0
 		return
 	end
-	local immersive = ns.ChatCamImmersive and ns.ChatCamImmersive() or false
+	-- (Chat Cam's Ultra immersive bars only with the Letterbox page and Visual
+	-- Effects on. Audit 2026-11-25, E1.)
+	local immersive = ns.ChatCamImmersive and ns.ChatCamImmersive() and ns.PageSetting("letterboxPage") and true
+		or false
 	-- (Show me's demo, ShowMe.lua: the bars with the setting off, too)
 	local target = ((cinematic and (ns.db.letterbox or ns.effectsDemo or bars.forced)) or immersive) and 1 or 0
 	local grow = immersive and 1 or 0
