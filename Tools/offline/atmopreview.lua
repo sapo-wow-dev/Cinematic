@@ -172,6 +172,10 @@ do
 	-- 2026-11-23 ("this zone looked a lot darker").
 	local preset, strength, drift = db.tintPreset, db.tintStrength, db.tintDrift
 	db.tintPreset, db.tintStrength, db.tintDrift = "warm", 1, false
+	-- (The preset is the Tint Style page's: with Enable Style off it's the
+	-- default. Audit 2026-11-25, OK'd by the user: both on for it.)
+	local styleGeneral, tintStyle = db.styleGeneral, db.tintStyle
+	db.styleGeneral, db.tintStyle = true, true
 	local function TintRun(seconds)
 		for _ = 1, math.floor(seconds / 0.1 + 0.5) do
 			now = now + 0.1
@@ -191,6 +195,7 @@ do
 	ns.RefreshTint()
 	TintRun(6)
 	db.tintPreset, db.tintStrength, db.tintDrift = preset, strength, drift
+	db.styleGeneral, db.tintStyle = styleGeneral, tintStyle
 	ns.effectWanted.inn = nil
 end
 

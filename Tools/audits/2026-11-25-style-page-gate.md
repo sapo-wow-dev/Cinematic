@@ -65,7 +65,7 @@ Test: Tools/offline/stylepagegatematrix.lua retail
 ## Expectations changed
 | File | Check | Was | Now | OK'd |
 |------|-------|-----|-----|------|
-| none | | | | |
+| Tools/offline/atmopreview.lua | the tint lift checks (a "warm" preset set with Enable Style off) | the preset applied | ignored, the default ran (Lua error on the stand-in's clock); setup now turns Enable Style and Tint Style on, passes | yes, the user 2026-11-25 ("Yes, edit it") |
 
 ## Risk
 low: Enable Style is on for nearly everyone; with it off, two looks now go to their defaults as every other
