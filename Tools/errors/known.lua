@@ -590,4 +590,30 @@ return {
 [CinematicDev/QoL/Reload.lua]:104: in function <CinematicDev/QoL/Reload.lua:84>]],
     source = "pasted 2026-11-23 (after a /reload in a fight, Forever)",
   },
+
+  -- Action bars --------------------------------------------------------------
+  {
+    id = "bar-calls-blocked-tainted",
+    status = "open",
+    title = "Every action bar's own calls blocked as CinematicDev's in a fight: the spellbook's grid (18:48), then slot changes (Forever)",
+    match = { all = { "Blizzard_ActionBar/Shared/ActionBar.lua" }, any = { "UpdateShownButtons", "SetShowGrid", "UpdateVisibility", "UpdateFrameStrata" } },
+    why = {
+      call = "the bars' protected calls from Blizzard's own code: SetFrameStrata, buttons' and containers' SetShown, HideBase/ShowBase, and Edit Mode's SetPoint/SetScale of MultiBarLeft/Right, all blocked as an addon's in a fight",
+      caller = "unknown: no Cinematic frame in any stack. 18:48 = the spellbook micro button's own click (MainMenuBarMicroButtons.lua:957) > TogglePlayerSpellsFrame > ShowUIPanel's center branch (UIParentPanelManager.lua:294) > SetUIPanel > Show > PlayerSpellsFrame OnShow > MultiActionBar_ShowAllGrids, already tainted at the first bar's SetFrameStrata. 18:50/18:53 = ACTIONBAR_SLOT_CHANGED > UpdateAction > MultiBarBottomLeft:UpdateShownButtons, an event handler that starts clean: a field it reads on that bar was ours then",
+      path = "unknown: something earlier in that session (18:25 login, a fight from 18:47:47, Ghost Wolf, the auto-run camera) left a value the window manager, the micro button or the bar reads written by our code; a /reload cleared it",
+      rule = "a read of a tainted value taints the rest of the run, and a field written in a tainted run stays tainted (each later read taints again) till a /reload",
+      pattern = "unknown. Ruled out by /cine debug bartaint, each with 0 fields of ours and 0 bar calls blocked (control proves the scan sees ours): a fresh session; the spellbook opened by its key or out of a fight; from the Menu Wheel in a fight (its first load too); the wheel's Game Menu slot (CloseAllWindows/HideUIPanel/ShowUIPanel from our code), window manager slots checked by name",
+    },
+    dont = "Not known yet. The dev copy logs the next one as it happens: Dev/BarTaintCatch.lua scans the first blocked bar call of a session and writes every tainted field with its writer under the bartaint category of /cine log. Read those lines first.",
+    fix = "open 2026-11-24: diagnosis only. Dev/BarTaintCatch.lua (auto scan, Tools/offline/bartaintcatch.lua), Dev/BarTaintTest.lua (/cine debug bartaint).",
+    seen = { "2026-11-24" },
+    example = [[blocked  (Blizzard_ActionBar)
+  CinematicDev: MultiBarBottomLeft:SetFrameStrata() (in combat)
+[C]: in function 'SetFrameStrata'
+[Blizzard_ActionBar/Shared/ActionBar.lua]:199: in function 'UpdateFrameStrata'
+[Blizzard_ActionBar/Shared/ActionBar.lua]:169: in function 'SetShowGrid'
+[Blizzard_ActionBar/Shared/MultiActionBars.lua]:108: in function 'MultiActionBar_ShowAllGrids'
+[Blizzard_PlayerSpells/Blizzard_PlayerSpellsFrame.lua]:53: in function <...Blizzard_PlayerSpells/Blizzard_PlayerSpellsFrame.lua:42>]],
+    source = "pasted 2026-11-24 18:48-18:53 (Forever, a fight, spellbook not opened by hand)",
+  },
 }

@@ -5883,6 +5883,10 @@ local NPC_WORD = "%f[%w_][Nn][Pp][Cc]%f[^%w_]"
 local function NpcToInteracting(text)
 	return (text:gsub(NPC_WORD, "interacting"))
 end
+-- (One rule's text: a shared camera trigger's condition, Camera/Shots.lua.)
+function ns.NpcWordToInteracting(text)
+	return type(text) == "string" and NpcToInteracting(text) or text
+end
 function ns.NpcRuleToInteracting(t)
 	if type(t) ~= "table" then return end
 	if type(t.frameRules) == "table" then
@@ -5910,7 +5914,23 @@ STEPS[#STEPS + 1] = function()
 	if ns.db.ruleNpcInteractingV1 then return end
 	ns.NpcRuleToInteracting(ns.db)
 	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
-		for _, saved in pairs(type(list) == "table" and list or {}) do ns.NpcRuleToInteracting(saved) end
+		for _, saved in pairs(type(list) == "table" and list or {}) do
+			ns.NpcRuleToInteracting(saved)
+			if type(saved) == "table" then ns.NpcRuleToInteracting(saved.settings) end
+		end
+	end
+	-- (And the backups, a deleted profile's too: all from before, restored
+	-- later their npc would mean a targeted NPC. Release review, 2026-11-24.
+	-- Shared strings from before: Share.lua and Camera/Shots.lua.)
+	for _, list in pairs(type(ns.db.profileBackups) == "table" and ns.db.profileBackups or {}) do
+		for _, backup in pairs(type(list) == "table" and list or {}) do
+			if type(backup) == "table" then ns.NpcRuleToInteracting(backup.settings) end
+		end
+	end
+	for _, gone in pairs(type(ns.db.deletedProfiles) == "table" and ns.db.deletedProfiles or {}) do
+		for _, backup in pairs(type(gone) == "table" and type(gone.backups) == "table" and gone.backups or {}) do
+			if type(backup) == "table" then ns.NpcRuleToInteracting(backup.settings) end
+		end
 	end
 	ns.db.ruleNpcInteractingV1 = true
 end

@@ -6,7 +6,8 @@
 --              "npc" unit there (DialogueUI's hidden window), the mailbox too
 --   migration  a saved rule's npc becomes interacting (rows, triggers,
 --              Cooldown Manager groups, combat sound lists), once; other
---              words (friendlynpc, npcs) untouched
+--              words (friendlynpc, npcs) untouched; saved profiles, backups
+--              and strings shared from before too (no npcWord), new ones kept
 --   editor     Any NPC on the Target line, Interacting first on You
 --   all names  the All names row: Always to start (no change); a rule
 --              saying no turns every other names row off, itself not gated
@@ -104,6 +105,44 @@ local function RunClient(client)
 		"migration: combat sound lists")
 	Check(t.plainText == "npc", "migration: other text settings untouched")
 	Check(ns.db.ruleNpcInteractingV1 == true, "migration: marked done at login")
+	-- (Release review, 2026-11-24: backups, a deleted profile's, and strings
+	-- shared from before keep their npc's old meaning: interacting.)
+	ns.db.profiles.OldSaved = { settings = { frameRules = { a = "npc or combat" } } }
+	ns.db.profileBackups = { Old = { { time = 1, settings = { frameRules = { a = "not npc" } } } } }
+	ns.db.deletedProfiles = { Gone = { backups = { { time = 1, settings = { frameRules = { a = "npc" } } } } } }
+	ns.db.ruleNpcInteractingV1 = nil
+	ns.RunMigrations()
+	Check(ns.db.profileBackups.Old[1].settings.frameRules.a == "not interacting"
+		and ns.db.deletedProfiles.Gone.backups[1].settings.frameRules.a == "interacting",
+		"migration: backups and a deleted profile's backups")
+	Check(ns.db.profiles.OldSaved.settings.frameRules.a == "interacting or combat", "migration: a saved profile's rules")
+	ns.db.profiles.OldSaved, ns.db.profileBackups, ns.db.deletedProfiles = nil, {}, {}
+	local oldShare = ns.PackShared("CINE", 1, { format = 1, version = "v2.1.33", name = "Old",
+		settings = { frameRules = { [ns.NameRuleKey("YourTarget")] = "not npc" } } })
+	local read = ns.ReadSharedProfile(oldShare)
+	Check(read and read.settings.frameRules[ns.NameRuleKey("YourTarget")] == "not interacting",
+		"migration: a profile string from before (no npcWord)")
+	local newShare = ns.PackShared("CINE", 1, { format = 1, version = "v2.1.34", name = "New", npcWord = "target",
+		settings = { frameRules = { [ns.NameRuleKey("YourTarget")] = "not npc" } } })
+	read = ns.ReadSharedProfile(newShare)
+	Check(read and read.settings.frameRules[ns.NameRuleKey("YourTarget")] == "not npc",
+		"migration: a profile string from now keeps npc")
+	local function CamShare(mark)
+		return ns.PackCameraShare({ kind = "trigger", name = "T", npcWord = mark,
+			triggers = { t1 = "event:X" }, defs = { t1 = { name = "T", cond = "npc and combat" } } })
+	end
+	local cam = ns.ReadCameraShare(CamShare(nil))
+	Check(cam and cam.defs[1] and cam.defs[1].cond == "interacting and combat", "migration: a camera trigger string from before")
+	cam = ns.ReadCameraShare(CamShare("target"))
+	Check(cam and cam.defs[1] and cam.defs[1].cond == "npc and combat", "migration: a camera trigger string from now keeps npc")
+	local ruleKey = "effect:inn"
+	local wasSettings = ns.ProfileForSharing
+	ns.ProfileForSharing = function() return { frameRules = { [ruleKey] = "not npc" } } end
+	local ok, export = pcall(ns.ExportProfile, ns.ActiveProfile())
+	ns.ProfileForSharing = wasSettings
+	local back = ok and export and ns.ReadSharedProfile(export)
+	Check(back and type(back.settings.frameRules) == "table" and back.settings.frameRules[ruleKey] == "not npc",
+		"migration: our own export reads back with npc kept", not ok and export or nil)
 
 	-- Editor --------------------------------------------------------------
 	local target, you

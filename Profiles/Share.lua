@@ -184,6 +184,9 @@ function ns.ExportProfile(name)
 		icon = ns.ProfileIcon(name),
 		from = UnitName("player"),
 		settings = ns.ProfileForSharing(name),
+		-- (Its rules' npc means a targeted NPC: one without this is from
+		-- before, its npc meaning interacting. ReadSharedProfile, below.)
+		npcWord = "target",
 	}
 	-- (A theme of yours is the account's, not the profile's: it goes along as
 	-- a theme's own share text, added to theirs on import. Older versions skip it.)
@@ -220,6 +223,9 @@ function ns.ReadSharedProfile(text)
 	-- (One from before the Cooldown Manager's grid: its numbered lines made
 	-- scenes, not skipped as from a newer version. Release review, 2026-11-22.)
 	if ns.MigrateCooldownLines then ns.MigrateCooldownLines(data.settings) end
+	-- (One from before npc meant a targeted NPC: its npc is interacting.
+	-- Migrations.lua. Release review, 2026-11-24.)
+	if data.npcWord == nil and ns.NpcRuleToInteracting then ns.NpcRuleToInteracting(data.settings) end
 	for key, value in pairs(data.settings) do
 		if ns.KnownProfileSetting(key, value) then
 			settings[key] = value

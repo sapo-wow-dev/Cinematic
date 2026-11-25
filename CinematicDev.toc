@@ -395,6 +395,8 @@ Dev\AddonListAllTest.lua
 Dev\LoosePartsSurvey.lua
 Dev\TooltipNoWaitTest.lua
 Dev\AhDressUpTest.lua
+Dev\BarTaintCatch.lua
+Dev\BarTaintTest.lua
 Dev\DrunkCamTest.lua
 Dev\ManaVisionTest.lua
 # (The test queue: TestQueueList.lua is written by Tools/testqueue.py, not kept in git)

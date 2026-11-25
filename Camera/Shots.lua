@@ -398,6 +398,8 @@ function ns.ExportCameraTrigger(id)
 		after = rows[id .. ".after"], camera = shot and "shot" or camera,
 		music = ns.CameraRowValue(id, "music") and true or nil, cine = ns.CameraRowValue(id, "cine") and true or nil,
 		shot = shot and ShotData(shot) or nil,
+		-- (Its conditions' npc means a targeted NPC: ReadCameraShare.)
+		npcWord = "target",
 	})
 end
 function ns.ExportShot(id)
@@ -436,6 +438,12 @@ function ns.ReadCameraShare(text)
 			if source and source:find("^%a+:.") then
 				triggers[#triggers + 1] = source
 				defs[#triggers] = CleanDef(type(data.defs) == "table" and data.defs["t" .. i] or nil, source)
+				-- (One from before npc meant a targeted NPC: its npc is
+				-- interacting. Migrations.lua. Release review, 2026-11-24.)
+				local def = defs[#triggers]
+				if def and data.npcWord == nil and ns.NpcWordToInteracting then
+					def.cond = ns.NpcWordToInteracting(def.cond)
+				end
 			end
 		end
 		if #triggers == 0 then
