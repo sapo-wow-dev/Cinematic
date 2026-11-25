@@ -289,6 +289,14 @@ python -I Tools/testqueue.py wait <id>      (run_in_background: it ends when the
 python -I .claude/skills/test/read_log.py <key> [client]
 ```
 
+**Inspect every error (USER RULE, 2026-11-25).** The kit ends each run with
+`errors during the test: N kind(s)` and one line per error that grew: kind,
+count, first Cinematic file:line, and `THIS TEST'S FEATURE` or `another
+feature` (give the test `files = { "UI/X.lua", ... }` so it can tell). What
+fires after DONE until the /reload comes as `errors after the test:` lines.
+List every one in the reply with its owner, and get each fixed: here, or
+sent to the session that owns it. Never "not this feature" and move on.
+
 Prints the test's log, the session's deverror / BLOCKED / ERROR / chat lines,
 the screenshots taken since it started (open every one), the game's own logs
 (the console's errors and warnings from the last UI session, saved even

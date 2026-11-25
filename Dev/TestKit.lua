@@ -149,6 +149,59 @@ local function Say(run, text)
 	if log then log[#log + 1] = date("%H:%M:%S") .. " " .. text end
 end
 
+-- Error inspection (the user, 2026-11-25: "add it to the test kit. inspect
+-- errors"; a blocked call fired 2 times in a cdmboth run and x36 after its
+-- DONE, and the counts alone never said what it was). Each red-window entry's
+-- count is kept at the start; at the end every entry that grew gets a line:
+-- its kind, how many, its first Cinematic file:line and whether that's in the
+-- test's own files (def.files, paths like "UI/CooldownBoth.lua") or another
+-- feature's. Then watched on to the /reload: what fires after DONE is logged
+-- too ("after the test"), into the same log, before it's saved.
+local function Snapshot()
+	local counts = {}
+	for _, entry in ipairs(ns.DevErrorEntries and ns.DevErrorEntries() or {}) do counts[entry] = entry.count end
+	return counts
+end
+local function Where(stack)
+	if type(stack) ~= "string" then return nil end
+	return stack:match("Cinematic%w*[/\\]([^:%]]+%.lua%]?:%d+)")
+end
+local function Inspect(run, before, label)
+	local lines = {}
+	for _, entry in ipairs(ns.DevErrorEntries and ns.DevErrorEntries() or {}) do
+		local grew = entry.count - (before[entry] or 0)
+		if grew > 0 then
+			local where = Where(entry.stack)
+			where = where and where:gsub("%]", "") or nil
+			local mine
+			for _, file in ipairs(run.def.files or {}) do
+				-- (gsub's count in parens out: it'd be find's start, lua-multireturn-traps.)
+				local pattern = (file:gsub("%.", "%%."):gsub("/", "[/\\]"))
+				if where and where:find(pattern) then mine = true end
+			end
+			local owner = not where and ("(no Cinematic line: " .. tostring(entry.source) .. ")")
+				or mine and "THIS TEST'S FEATURE"
+				or (run.def.files and "another feature: say whose and get it fixed" or "owner: check the file")
+			lines[#lines + 1] = ("  %s %s x%d: %s | at %s | %s"):format(label, entry.kind, grew,
+				tostring(entry.message):sub(1, 140), tostring(where), owner)
+		end
+	end
+	return lines
+end
+Kit.InspectErrors = Inspect
+Kit.ErrorSnapshot = Snapshot
+local afterWatch -- { run, snap }: the last finished run, watched to the /reload
+do
+	local logout = CreateFrame("Frame")
+	logout:RegisterEvent("PLAYER_LOGOUT")
+	logout:SetScript("OnEvent", function()
+		if not afterWatch then return end
+		local lines = Inspect(afterWatch.run, afterWatch.snap, "after the test:")
+		Say(afterWatch.run, ("errors after the test (DONE to /reload): %d kind(s)"):format(#lines))
+		for _, line in ipairs(lines) do Say(afterWatch.run, line) end
+	end)
+end
+
 -- The game's console, live: what the engine says while a run goes ------------
 -- (CONSOLE_MESSAGE: Lua errors with their stack, Blizzard's own too, warnings,
 -- "Test CVar test_cameraOverShoulder has been set to 0.02", "CVar ... failed
@@ -838,6 +891,12 @@ function Kit.Finish(run, done)
 	local summary = ("%s: %d pass, %d fail, %d skip; errors +%d, blocked +%d"):format(done and "DONE" or "STOPPED",
 		run.pass, run.fail, run.skip, errors - run.errors0, blocked - run.blocked0)
 	Say(run, summary)
+	-- Which errors, and whose (each entry that grew during the run).
+	local inspected = Inspect(run, run.errorSnap or {}, "during the test:")
+	Say(run, ("errors during the test: %d kind(s)%s"):format(#inspected,
+		#inspected > 0 and "; read each, list them in the reply, get every one fixed (whoever's it is)" or ""))
+	for _, line in ipairs(inspected) do Say(run, line) end
+	afterWatch = { run = run, snap = Snapshot() }
 	Say(run, "verdicts: " .. table.concat(run.verdicts, "; "))
 	current = nil
 	local title = run.def.title
@@ -1017,6 +1076,8 @@ function Kit.Start(name, arg, resume)
 	ContextLine(run)
 	ConsoleStart(run)
 	run.errors0, run.blocked0 = Counts()
+	run.errorSnap = Snapshot() -- (the inspection at the end: which errors, whose)
+	afterWatch = nil -- (a new run: the last one's after-watch ends here)
 	-- (Each second: CineMode kept off, unless the test leaves it alone, and
 	-- the AFK camera's still timer fresh either way.)
 	KeepCineOff(run)

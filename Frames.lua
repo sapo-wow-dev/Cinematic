@@ -11925,9 +11925,16 @@ do
 		end
 		return not known
 	end
+	-- (The row's Shows: false the buff or DoT (the game's), true the spell's
+	-- own cooldown in its place, "both" the DoT left to the game with the
+	-- cooldown drawn over it, UI/CooldownBoth.lua; 2026-11-25.)
 	function ns.CooldownNoBuffOn(id, group)
-		return ns.CooldownRowSetting("notBuff", id, group) and OwnCooldown(id) and true or false
+		return ns.CooldownRowSetting("notBuff", id, group) == true and OwnCooldown(id) and true or false
 	end
+	function ns.CooldownBothOn(id, group)
+		return ns.CooldownRowSetting("notBuff", id, group) == "both" and OwnCooldown(id) and true or false
+	end
+	ns.CooldownOwnCooldown = OwnCooldown
 
 	local function Apply(icon, id)
 		if applying or not ShowsBuff(icon) then return end

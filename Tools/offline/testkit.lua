@@ -344,6 +344,27 @@ local function RunClient(client)
 	local listed = false
 	for _, line in ipairs(printed) do if line:find("kitcheck", 1, true) then listed = true end end
 	Check("/cine debug kit lists kitcheck", listed)
+
+	-- Error inspection (2026-11-25): which errors grew in a run, and whose.
+	local blocked = { kind = "blocked", message = "CinematicDev: UNKNOWN() (in combat)", count = 2, source = "CinematicDev",
+		stack = "      [C]: ?\n      [CinematicDev/Frames.lua]:4936: in function <CinematicDev/Frames.lua:4928>\n"
+			.. "      [CinematicDev/Plates/PlateParts.lua]:2825: in function" }
+	local mine = { kind = "error", message = "attempt to index nil", count = 1, source = "CinematicDev",
+		stack = "      [CinematicDev/UI/CooldownBoth.lua]:120: in function <CinematicDev/UI/CooldownBoth.lua:100>" }
+	local old = { kind = "error", message = "an old one", count = 5, source = "CinematicDev", stack = nil }
+	local entries = { blocked, mine, old }
+	ns.DevErrorEntries = function() return entries end
+	local snap = ns.TestKit.ErrorSnapshot()
+	blocked.count, mine.count = 38, 3 -- (old didn't grow)
+	local lines = ns.TestKit.InspectErrors({ def = { files = { "UI/CooldownBoth.lua" } } }, snap, "during:")
+	local text = table.concat(lines, "\n")
+	Check("inspect: only the errors that grew (2 of 3)", #lines == 2, #lines)
+	Check("inspect: the blocked call, x36, at Frames.lua:4936, another feature's",
+		text:find("blocked x36", 1, true) and text:find("Frames.lua:4936", 1, true)
+		and text:find("another feature", 1, true) ~= nil, text)
+	Check("inspect: the test's own file named THIS TEST'S FEATURE",
+		text:find("error x2", 1, true) and text:find("UI/CooldownBoth.lua:120 | THIS TEST'S FEATURE", 1, true) ~= nil, text)
+	ns.DevErrorEntries = nil
 end
 
 RunClient("forever")

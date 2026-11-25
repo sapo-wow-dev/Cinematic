@@ -79,6 +79,7 @@ RuleAxes.lua
 UI\QuestStandIn.lua
 UI\CooldownStacks.lua
 UI\CooldownRing.lua
+UI\CooldownBoth.lua
 UI\CooldownMissing.lua
 UI\CooldownRules.lua
 UI\CooldownGrid.lua
@@ -289,6 +290,7 @@ Dev\KitCheckTest.lua
 Dev\ShieldProbeTest.lua
 Dev\SpellScanTest.lua
 Dev\CdmRingTest.lua
+Dev\CdmBothTest.lua
 Dev\ReachFightTest.lua
 Dev\PrdKillTest.lua
 Dev\PlateMatchTest.lua

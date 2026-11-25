@@ -221,6 +221,10 @@ function ns.DevErrorCount(kind)
 	return count, stack
 end
 
+-- Every entry so far (kind, message, count, stack, source): the test kit's
+-- error inspection, Dev/TestKit.lua Kit.InspectErrors (2026-11-25).
+function ns.DevErrorEntries() return entries end
+
 -- BugGrabber (when it owns the error handler, ours may never be called).
 local grabbed = false
 local function UseBugGrabber()

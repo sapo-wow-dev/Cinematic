@@ -88,6 +88,69 @@ local function MakePreview(parent, width)
 end
 ns.MakeCdmStylePreview = MakePreview
 
+-- The Cooldown + DoT tab's preview: a DoT's icon three times, its time in the
+-- middle as the game shows it, the spell's cooldown drawn by the real code
+-- (UI/CooldownBoth.lua's ns.CooldownBothDraw) in this page's look: just cast,
+-- halfway, and one cooling down over and over.
+local BOTH_ICON = "Interface\\Icons\\Spell_Shadow_CurseOfSargeras"
+local BOTH_COOLDOWN = 12 -- the sample cooldown, seconds
+local function MakeBothPreview(parent, width)
+	local L = ns.L
+	local preview = CreateFrame("Frame", nil, parent)
+	preview:SetSize(width, 130)
+	ns.StyleScene(preview, 0.6)
+	local caption = preview:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	caption:SetText(L["Preview"])
+	caption:SetPoint("TOPLEFT", 6, -5)
+	caption.searchSkip = true
+	local SPACING = 120
+	local group = CreateFrame("Frame", nil, preview)
+	group:SetSize(SPACING * 3, ICON + 50)
+	group:SetPoint("CENTER", preview, "CENTER", 0, 0)
+	local samples = {}
+	for i, label in ipairs({ L["Just cast"], L["Halfway"], L["Cooling down"] }) do
+		local icon = CreateFrame("Frame", nil, group)
+		icon:SetSize(ICON, ICON)
+		icon:SetPoint("TOP", group, "TOPLEFT", SPACING * (i - 0.5), -10)
+		icon:SetFrameLevel(group:GetFrameLevel() + 2)
+		icon.Icon = icon:CreateTexture(nil, "ARTWORK")
+		icon.Icon:SetAllPoints()
+		icon.Icon:SetTexture(BOTH_ICON)
+		icon.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		local dot = icon:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
+		dot:SetPoint("CENTER")
+		dot:SetText(({ "18", "12", "6" })[i])
+		dot.searchSkip = true
+		local name = group:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		name:SetText(label)
+		name:SetPoint("TOP", icon, "BOTTOM", 0, -16)
+		name.searchSkip = true
+		samples[i] = icon
+	end
+	local started = GetTime()
+	local function Draining()
+		local t = ((GetTime() - started) % (BOTH_COOLDOWN + 1)) / BOTH_COOLDOWN
+		local left = math.max(0, 1 - math.min(t, 1))
+		return left, left * BOTH_COOLDOWN
+	end
+	function preview:Refresh()
+		if not ns.CooldownBothDraw then return end
+		local look = ns.CooldownBothLook()
+		ns.CooldownBothDraw(samples[1], look, nil, 1, BOTH_COOLDOWN)
+		ns.CooldownBothDraw(samples[2], look, nil, 0.5, BOTH_COOLDOWN / 2)
+		ns.CooldownBothDraw(samples[3], look, nil, Draining())
+	end
+	local since = 0
+	ns.SetOnUpdate(preview, function(_, elapsed)
+		since = since + elapsed
+		if since < 0.1 then return end
+		since = 0
+		if ns.CooldownBothDraw then ns.CooldownBothDraw(samples[3], ns.CooldownBothLook(), nil, Draining()) end
+	end)
+	preview:SetScript("OnShow", preview.Refresh)
+	return preview
+end
+
 function ns.CreateCdmStylePanel(kit)
 	local L = ns.L
 	local canvas, content = kit.CreateScrollPage()
@@ -97,8 +160,11 @@ function ns.CreateCdmStylePanel(kit)
 	local intro = kit.PageIntro(content, title,
 		L["How the drain ring on your tracked buffs looks. Pick which buffs get one on the Cooldown Manager page, under Look."])
 	local preview -- (below: drawn again as each setting changes)
+	local bothPreview -- (the Cooldown + DoT tab's, below)
 	local function Changed()
 		if ns.ApplyCooldownRing then ns.ApplyCooldownRing() end
+		if ns.ApplyCooldownBoth then ns.ApplyCooldownBoth() end
+		if bothPreview then bothPreview:Refresh() end
 		-- (The icons' shape: Action Bar Style's pass, which waits out a fight.)
 		if ns.RefreshActionBarStyle then ns.RefreshActionBarStyle() end
 		if preview then preview:Refresh() end
@@ -124,6 +190,9 @@ function ns.CreateCdmStylePanel(kit)
 	local hosts, _, TabsShown = ns.PageTabsBelow(content, lookHeader, {
 		{ L["Drain ring"], L["How the drain ring on your tracked buffs looks."] },
 		{ L["Icons"], L["The Cooldown Manager icons' shape."] },
+		-- (A spell's cooldown drawn over its DoT: rows set to Both on the
+		-- Cooldown Manager page. UI/CooldownBoth.lua, 2026-11-25.)
+		{ L["Cooldown + DoT"], L["How a spell's cooldown shows over its DoT, on rows whose Shows is Both."] },
 	}, ns.CDM_STYLE_TABS)
 	local function HostStack(host)
 		local top = CreateFrame("Frame", nil, host)
@@ -185,6 +254,40 @@ function ns.CreateCdmStylePanel(kit)
 		end,
 	})
 	ringStack:Note(hosts[1], L["Which buffs get a ring, and the game's timer: the Cooldown Manager page, under Look."], 460)
+
+	-- Cooldown + DoT: the look of a spell's cooldown over its DoT.
+	local bothStack = HostStack(hosts[3])
+	bothPreview = MakeBothPreview(hosts[3], 460)
+	bothStack:Add(bothPreview, "label")
+	kit.AddControl(bothPreview)
+	local bothRows = ns.StyleRows(kit, hosts[3], bothStack, Changed, "cdmStyle", nil, { pictures = true })
+	local function Pipped(db)
+		return bothRows.On(db) and (db.cdmBothLook == nil or db.cdmBothLook == "ring" or db.cdmBothLook == "edge"
+			or db.cdmBothLook == "row")
+	end
+	bothRows.Choices(L["Look:"], "cdmBothLook", {
+		{ "ring", L["Ring"], L["Pips in a ring round the icon."] },
+		{ "edge", L["Edge pips"], L["Square pips along the icon's edge."] },
+		{ "row", L["Row pips"], L["A row of square pips under the icon."] },
+		{ "bar", L["Bar under"], L["A thin bar under the icon."] },
+		{ "corner", L["Corner number"], L["The cooldown's seconds in the icon's corner."] },
+	})
+	bothRows.Choices(L["Pips:"], "cdmBothPips", {
+		{ 4, "4", L["Four pips: a big step each."] },
+		{ 8, "8", L["Eight pips."] },
+		{ 12, "12", L["Twelve pips: small steps."] },
+	}, Pipped)
+	bothRows.Choices(L["Color:"], "cdmBothColor", {
+		{ "custom", L["Custom"], L["The color you pick below."] },
+		{ "class", L["Class"], L["Your class's color."] },
+		{ "white", L["White"], L["Plain white."] },
+	})
+	bothRows.Color(L["Custom color"], { "cdmBothR", "cdmBothG", "cdmBothB" }, L["Click to choose the cooldown's color."],
+		function(db) return bothRows.On(db) and (db.cdmBothColor == nil or db.cdmBothColor == "custom") end)
+	bothStack:Note(hosts[3], L["Which spells show both: the Cooldown Manager page, Look, Shows."], 460)
+	-- (For the tests: a folder tab opened, and the Cooldown + DoT preview.)
+	ns.CdmStyleOpenTab = function(i) if hosts[i] and hosts[i].openSection then hosts[i].openSection() end end
+	ns.cdmBothPreview = bothPreview
 
 	canvas:SetScript("OnShow", kit.PageShown(function()
 		kit.Refresh()

@@ -174,8 +174,15 @@ local LOOK = {
 		end },
 	keybinds = { label = L["Keybinds"], tip = L["Each spell's keybind on its icon."], values = { true, false }, Text = ShowHide },
 	-- (Short: "Cooldown, not buff" was cut to "Cooldown, not..." in game, run 1.)
-	notBuff = { label = L["Own cooldown"], tip = L["Shows the spell's own cooldown instead of its buff or DoT."],
-		values = { true, false }, Text = OnOff },
+	-- (Shows, 2026-11-25: was Own cooldown, on or off. Both: the DoT stays,
+	-- the cooldown drawn over it, its look on Style > Cooldown Manager,
+	-- UI/CooldownBoth.lua. Hidden on spells with no cooldown of their own.)
+	notBuff = { label = L["Shows"], tip = L["What the icon shows while the spell's buff or DoT is up: that, the spell's own cooldown, or both. Both's look: Style > Cooldown Manager."],
+		values = { false, true, "both" },
+		Text = function(value)
+			if value == "both" then return L["Both"] end
+			return value and L["Cooldown"] or L["Buff/DoT"]
+		end },
 	flash = { label = L["Flash"], tip = L["Flashes the icon for a few seconds when the spell's cooldown ends."],
 		values = { true, false }, Text = OnOff },
 	center = { label = L["Close the gaps"], tip = L["Closes the gaps so the shown icons sit centered."],
@@ -248,6 +255,7 @@ local function LookSet(what, kind, key, value, opts)
 	if ns.ApplyCooldownNumbers then ns.ApplyCooldownNumbers() end
 	if ns.ApplyCooldownKeybinds then ns.ApplyCooldownKeybinds() end
 	if (what == "ring" or what == "ringAmount") and ns.ApplyCooldownRing then ns.ApplyCooldownRing() end
+	if what == "notBuff" and ns.ApplyCooldownBoth then ns.ApplyCooldownBoth() end
 end
 -- A look's choices for a row, in order (a bar's numbers with the base first when it's none of them).
 local function LookValues(what, kind)
@@ -1887,6 +1895,7 @@ function ns.CooldownGrid(parent, opts)
 		end
 		if ns.ApplyCooldownNumbers then ns.ApplyCooldownNumbers() end
 		if ns.ApplyCooldownKeybinds then ns.ApplyCooldownKeybinds() end
+		if ns.ApplyCooldownBoth then ns.ApplyCooldownBoth() end
 		state.pasted = count
 		Changed()
 		Flash(pasted, MODE_COLOR.ready)
@@ -2493,7 +2502,11 @@ function ns.CooldownGrid(parent, opts)
 				-- hidden, not left to set and never draw. Lightning Shield, 2026-11-23.)
 				local noRing = not isBar and (col.look == "ring" or col.look == "ringAmount")
 					and ns.CooldownRingFits and not ns.CooldownRingFits(key)
-				cell:SetShown(not noRing)
+				-- (A spell with no cooldown of its own (a DoT) has only its DoT to
+				-- show: its Shows hidden. 2026-11-25.)
+				local noOwn = not isBar and col.look == "notBuff" and type(key) == "number"
+					and ns.CooldownOwnCooldown and not ns.CooldownOwnCooldown(key)
+				cell:SetShown(not noRing and not noOwn)
 			end
 			for j = n + 1, #row.cells do row.cells[j]:Hide() end
 			y = y - rowH
