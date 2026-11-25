@@ -229,6 +229,46 @@ local function RunClient(client)
 	Check("qe DONE after the reload", (Result("qe") or ""):find("result=DONE", 1, true) ~= nil, Result("qe"))
 	Check("then qf ran too", (Result("qf") or ""):find("result=DONE", 1, true) ~= nil, Result("qf"))
 
+	-- A part left out by an earlier test (Gating: out for one reload, ticked
+	-- back on), wanted but not loaded: the queue's Reload before the next
+	-- test, which runs after it (2026-11-25 run qa412 skipped: "Style isn't
+	-- loaded"). Still not loaded after that reload: it starts anyway, no loop.
+	local realLoaded, out = ns.ModuleLoaded, {}
+	ns.ModuleLoaded = function(name) if out[name] then return false end return realLoaded(name) end
+	Check("every part loaded on the stand-in", #Q.PartsToLoad() == 0, table.concat(Q.PartsToLoad(), ", "))
+	ns.TestQueueList = { { id = "qp1", test = "kitcheck", args = "1", session = "S" },
+		{ id = "qp2", test = "kitcheck", args = "1", session = "S" }, { id = "qp3", test = "kitcheck", args = "1", session = "S" } }
+	Q.Start()
+	Advance(4)
+	out.style = true -- (the test leaves Style out and ticks it back on)
+	Advance(60)
+	Check("parts out: qp1 DONE", (Result("qp1") or ""):find("result=DONE", 1, true) ~= nil, Result("qp1"))
+	Check("parts out: Reload first, qp2 not started", box:find("Click Reload first: Style,", 1, true) ~= nil
+		and Q.buttons and Q.buttons.Reload ~= nil and Q.buttons.Reload:GetAttribute("macrotext") == "/reload"
+		and Kit.Running() == nil and not Has(CinematicDB.testQueueLog, "start id=qp2"), box)
+	Check("parts out: the reason in the queue log", Has(CinematicDB.testQueueLog, "reload first for id=qp2: style wanted but not loaded") ~= nil)
+	Advance(30)
+	Check("parts out: it waits for the Reload", not Has(CinematicDB.testQueueLog, "start id=qp2") and CinematicDB.testQueueRun ~= nil)
+	out.style = nil -- (the reload: loaded again)
+	Login(false, true)
+	Advance(9) -- (the queue looks at 5 s, starts 3 s after)
+	Check("after the queue's Reload: goes on with qp2", Has(CinematicDB.testQueueLog, "after the queue's reload for id=qp2: every part loaded") ~= nil
+		and Has(CinematicDB.testQueueLog, "start id=qp2") ~= nil and not (Result("qp2") or ""):find("CUT%-OFF"), Result("qp2"))
+	out.cameras = true
+	Advance(60)
+	Check("after the queue's Reload: qp2 DONE", (Result("qp2") or ""):find("result=DONE", 1, true) ~= nil, Result("qp2"))
+	Check("Cameras out: Reload first for qp3", box:find("Click Reload first: Cameras,", 1, true) ~= nil
+		and not Has(CinematicDB.testQueueLog, "start id=qp3"), box)
+	Login(false, true) -- (reloaded, Cameras still out)
+	Advance(9)
+	Check("still out after the Reload: qp3 starts anyway, no second Reload",
+		Has(CinematicDB.testQueueLog, "still not loaded after the reload for id=qp3: cameras") ~= nil
+		and Has(CinematicDB.testQueueLog, "start id=qp3") ~= nil)
+	Advance(60)
+	Check("qp3 DONE, the queue done", (Result("qp3") or ""):find("result=DONE", 1, true) ~= nil
+		and box:find("^Test queue done: 3 of 3 run") ~= nil, box)
+	ns.ModuleLoaded = realLoaded
+
 	-- The last test ends within 3 s of its Reload (resumed at 2 s, the queue
 	-- looks at 5 s): the queue still wraps up (2026-11-25: stuck on "That was
 	-- the last one. Wrapping up..." after Gating audit fixes).

@@ -40,6 +40,11 @@
 --     test's log (ISSUE line) and the queue log ("issue client= id= test=
 --     step= msg="), which testqueue.py wait prints with the result. The game
 --     saves at a reload, so the session reads it after the queue's Reload.
+--   * Parts left out (the Gating test leaves Visions, Cameras, Style and
+--     Atmosphere out for one reload and ticks them back on; a part loads
+--     only at a reload): before the next test, while one is wanted but not
+--     loaded, the box asks for a Reload click, and the queue goes on with
+--     that test after it (Q.PartsToLoad, Q.WaitReload, Q.Login).
 --   * At the end: a Reload button, which saves the results for the sessions
 --     (Tools/testqueue.py wait <id> sees them then).
 local _, ns = ...
@@ -330,6 +335,38 @@ function Q.WaitFight(state, entry)
 	fightWatch:SetScript("OnEvent", function() FightOver(false) end)
 end
 
+-- The parts wanted but not running: left out by an earlier test (Gating
+-- leaves Visions, Cameras, Style and Atmosphere out for one reload, then
+-- ticks them back on), so every test after it skipped what needs them (the
+-- 2026-11-25 run qa412: "Style isn't loaded"). Sorted, by name.
+function Q.PartsToLoad()
+	local out = {}
+	if not (type(ns.MODULE_KEYS) == "table" and ns.ModuleWanted and ns.ModuleLoaded) then return out end
+	for name in pairs(ns.MODULE_KEYS) do
+		if ns.ModuleWanted(name) and not ns.ModuleLoaded(name) then out[#out + 1] = name end
+	end
+	table.sort(out)
+	return out
+end
+
+local function PartNames(parts)
+	local names = {}
+	for i, name in ipairs(parts) do names[i] = name:sub(1, 1):upper() .. name:sub(2) end
+	return table.concat(names, ", ")
+end
+
+-- The Reload before the next test: the same one again after it (Q.Login).
+function Q.WaitReload(state, entry, parts)
+	local where = Where(state, entry)
+	state.index = state.index - 1 -- (Next takes the same one again)
+	state.reloadFor, state.reloadedFor = entry.id, entry.id
+	Note(("reload first for id=%s: %s wanted but not loaded"):format(entry.id, table.concat(parts, ", ")))
+	Box(("%s - %s"):format(where, Title(entry)),
+		("Click Reload first: %s, left out by an earlier test, load again at the reload. The queue goes on after it.")
+			:format(PartNames(parts)), 1, 0.82, 0)
+	Q.buttons = Kit.ShowButtons({ { kind = "reload" }, { label = "Stop queue", fn = function() Q.Stop() end } })
+end
+
 function Q.Next()
 	local state = State()
 	if not state or state.stopped then return end
@@ -344,6 +381,13 @@ function Q.Next()
 		return Q.WaitFight(state, entry)
 	end
 	state.fightOk = nil
+	-- (A part an earlier test left out and ticked back on loads only at a
+	-- reload: the queue's Reload first, once per test.)
+	local parts = Q.PartsToLoad()
+	if #parts > 0 then
+		if state.reloadedFor ~= id then return Q.WaitReload(state, entry, parts) end
+		Note(("still not loaded after the reload for id=%s: %s; starting anyway"):format(id, table.concat(parts, ", ")))
+	end
 	if not Kit.Has(entry.test) and Kit.OldTest and Kit.OldTest(entry.test) then
 		return Q.StartOld(state, entry)
 	end
@@ -1089,6 +1133,18 @@ function Q.Login()
 			Hook(true)
 			Note(("picked up after the reload: id=%s (%d/%d)"):format(entry.id, state.index or 0, #state.ids))
 			return
+		end
+		-- (The queue's own Reload, for parts left out by an earlier test.)
+		if state.reloadFor and not running then
+			local id = state.reloadFor
+			state.reloadFor = nil
+			Hook(true)
+			began = GetTime()
+			if Q.ShowTracker then Q.ShowTracker() end
+			local left = Q.PartsToLoad()
+			Note(("after the queue's reload for id=%s: %s"):format(id,
+				#left == 0 and "every part loaded" or ("still not loaded: " .. table.concat(left, ", "))))
+			return Q.Next()
 		end
 		if live then
 			Hook(true)
