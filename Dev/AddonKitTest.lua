@@ -13,7 +13,8 @@
 --            <Addon> quick: each of its rows hidden and shown, a fight with
 --            our fade, every frame on screen covered), its log kept as
 --            CinematicDB.addonKit<Target>RowsLog
--- Then your addon list back as it was, and a last Reload.
+-- Then your addon list back as it was, and a last Reload (in the test queue:
+-- the queue's own at the end, and every queued addon kit test runs as one).
 -- After it: python -I Tools/addon-kit/diff.py all <client> (the baseline
 -- saved from the none run, each addon judged against it).
 local _, ns = ...
@@ -266,6 +267,12 @@ steps[#steps + 1] = { key = "back", title = "your addon list back", run = functi
 	if type(CinematicDB.soloAddons) ~= "table" then return r:Log("solo wasn't on") end
 	ns.SoloAddons("off", true)
 	r:Log("addon list put back")
+	-- (Last in a test queue: the queue's own Reload at the end brings them
+	-- back, one Reload less. The user, 2026-11-25: "so many reloads".)
+	local queue = ns.TestQueue
+	if queue and queue.FoldReload and queue.FoldReload("get your addons back") then
+		return r:Log("your addons come back at the test queue's Reload at the end")
+	end
 	r:WaitFor("Reload, to get your addons back", { check = function() return false end, buttons = { { kind = "reload" } } })
 end }
 steps[#steps + 1] = { key = "done", title = "next", run = function(r)
@@ -277,5 +284,8 @@ ns.TestKit.Define({
 	about = "every addon kit probe with no other addon (the baseline) and with each addon alone, plus each one's rows",
 	settings = { "handleChat" },
 	needs = "anywhere quiet; one Reload click per addon",
+	-- (In the test queue: every queued addon kit test runs as one, one
+	-- baseline for all, and last, its put-back Reload the queue's own.)
+	mergeArgs = true, lastInQueue = true,
 	steps = steps,
 })

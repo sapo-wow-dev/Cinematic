@@ -587,6 +587,56 @@ local function RunClient(client)
 		Check(what .. ": not offered again", not Q.IsOpen() and #Q.Pending() == 0)
 		Q.Close()
 	end
+
+	-- Run as one (the user, 2026-11-25: "so many reloads to turn addons on,
+	-- turn them off"): every queued addon kit test is one run, one baseline
+	-- for all, last in the queue, its put-back Reload the queue's own.
+	local kitDef = Kit.Has("addonkit")
+	Check("addon kit: merges and goes last", kitDef and kitDef.mergeArgs and kitDef.lastInQueue)
+	local order = Q.Order({ { id = "a1", test = "addonkit", args = "Foo" }, { id = "g1", test = "gating" },
+		{ id = "k1", test = "kitcheck", args = "" } })
+	Check("addon kit after even Gating", order[1].id == "k1" and order[2].id == "g1" and order[3].id == "a1")
+	local list, merged = Q.Merge({ { id = "k1", test = "kitcheck", args = "" },
+		{ id = "a1", test = "addonkit", args = "Foo", session = "One" },
+		{ id = "a2", test = "addonkit", args = "Bar foo", session = "Two" },
+		{ id = "a3", test = "addonkit", args = "2", session = "Three" },
+		{ id = "a4", test = "addonkit", args = "Baz", session = "One" } })
+	local runIds = {}
+	for i, entry in ipairs(list) do runIds[i] = entry.id end
+	Check("merge: one run for the addon kit's entries, a steps one alone", table.concat(runIds, " ") == "k1 a1 a3",
+		table.concat(runIds, " "))
+	Check("merge: words joined once each, sessions named once", merged.a1 and merged.a1.args == "Foo Bar Baz"
+		and table.concat(merged.a1.also, " ") == "a2 a4" and merged.a1.sessions == "One + Two" and merged.a3 == nil,
+		merged.a1 and (merged.a1.args .. " | " .. merged.a1.sessions))
+	local _, every = Q.Merge({ { id = "a1", test = "addonkit", args = "Foo" }, { id = "a2", test = "addonkit", args = "" } })
+	Check("merge: an entry with no words means every addon", every.a1 and every.a1.args == "")
+
+	local seenArgs, folded = {}, nil
+	Kit.Define({ name = "mergecheck", key = "mergeCheckTest", title = "Merge check", mergeArgs = true, lastInQueue = true,
+		steps = { { key = "one", title = "its words", run = function(r)
+			seenArgs[#seenArgs + 1] = r.arg or ""
+			folded = Q.FoldReload("get your addons back")
+		end } } })
+	ns.TestQueueList = { { id = "m1", test = "mergecheck", args = "Foo", session = "One" },
+		{ id = "m2", test = "mergecheck", args = "Bar", session = "Two" },
+		{ id = "m3", test = "kitcheck", args = "1", session = "Three" } }
+	Q.Start()
+	Advance(60)
+	Check("run as one: started once with both words", #seenArgs == 1 and seenArgs[1]:find("Foo Bar", 1, true) ~= nil,
+		table.concat(seenArgs, " / "))
+	Check("run as one: kitcheck ran first", (Result("m3") or ""):find("result=DONE", 1, true) ~= nil
+		and Has(CinematicDB.testQueueLog, "start id=m3") ~= nil and Has(CinematicDB.testQueueLog, "start id=m1") ~= nil)
+	Check("run as one: each entry its result line", (Result("m1") or ""):find("result=DONE", 1, true) ~= nil
+		and (Result("m2") or ""):find("result=DONE .-%(run as one with id=m1%) log=testQueue_m2Log$") ~= nil, Result("m2"))
+	Check("run as one: each entry its log copy", type(CinematicDB.testQueue_m2Log) == "table" and #CinematicDB.testQueue_m2Log > 0)
+	Check("run as one: nothing left queued", #Q.Pending() == 0, #Q.Pending())
+	Check("last in queue: its Reload is the queue's", folded == true
+		and (box or ""):find("Reload to save the results for the sessions and get your addons back.", 1, true) ~= nil, box)
+	-- (Not last: the test keeps its own Reload.)
+	ns.TestQueueList = { { id = "m4", test = "mergecheck", args = "", session = "One" } }
+	CinematicDB.testQueueRun = { ids = { "m4", "m5" }, index = 1, current = "m4", results = {} }
+	Check("not last in queue: no fold", Q.FoldReload("x") == false)
+	CinematicDB.testQueueRun = nil
 	ns.TestQueueList = {}
 end
 

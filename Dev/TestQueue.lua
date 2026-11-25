@@ -212,10 +212,24 @@ local function Box(text, sub, r, g, b)
 	end
 end
 
+-- An entry run as one with others (Q.Merge): the run's words and whose.
+local function MergedOf(entry)
+	local state = CinematicDB and CinematicDB.testQueueRun
+	return entry and state and state.merged and state.merged[entry.id]
+end
+local function ArgsOf(entry)
+	local m = MergedOf(entry)
+	return m and m.args or entry.args or ""
+end
+local function SessionOf(entry)
+	local m = MergedOf(entry)
+	return m and m.sessions or entry.session or "?"
+end
+
 local function Title(entry)
 	local def = entry and Kit.Has(entry.test)
 	if not entry then return "?" end
-	local args, extra = entry.args or "", ""
+	local args, extra = ArgsOf(entry), ""
 	if args:find("full") then extra = " (every step)"
 	elseif args:find("%d") then
 		local steps = (args:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", ", "))
@@ -252,6 +266,14 @@ local function Record(entry, result, run, oldKey)
 	end
 	Note(("client=%s id=%s test=%s session=%q result=%s log=testQueue_%sLog"):format(Q.client, entry.id, entry.test,
 		tostring(entry.session or "?"), result, entry.id))
+	-- (The entries run as one with it: the same result and log, each its own line.)
+	local m = MergedOf(entry)
+	for _, id in ipairs(m and m.also or {}) do
+		local other = ById(id)
+		if other and not DoneIds()[id] then
+			Record(other, ("%s (run as one with id=%s)"):format(result, entry.id), run, oldKey)
+		end
+	end
 end
 
 -- Old copies: dropped once their entry is out of the list (the session read it).
@@ -280,7 +302,7 @@ local live
 -- it is (the user, 2026-11-23: "see also the session name ... so i can tell
 -- what we are testing"). A long name cut to fit the box.
 local function Where(state, entry)
-	local name = tostring(entry and entry.session or "?")
+	local name = tostring(entry and SessionOf(entry) or "?")
 	if #name > 34 then name = name:sub(1, 32) .. "..." end
 	return ("Queue %d/%d (%s)"):format(state.index or 0, #state.ids, name)
 end
@@ -357,7 +379,8 @@ function Q.Finish(how)
 	Q.lastState = state
 	if tracker and tracker:IsShown() then Q.UpdateTracker() end
 	local left = #Q.Pending()
-	local sub = "Reload to save the results for the sessions." .. (left > 0 and (" %d left for later."):format(left) or "")
+	local sub = "Reload to save the results for the sessions" .. (state.endReload and (" and " .. state.endReload) or "")
+		.. "." .. (left > 0 and (" %d left for later."):format(left) or "")
 	Box(("Test queue %s: %d of %d run, %d with a FAIL."):format(how, ran, total, fails), sub,
 		fails > 0 and 1 or 0.3, fails > 0 and 0.4 or 1, 0.3)
 	EndButtons(sub)
@@ -467,15 +490,15 @@ function Q.Next()
 		-- (Unknown said as unknown, not "Needs you": the 10:31 run, no catalog.)
 		("%s. From %s%s. Starting..."):format(kind == "off" and "Hands off: nothing to do"
 			or kind == "you" and ("Needs you: " .. words) or ("Not known if it needs you (" .. words .. ")"),
-			entry.session or "?", entry.note and entry.note ~= "" and (" (" .. entry.note .. ")") or ""),
+			SessionOf(entry), entry.note and entry.note ~= "" and (" (" .. entry.note .. ")") or ""),
 		kind == "off" and 0.4 or 1, kind == "off" and 1 or 0.82, kind == "off" and 0.55 or 0)
 	Kit.ShowButtons({ { label = "Stop queue", fn = function() Q.Stop() end } })
 	C_Timer.After(GAP, function()
 		local now = State()
 		if now ~= state or state.stopped or state.current ~= id or Going() then return end
 		Kit.HideButtons()
-		Note(("start id=%s test=%s args=%q (%d/%d)"):format(id, entry.test, entry.args or "", state.index, #state.ids))
-		Kit.Start(entry.test, entry.args or "")
+		Note(("start id=%s test=%s args=%q (%d/%d)"):format(id, entry.test, ArgsOf(entry), state.index, #state.ids))
+		Kit.Start(entry.test, ArgsOf(entry))
 		-- (A test with nothing to wait for ends inside Kit.Start: onFinish
 		-- recorded it and cleared current, the next is on its way. kitcheck
 		-- 1 2 got a second, DID-NOT-START line, 2026-11-23.)
@@ -800,9 +823,11 @@ end
 -- doesnt require a reload could go first"): 1 hands off (and names passed
 -- over), 2 needs you, 3 has a Reload click of its own, 4 leaves parts out
 -- (the test's leavesPartsOut, Gating's: every test after it waits on the
--- queue's Reload, so it goes last).
+-- queue's Reload, so it goes last), 5 last of all (lastInQueue, the addon
+-- kit: its last Reload, your addons back, is the queue's own at the end).
 function Q.Group(entry)
 	local def = Kit.Has(entry.test)
+	if def and def.lastInQueue then return 5 end
 	if def and def.leavesPartsOut then return 4 end
 	local cat = type(ns.TestQueueCatalog) == "table" and ns.TestQueueCatalog[entry.test]
 	local reloads = Q.RunAsks and select(2, Q.RunAsks(entry.test, entry)) or (cat and tonumber(cat.reloads) or 0)
@@ -825,20 +850,79 @@ function Q.Order(list)
 	return out
 end
 
+-- One run for a test that takes every entry's words at once (mergeArgs: the
+-- addon kit; the user, 2026-11-25: "so many reloads to turn addons on, turn
+-- them off"): its entries become the first one's run, their words joined
+-- (one with none: every addon), so one baseline and one put-back for all.
+-- An entry for steps (a number in its words) runs on its own.
+-- Returns the list and { [first id] = { args, also = { ids }, sessions } }.
+function Q.Merge(list)
+	local out, groups, first = {}, {}, {}
+	for _, entry in ipairs(list) do
+		local def = Kit.Has(entry.test)
+		local args = entry.args or ""
+		if def and def.mergeArgs and not args:find("%d") then
+			local lead = first[entry.test]
+			if not lead then
+				lead = entry
+				first[entry.test] = entry
+				groups[entry.id] = { words = {}, seen = {}, also = {}, sessions = {}, named = {} }
+				out[#out + 1] = entry
+			else
+				local g = groups[lead.id]
+				g.also[#g.also + 1] = entry.id
+			end
+			local g = groups[lead.id]
+			local session = entry.session or "?"
+			if not g.named[session] then g.named[session] = true; g.sessions[#g.sessions + 1] = session end
+			if not args:find("%S") then g.all = true end
+			for word in args:gmatch("%S+") do
+				if not g.seen[word:lower()] then g.seen[word:lower()] = true; g.words[#g.words + 1] = word end
+			end
+		else
+			out[#out + 1] = entry
+		end
+	end
+	local merged = {}
+	for id, g in pairs(groups) do
+		if #g.also > 0 then
+			merged[id] = { args = g.all and "" or table.concat(g.words, " "), also = g.also,
+				sessions = table.concat(g.sessions, " + ") }
+		end
+	end
+	return out, merged
+end
+
+-- A test's last Reload left for the queue's own at the end (lastInQueue: the
+-- addon kit's "your addons back"), only when nothing runs after it. True when
+-- the queue takes it; the words go on the end box.
+function Q.FoldReload(words)
+	local state = State()
+	if not (state and state.current and not state.stopped) then return false end
+	if state.ids[(state.index or 0) + 1] then return false end
+	state.endReload = words
+	Note(("id=%s: its last Reload is the queue's at the end (%s)"):format(state.current, tostring(words)))
+	return true
+end
+
 -- Runs the given entries (default: every queued one): quick ones first (Q.Order).
 function Q.Start(list)
 	if Going() or State() then
 		ns.Print("test queue: a test is running; stop it first.")
 		return
 	end
-	list = Q.Order(list or Q.Pending())
+	local merged
+	list, merged = Q.Merge(Q.Order(list or Q.Pending()))
 	if #list == 0 then
 		ns.Print("test queue: nothing to run.")
 		return
 	end
 	local ids = {}
 	for i, entry in ipairs(list) do ids[i] = entry.id end
-	CinematicDB.testQueueRun = { ids = ids, index = 0, results = {} }
+	CinematicDB.testQueueRun = { ids = ids, index = 0, results = {}, merged = merged }
+	for id, m in pairs(merged) do
+		Note(("run as one: id=%s with %s, args=%q"):format(id, table.concat(m.also, ", "), m.args))
+	end
 	began = GetTime()
 	Hook(true)
 	Q.ShowTracker()
@@ -1467,7 +1551,8 @@ function Q.UpdateTracker()
 	end
 	f.foot:ClearAllPoints()
 	f.foot:SetPoint("TOPLEFT", f, "TOPLEFT", 14, y - 8)
-	f.foot:SetText(state.ended and "Reload to save the results for the sessions (the button above your screen)."
+	f.foot:SetText(state.ended and ("Reload to save the results for the sessions%s (the button above your screen).")
+		:format(state.endReload and (" and " .. state.endReload) or "")
 		or "Your turn shows here and on the box, with a sound. Drag to move.")
 	f:SetHeight(-y + 8 + (f.foot:GetStringHeight() or 14) + 14)
 	Q.trackerLines, Q.trackerChip = lines, chip[1]
