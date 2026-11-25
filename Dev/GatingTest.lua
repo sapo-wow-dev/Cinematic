@@ -951,6 +951,13 @@ ns.TestKit.Define({
 			if ns.FeatureLoopsOff then off, all = ns.FeatureLoopsOff() end
 			r:Log(("all off: feature loops off %d of %d; every loop running: %s"):format(off, all, AllLabels(audit)))
 			r:Verdict(#running == 0, "every switch off: no loop of the parts or the gated pages: " .. Joined(running))
+			-- (Run 3: the Plate parts keeper ran on here, what it held unknown and not
+			-- seen offline. Every held part, its alpha and its plate (or none): the probe.)
+			if ns.platePartsKept and ns.platePartsKept.Describe then
+				local ok, count, list = pcall(ns.platePartsKept.Describe)
+				r:Log(("probe plate parts held with every switch off: %s %s"):format(tostring(ok and count or count),
+					tostring(ok and list or "")))
+			end
 			PutBackKeys(r, keys, 3)
 			local back = Loops(r, 2)
 			if ns.FeatureLoopsOff then off, all = ns.FeatureLoopsOff() end

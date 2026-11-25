@@ -143,6 +143,36 @@ end
 end
 ns.SetOnUpdate(keeper, ns.Profiled("Plate parts keeper", ns.platePartsKept.Tick))
 
+-- Every part held now, and where (/cine debug gating's probe: the keeper ran on
+-- with every switch off, held parts unexplained offline). Gives the count and
+-- up to 12 "name want= now= at=<unit>:<part> | no plate". Audit 2026-11-25.
+function ns.platePartsKept.Describe()
+	local where = {}
+	local ok, plates = pcall(C_NamePlate.GetNamePlates)
+	for _, plate in ipairs(ok and type(plates) == "table" and plates or {}) do
+		local unitFrame = plate.UnitFrame
+		if unitFrame then
+			for part in pairs(PART_FRAMES) do
+				EachPartFrame(unitFrame, part, function(frame)
+					where[frame] = tostring(unitFrame.unit or plate.namePlateUnitToken or "?") .. ":" .. part
+				end)
+			end
+		end
+	end
+	local lines, count = {}, 0
+	for frame, wanted in pairs(held) do
+		count = count + 1
+		if count <= 12 then
+			local name = frame.GetDebugName and frame:GetDebugName() or tostring(frame)
+			local alpha = frame:GetAlpha()
+			if issecretvalue and issecretvalue(alpha) then alpha = "secret" end
+			lines[#lines + 1] = ("%s want=%s now=%s at=%s%s"):format(tostring(name), tostring(wanted), tostring(alpha),
+				where[frame] or "no plate", polled[frame] and " polled" or "")
+		end
+	end
+	return count, table.concat(lines, "; ")
+end
+
 -- WoW Forever's personal resource bars are a plate too: theirs are left alone.
 local function PersonalPlate()
 	return C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit("player")
