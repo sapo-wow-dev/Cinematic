@@ -95,7 +95,7 @@ function ns.RulePieces()
 			classes[#classes + 1] = { file:lower(), name }
 		end
 	end
-	return {
+	local groups = {
 		{ L["Logic"], { 1, 1, 1 }, { { "and", "AND" }, { "or", "OR" }, { "not", "NOT" }, { "(", "(" }, { ")", ")" } } },
 		{ L["Combat"], { 1, 0.45, 0.4 }, { { "combat", L["In combat"] }, { "calm", L["Calm Timer"] },
 			{ "nocombat", L["Out of combat"] },
@@ -105,17 +105,26 @@ function ns.RulePieces()
 			-- (The most used first: the kinds after, behind the line's +N, 2026-11-24.)
 			{ "target", L["Anything targeted"] }, { "targetself", L["You"] }, { "targetdead", L["Dead target"] },
 			{ "near", L["Near (11 yards)"] }, { "near28", L["Near (28 yards)"] }, { "noplate", L["Plate off screen"] },
-			{ "npc", L["Any NPC"] }, -- (hostile, neutral or friendly: Frames.lua, 2026-11-24)
-			{ "enemyplayer", L["Enemy players"] }, { "hostilenpc", L["Hostile NPCs"] }, { "neutralplayer", L["Neutral players"] },
-			{ "neutralnpc", L["Neutral NPCs"] }, { "friendlyplayer", L["Friendly players"] },
-			{ "friendlynpc", L["Friendly NPCs"] } } },
+			-- (The unit words, one fact each, 2026-11-25: "hostile and player" for
+			-- what enemyplayer said. The old kind words read as before, colored
+			-- as this line, out of the editor: colorOnly.)
+			{ "npc", L["Any NPC"] }, { "player", L["Any player"] }, { "hostile", L["Hostile"] },
+			{ "neutral", L["Neutral"] } },
+			colorOnly = { "enemyplayer", "hostilenpc", "neutralplayer", "neutralnpc", "friendlyplayer", "friendlynpc" } },
 		-- (The unit under the mouse: Frames.lua's ns.HoverWords. No near or range.)
 		{ L["Mouse over"], { 1, 0.85, 0.45 }, { { "hover", L["Anything"] }, { "hoverenemy", L["Enemy"] },
 			{ "hoverfriendly", L["Friendly"] }, { "hoverself", L["You"] }, { "hoverdead", L["Dead"] },
-			{ "hoverframe", L["On a unit frame"] },
-			{ "hoverenemyplayer", L["Enemy players"] }, { "hoverhostilenpc", L["Hostile NPCs"] },
-			{ "hoverneutralplayer", L["Neutral players"] }, { "hoverneutralnpc", L["Neutral NPCs"] },
-			{ "hoverfriendlyplayer", L["Friendly players"] }, { "hoverfriendlynpc", L["Friendly NPCs"] } } },
+			{ "hoverframe", L["On a unit frame"] }, { "hovernpc", L["Any NPC"] }, { "hoverplayer", L["Any player"] },
+			{ "hoverhostile", L["Hostile"] }, { "hoverneutral", L["Neutral"] } },
+			colorOnly = { "hoverenemyplayer", "hoverhostilenpc", "hoverneutralplayer", "hoverneutralnpc",
+				"hoverfriendlyplayer", "hoverfriendlynpc" } },
+		-- (Your focus, 2026-11-25: Frames.lua's ns.FocusWords. Taken out below
+		-- where the client has no focus.)
+		{ L["Focus"], { 0.95, 0.6, 0.85 }, { { "focus", L["Anything"] },
+			{ "focusenemy", L["Enemy"] }, { "focusfriendly", L["Friendly"] }, { "focusself", L["You"] },
+			{ "focusdead", L["Dead"] }, { "focusnear", L["Near (11 yards)"] }, { "focusnear28", L["Near (28 yards)"] },
+			{ "focusnpc", L["Any NPC"] }, { "focusplayer", L["Any player"] }, { "focushostile", L["Hostile"] },
+			{ "focusneutral", L["Neutral"] } }, focus = true },
 		{ L["Spell range"], { 0.45, 0.9, 0.9 }, ranges },
 		{ L["Nearby"], { 1, 0.5, 0.8 }, { { "elite11", L["Elite near (11 yards)"] },
 			{ "elite28", L["Elite near (28 yards)"] }, { "elite40", L["Elite near (40 yards)"] } } },
@@ -134,6 +143,12 @@ function ns.RulePieces()
 			{ "tipgather", L["Gatherable"] }, { "tipquest", L["Quest objective"] }, { "tipother", L["Anything else"] } },
 			tooltipOnly = true },
 	}
+	if _G.FocusFrame == nil then -- (a client with no focus: no Focus line)
+		for i, group in ipairs(groups) do
+			if group.focus then table.remove(groups, i) break end
+		end
+	end
+	return groups
 end
 
 -- Each situation's colour (a field of the rules' facts: aliases share it).
@@ -148,6 +163,9 @@ local function FieldColor(field)
 				for _, picked in ipairs(piece.pick or {}) do -- (a menu's words: its line's colour too)
 					fieldColor[ns.RULE_WORDS[picked[1]] or picked[1]] = group[2]
 				end
+			end
+			for _, word in ipairs(group.colorOnly or {}) do -- (old words, out of the editor: its line's colour)
+				fieldColor[ns.RULE_WORDS[word] or word] = group[2]
 			end
 		end
 	end
@@ -550,6 +568,10 @@ local function BuildEditor()
 					Tip(button, tip .. "\n\n" .. "")
 				elseif field == "enemy" or field == "friendly" or field == "target" then
 					Tip(button, tip .. "\n\n" .. L["Out of fights only."])
+				elseif field:find("hostile$") then -- (the unit words: what hostile and neutral mean)
+					Tip(button, tip .. "\n\n" .. L["A unit you can attack, red to you."])
+				elseif field:find("neutral$") then
+					Tip(button, tip .. "\n\n" .. L["A yellow NPC, or an enemy player you can't attack yet."])
 				else
 					Tip(button, tip)
 				end

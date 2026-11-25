@@ -20,7 +20,11 @@ end
 
 local WORDS = { "hover", "hoverself", "hoverdead", "hoverenemy", "hoverfriendly", "hoverenemyplayer",
 	"hoverhostilenpc", "hoverneutralplayer", "hoverneutralnpc", "hoverfriendlyplayer", "hoverfriendlynpc",
-	"hoverframe" }
+	"hoverframe", "hoverhostile", "hoverneutral", "hoverplayer", "hovernpc" }
+-- (The rule editor's Mouse over line since 2026-11-25: one fact a word, the
+-- kind words out of it.)
+local EDITOR_WORDS = { "hover", "hoverself", "hoverdead", "hoverenemy", "hoverfriendly", "hoverframe",
+	"hoverhostile", "hoverneutral", "hoverplayer", "hovernpc" }
 
 local function RunClient(client)
 	print("== " .. client)
@@ -32,21 +36,26 @@ local function RunClient(client)
 	InCombatLockdown = function() return combat end
 	UnitAffectingCombat = function(unit) return unit == "player" and combat end
 	-- The game: the unit under the mouse ("mo", nil for none) and the frame.
-	local mo, focus
+	-- (tf: your target, also your focus, for the kit test's units step; nil for none.)
+	local mo, focus, tf
 	local PlayerFrame = CreateFrame("Frame", "PlayerFrame", UIParent)
 	local partyRow = CreateFrame("Button", nil, CreateFrame("Frame", "CompactPartyFrame", UIParent))
 	local onPlate = CreateFrame("Frame", nil, CreateFrame("Frame", nil, WorldFrame))
+	local function Unit(unit)
+		if unit == "mouseover" then return mo end
+		if unit == "target" or unit == "focus" then return tf end
+	end
 	local function Read(field, unit)
-		if unit ~= "mouseover" or not mo then return nil end
-		return mo[field]
+		local u = Unit(unit)
+		return u and u[field]
 	end
 	UnitExists = function(unit)
-		if unit == "mouseover" then return mo ~= nil end
-		return unit == "player"
+		if unit == "player" then return true end
+		return Unit(unit) ~= nil
 	end
 	UnitGUID = function(unit) return Read("guid", unit) end
 	UnitIsDeadOrGhost = function(unit) return Read("dead", unit) or false end
-	UnitIsUnit = function(a, b) return a == "mouseover" and b == "player" and mo ~= nil and mo.me or false end
+	UnitIsUnit = function(a, b) return b == "player" and Unit(a) ~= nil and Unit(a).me or false end
 	UnitIsPlayer = function(unit) return Read("player", unit) or false end
 	UnitCanAttack = function(_, unit) local v = Read("attack", unit) return v == nil and false or v end
 	UnitIsFriend = function(_, unit) local v = Read("friend", unit) return v == nil and true or v end
@@ -108,14 +117,15 @@ local function RunClient(client)
 	mo, focus = { guid = "Creature-1", attack = true, reaction = 2 }, WorldFrame
 	wow.Fire("UPDATE_MOUSEOVER_UNIT")
 	local gen = ns.factsGen
-	ok, wrong = Is(Facts(), { hover = true, hoverenemy = true, hoverhostilenpc = true })
-	Check("hostile NPC in the world: hover, hoverenemy, hoverhostilenpc", ok, wrong)
+	ok, wrong = Is(Facts(), { hover = true, hoverenemy = true, hoverhostilenpc = true,
+		hoverhostile = true, hovernpc = true })
+	Check("hostile NPC in the world: hover, hoverenemy, hoverhostilenpc, hoverhostile, hovernpc", ok, wrong)
 	Check("hostile NPC: the stamp moved (rows read again)", ns.factsGen ~= gen)
 
 	-- 3. Another unit in the same frame, with the event: seen at once.
 	mo = { guid = "Creature-2", attack = false, friend = true, reaction = 5 }
 	wow.Fire("UPDATE_MOUSEOVER_UNIT")
-	ok, wrong = Is(Facts(), { hover = true, hoverfriendly = true, hoverfriendlynpc = true })
+	ok, wrong = Is(Facts(), { hover = true, hoverfriendly = true, hoverfriendlynpc = true, hovernpc = true })
 	Check("a friendly NPC in the same frame, after the event: seen at once", ok, wrong)
 
 	-- 4. The mouse leaves (the game sends nothing): the next frame sees it.
@@ -137,7 +147,8 @@ local function RunClient(client)
 	-- 6. A party member's frame (a button inside it) vs a plate in the world.
 	mo, focus = { guid = "Player-2", player = true }, partyRow
 	Step()
-	ok, wrong = Is(Facts(), { hover = true, hoverfriendly = true, hoverfriendlyplayer = true, hoverframe = true })
+	ok, wrong = Is(Facts(), { hover = true, hoverfriendly = true, hoverfriendlyplayer = true, hoverframe = true,
+		hoverplayer = true })
 	Check("a party frame's button: hoverframe, hoverfriendlyplayer", ok, wrong)
 	focus = onPlate
 	Step()
@@ -146,7 +157,8 @@ local function RunClient(client)
 	-- 7. A corpse in the world.
 	mo, focus = { guid = "Creature-3", dead = true, attack = true, reaction = 2 }, WorldFrame
 	Step()
-	ok, wrong = Is(Facts(), { hover = true, hoverdead = true, hoverfriendly = true, hoverfriendlynpc = true })
+	ok, wrong = Is(Facts(), { hover = true, hoverdead = true, hoverfriendly = true, hoverfriendlynpc = true,
+		hovernpc = true })
 	Check("a corpse: hoverdead, hoverfriendly, hoverfriendlynpc, not hoverenemy", ok, wrong)
 
 	-- 8. A mob dying under a still mouse: the next full working out sees it.
@@ -186,7 +198,7 @@ local function RunClient(client)
 		Check(("rule \"%s\" reads %s"):format(text, tostring(want)), test ~= nil and test(facts) == want, err)
 	end
 
-	-- 11. The rule editor: a Mouse over line with the twelve words, no near or range.
+	-- 11. The rule editor: a Mouse over line with the ten words, no near or range.
 	local line
 	for _, group in ipairs(ns.RulePieces()) do
 		if group[1] == ns.L["Mouse over"] then line = group end
@@ -201,8 +213,8 @@ local function RunClient(client)
 			end
 		end
 		local missing = {}
-		for _, word in ipairs(WORDS) do if not have[word] then missing[#missing + 1] = word end end
-		Check("rule editor: all twelve words on it", #missing == 0, table.concat(missing, ", "))
+		for _, word in ipairs(EDITOR_WORDS) do if not have[word] then missing[#missing + 1] = word end end
+		Check("rule editor: all ten words on it", #missing == 0, table.concat(missing, ", "))
 		Check("rule editor: nothing else (no near or range)", #odd == 0, table.concat(odd, ", "))
 	end
 
@@ -278,7 +290,13 @@ local function RunClient(client)
 		ns.db.frameRules["tooltip:All"])
 	mo, focus = { guid = "Player-1", me = true, player = true }, PlayerFrame
 	wow.Fire("UPDATE_MOUSEOVER_UNIT")
+	Advance(6)
+	-- (The units step: a hostile player targeted, then /focus on it.)
+	tf = { guid = "Player-9", attack = true, player = true, friend = false }
+	wow.Fire("PLAYER_TARGET_CHANGED")
+	wow.Fire("PLAYER_FOCUS_CHANGED")
 	Advance(12)
+	tf = nil
 	local log = CinematicDB.mouseWordsTestLog or {}
 	local done, bad = nil, {}
 	for _, line in ipairs(log) do

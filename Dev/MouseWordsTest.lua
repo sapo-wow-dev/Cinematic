@@ -136,7 +136,7 @@ ns.TestKit.Define({
 	end,
 	steps = {
 		{ key = "editor", title = "the rule editor: lines capped at two rows, +N and Fewer", seconds = 12,
-			proven = "run 3 (queue q8e9f), 2026-11-24: 26/26", run = function(r)
+			proven = "run 5 (queue q52b5), 2026-11-25: 26/26, the unit words' lines", run = function(r)
 			ns.OpenOptions("Tooltips")
 			r:Sleep(0.5)
 			if type(ns.db.ruleEditorOpen) ~= "table" then ns.db.ruleEditorOpen = {} end
@@ -147,9 +147,10 @@ ns.TestKit.Define({
 			-- (The Tooltips row in each state; the Minimap row closed: no Tooltip line.)
 			local CASES = {
 				{ key = ROW, state = "closed" }, { key = ROW, state = "open" },
-				{ key = ROW, state = "in the rule", rule = "hoverfriendlynpc or friendlynpc" },
+				{ key = ROW, state = "in the rule", rule = "hoverneutral or neutral" }, -- (each line's last word)
 				{ key = "minimap", state = "closed" },
 			}
+			local fitsClosed = {} -- (line key -> nothing behind a +N when closed: the first closed case)
 			for _, case in ipairs(CASES) do
 				local isOpen = case.state == "open" or nil
 				open.enemy, open.hover = isOpen, isOpen
@@ -167,14 +168,18 @@ ns.TestKit.Define({
 						local look = LineLook(r, editor, line)
 						r:Log(("%s, %s line: %d rows, %d of %d shown, %d behind %q"):format(where, line.key, look.rows,
 							look.shown, look.total, look.hidden, look.more))
+						-- (A line that fits in its two rows closed has no +N, nor Fewer
+						-- open: the Mouse over line since its ten words, 2026-11-25.)
+						local fits = fitsClosed[line.key]
 						if case.state == "open" then
-							r:Verdict(look.shown == look.total and look.more == ns.L["Fewer"],
-								("%s, %s: every word shown, Fewer (%d of %d, %q)"):format(where, line.key, look.shown,
-								look.total, look.more))
+							r:Verdict(look.shown == look.total and look.more == (fits and "" or ns.L["Fewer"]),
+								("%s, %s: every word shown, %s (%d of %d, %q)"):format(where, line.key,
+								fits and "no Fewer (it fits closed)" or "Fewer", look.shown, look.total, look.more))
 						else
-							-- (Nothing left behind it, the rule's word out: no +N.)
+							if case.state == "closed" and fits == nil then fitsClosed[line.key] = look.hidden == 0 end
+							-- (Nothing left behind it: no +N.)
 							local counted = look.hidden > 0 and look.more == "+" .. look.hidden
-								or (case.rule ~= nil and look.hidden == 0 and look.more == "")
+								or (look.hidden == 0 and look.more == "")
 							r:Verdict(counted and look.shown + look.hidden == look.total,
 								("%s, %s: +N counts what's behind it (%q, %d shown + %d)"):format(where, line.key,
 								look.more, look.shown, look.hidden))
@@ -310,6 +315,102 @@ ns.TestKit.Define({
 					("your tooltip shows (alpha %.2f)"):format(GameTooltip:GetAlpha() or 0))
 			end
 			r:Shot("your portrait under the mouse", { behind = GameTooltip })
+		end },
+		{ key = "units", title = "the unit words on your target and focus", seconds = 20,
+			proven = "run 1 (queue q68c0), 2026-11-25: 7/7", run = function(r)
+			-- (Tools/cql-words-plan.md phase 1, 2026-11-25: hostile, neutral,
+			-- player, npc for your target, and the focus words. Each against
+			-- the game's own answers, not ns.TargetNameRow, which makes them.)
+			ns.CompileRule("focus or focushostile") -- (the focus words read from now: ns.focusState.used)
+			local function Game(unit)
+				local dead = UnitIsDeadOrGhost(unit)
+				local attack, isPlayer = UnitCanAttack("player", unit), UnitIsPlayer(unit)
+				local friend, reaction = UnitIsFriend("player", unit), UnitReaction(unit, "player")
+				for _, v in ipairs({ dead, attack, isPlayer, friend, reaction }) do
+					if not Plain(v) then return nil end
+				end
+				local enemy = not dead and (attack or (isPlayer and not friend))
+				local neutral = enemy and (isPlayer and not attack or not isPlayer and reaction == 4) or false
+				return { hostile = enemy and not neutral or false, neutral = neutral, player = isPlayer and true or false,
+					npc = not isPlayer, dead = dead and true or false }, ("dead %s, attackable %s, player %s, friend %s,"
+					.. " reaction %s"):format(tostring(dead), tostring(attack), tostring(isPlayer), tostring(friend),
+					tostring(reaction))
+			end
+			if _G.FocusFrame == nil then
+				r:Log("this client has no focus frame: the focus words left out")
+			else
+				r:WaitFor("Target any NPC or player near you, then type /focus", { check = function()
+					return ns.Flag(UnitExists("focus")) and ns.Flag(UnitExists("target"))
+						and not ns.Flag(UnitIsUnit("target", "player")) or nil
+				end })
+			end
+			r:Sleep(0.5)
+			local facts = ns.RuleFactsNow()
+			local PAIRS = { enemyplayer = "hostile and player", hostilenpc = "hostile and npc",
+				neutralplayer = "neutral and player", neutralnpc = "neutral and npc",
+				friendlyplayer = "not hostile and not neutral and player",
+				friendlynpc = "not hostile and not neutral and npc" }
+			for _, who in ipairs({ { unit = "target", prefix = "" }, { unit = "focus", prefix = "focus" } }) do
+				if ns.Flag(UnitExists(who.unit)) and not ns.Flag(UnitIsUnit(who.unit, "player")) then
+					local want, line = Game(who.unit)
+					r:Log(who.unit .. ": " .. (line or "secret") .. "; words " .. table.concat((function()
+						local on = {}
+						for _, atom in ipairs(ns.UNIT_ATOMS) do
+							if facts[who.prefix .. atom] then on[#on + 1] = who.prefix .. atom end
+						end
+						return on
+					end)(), " "))
+					if want then
+						local wrong = {}
+						for _, atom in ipairs(ns.UNIT_ATOMS) do
+							if (facts[who.prefix .. atom] and true or false) ~= want[atom] then
+								wrong[#wrong + 1] = who.prefix .. atom
+							end
+						end
+						r:Verdict(#wrong == 0, ("%s: hostile, neutral, player, npc match the game%s"):format(who.unit,
+							#wrong > 0 and (": wrong " .. table.concat(wrong, ", ")) or ""))
+					end
+				end
+			end
+			-- (Your target: each old kind word equals its atoms joined with and.)
+			local odd = {}
+			for old, text in pairs(PAIRS) do
+				local a, b = ns.CompileRule(old), ns.CompileRule(text)
+				if not (a and b) or a(facts) ~= b(facts) then odd[#odd + 1] = old end
+			end
+			r:Verdict(#odd == 0, "target: the old kind words equal their atoms" .. (#odd > 0 and (": " .. table.concat(odd,
+				", ")) or ""))
+			if _G.FocusFrame ~= nil then
+				local dead = UnitIsDeadOrGhost("focus")
+				r:Verdict(facts.focus == true and (not Plain(dead) or facts.focusdead == (dead and true or false)),
+					("focus on, focusdead matches the game (%s)"):format(Plain(dead) and tostring(dead) or "secret"))
+				local near = CheckInteractDistance and select(2, pcall(CheckInteractDistance, "focus", 4))
+				if type(near) == "boolean" and Plain(near) then
+					r:Verdict(facts.focusnear28 == near, ("focusnear28 matches the game's 28 yards (%s)"):format(tostring(near)))
+				end
+				-- (The rule editor's Focus line: on screen, nothing cut or covered.)
+				ns.OpenOptions("Tooltips")
+				r:Sleep(0.5)
+				local rule = "focushostile and focusplayer"
+				ns.OpenRuleEditor({ key = ROW, label = ROW, Text = function() return rule end,
+					SetText = function() end, ResetToGrid = function() end, Close = function() end })
+				r:Sleep(0.6)
+				local editor = _G.CinematicRuleEditor
+				local found
+				for _, line in ipairs(editor and editor.lines or {}) do
+					if line.key == "focus" then found = line end
+				end
+				r:Verdict(found ~= nil, "rule editor: a Focus line")
+				if found then
+					local look = LineLook(r, editor, found)
+					r:Verdict(look.cut == 0 and #look.covered == 0 and look.past == 0,
+						("rule editor: Focus line %d of %d shown, %d cut short, %d covered, %d past the edge"):format(
+						look.shown, look.total, look.cut, #look.covered, look.past))
+				end
+				r:Shot("rule editor: the Focus line", { behind = editor })
+				if editor then editor:Hide() end
+				if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+			end
 		end },
 	},
 })

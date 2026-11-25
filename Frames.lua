@@ -3769,6 +3769,31 @@ ns.RULE_WORDS = {
 	deathknight = "deathknight", dk = "deathknight", shaman = "shaman", mage = "mage", warlock = "warlock",
 	monk = "monk", druid = "druid", demonhunter = "demonhunter", dh = "demonhunter", evoker = "evoker",
 }
+-- The unit words, one list for every unit (2026-11-25, Tools/cql-words-plan.md):
+-- one word, one fact, joined with and/or instead of a word for each mix
+-- ("hostile and player", not enemyplayer). hostile: a red unit you can
+-- attack; neutral: a yellow NPC, or an enemy player you can't attack yet;
+-- player or npc: what it is (the kinds' rows, ns.TargetNameRow: a dead unit
+-- counts as friendly). Your target's are bare words, targethostile... too;
+-- the mouse's hover..., mouseover... too; your focus's focus..., with its
+-- distance (focusnear, focusnear28). The old kind words (enemyplayer,
+-- hoverhostilenpc...) stay, out of the rule editor.
+ns.UNIT_ATOMS = { "hostile", "neutral", "player", "npc" }
+for _, atom in ipairs(ns.UNIT_ATOMS) do
+	ns.RULE_WORDS[atom], ns.RULE_WORDS["target" .. atom] = atom, atom
+	ns.RULE_WORDS["hover" .. atom], ns.RULE_WORDS["mouseover" .. atom] = "hover" .. atom, "hover" .. atom
+end
+for _, prop in ipairs({ "", "self", "dead", "enemy", "friendly", "hostile", "neutral", "player", "npc", "near",
+	"near28" }) do
+	ns.RULE_WORDS["focus" .. prop] = "focus" .. prop
+end
+-- The atoms from a unit's kind row (prefix "" for your target, "hover", "focus").
+function ns.SetKindAtoms(v, prefix, row)
+	v[prefix .. "hostile"] = row == "TargetEnemyPlayer" or row == "TargetEnemyNPC"
+	v[prefix .. "neutral"] = row == "TargetNeutralPlayer" or row == "TargetNeutralNPC"
+	v[prefix .. "player"] = row == "TargetEnemyPlayer" or row == "TargetNeutralPlayer" or row == "TargetFriendlyPlayer"
+	v[prefix .. "npc"] = row == "TargetEnemyNPC" or row == "TargetNeutralNPC" or row == "TargetFriendlyNPC"
+end
 -- (One camera running, by its key in ns.activeCam: cam_flight, cam_idle...,
 -- cam_chatcam; cam_script: a camera script playing. The rule editor's Camera
 -- line picks them by name: ns.RULE_CAMERAS.)
@@ -3800,7 +3825,7 @@ end
 -- (All on ns, no locals: this main chunk is at its 200.)
 ns.hoverState = { fields = { "hover", "hoverself", "hoverdead", "hoverenemy", "hoverfriendly", "hoverenemyplayer",
 	"hoverhostilenpc", "hoverneutralplayer", "hoverneutralnpc", "hoverfriendlyplayer", "hoverfriendlynpc",
-	"hoverframe" }, values = {} }
+	"hoverframe", "hoverhostile", "hoverneutral", "hoverplayer", "hovernpc" }, values = {} }
 ns.hoverState.isField = {}
 for _, field in ipairs(ns.hoverState.fields) do ns.hoverState.isField[field] = true end
 ns.hoverState.watch = CreateFrame("Frame")
@@ -3864,11 +3889,46 @@ function ns.HoverWords(facts, now, force)
 	v.hoverneutralplayer, v.hoverneutralnpc = row == "TargetNeutralPlayer", row == "TargetNeutralNPC"
 	v.hoverfriendlyplayer, v.hoverfriendlynpc = row == "TargetFriendlyPlayer", row == "TargetFriendlyNPC"
 	v.hoverframe = onFrame
+	ns.SetKindAtoms(v, "hover", row)
 	local changed = false
 	for _, field in ipairs(state.fields) do
 		if facts[field] ~= v[field] then facts[field], changed = v[field], true end
 	end
 	return changed
+end
+
+-- Your focus (2026-11-25): the mouse's words for the game's "focus" unit,
+-- read as they are (in fights too: what the game won't say reads false),
+-- and focusnear/focusnear28 as near and near28 measure (false where the
+-- game can't say: in a fight). Read in each full working out of
+-- ns.RuleFacts, and only while a rule names a focus word (ns.focusState.used,
+-- set by ns.CompileRule) or the rule editor is up, as the mouse words.
+ns.focusState = { fields = {}, isField = {} }
+for _, prop in ipairs({ "", "self", "dead", "enemy", "friendly", "hostile", "neutral", "player", "npc", "near",
+	"near28" }) do
+	ns.focusState.fields[#ns.focusState.fields + 1] = "focus" .. prop
+	ns.focusState.isField["focus" .. prop] = true
+end
+function ns.FocusWords(facts)
+	local editor = _G.CinematicRuleEditor
+	-- (ns.factsEvery: ns.RuleFactsAll asking for every word.)
+	local exists = (ns.focusState.used or ns.factsEvery or editor and editor:IsShown())
+		and ns.Flag(UnitExists("focus")) and true or false
+	if not exists then
+		for _, field in ipairs(ns.focusState.fields) do facts[field] = false end
+		return
+	end
+	local dead = ns.Flag(UnitIsDeadOrGhost("focus")) and true or false
+	local enemy = not dead and ns.IsEnemyUnit("focus")
+	local isSelf = ns.Flag(UnitIsUnit("focus", "player")) and true or false
+	local row = not isSelf and ns.TargetNameRow and ns.TargetNameRow("focus") or nil
+	facts.focus, facts.focusself, facts.focusdead = true, isSelf, dead
+	facts.focusenemy = enemy == true
+	facts.focusfriendly = dead or enemy == false
+	ns.SetKindAtoms(facts, "focus", row)
+	local within = ns.UnitWithin
+	facts.focusnear = not isSelf and within ~= nil and within("focus", 2) or false
+	facts.focusnear28 = not isSelf and within ~= nil and within("focus", 4) or false
 end
 
 do
@@ -3912,6 +3972,7 @@ do
 		local tokens, err = Tokens(text)
 		local pos = 1
 		local usesHover = false -- (a mouse word in it: ns.HoverWords reads from then on)
+		local usesFocus = false -- (a focus word: ns.FocusWords, the same)
 		local Or
 		local function Unary()
 			local token = tokens[pos]
@@ -3939,6 +4000,7 @@ do
 				local field = ns.RULE_WORDS[token]
 				pos = pos + 1
 				if ns.hoverState.isField[field] then usesHover = true end
+				if ns.focusState.isField[field] then usesFocus = true end
 				return function(f) return f[field] end
 			else
 				err = err or ("\"%s\" isn't a word it knows"):format(token)
@@ -3970,6 +4032,7 @@ do
 			end
 		end
 		if test and usesHover then ns.hoverState.used = true end
+		if test and usesFocus then ns.focusState.used = true end
 		compiled[text] = { test, not test and err or nil }
 		return test, not test and err or nil
 	end
@@ -4121,6 +4184,7 @@ do
 	local function UnitWithin(unit, index)
 		return InteractDistance(unit, index) or false
 	end
+	ns.UnitWithin = UnitWithin -- (the focus words' focusnear: ns.FocusWords)
 	-- The rules' near and near28: in a fight, where nothing can say, as it
 	-- was last measured for the same target (so not near doesn't turn true
 	-- the moment a fight starts); a new target in one: false.
@@ -4744,7 +4808,7 @@ do
 			"ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE",
 			"PLAYER_FLAGS_CHANGED", "UNIT_FACTION", "ENCOUNTER_START", "ENCOUNTER_END",
 			"INSTANCE_ENCOUNTER_ENGAGE_UNIT", "PLAYER_ROLES_ASSIGNED", "PLAYER_SPECIALIZATION_CHANGED",
-			"PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED", "WEATHER_CHANGED" }) do
+			"PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED", "WEATHER_CHANGED", "PLAYER_FOCUS_CHANGED" }) do
 			pcall(factsWatch.RegisterEvent, factsWatch, event)
 		end
 		for _, event in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START",
@@ -4854,9 +4918,11 @@ do
 		facts.enemyplayer, facts.hostilenpc = row == "TargetEnemyPlayer", row == "TargetEnemyNPC"
 		facts.neutralplayer, facts.neutralnpc = row == "TargetNeutralPlayer", row == "TargetNeutralNPC"
 		facts.friendlyplayer, facts.friendlynpc = row == "TargetFriendlyPlayer", row == "TargetFriendlyNPC"
-		-- (Any NPC targeted, whatever it thinks of you: npc, 2026-11-24. Before,
-		-- npc meant interacting: Migrations.lua moved saved rules over.)
-		facts.npc = facts.hostilenpc or facts.neutralnpc or facts.friendlynpc
+		-- (hostile, neutral, player and npc: the unit words, ns.SetKindAtoms. npc,
+		-- any NPC targeted, 2026-11-24: before, npc meant interacting, and
+		-- Migrations.lua moved saved rules over.)
+		ns.SetKindAtoms(facts, "", row)
+		ns.FocusWords(facts) -- (your focus: focus and the rest)
 		-- (Your target with no nameplate: behind the camera, off the side or too
 		-- far. The game only makes plates for units in view; a plate CineMode
 		-- fades is still there. Nameplates turned off for its kind count too.
