@@ -280,7 +280,10 @@ local function RunClient(client)
 	if client == "retail" then
 		Word("Skyride", function() g.gliding = true end, function() g.gliding = false end, "gliding")
 	end
-	Word("/afk", function() g.afk = true end, function() g.afk = false end, "afk")
+	-- (/afk: the game sends PLAYER_FLAGS_CHANGED, which the afk word waits
+	-- for since the 2026-11-25 audit, fix card 2026-11-25-event-fact-flags.md.)
+	local function Flags() wow.Fire("PLAYER_FLAGS_CHANGED", "player") end
+	Word("/afk", function() g.afk = true Flags() end, function() g.afk = false Flags() end, "afk")
 	Word("building", function() g.outdoors = false end, function() g.outdoors = true end, "outdoors")
 	Word("inn", function() g.resting = true end, function() g.resting = false end, "resting")
 	-- Stealth: skipped.

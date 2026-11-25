@@ -5346,6 +5346,17 @@ do
 		key = function() return ns.fakeGroup end, read = function(f)
 		f.group = ns.InGroup() and true or false
 	end })
+	-- Flagged for PvP (ns.IsPvPFlagged) and AFK: after your flags change.
+	-- (AFK may read secret where chat is locked down, a boss fight, so false
+	-- then: asked again as the fight ends.)
+	ns.AddEventFact({ name = "flagged", fields = { "flagged" },
+		unitEvents = { "UNIT_FLAGS", "PLAYER_FLAGS_CHANGED", "UNIT_FACTION" }, read = function(f)
+		f.flagged = ns.IsPvPFlagged() and true or false
+	end })
+	ns.AddEventFact({ name = "afk", fields = { "afk" }, unitEvents = { "PLAYER_FLAGS_CHANGED" },
+		events = { "PLAYER_REGEN_ENABLED" }, read = function(f)
+		f.afk = ns.Flag(UnitIsAFK("player")) and true or false
+	end })
 	-- (target, enemy and friendly as worked out, before SetTargetWords.)
 	local anyTarget, enemyTarget = false, false -- (enemyTarget nil: the game won't say)
 	-- target, enemy and friendly mean what the grids' Enemy targeted and
@@ -5495,7 +5506,7 @@ do
 		-- (The open world: not capital cities, as the grids' Cities is apart.)
 		facts.world = not facts.bg and not facts.instance and not facts.city
 		-- (group: by event, ns.AddEventFact.)
-		facts.flagged = Want("flagged") and ns.IsPvPFlagged() and true or false
+		-- (flagged: by event, ns.AddEventFact.)
 		facts.mounted = ns.Flag(IsMounted()) and true or false
 		-- (On a flight path, whatever camera plays: cam_flight is only our Flight camera.)
 		facts.taxi = ns.Flag(ns.OnTaxi()) and true or false
@@ -5509,7 +5520,7 @@ do
 		facts.moving, facts.rpwalk = moving, rpWalk
 		facts.autorun = rpWalk or (moving and Want("autorun") and ns.IsAutoRunning ~= nil and ns.IsAutoRunning())
 			and true or false
-		facts.afk = Want("afk") and ns.Flag(UnitIsAFK("player")) and true or false
+		-- (afk: by event, ns.AddEventFact.)
 		facts.swimming = Want("swimming") and IsSwimming and ns.Flag(IsSwimming()) and true or false
 		facts.flying = Want("flying") and IsFlying and ns.Flag(IsFlying()) and true or false
 		facts.outdoors = Want("outdoors") and IsOutdoors and ns.Flag(IsOutdoors()) and true or false
