@@ -9612,6 +9612,9 @@ function ns.PadTestBox(text, sub, r, g, b)
 	local box = ns.padTestBox
 	if not box then
 		box = CreateFrame("Frame")
+		-- (Ours, not the addon's: an addon setting a field on it made the
+		-- addon test count it NOT COVERED, ElvUI's run q9ef0.)
+		if ns.LeaveAloneFrame then ns.LeaveAloneFrame(box) end
 		box:SetFrameStrata("FULLSCREEN_DIALOG")
 		box:SetPoint("TOP", UIParent, "TOP", 0, -120)
 		local edge = box:CreateTexture(nil, "BACKGROUND", nil, -1)

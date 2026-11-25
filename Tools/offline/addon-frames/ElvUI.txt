@@ -1,0 +1,56 @@
+# ElvUI's named frames that Support/ElvUI.lua doesn't name, each with why it
+# needs no line there (Tools/addon-check.py check 3). A new frame of its that's
+# in neither = a MISS: decide it (a row, a fade, or here with why). One per
+# line: name or glob (*), a space, why. Checked against v16.02, 2026-11-25.
+
+# Holders of a frame that is faded by its own name (the frame inside fades).
+ElvUIParent its UIParent: its frames on it fade by row, never the whole of it
+ElvUI_MinimapHolder holds the Minimap (faded by name, Minimap row)
+ElvUI_MinimapClusterHolder holds the minimap cluster (Minimap rows fade its parts)
+ElvUI_MinimapClickHandler invisible click area over the minimap
+ElvUI_ExtraActionBarHolder holds the game's ExtraActionBarFrame (faded by name, Extra button row)
+ElvUI_ZoneAbilityHolder holds the game's ZoneAbilityFrame (faded by name, Zone ability row)
+ElvUIQueueStatus holds the game's QueueStatusButton (faded by name)
+ElvUIQueueStatusDisplay its queue timer text, a child of QueueStatusButton (faded with it)
+ElvUIPlayerNamePlateAnchor invisible anchor for its player nameplate (ElvNP_Player, prd row)
+ElvUI_TooltipAnchor invisible anchor its tooltips sit at
+ElvUI_ExperienceBar_Quest inside its XP bar holder (faded, XP row)
+ElvUI_ExperienceBar_Rested inside its XP bar holder (faded, XP row)
+ElvUIAFKChat inside ElvUIAFKFrame (its AFK screen: the AFK scene Conflicts row)
+ElvUIAFKPlayerModel inside ElvUIAFKFrame (its AFK screen: the AFK scene Conflicts row)
+
+# Shown only in a state the game's UI is gone or changed for anyway.
+ElvUIPetBattleActionBar its pet battle bar: pet battles have their own UI
+ElvUIChatHeadFrame* voice chat talking heads, only while someone speaks in voice chat
+ElvUIChatHeadFrame voice chat talking heads, only while someone speaks in voice chat
+ElvUI_PrivateRaidWarning boss warnings in a raid, as the game's raid warnings (left to show)
+
+# Windows, popups, tooltips and option widgets (opened by the player).
+ElvUIInstallFrame its installer window
+ElvUITutorialWindow its tips window
+ElvUIStatusReport its /estatus window
+ElvUIStatusPlugins inside its /estatus window
+ElvUIGrid its /egrid alignment grid while moving frames
+ElvUIBindPopupWindow* its key binding window (/kb)
+ElvUIBindPopupWindow its key binding window (/kb)
+ElvUI_KeyBinder its key binding mode (/kb)
+ElvUI_CopyChatFrame* its copy chat window
+ElvUI_CopyChatFrame its copy chat window
+ElvUIVendorGraysFrame* progress while it sells gray items at a vendor
+ElvUIVendorGraysFrame progress while it sells gray items at a vendor
+ElvUI_Distributor_StatusBar progress while a profile is shared
+ElvUI_ConfigTooltip tooltip of its options
+ElvUI_ScanTooltip hidden tooltip it reads items with
+ElvUI_SpellBookTooltip tooltip on the spellbook
+ElvUI_EasyMenu its right-click menus
+ElvUI_GameMenuButton its button in the game menu (Escape)
+ElvUI_CoordsHolder coordinates on the world map window
+ElvUI_OverlayButton_* overlays on buttons of windows it skins
+ElvUI_QuestRewardGoldIconFrame in the quest window's reward list
+ElvUIAce* its options window's widgets
+ElvUIAceGUI-3.0EditBox* its options window's edit boxes
+ElvUIAceGUI30DropDown* its options window's dropdowns
+
+# Named in Support/ElvUI.lua's code another way.
+ElvUI_MinimapClusterBackdrop found by Support/ElvUI.lua's scanner: Minimap header row
+ElvUIPluginVC* oUF's default unit frame name: ElvUI passes its own (ElvUF_<unit>)

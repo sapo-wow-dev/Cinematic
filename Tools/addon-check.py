@@ -63,6 +63,17 @@ NOT_CHECKED = {
     # table, Core.lua. Read from v1.29.0, 2026-11-22.)
     "BattleTextForever": {"BattleTextForeverIncoming", "BattleTextForeverHealing",
                           "BattleTextForeverNotifications"},
+    # (Its unit frames' names are built: oUF's Spawn with "ElvUF_" .. its unit
+    # (Arena1-5), and power and cast bars as "$parent_PowerBar" / "$parent_CastBar"
+    # (UnitFrames/Elements), its data bars' holders as the bar's name .. "Holder"
+    # (DataBars). Seen made by the addon kit's rows stage, run q9ef0, 2026-11-25,
+    # v16.02, except Honor and Azerite (retail's bars) and Pet experience (a
+    # hunter's pet).)
+    "ElvUI": {"ElvUF_Arena1", "ElvUF_Arena2", "ElvUF_Arena3", "ElvUF_Arena4", "ElvUF_Arena5",
+              "ElvUF_Player_PowerBar", "ElvUF_Pet_PowerBar", "ElvUF_Target_PowerBar", "ElvUF_Focus_PowerBar",
+              "ElvUF_Player_CastBar", "ElvUF_Pet_CastBar", "ElvUI_AzeriteBarHolder", "ElvUI_HonorBarHolder",
+              "ElvUI_ExperienceBarHolder", "ElvUI_PetExperienceBarHolder", "ElvUI_ReputationBarHolder",
+              "ElvUI_ThreatBarHolder"},
 }
 # Names a Support file uses that came in a later version of the addon:
 # "<Support file>": {name: first version}. Not looked for in an older copy (a

@@ -86,7 +86,9 @@ local ROWS = {
 	-- (Classic clients have no Bags row: their bags go with the micro menu.)
 	{ _G.BagsBar and "bags" or "micro", "bars", "ElvUIBagBar" },
 	-- Its bar for an encounter's or quest's own power, in place of the game's.
-	{ "encounter", "encounter", "ElvUI_AltPowerBar" },
+	-- With that bar off, the game's own bar is moved out of EncounterBar
+	-- into its holder (its Blizzard module): the holder fades with the row.
+	{ "encounter", "encounter", "ElvUI_AltPowerBar", "AltPowerBarHolder" },
 	-- (Honor and Azerite: retail only.)
 	{ "xp", "bars","ElvUI_ExperienceBarHolder", "ElvUI_ReputationBarHolder", "ElvUI_PetExperienceBarHolder",
 		"ElvUI_HonorBarHolder", "ElvUI_AzeriteBarHolder" },
@@ -245,6 +247,15 @@ ns.WhenAddonLoads("ElvUI", function()
 		ns.FadeFoundByName(group, names)
 	end
 	ns.AddPlateAlpha(SetPlateAlpha)
+	-- Its chat bubble look: it styles the frame inside each bubble. Bubbles
+	-- show in the world, over who speaks, not on the HUD: left alone (the
+	-- addon test listed one NOT COVERED, run q9ef0).
+	local E = _G.ElvUI and _G.ElvUI[1]
+	local ok, misc = false, nil
+	if E and type(E.GetModule) == "function" then ok, misc = pcall(E.GetModule, E, "Misc", true) end
+	if ok and type(misc) == "table" and type(misc.SkinBubble) == "function" then
+		hooksecurefunc(misc, "SkinBubble", function(_, _, holder) ns.LeaveAloneFrame(holder) end)
+	end
 end)
 
 -- Its own versions of some of Cinematic's features (Addon Conflicts: whose
@@ -362,3 +373,103 @@ ns.WhenAddonLoads("ElvUI", function()
 		end,
 		onPick = function() if ns.RefreshRollWindow then ns.RefreshRollWindow() end end })
 end)
+
+-- Its action bars draw their own buttons, with key and macro texts set per
+-- bar in its own options: the Standard Frames page's Hide keybinds and Hide
+-- macro names only reached the game's pet and stance buttons it keeps in its
+-- bars. Those stand aside too while its bars are on, so its bars look one way.
+ns.WhenAddonLoads("ElvUI", function()
+	local function Theirs() return Private("actionbar", "enable") == true and "ElvUI" or nil end
+	local row = ns.AddConflict({ key = "hideKeybinds", addon = "ElvUI", label = "Action button texts",
+		group = "frames", noBoth = true,
+		about = "Key and macro names on action buttons: the Standard Frames page's Hide keybinds and " ..
+			"Hide macro names, or ElvUI's own per-bar settings",
+		theirs = Theirs,
+		ours = function() return ns.db and (ns.db.hideKeybinds or ns.db.hideMacroText) and true or false end,
+		onPick = function() if ns.ApplyHideKeybinds then ns.ApplyHideKeybinds() end end })
+	ns.AddFeatureYield("hideKeybinds", Theirs, row)
+	ns.AddFeatureYield("hideMacroText", Theirs, row)
+end)
+
+-- What the addon kit sees differ with it loaded, on purpose (Tools/addon-kit,
+-- run q9ef0, 2026-11-25). Its frames stand in for the game's, which it puts
+-- away under a hidden parent ("unnamed"): the Frames page rows above fade its.
+-- (frame.<row> probes name the frame in the field; touch.<Frame> probes in the probe.)
+ns.AddonKitExpect("ElvUI", "frame.*", "PlayerFrame.*", "put away: its player frame stands in")
+ns.AddonKitExpect("ElvUI", "touch.PlayerFrame", "*", "put away: its player frame stands in")
+ns.AddonKitExpect("ElvUI", "frame.*", "PetFrame.parent", "put away: its pet frame stands in")
+ns.AddonKitExpect("ElvUI", "touch.PetFrame", "parent", "put away: its pet frame stands in")
+ns.AddonKitExpect("ElvUI", "frame.*", "TargetFrame.parent", "put away: its target frame stands in")
+ns.AddonKitExpect("ElvUI", "touch.TargetFrame", "parent", "put away: its target frame stands in")
+ns.AddonKitExpect("ElvUI", "frame.*", "FocusFrame.parent", "put away: its focus frame stands in")
+ns.AddonKitExpect("ElvUI", "touch.FocusFrame", "parent", "put away: its focus frame stands in")
+ns.AddonKitExpect("ElvUI", "touch.PartyFrame", "*", "put away: its party frames stand in")
+ns.AddonKitExpect("ElvUI", "frame.*", "CompactRaidFrameManager.parent", "put away: its raid frames stand in")
+ns.AddonKitExpect("ElvUI", "touch.CompactRaidFrameManager", "parent", "put away: its raid frames stand in")
+ns.AddonKitExpect("ElvUI", "frame.*", "*CastingBarFrame.parent", "put away: its cast bars stand in")
+ns.AddonKitExpect("ElvUI", "touch.*CastingBarFrame", "parent", "put away: its cast bars stand in")
+ns.AddonKitExpect("ElvUI", "frame.*", "*uffFrame.*", "put away: its buffs and debuffs stand in")
+ns.AddonKitExpect("ElvUI", "touch.*uffFrame", "*", "put away: its buffs and debuffs stand in")
+-- Its action bars, bag bar, micro bar and XP bars.
+ns.AddonKitExpect("ElvUI", "frame.*", "MainActionBar.*", "put away: its bar 1 stands in")
+ns.AddonKitExpect("ElvUI", "touch.MainActionBar", "*", "put away: its bar 1 stands in")
+ns.AddonKitExpect("ElvUI", "frame.*", "MultiBar*.*", "put away: its bars 2-8 stand in")
+ns.AddonKitExpect("ElvUI", "touch.MultiBar*", "*", "put away: its bars 2-8 stand in")
+ns.AddonKitExpect("ElvUI", "touch.ActionButton_", "visible", "with the main bar put away: its buttons stand in")
+ns.AddonKitExpect("ElvUI", "frame.*", "PetActionBar.parent", "put away: the pet buttons sit in its pet bar")
+ns.AddonKitExpect("ElvUI", "touch.PetActionBar", "parent", "put away: the pet buttons sit in its pet bar")
+ns.AddonKitExpect("ElvUI", "touch.PetActionButton_", "*", "in ElvUI_BarPet, its pet bar (Pet bar row)")
+ns.AddonKitExpect("ElvUI", "frame.*", "StanceBar.parent", "put away: its stance bar stands in")
+ns.AddonKitExpect("ElvUI", "touch.StanceBar", "parent", "put away: its stance bar stands in")
+ns.AddonKitExpect("ElvUI", "touch.PossessActionBar", "parent", "put away: its bars hold the possess buttons")
+ns.AddonKitExpect("ElvUI", "frame.*", "MainMenuBarVehicleLeaveButton.parent",
+	"moved by it, still faded by name on the Main bar row")
+ns.AddonKitExpect("ElvUI", "touch.MainMenuBarVehicleLeaveButton", "parent",
+	"moved by it, still faded by name on the Main bar row")
+ns.AddonKitExpect("ElvUI", "frame.*", "BagsBar.*", "put away: its bags (and its bag bar, off by default) stand in")
+ns.AddonKitExpect("ElvUI", "touch.BagsBar", "*", "put away: its bags stand in")
+ns.AddonKitExpect("ElvUI", "touch.MainMenuBarBackpackButton", "visible", "with the bag bar put away: its bags stand in")
+ns.AddonKitExpect("ElvUI", "frame.*", "MicroButtonAndBagsBar.*", "put away: its micro bar stands in")
+ns.AddonKitExpect("ElvUI", "touch.MicroButtonAndBagsBar", "*", "put away: its micro bar stands in")
+ns.AddonKitExpect("ElvUI", "touch.*MicroButton", "*",
+	"in ElvUI_MicroBar (off in its own options by default); the menu wheel calls their functions")
+ns.AddonKitExpect("ElvUI", "frame.*", "*StatusTrackingBar*.*", "put away: its XP and reputation bars stand in")
+ns.AddonKitExpect("ElvUI", "touch.*StatusTrackingBar*", "*", "put away: its XP and reputation bars stand in")
+ns.AddonKitExpect("ElvUI", "touch.PlayerPowerBarAlt", "parent", "in AltPowerBarHolder, its holder: Encounter row")
+-- Its chat panels hold the game's chat frames, tabs and buttons.
+ns.AddonKitExpect("ElvUI", "frame.*", "ChatFrame*Button.parent", "on its left chat panel")
+ns.AddonKitExpect("ElvUI", "touch.ChatFrame*Button", "parent", "on its left chat panel")
+ns.AddonKitExpect("ElvUI", "frame.*", "GeneralDockManager.parent", "on its left chat panel: its tab strip")
+ns.AddonKitExpect("ElvUI", "touch.GeneralDockManager", "parent", "on its left chat panel: its tab strip")
+ns.AddonKitExpect("ElvUI", "touch.ChatFrame_", "parent", "on its chat panels")
+ns.AddonKitExpect("ElvUI", "touch.ChatFrame_Tab", "alpha", "its chat tabs keep alpha 1 (its own tab fading)")
+ns.AddonKitExpect("ElvUI", "touch.QuickJoinToastButton", "*", "hidden: its chat panels have their own buttons")
+ns.AddonKitExpect("ElvUI", "frame.*", "QuickJoinToastButton.*", "hidden: its chat panels have their own buttons")
+ns.AddonKitExpect("ElvUI", "chat.linesOnly", "chatIsDefault", "false: its chat panel holds the window (chatwindow claim)")
+ns.AddonKitExpect("ElvUI", "chat.linesOnly", "linesOnly",
+	"off with its chat panel: a message brings up its window, no copies under it")
+-- Its minimap: no clock, calendar, compass ring or zone text of the game's.
+ns.AddonKitExpect("ElvUI", "touch.GameTimeFrame", "*", "put away: its minimap has its own calendar")
+ns.AddonKitExpect("ElvUI", "touch.TimeManagerClockButton", "*", "put away: its data texts show the time")
+ns.AddonKitExpect("ElvUI", "touch.MinimapCompassTexture", "*", "hidden by its square minimap")
+ns.AddonKitExpect("ElvUI", "touch.MinimapZoneText", "visible", "its minimap shows the zone its own way")
+ns.AddonKitExpect("ElvUI", "touch.AddonCompartmentFrame", "parent",
+	"moved by its minimap; still faded by name (Addon compartment row)")
+-- Our Addon Frame Links claims for its frames (the LINKS table above, and ClaimChat).
+ns.AddonKitExpect("ElvUI", "link.*", "*", "its frame claimed as that part (Support/ElvUI.lua)")
+-- Game functions it hooks after ours: AceHook SecureHook (hooksecurefunc's
+-- way: the old one still runs, ours in it), and its chat line edits, which
+-- call the frame's AddMessage it found, ours included (OldAddMessage).
+ns.AddonKitExpect("ElvUI", "hook.*", "state", "its SecureHook or OldAddMessage calls ours through: ours still run")
+ns.AddonKitExpect("ElvUI", "touch.*Bag*", "sameAsLogin", "its Bags module's SecureHook: the old one still runs")
+ns.AddonKitExpect("ElvUI", "touch.ToggleBackpack", "sameAsLogin", "its Bags module's SecureHook: the old one still runs")
+ns.AddonKitExpect("ElvUI", "touch.FCF_*", "sameAsLogin", "its Chat module's SecureHook: the old one still runs")
+ns.AddonKitExpect("ElvUI", "touch.SetItemRef", "sameAsLogin", "its Tooltip module's SecureHook: the old one still runs")
+ns.AddonKitExpect("ElvUI", "touch.StaticPopup_Show", "sameAsLogin", "its DebugTools SecureHook: the old one still runs")
+ns.AddonKitExpect("ElvUI", "touch.GameTooltip_SetDefaultAnchor", "sameAsLogin",
+	"its Tooltip module's SecureHook: the old one still runs")
+-- (A tooltip from its panels' data texts under the resting mouse, fading out
+-- as the probes ran: the mouse's state, not a feature of ours.)
+ns.AddonKitExpect("ElvUI", "touch.GameTooltip", "*", "a tooltip of its data panels under the resting mouse")
+ns.AddonKitExpect("ElvUI", "addons.yields", "hideKeybinds", "its bars' own key texts: Action button texts row")
+ns.AddonKitExpect("ElvUI", "addons.yields", "hideMacroText", "its bars' own macro texts: Action button texts row")
