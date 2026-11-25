@@ -119,7 +119,7 @@ function ns.MakePlateThemeDropdown(parent, width, changed, onHover)
 	drop.searchSkip = true
 	drop:SetWidth(width)
 	local function Themes()
-		local themes = { { key = "main", name = L["Follow General"] } }
+		local themes = { { key = "main", name = L["Follow main theme"] } }
 		for _, theme in ipairs(ns.PlateThemeList()) do
 			if theme.key == "game" then table.insert(themes, 2, theme) else themes[#themes + 1] = theme end
 		end
@@ -159,7 +159,7 @@ function ns.MakePlateThemeDropdown(parent, width, changed, onHover)
 	if drop.SetSelectionText then
 		drop:SetSelectionText(function()
 			local key = Picked()
-			local theme = key == "main" and { key = "main", name = L["Follow General"] } or ns.PlateThemeByKey(key)
+			local theme = key == "main" and { key = "main", name = L["Follow main theme"] } or ns.PlateThemeByKey(key)
 			return L["Theme: %s"]:format(theme and NameOf(theme) or key)
 		end)
 	end
@@ -175,7 +175,7 @@ local TILE_W, TILE_H, GAP, ACROSS = 112, 40, 6, 4
 function ns.MakePartThemeStrip(kit, parent, kind, changed)
 	local key = kind == "plate" and "plateTheme" or "nameTheme"
 	local function Themes()
-		local themes = { { key = "main", name = kind == "plate" and L["Follow General"] or L["Follow main theme"] } }
+		local themes = { { key = "main", name = L["Follow main theme"] } }
 		local source = kind == "plate" and ns.PlateThemeList() or ns.NameThemeList()
 		-- (The game's second, right after Follow, 2026-11-16: the plain one easy to find.)
 		for _, theme in ipairs(source) do

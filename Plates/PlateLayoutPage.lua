@@ -18,7 +18,6 @@ local FOR = {
 	{ "all", "All plates", 1 }, { "hostile", "Hostile", 1 }, { "neutral", "Neutral", 2 },
 	{ "friendly", "Friendly NPCs", 3 }, { "player", "Players", 4 },
 }
-local COUNT_NAMES = { always = "Always counts", shown = "Counts while shown", never = "Doesn't count" }
 
 function ns.CreatePlateLayoutPage(kit)
 	if ns.isRetail then return end
@@ -36,7 +35,7 @@ function ns.CreatePlateLayoutPage(kit)
 	local editKey = "all" -- (the layout being edited: "all" or a kind)
 	local selected = "level"
 	local holder, overlay, partsPanel -- (below)
-	local Redraw, RedrawOverlay, RowStates -- (below)
+	local Redraw, RedrawOverlay -- (below)
 
 	-- The layout shown and edited: the kind's own when it has one ticked, else
 	-- All plates' (read); made when first changed (write).
@@ -67,6 +66,11 @@ function ns.CreatePlateLayoutPage(kit)
 			if own and own.own then return own end
 		end
 		return ns.PlateLayoutGet("all")
+	end
+	-- What the stage puts on its plate: the layout shown, while the page's switch is on.
+	local function StageLayout()
+		if not (ns.StyleOn and ns.StyleOn("plateLayout")) then return false end
+		return Shown() or false
 	end
 	local function Part(create)
 		return ns.PlateLayoutPart(Editing(create), selected, create)
@@ -99,61 +103,28 @@ function ns.CreatePlateLayoutPage(kit)
 	-- scroll bar, run qc3be.)
 	local WIDTH = 560
 
-	-- Buttons drawn as the Look panels' segmented buttons (StylePages.lua
-	-- rows.Segments: dark, a gold line under it and gold words while on), for
-	-- the few here that aren't a setting's (the preview's toggles, Mirror and
-	-- the resets). (The user, 2026-11-25: designs of my own didn't fit the addon.)
-	local function Flat(parent, text, width, onClick)
-		local button = CreateFrame("Button", nil, parent)
-		button:SetSize(width, 22)
-		local back = button:CreateTexture(nil, "BACKGROUND")
-		back:SetAllPoints()
-		local line = button:CreateTexture(nil, "ARTWORK")
-		line:SetPoint("BOTTOMLEFT")
-		line:SetPoint("BOTTOMRIGHT")
-		line:SetHeight(2)
-		line:SetColorTexture(1, 0.82, 0, 1)
-		local words = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		words:SetPoint("CENTER", 0, 1)
-		words:SetText(text)
-		button:SetWidth(math.max(width, words:GetStringWidth() + 20))
-		local glow = button:CreateTexture(nil, "HIGHLIGHT")
-		glow:SetAllPoints()
-		glow:SetColorTexture(1, 1, 1, 0.07)
-		function button.SetOn(_, on)
-			back:SetColorTexture(on and 0.2 or 0.1, on and 0.17 or 0.1, on and 0.08 or 0.12, 0.95)
-			line:SetShown(on and true or false)
-			if on then words:SetTextColor(1, 0.82, 0) else words:SetTextColor(0.85, 0.85, 0.85) end
-		end
-		button:SetOn(false)
+	-- The stage's two toggles: the Style Studio's buttons (2026-11-25: every button
+	-- looks like a button), lit while on.
+	local function Flat(parent, text, _, onClick)
+		local button = ns.Studio.C.Button(parent, text)
+		function button.SetOn(self, on) self:Paint(on and "on" or nil) end
 		button:SetScript("OnClick", onClick)
 		return button
 	end
-	local function Caption(parent, text)
-		local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		label:SetText(text)
-		return label
-	end
 
-	-- Row 1: Layout for (and its own layout tick), the presets at the right.
+	-- Layout for: the editor's Applies to (its variants, Style/Studio/Frames/Nameplates.lua),
+	-- the preview's unit with it (the Unit list hidden here: the two disagreed). Own
+	-- layout under the preview, for a kind.
+	local function Edit(key)
+		editKey = key
+		for _, each in ipairs(FOR) do
+			if each[1] == key and holder and holder.PickSample then holder.PickSample(each[3]) end
+		end
+		if holder and holder.LayoutBottomRow then holder.LayoutBottomRow() end
+	end
 	local row1 = CreateFrame("Frame", nil, content)
 	row1:SetSize(WIDTH, 28)
 	stack:Add(row1, "label")
-	local forLabel = Caption(row1, L["Layout for"])
-	forLabel:SetPoint("LEFT", row1, "LEFT", 0, 0)
-	local forDrop = kit.Dropdown(content, { noSettingId = true, get = function() return editKey end,
-		set = function(value) editKey = value end }, (function()
-		local list = {}
-		for _, each in ipairs(FOR) do list[#list + 1] = { text = L[each[2]], value = each[1] } end
-		return list
-	end)(), 170, function(value)
-		for _, each in ipairs(FOR) do
-			if each[1] == value and holder and holder.PickSample then holder.PickSample(each[3]) end
-		end
-		Changed()
-	end)
-	forDrop:SetPoint("LEFT", forLabel, "RIGHT", 8, 0)
-	kit.Tooltip(forDrop, L["Which plates this layout is for. A kind uses All plates' until you tick Own layout."])
 	local own = kit.Check(content, { noSettingId = true, get = function()
 		local layout = ns.PlateLayoutGet(editKey)
 		return layout and layout.own and true or false
@@ -172,60 +143,53 @@ function ns.CreatePlateLayoutPage(kit)
 			end
 			Changed()
 		end)
-	own:SetPoint("LEFT", forDrop, "RIGHT", 12, 0)
-	local PRESETS = { { "game", "Game's" }, { "balanced", "Balanced" }, { "compact", "Compact" },
-		{ "namein", "Name in the bar" } }
-	local presetDrop = kit.Dropdown(content, { noSettingId = true, get = function() return nil end,
-		set = function() end }, (function()
-		local list = {}
-		for _, each in ipairs(PRESETS) do list[#list + 1] = { text = L[each[2]], value = each[1] } end
-		return list
-	end)(), 150, function(value)
-		if ns.PlateLayoutPreset then ns.PlateLayoutPreset(Editing(true), value, holder and holder.plate) end
-		Changed()
-	end)
-	-- (Beside Layout for, Own layout after it (only a kind's): Preset sat alone at the
-	-- row's far end. Audit 2026-11-25.)
-	presetDrop:SetPoint("LEFT", forDrop, "RIGHT", 8, 0)
-	own:ClearAllPoints()
-	own:SetPoint("LEFT", presetDrop, "RIGHT", 12, 0)
-	if presetDrop.SetDefaultText then presetDrop:SetDefaultText(L["Preset"]) end
-	kit.Tooltip(presetDrop, L["A starting point: the game's places, balanced, compact, or the name in the bar."])
-
-	-- Row 2: the center, the Look panels' own segmented buttons (StylePages.lua
-	-- rows.Segments: its heading, joined buttons, the picked one gold): the
-	-- game's bar, balanced on the unit, or shifted by hand (its two boxes
-	-- beside, Custom's only).
-	local styleRows = ns.StyleRows(kit, content, stack, Changed, "plateLayout")
-	local lastCenter = styleRows.Segments(L["Center"], { noSettingId = true, get = function()
-		local layout = Shown()
-		return layout and layout.center or "bar"
-	end, set = function(value)
-		Editing(true).center = value ~= "bar" and value or nil
-	end }, {
-		{ "bar", L["Bar (the game's)"], L["The plate sits as the game puts it."] },
-		{ "balanced", L["Balanced"], L["Moved so what's shown is centered on its unit."] },
-		{ "custom", L["Custom"], L["Moved by your own amount."] },
-	}, L["Where the plate sits on its unit."])
-	local function CenterField(field)
-		return { noSettingId = true, get = function()
-			local layout = Shown()
-			return layout and layout[field] or 0
-		end, set = function(value) Editing(true)[field] = value ~= 0 and value or nil end }
-	end
-	local customLine = kit.BoxLine(content)
-	customLine:SetPoint("LEFT", lastCenter, "RIGHT", 16, 0)
-	customLine:Box(L["Shift"], CenterField("cx"), -RANGE.x, RANGE.x, 1, "%d", 1,
-		L["Moves the whole plate left or right."], Changed, 40)
-	customLine:Box(L["Up"], CenterField("cy"), -RANGE.y, RANGE.y, 1, "%d", 1,
-		L["Moves the whole plate down or up."], Changed, 40)
+	own:SetPoint("LEFT", row1, "LEFT", 0, 0)
+	-- (The center (Bar / Balanced / Custom and its shift) and the presets: the editor's
+	-- Plate part and Looks since 2026-11-25; a preset is one Undo step there.)
 
 	-- The previewer in the shared preview frame, as Nameplate Style's (Options.lua):
-	-- filling it, its own Scene pill in place of the frame's backdrop button.
+	-- filling it, its own Scene button in place of the frame's backdrop button.
 	holder = ns.MakePlateRowLookPreview(preview, WIDTH, "others")
 	holder:ClearAllPoints()
 	holder:SetAllPoints(preview)
 	holder.zoomSkip, holder.noAutoFit = true, true
+	-- (Its bottom row, the user 2026-11-25: "not in the bottom left nice and neat",
+	-- Scene "randomly offset". The Unit list only with All plates: a single kind's
+	-- layout shows that kind (Edit picks it), the two never disagreeing. State at the
+	-- bottom left when it's alone; Scene at the bottom right, level with State (the
+	-- previewer keeps 90 for zoom buttons this page hasn't got).)
+	local unitDrop, stateDrop, sceneButton = holder.unitDropdown, holder.stateDropdown, holder.sceneButton
+	local function BottomRow()
+		local withUnit = unitDrop ~= nil and editKey == "all"
+		if unitDrop then
+			if withUnit then unitDrop:ShowForKind() else unitDrop:Hide() end
+		end
+		if stateDrop then
+			stateDrop:ClearAllPoints()
+			if withUnit then
+				stateDrop:SetPoint("LEFT", unitDrop, "RIGHT", 6, 0)
+			else
+				stateDrop:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 6, 6)
+			end
+		end
+		if sceneButton then
+			local level = stateDrop or unitDrop
+			sceneButton:ClearAllPoints()
+			if level then
+				sceneButton:SetPoint("RIGHT", holder, "RIGHT", -8, 0)
+				sceneButton:SetPoint("TOP", level, "TOP", 0, -math.floor(((level:GetHeight() or 0) - (sceneButton:GetHeight() or 0)) / 2 + 0.5))
+			else
+				sceneButton:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", -8, 6)
+			end
+		end
+	end
+	if unitDrop then
+		unitDrop.ShowForKind = unitDrop.Show
+		unitDrop.Show = function(self) if editKey == "all" then self:ShowForKind() end end
+	end
+	holder.LayoutBottomRow = BottomRow -- (Edit calls it as Layout for changes)
+	BottomRow()
+	preview.layoutStage = true -- (the Studio's hotspots stay off it: its own hits pick and drag)
 	if preview.backButton then preview.backButton:Hide() end
 	preview.backButton = nil
 	local game = holder.gamePlate
@@ -254,7 +218,9 @@ function ns.CreatePlateLayoutPage(kit)
 			tick:SetColorTexture(r, g, b, 0.95)
 			tick:SetSize(2, TICK)
 		end
-		mark.name = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		-- (The page's own size, not the small one: "the unit line is so small no one
+		-- would know what it is", the user 2026-11-25.)
+		mark.name = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		mark.name:SetTextColor(r, g, b)
 		mark.name.searchSkip = true
 		return mark
@@ -417,7 +383,7 @@ function ns.CreatePlateLayoutPage(kit)
 		-- (The middle's own mark only where it's yours to move: Balanced or Custom.)
 		local showMiddle = not together and center ~= "bar"
 		local right = off > 0
-		Place(unitMark, unitX, L["Unit"], showMiddle and (right and "left" or "right") or "center")
+		Place(unitMark, unitX, L["Unit's middle"], showMiddle and (right and "left" or "right") or "center")
 		Place(groupMark, showMiddle and groupX or nil, L["Plate's middle"], right and "right" or "left")
 		span:ClearAllPoints()
 		span:SetShown(guides and showMiddle and unitX ~= nil)
@@ -444,7 +410,6 @@ function ns.CreatePlateLayoutPage(kit)
 			status:SetText("|cffffb060" .. L["%d %s of the unit"]:format(amount, side) .. "|r")
 		end
 		if height < 1 then status:Hide() end
-		if RowStates then RowStates() end
 	end
 
 	-- The preview drawn again: the previewer's plate, then the layout on it.
@@ -469,7 +434,9 @@ function ns.CreatePlateLayoutPage(kit)
 		holder.gameShift, holder.gameScale = nil, scale
 		holder.gameLift = lift + BOTTOM_STRIP + (room - top * scale) / 2
 		holder:Refresh()
-		local layout = Shown()
+		-- (Only with the page's switch on, 2026-11-25: off, the stage showed a layout your
+		-- plates didn't have. The editor's status line says it's off, with Turn on.)
+		local layout = StageLayout()
 		if game and game.gameCopy then
 			game.onLayoutDirty = RedrawOverlay
 			ns.PlateLayoutApply(game, layout or false)
@@ -519,21 +486,26 @@ function ns.CreatePlateLayoutPage(kit)
 		cast = "casting", castIcon = "casting", castText = "casting", castShield = "locked", softTarget = "quest" }
 	local function ShowPart(key)
 		local state = PART_STATE[key]
-		local states = ns.PlatePreviewStates and ns.PlatePreviewStates()
+		local states = ns.PlatePreviewStates and ns.PlatePreviewStates(holder)
 		if not (state and states and ns.TogglePlatePreviewState) then return false end
 		local changed = false
 		if key == "elite" and states.marker then
-			ns.TogglePlatePreviewState("marker")
+			ns.TogglePlatePreviewState("marker", holder)
 			changed = true
 		end
 		if not states[state] then
-			ns.TogglePlatePreviewState(state)
+			ns.TogglePlatePreviewState(state, holder)
 			changed = true
 		end
 		return changed
 	end
+	local editor -- (below: the Style Studio's editor, its part the one picked here)
 	local function Pick(key, clicked)
 		selected = key
+		if editor and editor.partId ~= key then
+			editor.partId = key
+			editor:Redraw()
+		end
 		if ShowPart(key) then Redraw() end
 		kit.Refresh()
 		RedrawOverlay()
@@ -556,18 +528,27 @@ function ns.CreatePlateLayoutPage(kit)
 	end
 	function ns.PlateLayoutPageDrag(key)
 		if not key then
+			local was = drag
 			drag = nil
 			snapLine:Hide()
 			overlay:SetScript("OnUpdate", nil)
+			-- (Dropped: one Undo step in the Style Studio's history, 2026-11-25.)
+			if was and ns.PlateLayoutRecord then
+				ns.PlateLayoutRecord(was.kind, was.key, { x = was.px ~= 0 and was.px or nil, y = was.py ~= 0 and was.py or nil })
+			end
 			-- (Dropped: the preview fitted again, so a part moved far stays in view.)
 			if Redraw then Redraw() end
 			kit.Refresh()
 			return
 		end
 		selected = key
+		if editor and editor.partId ~= key then
+			editor.partId = key
+			editor:Redraw()
+		end
 		local p = Part(true)
 		local x, y = GetCursorPosition()
-		drag = { x = x, y = y, px = p.x or 0, py = p.y or 0 }
+		drag = { x = x, y = y, px = p.x or 0, py = p.y or 0, key = key, kind = editKey }
 		-- (Its edges and the bar's as it's picked up, on the screen.)
 		local copy0 = CopyOf()
 		if copy0 then
@@ -606,7 +587,7 @@ function ns.CreatePlateLayoutPage(kit)
 			if part.x == 0 then part.x = nil end
 			if part.y == 0 then part.y = nil end
 			ns.PlateLayoutChanged()
-			ns.PlateLayoutApply(game, Shown() or false)
+			ns.PlateLayoutApply(game, StageLayout())
 			RedrawOverlay()
 		end)
 		RedrawOverlay()
@@ -657,18 +638,23 @@ function ns.CreatePlateLayoutPage(kit)
 		self:SetPropagateKeyboardInput(false)
 		local by = IsShiftKeyDown() and 5 or 1
 		local part = Part(true)
+		local before = { x = part.x, y = part.y }
 		part.x = Clamp((part.x or 0) + step[1] * by, RANGE.x)
 		part.y = Clamp((part.y or 0) + step[2] * by, RANGE.y)
 		if part.x == 0 then part.x = nil end
 		if part.y == 0 then part.y = nil end
-		local ok = pcall(Changed)
+		-- (Each nudge one Undo step in the Style Studio's history, 2026-11-25.)
+		local ok = pcall(function()
+			if ns.PlateLayoutRecord then ns.PlateLayoutRecord(editKey, selected, before) end
+			Changed()
+		end)
 		if not ok then KeysOff() end
 	end
 
 	-- (Two toggles in the stage's top right: every part up, and the lines.)
 	local ALL_UP = { "casting", "marker", "debuffs", "buffs", "crowd", "quest" }
 	local function AllUp()
-		local states = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
+		local states = ns.PlatePreviewStates and ns.PlatePreviewStates(holder) or {}
 		for _, key in ipairs(ALL_UP) do if not states[key] then return false end end
 		return true
 	end
@@ -684,13 +670,13 @@ function ns.CreatePlateLayoutPage(kit)
 		"buttons says how far off it is."])
 	allBox = Flat(overlay, L["All parts up"], 92, function()
 		-- (On: every part up, to lay them all out; off: just the cast.)
-		local states = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
+		local states = ns.PlatePreviewStates and ns.PlatePreviewStates(holder) or {}
 		local on = not AllUp()
 		for _, key in ipairs(ALL_UP) do
 			if key ~= "casting" and (states[key] and true or false) ~= on and ns.TogglePlatePreviewState then
-				ns.TogglePlatePreviewState(key)
+				ns.TogglePlatePreviewState(key, holder)
 			end
-			if key == "casting" and not states.casting and ns.TogglePlatePreviewState then ns.TogglePlatePreviewState(key) end
+			if key == "casting" and not states.casting and ns.TogglePlatePreviewState then ns.TogglePlatePreviewState(key, holder) end
 		end
 		Redraw()
 	end)
@@ -705,147 +691,10 @@ function ns.CreatePlateLayoutPage(kit)
 	kit.Tooltip(allBox, L["Shows every part on the preview at once (a cast, a marker, debuffs, crowd control, " ..
 		"the soft target icon), to lay them all out. Pick what shows in the State list."])
 
-	-- The parts panel under the stage: the list (gold dot: changed) on the
-	-- left, the picked part's fields on the right, on one dark ground.
-	local ROW_H = 18
-	local panelH = #PARTS * ROW_H + 16
-	partsPanel = CreateFrame("Frame", nil, content)
-	partsPanel:SetSize(WIDTH, panelH)
-	stack:Add(partsPanel, "label")
-	local ground = partsPanel:CreateTexture(nil, "BACKGROUND")
-	ground:SetAllPoints()
-	ground:SetColorTexture(0.02, 0.02, 0.03, 0.55)
-	local divider = partsPanel:CreateTexture(nil, "BORDER")
-	divider:SetColorTexture(0.35, 0.3, 0.2, 0.6)
-	divider:SetWidth(1)
-	divider:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", 178, -8)
-	divider:SetPoint("BOTTOMLEFT", partsPanel, "BOTTOMLEFT", 178, 8)
-	local list = CreateFrame("Frame", nil, partsPanel)
-	list:SetSize(170, #PARTS * ROW_H)
-	list:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", 4, -8)
-	local rows = {}
-	for i, part in ipairs(PARTS) do
-		local row = CreateFrame("Button", nil, list)
-		row:SetSize(170, ROW_H)
-		row:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -(i - 1) * ROW_H)
-		local back = row:CreateTexture(nil, "BACKGROUND")
-		back:SetAllPoints()
-		back:SetColorTexture(1, 0.82, 0, 0.18)
-		row.back = back
-		local text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		text:SetPoint("LEFT", 6, 0)
-		text:SetText(L[part.label])
-		row.text = text
-		-- (A drawn dot: the menu font has no "●", it showed a box, run qc3be.)
-		local dot = row:CreateTexture(nil, "OVERLAY")
-		dot:SetSize(6, 6)
-		dot:SetPoint("RIGHT", -8, 0)
-		dot:SetTexture("Interface\\COMMON\\Indicator-Yellow")
-		dot:SetTexCoord(0.2, 0.8, 0.2, 0.8)
-		row.dot = dot
-		-- ("off": your game's settings hide it. Audit 2026-11-25.)
-		local off = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-		off:SetPoint("RIGHT", -18, 0)
-		off:SetText(L["off"])
-		off:Hide()
-		row.off = off
-		local glow = row:CreateTexture(nil, "HIGHLIGHT")
-		glow:SetAllPoints()
-		glow:SetColorTexture(1, 1, 1, 0.08)
-		row:SetScript("OnClick", function() Pick(part.key, true) end)
-		kit.Tooltip(row, L[part.tip])
-		rows[part.key] = row
-	end
-
-	-- Each part in the list as it is now (audit 2026-11-25: the list never said): white on
-	-- the preview, dim when not up (picking it brings it up), grey with "off" when your
-	-- game's settings hide it. (HiddenBySettings: below, read when this runs.)
-	RowStates = function()
-		local copy = CopyOf()
-		for _, part in ipairs(PARTS) do
-			local row = rows[part.key]
-			if row then
-				local hidden = ns.PlateLayoutHiddenBySettings and ns.PlateLayoutHiddenBySettings(part.key)
-				local up = false
-				local frame = copy and Field(copy, part.path)
-				if frame and Visible(frame) and (not LISTS[part.key] or HasIcon(frame))
-					and (part.key ~= "softTarget" or (frame.Icon and Visible(frame.Icon))) then
-					up = true
-				end
-				row.off:SetShown(hidden ~= nil)
-				if hidden then
-					row.text:SetTextColor(0.45, 0.45, 0.45)
-				elseif up then
-					row.text:SetTextColor(1, 1, 1)
-				else
-					row.text:SetTextColor(0.62, 0.6, 0.55)
-				end
-			end
-		end
-	end
-	local FIELDS_X = 194
-	local partTitle = kit.Label(partsPanel, "GameFontNormal", "")
-	partTitle:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -10)
-	partTitle.searchSkip = true
-	local hangsText = kit.Label(partsPanel, "GameFontDisableSmall", "")
-	hangsText:SetPoint("LEFT", partTitle, "RIGHT", 10, 0)
-	hangsText.searchSkip = true
-	local function PartInfo() for _, part in ipairs(PARTS) do if part.key == selected then return part end end end
-	local function PartField(field, default)
-		return { noSettingId = true, get = function()
-			local p = ns.PlateLayoutPart(Shown(), selected)
-			local value = p and p[field]
-			if value == nil then return default end
-			return value
-		end, set = function(value)
-			local p = Part(true)
-			if value == default then value = nil end
-			p[field] = value
-		end }
-	end
-	-- Hang on: the game's place, another part, or the plate's middle.
-	local hangDrop = kit.Dropdown(content, PartField("to", "game"), function()
-		local choices = { { text = L["Where the game hangs it"], value = "game" } }
-		for _, part in ipairs(PARTS) do
-			if part.key ~= selected and not (ns.PlateLayoutWouldLoop and game and game.gameCopy
-				and ns.PlateLayoutWouldLoop(game, selected, part.key)) then
-				choices[#choices + 1] = { text = L["On: %s"]:format(L[part.label]), value = part.key }
-			end
-		end
-		choices[#choices + 1] = { text = L["On: the plate's middle"], value = "plate" }
-		return choices
-	end, 190, Changed)
-	hangDrop:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X - 2, -34)
-	kit.Tooltip(hangDrop, L["What this part hangs on. Moving that part moves this one with it."])
-	local sideChoices = {}
-	for _, side in ipairs(ns.PLATE_LAYOUT_SIDES) do
-		sideChoices[#sideChoices + 1] = { text = L[ns.PLATE_LAYOUT_SIDE_INFO[side][5]], value = side }
-	end
-	local sideDrop = kit.Dropdown(content, PartField("side", "right"), sideChoices, 130, Changed)
-	sideDrop:SetPoint("LEFT", hangDrop, "RIGHT", 6, 0)
-	kit.Tooltip(sideDrop, L["Which side of that part it sits on."])
-	-- (Number boxes, not sliders: wheel or type, one line, the Nameplate Style page's W and H boxes.)
-	local moveLine = kit.BoxLine(partsPanel)
-	moveLine:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -72)
-	moveLine:Box(L["Left / right"], PartField("x", 0), -RANGE.x, RANGE.x, 1, "%d", 1,
-		L["Moves it left or right, in the plate's own units. The arrow keys over the plate do the same."], Changed, 44)
-	moveLine:Box(L["Down / up"], PartField("y", 0), -RANGE.y, RANGE.y, 1, "%d", 1,
-		L["Moves it down or up, in the plate's own units."], Changed, 44)
-	local sizeLine = kit.BoxLine(partsPanel)
-	sizeLine:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -102)
-	local sizeSlider, sizeName = sizeLine:Box(L["Size"], PartField("scale", 1), 50, 200, 5, "%d%%", 100,
-		L["How big it is, times the game's size."], Changed, 44)
-	local gap, gapName = sizeLine:Box(L["Gap"], PartField("gap", 0), -20, 40, 1, "%d", 1,
-		L["How far it sits from the part it hangs on."], Changed, 44)
-	-- (A part your game's nameplate settings hide: said so, under its fields, so
-	-- you don't lay out what you'll never see. The preview shows it all the same
-	-- where the game would draw it.)
-	local hiddenNote = partsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	hiddenNote:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -172)
-	hiddenNote:SetWidth(WIDTH - FIELDS_X - 16)
-	hiddenNote:SetJustifyH("LEFT")
-	hiddenNote:SetTextColor(1, 0.69, 0.38)
-	hiddenNote.searchSkip = true
+	-- (The parts list and the picked part's fields under the stage: the Style Studio's
+	-- editor since 2026-11-25 (Style/Studio/Frames/Nameplates.lua's "platelayout"): its
+	-- parts, each its Place (Hang on, Side, Left/right, Down/up, Size, Gap, Balance,
+	-- Mirror), Reset by scope and Undo. A part your game's settings hide: a note there.)
 	local function Bit(cvarKey, enumName, which)
 		local registry, constants = _G.CVarCallbackRegistry, _G.NamePlateConstants
 		local values = Enum and Enum[enumName]
@@ -882,107 +731,34 @@ function ns.CreatePlateLayoutPage(kit)
 		return nil
 	end
 	ns.PlateLayoutHiddenBySettings = HiddenBySettings -- (the tests read it)
-	local countLabel = Caption(partsPanel, L["Balance"])
-	countLabel:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -140)
-	-- (Its default is the part's own: the ones that only sometimes show count while
-	-- they're up, the rest always. PlateLayout.lua's ns.PlateLayoutCountOf. Audit 2026-11-25.)
-	local countDrop = kit.Dropdown(content, { noSettingId = true, get = function()
-		return ns.PlateLayoutCountOf(Shown(), selected)
-	end, set = function(value)
-		local p = Part(true)
-		local default = (ns.PLATE_LAYOUT_DEFAULT_COUNT or {})[selected] or "always"
-		p.count = value ~= default and value or nil
-	end }, function()
-		local part = PartInfo()
-		local choices = { { text = L[COUNT_NAMES.always], value = "always" } }
-		if part and part.frame then choices[#choices + 1] = { text = L[COUNT_NAMES.shown], value = "shown" } end
-		choices[#choices + 1] = { text = L[COUNT_NAMES.never], value = "never" }
-		return choices
-	end, 170, Changed)
-	countDrop:SetPoint("LEFT", countLabel, "RIGHT", 8, 0)
-	kit.Tooltip(countDrop, L["Whether this part counts when Center is Balanced: always (steady), only while " ..
-		"it's up (the plate moves as it comes and goes), or never."])
-
-	local function Button(text, tip, onClick)
-		local button = Flat(partsPanel, text, 92, onClick)
-		kit.Tooltip(button, tip)
-		return button
+	-- The editor (Style/Studio/Frames/Nameplates.lua): its variant is Layout for, its
+	-- part the one picked on the stage (and back), its Looks the presets.
+	editor = ns.StyleEditorPage(kit, content, stack, "platelayout", { preview = preview, canvas = canvas, variant = editKey })
+	partsPanel = editor.holder -- (the arrow keys nudge with the mouse over it too)
+	editor.partId = selected
+	local pickEditor = editor.Pick
+	function editor.Pick(self, partId, variant)
+		if variant ~= nil and variant ~= editKey then Edit(variant) end
+		if partId and partId ~= selected and partId ~= "plate" then
+			selected = partId
+			if ShowPart(partId) then Redraw() end
+		end
+		pickEditor(self, partId, variant)
+		Redraw()
 	end
-	local mirror = Button(L["Mirror"], L["Puts it on the other side of the bar, as far out."], function()
-		if ns.PlateLayoutMirror then ns.PlateLayoutMirror(Editing(true), selected, game) end
-		Changed()
-	end)
-	mirror:SetPoint("BOTTOMLEFT", partsPanel, "BOTTOMLEFT", FIELDS_X, 10)
-	local resetPart = Button(L["Reset part"], L["Puts this part back where the game puts it."], function()
-		local layout = Editing(true)
-		if layout.parts then layout.parts[selected] = nil end
-		Changed()
-	end)
-	resetPart:SetPoint("LEFT", mirror, "RIGHT", 6, 0)
-	local resetAll = Button(L["Reset layout"], L["Puts every part, and the center, back as the game has them."],
-		function()
-			local data = ns.PlateLayoutData(true)
-			data[editKey] = nil
-			Changed()
-		end)
-	resetAll:SetPoint("BOTTOMRIGHT", partsPanel, "BOTTOMRIGHT", -10, 10)
 
-	-- The fields as the picked part has them: hidden where they can't apply.
+	-- The stage's toggles and Own layout as the page has them.
 	local refresher = CreateFrame("Frame", nil, content)
 	refresher.Refresh = function()
-		local part = PartInfo()
-		local p = ns.PlateLayoutPart(Shown(), selected)
-		partTitle:SetText(part and L[part.label] or "")
-		local hangs = game and game.gameCopy and ns.PlateLayoutHangsOn and ns.PlateLayoutHangsOn(game, selected)
-		local hangName = hangs == "plate" and L["the plate"] or nil
-		for _, other in ipairs(PARTS) do if other.key == hangs then hangName = L[other.label] end end
-		hangsText:SetText(hangName and L["Hangs on: %s"]:format(hangName) or "")
-		local hiddenWhat = HiddenBySettings(selected)
-		hiddenNote:SetShown(hiddenWhat ~= nil)
-		if hiddenWhat then
-			hiddenNote:SetText(L["Your game's nameplate settings hide %s, so it won't show on your plates. Turn it on in " ..
-				"the game's Options > Nameplates."]:format(L[hiddenWhat]))
-		end
-		local hung = p and p.to and true or false
-		hangDrop:SetShown(part and part.hang and true or false)
-		sideDrop:SetShown(hung)
-		gap:SetShown(hung)
-		gapName:SetShown(hung)
-		local sized = part and part.scale and true or false
-		sizeSlider:SetShown(sized)
-		sizeName:SetShown(sized)
-		for key, row in pairs(rows) do
-			row.back:SetShown(key == selected)
-			row.dot:SetShown(ns.PlateLayoutPartMoves(ns.PlateLayoutPart(Shown(), key)))
-		end
-		RowStates()
-		-- (The fields close up: a row that doesn't apply to this part leaves no gap. Audit 2026-11-25.)
-		local y = -34
-		local function Next(frame, shown, height, x)
-			frame:ClearAllPoints()
-			if shown then
-				frame:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", x or FIELDS_X, y)
-				y = y - height
-			end
-		end
-		Next(hangDrop, part and part.hang, 38, FIELDS_X - 2)
-		Next(moveLine, true, 30)
-		Next(sizeLine, sized or hung, 34)
-		Next(countLabel, true, 30)
-		Next(hiddenNote, hiddenWhat ~= nil, 30)
 		own:SetShown(editKey ~= "all")
-		local layout = Shown()
-		local center = layout and layout.center or "bar"
-		customLine:SetShown(center == "custom")
 		guideBox:SetOn(guides)
 		allBox:SetOn(AllUp())
-		mirror:SetShown(part and part.key ~= "health" and part.key ~= "cast" and true or false)
 	end
 	kit.AddControl(refresher)
 
 	local spacer = CreateFrame("Frame", nil, content)
 	spacer:SetSize(10, 24)
-	spacer:SetPoint("TOPLEFT", partsPanel, "BOTTOMLEFT", 0, 0)
+	spacer:SetPoint("TOPLEFT", editor.holder, "BOTTOMLEFT", 0, 0)
 	stack:Continue(spacer, "label")
 
 	canvas:SetScript("OnShow", function(...)
@@ -1003,13 +779,30 @@ function ns.CreatePlateLayoutPage(kit)
 		ns.PlateLayoutChanged()
 		if Redraw then Redraw() end
 	end)
-	ns.plateLayoutPage = { preview = preview, partsPanel = partsPanel, rows = rows, controls = { { forDrop, "Layout for" }, { own, "Own layout" }, { presetDrop, "Preset" },
-		{ lastCenter, "Center's buttons" }, { allBox, "All parts up" },
-		{ guideBox, "Guides" }, { hangDrop, "Hang on" }, { moveLine, "Left / right, Down / up" },
-		{ sizeLine, "Size, Gap" }, { countDrop, "Balance" }, { mirror, "Mirror" }, { resetAll, "Reset layout" } },
+	-- (The controls the tests check for overlaps: the page's own, then each row the editor
+	-- draws now, by its control. Not the editor's holder: a tall container, it always sits
+	-- under the preview held at the view's top as the page scrolls; run q7ba3.)
+	local controls = {}
+	local function ListControls()
+		for i = #controls, 1, -1 do controls[i] = nil end
+		controls[1], controls[2], controls[3] = { own, "Own layout" }, { allBox, "All parts up" }, { guideBox, "Guides" }
+		for _, row in ipairs(editor.body and editor.body.shownRows or {}) do
+			if row.control then controls[#controls + 1] = { row.control, "Editor: " .. (row.prop.label or row.prop.kind) } end
+		end
+	end
+	ListControls()
+	hooksecurefunc(editor, "Redraw", ListControls)
+	ns.plateLayoutPage = { preview = preview, partsPanel = partsPanel, editor = editor, controls = controls,
 		-- (Refresh: the page's controls drawn again, for a layout changed from outside it: the tests.)
 		Refresh = function() kit.Refresh() end,
-		holder = holder, overlay = overlay, Redraw = Redraw, Select = Pick, Edit = function(key) editKey = key kit.Refresh() Redraw() end, hits = hits, keys = keys, canvas = canvas, readout = offText,
+		holder = holder, overlay = overlay, Redraw = Redraw, Select = Pick,
+		Edit = function(key)
+			Edit(key)
+			editor.variant = key
+			editor:Redraw()
+			kit.Refresh()
+			Redraw()
+		end, hits = hits, keys = keys, canvas = canvas, readout = offText,
 		marks = { unit = unitMark, middle = groupMark, span = span }, plateParts = PARTS, copyOf = CopyOf }
 end
 

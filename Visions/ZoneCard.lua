@@ -102,7 +102,7 @@ function ns.ZoneCardText(zone, subzone, territory, newArea, meta)
 		name = subzone ~= "" and subzone or zone
 		if zone ~= "" and zone ~= name then under[#under + 1] = zone end
 	end
-	if ns.db.storyZoneTerritory and territory ~= "" then under[#under + 1] = territory end
+	if ns.db and ns.db.storyZoneTerritory and territory ~= "" then under[#under + 1] = territory end
 	if name == "" then return nil end
 	return { name = name, sub = table.concat(under, SEPARATOR), meta = meta }
 end

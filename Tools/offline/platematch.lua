@@ -84,7 +84,6 @@ _G.C_XMLUtil = { GetTemplateInfo = function() return { type = "Button" } end }
 -- The settings window: Combat Text Style's page holding a preview, as the page
 -- builds one.
 local panel = CreateFrame("Frame", "SettingsPanel", UIParent)
-local lookOpened -- (Customize's click, followed: see LookPanelOpen below)
 local opened = {}
 ns.OpenOptions = function(page)
 	opened[#opened + 1] = page
@@ -95,20 +94,12 @@ ns.OpenOptions = function(page)
 				if entry.name == "Nameplate Style" and not entry.made then entry.Make("test") end
 			end
 			for _, frame in ipairs(wow.frames) do
-				if rawget(frame, "plateThemeDropdown") ~= nil then
+				-- (The page's content, by its Style Studio editor: 2026-11-25.)
+				if rawget(frame, "plateEditor") ~= nil then
 					local top = frame
 					while top:GetParent() and top:GetParent() ~= UIParent do top = top:GetParent() end
 					top:SetParent(panel)
 					panel.stylePage = top
-					-- (Customize's own click runs; once it has, the panel counts as opened.)
-					local customize = frame.plateCustomize
-					local click = customize and customize:GetScript("OnClick")
-					if click then
-						customize:SetScript("OnClick", function(...)
-							click(...)
-							lookOpened = lookOpened or CreateFrame("Frame")
-						end)
-					end
 				end
 			end
 		end
@@ -144,9 +135,8 @@ ns.PageOffCardWanted = function(page)
 	if page == "Nameplate Layout" then return not ns.db.plateLayout end
 	return false
 end
--- (The Look panel is StylePages', opened from the grid's Look button: the stand-in has no panel, so Customize's
--- click is followed to the panel's open call and stands in for it.)
-ns.LookPanelOpen = function() return lookOpened end
+-- (No Look panel since 2026-11-25: Customize became the Style Studio's editor.)
+ns.LookPanelOpen = function() return nil end
 ns.noRealLayout = true -- (as the kit's other offline checks: the stand-in places every frame alike)
 ns.HandleSlash("debug platematch full") -- (every step, proven or not: what each still does)
 Advance(400) -- (19 states shot on two previews, paced)
@@ -180,9 +170,10 @@ Check("Nameplate Style: one big game plate, its lists, every unit and state on i
 	and Count(log, "verdict PASS stylepage: %a+ list shown on the preview") == 2
 	and Count(log, "verdict SKIP stylepage: %a+: places not read") == 4
 	and Count(log, "verdict PASS stylepage: page state %a+: as your settings draw it") == #ns.GAME_PLATE_STATES)
-Check("Nameplate Style: the Theme list right under the preview, Customize beside it",
-	Has(log, "verdict PASS stylepage: the Theme list and Customize shown") ~= nil
-	and Has(log, "verdict PASS stylepage: the Theme list right under the preview") ~= nil)
+-- (The Theme list and Customize: the Style Studio's editor since 2026-11-25.)
+Check("Nameplate Style: the editor right under the preview",
+	Has(log, "verdict PASS stylepage: the editor shown") ~= nil
+	and Has(log, "verdict PASS stylepage: the editor right under the preview") ~= nil)
 Check("Nameplate Style: a theme pointed at leaves the saved one alone", Has(log, "verdict PASS stylepage: a theme pointed at") ~= nil)
 Check("Nameplate Style off: the off card", Has(log, "verdict PASS stylepage: page switch off: the off card") ~= nil)
 -- (The stand-in has no real layout: the overlap check SKIPs, never a pass.)
@@ -190,9 +181,10 @@ Check("the page: on, the preview and its picks tried; off, the off card", Count(
 	and Count(log, "verdict PASS page: page switch off: the off card shows") == 1
 	and Count(log, "verdict SKIP page: no real layout to measure") == 1)
 Check("a shot per sample, per state, the open dropdown, per page state, the compare and the layout",
-	shots == 4 + #ns.GAME_PLATE_STATES + 1 + 2 + (4 + #ns.GAME_PLATE_STATES + 3) + 1 + 6 + 4, shots)
+	shots == 4 + #ns.GAME_PLATE_STATES + 1 + 2 + (4 + #ns.GAME_PLATE_STATES + 3) + 1 + 7 + 4, shots)
 	-- (+1: the State dropdown open; Nameplate Style's page: a shot per unit, per state, the theme, Customize, off;
-	-- +6: the Layout tab's game places, nudge (the game's place), Custom, Balanced, popped out and off; +4: the
+	-- +7: the Layout tab's game places, a kind's bottom row (2026-11-25), nudge (the game's place), Custom,
+	-- Balanced, popped out and off; +4: the
 	-- target's plate as the game has it,
 	-- with the layout, after the game's re-layout, the switch off.)
 Check("the Layout tab built, opened, its switch on and off", Has(log, "verdict PASS layoutpage: the Layout page built and shown") ~= nil
@@ -227,7 +219,9 @@ Check("plain: the theme pointed at checked (new on the previewer)", Has(log, "ve
 -- (Opened once: Nameplate Style. The Layout tab's step is proven, left out.)
 Check("plain: the off pass, the state loop and Customize left out", #opened - openedBefore == 1
 	and Has(log, "verdict PASS stylepage: page switch off") == nil and Has(log, "verdict PASS stylepage: Customize opens") == nil
-	and Count(log, "  proven, not checked again") == 3, Count(log, "  proven, not checked again"))
+	-- (2026-11-25 Style Studio: 2 proven lines, was 3; the Customize button is gone, its proven check with it.
+	-- OK'd by the user.)
+	and Count(log, "  proven, not checked again") == 2, Count(log, "  proven, not checked again"))
 for _, line in ipairs(log or {}) do if os.getenv("PLATEMATCH_LOG") then print("  | " .. line) end end
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

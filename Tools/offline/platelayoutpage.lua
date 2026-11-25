@@ -80,6 +80,33 @@ if page then
 	page.Select("elite")
 	Check("picking the elite mark turns it on and the marker off (the game hides it under one)",
 		states.elite and not states.marker and true or false)
+	-- (Layout for and the part: two dropdowns on one line, no rows of pills. The user
+	-- 2026-11-25: "can we make this 2 dropdowns? i hate this look".)
+	local body = page.editor and page.editor.body
+	if body and body.f then body:Draw(body.f, body.variant, body.part and body.part.id) end
+	local row = body and body.pickRow
+	Check("the editor draws its two dropdowns", row ~= nil and row:IsShown())
+	local pills = 0
+	for _, b in ipairs(body and body.partButtons or {}) do if b:IsShown() then pills = pills + 1 end end
+	for _, b in ipairs(body and body.variantButtons or {}) do if b:IsShown() then pills = pills + 1 end end
+	Check("...and no pills", pills == 0, pills)
+	if row then
+		local C = ns.Studio.C
+		local open = C.OpenList
+		local pickTo
+		C.OpenList = function(_, opts, _, onPick) for _, o in ipairs(opts) do if o[1] == pickTo then onPick(pickTo) end end end
+		pickTo = "castIcon"
+		row.partDrop:GetScript("OnClick")(row.partDrop)
+		Check("Part dropdown: Spell icon picked", body.part and body.part.id == "castIcon" and row.partDrop.value == "castIcon",
+			body.part and body.part.id)
+		pickTo = "hostile"
+		row.variantDrop:GetScript("OnClick")(row.variantDrop)
+		Check("Layout for dropdown: Hostile picked", page.editor.variant == "hostile" and row.variantDrop.value == "hostile",
+			page.editor.variant)
+		pickTo = "all"
+		row.variantDrop:GetScript("OnClick")(row.variantDrop)
+		C.OpenList = open
+	end
 end
 Check("no error reported while building", logged == ns.ReportError and #errors == 0)
 

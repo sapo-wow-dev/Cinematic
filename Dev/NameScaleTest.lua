@@ -1001,7 +1001,8 @@ local SIZE_PAGE = "Name Style"
 local function SizeChoices(r)
 	ns.OpenOptions(SIZE_PAGE)
 	r:Sleep(0.8)
-	-- (On the page's Size tab since 2026-11-23.)
+	-- (On the page's Size tab since 2026-11-23; the Style Studio editor's
+	-- Distance part since 2026-11-25: nameStylePickTab(2) picks it.)
 	if ns.nameStylePickTab then
 		ns.nameStylePickTab(2)
 		r:Sleep(0.3)
@@ -1010,7 +1011,7 @@ local function SizeChoices(r)
 	-- nothing greyed with the switch just turned off.)
 	if ns.lowHealthKit and ns.lowHealthKit.Refresh then ns.lowHealthKit.Refresh() end
 	r:Sleep(0.2)
-	return ns.nameSizeChoices or {}
+	return ns.NameSizeChoices and ns.NameSizeChoices() or {}
 end
 
 local function SizeInView(frame)
@@ -1050,6 +1051,9 @@ if ns.TestKit and not ns.isRetail then ns.TestKit.Define({
 	steps = {
 		{ key = "page", title = "the choices on the page", run = function(r)
 			r:Set("plateNameStyle", true)
+			-- (Size by zoom: with Fixed the editor hides Far names, a choice that can't
+			-- be used (run qe46bf: 2 of 6, Size by fixed saved).)
+			r:Set("plateNameSizeBy", "zoom")
 			local choices = SizeChoices(r)
 			r:Verdict(#choices == 6, ("six choices made (%d)"):format(#choices))
 			if #choices == 0 then return end

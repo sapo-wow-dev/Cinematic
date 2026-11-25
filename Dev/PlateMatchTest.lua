@@ -644,7 +644,7 @@ ns.TestKit.Define({
 					-- (By its previewer: the Look panel's, one big game plate with its
 					-- Unit and State lists, the user 2026-11-23: "the same previewer in both".)
 					local page = panel and FindWith(panel, "lookPreview")
-					local content = panel and FindWith(panel, "plateThemeDropdown")
+					local content = panel and FindWith(panel, "plateEditor") -- (the Style Studio's editor, 2026-11-25)
 					r:Verdict(page ~= nil and page:IsVisible() and not card, "page switch on: the preview on the page, no off card")
 					local inner = page and page.lookPreview
 					if inner then
@@ -715,37 +715,24 @@ ns.TestKit.Define({
 						page.hoverTheme = nil
 						page:Refresh()
 					end
+					-- (The Theme list and Customize: the Style Studio's editor since 2026-11-25,
+					-- its Plate part's Theme tiles first.)
 					if content then
-						local drop, customize = content.plateThemeDropdown, content.plateCustomize
-						r:Verdict(drop ~= nil and drop:IsVisible() and customize ~= nil and customize:IsVisible(),
-							"the Theme list and Customize shown")
-						-- (Up front: right under the preview, not under a wall of tiles.)
-						local dropTop, previewBottom = drop and drop:GetTop(), page and page:GetBottom()
-						r:Log(("  theme row top %s, preview bottom %s"):format(S(dropTop), S(previewBottom)))
-						r:Verdict(dropTop and previewBottom and previewBottom - dropTop < 80 or false,
-							"the Theme list right under the preview")
-						local covered = 0
-						for _, each in ipairs({ { drop, "Theme list" }, { customize, "Customize" } }) do
-							local okO, hits = pcall(r.Overlaps, r, each[1], content)
-							if okO and #hits > 0 then r:Log(("  %s covers: %s"):format(each[2], table.concat(hits, ", "))) end
-							covered = covered + (okO and #hits or 0)
-						end
+						local editor = content.plateEditor
+						local holder = editor and editor.holder
+						r:Verdict(holder ~= nil and holder:IsVisible(), "the editor shown")
+						local top, previewBottom = holder and holder:GetTop(), page and page:GetBottom()
+						r:Log(("  editor top %s, preview bottom %s"):format(S(top), S(previewBottom)))
+						r:Verdict(top and previewBottom and previewBottom - top < 80 or false, "the editor right under the preview")
+						local okO, hits = pcall(r.Overlaps, r, holder, content)
 						if ns.noRealLayout then
 							r:Skip("no real layout to measure (offline)")
 						else
-							r:Verdict(covered == 0, ("the Theme list and Customize cover nothing (%d)"):format(covered))
+							r:Verdict(okO and #hits == 0, ("the editor covers nothing (%s)"):format(okO and table.concat(hits, ", ") or tostring(hits)))
 						end
-						-- (Customize: the Default row's Look panel.)
-						if customize and not r:Proven("Customize opens the Look panel (runs 11-14)") then
-							customize:GetScript("OnClick")(customize, "LeftButton")
-							r:Sleep(0.5)
-							local open = ns.LookPanelOpen and ns.LookPanelOpen()
-							r:Verdict(open ~= nil, "Customize opens the Look panel")
-							r:Shot("Nameplate Style, Customize opened", { behind = panel })
-							if open then open:Hide() end
-						end
+						r:Shot("Nameplate Style, the editor", { behind = panel })
 					else
-						r:Fail("the Theme list's row on the page")
+						r:Fail("the editor on the page")
 					end
 				end
 			end
@@ -840,8 +827,16 @@ ns.TestKit.Define({
 			page.Redraw()
 			local keys = page.keys
 			local okK, kb = pcall(keys.IsKeyboardEnabled, keys)
-			r:Verdict(keys:GetScript("OnKeyDown") == nil and not (okK and kb == true),
-				"the arrow-key frame holds no keyboard with the mouse off the plate (the first build took every key)")
+			-- (Pointing at a part turns the arrows on, rightly: run q369c opened the window
+			-- under the mouse, on a part. Held only then.)
+			local onPart = false
+			for _, hit in pairs(page.hits) do
+				local okM, over = pcall(hit.IsMouseOver, hit)
+				if okM and over and hit:IsVisible() then onPart = true end
+			end
+			local held = keys:GetScript("OnKeyDown") ~= nil or (okK and kb == true)
+			r:Verdict(onPart or not held, ("the arrow-key frame holds no keyboard unless the mouse is on a part (held %s, on a part %s; the first build took every key)")
+				:format(tostring(held), tostring(onPart)))
 			local plate = page.holder.gamePlate
 			local copy = plate and plate.gameCopy
 			r:Verdict(copy ~= nil and plate:IsShown(), "the preview is the game's plate: " .. tostring(ns.GamePlateReport(plate)))
@@ -858,6 +853,44 @@ ns.TestKit.Define({
 					r:Verdict(okO and #hits == 0, each[2] .. " covers nothing: " .. (okO and table.concat(hits, ", ") or tostring(hits)))
 				end
 			end
+			-- The bottom row neat (the user, 2026-11-25: State "not in the bottom left nice and
+			-- neat", Scene "randomly offset", the Unit list gone): the Unit list with All plates
+			-- only, State at the bottom left when alone, Scene at the bottom right level with it.
+			local h, unitD, stateD, scene = page.holder, page.holder.unitDropdown, page.holder.stateDropdown, page.holder.sceneButton
+			local function Row(label)
+				if not measured then return end -- (offline: nothing placed to measure)
+				local hl, hr = h:GetLeft(), h:GetRight()
+				local sl, sc = stateD and stateD:GetLeft(), stateD and select(2, stateD:GetCenter())
+				local cr, cc = scene and scene:GetRight(), scene and select(2, scene:GetCenter())
+				local withUnit = unitD ~= nil and unitD:IsShown()
+				local wantLeft = withUnit and (unitD:GetRight() or 0) + 6 or (hl or 0) + 6
+				r:Log(("  %s: unit %s, state left %s (want %s), scene right %s of %s, centers %s / %s"):format(label,
+					tostring(withUnit), S(sl), S(wantLeft), S(cr), S(hr), S(sc), S(cc)))
+				return withUnit, sl and math.abs(sl - wantLeft) <= 1 or false,
+					cr and hr and math.abs(cr - (hr - 8)) <= 1 or false, sc and cc and math.abs(sc - cc) <= 1 or false
+			end
+			if h and stateD and scene and page.Edit then
+				local u1, s1, c1, v1 = Row("All plates")
+				if measured then
+					r:Verdict(u1 and s1, "All plates: the Unit list at the bottom left, State beside it")
+					r:Verdict(c1 and v1, "All plates: Scene at the bottom right, level with State")
+				end
+				page.Edit("hostile")
+				r:Sleep(0.2)
+				local u2, s2, c2, v2 = Row("Hostile")
+				if measured then
+					r:Verdict(not u2 and s2, "a kind's layout: no Unit list, State at the bottom left")
+					r:Verdict(c2 and v2, "a kind's layout: Scene at the bottom right, level with State")
+				end
+				r:Shot("Layout tab, Hostile's layout: State bottom left, Scene bottom right", { behind = panel })
+				page.Edit("all")
+				r:Sleep(0.2)
+			else
+				r:Fail("the preview's bottom row read (State, Scene, Edit)")
+			end
+			-- (The guides' names at the page's own size, the user: "so small no one would know".)
+			local okF, _, nameSize = pcall(function() return page.marks.unit.name:GetFont() end)
+			r:Verdict(okF and (nameSize or 0) >= 12, ("the guides' names readable (size %s)"):format(tostring(nameSize)))
 			r:Shot("Layout tab, the game's places", { behind = panel })
 			-- A nudge on the preview: the level box 12 right, read off our copy.
 			local box = copy.PlayerLevelDiffFrame

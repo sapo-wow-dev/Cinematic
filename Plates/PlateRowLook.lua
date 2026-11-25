@@ -339,8 +339,16 @@ local SAMPLES = {
 }
 local sampleNow = 1
 -- The game plate's states shown (PlateCopy.lua), picked on the second row of
--- pills: kept for the next panel opened, as the unit pick is.
+-- pills: each preview's own (2026-11-25: the Layout tab's picks showed on the
+-- Default tab's preview), a new one starting from the last one used.
 local statesNow = { casting = true }
+local function StatesOf(holder)
+	if holder and holder.states then
+		statesNow = holder.states -- (the last one used: ns.PlatePreviewStates() with none given)
+		return holder.states
+	end
+	return statesNow
+end
 -- { key, its name, its tooltip, its group (a heading in the list) }. The
 -- either/or sets below (EXCLUSIVE): one of a set at a time.
 local STATE_PILLS = {
@@ -369,7 +377,8 @@ local STATE_PILLS = {
 local EXCLUSIVE = { { "target", "focus" }, { "locked", "channel", "interrupted" }, { "elite", "rare", "rareelite", "boss" },
 	{ "aggro", "gaining" } }
 local NEEDS_CAST = { locked = true, channel = true, interrupted = true, important = true, atyou = true }
-local function PickState(key)
+local function PickState(key, holder)
+	local statesNow = StatesOf(holder) -- luacheck: ignore 431 (this preview's)
 	local on = not statesNow[key]
 	statesNow[key] = on or nil
 	if on then
@@ -387,14 +396,17 @@ end
 -- The game plate's states as the previews keep them (the next panel opened
 -- shows the same), and a State dropdown to tick them: onToggle() after each.
 -- nil on a client without the dropdown template.
-function ns.PlatePreviewStates() return statesNow end
-function ns.TogglePlatePreviewState(key) PickState(key) end -- (what the State list's ticks do)
+-- (holder: a preview's own; none, the last one used.)
+function ns.PlatePreviewStates(holder) return StatesOf(holder) end
+function ns.TogglePlatePreviewState(key, holder) PickState(key, holder) end -- (what the State list's ticks do)
 function ns.MakePlateStateDropdown(parent, width, onToggle)
 	local L = ns.L
 	local ok, drop = ns.MenuDropdown(parent)
 	if not (ok and drop and drop.SetupMenu) then return nil end
 	drop.zoomSkip, drop.searchSkip = true, true
 	drop:SetWidth(width)
+	-- (parent: a preview with states of its own, else the last one used.)
+	local function States() return StatesOf(parent.states and parent or nil) end
 	drop:SetupMenu(function(_, root)
 		local group
 		for _, info in ipairs(STATE_PILLS) do
@@ -403,9 +415,10 @@ function ns.MakePlateStateDropdown(parent, width, onToggle)
 				ns.MenuTitle(root, L[group])
 			end
 			local box = root:CreateCheckbox(L[info[2]], function()
+				local statesNow = States() -- luacheck: ignore 431
 				return statesNow[info[1]] or (info[1] == "casting" and statesNow.locked) or false
 			end, function()
-				PickState(info[1])
+				PickState(info[1], parent.states and parent or nil)
 				onToggle()
 				return MenuResponse and MenuResponse.Refresh -- (kept open: try one after another)
 			end)
@@ -417,9 +430,9 @@ function ns.MakePlateStateDropdown(parent, width, onToggle)
 	end)
 	if drop.SetSelectionText then
 		drop:SetSelectionText(function()
-			local on = {}
+			local on, states = {}, States()
 			for _, info in ipairs(STATE_PILLS) do
-				if statesNow[info[1]] then on[#on + 1] = L[info[2]] end
+				if states[info[1]] then on[#on + 1] = L[info[2]] end
 			end
 			return L["State: %s"]:format(#on > 0 and table.concat(on, ", ") or L["None"])
 		end)
@@ -570,8 +583,18 @@ function ns.GamePlateTrim(bar)
 	return made
 end
 
--- A small pick under the plate: gold while on.
+-- A small pick under the plate: the Style Studio's button (2026-11-25: every
+-- button looks like one), lit while on; the old pill where the Studio isn't loaded.
 local function Pill(parent, text, onClick)
+	local C = ns.Studio and ns.Studio.C
+	if C and C.Button then
+		local button = C.Button(parent, text)
+		button:SetFrameLevel(parent:GetFrameLevel() + 10)
+		button.zoomSkip = true -- (the preview's zoom leaves its buttons be)
+		function button.SetOn(self, on) self:Paint(on and "on" or nil) end
+		button:SetScript("OnClick", onClick)
+		return button
+	end
 	local pill = CreateFrame("Button", nil, parent)
 	pill:SetFrameLevel(parent:GetFrameLevel() + 10)
 	pill.zoomSkip = true -- (the preview's zoom leaves its buttons be)
@@ -605,6 +628,11 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 	local L = ns.L
 	local holder = CreateFrame("Frame", nil, parent)
 	holder.kind = startKind
+	-- (Its own picks, from the last preview's: 2026-11-25, one page's picks no longer
+	-- reach another's preview.)
+	holder.states = {}
+	for key, on in pairs(statesNow) do holder.states[key] = on end
+	holder.sample = sampleNow
 	holder:SetSize(width, 112)
 	if holder.SetClipsChildren then holder:SetClipsChildren(true) end
 	-- (Its plate sized here (1.6): not grown to fill the preview, only its zoom's - and +.)
@@ -668,7 +696,7 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 	-- State (the user, 2026-11-23: the two rows of pills were ugly to see);
 	-- the pills only where the client has no dropdown template.)
 	local function PickSample(i)
-		sampleNow = i
+		sampleNow, holder.sample = i, i
 		holder:Refresh()
 	end
 	-- (holder.onStates: its page drawn again instead, Nameplate Style's, which
@@ -677,7 +705,7 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		if holder.onStates then holder.onStates() else holder:Refresh() end
 	end
 	local function ToggleState(key)
-		PickState(key)
+		PickState(key, holder)
 		StatesChanged()
 	end
 	holder.PickSample, holder.ToggleState = PickSample, ToggleState
@@ -707,11 +735,11 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		unitDrop:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 6, 6)
 		unitDrop:SetupMenu(function(_, root)
 			for i, sample in ipairs(SAMPLES) do
-				root:CreateRadio(L[sample[1]], function() return sampleNow == i end, function() PickSample(i) end)
+				root:CreateRadio(L[sample[1]], function() return holder.sample == i end, function() PickSample(i) end)
 			end
 		end)
 		if unitDrop.SetSelectionText then
-			unitDrop:SetSelectionText(function() return L["Unit: %s"]:format(L[SAMPLES[sampleNow][1]]) end)
+			unitDrop:SetSelectionText(function() return L["Unit: %s"]:format(L[SAMPLES[holder.sample][1]]) end)
 		end
 		ns.lowHealthKit.Tooltip(unitDrop, L["The kind of unit the plate is for."])
 		rowRight = rowRight + unitW
@@ -749,7 +777,7 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		holder:SetHeight(holder.plateLift + 89 + 18)
 		game:SetPoint("BOTTOM", holder, "BOTTOM", 0, holder.plateLift)
 	end
-	holder.unitDropdown, holder.stateDropdown = unitDrop, stateDrop
+	holder.unitDropdown, holder.stateDropdown, holder.sceneButton = unitDrop, stateDrop, sceneButton
 
 	-- (Over the scene's top right while a choice is only pointed at.)
 	local tag = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -771,7 +799,7 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		local kind = self.kind
 		tag:SetShown(over ~= nil or self.hoverTheme ~= nil)
 		tag:SetText(note or L["Preview: not saved"])
-		for i, pill in ipairs(picks) do pill:SetOn(i == sampleNow) end
+		for i, pill in ipairs(picks) do pill:SetOn(i == self.sample) end
 		sceneButton:SetOn(db.stylePreviewBack == "scene")
 		-- (The shared backdrop, the lake or the dark panel: StyleScene draws either.)
 		ns.StyleScene(self, 0.55, 0.85)
@@ -779,7 +807,7 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		dark:Hide()
 		plate:SetScale(1.6)
 
-		local sample = SAMPLES[sampleNow]
+		local sample = SAMPLES[self.sample] or SAMPLES[1]
 		local unitName, barColor, nameColor, level = sample[2] and L[sample[2]], sample[3], sample[4], sample[5]
 		if not unitName then
 			unitName = UnitName("player") or L["Player"]
@@ -823,7 +851,7 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 			pcall(NameLook, game.UnitFrame.name, look)
 			ns.SetGamePlateUnit(game, sample[1]:lower(), unitName, paintBar, paintName)
 			ns.SetGamePlateLevel(game, look.level ~= false)
-			ns.SetGamePlateStates(game, statesNow)
+			ns.SetGamePlateStates(game, StatesOf(self))
 			if ns.StylePlateBar then ns.StylePlateBar(game, look, self.hoverTheme) end
 			if self.gameScale then
 				game:SetScale(self.gameScale)
@@ -945,8 +973,102 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 	-- gamePlate each, for a page placing both.)
 	holder.plate = game or plate
 	holder.gamePlate, holder.drawnPlate = game, plate
-	function holder.SampleKind() return SAMPLES[sampleNow][1] end
+	function holder.SampleKind() return (SAMPLES[holder.sample] or SAMPLES[1])[1] end
 	return holder
+end
+
+-- Nameplate Style's preview fitted (2026-11-25): the layout put on its game plate
+-- when the Layout page is on (it never was: what you saw wasn't your plates), its
+-- debuffs kept over its name by their measured places (they sat on the name, the
+-- in-game shot that day), then sized and placed by what it measures from cast bar to
+-- its highest part, not by fixed numbers. holder: MakePlateRowLookPreview's; width,
+-- height: its room; lift: where its plate's bottom may start. Leaves
+-- holder.previewLayout (the layout it put on) and holder.debuffLift.
+local LAYOUT_KIND = { Hostile = "hostile", Neutral = "neutral", Friendly = "friendly", Player = "player" }
+local FIT_PARTS = { "name", "HealthBarsContainer", "AurasFrame.DebuffListFrame", "AurasFrame.BuffListFrame",
+	"AurasFrame.CrowdControlListFrame", "CastBarsContainer.castBar", "PlayerLevelDiffFrame", "RaidTargetFrame",
+	"ClassificationFrame", "SoftTargetFrame.Icon" }
+local LISTS = { ["AurasFrame.DebuffListFrame"] = true, ["AurasFrame.BuffListFrame"] = true,
+	["AurasFrame.CrowdControlListFrame"] = true }
+local function Path(root, path)
+	local value = root
+	for name in path:gmatch("[^.]+") do value = type(value) == "table" and value[name] or nil end
+	return value
+end
+local function Up(frame)
+	local ok, shown = pcall(frame.IsVisible, frame)
+	return ok and shown
+end
+local function HasIcon(frame)
+	local ok, kids = pcall(function() return { frame:GetChildren() } end)
+	for _, kid in ipairs(ok and kids or {}) do if Up(kid) then return true end end
+	return false
+end
+-- A part's bottom and top in plate units over the plate's bottom (nil: can't be measured).
+local function Span(holder, frame)
+	local game = holder.gamePlate
+	local ok, b, t, eff, gb, ge = pcall(function()
+		return frame:GetBottom(), frame:GetTop(), frame:GetEffectiveScale(), game:GetBottom(), game:GetEffectiveScale()
+	end)
+	if not (ok and type(b) == "number" and type(t) == "number" and type(gb) == "number" and eff and ge and ge > 0) then return nil end
+	return (b * eff - gb * ge) / ge, (t * eff - gb * ge) / ge
+end
+ns.PlatePreviewSpan = Span -- (the tests read it)
+function ns.PlatePreviewFit(holder, width, height, lift)
+	local game = holder.gamePlate
+	local copy = game and game.gameCopy
+	local room = height - lift
+	-- (A first draw at the size that fits its debuffs, to measure.)
+	local scale = math.max(0.6, math.min(1.6, (room - 8) / 89.1, (width - 12) / 360))
+	holder.gameShift, holder.gameScale, holder.gameLift = nil, scale, lift
+	holder:Refresh()
+	if not copy then return end
+	-- The layout, when the Layout page is on (Forever): the sample unit's kind's.
+	local layout = false
+	if not ns.isRetail and ns.StyleOn and ns.StyleOn("plateLayout") and ns.PlateLayoutFor then
+		layout = ns.PlateLayoutFor(LAYOUT_KIND[holder.SampleKind()] or "hostile") or false
+	end
+	if ns.PlateLayoutApply then ns.PlateLayoutApply(game, layout) end
+	-- Debuffs where the game hangs them (on the name) kept over it: lifted by what overlaps.
+	holder.debuffLift = 0
+	local debuffs = Path(copy, "AurasFrame.DebuffListFrame")
+	local own = layout and ns.PlateLayoutPart and ns.PlateLayoutPart(layout, "debuffs")
+	local moved = own and (own.to or (own.x or 0) ~= 0 or (own.y or 0) ~= 0)
+	if debuffs and Up(debuffs) and HasIcon(debuffs) and not moved then
+		local _, nameTop = Span(holder, copy.name)
+		local debuffBottom = Span(holder, debuffs)
+		if nameTop and debuffBottom and debuffBottom < nameTop + 1 then
+			holder.debuffLift = math.ceil(nameTop + 1 - debuffBottom)
+			local stacked = { center = layout and layout.center, cx = layout and layout.cx, cy = layout and layout.cy, parts = {} }
+			for key, p in pairs(layout and layout.parts or {}) do
+				local each = {}
+				for k, v in pairs(p) do each[k] = v end
+				stacked.parts[key] = each
+			end
+			stacked.parts.debuffs = stacked.parts.debuffs or {}
+			stacked.parts.debuffs.y = (stacked.parts.debuffs.y or 0) + holder.debuffLift
+			layout = stacked
+			if ns.PlateLayoutApply then ns.PlateLayoutApply(game, layout) end
+		end
+	end
+	holder.previewLayout = layout
+	-- Sized and placed by what shows: cast bar to its highest part.
+	local low, high
+	for _, path in ipairs(FIT_PARTS) do
+		local frame = Path(copy, path)
+		if frame and Up(frame) and (not LISTS[path] or HasIcon(frame)) then
+			local b, t = Span(holder, frame)
+			if b and t and t > b then low, high = math.min(low or b, b), math.max(high or t, t) end
+		end
+	end
+	if not (low and high and high - low > 4) then return end
+	-- (Steady as debuffs come and go: never sized for less than the plate with its debuffs.)
+	local tall = math.max(high - low, 89.1)
+	scale = math.max(0.6, math.min(1.6, (room - 8) / tall, (width - 12) / 360))
+	holder.gameScale = scale
+	holder.gameLift = lift + (room - (high - low) * scale) / 2 - low * scale
+	holder:Refresh()
+	if ns.PlateLayoutApply then ns.PlateLayoutApply(game, layout) end
 end
 
 -- What a row's usual gives for one Look setting (the Look panel's Inherit

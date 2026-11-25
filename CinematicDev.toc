@@ -164,6 +164,10 @@ Dev\TintLayerTest.lua
 UI\PersonalResources.lua
 Style\ColorPalette.lua
 Style\StylePages.lua
+Style\Studio\Editor.lua
+Style\Studio\Controls.lua
+Style\Studio\Recipes.lua
+Style\Studio\Studio.lua
 Style\MirrorTimerStyle.lua
 Style\StyleThemes.lua
 Style\StyleDemos.lua
@@ -223,6 +227,15 @@ Style\StyleOverrides.lua
 Style\ThemeShots.lua
 Style\PageShots.lua
 Style\VisionsStyle.lua
+Style\Studio\Frames\Tooltips.lua
+Style\Studio\Frames\GeneralBand.lua
+Style\Studio\Frames\CombatBand.lua
+Style\Studio\Frames\FloatingText.lua
+Style\Studio\Frames\Nameplates.lua
+Style\Studio\Frames\Names.lua
+Style\Studio\Frames\Visions.lua
+Style\Studio\Frames\VisionsWorld.lua
+Style\Studio\Frames\Atmosphere.lua
 Visions\EmoteVision.lua
 Dev\WindGuideStyles.lua
 Dev\WindGuide.lua
@@ -429,6 +442,7 @@ Dev\BarTaintTest.lua
 Dev\DrunkCamTest.lua
 Dev\ManaVisionTest.lua
 Dev\RangeHintTest.lua
+Dev\StyleStudioTest.lua
 # (The test queue: TestQueueList.lua is written by Tools/testqueue.py, not kept in git)
 Dev\TestQueueList.lua
 Dev\TestQueue.lua

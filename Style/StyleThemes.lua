@@ -1667,7 +1667,15 @@ local function PagesOn()
 	for _, key in ipairs(SWITCHES) do db[key] = true end
 end
 
--- One of General's own settings as a quick setting.
+-- What a setting goes back to (the Style Studio's Reset): the theme's, else its default.
+local function ResetRaw(key)
+	local value = ns.ThemeSetting(key)
+	if value == nil then value = ns.DEFAULTS[key] end
+	return value
+end
+
+-- One of General's own settings as a quick setting. reset(): what Reset gives it
+-- (Style/Studio/Frames/GeneralBand.lua: Reset page reaches it, 2026-11-25).
 function ns.ThemeQuickField(key)
 	return {
 		get = function()
@@ -1676,8 +1684,10 @@ function ns.ThemeQuickField(key)
 		end,
 		set = function(value)
 			ns.GetDB()[key] = value
-			PagesOn()
+			-- (Back to what it follows: no pages turned on for that.)
+			if value ~= ResetRaw(key) then PagesOn() end
 		end,
+		reset = function() return ResetRaw(key) end,
 	}
 end
 
@@ -1689,19 +1699,29 @@ local function Shown(value)
 	if value == nil or value == "default" or ns.IsGeneralStyle(value) then return db and db.styleFont end
 	return value
 end
+-- (reset(): the font it shows back on what it follows. A font picked that's just
+-- that writes each setting's own follow value, so it keeps following General's.)
 function ns.ThemeTitleFontField()
+	-- (The cards' font: with Visions left out (Modules.lua) there are no cards, and no
+	-- ns.CardStyleKey: the field reads nothing and writes nothing.)
+	local place = function() return ns.CardStyleKey and ns.CardStyleKey("Font", "place") end
 	return {
 		get = function()
 			local db = ns.GetDB()
-			return db and Shown(db[ns.CardStyleKey("Font", "place")])
+			local key = place()
+			return db and key and Shown(db[key])
 		end,
 		set = function(value)
+			if not ns.CardStyleKey then return end
 			local db = ns.GetDB()
+			local back = value == Shown(ResetRaw(place()))
 			for _, style in ipairs(ns.CARD_STYLES or {}) do
-				if not CARDS_KEEP[style.id] then db[ns.CardStyleKey("Font", style.id)] = value end
+				local key = ns.CardStyleKey("Font", style.id)
+				if not CARDS_KEEP[style.id] then db[key] = back and ResetRaw(key) or value end
 			end
-			PagesOn()
+			if not back then PagesOn() end
 		end,
+		reset = function() local key = place() return key and Shown(ResetRaw(key)) end,
 	}
 end
 function ns.ThemeSmallFontField()
@@ -1712,9 +1732,12 @@ function ns.ThemeSmallFontField()
 		end,
 		set = function(value)
 			local db = ns.GetDB()
-			db.rfFont, db.ufFont = value, value
-			PagesOn()
+			local back = value == Shown(ResetRaw("rfFont"))
+			db.rfFont = back and ResetRaw("rfFont") or value
+			db.ufFont = back and ResetRaw("ufFont") or value
+			if not back then PagesOn() end
 		end,
+		reset = function() return Shown(ResetRaw("rfFont")) end,
 	}
 end
 

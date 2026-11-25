@@ -4485,7 +4485,7 @@ do
 					end
 					list[#list + 1] = { name = tile.english, label = L[tile.label or tile.english],
 						band = tile.band and L[tile.band] or "", texture = tile.icon and tile.icon:GetTexture(), on = on,
-						held = held, key = switch and switch.key or nil, dev = tile.dev }
+						held = held, key = switch and switch.key or nil, dev = tile.dev, frame = tile, sub = tile.sub }
 				end
 			end
 		end
@@ -11869,21 +11869,6 @@ end
 -- The Style hub's Names page: how names look on nameplates showing just the
 -- name (CineMode), with a preview of them at the top. PlateParts draws them.
 local function CreateNameStylePanel()
-	-- (Each row's Color tab: the colors its names can take, by NAME_ROWS' key;
-	-- a row not here, every one (Default, Your target). Friends / Enemies:
-	-- the players' segments; Hostile, Neutral, Friendly: the NPC reactions';
-	-- class: Color by's Class. Enemy players keep Hostile, for Hostile's color.)
-	local NAME_COLOR_PARTS = {
-		GroupMembers = { class = true, Friends = true }, Friends = { class = true, Friends = true },
-		Enemies = { class = true, Enemies = true, Hostile = true },
-		ServiceNPCs = { Friendly = true }, FriendlyNPCs = { Friendly = true },
-		NeutralNPCs = { Neutral = true }, HostileNPCs = { Hostile = true },
-		FriendlyMinions = { Friendly = true }, GroupMinions = { Friendly = true }, EnemyMinions = { Hostile = true },
-	}
-	-- (Each kind of service NPC's row: as Service NPCs'.)
-	for _, each in ipairs(ns.NAME_ROWS) do
-		if each.service then NAME_COLOR_PARTS[each.key] = { Friendly = true } end
-	end
 	local canvas, content = CreateScrollPage()
 
 	local title = Label(content, "GameFontNormalLarge", L["Name Style"])
@@ -11894,38 +11879,17 @@ local function CreateNameStylePanel()
 		L["How names look on nameplates that show just the name."])
 
 	local scene -- (below: drawn again as each setting changes)
-	local panels = {} -- [row] = its Look panel's preview, once made
-	local rowButtons = {}
 	local function Changed()
-		if ns.NameRowsChanged then ns.NameRowsChanged() end
-		if ns.RefreshPlateNameStyle then ns.RefreshPlateNameStyle() end
-		-- (All names' outline and shadow reach full plates' names too: PlateRowLook.lua.)
-		if ns.RefreshTargetArrows then ns.RefreshTargetArrows() end
-		-- (The lines under names: titles' brackets and icons, the line's size and color.)
-		if ns.ServiceKindsChanged then ns.ServiceKindsChanged() end
-		if ns.RefreshAllPlates then ns.RefreshAllPlates() end
-		if ns.RefreshPlateGuilds then ns.RefreshPlateGuilds() end
-		-- (Far names' step: at once, not at the next plate pass.)
-		if ns.plates and ns.plates.FarStepChanged then ns.plates.FarStepChanged() end
+		-- (The runtime's refresh: the Names frame's, Style/Studio/Frames/Names.lua.)
+		local frame = ns.Studio and ns.Studio.frames.names
+		if frame and frame.refresh then frame.refresh() end
 		if scene then scene:Refresh() end
-		for _, button in pairs(rowButtons) do button:Refresh() end
 	end
-	local function On(db) return db.plateNameStyle end
 
 	-- (Its switch: names as this page says, or as the plates draw them.)
 	local switch = PageSwitch(content, "plateNameStyle", L["Enable Page"],
 		L["Names look as this page says. When it's off, they look the way the nameplate draws them."], subtitle, Changed)
 	local stack = Stack(switch, "check")
-	-- Two tabs on WoW Forever (2026-11-23): Look (all the page had) and Size
-	-- (Size by, Far names: built at the page's end, NameTabsAdopt there).
-	local nameTabsHosts, NameTabsPick, NameTabsShown, NameTabsAdopt
-	if not ns.isRetail then
-		nameTabsHosts, NameTabsPick, NameTabsShown, NameTabsAdopt = ns.PageTabsBelow(content, switch, {
-			{ L["Look"], L["How each kind of name looks."] },
-			{ L["Size"], L["How big names are, near and far."] },
-		}, "Name Style/page", nil, nil, 1)
-		ns.nameStylePickTab = NameTabsPick -- (/cine debug namesize opens the Size tab)
-	end
 
 	-- A sample name of each kind, drawn as its row says (NameRowLook.lua):
 	-- its font, size, outline (in its color), shadow, opacity, color, glow,
@@ -12135,657 +12099,89 @@ local function CreateNameStylePanel()
 		{ "ServiceNPCs", 0.2, 0.52 }, { "FriendlyNPCs", 0.82, 0.5 }, { "NeutralNPCs", 0.3, 0.82 },
 		{ "HostileNPCs", 0.7, 0.82 },
 	}
-	scene = CreateFrame("Frame", nil, content)
-	scene:SetSize(SCENE_W, SCENE_H)
+	-- (The row the editor has picked: drawn in the spot of the row it goes by
+	-- when it has none of its own, Vendors in Service NPCs', with its second
+	-- line; near or far as the Distance part's Preview says. 2026-11-25.)
+	local SPOT_ROWS = {}
+	for _, spot in ipairs(SPOTS) do SPOT_ROWS[spot[1]] = true end
+	local function MakeScene(parent, width)
+		local made = CreateFrame("Frame", nil, parent)
+		made:SetSize(width or SCENE_W, SCENE_H)
+		ns.StyleScene(made, 0.55, 0.8)
+		local caption = Label(made, "GameFontDisableSmall", L["Preview"])
+		caption:SetPoint("TOPLEFT", 6, -5)
+		caption.searchSkip = true
+		local spots = {}
+		for i in ipairs(SPOTS) do spots[i] = MakeSample(made) end
+		-- (The names grow with the scene, however big the page makes it: at the
+		-- game's size they were specks in a screen-shaped scene.)
+		local sceneScale = 1
+		local function PlaceSpots(_, w, h)
+			w, h = w or SCENE_W, h or SCENE_H
+			sceneScale = math.max(1, math.min(1.8, w / 340))
+			for i, spot in ipairs(SPOTS) do
+				spots[i].text:ClearAllPoints()
+				spots[i].text:SetPoint("CENTER", made, "TOPLEFT", w * spot[2], -h * spot[3])
+			end
+			if made.Refresh and ns.db then made:Refresh() end
+		end
+		-- (Which spot draws the picked row, and as which row each spot draws.)
+		local function SpotRows()
+			local picked = ns.NameStageRow and ns.NameStageRow() or "all"
+			local at = picked
+			while at ~= "all" and not SPOT_ROWS[at] do at = ns.NAME_ROW_PARENT[at] or "all" end
+			local rows = {}
+			for i, spot in ipairs(SPOTS) do rows[i] = (spot[1] == at and picked ~= "all") and picked or spot[1] end
+			return rows, at == "all" and "Target" or at, picked
+		end
+		function made:SpotOf()
+			local _, at = SpotRows()
+			for i, spot in ipairs(SPOTS) do if spot[1] == at then return spots[i] end end
+		end
+		function made:Refresh()
+			if not ns.GetDB() then return end -- (the editor draws it as the page is made)
+			local rows, at, picked = SpotRows()
+			local far = ns.NameStageScale and ns.NameStageScale() or 1
+			for i, spot in ipairs(SPOTS) do
+				DrawSample(spots[i], rows[i], nil, (spot[1] == "Target" and 1.25 or 1) * sceneScale * far,
+					spot[1] == at and picked ~= "all" or nil)
+			end
+		end
+		PlaceSpots(nil, width or SCENE_W, SCENE_H)
+		made:HookScript("OnSizeChanged", PlaceSpots)
+		return made
+	end
+	ns.MakeNameStylePreview = MakeScene -- (the Style Studio's stage for Names)
+	scene = MakeScene(content)
 	stack:Add(scene, "label")
-	ns.StylePopout(scene, Tooltip) -- (StylePages.lua)
-	ns.StyleScene(scene, 0.55, 0.8)
-	local caption = Label(scene, "GameFontDisableSmall", L["Preview"])
-	caption:SetPoint("TOPLEFT", 6, -5)
-	caption.searchSkip = true
-	local spots = {}
-	for i in ipairs(SPOTS) do spots[i] = MakeSample(scene) end
-	-- (The names grow with the scene, however big the page makes it: at the
-	-- game's size they were specks in a screen-shaped scene.)
-	local sceneScale = 1
-	local function PlaceSpots(_, width, height)
-		width, height = width or SCENE_W, height or SCENE_H
-		sceneScale = math.max(1, math.min(1.8, width / 340))
-		for i, spot in ipairs(SPOTS) do
-			spots[i].text:ClearAllPoints()
-			spots[i].text:SetPoint("CENTER", scene, "TOPLEFT", width * spot[2], -height * spot[3])
-		end
-		if scene.Refresh and ns.db then scene:Refresh() end
-	end
-	PlaceSpots(nil, SCENE_W, SCENE_H)
-	scene:HookScript("OnSizeChanged", PlaceSpots)
-	function scene:Refresh()
-		for i, spot in ipairs(SPOTS) do
-			DrawSample(spots[i], spot[1], nil, (spot[1] == "Target" and 1.25 or 1) * sceneScale)
-		end
-		for _, preview in pairs(panels) do
-			if preview:IsVisible() then preview:Refresh() end
-		end
-	end
+	ns.StylePopout(scene, Tooltip) -- (StylePages.lua; held at the page top as you scroll)
 	controls[#controls + 1] = scene
 
-	-- Name theme (under the scene): a whole look in one pick, under All names (NameThemes.lua).
-	-- Follow main theme first: the main theme's own names. The old presets are
-	-- among them (Bold, Subtle; Like the game's names is The game's).
-	stack:Header(content, L["Name theme"])
-	RecordKey(content, "nameTheme")
-	local nameStrip = stack:Add(ns.MakePartThemeStrip(ns.lowHealthKit, content, "name", function() Changed() end), "label")
-	local themeNow = stack:Note(content, "", 460)
-	themeNow.searchSkip = true
-	themeNow.Refresh = function(self)
-		local db = ns.GetDB()
-		local theme = ns.NameThemeNow()
-		local picked = db and db.nameTheme or "main"
-		if picked == "main" then
-			self:SetText(theme and (L["Following the main theme: %s's names."]):format(L[theme.name])
-				or L["Following the main theme: the game's names."])
-		else
-			self:SetText((L["%s, picked here, so it stays when the main theme changes."]):format(theme and L[theme.name] or ""))
+	-- The look: the Style Studio's editor (Style/Studio/Frames/Names.lua), 2026-11-25:
+	-- the rows as its variants (Default, then each kind), the old Look panels'
+	-- tabs as its parts, the name theme on Default's Text, Size by, Far names and
+	-- the distance settings (hidden since 2026-11-16) in its Distance part, and
+	-- where these names show now as its status line.
+	local editor = ns.StyleEditorPage(ns.lowHealthKit, content, stack, "names", { preview = scene, canvas = canvas })
+	if ns.StudioPageHost then ns.StudioPageHost("names", editor) end -- (the row its stage draws: ns.NameStageRow)
+	-- (/cine debug namesize: 1 the Text part, 2 the Distance part; its choices there.)
+	ns.nameStylePickTab = function(i) editor:Pick(i == 2 and "distance" or "text", "all") end
+	function ns.NameSizeChoices()
+		local list = {}
+		for _, each in ipairs(ns.Studio.Props(ns.Studio.frames.names, "distance")) do
+			local key = ns.Studio.KeyOf(each.prop, "all")
+			local row = editor.body.rows[each.prop]
+			if (key == "plateNameSizeBy" or key == "plateNameFarStep") and row and row.control and row.control.buttons then
+				for _, b in ipairs(row.control.buttons) do list[#list + 1] = b end
+			end
 		end
-		self:SetTextColor(0.6, 0.6, 0.6)
+		return list
 	end
-	controls[#controls + 1] = themeNow
-	controls[#controls + 1] = nameStrip
-
-	-- Where these names are right now: a warning while they aren't drawn (out
-	-- of CineMode, or in it where plates aren't kept on), a calm line while
-	-- they are. The game's own names over heads can't be styled by addons.
-	local whereNote = stack:Note(content, "", 460)
-	whereNote.searchSkip = true
-	local WARN = "|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:14:14|t "
-	local OK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t "
-	local whereState
-	local function UpdateWhere()
-		local cine = ns.lastCinematic and true or false
-		local state = not cine and "out" or (ns.PlatesForcedHere(cine) and "on" or "here")
-		if state == whereState then return end
-		whereState = state
-		if state == "on" then
-			whereNote:SetText(OK .. L["In CineMode, names near you are drawn by their nameplates and look as this page says. Farther " ..
-				"off, the game's own names show, and addons can't resize or fade those."])
-			whereNote:SetTextColor(0.6, 0.9, 0.6)
-		elseif state == "here" then
-			whereNote:SetText(WARN .. L["You're in CineMode, but names here are the game's own (in dungeons and raids, or with the " ..
-				"Nameplates page off). This page doesn't change them, and addons can't resize or fade them. The " ..
-				"preview shows this page's look."])
-			whereNote:SetTextColor(1, 0.82, 0)
-		else
-			whereNote:SetText(WARN .. L["You're not in CineMode, so names over heads are the game's own, which addons can't resize or " ..
-				"fade. This page's look shows on names near you once you're in CineMode. The preview shows it " ..
-				"now."])
-			whereNote:SetTextColor(1, 0.82, 0)
-		end
-	end
-	local whereAt = 0
-	ns.HookOnUpdate(canvas, function()
-		if GetTime() < whereAt then return end
-		whereAt = GetTime() + 0.25
-		UpdateWhere()
-	end)
-	canvas:HookScript("OnShow", UpdateWhere)
-
-	-- (The Style pages' rows, StylePages.lua: each greyed by this page's own
-	-- switch, as General's doesn't reach these names.)
-	local rows = ns.StyleRows(ns.lowHealthKit, content, stack, Changed, "plateNameStyle")
-
-	-- The rows: All names (the page's own settings), then a row per kind of
-	-- unit, each a Look panel (made the first time it's opened): Text, Color,
-	-- Glow, Background and Second line. A row's setting left on Inherit takes
-	-- All names', and All names' the game's.
-	stack:Header(content, L["Names"])
-	-- (Each setting's tab, for a row's button: Own: Name · Behind. 2026-11-17.)
-	local TAB_NAMES = {}
-	for _, setting in ipairs({ "Font", "Size", "Alpha", "Outline", "OutlineColor", "Shadow", "ShadowAlpha", "Colour",
-		"Friends", "Enemies", "Hostile", "Neutral", "Friendly" }) do TAB_NAMES[setting] = "Name" end
-	for setting in pairs(ns.NAME_LOOK_GAME) do
-		if setting:find("^Line2") then TAB_NAMES[setting] = "Second line" end
-	end
-	for _, setting in ipairs({ "Glow", "GlowAlpha", "GlowSize", "GlowAround", "Back", "BackAlpha", "BackBorder",
-		"BackBorderSize", "BackAround" }) do TAB_NAMES[setting] = "Behind" end
-	local OUTLINE_NAMES = { [0] = L["None"], L["Thin"], L["Thick"] }
-	local function Words(setting, value)
-		if setting == "Font" then
-			if value == "usual" then return L["General's or the game's"] end
-			return value == "game" and L["The game's"] or ns.StyleFontName(value)
-		elseif setting == "Outline" then
-			return OUTLINE_NAMES[tonumber(value) or 0] or tostring(value)
-		elseif setting == "Size" or setting == "Alpha" or setting == "ShadowAlpha" or setting == "BackAlpha"
-			or setting == "Line2Size" or setting == "GlowAlpha" or setting == "GlowSize" then
-			return ("%d%%"):format(math.floor((tonumber(value) or 1) * 100 + 0.5))
-		elseif setting == "Shadow" then
-			return value and L["Shadow"] or L["None"]
-		elseif setting == "Colour" then
-			return ({ [true] = L["How they see you"], [false] = L["The plate's"], class = L["Class colors"],
-				one = L["One color"] })[value] or tostring(value)
-		end
-		local WORDS = { blue = L["Blue"], class = L["Class colors"], white = L["White"], react = L["Hostile's color"],
-			game = L["The game's"], custom = L["Custom"], black = L["Black"], none = L["None"], soft = L["Soft glow"],
-			band = L["Band"], name = L["Name's"], grey = L["Gray"], gold = L["Gold"] }
-		return WORDS[value] or tostring(value)
-	end
-	local function RowSource(row, setting)
-		local db = ns.GetDB() or {}
-		local own = db[ns.NameLookKey(row, setting)]
-		own = own ~= nil and own ~= "inherit"
-		local parent, short
-		-- (From the nearest row up that sets it (2026-11-16: rows inherit along
-		-- NAME_ROWS' parents), else Default's, the theme's or the game's.)
-		local above = row ~= "all" and (ns.NAME_ROW_PARENT[row] or "all") or nil
-		local from = above and select(2, ns.NameLookValue(above, setting)) or select(2, ns.NameLookValue("all", setting))
-		if from ~= "all" and from ~= "theme" and from ~= "game" and ns.NameRowLabel(from) then
-			parent, short = (L["%s's"]):format(ns.NameRowLabel(from)), ns.NameRowLabel(from)
-		elseif from == "all" and row == "Target" then
-			-- (Your target: its own kind's row first, then Default's. 2026-11-16.)
-			parent, short = L["Its kind's row, else Default's"], L["Its kind's"]
-		elseif from == "all" and row ~= "all" then
-			parent, short = L["Default's"], L["Default"]
-		elseif from == "theme" or (from == "all" and row == "all" and ns.NameThemeLook()
-			and ns.NameThemeLook()[setting] ~= nil) then
-			local theme = ns.NameThemeNow()
-			parent, short = (L["Name theme: %s"]):format(theme and L[theme.name] or ""), L["theme"]
-		end
-		if not parent then parent = L["The game's"] end
-		return { text = own and (row == "all" and L["Set here"] or L["This row"]) or parent, own = own,
-			parent = parent, short = short }
-	end
-	local function ParentValue(row, setting)
-		if row == "all" then
-			local themed = ns.NameThemeLook()
-			if themed and themed[setting] ~= nil then return themed[setting] end
-			return ns.NAME_LOOK_GAME[setting]
-		end
-		local above = ns.NAME_ROW_PARENT[row]
-		return (ns.NameLookValue(above or "all", setting))
-	end
-
-	-- A row's Look panel: its keys through a field each (nameLook<row><setting>,
-	-- All names' plateName<setting>), "inherit" saved as no value.
-	local function OpenRow(row, label)
-		if rowButtons[row].pop then
-			rowButtons[row].pop:SetShown(not rowButtons[row].pop:IsShown())
-			return
-		end
-		local function RowDefault(dbKey)
-			if row == "all" then return ns.DEFAULTS[dbKey] end
-			return ns.NameRowDefault(dbKey)
-		end
-		-- (A row's own value saved, its default as none.)
-		local function Save(setting, value)
-			local dbKey = ns.NameLookKey(row, setting)
-			if value == RowDefault(dbKey) then value = nil end
-			ns.GetDB()[dbKey] = value
-		end
-		local function Own(setting)
-			local value = ns.GetDB()[ns.NameLookKey(row, setting)]
-			return value ~= nil and value ~= "inherit" and value or nil
-		end
-		-- (A color's setting from one of its keys: GlowR -> Glow, OutlineR -> OutlineColor.)
-		local function ColorSetting(key)
-			local base = type(key) == "string" and key:match("^(.-)[RGB]$")
-			if not base then return nil end
-			local setting = base == "Outline" and "OutlineColor" or base
-			return ns.NAME_LOOK_COLORS[setting] and setting or nil
-		end
-		-- (Match the name turned off: the second line starts as a copy of the
-		-- name's letters, so nothing changes till you change it. 2026-11-17.)
-		local LINE2_COPY = { Font = "Line2Font", Outline = "Line2Outline", OutlineColor = "Line2OutlineColor",
-			Shadow = "Line2Shadow", ShadowAlpha = "Line2ShadowAlpha" }
-		local function CopyNameToLine2()
-			for from, into in pairs(LINE2_COPY) do Save(into, (ns.NameLookValue(row, from))) end
-			local r, g, b = ns.NameLookColor(row, "OutlineColor")
-			Save("Line2OutlineColorR", r)
-			Save("Line2OutlineColorG", g)
-			Save("Line2OutlineColorB", b)
-		end
-		local function FieldOf(key)
-			-- (The service titles' own settings, the same for every row.)
-			if key:find("^nameService") then return key end
-			local dbKey = ns.NameLookKey(row, key)
-			RecordKey(content, dbKey)
-			return { get = function()
-				local value = ns.GetDB()[dbKey]
-				if value == nil then value = RowDefault(dbKey) end
-				return value
-			end, set = function(value)
-				-- (A color picked for a setting this row hands down: the setting
-				-- becomes the row's own as it is, so the color shows. No Inherit
-				-- buttons since 2026-11-17.)
-				local colorOf = ColorSetting(key)
-				if colorOf and not Own(colorOf) then Save(colorOf, (ns.NameLookValue(row, colorOf))) end
-				if key == "Line2Match" and value == false and ns.NameLookValue(row, "Line2Match") ~= false then
-					CopyNameToLine2()
-				end
-				if value == RowDefault(dbKey) then value = nil end
-				ns.GetDB()[dbKey] = value
-			end }
-		end
-		local function DefaultOf(key)
-			if type(key) ~= "string" or key:find("^nameService") then return nil end -- (not this row's: never reset with it)
-			return RowDefault(ns.NameLookKey(row, key))
-		end
-		-- (Fonts: the usual first, General's or the game's.)
-		local USUAL = { "usual", L["General's or the game's"] }
-		local hidden = { Add = function(_, control)
-			control:Hide()
-			return control
-		end }
-		local styleRows = ns.StyleRows(ns.lowHealthKit, content, hidden, Changed, "plateNameStyle", FieldOf)
-		local service = row == "all" or row == "ServiceNPCs" or row:find("^Service") ~= nil
-		-- (Outline and Shadow, the name's (prefix "") or the second line's own
-		-- ("Line2"): a Section each, its parts only while it's on. 2026-11-17.)
-		local function OutlineRows(look, prefix)
-			look.Section(L["Outline"])
-			look.Segments(L["Outline"], prefix .. "Outline", { { 0, L["None"] }, { 1, L["Thin"] }, { 2, L["Thick"] } },
-				L["A border around the letters."], nil, "outline")
-			local outlined = look.Fold(function()
-				return (tonumber((ns.NameLookValue(row, prefix .. "Outline"))) or 0) > 0
-			end)
-			outlined.Segments(L["Color"], prefix .. "OutlineColor", { { "black", L["Black"] },
-				{ "custom", L["Custom"], L["An outline in your own color; costs more with many names up."] } })
-			local keys = prefix == "" and "Outline" or "Line2OutlineColor"
-			outlined.Fold(function() return ns.NameLookValue(row, prefix .. "OutlineColor") == "custom" end)
-				.Chips(L["Its color"], { keys .. "R", keys .. "G", keys .. "B" })
-		end
-		local function ShadowRows(look, prefix)
-			look.Section(L["Shadow"])
-			look.Segments(L["Shadow"], prefix .. "Shadow", { { true, L["On"],
-				L["A dark shadow behind the letters so they stand out."] }, { false, L["Off"] } })
-			look.Fold(function() return ns.NameLookValue(row, prefix .. "Shadow") == true end)
-				.Slider(prefix .. "ShadowAlpha", L["Strength"], 0, 100, 5, "%d%%", 100, L["How dark the shadow is."])
-		end
-		-- (What shows, 2026-11-17: round whatever's up, a title shown alone
-		-- too, both lines once your target's name comes in over it.)
-		local AROUND = { { "both", L["What shows"], L["Round whatever shows: the name, the line under it, or both."] },
-			{ "name", L["Name only"], L["Round the name alone; hidden while only its title shows."] } }
-		-- (Service titles' own settings, every row's: Show as Text or Icon, and
-		-- the brackets' two ticks as one pick.)
-		local SERVICE_ICONS = {
-			get = function() return ns.GetDB().nameServiceIcons and true or false end,
-			set = function(value) ns.GetDB().nameServiceIcons = value end,
-		}
-		local SERVICE_BRACKETS = {
-			get = function()
-				local db = ns.GetDB()
-				if not db.nameServiceBrackets then return "never" end
-				return db.nameServiceBracketsWithName and "always" or "alone"
-			end,
-			set = function(value)
-				local db = ns.GetDB()
-				db.nameServiceBrackets = value ~= "never"
-				db.nameServiceBracketsWithName = value == "always"
-			end,
-		}
-		local button, pop = styleRows.Look("", label, {
-			tabs = {
-				default = DefaultOf,
-				usual = function(key)
-					if key:find("^nameService") then return nil end
-					return Words(key, ParentValue(row, key)), ParentValue(row, key)
-				end,
-				source = function(key)
-					if type(key) ~= "string" or key:find("^nameService") then return nil end
-					return RowSource(row, key)
-				end,
-				resolved = function(key) return ParentValue(row, key) end,
-				-- (A color's chips: the color it gives, wherever it's from.)
-				color = function(keys)
-					local setting = ColorSetting(keys[1])
-					if setting then return ns.NameLookColor(row, setting) end
-				end,
-				copyKind = "nameRow", copyName = label,
-				-- (Start from a theme: a name theme's look in just this row.)
-				themeList = function()
-					local list = {}
-					for _, theme in ipairs(ns.NameThemeList()) do list[#list + 1] = { key = theme.key, name = L[theme.name] } end
-					return list
-				end,
-				themeLook = function(key)
-					local theme = ns.NameThemeByKey(key)
-					if not theme then return nil end
-					local look = {}
-					for setting, value in pairs(theme.look) do look[setting] = value end
-					return look
-				end,
-				resetLabel = function() return row == "all" and L["Reset all"] or L["Clear this row"] end,
-			},
-			preview = function(parent, width)
-				local holder = CreateFrame("Frame", nil, parent)
-				holder:SetSize(width, 96)
-				ns.StyleScene(holder, 0.55, 0.85)
-				local sample = MakeSample(holder)
-				sample.text:SetPoint("CENTER", holder, "CENTER", 0, 8)
-				local tag = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-				tag:SetPoint("TOPRIGHT", -8, -6)
-				tag.searchSkip = true
-				function holder.Refresh(_, over, note)
-					tag:SetShown(over ~= nil)
-					tag:SetText(note or L["Preview: not saved"])
-					DrawSample(sample, row, over, 1.6, true)
-				end
-				holder:SetScript("OnShow", function(self) self:Refresh() end)
-				panels[row] = holder
-				return holder
-			end,
-			-- (Three tabs, 2026-11-17: Name (its letters and colors), Second line
-			-- (the guild or title's, matching the name's or its own) and Behind
-			-- (the glow and band, round the name or both lines). Each tab every
-			-- setting on one page; no Inherit buttons: a heading says where a
-			-- value comes from, Clear hands it back.)
-			groups = {
-				{ "Name", { { "font", "Font" }, { "textSize", "Size" }, { "nameColor", "Color by" },
-					{ "outline", "Outline" }, { "outlineColor", "Outline color" }, { "shadow", "Shadow" } } },
-				{ "Second line", { { "line2", "Second line" } } },
-				{ "Behind", { { "glow", "Glow" }, { "backColor", "Band" } } },
-			},
-			font = function(look)
-				look.Section(L["Text"])
-				look.Font("Font", L["The names' font."], nil, USUAL)
-			end,
-			textSize = function(look)
-				-- (Up to 400%, 2026-11-16: a target's name can be made to stand out.)
-				look.Pair(true) -- (Size and Opacity on one line, 2026-11-16)
-				look.Slider("Size", L["Size"], 50, 400, 10, "%d%%", 100, L["How big the names are compared to the plates' own."])
-				look.Slider("Alpha", L["Opacity"], 20, 100, 5, "%d%%", 100,
-					L["How see-through the names are, on top of their fades."])
-				look.Pair(false)
-			end,
-			textColor = false,
-			nameColor = function(look)
-				look.Section(L["Color"])
-				-- (The Default row: no One color or its picker, 2026-11-16: every kind
-				-- of name in one color undoes the rows' own, as the plates' did.)
-				-- (Only the colors this row's names can take, 2026-11-16: an NPC row
-				-- has no players' or other reactions' colors, nor Class; the
-				-- Default row and Your target, every kind of unit, have them all.)
-				local parts = NAME_COLOR_PARTS[row]
-				-- (How they see you only where names of every reaction share the row,
-				-- 2026-11-16: Default, Your target. A row of one kind of unit has its
-				-- color below.)
-				local choices = {}
-				if not parts then
-					choices[#choices + 1] = { true, L["How they see you"], L["Red for hostile, yellow for neutral and green for friendly units."] }
-				end
-				if not parts or parts.class then
-					choices[#choices + 1] = { "class", L["Class"], L["Players in their class color, everyone else by their reaction to you."] }
-				end
-				-- (No One color on an NPC row, 2026-11-16: its reaction's Custom below
-				-- is that one color already.)
-				local npcRow = parts and not parts.Friends and not parts.Enemies
-				if row ~= "all" and not npcRow then choices[#choices + 1] = { "one", L["One color"] } end
-				choices[#choices + 1] = { false, L["The plate's"], L["The plate's own color, white or gray."] }
-				look.Segments(L["Color by"], "Colour", choices)
-				if row ~= "all" and not npcRow then
-					look.Fold(function() return ns.NameLookValue(row, "Colour") == "one" end)
-						.Chips(L["Its color"], { "ColourR", "ColourG", "ColourB" })
-				end
-				-- (The Default row: Color by alone, 2026-11-16. Each kind's color is
-				-- on its own row; Your target takes them from its kind's.)
-				if row == "all" then return end
-				local reacting = look.Fold(function()
-					local mode = ns.NameLookValue(row, "Colour")
-					return mode ~= "one" and mode ~= false
-				end)
-				if not parts or parts.Friends then
-					reacting.Segments(L["Friendly players"], "Friends", {
-						{ "blue", L["Blue"], L["Blue, like the game's names over their heads."] },
-						{ "class", L["Class colors"], L["Their class's color; also turns on the game's class colors for nameplates."] },
-						{ "white", L["White"] }, { "custom", L["Custom"] } })
-					reacting.Fold(function() return ns.NameLookValue(row, "Friends") == "custom" end)
-						.Chips(L["Friendly players"] .. " " .. L["color"], { "FriendsR", "FriendsG", "FriendsB" })
-				end
-				if not parts or parts.Enemies then
-					reacting.Segments(L["Enemy players"], "Enemies", { { "react", L["Hostile's color"] },
-						{ "class", L["Class colors"] } })
-				end
-				for _, each in ipairs({ { "Hostile", L["Hostile"] }, { "Neutral", L["Neutral"] },
-					{ "Friendly", L["Friendly"] } }) do
-					if not parts or parts[each[1]] then
-						look.Segments(each[2], each[1], { { "game", L["The game's"] }, { "custom", L["Custom"] } },
-							L["NPCs of this reaction in a color of your own."])
-						look.Fold(function() return ns.NameLookValue(row, each[1]) == "custom" end)
-							.Chips(each[2] .. " " .. L["color"], { each[1] .. "R", each[1] .. "G", each[1] .. "B" })
-					end
-				end
-			end,
-			outline = function(look) OutlineRows(look, "") end,
-			outlineColor = function() end, -- (with Outline, OutlineRows)
-			shadow = function(look) ShadowRows(look, "") end,
-			glow = function(look)
-				look.Section(L["Glow"])
-				look.Segments(L["Glow"], "Glow", { { "none", L["Off"] },
-					{ "soft", L["On"], L["A soft light behind the name."] } })
-				local on = look.Fold(function() return ns.NameLookValue(row, "Glow") ~= "none" end)
-				on.Segments(L["Around"], "GlowAround", AROUND)
-				on.Chips(L["Color"], { "GlowR", "GlowG", "GlowB" })
-				-- (Past 100%: brighter, a second glow over the first. 2026-11-17.)
-				on.Pair(true)
-				on.Slider("GlowAlpha", L["Strength"], 10, 150, 5, "%d%%", 100, L["How strong the glow is."])
-				on.Slider("GlowSize", L["Size"], 50, 300, 10, "%d%%", 100, L["How far the glow spreads around the name."])
-				on.Pair(false)
-			end,
-			backColor = function(look)
-				look.Section(L["Band"])
-				look.Segments(L["Band"], "Back", { { "none", L["Off"] },
-					{ "band", L["On"], L["A band of color behind the name."] } })
-				local on = look.Fold(function() return ns.NameLookValue(row, "Back") ~= "none" end)
-				on.Segments(L["Around"], "BackAround", AROUND)
-				on.Chips(L["Color"], { "BackR", "BackG", "BackB" })
-				on.Pair(true)
-				on.Slider("BackAlpha", L["Strength"], 10, 100, 5, "%d%%", 100, L["How see-through the band is."])
-				on.Pair(false)
-				-- (A border round the band, 2026-11-16: its color and thickness.)
-				on.Segments(L["Border"], "BackBorder", { { "none", L["None"] },
-					{ "line", L["Line"], L["A line around the band."] } })
-				local edged = on.Fold(function() return ns.NameLookValue(row, "BackBorder") == "line" end)
-				edged.Chips(L["Border color"], { "BackBorderR", "BackBorderG", "BackBorderB" })
-				edged.Pair(true)
-				edged.Slider("BackBorderSize", L["Thickness"], 1, 4, 1, "%d", 1, L["How thick the band's border is, in pixels."])
-				edged.Pair(false)
-			end,
-			backAlpha = false,
-			line2 = function(look)
-				-- (Its letters: the name's, or its own once Its own is picked,
-				-- starting as a copy of the name's: FieldOf. 2026-11-17.)
-				look.Segments(L["Letters"], "Line2Match", {
-					{ true, L["Match the name"], L["The name's font, outline and shadow. Size, opacity and color stay this line's own."] },
-					{ false, L["Its own"], L["Its own font, outline and shadow, starting from the name's."] } })
-				local function Own2() return ns.NameLookValue(row, "Line2Match") == false end
-				look.Section(L["Text"])
-				look.Fold(Own2).Font("Line2Font", L["The second line's font."], nil, USUAL)
-				look.Pair(true)
-				look.Slider("Line2Size", L["Size"], 50, 120, 5, "%d%%", 100,
-					L["The guild or title under the name, sized compared to the name."])
-				look.Slider("Line2Alpha", L["Opacity"], 20, 100, 5, "%d%%", 100, L["How see-through the line under the name is."])
-				look.Pair(false)
-				look.Section(L["Color"])
-				look.Segments(L["Color"], "Line2Color", { { "name", L["Name's"] }, { "grey", L["Gray"] },
-					{ "gold", L["Gold"] }, { "custom", L["Custom"] } })
-				look.Fold(function() return ns.NameLookValue(row, "Line2Color") == "custom" end)
-					.Chips(L["Its color"], { "Line2ColorR", "Line2ColorG", "Line2ColorB" })
-				local own = look.Fold(Own2)
-				OutlineRows(own, "Line2")
-				ShadowRows(own, "Line2")
-				-- (Service NPCs' titles: the same for every row that shows them.)
-				if service then
-					look.Section(L["NPC titles"])
-					look.Segments(L["Show as"], SERVICE_ICONS, { { false, L["Text"] },
-						{ true, L["Icon"], L["An icon in place of a service NPC's title (an anvil for repairs...)."] } })
-					look.Fold(function(db) return db.nameServiceIcons end)
-						.Slider("nameServiceIconScale", L["Icon size"], 50, 200, 5, "%d%%", 100, L["How big the title icons are."])
-					look.Segments(L["Brackets"], SERVICE_BRACKETS, { { "never", L["Never"] },
-						{ "alone", L["Title alone"], L["Puts < > around a title shown without its NPC's name."] },
-						{ "always", L["Always"], L["Puts < > around every title, including under the name."] } })
-				end
-			end,
-		})
-		if button then button:Hide() end
-		rowButtons[row].pop = pop
-		pop:Show()
-	end
+	-- (Every row's keys counted on the page, for its Reset page, as before.)
 	for _, info in ipairs(ns.NAME_ROWS) do
-		local row = info.key
-		for _, key in ipairs(ns.NameRowKeys(row)) do RecordKey(content, key) end
-		-- (Indented under the row it inherits from, a step a level. Default and
-		-- the rows right under it flush left.)
-		local shownLabel = info.label
-		if (info.depth or 0) > 1 then shownLabel = ("     "):rep(info.depth - 1) .. info.label end
-		local name = stack:Add(Label(content, "GameFontHighlight", shownLabel), "label")
-		name.searchLabel = info.label
-		name:SetSize(195, 26) -- (room for the deepest, Group members' minions, indented)
-		name:SetJustifyV("MIDDLE")
-		local button = ns.PanelButton(content)
-		button:SetHeight(22)
-		button:SetPoint("LEFT", name, "RIGHT", 4, 0)
-		-- (A thin line under the Default row: the rows below start on it. 2026-11-16.)
-		if row == "all" then
-			local line = content:CreateTexture(nil, "ARTWORK")
-			line:SetColorTexture(0.45, 0.38, 0.2, 0.8)
-			line:SetHeight(1)
-			line:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
-			line:SetPoint("RIGHT", name, "RIGHT", 4 + 300, 0)
-		end
-		button.searchLabel = info.label
-		Tooltip(button, row == "all" and L["Every name's look; each row below starts from it."]
-			or L["This kind's own look, on top of the row it's under."])
-		button:SetScript("OnClick", function() OpenRow(row, info.label) end)
-		button.opensLook = true -- (opens a Look panel: /cine debug lookdock clicks one a page)
-		function button.Refresh(self)
-			local db = ns.GetDB()
-			local tabs, seen = {}, {}
-			for setting, tab in pairs(TAB_NAMES) do
-				local value = db and db[ns.NameLookKey(row, setting)]
-				if value ~= nil and value ~= "inherit" and not seen[tab] then
-					seen[tab] = true
-					tabs[#tabs + 1] = L[tab]
-				end
-			end
-			table.sort(tabs)
-			local inherits = false
-			if #tabs > 0 then
-				self:SetText(L["Own:"] .. " " .. table.concat(tabs, " · "))
-			elseif row == "all" then
-				self:SetText(ns.NameThemeNow() and L["The name theme's"] or L["The game's"])
-			else
-				-- (The row right above it, which it goes by (2026-11-16); Default
-				-- for the rows right under Default.)
-				local above = ns.NAME_ROW_PARENT[row]
-				local aboveLabel = above and ns.NameRowLabel(above)
-				-- (Your target: whatever its kind's row says, under its own.)
-				if row == "Target" then aboveLabel = L["Its kind's row"] end
-				self:SetText(aboveLabel or L["Default"])
-				inherits = true
-			end
-			-- (Grey while it has nothing of its own: it's all the Default row's.)
-			local words = self:GetFontString()
-			if words then
-				if inherits then words:SetTextColor(0.6, 0.6, 0.6) else words:SetTextColor(1, 0.82, 0) end
-			end
-			self:SetWidth(math.max(140, self:GetFontString():GetStringWidth() + 30))
-			self:SetEnabled(db and db.plateNameStyle and true or false)
-		end
-		rowButtons[row] = button
-		controls[#controls + 1] = button
+		for _, key in ipairs(ns.NameRowKeys(info.key)) do RecordKey(content, key) end
 	end
-
-	-- The Size tab (WoW Forever, 2026-11-23, the user: "add these as a tab in
-	-- the page"): names by the camera's zoom or one size, and Far names' step
-	-- past 28 yards from you (our own, PlateParts' plateSightNear.out: zooming
-	-- never moves it; was the game's plate step by the camera's distance).
-	-- Everything above goes onto the Look tab first. Retail's plates size
-	-- themselves: no Size tab, no tabs there.
-	if nameTabsHosts then
-		NameTabsAdopt(switch)
-		local sizeHost = nameTabsHosts[2]
-		local top = CreateFrame("Frame", nil, sizeHost)
-		top:SetSize(1, 1)
-		top:SetPoint("TOPLEFT", sizeHost, "TOPLEFT", 0, 1)
-		local sizeStack = Stack(top, "check")
-		local sizeRows = ns.StyleRows(ns.lowHealthKit, sizeHost, sizeStack, Changed, "plateNameStyle")
-		-- (Its choices kept for /cine debug namesize: the ones made below.)
-		local made = select("#", sizeHost:GetChildren())
-		-- (Joined buttons, not rows.Choices' checkboxes: those wrapped and sat on
-		-- the row above, namesize run 1's shot.)
-		sizeRows.Segments(L["Size by"], "plateNameSizeBy", {
-			{ "zoom", L["Zoom"], L["Names grow as you zoom in and shrink as you zoom out."] },
-			{ "fixed", L["Fixed"], L["Names keep one size at any zoom."] },
-		})
-		sizeRows.Segments(L["Far names"], "plateNameFarStep", {
-			{ 1, L["Same size"], L["Far names stay the size of near ones."] },
-			{ 0.9, L["A bit smaller"], L["Names more than 28 yards from you get 10% smaller, in one step."] },
-			{ 0.8, L["Smaller"], L["Names more than 28 yards from you get 20% smaller, in one step."] },
-			{ 0.65, L["Much smaller"], L["Names more than 28 yards from you get 35% smaller, in one step."] },
-		})
-		ns.nameSizeChoices = {}
-		local children = { sizeHost:GetChildren() }
-		for i = made + 1, #children do
-			if children[i].value ~= nil then ns.nameSizeChoices[#ns.nameSizeChoices + 1] = children[i] end
-		end
-	end
-
-	-- Distance and timing. Retail's plates scale themselves: one size, and
-	-- names raised as a whole. WoW Forever's don't, so names are sized and
-	-- placed by the camera's zoom (PlateParts' Look): set at two points,
-	-- close and far, following perspective between them and on past far. The
-	-- camera's distance now shows under them, to set each with the camera
-	-- there. (Each name's own size and opacity: its row's Text tab.)
-	-- (Hidden for now, 2026-11-16: hard for players to read; names' size is on
-	-- their rows' Text tab. The settings still work as they are.)
-	local SHOW_DISTANCE = false
-	if SHOW_DISTANCE then stack:Header(content, L["Distance and timing"]) end
-	local function HideDelayBox(boxes)
-		boxes:Box(L["Hide delay"], "plateNameHideDelay", 0, 10, 0.1, "%.1f", 1,
-			L["How long a unit stays out of sight before its name hides."], On, L["sec"])
-		boxes:Box(L["Fade time"], "plateNameFadeTime", 0, 5, 0.1, "%.1f", 1,
-			L["How long a name takes to fade in or out."], On, L["sec"])
-	end
-	if not SHOW_DISTANCE then -- luacheck: ignore 542
-	elseif ns.isRetail then
-		local sizes = rows.Boxes()
-		sizes:Box(L["Raise"], "plateNameY", -30, 30, 1, "%d", 1,
-			L["Moves the names up (or down, below 0) from where the plates put them."], On)
-		HideDelayBox(sizes)
-		rows.Check("plateNameFixedSize", L["Same size at any distance"],
-			L["Names keep one size at any distance."], On)
-	else
-		local fades = rows.Boxes()
-		HideDelayBox(fades)
-		stack:Header(content, L["Close (camera zoomed all the way in)"])
-		local close = rows.Boxes()
-		close:Box(L["Size"], "plateNameCloseSize", 50, 300, 5, "%d", 100,
-			L["How big names are with the camera zoomed all the way in."], On, "%")
-		close:Box(L["Raise"], "plateNameCloseY", -40, 60, 1, "%d", 1,
-			L["Moves names up or down with the camera zoomed all the way in."], On)
-		stack:Header(content, L["Far (camera about 34 yards from you)"])
-		local far = rows.Boxes()
-		far:Box(L["Size"], "plateNameFarSize", 20, 100, 5, "%d", 100,
-			L["How big names are with the camera zoomed far out."],
-			On, "%")
-		far:Box(L["Raise"], "plateNameFarY", -60, 10, 1, "%d", 1,
-			L["Moves names up or down with the camera zoomed far out."], On)
-		-- (Every unit counts as 16 yards from you: PlateParts' UNIT_YARDS.)
-		local cameraNote = stack:Note(content, "", 460)
-		cameraNote.searchSkip = true
-		local noteAt = 0
-		ns.HookOnUpdate(canvas, function()
-			if GetTime() < noteAt then
-				return
-			end
-			noteAt = GetTime() + 0.2
-			local zoom = math.floor((GetCameraZoom and GetCameraZoom() or 0) + 0.5)
-			cameraNote:SetText((L["The camera is %d yards from you: every name is sized as if its unit were " ..
-				"about %d yards from it."]):format(zoom, zoom + 16))
-		end)
-	end
-
-	canvas:SetScript("OnShow", PageShown(function()
-		Refresh()
-		if NameTabsShown then NameTabsShown() end
-	end, content))
+	canvas:SetScript("OnShow", PageShown(Refresh, content))
 	canvas:Hide()
 	RegisterSubpage(canvas, "Name Style", L["Name Style"])
 end
@@ -12885,6 +12281,10 @@ do
 		local ShowPart
 		local subtitle = PageIntro(content, title,
 			L["Makes your target, focus and mouseover stand out on the nameplates."])
+		-- (Each tab its own intro, 2026-11-25: Smart's showed on Default too. ShowPart sets it.)
+		local INTROS = { L["How every nameplate looks: its bar, its name and its parts."],
+			L["Makes your target, focus and mouseover stand out on the nameplates."] }
+		local introHelp = content.pageHelp
 		-- (A warning triangle past the "?": friendly plates are the game's in
 		-- dungeons and raids, as on the Nameplates page's Dungeons & raids tab.)
 		PageIntro(content, content.pageHelp or title,
@@ -12906,14 +12306,14 @@ do
 			if ns.RefreshPlateHealthStyle then ns.RefreshPlateHealthStyle() end
 		end
 		local switch = PageSwitch(content, "handlePlateStyle", L["Enable Page"],
-			L["Turns the nameplates' look on or off, Smart and Cast Bars with it."], subtitle, SwitchChanged)
+			L["Turns the nameplates' look on or off, Smart, Cast Bars and Layout with it."], subtitle, SwitchChanged)
 		local defaultSwitchFrame, smartSwitchFrame = CreateFrame("Frame", nil, content), CreateFrame("Frame", nil, content)
 		for _, each in ipairs({ defaultSwitchFrame, smartSwitchFrame }) do
 			each:SetSize(1, 1)
 			each:SetPoint("TOPLEFT")
 		end
 		PageSwitch(defaultSwitchFrame, "handlePlateStyle", L["Enable Page"],
-			L["Turns the nameplates' look on or off, Smart and Cast Bars with it."], defaultSwitchFrame, SwitchChanged)
+			L["Turns the nameplates' look on or off, Smart, Cast Bars and Layout with it."], defaultSwitchFrame, SwitchChanged)
 		local smartCheck = PageSwitch(smartSwitchFrame, "plateMarks", L["Enable Page"],
 			L["Turns Smart's marks and colors on or off."], smartSwitchFrame, SwitchChanged)
 		-- (Everything below is made the first time the page is needed: lazyPages.)
@@ -13251,17 +12651,12 @@ do
 					-- bar, as the game's (the user: moved left for the crowd control
 					-- icon, it looked off center); that icon, 180 right of the middle,
 					-- kept inside.)
+					-- (2026-11-25: your Layout on it, and fitted by what it measures, its
+					-- debuffs kept over its name: PlateRowLook.lua's PlatePreviewFit. Fixed
+					-- heights before, and no layout: the debuffs sat on the name.)
 					self.noAutoFit = true
-					local NAME_TOP, DEBUFF_TOP = 58.3, 89.1
-					local lift = inner.plateLift or 38
-					local room = height - lift
-					local scale = math.max(0.6, math.min(1.6, (room - 8) / DEBUFF_TOP, (width - 12) / 360))
-					local top = ns.PlatePreviewStates and ns.PlatePreviewStates().debuffs and DEBUFF_TOP or NAME_TOP
-					inner.gameShift = nil
-					inner.gameScale = scale
-					inner.gameLift = lift + (room - top * scale) / 2
 					inner.kind, inner.hoverTheme = previewed, self.hoverTheme
-					inner:Refresh()
+					ns.PlatePreviewFit(inner, width, height, inner.plateLift or 38)
 					for _, plate in pairs(plates) do plate:Hide() end
 					return
 				end
@@ -13352,76 +12747,31 @@ do
 				return pick
 			end
 
-			-- Plate theme (under the preview): the bars' look under the rows, in one pick (texture and
-			-- border; names are Name Style's). Follow General first: as plates
-			-- have always been. PlateThemes.lua.
-			stack:Header(content, L["Plate theme"])
+			-- The look (2026-11-25): the Style Studio's editor (Style/Studio/Frames/Nameplates.lua),
+			-- the Default row's and each Smart row's Look as its variants, the plate theme as
+			-- tiles (with the page's switch, as the rest: the list was exempt), Width, Height
+			-- and Change time (from Smart's All rows). In place of the Theme list, its note and
+			-- Customize (which clicked a hidden Smart button). Its variant and the preview's
+			-- row are one pick: preview.OnPicked below.
 			RecordKey(content, "plateTheme")
-			-- (One row under the preview, 2026-11-23 (the user: the wall of theme
-			-- tiles was too much and Customize sat hidden at the bottom): the
-			-- Theme list (pointing at a theme shows it on the preview, not saved)
-			-- and Customize beside it, then a line on the pick. The tiles stay
-			-- where a client has no dropdown template.)
-			local function ThemeChanged()
-				if ns.RefreshPlateHealthStyle then ns.RefreshPlateHealthStyle() end
-				Changed()
-			end
-			local themeRow = CreateFrame("Frame", nil, content)
-			themeRow:SetSize(460, 26)
-			local themeDrop = ns.MakePlateThemeDropdown and ns.MakePlateThemeDropdown(themeRow, 260, ThemeChanged, function(key)
-				if not preview then return end
-				preview.hoverTheme = key
-				preview:Refresh()
-			end)
-			local plateStrip
-			if themeDrop then
-				themeDrop:SetPoint("LEFT", themeRow, "LEFT", 0, 0)
-				themeDrop.Refresh = function(self)
-					if self.GenerateMenu then pcall(self.GenerateMenu, self) end
+			if ns.PlateStudioVariants then ns.PlateStudioVariants() end
+			content.plateEditor = ns.StyleEditorPage(ns.lowHealthKit, content, stack, "plates",
+				{ preview = preview, canvas = canvas })
+			do
+				local editor = content.plateEditor
+				local pickEditor = editor.Pick
+				function editor.Pick(self, partId, variant)
+					if variant ~= nil and variant ~= self.variant and preview.Pick then
+						self.variant = variant
+						preview:Pick(variant) -- (its OnPicked: the grid's row lit)
+					end
+					return pickEditor(self, partId, variant)
 				end
-				Tooltip(themeDrop, L["The plates' bar: its texture and border, in one pick. Point at one to see it above."])
-				themeDrop.pageSwitch = false -- (as the tiles: a theme can be picked with the page off)
-				stack:Add(themeRow, "label")
-				controls[#controls + 1] = themeDrop
-			else
-				plateStrip = stack:Add(ns.MakePartThemeStrip(ns.lowHealthKit, content, "plate", ThemeChanged), "label")
-				controls[#controls + 1] = plateStrip
 			end
-			local plateThemeNow = stack:Note(content, "", 460)
-			plateThemeNow.searchSkip = true
-			plateThemeNow.Refresh = function(self)
-				local theme = ns.PlateThemeNow()
-				self:SetText(theme and (L["%s, picked here, so it stays when the main theme changes."]):format(L[theme.name])
-					or L["Following General: the bar's texture and border as the Style hub's General page has them."])
-				self:SetTextColor(0.6, 0.6, 0.6)
+			-- (The page drawn again after a change made in the Studio: the grid's chips and the preview.)
+			ns.RefreshPlateStylePage = function()
+				if canvas:IsVisible() then Refresh() end
 			end
-			controls[#controls + 1] = plateThemeNow
-			-- Customize (2026-11-16): the Default row's Look panel (Smart Style's
-			-- last row): the plates' own look before any row of Smart Style.
-			-- Beside the Theme list (under the note where there's no list).
-			local customize = ns.PanelButton(themeDrop and themeRow or content)
-			customize:SetSize(140, 22)
-			customize:SetText(L["Customize"])
-			if themeDrop then
-				customize:SetPoint("LEFT", themeDrop, "RIGHT", 10, 0)
-			else
-				customize:SetPoint("TOPLEFT", plateThemeNow, "BOTTOMLEFT", 0, -12)
-			end
-			Tooltip(customize, L["Change the plates' basic look."])
-			customize:SetScript("OnClick", function()
-				local grid = content.markGrid
-				local default
-				for _, id in ipairs(ns.TargetMarkOrder()) do
-					if not default and ns.MarkRowBase(id) == "others" then default = id end
-				end
-				local button = grid and grid.lookButtons and grid.lookButtons[default or "others"]
-				if preview and preview.Pick then preview:Pick(default) end
-				if button and button:GetScript("OnClick") then button:GetScript("OnClick")(button, "LeftButton") end
-			end)
-			content.plateThemeDropdown, content.plateCustomize = themeDrop, customize
-			customize.Refresh = function() end
-			customize.pageSwitch = false
-			controls[#controls + 1] = customize
 
 			-- The grid: a line for each row in the order a plate tries them, its
 			-- mark's preview, name and what's set apart from the usual (chips);
@@ -13580,6 +12930,7 @@ do
 						.. (distance and " " .. (distance == "NearAggro" and NEAR_AGGRO_TIP or DISTANCE_TIP) or "") }
 			end
 			preview.RowInfo = RowInfo
+			ns.PlateRowLabel = function(id) return RowInfo(id).full end -- (the Studio's variants' names)
 
 			-- When each row fits, in its drawer (as the Standard Frames page's rows:
 			-- Always, the dropdowns, roles, a rule: Core's MARK_WHEN_WORDS).
@@ -13763,7 +13114,15 @@ do
 				if button ~= "RightButton" then preview:Pick(id) end
 			end
 			-- (A row picked for the preview: lit here.)
-			preview.OnPicked = function() grid:Refresh() end
+			preview.OnPicked = function()
+				grid:Refresh()
+				-- (The editor on the row picked: one pick for both.)
+				local editor = content.plateEditor
+				if editor and editor.variant ~= previewed then
+					editor.variant = previewed
+					editor:Redraw()
+				end
+			end
 			-- (A plate clicked in the preview: its row opened.)
 			preview.OnPlateClick = function(id)
 				opened[id] = true
@@ -13771,6 +13130,7 @@ do
 			end
 			local function SetOrder(order)
 				ns.GetDB().markOrder = table.concat(order, ",")
+				if ns.PlateStudioVariants then ns.PlateStudioVariants() end -- (the editor's variants: the rows)
 				Refresh()
 				Changed()
 			end
@@ -14255,140 +13615,26 @@ do
 			-- the level box (Forever's). Each the Default row's to start (its
 			-- own: the plate's usual look), in keys as the row's others
 			-- (PlateRowLook.lua's, nil while it's the Default row's).
-			function grid.BuildLookLine(kind, info, drawer, At, chips)
+			function grid.BuildLookLine(kind, _, drawer, At)
 				local LOOK_DEFAULT = ns.PLATE_LOOK_DEFAULTS
 				for _, key in ipairs(ns.PLATE_LOOK_KEYS) do RecordKey(content, MarkKey(kind, key)) end
-				-- (The parts it colors: <kind>Color<part>, not the row's other keys;
-				-- its custom color as the row has it, white to start.)
-				local function FieldOf(key)
-					local part = key:match("^Color(%u%l+)$")
-					local dbKey = part and (kind .. key) or MarkKey(kind, key)
-					return { get = function()
-						if part then return ns.TargetMarkOwn(key, kind) and true or false end
-						if key == "PlateR" or key == "PlateG" or key == "PlateB" then
-							return ns.TargetMarkOwn(key, kind) or 1
-						end
-						local value = ns.GetDB()[dbKey]
-						if value == nil then return LOOK_DEFAULT[key] end
-						return value
-					end, set = function(value)
-						if LOOK_DEFAULT[key] ~= nil and value == LOOK_DEFAULT[key] then value = nil end
-						ns.GetDB()[dbKey] = value
-					end }
-				end
+				for _, part in ipairs(ALSO_PARTS) do RecordKey(content, kind .. "Color" .. part[1]) end
 				local function IsCustom()
-					-- (The Default row's look always counts: its Customize always there.)
+					-- (The Default row's look always counts.)
 					if kind == "others" then return true end
 					return ns.TargetMarkOwn("PlateColor", kind) == "custom"
 						and not (ns.MarkRowBase(kind) == "aggro" and ns.TargetMarkOwn("AlsoSame", kind))
 				end
-				local function LookChanged()
-					chips.Refresh()
-					Changed()
-				end
-				-- (Each setting's first choice: Inherit, what's above the row.)
-				local defaultName = L["Inherit"]
-				local defaultTip = kind == "others"
-					and L["Inherit: the plate's usual look."]
-					or L["Inherit: as the Default row's Look has it."]
-				-- (Its rows placed on the drawer's Look line: the panel's own are in it.)
-				local onLine = { Add = function(_, control)
-					control:SetParent(drawer)
-					return At("Plate", control, LABEL_W + 106)
-				end }
-				local rows = ns.StyleRows(ns.lowHealthKit, content, onLine, LookChanged, "handlePlateStyle", FieldOf)
-				local OUTLINE_NAMES = { [0] = L["None"], L["Thin"], L["Thick"] }
-				local button = rows.Look("", info.full .. " - " .. L["Look"], {
-					-- (Tabbed, the Look settings counted and reset; the row's color and
-					-- the parts it paints are its own, left alone.)
-					tabs = { default = function(key) return LOOK_DEFAULT[key] end,
-						usual = function(key) return ns.PlateRowUsual(kind, key) end,
-						-- (Where each comes from: This row, Default row's, General's...)
-						source = function(key) return ns.PlateRowSource(kind, key) end,
-						-- (Copy look / Paste between the rows; Start from a theme: its bar.)
-						copyKind = "plateRow", copyName = info.full,
-						themeLook = function(key) return ns.PlateThemeRowLook(key) end,
-						themeList = function()
-							local list = {}
-							for _, theme in ipairs(ns.PlateThemeList()) do list[#list + 1] = { key = theme.key, name = L[theme.name] } end
-							return list
-						end,
-						resetLabel = function() return kind == "others" and L["Reset all"] or L["Clear this row"] end },
-					-- (A plate as this row's Look draws it: PlateRowLook.lua.)
-					preview = function(parent, width) return ns.MakePlateRowLookPreview(parent, width, kind) end,
-					texture = function(look)
-						look.Dropdown(L["Texture:"], "LookTexture", function()
-							local list = { { value = "default", text = defaultName } }
-							for _, choice in ipairs(ns.StyleTextureChoices(L["The game's"], "LookTexture")) do
-								list[#list + 1] = choice
-							end
-							return list
-						end, L["The health bar's fill."] .. " " .. defaultTip)
-					end,
-					-- (Its color, and the parts that take it.)
-					barColor = function(look)
-						-- (Not on the Default row: it paints nothing, each plate keeping its
-						-- own color, hostile, neutral or friendly. Its gradient still fades it.)
-						if kind ~= "others" then
-							look.Color(L["Color:"], { "PlateR", "PlateG", "PlateB" },
-								L["The plate's color, for the parts ticked below."])
-							for _, part in ipairs(ALSO_PARTS) do
-								if not part.targetOnly or ns.MarkRowBase(kind) == "target" or ns.MarkRowBase(kind) == "aggro" then
-									RecordKey(content, kind .. "Color" .. part[1])
-									look.Check("Color" .. part[1], (L["%s in its color"]):format(part[2]), part[3])
-								end
-							end
-						end
-						-- (The fill fading, left to right, to a second color: PlateHealthStyle.lua.)
-						look.Choices(L["Gradient:"], "LookGradient", { { "default", defaultName }, { "off", L["Off"] },
-							{ "on", L["On"], L["The health bar's fill fades from its color on the left to the color " ..
-								"below on the right."] } })
-						look.Color(L["Fades to:"], { "LookGradR", "LookGradG", "LookGradB" },
-							L["The color the health bar fades to, at its right end."],
-							function(db) return look.On(db) and look.Get("LookGradient") == "on" end)
-					end,
-					ground = false,
-					font = function(look)
-						look.Font("LookFont", L["The name's font."] .. " " .. defaultTip, nil, { "default", defaultName })
-					end,
-					textSize = function(look)
-						look.Slider("LookTextSize", L["Size"], 50, 200, 5, "%d%%", 100,
-							L["The name's size, as a multiple of its usual size."])
-					end,
-					textColor = false, outlineColor = false, -- (its color: the Plate line's Name)
-					outline = function(look)
-						look.Outline("LookOutline", L["Outline"], 2, OUTLINE_NAMES, L["The name's outline."] .. " " ..
-							defaultTip, nil, defaultName)
-					end,
-					shadow = function(look)
-						look.Choices(L["Shadow:"], "LookShadow", { { "default", defaultName }, { "game", L["The game's"] },
-							{ "on", L["Shadow"], L["A dark shadow behind the letters, down and to the right."] },
-							{ "none", L["None"] } })
-					end,
-					border = function(look)
-						look.Dropdown(L["Border:"], "LookBorder", function()
-							-- (edge: a border's, drawn as one on the panel's tiles.)
-							return { { value = "default", text = defaultName, edge = true },
-								{ value = "game", text = L["The game's"], edge = true },
-								{ value = "none", text = L["None"], edge = true }, { value = "thin", text = L["Thin"], edge = true },
-								{ value = "thick", text = L["Thick"], edge = true },
-								{ value = "custom", text = L["Custom"], edge = true } }
-						end, L["The health bar's border."] .. " " .. defaultTip)
-						local function Custom(db) return look.On(db) and look.Get("LookBorder") == "custom" end
-						local line = look.Boxes()
-						line:Box(L["Thickness"], look.K("LookBorderSize"), 1, 10, 1, "%d", 1,
-							L["How thick the border is, in pixels."], Custom, "px")
-						look.Swatch(line, "LookBorder", { "LookBorderR", "LookBorderG", "LookBorderB" },
-							L["The border's color. Picking one turns it to Custom."])
-					end,
-					backColor = false, backAlpha = false,
-					-- (Forever's level box at the bar's end: shown, hidden, or the Default row's.)
-					level = not ns.isRetail and function(look)
-						RecordKey(content, MarkKey(kind, "LookLevel"))
-						look.Choices(L["Level box:"], "LookLevel", { { "default", defaultName },
-							{ "show", L["Shown"] }, { "hide", L["Hidden"] } })
-					end or false,
-				})
+				-- (2026-11-25: its settings are this row's variant in the Default tab's editor
+				-- (Style/Studio/Frames/Nameplates.lua); the button goes there with the row picked.
+				-- Not the Studio window: its links are hidden, the user, 2026-11-25.)
+				local button = ns.PanelButton(drawer)
+				button:SetSize(120, 22)
+				button:SetScript("OnClick", function()
+					if ShowPart then ShowPart(1) end
+					if ns.SetPageSwitchKey and switch then ns.SetPageSwitchKey(content, "handlePlateStyle", switch) end
+					if content.plateEditor then content.plateEditor:Pick("health", kind) end
+				end)
 				if button then
 					grid.lookButtons = grid.lookButtons or {}
 					grid.lookButtons[kind] = button
@@ -14396,9 +13642,7 @@ do
 					button:ClearAllPoints()
 					At("Plate", button, LABEL_W + 106)
 					-- (Its words: what the row has of its own, else Customize. Only on Custom.)
-					local refresh = button.Refresh
 					button.Refresh = function(self)
-						refresh(self)
 						self:SetShown(IsCustom())
 						local parts = {}
 						for _, each in ipairs({ { "LookTexture", L["Texture"] }, { "LookBorder", L["Border"] },
@@ -14410,8 +13654,8 @@ do
 						self:SetText(#parts > 0 and table.concat(parts, " · ") or L["Customize"])
 						self:SetWidth(math.max(120, self:GetFontString():GetStringWidth() + 30))
 					end
-					Tooltip(button, L["This row's own look on its plates."] ..
-						" " .. defaultTip)
+					Tooltip(button, L["This row's own look on its plates, in the Style Studio."])
+					controls[#controls + 1] = button
 				end
 			end
 
@@ -15114,24 +14358,64 @@ do
 
 			grid:Refresh()
 
-			-- (How fast a plate's opacity and size change, as CineMode's Fade in
-			-- time: a quick look away from an elite and back barely shows.)
-			stack:Header(content, L["All rows"])
-			-- (On one line, small boxes: the time, and every plate's Width and
-			-- Height, times each row's, as theirs: the ones this client takes.)
-			local allRows = stack:Add(BoxLine(content), "label")
-			allRows:Box(L["Change time"], "plateStyleFadeTime", 0, 10, 0.1, "%.1f", 1,
-				L["How long plates take to change opacity or size."], nil, nil, L["sec"])
-			if (ns.plateSizes or {}).width then
-				allRows:Box(L["Width"], "plateStyleWidth", 25, 300, 5, "%d", 100,
-					L["The health bar's width."], Changed, nil, "%")
+			-- A row's When rule from the Style Studio (its variant's Edit rule): the rule
+			-- editor as the row's When cell opens it (GridRows.lua's Target), its ticks
+			-- read back where the rule is one of them.
+			-- (All rows' Change time, Width and Height: on the editor's Default since 2026-11-25.)
+			local WHEN_GRID = {}
+			for _, word in ipairs(ns.MARK_WHEN_WORDS) do WHEN_GRID[word[1]] = true end
+			function ns.PlateRowEditRule(kind)
+				local db = ns.GetDB()
+				if not (db and ns.OpenRuleEditor) then return end
+				local whenKey = kind .. "When"
+				local function RuleNow()
+					local text = type(db.frameRules) == "table" and db.frameRules[whenKey]
+					return type(text) == "string" and text:find("%S") and text or nil
+				end
+				local function SetRule(text)
+					db.frameRules = db.frameRules or {}
+					if text == nil and ns.RULE_DEFAULTS and ns.RULE_DEFAULTS[whenKey] then text = "" end
+					db.frameRules[whenKey] = text
+				end
+				local function Words()
+					local ticked = {}
+					for _, word in ipairs(ns.MARK_WHEN_WORDS) do
+						if db[whenKey .. word[2]] then ticked[#ticked + 1] = word[1] end
+					end
+					return ticked
+				end
+				local function Done()
+					Refresh()
+					Changed()
+				end
+				local before = RuleNow()
+				local start = before or (ns.GridRule and ns.GridRule(db[whenKey] and true or false, Words())) or ""
+				ns.OpenRuleEditor({ label = RowInfo(kind).full, grid = WHEN_GRID, key = whenKey,
+					Text = function() return start end,
+					SetText = function(typed) SetRule(typed) Done() end,
+					Close = function(typed)
+						if typed:find("%S") and not ns.CompileRule(typed) then
+							SetRule(before and ns.CompileRule(before) and before or nil)
+							return Done()
+						end
+						local isAlways, ticked = ns.ReadGridRule(typed, WHEN_GRID)
+						if isAlways ~= nil then
+							if before or typed ~= start then
+								db[whenKey] = isAlways and true or false
+								for _, word in ipairs(ns.MARK_WHEN_WORDS) do
+									db[whenKey .. word[2]] = ticked[word[1]] and true or false
+								end
+							end
+							SetRule(nil)
+						elseif not before and typed == start then
+							SetRule(nil)
+						else
+							SetRule(typed:find("%S") and typed or nil)
+						end
+						Done()
+					end,
+					ResetToGrid = function() SetRule(nil) Done() end })
 			end
-			if (ns.plateSizes or {}).height then
-				allRows:Box(L["Height"], "plateStyleHeight", 50, 300, 5, "%d", 100,
-					L["The health bar's height."], Changed, nil, "%")
-			end
-			-- (The game's Show Offscreen Nameplates in CineMode: Settings >
-			-- General's Allow offscreen nameplates, plateOffscreen.)
 
 			ns.PageBuildStep(true) -- (made ahead: the next frame from here)
 			stack:Header(content, L["All marks"])
@@ -15194,13 +14478,18 @@ do
 				end
 				hosts[1]:SetShown(i == 1)
 				hosts[2]:SetShown(i == 2)
+				-- (Its intro, the "?": the tab's own.)
+				if introHelp then introHelp.liveTip, introHelp.searchNote = INTROS[i], INTROS[i] end
 				ShowPlateTab(ns.ShowInIndex("plates", i == 1 and "Nameplate Style" or "Nameplate Marks"))
 				FitContentHeight(content)
 			end
 			ns.PageBuildStep(true) -- (made ahead: the next frame from here)
 			ShowPart(1)
 
-			canvas:SetScript("OnShow", PageShown(Refresh, content))
+			canvas:SetScript("OnShow", PageShown(function()
+				if ns.PlateStudioVariants then ns.PlateStudioVariants() end
+				Refresh()
+			end, content))
 		end
 		local MakeStyle = lazyPages.Add(canvas, "Nameplate Style", MakeBody)
 		-- (A hub tile each: Plate Style, and Marks hidden under it (the Style

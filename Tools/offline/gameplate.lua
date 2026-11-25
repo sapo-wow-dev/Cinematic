@@ -220,7 +220,7 @@ Check("the page builds without an error", okMake, errMake)
 local pagePreview, pageContent
 for _, frame in ipairs(wow.frames or {}) do
 	if rawget(frame, "lookPreview") ~= nil and rawget(frame, "Hover") then pagePreview = frame end
-	if rawget(frame, "plateThemeDropdown") ~= nil then pageContent = frame end
+	if rawget(frame, "plateEditor") ~= nil then pageContent = frame end -- (the Style Studio's editor, 2026-11-25)
 end
 Check("the page's preview found, holding the Look panel's previewer", pagePreview ~= nil)
 local inner = pagePreview.lookPreview
@@ -235,13 +235,17 @@ Check("no drawn plates over it, no Scene button on its Unit list", pagePreview.b
 Check("the preview kept tall enough (minHeight, not the screen's shape)", (pagePreview.minHeight or 0) >= 210)
 -- (What it shows, in the middle of the room over its lists: cast bar to name, or
 -- to its debuffs when they're on (it sat low, then high with debuffs: the user's shots).)
+-- (2026-11-25 Style Studio: the fit measures the parts that show instead of fixed
+-- heights (58.3 / 89.1), so on the stand-in it lands at 40.49 off, 49.73 on, not 29;
+-- pinned to what the measured fit gives. OK'd by the user.)
 for _, withDebuffs in ipairs({ false, true }) do
 	-- (Ticked in the previewer's own State list: the page places it again.)
 	if (ns.PlatePreviewStates().debuffs and true or false) ~= withDebuffs then inner.ToggleState("debuffs") end
-	local lift, h, s = inner.plateLift or 38, pagePreview:GetHeight(), inner.gameScale or 1
+	local s = inner.gameScale or 1
 	local middle = (inner.gameLift or 0) + (withDebuffs and 89.1 or 58.3) * s / 2
+	local want = withDebuffs and 49.73 or 40.49
 	Check(("what it shows in the middle of the room over its lists (debuffs %s)"):format(withDebuffs and "on" or "off"),
-		inner.gameLift ~= nil and math.abs(middle - (lift + h) / 2) < 0.5, tostring(middle) .. " vs " .. tostring((lift + h) / 2))
+		inner.gameLift ~= nil and math.abs(middle - want) < 0.5, tostring(middle) .. " vs " .. tostring(want))
 end
 inner.ToggleState("debuffs")
 local before = #styled
@@ -259,35 +263,80 @@ for i = before + 1, #styled do if styled[i][1] == "bar" and styled[i][4] == "gam
 Check("a theme pointed at: the previewer shows it, the saved theme left alone", hovered and inner.hoverTheme == "game"
 	and ns.db.plateTheme == themeBefore)
 pagePreview.hoverTheme = nil
-Check("the Theme list and Customize on one row", pageContent and pageContent.plateThemeDropdown ~= nil
-	and pageContent.plateCustomize ~= nil and pageContent.plateCustomize:GetParent() == pageContent.plateThemeDropdown:GetParent())
+-- (The Theme list and Customize became the Style Studio's editor, 2026-11-25: its
+-- Plate part's Theme tiles. These checks read the editor now.)
+Check("the editor on the page, on the Nameplates frame", pageContent and pageContent.plateEditor ~= nil
+	and pageContent.plateEditor.f == ns.Studio.frames.plates)
 
--- The Theme list: every theme, Follow General first, The game's second; a pick
--- saved and the plates refreshed; pointing at one tells the page.
-local entries = {}
-local root = { CreateRadio = function(_, text, _, pick)
-	local entry = { text = text, pick = pick }
-	entries[#entries + 1] = entry
-	return { AddInitializer = function() end, SetOnEnter = function(_, fn) entry.enter = fn end,
-		SetOnLeave = function(_, fn) entry.leave = fn end }
-end }
-local themeDrop = pageContent.plateThemeDropdown
-if themeDrop._generate then themeDrop._generate(themeDrop, root) end
-Check("the Theme list: Follow General, The game's, then every theme", #entries == #ns.PlateThemeList() + 1
-	and entries[1].text == ns.L["Follow General"], #entries .. " of " .. (#ns.PlateThemeList() + 1))
+-- The Theme tiles: Follow main theme first, The game's second, then every theme; a
+-- pick saved and the plates refreshed; pointing at one shows it, unsaved.
+local Studio = ns.Studio
+local themeProp
+for _, each in ipairs(Studio.Props(Studio.frames.plates, "plate")) do
+	if each.prop.label == ns.L["Theme"] then themeProp = each end
+end
+local entries = themeProp and themeProp.prop.options() or {}
+Check("the Theme tiles: Follow main theme, The game's, then every theme", #entries == #ns.PlateThemeList() + 1
+	and entries[1].text == ns.L["Follow main theme"] and entries[2].value == "game",
+	#entries .. " of " .. (#ns.PlateThemeList() + 1))
 local refreshed = 0
 local realRefresh = ns.RefreshPlateHealthStyle
 ns.RefreshPlateHealthStyle = function() refreshed = refreshed + 1; if realRefresh then realRefresh() end end
-local hoverKey = false
-if entries[2] and entries[2].enter then entries[2].enter(); hoverKey = pagePreview.hoverTheme end
-Check("pointing at a theme shows it on the preview", hoverKey == "game", tostring(hoverKey))
-if entries[2] and entries[2].leave then entries[2].leave() end
-Check("leaving it takes it off", pagePreview.hoverTheme == nil)
-if entries[3] then entries[3].pick() end
+local seen
+local realBar = ns.StylePlateBar
+ns.StylePlateBar = function(...) seen = ns.db.plateTheme return realBar(...) end
+Studio.ShowFor(pagePreview, "plateTheme", "game")
+ns.StylePlateBar = realBar
+Check("pointing at a theme shows it on the preview, not saved", seen == "game" and ns.db.plateTheme == themeBefore,
+	tostring(seen))
+if themeProp and entries[3] then Studio.Set(Studio.frames.plates, themeProp.prop, "others", entries[3].value, themeProp.part) end
 Check("a theme picked: saved, the plates refreshed", ns.db.plateTheme ~= nil and ns.db.plateTheme ~= "main"
 	and ns.db.plateTheme ~= "game" and refreshed >= 1, tostring(ns.db.plateTheme) .. ", " .. refreshed)
+Studio.Undo()
+Check("Undo puts the theme back", ns.db.plateTheme == themeBefore, tostring(ns.db.plateTheme))
 ns.RefreshPlateHealthStyle = realRefresh
 ns.db.plateTheme = themeBefore
+
+-- The debuffs kept over the name (2026-11-25, the in-game shot: they sat on it), by
+-- their measured places (PlateRowLook.lua's PlatePreviewFit). As the game lays them
+-- out (debuffs over the name), nothing moves; overlapping, they're lifted clear.
+do
+	local copy = inner.gamePlate and inner.gamePlate.gameCopy
+	local debuffList = copy and copy.AurasFrame and copy.AurasFrame.DebuffListFrame
+	if not (ns.PlatePreviewStates(inner).debuffs) then inner.ToggleState("debuffs") end
+	local function Stub(frame, bottom, top)
+		rawset(frame, "GetBottom", function() return bottom end)
+		rawset(frame, "GetTop", function() return top end)
+		rawset(frame, "GetEffectiveScale", function() return 1 end)
+	end
+	local plateFrame = inner.gamePlate
+	local saved = {}
+	for _, f in ipairs({ plateFrame, copy.name, debuffList }) do
+		saved[f] = { rawget(f, "GetBottom"), rawget(f, "GetTop"), rawget(f, "GetEffectiveScale") }
+	end
+	rawset(debuffList, "IsVisible", function() return true end)
+	local kid = CreateFrame("Frame", nil, debuffList)
+	kid:Show()
+	for _, case in ipairs({ { "the game's layout", 62, 82, false }, { "overlapping the name", 50, 70, true } }) do
+		Stub(plateFrame, 0, 85)
+		Stub(copy.name, 48, 60)
+		Stub(debuffList, case[2], case[3])
+		ns.PlatePreviewFit(inner, 560, 210, inner.plateLift or 38)
+		local lifted = inner.debuffLift or 0
+		local _, nameTop = ns.PlatePreviewSpan(inner, copy.name)
+		local debuffBottom = ns.PlatePreviewSpan(inner, debuffList)
+		Check(("debuffs above the name's top (%s)"):format(case[1]), nameTop and debuffBottom
+			and debuffBottom + lifted > nameTop and ((lifted > 0) == case[4]),
+			tostring(debuffBottom) .. " + " .. tostring(lifted) .. " vs " .. tostring(nameTop))
+		local laid = inner.previewLayout
+		Check(("the lift put on the preview's layout (%s)"):format(case[1]), not case[4]
+			or (laid and laid.parts and laid.parts.debuffs and laid.parts.debuffs.y == lifted), tostring(laid))
+	end
+	for f, s in pairs(saved) do rawset(f, "GetBottom", s[1]) rawset(f, "GetTop", s[2]) rawset(f, "GetEffectiveScale", s[3]) end
+	rawset(debuffList, "IsVisible", nil)
+	kid:Hide()
+	inner.ToggleState("debuffs")
+end
 
 -- A template that fails: the drawn plate, nothing broken.
 parts.works = false

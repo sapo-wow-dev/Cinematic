@@ -26,6 +26,30 @@ error: Interface/AddOns/Questie/Modules/QuestieInit.lua:428: attempt to call a n
 [Questie/Modules/QuestieInit.lua]:428: in function 'OnAddonLoaded']],
     source = "the dev error window, 2026-11-25 (addon kit run for Guidelime, then every reload after)",
   },
+  {
+    id = "studio-tip-not-words",
+    status = "fixed",
+    title = "Hovering a choice on a Style editor page: SetText's bad argument #1 in C.Tip (a tip that isn't words)",
+    match = {
+      all = { "SetText" },
+      any = { "Style/Studio/Controls.lua" },
+    },
+    why = {
+      call = "GameTooltip:SetText(shown, ...) with shown not a string",
+      caller = "C.Tip's OnEnter (Style/Studio/Controls.lua), from a choice button (C.Segments: o.tip or o[3]) or a row's label (prop.tip)",
+      path = "a choice list's third slot or a prop's tip holding something other than words -> C.Tip -> SetText errors",
+      rule = "GameTooltip:SetText takes words first; anything else is a Lua error",
+      pattern = "a tooltip fed from a list slot that can hold other things (a color, a flag)",
+    },
+    dont = "Don't hand C.Tip anything but words or a function giving words; a list's third slot is a tip only when it's a string.",
+    check = { pattern = [[Tip\(b, o\.tip or o\[3\]\)]] },
+    fix = "2026-11-25: C.Segments takes o[3] as a tip only when it's words (or a function); C.Tip shows words only and logs any other value with its button's words (studio: a tip that isn't words), so the list that sent it is named next time",
+    seen = { "2026-11-25" },
+    example = [[deverror: error: ...erface/AddOns/CinematicDev/Style/Studio/Controls.lua:64: bad argument #1 to 'SetText' (Usage: self:SetText(text [, color, alpha, wrap]))
+[C]: in function 'SetText'
+[CinematicDev/Style/Studio/Controls.lua]:64: in function <...erface/AddOns/CinematicDev/Style/Studio/Controls.lua:60>]],
+    source = "the user, Forever, 17:47:35 2026-11-25, hovering choices on the Names page (reported by the Names page session)",
+  },
   -- Menus -----------------------------------------------------------------
   {
     id = "menu-row-smartnav-fight",
