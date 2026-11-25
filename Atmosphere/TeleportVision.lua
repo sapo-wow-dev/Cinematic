@@ -104,10 +104,24 @@ local function Color(db, cast)
 	return color[1], color[2], color[3]
 end
 
+-- A cast whose end never came in (the event lost, with no loading screen to
+-- end it: Diagnostics.lua's ns.OnLoadingScreen): over once it's LOST_AFTER
+-- seconds past its end and you're not casting, opening back out as if
+-- cancelled. Held at full for good before, your tooltips and cast bar faded
+-- out with it. Audit 2026-11-25.
+local LOST_AFTER = 1.5
+local function Settle(cast)
+	if cast and not cast.done and cast.endsAt and GetTime() > cast.endsAt + LOST_AFTER
+		and not ns.Flag(UnitCastingInfo("player")) then
+		cast.done, cast.doneAt = "cancelled", GetTime()
+	end
+	return cast
+end
+
 -- The cast to show: the page's test, or yours if its scene plays (the tele camera's rules).
 local function Cast()
 	if test then return test end
-	local cast = ns.departCast
+	local cast = Settle(ns.departCast)
 	if cast and cast.scene and ns.Setting("teleportVision") then return cast end
 end
 
@@ -151,6 +165,9 @@ local function Update()
 	if test and not test.done and now >= test.endsAt then test.done, test.doneAt = "gone", now end
 	local width, height = frame:GetWidth(), frame:GetHeight()
 	local corner = 0.5 * math.sqrt(width * width + height * height)
+	-- (No size yet: nothing to draw. Its sums divide by it, and the error the
+	-- shade's coordinates gave would trip the loop's breaker, frozen on screen.)
+	if corner ~= corner or corner < 1 then return end -- (corner ~= corner: NaN)
 	local db = ns.GetDB()
 	-- How far through (0-1), and what's after: closing out as it's gone or cancelled.
 	local p, alpha, rim, flashAlpha, fadeOut = 0, 0, RIM_OUT, 0, 1
@@ -326,7 +343,7 @@ local CAST_FADE = 3 -- seconds they take to fade out
 -- The alpha wanted for the bar or the tooltip (key: its setting) now, or nil: not faded.
 local function FadeWanted(key)
 	local db = ns.GetDB()
-	local cast = ns.departCast
+	local cast = Settle(ns.departCast)
 	if not (db and db[key] and ns.Setting("teleportVision") and cast and cast.scene) then
 		return nil
 	end

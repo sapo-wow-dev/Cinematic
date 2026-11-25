@@ -381,6 +381,14 @@ do
 			end
 		end
 	end)
+	-- (A loading screen: you're gone, whether or not the cast's end came in.
+	-- Lost across the load, Teleport Vision stayed at full for good, and your
+	-- tooltips and cast bar faded out with it. Audit 2026-11-25.)
+	ns.OnLoadingScreen(function()
+		if ns.departCast and not ns.departCast.done then
+			ns.departCast.done, ns.departCast.doneAt = "gone", GetTime()
+		end
+	end)
 	-- Casting your Hearthstone or a teleport: the seconds the cozy camera has to
 	-- swing round (and zoom in) so it's in front of you before the cast ends;
 	-- nil otherwise.

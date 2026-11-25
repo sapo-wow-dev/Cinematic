@@ -484,6 +484,21 @@ function ns.Guard(fn, ...)
 	end
 end
 
+-- State held by a game event that may never come (a cast's end, a key let go)
+-- ended by a loading screen too: fn() as one starts (each guarded). Something
+-- still on screen from such a state (Teleport Vision held at full) stayed
+-- there for good when its end event was lost across the load. Audit 2026-11-25.
+local loadingClears = {}
+function ns.OnLoadingScreen(fn)
+	loadingClears[#loadingClears + 1] = fn
+end
+local loadingWatch = CreateFrame("Frame")
+loadingWatch:RegisterEvent("LOADING_SCREEN_ENABLED")
+loadingWatch:RegisterEvent("PLAYER_LEAVING_WORLD")
+loadingWatch:SetScript("OnEvent", function()
+	for _, fn in ipairs(loadingClears) do ns.Guard(fn) end
+end)
+
 -- After /cine resume: give the repeat counts a fresh start.
 function ns.ResetErrorWindows()
 	for _, entry in pairs(errors) do
