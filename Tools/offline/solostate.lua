@@ -16,6 +16,7 @@ local list = {
 	{ "Questie", 0, "DISABLED" },
 }
 local calls = {}
+local fake = {}
 -- luacheck: push ignore 122
 local function Install()
 	local function Find(name)
@@ -30,8 +31,12 @@ local function Install()
 	C_AddOns.IsAddOnLoaded = function(name) local each = Find(name) return each and each[3] == nil end
 	C_AddOns.GetAddOnDependencies = function() return nil end
 	C_AddOns.GetAddOnOptionalDependencies = function() return nil end
-	C_AddOns.EnableAddOn = function(name) calls[#calls + 1] = "on " .. name Find(name)[2] = 2 end
-	C_AddOns.DisableAddOn = function(name) calls[#calls + 1] = "off " .. name Find(name)[2] = 0 end
+	-- (Through fake.on/off: solo keeps its own copy of these from load, so a
+	-- check that changes how they behave swaps the fake's, not C_AddOns'.)
+	fake.on = function(name) calls[#calls + 1] = "on " .. name Find(name)[2] = 2 end
+	fake.off = function(name) calls[#calls + 1] = "off " .. name Find(name)[2] = 0 end
+	C_AddOns.EnableAddOn = function(...) return fake.on(...) end
+	C_AddOns.DisableAddOn = function(...) return fake.off(...) end
 	C_AddOns.SaveAddOns = function() end
 end
 -- luacheck: pop
@@ -53,5 +58,42 @@ Check("the addon asked for and Cinematic stay on", not did:find("off JourneyTrac
 Check("an addon that's off stays off, untouched", not did:find("Questie", 1, true), did)
 local turnedOff = CinematicDB.soloAddons and CinematicDB.soloAddons.turnedOff or {}
 Check("solo off will turn it back on", turnedOff.Auctionator ~= nil)
+Check("every switch took: nothing unconfirmed", CinematicDB.soloAddons and CinematicDB.soloAddons.unconfirmed == nil)
+
+-- Each switch read back (run qcbb3, 2026-11-25: the opposite of solo's list
+-- loaded and nothing said which switch didn't take). Stubborn ignores the
+-- no-character call but takes the character one; Stuck ignores both.
+ns.SoloAddons("off", true)
+list[#list + 1] = { "Stubborn", 2, nil }
+list[#list + 1] = { "Stuck", 2, nil }
+local Disable = fake.off
+fake.off = function(name, who)
+	if name == "Stuck" or (name == "Stubborn" and who == nil) then
+		calls[#calls + 1] = "ignored off " .. name .. (who and " for the character" or "")
+		return
+	end
+	return Disable(name, who)
+end
+CinematicDB.soloBack = { on = { "Guidelime" }, off = {} }
+calls = {}
+ns.SoloAddons("JourneyTracker", true)
+local solo = CinematicDB.soloAddons or {}
+local stuck = table.concat(solo.unconfirmed or {}, ", ")
+Check("an addon that ignores the plain call is switched with the character one", not stuck:find("Stubborn", 1, true)
+	and table.concat(calls, ", "):find("ignored off Stubborn", 1, true) ~= nil, table.concat(calls, ", "))
+Check("an addon that won't switch either way is named", stuck == "Stuck (still on)", stuck)
+Check("a new solo drops the solo off's list-back check (it decides the list now)", CinematicDB.soloBack == nil)
+fake.off = Disable
+
+-- Solo off reads its own switches back too.
+local Enable = fake.on
+fake.on = function(name, who)
+	if name == "Auctionator" then return end
+	return Enable(name, who)
+end
+ns.SoloAddons("off", true)
+local offStuck = table.concat(CinematicDB.soloOffUnconfirmed or {}, ", ")
+Check("solo off names an addon it couldn't turn back on", offStuck:find("Auctionator (still off)", 1, true) ~= nil, offStuck)
+fake.on = Enable
 
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))

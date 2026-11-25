@@ -74,6 +74,24 @@ local function EnableState(name)
 	return nil
 end
 
+-- An addon switched on or off, then read back: the no-character call first
+-- (engine rule forever.addons.enable-no-character), then with the character.
+-- True when its enable state now says so. (The addon kit's qcbb3 run,
+-- 2026-11-25: solo asked MikScrollingBattleText_Forever on and Guidelime off,
+-- and after the reload the opposite had loaded; nothing said which switch
+-- didn't take. Now each one is checked as it's made.)
+local function Switch(name, on)
+	local function Took()
+		local state = EnableState(name)
+		if on then return type(state) == "number" and state > 0 end
+		return state == 0
+	end
+	pcall(on and EnableAddOn or DisableAddOn, name)
+	if Took() then return true end
+	pcall(on and EnableAddOn or DisableAddOn, name, UnitName("player"))
+	return Took() and true or false
+end
+
 local function AddOns()
 	local out = {}
 	for i = 1, (GetNum and GetNum() or 0) do
@@ -188,14 +206,21 @@ function ns.SoloAddons(words, noReload)
 			ns.Print("solo: not on. /cine debug solo <Addon> turns every other addon off.")
 			return
 		end
-		local me = UnitName("player")
-		for name, state in pairs(solo.turnedOff or {}) do
-			-- (On for some characters only: back on for this one at least.)
-			if state == 1 then pcall(EnableAddOn, name, me) else pcall(EnableAddOn, name) end
+		-- (Each switch read back. The character form came first for an addon on
+		-- for some characters only; on Forever it doesn't reach the character,
+		-- engine rule forever.addons.enable-no-character.)
+		local unconfirmed = {}
+		for name in pairs(solo.turnedOff or {}) do
+			if not Switch(name, true) then unconfirmed[#unconfirmed + 1] = name .. " (still off)" end
 		end
 		for name, state in pairs(solo.turnedOn or {}) do
-			if state == 0 then pcall(DisableAddOn, name) end
+			if state == 0 and not Switch(name, false) then unconfirmed[#unconfirmed + 1] = name .. " (still on)" end
 		end
+		table.sort(unconfirmed)
+		if #unconfirmed > 0 then
+			ns.Print("solo off: these didn't switch back: " .. table.concat(unconfirmed, ", "))
+		end
+		db.soloOffUnconfirmed = #unconfirmed > 0 and unconfirmed or nil
 		db.soloAddons = nil
 		SaveAddOns()
 		ns.Print("solo off: your addon list is back. Reloading.")
@@ -264,21 +289,32 @@ function ns.SoloAddons(words, noReload)
 			end
 		end
 	end
+	local unconfirmed = {}
 	for _, each in ipairs(all) do
 		if keep[each.name] then
 			if not each.enabled then
 				turnedOn[each.name] = each.state or 0
-				EnableAddOn(each.name)
+				if not Switch(each.name, true) then unconfirmed[#unconfirmed + 1] = each.name .. " (still off)" end
 			end
 		elseif each.enabled then
 			turnedOff[each.name] = each.state or 2
-			DisableAddOn(each.name)
+			if not Switch(each.name, false) then unconfirmed[#unconfirmed + 1] = each.name .. " (still on)" end
 		end
 	end
+	table.sort(unconfirmed)
 	local kept = {}
 	for name in pairs(keep) do kept[#kept + 1] = name end
 	table.sort(kept)
-	db.soloAddons = { keep = kept, turnedOff = turnedOff, turnedOn = turnedOn, at = date("%Y-%m-%d %H:%M") }
+	db.soloAddons = { keep = kept, turnedOff = turnedOff, turnedOn = turnedOn, at = date("%Y-%m-%d %H:%M"),
+		unconfirmed = #unconfirmed > 0 and unconfirmed or nil }
+	-- (This solo decides the list now: a solo off just before it, as the addon
+	-- kit does between its stages, no longer expects its list back at login.
+	-- Its "NOT BACK: Guidelime is still off" in run qcbb3 was this one turning
+	-- Guidelime off, as asked.)
+	db.soloBack = nil
+	if #unconfirmed > 0 then
+		ns.Print("solo: these didn't switch: " .. table.concat(unconfirmed, ", ") .. " (the list after the reload won't be solo's)")
+	end
 	SaveAddOns()
 	ns.Print(("solo: only %s now. Reloading; /cine debug solo off brings the rest back."):format(table.concat(kept, ", ")))
 	ReloadOrAsk(("Solo: only %s now. Reload now?"):format(table.concat(kept, ", ")))
@@ -317,10 +353,6 @@ local SETTLE = 4 -- seconds a row gets to reach its alpha
 local HOLD = 1.5 -- seconds it must stay there (an addon setting its own back)
 local MADE_WAIT = 20 -- seconds given to frames it makes late (Questie's tracker, seconds after a /reload)
 local MADE_SETTLE = 3 -- then seconds for them to settle (Questie hides and shows its tracker once more)
--- Fade in and out while the rows run: a row checks it hides, stays hidden and
--- comes back, not the fade (the player's 1.5 s each way was 3 of a row's 7 s).
-local ROW_FADE = 0.2
-local ROW_GAP = 0.2 -- seconds between rows (one shot a row, already seconds apart)
 local run
 
 local function Log(text)
@@ -712,7 +744,7 @@ local function TestRow(index)
 				#down > 0 and ("still down: " .. table.concat(down, ", ")) or
 				(unclear > 0 and (unclear .. " hidden or at alpha 0 by the addon itself") or nil))
 			Force(item.key, run.forceBefore[item.key])
-			C_Timer.After(ROW_GAP, function() TestRow(index + 1) end)
+			C_Timer.After(1, function() TestRow(index + 1) end)
 		end)
 	end)
 end
@@ -804,8 +836,6 @@ StartRows = function()
 		for _, item in ipairs(run.rows) do keys[#keys + 1] = item.key end
 		return table.concat(keys, ", ")
 	end)()))
-	ns.testFadeTime = ROW_FADE
-	Log(("fades at %.1fs while the rows run"):format(ROW_FADE))
 	TestRow(1)
 end
 
@@ -860,7 +890,6 @@ Finish = function(done)
 	if not run then return end
 	run.ticker:Cancel()
 	events:UnregisterAllEvents()
-	ns.testFadeTime = nil -- (before the rows go back: they fade at the player's own speed)
 	-- (Rows still forced by the test go back to what they were.)
 	for _, item in ipairs(run.forceBefore and run.rows or {}) do
 		if ns.db.frameForce[item.key] ~= run.forceBefore[item.key] then Force(item.key, run.forceBefore[item.key]) end
