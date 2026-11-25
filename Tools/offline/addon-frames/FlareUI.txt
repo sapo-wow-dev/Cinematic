@@ -1,0 +1,58 @@
+# FlareUI's named frames that Support/FlareUI.lua doesn't name, each with
+# why it needs no line there (Tools/addon-check.py check 3). A new frame of
+# its that's in neither = a MISS: decide it (a row, a fade, or here with why).
+# One per line: name or glob (*), a space, why. Checked against v7.0.16,
+# 2026-11-25.
+
+# On screen, fading with something we already fade.
+FlareUIDurability minimap edge icon: copies MinimapCluster's alpha itself (its SetAlpha hook), so the Minimap row fades it
+FlareUIFinderEye minimap edge icon: copies MinimapCluster's alpha itself (its SetAlpha hook), so the Minimap row fades it
+FlareUIVehicleExit minimap edge icon: copies MinimapCluster's alpha itself (its SetAlpha hook), so the Minimap row fades it
+FlareUIMinimapButton on the minimap (fades with it)
+FlareUI_DrawerButton in MinimapCluster (fades with it)
+FlareUI_BagBarToggle on the game's BagsBar (fades with it)
+FlareUI_ThreatMeter inside a holder on the game's DamageMeter (fades with it)
+FlareUI_BuffReminder* inside FlareUI_BuffReminders (its own row)
+FlareUI_FlagCarrier* inside FlareUI_FlagCarriers (Flag carriers row)
+
+# Windows and popups, opened by the player: left alone, like the game's.
+FlareUI_SettingsPanel its settings window (and What's New, once after an update)
+FlareUI_BlizzOptionsPanel its page in the game's Settings
+FlareUI_ColorPickerWindow a settings window
+FlareUI_ImportPicker a settings window
+FlareUI_RadialEditorNewRadial a settings popup
+FlareUI_PreviewActionButton* sample buttons in its settings preview
+FlareUI_PerfReport its /perf report window
+FlareUI_CopyChat a window to copy chat from
+FlareUI_CopyLink a window to copy a link from
+FlareUIDialog its confirm dialog
+FlareUIDialogPadAlt a button in its dialog
+FlareUIDialogPadNo a button in its dialog
+FlareUI_MinimapMenu its minimap's menu, opened by a click
+FlareUI_LootWindow its loot window, in place of the game's (a window)
+FlareUI_LootWindowHolder holds its loot window's place (Edit Mode)
+FlareUI_LootRolls its loot roll prompts, in place of the game's (a window that asks)
+FlareUI_BagButton* in its bags window
+FlareUIKeyringBackpackClick a click proxy on its bags window
+FlareUIReagentBackpackClick a click proxy on its bags window
+FlareUIReagentProbeSlot* hidden buttons that read the reagent bag
+FlareUI_Radial its radial menu, up only while its key is held
+FlareUI_RadialWheel part of its radial menu
+FlareUI_RadialPad part of its radial menu
+FlareUI_RadialCaster a secure button its radial menu clicks (no art)
+FlareUI_RadialCatcher a secure button its radial menu clicks (no art)
+FlareUI_RadialAim* secure buttons its radial menu clicks (no art)
+FlareUI_EditModeEye a button on the game's Edit Mode window
+
+# Invisible helpers: nothing drawn.
+FlareUI_HiddenBarParent the hidden parent it parks the game's frames on
+FlareUI_ReloadParent holds its secure reload buttons
+FlareUIDialogReload a secure reload button in its dialog
+FlareUI_SettingsReload a secure reload button in its settings
+FlareUI_TourReload a secure reload button in its welcome tour
+FlareUI_PadNav listens for gamepad keys in its settings
+FlareUIPadGroupNav a 1x1 secure button off screen (gamepad targeting)
+FlareUIPadGroupWatch a secure show/hide watcher (gamepad targeting)
+FlareUIPadTrackerWatch a secure show/hide watcher (gamepad quest tracker)
+FlareUIQuestPick a secure button its quest macro clicks (no art)
+FlareUI_FishingCast a secure button its fishing key clicks (no art)

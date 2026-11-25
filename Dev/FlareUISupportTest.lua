@@ -6,11 +6,18 @@
 -- alone now. Runs in either mode and says which; the Gamepad UI is the case
 -- the fix is for (Forever decides it at login, from the gamepad in use).
 -- Steps:
+--   0 solo    FlareUI alone with Cinematic (a Reload), if it isn't loaded
 --   1 setup   FlareUI up, its target frame made; mode; how TargetFrame is kept
 --   2 target  you target anything (skipped if you already have a target)
 --   3 rows    hands off: the Target row hidden, then shown, then CineMode on
 --             and off: TargetFrame stays invisible each time (gamepad), and
 --             FlareUI's frame hides and comes back; a shot of each
+--   4 own     hands off: its frames the addon test can't see up (buff
+--             reminders, loot feed, flag carriers, the box behind the event
+--             boxes: each made only when its option is on, or in a
+--             battleground): each one made is shown, its row hidden, then
+--             shown, and put back. (2026-11-25, the addon kit's first run.)
+--   5 back    your addon list back (a Reload), if step 0 changed it
 -- Into CinematicDB.flareUISupportTestLog. Dev copy only.
 local _, ns = ...
 
@@ -79,6 +86,63 @@ local function Check(r, label, flareUp)
 	r:Shot(label .. ": one target frame (FlareUI's) or none", { behind = Ours() })
 end
 
+-- Its frames that fade by a row of their own, or with a game frame the addon
+-- test seldom sees: the row's key (as frameForce has it) and the frame.
+local OWN = {
+	{ "addon:flareReminders", "FlareUI_BuffReminders" },
+	{ "addon:flareLootFeed", "FlareUI_LootFeed" },
+	{ "flags", "FlareUI_FlagCarriers" },
+	{ "topcenter", "FlareUI_BattlegroundObjectivesBox" },
+}
+
+local function ForceRow(key, state)
+	ns.db.frameForce[key] = state
+	if ns.db.frameForceAt then ns.db.frameForceAt[key] = state and GetTime() or nil end
+	ns.RefreshFrameForce()
+end
+
+local function Effective(frame)
+	local alpha = frame:GetEffectiveAlpha()
+	if issecretvalue and issecretvalue(alpha) then return nil end
+	return alpha
+end
+
+-- One of OWN: shown if it wasn't (out of fights: some hold secure buttons),
+-- its row hidden then shown, and all of it put back.
+local function CheckOwn(r, key, name)
+	local frame = _G[name]
+	if not frame then
+		r:Skip(name .. " not made (its option is off in FlareUI, or not in a battleground)")
+		return
+	end
+	local wasShown = ns.Flag(frame:IsShown())
+	if not wasShown then frame:Show() end
+	local own = frame:GetAlpha()
+	r:Sleep(0.5)
+	r:Log(("%s: shown before %s, its own alpha %s, faded by us %s"):format(name, tostring(wasShown),
+		tostring(own), tostring(ns.IsFaded(frame))))
+	ForceRow(key, "hide")
+	r:Sleep(1.5)
+	local hidden = Effective(frame)
+	if hidden == nil then
+		r:Log(name .. ": alpha reads secret, not judged")
+	else
+		r:Verdict(hidden < 0.05, ("%s: hidden by its row %s (%.2f)"):format(name, key, hidden))
+	end
+	r:Shot(name .. " hidden by " .. key, { behind = frame })
+	ForceRow(key, "show")
+	r:Sleep(1.5)
+	local back = Effective(frame)
+	if back ~= nil and type(own) == "number" and not (issecretvalue and issecretvalue(own)) then
+		if own < 0.05 then
+			r:Log(("%s: its own alpha is %.2f (faded by FlareUI itself): coming back not judged"):format(name, own))
+		else
+			r:Verdict(back > 0.3, ("%s: back with its row shown (%.2f)"):format(name, back))
+		end
+	end
+	if not wasShown then frame:Hide() end
+end
+
 ns.TestKit.Define({
 	name = "flareui",
 	key = "flareUISupportTest",
@@ -95,6 +159,10 @@ ns.TestKit.Define({
 	end,
 	putBack = function(extra)
 		Force(extra.forceWas ~= "<nil>" and extra.forceWas or nil)
+		for _, each in ipairs(OWN) do
+			local was = extra["force:" .. each[1]]
+			if was ~= nil then ForceRow(each[1], was ~= "<nil>" and was or nil) end
+		end
 		if ns.IsCineModeOn and Cinematic_ToggleCineMode and extra.cineWas ~= nil
 			and (ns.IsCineModeOn() and true or false) ~= extra.cineWas then
 			Cinematic_ToggleCineMode()
@@ -102,6 +170,19 @@ ns.TestKit.Define({
 		return "Target row and CineMode as they were"
 	end,
 	steps = {
+		-- (FlareUI alone with Cinematic: the queue runs it after the addon kit
+		-- has put your list back, without FlareUI, 2026-11-25. As the kit's
+		-- solo stages, with a Reload; the last step puts the list back.)
+		{ key = "solo", title = "FlareUI alone with Cinematic", run = function(r)
+			if ns.AddonUp("FlareUI") then r:Log("FlareUI already loaded") return end
+			if not ns.SoloAddons then r:Fail("no /cine debug solo here (dev copy only)") return end
+			if type(CinematicDB.soloAddons) == "table" then ns.SoloAddons("off", true) end
+			ns.SoloAddons("FlareUI", true)
+			CinematicDB.flareUITestSolo = true
+			r:Log("solo for FlareUI: " .. table.concat(CinematicDB.soloAddons and CinematicDB.soloAddons.keep or {}, ", "))
+			r:WaitFor("Reload, for FlareUI alone with Cinematic",
+				{ check = function() return false end, buttons = { { kind = "reload" } } })
+		end },
 		{ key = "setup", title = "FlareUI and how it keeps TargetFrame", run = function(r)
 			if not ns.AddonUp("FlareUI") or not Ours() then
 				r:Fail("FlareUI isn't loaded, or its target frame is off: turn it on and run again")
@@ -148,6 +229,30 @@ ns.TestKit.Define({
 				Cinematic_ToggleCineMode()
 				Check(r, "CineMode off again", true)
 			end
+		end },
+		{ key = "own", title = "its own rows and battleground frames (hands off)", seconds = 16, run = function(r)
+			if not ns.AddonUp("FlareUI") then r:Skip("FlareUI isn't loaded") return end
+			if InCombatLockdown() then r:Skip("in a fight: its frames hold secure buttons") return end
+			for _, each in ipairs(OWN) do
+				local before = ns.db.frameForce[each[1]]
+				r:Keep("force:" .. each[1], before or "<nil>")
+				CheckOwn(r, each[1], each[2])
+				ForceRow(each[1], before)
+				r:Log(("%s: row put back (forced %s before)"):format(each[1], tostring(before)))
+			end
+		end },
+		{ key = "back", title = "your addon list back", run = function(r)
+			if not CinematicDB.flareUITestSolo then r:Log("FlareUI was loaded already: list left as it was") return end
+			CinematicDB.flareUITestSolo = nil
+			ns.SoloAddons("off", true)
+			r:Log("addon list put back")
+			r:WaitFor("Reload, to get your addons back",
+				{ check = function() return false end, buttons = { { kind = "reload" } } })
+		end },
+		-- (A step after the last Reload, so the run picks up and ends DONE at
+		-- login, not cut off: as the addon kit's done step.)
+		{ key = "done", title = "done", run = function(r)
+			r:Log("addons now: " .. (ns.AddonUp("FlareUI") and "FlareUI still loaded" or "your list"))
 		end },
 	},
 })

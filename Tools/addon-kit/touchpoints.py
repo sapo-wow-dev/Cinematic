@@ -99,6 +99,9 @@ def our_files():
 COMMENT_LONG = re.compile(r"--\[(=*)\[.*?\]\1\]", re.S)
 COMMENT = re.compile(r"--[^\n]*")
 PLAYER_TEXT = re.compile(r'\bL\[\s*"(?:[^"\\]|\\.)*"\s*\]')
+# (The addon kit's expectations name game frames only as probe ids and notes:
+# no touch. Support/FlareUI.lua's, 2026-11-25, read as 8 frames newly touched.)
+KIT_EXPECT = re.compile(r'\bns\.AddonKitExpect\((?:[^()"]|"(?:[^"\\]|\\.)*")*\)')
 STRING = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 
 
@@ -107,6 +110,7 @@ def strip(text):
     # (Comments, but not -- inside a string: good enough for this code base,
     # whose strings rarely hold "--".)
     text = COMMENT.sub("", text)
+    text = KIT_EXPECT.sub("", text)
     return PLAYER_TEXT.sub('""', text)
 
 

@@ -47,6 +47,8 @@ STATE_FRAMES = {
     "group": (r"party", r"raid", r"CompactRaid", r"CompactParty"),
     "combat": (r"combat",),
     "instance": (r"instance", r"boss", r"arena"),
+    # (Settings or the game menu open: the game dims the micro buttons while it is.)
+    "window": (r"SettingsPanel", r"GameMenu", r"MicroButton"),
 }
 sys.path.insert(0, os.path.join(ROOT, ".claude", "skills", "test"))
 
@@ -406,16 +408,6 @@ def selftest():
     fails, expected, _ = compare(Run(nbase), Run(newrow), "Fake", [])
     check("a frame probe the baseline lacks (the addon's frame on our row) is its own, not a FAIL",
           not any("prdpower" in f for f in fails) and any("prdpower" in e for e in expected), "; ".join(fails))
-    hbase = ["H format=1 client=forever build=16001 label=x addons=", "R touch.ActionStatus	visible	false	v1",
-             "R touch.ActionStatus	alpha	0.010	v1", "R frame.buffs	BuffFrame.visible	true	v1",
-             "R frame.buffs	BuffFrame.alpha	1	v1", "D 2 probes, 0 errors"]
-    hrun = ["H format=1 client=forever build=16001 label=x addons=Fake", "R touch.ActionStatus	visible	false	v1",
-            "R touch.ActionStatus	alpha	1	v1", "R frame.buffs	BuffFrame.visible	true	v1",
-            "R frame.buffs	BuffFrame.alpha	0	v1", "D 2 probes, 0 errors"]
-    fails, _, notes = compare(Run(hbase), Run(hrun), "Fake", [])
-    check("an alpha on a frame hidden in both runs is a note, a shown frame's still FAILs",
-          not any("ActionStatus" in f for f in fails) and any("BuffFrame.alpha" in f for f in fails)
-          and any("hidden in both" in n for n in notes), "; ".join(fails))
     sbase = ["H format=1 client=forever build=16001 label=x addons=", "R context.state	pet	false	v1",
              "R frame.petframe	PetFrame.shown	false	v1", "R frame.player	PlayerFrame.shown	true	v1",
              "D 2 probes, 0 errors"]
@@ -426,6 +418,26 @@ def selftest():
     check("a pet out in one run only: the pet frame can't tell, the player frame still FAILs",
           not any("PetFrame" in f for f in fails) and any("PlayerFrame" in f for f in fails)
           and any("pet false then" in n for n in notes), "; ".join(fails))
+    hbase = ["H format=1 client=forever build=16001 label=x addons=", "R touch.ActionStatus	visible	false	v1",
+             "R touch.ActionStatus	alpha	0.010	v1", "R frame.buffs	BuffFrame.visible	true	v1",
+             "R frame.buffs	BuffFrame.alpha	1	v1", "D 2 probes, 0 errors"]
+    hrun = ["H format=1 client=forever build=16001 label=x addons=Fake", "R touch.ActionStatus	visible	false	v1",
+            "R touch.ActionStatus	alpha	1	v1", "R frame.buffs	BuffFrame.visible	true	v1",
+            "R frame.buffs	BuffFrame.alpha	0	v1", "D 2 probes, 0 errors"]
+    fails, _, notes = compare(Run(hbase), Run(hrun), "Fake", [])
+    check("an alpha on a frame hidden in both runs is a note, a shown frame's still FAILs",
+          not any("ActionStatus" in f for f in fails) and any("BuffFrame.alpha" in f for f in fails)
+          and any("hidden in both" in n for n in notes), "; ".join(fails))
+    wbase = ["H format=1 client=forever build=16001 label=x addons=", "R context.state	window	true	v2",
+             "R touch.SettingsPanel	shown	true	v1", "R touch.TalentMicroButton	alpha	0.500	v1",
+             "R touch.BuffFrame	shown	true	v1", "D 3 probes, 0 errors"]
+    wrun = ["H format=1 client=forever build=16001 label=x addons=Fake", "R context.state	window	false	v2",
+            "R touch.SettingsPanel	shown	false	v1", "R touch.TalentMicroButton	alpha	1	v1",
+            "R touch.BuffFrame	shown	false	v1", "D 3 probes, 0 errors"]
+    fails, _, notes = compare(Run(wbase), Run(wrun), "Fake", [])
+    check("Settings open in one run only: it and the dimmed micro buttons can't tell, the buffs still FAIL",
+          not any("SettingsPanel" in f or "MicroButton" in f for f in fails) and any("BuffFrame" in f for f in fails)
+          and any("window true then" in n for n in notes), "; ".join(fails))
     check("expectations read across lines", any(e[2] == "linesOnly" and "2979131" in e[3] for e in expects))
     print("diff selftest: %d FAIL" % len(bad))
     return 1 if bad else 0

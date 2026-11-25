@@ -4,6 +4,13 @@ R addons.yields	cooldownDefaults	ours	v1
 R chat.linesOnly	chatIsDefault	true	v1
 R chat.linesOnly	linesOnly	true	v1
 R chat.linesOnly	linesOnlyWhenOff	false	v1
+R context.state	combat	false	v2
+R context.state	group	false	v2
+R context.state	instance	false	v2
+R context.state	mounted	false	v2
+R context.state	pet	false	v2
+R context.state	vehicle	false	v2
+R context.state	window	false	v2
 R frame.bags	BagsBar.alpha	1	v1
 R frame.bags	BagsBar.exists	true	v1
 R frame.bags	BagsBar.forbidden	false	v1
@@ -146,7 +153,7 @@ R frame.encounter	EncounterBar.forbidden	false	v1
 R frame.encounter	EncounterBar.parent	UIParent	v1
 R frame.encounter	EncounterBar.shown	true	v1
 R frame.encounter	EncounterBar.visible	true	v1
-R frame.extra	ExtraActionBarFrame.alpha	0	v1
+R frame.extra	ExtraActionBarFrame.alpha	1	v1
 R frame.extra	ExtraActionBarFrame.exists	true	v1
 R frame.extra	ExtraActionBarFrame.forbidden	false	v1
 R frame.extra	ExtraActionBarFrame.parent	none	v1
@@ -194,7 +201,7 @@ R frame.gamepadreticle	GamepadReticle.forbidden	false	v1
 R frame.gamepadreticle	GamepadReticle.parent	UIParent	v1
 R frame.gamepadreticle	GamepadReticle.shown	false	v1
 R frame.gamepadreticle	GamepadReticle.visible	false	v1
-R frame.gamepadxp	MainStatusTrackingBarContainer.alpha	0	v1
+R frame.gamepadxp	MainStatusTrackingBarContainer.alpha	1	v1
 R frame.gamepadxp	MainStatusTrackingBarContainer.exists	true	v1
 R frame.gamepadxp	MainStatusTrackingBarContainer.forbidden	false	v1
 R frame.gamepadxp	MainStatusTrackingBarContainer.parent	StatusTrackingBarManager	v1
@@ -310,19 +317,19 @@ R frame.stance	StanceBar.parent	UIParent	v1
 R frame.stance	StanceBar.shown	false	v1
 R frame.stance	StanceBar.visible	false	v1
 R frame.stance	StanceBarFrame.exists	false	v1
-R frame.swing	SwingTimerMainHandFrame.alpha	1	v1
+R frame.swing	SwingTimerMainHandFrame.alpha	0	v1
 R frame.swing	SwingTimerMainHandFrame.exists	true	v1
 R frame.swing	SwingTimerMainHandFrame.forbidden	false	v1
 R frame.swing	SwingTimerMainHandFrame.parent	UIParent	v1
 R frame.swing	SwingTimerMainHandFrame.shown	true	v1
 R frame.swing	SwingTimerMainHandFrame.visible	true	v1
-R frame.swing	SwingTimerOffHandFrame.alpha	1	v1
+R frame.swing	SwingTimerOffHandFrame.alpha	0	v1
 R frame.swing	SwingTimerOffHandFrame.exists	true	v1
 R frame.swing	SwingTimerOffHandFrame.forbidden	false	v1
 R frame.swing	SwingTimerOffHandFrame.parent	UIParent	v1
 R frame.swing	SwingTimerOffHandFrame.shown	false	v1
 R frame.swing	SwingTimerOffHandFrame.visible	false	v1
-R frame.swing	SwingTimerRangedFrame.alpha	1	v1
+R frame.swing	SwingTimerRangedFrame.alpha	0	v1
 R frame.swing	SwingTimerRangedFrame.exists	true	v1
 R frame.swing	SwingTimerRangedFrame.forbidden	false	v1
 R frame.swing	SwingTimerRangedFrame.parent	UIParent	v1
@@ -424,7 +431,7 @@ R frame.voice	VoiceActivityManager.forbidden	false	v1
 R frame.voice	VoiceActivityManager.parent	UIParent	v1
 R frame.voice	VoiceActivityManager.shown	true	v1
 R frame.voice	VoiceActivityManager.visible	true	v1
-R frame.xp	MainStatusTrackingBarContainer.alpha	0	v1
+R frame.xp	MainStatusTrackingBarContainer.alpha	1	v1
 R frame.xp	MainStatusTrackingBarContainer.exists	true	v1
 R frame.xp	MainStatusTrackingBarContainer.forbidden	false	v1
 R frame.xp	MainStatusTrackingBarContainer.parent	StatusTrackingBarManager	v1
@@ -582,7 +589,7 @@ R touch.AcceptDuel	sameAsLogin	same	v1
 R touch.AcceptQuest	kind	function	v1
 R touch.AcceptQuest	sameAsLogin	same	v1
 R touch.AchievementFrame	kind	nil	v1
-R touch.AchievementMicroButton	alpha	0.500	v1
+R touch.AchievementMicroButton	alpha	1	v1
 R touch.AchievementMicroButton	forbidden	false	v1
 R touch.AchievementMicroButton	kind	frame	v1
 R touch.AchievementMicroButton	parent	none	v1
@@ -597,7 +604,7 @@ R touch.ActionButton_	members	12	v1
 R touch.ActionButton_	parent	MainActionBarButtonContainer1	v1
 R touch.ActionButton_	shown	true	v1
 R touch.ActionButton_	visible	true	v1
-R touch.ActionStatus	alpha	1	v1
+R touch.ActionStatus	alpha	0.010	v1
 R touch.ActionStatus	forbidden	false	v1
 R touch.ActionStatus	kind	frame	v1
 R touch.ActionStatus	parent	UIParent	v1
@@ -729,7 +736,7 @@ R touch.CharacterFrame	kind	frame	v1
 R touch.CharacterFrame	parent	UIParent	v1
 R touch.CharacterFrame	shown	false	v1
 R touch.CharacterFrame	visible	false	v1
-R touch.CharacterMicroButton	alpha	0.500	v1
+R touch.CharacterMicroButton	alpha	1	v1
 R touch.CharacterMicroButton	forbidden	false	v1
 R touch.CharacterMicroButton	kind	frame	v1
 R touch.CharacterMicroButton	parent	MicroMenu	v1
@@ -815,7 +822,7 @@ R touch.CloseMenus	sameAsLogin	same	v1
 R touch.CloseSideDressUpFrame	kind	function	v1
 R touch.CloseSideDressUpFrame	sameAsLogin	same	v1
 R touch.CollectionsJournal	kind	nil	v1
-R touch.CollectionsMicroButton	alpha	0.500	v1
+R touch.CollectionsMicroButton	alpha	1	v1
 R touch.CollectionsMicroButton	forbidden	false	v1
 R touch.CollectionsMicroButton	kind	frame	v1
 R touch.CollectionsMicroButton	parent	MicroMenu	v1
@@ -940,7 +947,7 @@ R touch.DurabilityFrame	kind	frame	v1
 R touch.DurabilityFrame	parent	RightManagedFrameContainer	v1
 R touch.DurabilityFrame	shown	false	v1
 R touch.DurabilityFrame	visible	false	v1
-R touch.EJMicroButton	alpha	0.500	v1
+R touch.EJMicroButton	alpha	1	v1
 R touch.EJMicroButton	forbidden	false	v1
 R touch.EJMicroButton	kind	frame	v1
 R touch.EJMicroButton	parent	none	v1
@@ -979,7 +986,7 @@ R touch.Event	kind	table	v1
 R touch.Event	sameAsLogin	same	v1
 R touch.EventRegistry	kind	table	v1
 R touch.EventRegistry	sameAsLogin	same	v1
-R touch.ExtraActionBarFrame	alpha	0	v1
+R touch.ExtraActionBarFrame	alpha	1	v1
 R touch.ExtraActionBarFrame	forbidden	false	v1
 R touch.ExtraActionBarFrame	kind	frame	v1
 R touch.ExtraActionBarFrame	parent	none	v1
@@ -1219,7 +1226,7 @@ R touch.GroupLootHistoryFrame	parent	UIParent	v1
 R touch.GroupLootHistoryFrame	shown	false	v1
 R touch.GroupLootHistoryFrame	visible	false	v1
 R touch.GuildBankFrame	kind	nil	v1
-R touch.GuildMicroButton	alpha	0.500	v1
+R touch.GuildMicroButton	alpha	1	v1
 R touch.GuildMicroButton	forbidden	false	v1
 R touch.GuildMicroButton	kind	frame	v1
 R touch.GuildMicroButton	parent	MicroMenu	v1
@@ -1238,7 +1245,7 @@ R touch.HelpMicroButton	visible	false	v1
 R touch.HideUIPanel	kind	function	v1
 R touch.HideUIPanel	sameAsLogin	same	v1
 R touch.HonorFrame	kind	nil	v1
-R touch.HousingMicroButton	alpha	0.500	v1
+R touch.HousingMicroButton	alpha	1	v1
 R touch.HousingMicroButton	forbidden	false	v1
 R touch.HousingMicroButton	kind	frame	v1
 R touch.HousingMicroButton	parent	none	v1
@@ -1274,7 +1281,7 @@ R touch.ItemTextFrame	visible	false	v1
 R touch.ItemUpgradeFrame	kind	nil	v1
 R touch.JumpOrAscendStart	kind	function	v1
 R touch.JumpOrAscendStart	sameAsLogin	same	v1
-R touch.LFDMicroButton	alpha	0.500	v1
+R touch.LFDMicroButton	alpha	1	v1
 R touch.LFDMicroButton	forbidden	false	v1
 R touch.LFDMicroButton	kind	frame	v1
 R touch.LFDMicroButton	parent	MicroMenu	v1
@@ -1287,7 +1294,7 @@ R touch.LFGParentFrame	kind	frame	v1
 R touch.LFGParentFrame	parent	UIParent	v1
 R touch.LFGParentFrame	shown	false	v1
 R touch.LFGParentFrame	visible	false	v1
-R touch.LegacyMicroButton	alpha	0.500	v1
+R touch.LegacyMicroButton	alpha	1	v1
 R touch.LegacyMicroButton	forbidden	false	v1
 R touch.LegacyMicroButton	kind	frame	v1
 R touch.LegacyMicroButton	parent	MicroMenu	v1
@@ -1337,7 +1344,7 @@ R touch.MainMenuMicroButton	kind	frame	v1
 R touch.MainMenuMicroButton	parent	MicroMenu	v1
 R touch.MainMenuMicroButton	shown	true	v1
 R touch.MainMenuMicroButton	visible	true	v1
-R touch.MainStatusTrackingBarContainer	alpha	0	v1
+R touch.MainStatusTrackingBarContainer	alpha	1	v1
 R touch.MainStatusTrackingBarContainer	forbidden	false	v1
 R touch.MainStatusTrackingBarContainer	kind	frame	v1
 R touch.MainStatusTrackingBarContainer	parent	StatusTrackingBarManager	v1
@@ -1697,7 +1704,7 @@ R touch.PlayerPowerBarAlt	visible	false	v1
 R touch.PlayerSpellsFrame	kind	nil	v1
 R touch.PlayerSpellsFrame_LoadUI	kind	function	v1
 R touch.PlayerSpellsFrame_LoadUI	sameAsLogin	same	v1
-R touch.PlayerSpellsMicroButton	alpha	0.500	v1
+R touch.PlayerSpellsMicroButton	alpha	1	v1
 R touch.PlayerSpellsMicroButton	forbidden	false	v1
 R touch.PlayerSpellsMicroButton	kind	frame	v1
 R touch.PlayerSpellsMicroButton	parent	none	v1
@@ -1714,7 +1721,7 @@ R touch.PossessActionBar	kind	frame	v1
 R touch.PossessActionBar	parent	UIParent	v1
 R touch.PossessActionBar	shown	false	v1
 R touch.PossessActionBar	visible	false	v1
-R touch.ProfessionMicroButton	alpha	0.500	v1
+R touch.ProfessionMicroButton	alpha	1	v1
 R touch.ProfessionMicroButton	forbidden	false	v1
 R touch.ProfessionMicroButton	kind	frame	v1
 R touch.ProfessionMicroButton	parent	MicroMenu	v1
@@ -1792,7 +1799,7 @@ R touch.QuestFrameRewardPanel	parent	QuestFrame	v1
 R touch.QuestFrameRewardPanel	shown	false	v1
 R touch.QuestFrameRewardPanel	visible	false	v1
 R touch.QuestLogFrame	kind	nil	v1
-R touch.QuestLogMicroButton	alpha	0.500	v1
+R touch.QuestLogMicroButton	alpha	1	v1
 R touch.QuestLogMicroButton	forbidden	false	v1
 R touch.QuestLogMicroButton	kind	frame	v1
 R touch.QuestLogMicroButton	parent	MicroMenu	v1
@@ -1913,8 +1920,8 @@ R touch.SettingsPanel	alpha	1	v1
 R touch.SettingsPanel	forbidden	false	v1
 R touch.SettingsPanel	kind	frame	v1
 R touch.SettingsPanel	parent	UIParent	v1
-R touch.SettingsPanel	shown	true	v1
-R touch.SettingsPanel	visible	true	v1
+R touch.SettingsPanel	shown	false	v1
+R touch.SettingsPanel	visible	false	v1
 R touch.ShapeshiftButton_	kind	nil	v1
 R touch.ShapeshiftButton_	members	0	v1
 R touch.SharedTooltip_SetBackdropStyle	kind	function	v1
@@ -1952,7 +1959,7 @@ R touch.SpellActivationOverlayFrame	parent	UIParent	v1
 R touch.SpellActivationOverlayFrame	shown	true	v1
 R touch.SpellActivationOverlayFrame	visible	true	v1
 R touch.SpellBookFrame	kind	nil	v1
-R touch.SpellbookMicroButton	alpha	0.500	v1
+R touch.SpellbookMicroButton	alpha	1	v1
 R touch.SpellbookMicroButton	forbidden	false	v1
 R touch.SpellbookMicroButton	kind	frame	v1
 R touch.SpellbookMicroButton	parent	MicroMenu	v1
@@ -2023,19 +2030,19 @@ R touch.SuperTrackedFrame	kind	frame	v1
 R touch.SuperTrackedFrame	parent	UIParent	v1
 R touch.SuperTrackedFrame	shown	false	v1
 R touch.SuperTrackedFrame	visible	false	v1
-R touch.SwingTimerMainHandFrame	alpha	1	v1
+R touch.SwingTimerMainHandFrame	alpha	0	v1
 R touch.SwingTimerMainHandFrame	forbidden	false	v1
 R touch.SwingTimerMainHandFrame	kind	frame	v1
 R touch.SwingTimerMainHandFrame	parent	UIParent	v1
 R touch.SwingTimerMainHandFrame	shown	true	v1
 R touch.SwingTimerMainHandFrame	visible	true	v1
-R touch.SwingTimerOffHandFrame	alpha	1	v1
+R touch.SwingTimerOffHandFrame	alpha	0	v1
 R touch.SwingTimerOffHandFrame	forbidden	false	v1
 R touch.SwingTimerOffHandFrame	kind	frame	v1
 R touch.SwingTimerOffHandFrame	parent	UIParent	v1
 R touch.SwingTimerOffHandFrame	shown	false	v1
 R touch.SwingTimerOffHandFrame	visible	false	v1
-R touch.SwingTimerRangedFrame	alpha	1	v1
+R touch.SwingTimerRangedFrame	alpha	0	v1
 R touch.SwingTimerRangedFrame	forbidden	false	v1
 R touch.SwingTimerRangedFrame	kind	frame	v1
 R touch.SwingTimerRangedFrame	parent	UIParent	v1
@@ -2101,7 +2108,7 @@ R touch.TabardFrame	visible	false	v1
 R touch.TakeTaxiNode	kind	function	v1
 R touch.TakeTaxiNode	sameAsLogin	same	v1
 R touch.TalentFrame	kind	nil	v1
-R touch.TalentMicroButton	alpha	0.500	v1
+R touch.TalentMicroButton	alpha	1	v1
 R touch.TalentMicroButton	forbidden	false	v1
 R touch.TalentMicroButton	kind	frame	v1
 R touch.TalentMicroButton	parent	MicroMenu	v1
@@ -2265,4 +2272,4 @@ R touch.ZoneTextString	kind	frame	v1
 R touch.ZoneTextString	parent	ZoneTextFrame	v1
 R touch.ZoneTextString	shown	true	v1
 R touch.ZoneTextString	visible	false	v1
-D 615 probes, 0 errors; saved 2026-11-25 09:36
+D 616 probes, 0 errors; saved 2026-11-25 10:42

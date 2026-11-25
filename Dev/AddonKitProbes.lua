@@ -205,11 +205,16 @@ end
 -- The game's state, which some frames follow whatever addon is loaded: a pet
 -- out shows the pet frame and bar, a vehicle its bar. diff.py marks such
 -- frames' differences "can't tell" when this differs from the baseline's
--- (the first game run's pet frame, 2026-11-25), instead of a FAIL.
+-- (the first game run's pet frame, 2026-11-25), instead of a FAIL. A game
+-- window open: the first baseline ran with Settings open (the Run all click),
+-- and the game dims every micro button to half while it is, so two addons'
+-- runs showed 15 differences neither made.
 Probe({
-	id = "context.state", v = 1, touches = { "UIParent" },
-	about = "pet out, vehicle, mounted, in a group, in a fight, in an instance",
+	id = "context.state", v = 2, touches = { "UIParent" },
+	about = "pet out, vehicle, mounted, in a group, in a fight, in an instance, Settings or the game menu open",
 	run = function(r)
+		local settings, menu = _G.SettingsPanel, _G.GameMenuFrame
+		r:Set("window", (settings and settings:IsShown() or menu and menu:IsShown()) and true or false)
 		r:Set("pet", UnitExists("pet") and true or false)
 		r:Set("vehicle", UnitInVehicle and UnitInVehicle("player") and true or false)
 		r:Set("mounted", IsMounted and IsMounted() and true or false)
