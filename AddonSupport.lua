@@ -149,6 +149,20 @@ function ns.SplitAddonRows(settings)
 	end
 end
 
+-- The addon kit's expectations (Tools/addon-kit/diff.py): with this addon
+-- loaded, this probe's field is meant to differ from the no-addons baseline,
+-- and why. ns.AddonKitExpect("DaylightUI_Chat", "chat.linesOnly", "linesOnly",
+-- "off: its window comes up instead"). field "*": every field of the probe.
+-- A difference no line here declares is a FAIL there. Literal strings only:
+-- diff.py reads them from the Support files' text. Kept for the dev copy's
+-- runner (Dev/AddonKit.lua); a table, nothing runs.
+ns.ADDON_KIT_EXPECT = {}
+function ns.AddonKitExpect(addon, probe, field, note)
+	local list = ns.ADDON_KIT_EXPECT[addon] or {}
+	ns.ADDON_KIT_EXPECT[addon] = list
+	list[#list + 1] = { probe = probe, field = field, note = note }
+end
+
 local setups = {} -- addon name -> setup functions still to run
 local supported = {} -- addon name -> true: has a setup (loaded or not)
 local started = false -- (Cinematic itself loaded: the setups can run)
@@ -394,6 +408,7 @@ end
 -- on; row (ns.AddConflict's fields, its key the feature's unless it shares a
 -- row: row.key) lists it on the page.
 local featureYields = {}
+ns.FEATURE_YIELDS = featureYields -- (read by the addon kit's probes, Dev/AddonKitProbes.lua)
 function ns.AddFeatureYield(feature, fn, row)
 	row = row or {}
 	row.key = row.key or feature

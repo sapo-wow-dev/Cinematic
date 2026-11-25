@@ -356,6 +356,50 @@ for label, want in (("NEW", False), ("known", True)):
     print(", ".join(f"{n} `{quoted[n]}`" for n in names) or "none")
     print()
 
+# 3b. Our features on those frames (the addon kit's touch points,
+# Tools/addon-kit/touchpoints.txt): the miss behind the kit was a feature of
+# ours on a game frame the addon replaced (Show just those messages over
+# DaylightUI's chat, 2979131), which no list of the addon's frames shows.
+def _touch_registry():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tools", "addon-kit",
+                        "touchpoints.txt")
+    out, cur = {}, None
+    if not os.path.exists(path):
+        return out
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if not line or line.startswith("#"):
+                continue
+            if not line.startswith("\t"):
+                cur = out.setdefault(line.strip(), {"files": [], "settings": []})
+            elif cur is not None:
+                word, _, rest = line.strip().partition(" ")
+                if word in ("files", "settings"):
+                    cur[word] = rest.split()
+    return out
+
+
+_reg = _touch_registry()
+print("## 3b. Our features on the game frames it touches\n")
+print("Each game frame above that Cinematic touches too (Tools/addon-kit/touchpoints.txt): our files and the "
+      "settings that reach it. Each setting is a feature of ours that can break where the addon hides, replaces "
+      "or restyles that frame: decide each (fine, yields, or a fix) and declare what's meant to differ with "
+      "ns.AddonKitExpect, so /cine debug addonkit's diff passes.\n")
+_seen = 0
+for name in sorted(set(game_hits) | {n for n in quoted if n in ours}):
+    point = re.sub(r"\d+", "#", name)
+    entry = _reg.get(point)
+    if not entry:
+        continue
+    _seen += 1
+    settings = entry["settings"]
+    shown = " ".join(settings[:25]) + (f" +{len(settings) - 25}" if len(settings) > 25 else "")
+    print(f"- **{name}** (touch point {point}): our files {' '.join(entry['files'][:8])}"
+          f"{' +' + str(len(entry['files']) - 8) if len(entry['files']) > 8 else ''}; features: {shown or 'none linked'}")
+print("none" if not _seen else "")
+print()
+
 print("## 4. Fade / hover traps\n")
 show("SetAlpha hooks, with the lines after", lists["alphahooks"],
      "Read each: a hook that turns the mouse off, or sets alpha back, fights our fade.")

@@ -446,6 +446,9 @@ end)
 -- UI/FrameLinks.lua), as for Glass. Unclaimed, the peek raised only the game's
 -- window at alpha 0 and nothing showed (test q5a6f, 2026-11-24). (Its being
 -- loaded also turns off Show just those messages: UI/Chat.lua.)
+ns.AddonKitExpect("DaylightUI_Chat", "chat.linesOnly", "chatIsDefault", "false: its chat window draws the lines")
+ns.AddonKitExpect("DaylightUI_Chat", "chat.linesOnly", "linesOnly",
+	"false: a message brings up its window, no copy under it (2979131)")
 ns.WhenAddonLoads("DaylightUI_Chat", function()
 	ns.AddScanner(function()
 		local holder, window = _G.DaylightUIChat, _G.ChatFrame1

@@ -1,6 +1,9 @@
 # Addon baseline kit: plan (2026-11-25)
 
-Status: steps 1 and 2 built 2026-11-25 (Tools/addon-kit/README.md); steps 3-8 plan.
+Status: steps 1-5 and 7 built 2026-11-25 (Tools/addon-kit/README.md). Steps 6 and 8 are game runs: the first is
+queued (Tools/addon-kit/backfill.md).
+After step 8 (the user, 2026-11-25): rerun /addon-support with the kit for
+EllesmereUI, FlareUI and DaylightUI.
 
 Step 1 as built, where it differs from the plan below:
 - **No `ns.Touch` declarations in the code.** Touches are found

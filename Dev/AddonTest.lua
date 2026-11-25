@@ -163,8 +163,11 @@ local function IsLib(name)
 	return (name:find("^Lib") or name:find("^Ace")) ~= nil
 end
 
-function ns.SoloAddons(words)
+-- noReload: the addon list set, no reload asked (the addon kit's test asks
+-- with its own Reload button, Dev/AddonKitTest.lua).
+function ns.SoloAddons(words, noReload)
 	local db = CinematicDB
+	local ReloadOrAsk = noReload and function() end or ns.ReloadOrAsk
 	if words == "" then
 		local solo = db.soloAddons
 		ns.Print(type(solo) == "table" and ("solo: on since %s for %s. /cine debug solo off brings the rest back."):format(
@@ -189,7 +192,7 @@ function ns.SoloAddons(words)
 		db.soloAddons = nil
 		SaveAddOns()
 		ns.Print("solo off: your addon list is back. Reloading.")
-		ns.ReloadOrAsk("Solo off: your addon list is back. Reload now?")
+		ReloadOrAsk("Solo off: your addon list is back. Reload now?")
 		return
 	end
 	if type(db.soloAddons) == "table" then
@@ -200,7 +203,9 @@ function ns.SoloAddons(words)
 	local keep, turnedOff, turnedOn = {}, {}, {}
 	keep[addonName] = true
 	local wanted = {}
-	for typed in words:gmatch("%S+") do
+	-- ("none": no other addon at all, Cinematic alone: the addon kit's
+	-- baseline, Tools/addon-kit/diff.py baseline.)
+	for typed in (words == "none" and "" or words):gmatch("%S+") do
 		local name = Resolve(typed)
 		if not name then
 			ns.Print("solo: no addon called " .. typed .. " is installed.")
@@ -253,7 +258,7 @@ function ns.SoloAddons(words)
 	db.soloAddons = { keep = kept, turnedOff = turnedOff, turnedOn = turnedOn, at = date("%Y-%m-%d %H:%M") }
 	SaveAddOns()
 	ns.Print(("solo: only %s now. Reloading; /cine debug solo off brings the rest back."):format(table.concat(kept, ", ")))
-	ns.ReloadOrAsk(("Solo: only %s now. Reload now?"):format(table.concat(kept, ", ")))
+	ReloadOrAsk(("Solo: only %s now. Reload now?"):format(table.concat(kept, ", ")))
 end
 
 -- Other addons loaded besides the solo ones (and the game's own): the check.
@@ -819,6 +824,9 @@ Finish = function(done)
 	ns.TestPrompt(done and ("Addon test DONE: %d pass, %d fail, %d can't tell. Type /reload, then say \"check log\"."):format(
 		tally.pass, tally.fail, tally.unclear) or "Addon test stopped.", 30)
 end
+
+-- Whether an addon test is running (the addon kit's test waits for it to end).
+function ns.AddonTestRunning() return run ~= nil end
 
 function ns.AddonTest(words)
 	if run then

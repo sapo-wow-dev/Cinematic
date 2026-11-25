@@ -550,7 +550,9 @@ def main():
                         [PY, "-I", "Tools/addon-kit/misses.py"], lambda ok, out: (ok, last_line(out))))
         jobs.append(Job("addon kit: rule walk, every row x word x tick vs its baseline (both clients)",
                         [PY, "-I", "Tools/addon-kit/rulewalk.py"], lambda ok, out: (ok, last_line(out))))
-        for kit in ("touchpoints", "misses", "rulewalk"):
+        # (diff.py's: the probes run offline with no addon and with DaylightUI's
+        # chat, each way a run can't be judged refused.)
+        for kit in ("touchpoints", "misses", "rulewalk", "diff"):
             jobs.append(Job("addon kit: %s.py's own checks" % kit, [PY, "-I", "Tools/addon-kit/%s.py" % kit,
                                                                      "--selftest"], judge_test))
         scratch = tempfile.mkdtemp(prefix="cine-prerelease-")

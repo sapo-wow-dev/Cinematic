@@ -394,6 +394,10 @@ QoL\AddonListAll.lua
 Dev\ReloadPathsTest.lua
 Dev\ReloadCoverTest.lua
 Dev\AddonListAllTest.lua
+Dev\AddonKit.lua
+Dev\AddonKitTouches.lua
+Dev\AddonKitProbes.lua
+Dev\AddonKitTest.lua
 Dev\LoosePartsSurvey.lua
 Dev\TooltipNoWaitTest.lua
 Dev\AhDressUpTest.lua

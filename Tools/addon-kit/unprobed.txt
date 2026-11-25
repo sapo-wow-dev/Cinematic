@@ -1,0 +1,3 @@
+# Touch points with no addon kit probe (Tools/addon-kit/touchpoints.py): <touch point>  <why>.
+# Kept by hand, never written by --update: a touch point the code reaches that has no probe and
+# no line here FAILs. A probe for one takes its line off (the check says so).

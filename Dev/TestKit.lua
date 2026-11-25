@@ -993,6 +993,9 @@ function Kit.Start(name, arg, resume)
 	if ns.PadTestBoxClock then ns.PadTestBoxClock(function() return Kit.Clock(run) end) end
 	local left
 	run.steps, run.full, left = Pick(def, arg)
+	-- (What was typed after the name, for a test that takes words of its own:
+	-- the addon kit's addon names. After a reload it's the steps left.)
+	run.arg = arg
 	if resume then run.full = resume.full and true or false end
 	current = run
 	Say(run, ("start: /cine debug %s%s, %s, %d of %d step(s)%s"):format(def.name, arg and arg ~= "" and (" " .. arg) or "",
