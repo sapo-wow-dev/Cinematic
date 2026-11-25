@@ -5,7 +5,7 @@ Found by: audit 2026-11-25; the range is the user's pick ("Bigger range, kept in
 Code: Plates/PlateLayout.lua: ns.PLATE_LAYOUT_RANGE, Clamp (applied to parts, the soft target, Custom's shift);
 Plates/PlateLayoutPage.lua: the drag, the arrow keys, the boxes, Redraw's fit
 Clients: forever (no Layout tab on retail)
-Base: HEAD
+Base: 653a35a^
 
 ## Before / after
 - Before: Left / right -150..150 and Down / up -100..100 in the boxes; dragging and the arrows any distance (a box

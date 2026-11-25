@@ -129,6 +129,27 @@ end
 ns.PLATE_LAYOUT_RANGE = { x = 250, y = 150 }
 local function Clamp(value, range) return math.max(-range, math.min(range, value)) end
 ns.PlateLayoutClamp = Clamp
+
+-- Snapping a dragged part (the Layout tab; the user's mockup, audit 2026-11-25):
+-- move, how far it's dragged (screen units); left / right, the part's edges
+-- before it; barLeft / barRight, the bar's. Its left, middle or right meeting
+-- the bar's left, middle or right within reach: moved there exactly. Gives
+-- the move, and the x it lined up on (nil: none).
+function ns.PlateLayoutSnap(move, left, right, barLeft, barRight, reach)
+	reach = reach or 4
+	local barMid = (barLeft + barRight) / 2
+	local best, line
+	for _, edge in ipairs({ left, (left + right) / 2, right }) do
+		for _, target in ipairs({ barLeft, barMid, barRight }) do
+			local need = target - (edge + move)
+			if math.abs(need) <= reach and (not best or math.abs(need) < math.abs(best)) then
+				best, line = need, target
+			end
+		end
+	end
+	if best then return move + best, line end
+	return move, nil
+end
 -- Whether a part's settings move it at all.
 local function PartMoves(p)
 	return p and (Num(p.x, 0) ~= 0 or Num(p.y, 0) ~= 0 or Num(p.scale, 1) ~= 1 or (p.to and SIDES[p.side or "right"]))

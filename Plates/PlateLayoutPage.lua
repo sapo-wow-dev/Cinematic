@@ -535,11 +535,21 @@ function ns.CreatePlateLayoutPage(kit)
 	end
 
 	-- Dragging a part: the cursor's move in the plate's units, snapped to the
-	-- game's place and the bar's middle line within 3.
+	-- game's place, and its left, middle or right to the bar's left, middle or
+	-- right (a thin gold line shows the one it lined up on). Audit 2026-11-25.
 	local drag
+	local snapLine = overlay:CreateTexture(nil, "OVERLAY")
+	snapLine:SetColorTexture(1, 0.82, 0, 0.9)
+	snapLine:SetWidth(1)
+	snapLine:Hide()
+	local function ScreenEdges(frame)
+		local ok, l, r, eff = pcall(function() return frame:GetLeft(), frame:GetRight(), frame:GetEffectiveScale() end)
+		if ok and type(l) == "number" and type(r) == "number" then return l * eff, r * eff end
+	end
 	function ns.PlateLayoutPageDrag(key)
 		if not key then
 			drag = nil
+			snapLine:Hide()
 			overlay:SetScript("OnUpdate", nil)
 			-- (Dropped: the preview fitted again, so a part moved far stays in view.)
 			if Redraw then Redraw() end
@@ -550,16 +560,39 @@ function ns.CreatePlateLayoutPage(kit)
 		local p = Part(true)
 		local x, y = GetCursorPosition()
 		drag = { x = x, y = y, px = p.x or 0, py = p.y or 0 }
+		-- (Its edges and the bar's as it's picked up, on the screen.)
+		local copy0 = CopyOf()
+		if copy0 then
+			local frame
+			for _, part in ipairs(PARTS) do if part.key == key then frame = Field(copy0, part.path) end end
+			drag.left, drag.right = ScreenEdges(frame or copy0)
+			drag.barLeft, drag.barRight = ScreenEdges(copy0.HealthBarsContainer)
+		end
 		ns.SetOnUpdate(overlay, function()
 			local copy = CopyOf()
 			if not (drag and copy) then return end
 			local cx, cy = GetCursorPosition()
 			local scale = copy:GetEffectiveScale()
+			-- (Snapped on the screen, then back in the plate's units: the bar itself
+			-- doesn't snap to its own edges, it moves the plate.)
+			local move = cx - drag.x
+			local line
+			if key ~= "health" and drag.left and drag.barLeft and ns.PlateLayoutSnap then
+				move, line = ns.PlateLayoutSnap(move, drag.left, drag.right, drag.barLeft, drag.barRight, 4)
+			end
 			-- (Inside the range every way of moving shares: the boxes', the keys'. Audit 2026-11-25.)
-			local nx = Clamp(drag.px + (cx - drag.x) / scale, RANGE.x)
+			local nx = Clamp(drag.px + move / scale, RANGE.x)
 			local ny = Clamp(drag.py + (cy - drag.y) / scale, RANGE.y)
-			if math.abs(nx) < 3 then nx = 0 end
+			if math.abs(nx) < 3 then nx, line = 0, nil end
 			if math.abs(ny) < 3 then ny = 0 end
+			snapLine:ClearAllPoints()
+			snapLine:SetShown(line ~= nil)
+			if line then
+				local oe = overlay:GetEffectiveScale()
+				snapLine:SetPoint("BOTTOMLEFT", overlay, "BOTTOMLEFT", line / oe - (overlay:GetLeft() or 0),
+					holder.plateLift or 38)
+				snapLine:SetHeight(math.max(10, overlay:GetHeight() - (holder.plateLift or 38) - 50))
+			end
 			local part = Part(true)
 			part.x, part.y = math.floor(nx + 0.5), math.floor(ny + 0.5)
 			if part.x == 0 then part.x = nil end
