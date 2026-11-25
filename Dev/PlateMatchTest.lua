@@ -1030,7 +1030,7 @@ ns.TestKit.Define({
 				local statesNow2 = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
 				local before2 = {}
 				for key, on in pairs(statesNow2) do if on then before2[#before2 + 1] = key end end
-				local missing, noted = {}, {}
+				local missing, noted, rowWrong = {}, {}, {}
 				for _, part in ipairs(ns.PLATE_LAYOUT_PARTS) do
 					local on = {}
 					for key, value in pairs(statesNow2) do if value then on[#on + 1] = key end end
@@ -1044,6 +1044,13 @@ ns.TestKit.Define({
 					local hiddenBy = ns.PlateLayoutHiddenBySettings and ns.PlateLayoutHiddenBySettings(part.key)
 					if hiddenBy then noted[#noted + 1] = part.label .. " (" .. hiddenBy .. ")" end
 					if not seen and not hiddenBy then missing[#missing + 1] = part.label end
+					-- (Its row says so: white on the preview, "off" when your settings hide it. Audit 2026-11-25.)
+					local row = page.rows and page.rows[part.key]
+					if row then
+						local red = row.text:GetTextColor()
+						if hiddenBy and not row.off:IsShown() then rowWrong[#rowWrong + 1] = part.label .. " (no off)" end
+						if seen and not hiddenBy and red < 0.95 then rowWrong[#rowWrong + 1] = part.label .. " (not white)" end
+					end
 					if part.key == "debuffs" or part.key == "buffs" or part.key == "softTarget" or part.key == "castShield" then
 						r:Shot("Layout tab, " .. part.label .. " picked from bare: on the preview", { behind = panel })
 					end
@@ -1051,6 +1058,8 @@ ns.TestKit.Define({
 				r:Log("  hidden by your game's settings (the page says so): " .. (#noted > 0 and table.concat(noted, ", ") or "none"))
 				r:Verdict(#missing == 0, #missing == 0 and "every part picked shows on the preview (or the page says your settings hide it)"
 					or ("picked but not shown: " .. table.concat(missing, ", ")))
+				r:Verdict(#rowWrong == 0, #rowWrong == 0 and "every part's row says how it is (white on the preview, off when hidden)"
+					or ("rows wrong: " .. table.concat(rowWrong, ", ")))
 				-- (The preview's states back as they were.)
 				local now2 = {}
 				for key, value in pairs(statesNow2) do if value then now2[#now2 + 1] = key end end

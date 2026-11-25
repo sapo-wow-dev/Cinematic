@@ -36,7 +36,7 @@ function ns.CreatePlateLayoutPage(kit)
 	local editKey = "all" -- (the layout being edited: "all" or a kind)
 	local selected = "level"
 	local holder, overlay, partsPanel -- (below)
-	local Redraw, RedrawOverlay -- (below)
+	local Redraw, RedrawOverlay, RowStates -- (below)
 
 	-- The layout shown and edited: the kind's own when it has one ticked, else
 	-- All plates' (read); made when first changed (write).
@@ -184,7 +184,11 @@ function ns.CreatePlateLayoutPage(kit)
 		if ns.PlateLayoutPreset then ns.PlateLayoutPreset(Editing(true), value, holder and holder.plate) end
 		Changed()
 	end)
-	presetDrop:SetPoint("RIGHT", row1, "RIGHT", 0, 0)
+	-- (Beside Layout for, Own layout after it (only a kind's): Preset sat alone at the
+	-- row's far end. Audit 2026-11-25.)
+	presetDrop:SetPoint("LEFT", forDrop, "RIGHT", 8, 0)
+	own:ClearAllPoints()
+	own:SetPoint("LEFT", presetDrop, "RIGHT", 12, 0)
 	if presetDrop.SetDefaultText then presetDrop:SetDefaultText(L["Preset"]) end
 	kit.Tooltip(presetDrop, L["A starting point: the game's places, balanced, compact, or the name in the bar."])
 
@@ -440,6 +444,7 @@ function ns.CreatePlateLayoutPage(kit)
 			status:SetText("|cffffb060" .. L["%d %s of the unit"]:format(amount, side) .. "|r")
 		end
 		if height < 1 then status:Hide() end
+		if RowStates then RowStates() end
 	end
 
 	-- The preview drawn again: the previewer's plate, then the layout on it.
@@ -527,13 +532,14 @@ function ns.CreatePlateLayoutPage(kit)
 		end
 		return changed
 	end
-	local function Pick(key)
+	local function Pick(key, clicked)
 		selected = key
 		if ShowPart(key) then Redraw() end
 		kit.Refresh()
 		RedrawOverlay()
-		-- (Picked: the arrows nudge it, while the mouse stays on the preview or the panel.)
-		if ns.PlateLayoutPageKeys then ns.PlateLayoutPageKeys() end
+		-- (Picked with a click in the list: the arrows nudge it, while the mouse stays on
+		-- the preview or the panel. Not when picked by code: a test's, the page's own.)
+		if clicked and ns.PlateLayoutPageKeys then ns.PlateLayoutPageKeys() end
 	end
 
 	-- Dragging a part: the cursor's move in the plate's units, snapped to the
@@ -737,14 +743,46 @@ function ns.CreatePlateLayoutPage(kit)
 		dot:SetTexture("Interface\\COMMON\\Indicator-Yellow")
 		dot:SetTexCoord(0.2, 0.8, 0.2, 0.8)
 		row.dot = dot
+		-- ("off": your game's settings hide it. Audit 2026-11-25.)
+		local off = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		off:SetPoint("RIGHT", -18, 0)
+		off:SetText(L["off"])
+		off:Hide()
+		row.off = off
 		local glow = row:CreateTexture(nil, "HIGHLIGHT")
 		glow:SetAllPoints()
 		glow:SetColorTexture(1, 1, 1, 0.08)
-		row:SetScript("OnClick", function() Pick(part.key) end)
+		row:SetScript("OnClick", function() Pick(part.key, true) end)
 		kit.Tooltip(row, L[part.tip])
 		rows[part.key] = row
 	end
 
+	-- Each part in the list as it is now (audit 2026-11-25: the list never said): white on
+	-- the preview, dim when not up (picking it brings it up), grey with "off" when your
+	-- game's settings hide it. (HiddenBySettings: below, read when this runs.)
+	RowStates = function()
+		local copy = CopyOf()
+		for _, part in ipairs(PARTS) do
+			local row = rows[part.key]
+			if row then
+				local hidden = ns.PlateLayoutHiddenBySettings and ns.PlateLayoutHiddenBySettings(part.key)
+				local up = false
+				local frame = copy and Field(copy, part.path)
+				if frame and Visible(frame) and (not LISTS[part.key] or HasIcon(frame))
+					and (part.key ~= "softTarget" or (frame.Icon and Visible(frame.Icon))) then
+					up = true
+				end
+				row.off:SetShown(hidden ~= nil)
+				if hidden then
+					row.text:SetTextColor(0.45, 0.45, 0.45)
+				elseif up then
+					row.text:SetTextColor(1, 1, 1)
+				else
+					row.text:SetTextColor(0.62, 0.6, 0.55)
+				end
+			end
+		end
+	end
 	local FIELDS_X = 194
 	local partTitle = kit.Label(partsPanel, "GameFontNormal", "")
 	partTitle:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -10)
@@ -917,6 +955,21 @@ function ns.CreatePlateLayoutPage(kit)
 			row.back:SetShown(key == selected)
 			row.dot:SetShown(ns.PlateLayoutPartMoves(ns.PlateLayoutPart(Shown(), key)))
 		end
+		RowStates()
+		-- (The fields close up: a row that doesn't apply to this part leaves no gap. Audit 2026-11-25.)
+		local y = -34
+		local function Next(frame, shown, height, x)
+			frame:ClearAllPoints()
+			if shown then
+				frame:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", x or FIELDS_X, y)
+				y = y - height
+			end
+		end
+		Next(hangDrop, part and part.hang, 38, FIELDS_X - 2)
+		Next(moveLine, true, 30)
+		Next(sizeLine, sized or hung, 34)
+		Next(countLabel, true, 30)
+		Next(hiddenNote, hiddenWhat ~= nil, 30)
 		own:SetShown(editKey ~= "all")
 		local layout = Shown()
 		local center = layout and layout.center or "bar"
@@ -950,7 +1003,7 @@ function ns.CreatePlateLayoutPage(kit)
 		ns.PlateLayoutChanged()
 		if Redraw then Redraw() end
 	end)
-	ns.plateLayoutPage = { preview = preview, partsPanel = partsPanel, controls = { { forDrop, "Layout for" }, { own, "Own layout" }, { presetDrop, "Preset" },
+	ns.plateLayoutPage = { preview = preview, partsPanel = partsPanel, rows = rows, controls = { { forDrop, "Layout for" }, { own, "Own layout" }, { presetDrop, "Preset" },
 		{ lastCenter, "Center's buttons" }, { allBox, "All parts up" },
 		{ guideBox, "Guides" }, { hangDrop, "Hang on" }, { moveLine, "Left / right, Down / up" },
 		{ sizeLine, "Size, Gap" }, { countDrop, "Balance" }, { mirror, "Mirror" }, { resetAll, "Reset layout" } },
