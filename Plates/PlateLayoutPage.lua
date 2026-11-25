@@ -35,7 +35,7 @@ function ns.CreatePlateLayoutPage(kit)
 
 	local editKey = "all" -- (the layout being edited: "all" or a kind)
 	local selected = "level"
-	local holder, overlay -- (below)
+	local holder, overlay, partsPanel -- (below)
 	local Redraw, RedrawOverlay -- (below)
 
 	-- The layout shown and edited: the kind's own when it has one ticked, else
@@ -532,6 +532,8 @@ function ns.CreatePlateLayoutPage(kit)
 		if ShowPart(key) then Redraw() end
 		kit.Refresh()
 		RedrawOverlay()
+		-- (Picked: the arrows nudge it, while the mouse stays on the preview or the panel.)
+		if ns.PlateLayoutPageKeys then ns.PlateLayoutPageKeys() end
 	end
 
 	-- Dragging a part: the cursor's move in the plate's units, snapped to the
@@ -628,9 +630,15 @@ function ns.CreatePlateLayoutPage(kit)
 		keys:SetScript("OnKeyDown", OnKey)
 		keys:EnableKeyboard(true)
 	end
+	-- (Over the preview, or over the parts panel, its list and fields: the arrows nudge
+	-- the picked part from either. Only the preview's before, and the keys stopped as
+	-- the mouse went to the fields. Audit 2026-11-25.)
 	local function OverPreview()
-		local ok, over = pcall(holder.IsMouseOver, holder)
-		return ok and over and holder:IsVisible()
+		for _, area in ipairs({ holder, partsPanel }) do
+			local ok, over = pcall(area.IsMouseOver, area)
+			if ok and over and area:IsVisible() then return true end
+		end
+		return false
 	end
 	OnKey = function(self, key)
 		local step = NUDGE[key]
@@ -695,7 +703,7 @@ function ns.CreatePlateLayoutPage(kit)
 	-- left, the picked part's fields on the right, on one dark ground.
 	local ROW_H = 18
 	local panelH = #PARTS * ROW_H + 16
-	local partsPanel = CreateFrame("Frame", nil, content)
+	partsPanel = CreateFrame("Frame", nil, content)
 	partsPanel:SetSize(WIDTH, panelH)
 	stack:Add(partsPanel, "label")
 	local ground = partsPanel:CreateTexture(nil, "BACKGROUND")
@@ -934,7 +942,7 @@ function ns.CreatePlateLayoutPage(kit)
 		ns.PlateLayoutChanged()
 		if Redraw then Redraw() end
 	end)
-	ns.plateLayoutPage = { preview = preview, controls = { { forDrop, "Layout for" }, { own, "Own layout" }, { presetDrop, "Preset" },
+	ns.plateLayoutPage = { preview = preview, partsPanel = partsPanel, controls = { { forDrop, "Layout for" }, { own, "Own layout" }, { presetDrop, "Preset" },
 		{ lastCenter, "Center's buttons" }, { allBox, "All parts up" },
 		{ guideBox, "Guides" }, { hangDrop, "Hang on" }, { moveLine, "Left / right, Down / up" },
 		{ sizeLine, "Size, Gap" }, { countDrop, "Balance" }, { mirror, "Mirror" }, { resetAll, "Reset layout" } },

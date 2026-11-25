@@ -4,7 +4,7 @@ part up with the bar, as the user's mockup had.
 Found by: audit 2026-11-25
 Code: Plates/PlateLayout.lua: ns.PlateLayoutSnap (new); Plates/PlateLayoutPage.lua: ns.PlateLayoutPageDrag
 Clients: forever (no Layout tab on retail)
-Base: HEAD
+Base: 29b7920^
 
 ## Before / after
 - Before: a dragged part went wherever the mouse took it, snapping only to its game place (within 3).
