@@ -166,6 +166,77 @@ local function RunClient(client)
 		Check(("rule \"%s\" reads %s"):format(text, tostring(want)), test ~= nil and test(facts) == want, err)
 	end
 
+	-- 7. Phase 3: elite, rare, boss, quest, tapped, critter, targeting you,
+	-- for your target (only once a rule names one) and your focus; secret false.
+	local props = {}
+	local propAsked = 0
+	local function P(key) return function(unit) propAsked = propAsked + 1 local u = units[unit] return u and u[key] end end
+	UnitClassification = P("rank")
+	UnitIsBossMob = P("bossmob")
+	UnitIsTapDenied = P("tapped")
+	UnitIsQuestBoss = function() return false end
+	C_QuestLog = C_QuestLog or {}
+	C_QuestLog.UnitIsRelatedToActiveQuest = P("quest")
+	UnitCreatureType = function(unit) propAsked = propAsked + 1 local u = units[unit] return "x", u and u.ctype end
+	local level = UnitLevel
+	UnitLevel = function(unit) local u = units[unit] if u and u.level then return u.level end return 30 end
+	IsInInstance = function() return props.instance ~= nil, props.instance or "none" end
+	local isUnit = UnitIsUnit
+	UnitIsUnit = function(a, b)
+		if b == "player" and (a == "targettarget" or a == "focustarget") then
+			local u = units[a:sub(1, -7)]
+			return u ~= nil and u.onMe or false
+		end
+		return isUnit(a, b)
+	end
+	local PROPS = { "elite", "rare", "boss", "quest", "tapped", "critter" }
+	local function Props(facts, prefix, want, what)
+		local w = {}
+		for _, p in ipairs(PROPS) do w[p] = want[p] or false end
+		w[prefix == "target" and "ingyou" or "targetingyou"] = nil
+		Want(facts, prefix, w, what)
+		local field = prefix == "target" and "targetingyou" or prefix .. "targetingyou"
+		Check(what .. ": " .. field .. " " .. tostring(want.targetingyou or false),
+			(facts[field] and true or false) == (want.targetingyou or false))
+	end
+	units.target = { guid = "Creature-20", attack = true, reaction = 2, rank = "rareelite", tapped = true, quest = true,
+		onMe = true }
+	units.focus = units.target
+	propAsked = 0
+	facts = Facts()
+	Check("phase 3: no rule names a target one: not asked for your target", propAsked == 0 or facts.targetelite == false,
+		propAsked .. " asks")
+	ns.CompileRule("targetelite or targetrare or targetboss or targetquest or targettapped or targetcritter or targetingyou")
+	facts = Facts()
+	Props(facts, "target", { elite = true, rare = true, quest = true, tapped = true, targetingyou = true },
+		"target rare elite, tagged, on a quest, on you")
+	Props(facts, "focus", { elite = true, rare = true, quest = true, tapped = true, targetingyou = true },
+		"focus the same")
+	units.target = { guid = "Creature-21", attack = true, reaction = 2, rank = "elite", level = 32 }
+	units.focus = units.target
+	props.instance = "party"
+	facts = Facts()
+	Props(facts, "target", { elite = true, boss = true }, "an elite 2 above you in a dungeon: targetboss")
+	props.instance = nil
+	facts = Facts()
+	Props(facts, "target", { elite = true }, "the same elite out in the world: not a boss")
+	units.target = { guid = "Creature-22", attack = false, reaction = 5, rank = "minus", ctype = 8 }
+	units.focus = units.target
+	facts = Facts()
+	Props(facts, "target", { critter = true }, "a critter")
+	Props(facts, "focus", { critter = true }, "a critter as focus")
+	units.target = { guid = "Creature-23", attack = true, reaction = 2, rank = SECRET, tapped = SECRET, quest = SECRET,
+		ctype = SECRET }
+	units.focus = units.target
+	local okP, gotP = pcall(Facts)
+	Check("phase 3: secret answers: no error", okP, not okP and gotP or nil)
+	if okP then Props(gotP, "target", {}, "phase 3: secret answers all false") end
+	for text, want in pairs({ mouseoverelite = false, focuscritter = false, ["targetelite or targetingyou"] = false }) do
+		local t, e = ns.CompileRule(text)
+		Check(("rule \"%s\" compiles and reads %s"):format(text, tostring(want)), t ~= nil and t(gotP or {}) == want, e)
+	end
+	UnitLevel, UnitIsUnit = level, isUnit
+
 	-- 6. The rule editor: atoms on the Target and Mouse over lines, the old
 	-- kind words off them but colored as their line; a Focus line where the
 	-- client has a focus frame.
@@ -185,6 +256,10 @@ local function RunClient(client)
 	for _, old in ipairs(OLD_KINDS) do
 		if target[old] then stale[#stale + 1] = old end
 		if hover["hover" .. old] then stale[#stale + 1] = "hover" .. old end
+	end
+	for _, prop in ipairs(ns.UNIT_PROPS) do -- (phase 3's, at the end of each line)
+		if not target[ns.UnitPropField("target", prop)] then missing[#missing + 1] = ns.UnitPropField("target", prop) end
+		if not hover["hover" .. prop] then missing[#missing + 1] = "hover" .. prop end
 	end
 	Check("rule editor: the atoms on Target and Mouse over", #missing == 0, table.concat(missing, ", "))
 	Check("rule editor: no old kind word on them", #stale == 0, table.concat(stale, ", "))

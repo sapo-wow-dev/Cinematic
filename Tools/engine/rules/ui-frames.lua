@@ -1522,4 +1522,18 @@ return {
     proof = "/cine debug worldview run 1 (queue qbd76, Forever 71037): 11 pass, the 2 fails are the in-fight block",
     source = "Tools/tests/logs/2026-11-24-forever-testQueue_qbd76Log-cc7bca9d.txt",
   },
+  {
+    id = "forever.partyinfo.delve-in-progress-world",
+    area = "places",
+    clients = { "forever" },
+    api = { "C_PartyInfo.IsDelveInProgress", "GetInstanceInfo" },
+    when = "out in the world",
+    rule = "C_PartyInfo.IsDelveInProgress() returns true out in Elwynn Forest, in no instance (its docs name the return isDelveComplete). Tell a delve by GetInstanceInfo's difficultyID 208 instead.",
+    works = { "select(3, GetInstanceInfo()) == 208" },
+    fails = { "C_PartyInfo.IsDelveInProgress()" },
+    status = "tested",
+    tested = "2026-11-25",
+    proof = "/cine debug mousewords state step, run q4a77 (Forever): delve true in Elwynn Forest",
+    source = "the rules' delve word (Frames.lua ns.StateWords)",
+  },
 }

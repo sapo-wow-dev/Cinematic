@@ -281,6 +281,14 @@ local function RunClient(client)
 	GameTooltip.GetAlpha = function() return 1 end
 	mo, focus = nil, WorldFrame
 	CinematicDB.mouseWordsTestLog = nil
+	-- (The game's map and character window, as the state step opens them.)
+	local map = rawget(_G, "WorldMapFrame") or CreateFrame("Frame", "WorldMapFrame", UIParent)
+	local character = rawget(_G, "CharacterFrame") or CreateFrame("Frame", "CharacterFrame", UIParent)
+	map:Hide()
+	character:Hide()
+	ToggleWorldMap = function() map:SetShown(not map:IsShown()) end
+	ToggleCharacter = function() character:Show() end
+	HideUIPanel = function(frame) frame:Hide() end
 	ns.HandleSlash("debug mousewords full") -- (full: its steps are proven, a plain run leaves them out)
 	Advance(25) -- (the editor step: four cases, a paced shot each)
 	mo, focus = { guid = "Creature-8", dead = true, name = "Kobold" }, WorldFrame
@@ -297,6 +305,15 @@ local function RunClient(client)
 	wow.Fire("PLAYER_FOCUS_CHANGED")
 	Advance(12)
 	tf = nil
+	-- (The state step: the map and your character window, which the test
+	-- opens itself, then a talk with an NPC, opened and closed by "you".)
+	local gossip = rawget(_G, "GossipFrame") or CreateFrame("Frame", "GossipFrame", UIParent)
+	gossip:Hide()
+	Advance(8)
+	gossip:Show()
+	Advance(2)
+	gossip:Hide()
+	Advance(12)
 	local log = CinematicDB.mouseWordsTestLog or {}
 	local done, bad = nil, {}
 	for _, line in ipairs(log) do

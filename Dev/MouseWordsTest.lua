@@ -36,6 +36,35 @@ local function Plain(value)
 	return not (issecretvalue and issecretvalue(value))
 end
 
+-- The game's settings window closed, whichever this client has (Forever:
+-- InterfaceOptionsFrame; run qc7ea left it open, and the phase 2 checks read
+-- it as a game window).
+local function CloseSettings()
+	if InCombatLockdown() then return end
+	for _, name in ipairs({ "SettingsPanel", "InterfaceOptionsFrame" }) do
+		local panel = _G[name]
+		if panel and ns.Flag(panel:IsShown()) then HideUIPanel(panel) end
+	end
+end
+
+-- The game windows shown now, by name (for the log: what menuopen sees).
+local WINDOW_NAMES = { "SettingsPanel", "InterfaceOptionsFrame", "WorldMapFrame", "CharacterFrame", "GameMenuFrame",
+	"SpellBookFrame", "PlayerSpellsFrame", "QuestLogFrame", "FriendsFrame", "EditModeManagerFrame", "KeyBindingFrame",
+	"ContainerFrameCombinedBags", "GossipFrame", "QuestFrame", "MerchantFrame", "ItemTextFrame", "TalkingHeadFrame" }
+local function WindowsUp()
+	local up = {}
+	for _, name in ipairs(WINDOW_NAMES) do
+		local f = _G[name]
+		if f then
+			local shown = f:IsShown()
+			if not Plain(shown) then up[#up + 1] = name .. "(secret)"
+			elseif shown then up[#up + 1] = name end
+		end
+	end
+	if ns.OurSettingsShown and ns.OurSettingsShown() then up[#up + 1] = "our settings" end
+	return #up == 0 and "none" or table.concat(up, ", ")
+end
+
 -- The words as the rows read them now, one line.
 local function WordsLine(facts)
 	local on = {}
@@ -106,7 +135,7 @@ end
 ns.TestKit.Define({
 	name = "mousewords",
 	key = "mouseWordsTest",
-	title = "Mouse over rule words",
+	title = "Mouse over and unit rule words",
 	about = "the rules' Mouse over words: the editor's line, a unit in the world, then your portrait",
 	needs = "A unit in view to mouse over (any NPC or player), out of combat",
 	settings = { "handleTooltips", "tooltipStillMode" },
@@ -136,7 +165,7 @@ ns.TestKit.Define({
 	end,
 	steps = {
 		{ key = "editor", title = "the rule editor: lines capped at two rows, +N and Fewer", seconds = 12,
-			proven = "run 5 (queue q52b5), 2026-11-25: 26/26, the unit words' lines", run = function(r)
+			proven = "run 7 (queue q504b), 2026-11-25: phase 3's longer lines", run = function(r)
 			ns.OpenOptions("Tooltips")
 			r:Sleep(0.5)
 			if type(ns.db.ruleEditorOpen) ~= "table" then ns.db.ruleEditorOpen = {} end
@@ -147,7 +176,7 @@ ns.TestKit.Define({
 			-- (The Tooltips row in each state; the Minimap row closed: no Tooltip line.)
 			local CASES = {
 				{ key = ROW, state = "closed" }, { key = ROW, state = "open" },
-				{ key = ROW, state = "in the rule", rule = "hoverneutral or neutral" }, -- (each line's last word)
+				{ key = ROW, state = "in the rule", rule = "hovertargetingyou or targetingyou" }, -- (each line's last word)
 				{ key = "minimap", state = "closed" },
 			}
 			local fitsClosed = {} -- (line key -> nothing behind a +N when closed: the first closed case)
@@ -207,7 +236,7 @@ ns.TestKit.Define({
 				editor:Hide()
 			end
 			open.enemy, open.hover = nil, nil
-			if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+			CloseSettings()
 		end },
 		{ key = "world", title = "a unit out in the world", proven = "run 2 (queue qf726), 2026-11-24: 4/4",
 			run = function(r)
@@ -409,8 +438,280 @@ ns.TestKit.Define({
 				end
 				r:Shot("rule editor: the Focus line", { behind = editor })
 				if editor then editor:Hide() end
-				if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+				CloseSettings()
 			end
+		end },
+		{ key = "props", title = "phase 3's words: elite, rare, boss, quest, tapped, critter, targeting you",
+			seconds = 20, proven = "run 7 (queue q504b), 2026-11-25: a normal humanoid, all false", run = function(r)
+			-- (Tools/cql-words-plan.md phase 3, 2026-11-25: Frames.lua's
+			-- ns.SetUnitProps, each against the game's own answer for your
+			-- target, and your focus if you have one.)
+			local fields = {}
+			for _, prefix in ipairs({ "target", "focus" }) do
+				for _, prop in ipairs(ns.UNIT_PROPS) do fields[#fields + 1] = ns.UnitPropField(prefix, prop) end
+			end
+			ns.CompileRule(table.concat(fields, " or "))
+			r:WaitFor("Target any mob or NPC near you (not yourself).", { check = function()
+				return ns.Flag(UnitExists("target")) and not ns.Flag(UnitIsUnit("target", "player")) or nil
+			end })
+			r:Sleep(0.5)
+			local facts = ns.RuleFactsAll()
+			local function Say(fn, ...)
+				if type(fn) ~= "function" then return nil, "none" end
+				local ok, a, b = pcall(fn, ...)
+				if not ok then return nil, "error" end
+				if not Plain(a) or not Plain(b) then return nil, "secret" end
+				return a, b
+			end
+			for _, unit in ipairs({ "target", "focus" }) do
+				if ns.Flag(UnitExists(unit)) and not ns.Flag(UnitIsUnit(unit, "player")) then
+					local rank = Say(UnitClassification, unit)
+					local _, ctype = Say(UnitCreatureType, unit)
+					local game = {
+						elite = rank == "elite" or rank == "rareelite" or rank == "worldboss",
+						rare = rank == "rare" or rank == "rareelite",
+						tapped = Say(UnitIsTapDenied, unit) == true,
+						critter = ns.CRITTER_TYPES[ctype] == true,
+						quest = Say(C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest, unit) == true
+							or Say(UnitIsQuestBoss, unit) == true,
+						targetingyou = Say(UnitIsUnit, unit .. "target", "player") == true,
+					}
+					r:Log(("%s: rank %s, creature type %s, level %s; words %s"):format(unit, tostring(rank), tostring(ctype),
+						tostring(UnitLevel(unit)), table.concat((function()
+							local on = {}
+							for _, prop in ipairs(ns.UNIT_PROPS) do
+								if facts[ns.UnitPropField(unit, prop)] then on[#on + 1] = ns.UnitPropField(unit, prop) end
+							end
+							return #on > 0 and on or { "none" }
+						end)(), " ")))
+					local wrong = {}
+					for prop, want in pairs(game) do
+						local field = ns.UnitPropField(unit, prop)
+						if (facts[field] and true or false) ~= want then wrong[#wrong + 1] = field end
+					end
+					r:Verdict(#wrong == 0, ("%s: elite, rare, quest, tapped, critter, targeting you match the game%s"):format(
+						unit, #wrong > 0 and (": wrong " .. table.concat(wrong, ", ")) or ""))
+				end
+			end
+		end },
+		{ key = "values", title = "phase 4's value words: zone:, aura: and the rest, where you stand", seconds = 20,
+			proven = "run 2 (queue qde9b), 2026-11-25: 15/15", run = function(r)
+			-- (Tools/cql-words-plan.md phase 4, 2026-11-25: RuleAxes.lua. Each
+			-- axis's menu picks what's here; that word must read true here,
+			-- and a made-up value false. No action.)
+			CloseSettings()
+			local function Pick(axis)
+				local a = ns.RULE_AXES[axis]
+				local ok, list = pcall(a.Pick)
+				return ok and list or {}, not ok and list or nil
+			end
+			for _, axis in ipairs({ "zone", "subzone", "instance", "class", "race", "spec", "aura", "form", "mount",
+				"targetid", "window", "camera" }) do
+				local list, err = Pick(axis)
+				if err then
+					r:Verdict(false, axis .. ": its menu errored: " .. tostring(err))
+				else
+					r:Log(("%s menu: %d (%s)"):format(axis, #list, table.concat((function()
+						local t = {}
+						for i = 1, math.min(4, #list) do t[#t + 1] = list[i][1] .. " = " .. tostring(list[i][2]) end
+						return t
+					end)(), "; ")))
+				end
+				-- (Where the menu offers what's here: its first must read true.
+				-- window, camera and class list every kind, not what's here
+				-- (run q1d3a: class:warrior first, on a warlock); class: yours.)
+				if axis == "class" then
+					local _, file = UnitClass("player")
+					list = file and { { "class:" .. file:lower(), file } } or {}
+				end
+				if list[1] and axis ~= "window" and axis ~= "camera" then
+					local test, why = ns.CompileRule(list[1][1])
+					ns.RuleFactsAll()
+					local on = test and test(ns.RuleFactsAll())
+					r:Verdict(on == true, ("%s: %s reads true here%s"):format(axis, list[1][1], why and (" (" .. why .. ")") or ""))
+					local fake = ns.CompileRule(axis .. ":nosuchvalue987")
+					r:Verdict(fake ~= nil and fake(ns.RuleFactsAll()) == false, axis .. ": a made-up value reads false")
+				end
+			end
+			-- (A whole rule as the editor shows it: the names next to the ids.)
+			local zone = Pick("zone")
+			if zone[1] then
+				local shown = ns.ColoredRule(zone[1][1] .. " and not combat")
+				r:Log("shown: " .. shown:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+				r:Verdict(shown:find(zone[1][2], 1, true) ~= nil, "the editor shows the zone's name next to its id")
+			end
+			-- (The editor's Values line: open, nothing cut or covered.)
+			ns.OpenOptions("Tooltips")
+			r:Sleep(0.5)
+			if type(ns.db.ruleEditorOpen) ~= "table" then ns.db.ruleEditorOpen = {} end
+			local open = ns.db.ruleEditorOpen
+			local was = open["zone:"]
+			open["zone:"] = true
+			local rule = zone[1] and (zone[1][1] .. " and not combat") or "class:mage"
+			ns.OpenRuleEditor({ key = ROW, label = ROW, Text = function() return rule end,
+				SetText = function() end, ResetToGrid = function() end, Close = function() end })
+			r:Sleep(0.6)
+			local editor = _G.CinematicRuleEditor
+			local found
+			for _, l in ipairs(editor and editor.lines or {}) do if l.key == "zone:" then found = l end end
+			r:Verdict(found ~= nil, "rule editor: a Values line")
+			if found then
+				local look = LineLook(r, editor, found)
+				r:Verdict(look.shown == look.total and look.cut == 0 and #look.covered == 0 and look.past == 0,
+					("rule editor, Values line open: %d of %d shown, %d cut short, %d covered, %d past the edge"):format(
+					look.shown, look.total, look.cut, #look.covered, look.past))
+			end
+			r:Shot("rule editor: the Values line, a zone rule", { behind = editor })
+			open["zone:"] = was
+			if editor then editor:Hide() end
+			CloseSettings()
+		end },
+		{ key = "state", title = "phase 2's words: you, the zone, your screen, talking", seconds = 40,
+			proven = "run 2 (queue q4a77), 2026-11-25: 32/32", run = function(r)
+			-- (Tools/cql-words-plan.md phase 2, 2026-11-25: Frames.lua's
+			-- ns.StateWords. Each against the game's own answer; the map and a
+			-- game window opened by the test; one action: talk to an NPC.)
+			CloseSettings() -- (a step before left them open: run qc7ea)
+			r:Sleep(0.6)
+			r:Log("windows up at the start: " .. WindowsUp())
+			local words = {}
+			for _, w in ipairs(ns.STATE_WORDS) do words[#words + 1] = w[1] end
+			ns.CompileRule(table.concat(words, " or ")) -- (read from now: ns.factsUsed)
+			local function Facts() return ns.RuleFactsAll() end
+			local function Say(fn, ...)
+				if type(fn) ~= "function" then return "none" end
+				local ok, v = pcall(fn, ...)
+				if not ok then return "error" end
+				if not Plain(v) then return "secret" end
+				return v
+			end
+			local facts = Facts()
+			local line = {}
+			for _, w in ipairs(words) do line[#line + 1] = w .. "=" .. tostring(facts[w]) end
+			r:Log("words: " .. table.concat(line, " "))
+			local pvpGet = C_PvP and C_PvP.GetZonePVPInfo or GetZonePVPInfo
+			local pvp = Say(pvpGet)
+			local cap = Say(GetMaxLevelForPlayerExpansion or GetMaxPlayerLevel)
+			local pad = Say(C_GamePad and C_GamePad.GetActiveDeviceID)
+			r:Log(("game: ghost %s, dnd %s, vehicle %s, pet %s, leader %s, raid %s, level %s of %s, falling %s,"
+				.. " full control %s, zone pvp %s, instance %s, gamepad on %s, active device %s, last pad event %s"):format(
+				tostring(Say(UnitIsGhost, "player")), tostring(Say(UnitIsDND, "player")),
+				tostring(Say(UnitInVehicle, "player")), tostring(Say(UnitExists, "pet")),
+				tostring(Say(UnitIsGroupLeader, "player")), tostring(Say(IsInRaid)), tostring(UnitLevel("player")),
+				tostring(cap), tostring(Say(IsFalling)), tostring(Say(HasFullControl)), tostring(pvp),
+				tostring(select(2, IsInInstance())), tostring(ns.IsGamePadOn()), tostring(pad),
+				tostring(ns.gamePadState.active)))
+			local function Match(word, game)
+				if game == "secret" or game == "error" or game == "none" then
+					return r:Log(word .. ": the game won't say (" .. game .. "), not judged")
+				end
+				r:Verdict((facts[word] and true or false) == (game and true or false),
+					("%s matches the game (%s)"):format(word, tostring(game)))
+			end
+			Match("ghost", Say(UnitIsGhost, "player"))
+			Match("dnd", Say(UnitIsDND, "player"))
+			Match("pet", Say(UnitExists, "pet"))
+			Match("raidgroup", Say(IsInRaid))
+			Match("falling", Say(IsFalling))
+			if type(cap) == "number" then Match("maxlevel", UnitLevel("player") >= cap) end
+			local full = Say(HasFullControl)
+			if type(full) == "boolean" then Match("controlled", not full and not ns.OnTaxi()) end
+			Match("sanctuary", pvp == "sanctuary")
+			Match("contested", pvp == "contested")
+			Match("scenario", select(2, IsInInstance()) == "scenario")
+			-- (Phase 2's rest: each where the client has its call.)
+			local threat = Say(UnitThreatSituation, "player")
+			if type(threat) == "number" or threat == nil then Match("aggro", (threat or 0) >= 2) end
+			if C_PvP and C_PvP.IsWarModeActive then Match("warmode", Say(C_PvP.IsWarModeActive)) end
+			if C_PartyInfo and C_PartyInfo.IsDelveInProgress then Match("delve", Say(C_PartyInfo.IsDelveInProgress)) end
+			if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive then
+				Match("mythicplus", Say(C_ChallengeMode.IsChallengeModeActive))
+			end
+			if C_Housing and C_Housing.IsInsideHouseOrPlot then Match("housing", Say(C_Housing.IsInsideHouseOrPlot)) end
+			local _, class = UnitClass("player")
+			local form = Say(GetShapeshiftForm)
+			r:Log(("form %s (%s), threat %s, pvp fight now %s"):format(tostring(form), tostring(class), tostring(threat),
+				tostring(ns.CardPvpFight and ns.CardPvpFight())))
+			if type(form) == "number" then
+				local formClass = class == "DRUID" or class == "SHAMAN" or class == "PRIEST" or class == "WARLOCK"
+				Match("shapeshifted", formClass and form > 0)
+			end
+			Match("pvpfight", false) -- (out of a fight: never)
+			local editMode, WorldMapFrame = _G.EditModeManagerFrame, _G.WorldMapFrame
+			Match("editmode", editMode ~= nil and editMode:IsShown())
+			-- (The map, opened and closed by the test: mapopen, and menuopen with it.)
+			if ToggleWorldMap and WorldMapFrame and not WorldMapFrame:IsShown() then
+				ToggleWorldMap()
+				r:Sleep(0.6)
+				facts = Facts()
+				r:Log("map: windows up " .. WindowsUp())
+				r:Verdict(WorldMapFrame:IsShown() and facts.mapopen == true and facts.menuopen == true,
+					("map open: mapopen %s, menuopen %s"):format(tostring(facts.mapopen), tostring(facts.menuopen)))
+				r:Shot("the map open (mapopen)")
+				ToggleWorldMap()
+				r:Sleep(0.6)
+				facts = Facts()
+				r:Verdict(not WorldMapFrame:IsShown() and facts.mapopen == false,
+					"map closed: mapopen " .. tostring(facts.mapopen))
+			end
+			-- (Your character window: menuopen, not mapopen.)
+			if ToggleCharacter and CharacterFrame then
+				ToggleCharacter("PaperDollFrame")
+				r:Sleep(0.6)
+				facts = Facts()
+				r:Log("character window: windows up " .. WindowsUp())
+				r:Verdict(CharacterFrame:IsShown() and facts.menuopen == true and facts.mapopen == false,
+					("character window: menuopen %s, mapopen %s"):format(tostring(facts.menuopen),
+					tostring(facts.mapopen)))
+				if CharacterFrame:IsShown() then HideUIPanel(CharacterFrame) end
+				r:Sleep(0.6)
+				local closed = Facts().menuopen
+				r:Verdict(closed == false, "character window closed: menuopen false (windows up " .. WindowsUp() .. ")")
+			end
+			-- (The one action: a conversation. talking with interacting; and
+			-- talking false again once it's closed. Not a vendor: a shop is
+			-- interacting, not talking (run qc7ea got stuck on one). Each change
+			-- logged, so a stuck wait says what it saw.)
+			local talked, seen = false, nil
+			local function Up(name) local f = _G[name] return tostring(f ~= nil and f:IsShown()) end
+			r:WaitFor("Talk to an NPC that greets you with text (an innkeeper, a guard or a quest giver), then close it.", {
+				check = function()
+					local f = Facts()
+					local now = ("interacting %s, talking %s; windows %s; npc unit %s"):format(tostring(f.interacting),
+						tostring(f.talking), WindowsUp(), tostring(ns.Flag(UnitExists("npc"))))
+					if now ~= seen then seen = now r:Log("seen: " .. now) end
+					if f.talking and f.interacting and not talked then
+						talked = true
+						r:Log(("talking: gossip %s, quest %s, item text %s, talking head %s, npc unit %s"):format(
+							Up("GossipFrame"), Up("QuestFrame"), Up("ItemTextFrame"), Up("TalkingHeadFrame"),
+							tostring(ns.Flag(UnitExists("npc")))))
+					end
+					return (talked and not f.talking and not f.interacting) or nil
+				end })
+			r:Verdict(talked, "talking and interacting while you talked to the NPC, both off after")
+			-- (The rule editor: the You and Screen lines, nothing cut or covered.)
+			ns.OpenOptions("Tooltips")
+			r:Sleep(0.5)
+			if type(ns.db.ruleEditorOpen) ~= "table" then ns.db.ruleEditorOpen = {} end
+			local open = ns.db.ruleEditorOpen
+			local wasYou, wasScreen = open.interacting, open.mapopen
+			open.interacting, open.mapopen = true, true -- (both lines opened: every word shown)
+			ns.OpenRuleEditor({ key = ROW, label = ROW, Text = function() return "talking and not mapopen" end,
+				SetText = function() end, ResetToGrid = function() end, Close = function() end })
+			r:Sleep(0.6)
+			local editor = _G.CinematicRuleEditor
+			for _, l in ipairs(editor and editor.lines or {}) do
+				if l.key == "interacting" or l.key == "mapopen" then
+					local look = LineLook(r, editor, l)
+					r:Verdict(look.shown == look.total and look.cut == 0 and #look.covered == 0 and look.past == 0,
+						("rule editor, %s line open: %d of %d shown, %d cut short, %d covered, %d past the edge"):format(
+						l.key, look.shown, look.total, look.cut, #look.covered, look.past))
+				end
+			end
+			r:Shot("rule editor: the You and Screen lines open", { behind = editor })
+			open.interacting, open.mapopen = wasYou, wasScreen
+			if editor then editor:Hide() end
+			CloseSettings()
 		end },
 	},
 })

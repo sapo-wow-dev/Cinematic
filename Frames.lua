@@ -3787,6 +3787,67 @@ for _, prop in ipairs({ "", "self", "dead", "enemy", "friendly", "hostile", "neu
 	"near28" }) do
 	ns.RULE_WORDS["focus" .. prop] = "focus" .. prop
 end
+-- More about a unit, one list for all three (2026-11-25, phase 3): elite
+-- (elite, rare elite or world boss), rare, boss (a world boss, the game's
+-- boss mob, or in a dungeon or raid an elite at ?? or 2+ levels above you,
+-- as the boss word tells it), quest (needed for one of your quests), tapped
+-- (tagged by someone else), critter (a critter, totem or pet: the game's
+-- creature type), targetingyou (its target is you). Words: targetelite...,
+-- hoverelite..., focuselite...; targetingyou for your target, hover... and
+-- focus... for the others. A secret answer reads false.
+ns.UNIT_PROPS = { "elite", "rare", "boss", "quest", "tapped", "critter", "targetingyou" }
+ns.UNIT_PROP_PREFIXES = { target = "target", hover = "hover", focus = "focus" }
+function ns.UnitPropField(prefix, prop)
+	if prefix == "target" and prop == "targetingyou" then return "targetingyou" end
+	return prefix .. prop
+end
+for _, prefix in pairs(ns.UNIT_PROP_PREFIXES) do
+	for _, prop in ipairs(ns.UNIT_PROPS) do
+		local field = ns.UnitPropField(prefix, prop)
+		ns.RULE_WORDS[field] = field
+		if prefix == "hover" then ns.RULE_WORDS["mouseover" .. prop] = field end
+	end
+end
+ns.CRITTER_TYPES = { [8] = true, [11] = true, [12] = true, [14] = true } -- (critter, totem, pet, wild pet)
+-- Sets a unit's props on v (unit nil: none there, all false). want(field):
+-- whether to work each out (the target's, by ns.RuleFacts' Want).
+function ns.SetUnitProps(v, prefix, unit, want)
+	local function Plain(fn, ...)
+		if type(fn) ~= "function" then return nil end
+		local ok, a, b = pcall(fn, ...)
+		if not ok or (issecretvalue and (issecretvalue(a) or issecretvalue(b))) then return nil end
+		return a, b
+	end
+	local function Want(prop) return unit ~= nil and (want == nil or want(ns.UnitPropField(prefix, prop))) end
+	local rank = (Want("elite") or Want("rare") or Want("boss")) and Plain(UnitClassification, unit) or nil
+	v[prefix .. "elite"] = rank == "elite" or rank == "rareelite" or rank == "worldboss"
+	v[prefix .. "rare"] = rank == "rare" or rank == "rareelite"
+	local boss = false
+	if Want("boss") then
+		boss = rank == "worldboss" or Plain(UnitIsBossMob, unit) == true
+		local level, mine = Plain(UnitLevel, unit), UnitLevel("player")
+		if not boss and (rank == "elite" or rank == "rareelite") and type(level) == "number" then
+			local _, kind = IsInInstance()
+			boss = (kind == "party" or kind == "raid") and (level == -1 or (type(mine) == "number" and level >= mine + 2))
+		end
+	end
+	v[prefix .. "boss"] = boss
+	local quest = false
+	if Want("quest") then
+		quest = Plain(C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest, unit) == true
+			or Plain(UnitIsQuestBoss, unit) == true
+	end
+	v[prefix .. "quest"] = quest
+	v[prefix .. "tapped"] = Want("tapped") and Plain(UnitIsTapDenied, unit) == true or false
+	local critter = false
+	if Want("critter") then
+		local _, id = Plain(UnitCreatureType, unit)
+		critter = ns.CRITTER_TYPES[id] == true
+	end
+	v[prefix .. "critter"] = critter
+	v[ns.UnitPropField(prefix, "targetingyou")] = Want("targetingyou")
+		and Plain(UnitIsUnit, unit .. "target", "player") == true or false
+end
 -- The atoms from a unit's kind row (prefix "" for your target, "hover", "focus").
 function ns.SetKindAtoms(v, prefix, row)
 	v[prefix .. "hostile"] = row == "TargetEnemyPlayer" or row == "TargetEnemyNPC"
@@ -3826,6 +3887,9 @@ end
 ns.hoverState = { fields = { "hover", "hoverself", "hoverdead", "hoverenemy", "hoverfriendly", "hoverenemyplayer",
 	"hoverhostilenpc", "hoverneutralplayer", "hoverneutralnpc", "hoverfriendlyplayer", "hoverfriendlynpc",
 	"hoverframe", "hoverhostile", "hoverneutral", "hoverplayer", "hovernpc" }, values = {} }
+for _, prop in ipairs(ns.UNIT_PROPS) do -- (phase 3's: hoverelite and the rest)
+	ns.hoverState.fields[#ns.hoverState.fields + 1] = ns.UnitPropField("hover", prop)
+end
 ns.hoverState.isField = {}
 for _, field in ipairs(ns.hoverState.fields) do ns.hoverState.isField[field] = true end
 ns.hoverState.watch = CreateFrame("Frame")
@@ -3890,6 +3954,7 @@ function ns.HoverWords(facts, now, force)
 	v.hoverfriendlyplayer, v.hoverfriendlynpc = row == "TargetFriendlyPlayer", row == "TargetFriendlyNPC"
 	v.hoverframe = onFrame
 	ns.SetKindAtoms(v, "hover", row)
+	ns.SetUnitProps(v, "hover", exists and not isSelf and "mouseover" or nil)
 	local changed = false
 	for _, field in ipairs(state.fields) do
 		if facts[field] ~= v[field] then facts[field], changed = v[field], true end
@@ -3906,6 +3971,10 @@ end
 ns.focusState = { fields = {}, isField = {} }
 for _, prop in ipairs({ "", "self", "dead", "enemy", "friendly", "hostile", "neutral", "player", "npc", "near",
 	"near28" }) do
+	ns.focusState.fields[#ns.focusState.fields + 1] = "focus" .. prop
+	ns.focusState.isField["focus" .. prop] = true
+end
+for _, prop in ipairs(ns.UNIT_PROPS) do -- (phase 3's: focuselite and the rest)
 	ns.focusState.fields[#ns.focusState.fields + 1] = "focus" .. prop
 	ns.focusState.isField["focus" .. prop] = true
 end
@@ -3926,9 +3995,146 @@ function ns.FocusWords(facts)
 	facts.focusenemy = enemy == true
 	facts.focusfriendly = dead or enemy == false
 	ns.SetKindAtoms(facts, "focus", row)
+	ns.SetUnitProps(facts, "focus", not isSelf and "focus" or nil)
 	local within = ns.UnitWithin
 	facts.focusnear = not isSelf and within ~= nil and within("focus", 2) or false
 	facts.focusnear28 = not isSelf and within ~= nil and within("focus", 4) or false
+end
+
+-- More of you and your screen (2026-11-25, Tools/cql-words-plan.md phase 2),
+-- each read only while a rule names it (want: ns.RuleFacts' Want), else
+-- false. A secret answer reads false. { word, aliases... }:
+ns.STATE_WORDS = {
+	{ "ghost" }, -- (a ghost after releasing; dead stays dead or a ghost)
+	{ "dnd", "busy" }, -- (flagged busy)
+	{ "vehicle", "invehicle" }, -- (in a vehicle or on a seat)
+	{ "pet", "haspet" }, -- (a pet out)
+	{ "leader", "groupleader" }, -- (your group's leader)
+	{ "raidgroup", "inraid" }, -- (in a raid group, not a party; raid stays the place)
+	{ "maxlevel" }, -- (at this client's level cap)
+	{ "falling" }, -- (in the air, not flying: a jump or a fall)
+	{ "controlled", "stunned", "cc" }, -- (stunned, feared, charmed...: not on a flight path)
+	{ "talking", "dialog" }, -- (a conversation: gossip, quest text, a book, a talking head)
+	{ "movie" }, -- (a game cinematic or movie playing)
+	{ "mapopen", "map" }, -- (the world map up)
+	{ "menuopen", "menu" }, -- (a game window up: bags aside, as the camera modes wait for one)
+	{ "editmode" }, -- (Edit Mode open)
+	{ "mouselook", "mouseturning" }, -- (turning with a mouse button held)
+	{ "gamepad", "controller" }, -- (playing on a gamepad right now)
+	{ "sanctuary" }, { "contested" }, -- (the zone's PvP: a sanctuary, a contested zone)
+	{ "scenario" }, -- (in a scenario)
+	-- (Phase 2's rest, 2026-11-25. No lowhealth: your health reads secret on
+	-- Forever even out of fights, engine rule forever.unithealth.group-secret.)
+	{ "pvpfight", "pvpcombat" }, -- (a fight against players: a BG, an arena, or an enemy player at it, as the Cards' PvP fight)
+	{ "aggro", "threat" }, -- (a mob on you: the game's threat, where it says)
+	{ "shapeshifted", "form", "inform" }, -- (a druid's, shaman's, priest's or warlock's form; not stances)
+	{ "warmode" }, { "delve" }, { "mythicplus", "keystone" }, -- (retail's)
+	{ "housing", "house" }, -- (in a house or on its plot: retail's housing)
+}
+for _, words in ipairs(ns.STATE_WORDS) do
+	for _, word in ipairs(words) do ns.RULE_WORDS[word] = words[1] end
+end
+-- (The gamepad in use, as the game last said: GAME_PAD_ACTIVE_CHANGED. Till
+-- it says, a gamepad switched on counts.)
+ns.gamePadState = CreateFrame("Frame")
+pcall(ns.gamePadState.RegisterEvent, ns.gamePadState, "GAME_PAD_ACTIVE_CHANGED")
+ns.gamePadState:SetScript("OnEvent", function(self, _, active) self.active = active and true or false end)
+-- (On ns, not a local: this main chunk is at its 200.)
+ns.TALK_FRAMES = { "GossipFrame", "QuestFrame", "ItemTextFrame", "TalkingHeadFrame" }
+function ns.StateWords(facts, want)
+	local function Shown(name)
+		local frame = _G[name]
+		return frame ~= nil and frame.IsShown ~= nil and ns.Flag(frame:IsShown()) and true or false
+	end
+	local function Ask(fn, ...) return type(fn) == "function" and ns.Flag(fn(...)) and true or false end
+	facts.ghost = want("ghost") and Ask(UnitIsGhost, "player")
+	facts.dnd = want("dnd") and Ask(UnitIsDND, "player")
+	facts.vehicle = want("vehicle") and (Ask(UnitInVehicle, "player") or Ask(UnitHasVehicleUI, "player"))
+	facts.pet = want("pet") and Ask(UnitExists, "pet")
+	facts.leader = want("leader") and ns.InGroup() and Ask(UnitIsGroupLeader, "player") or false
+	facts.raidgroup = want("raidgroup") and Ask(IsInRaid)
+	if want("maxlevel") then
+		local cap = (GetMaxLevelForPlayerExpansion or GetMaxPlayerLevel or function() end)()
+		local level = UnitLevel("player")
+		facts.maxlevel = type(cap) == "number" and type(level) == "number" and ns.Flag(level >= cap) and true or false
+	else
+		facts.maxlevel = false
+	end
+	facts.falling = want("falling") and Ask(IsFalling)
+	-- (A secret answer is false: not "no control".)
+	local full = nil
+	if want("controlled") and type(HasFullControl) == "function" then full = HasFullControl() end
+	facts.controlled = full == false and not ns.Flag(ns.OnTaxi()) or false
+	local talking = false
+	if want("talking") then
+		for _, name in ipairs(ns.TALK_FRAMES) do
+			if Shown(name) then talking = true break end
+		end
+		-- (Talking with the game's windows hidden, as DialogueUI does.)
+		local manager, types = C_PlayerInteractionManager, Enum and Enum.PlayerInteractionType
+		if not talking and manager and manager.IsInteractingWithNpcOfType and types then
+			talking = Ask(manager.IsInteractingWithNpcOfType, types.Gossip)
+				or Ask(manager.IsInteractingWithNpcOfType, types.QuestGiver)
+		end
+	end
+	facts.talking = talking
+	facts.movie = want("movie") and (Shown("CinematicFrame") or Shown("MovieFrame"))
+	facts.mapopen = want("mapopen") and Shown("WorldMapFrame")
+	facts.menuopen = want("menuopen") and ns.MenuWindowOpen ~= nil and ns.MenuWindowOpen() and true or false
+	facts.editmode = want("editmode") and Shown("EditModeManagerFrame")
+	facts.mouselook = want("mouselook") and Ask(IsMouselooking)
+	if want("gamepad") then
+		local active = ns.gamePadState.active
+		if active == nil then active = ns.IsGamePadOn() and true or false end
+		facts.gamepad = active
+	else
+		facts.gamepad = false
+	end
+	local pvpType
+	if want("sanctuary") or want("contested") then
+		local get = C_PvP and C_PvP.GetZonePVPInfo or GetZonePVPInfo
+		if get then
+			local ok, kind = pcall(get)
+			pvpType = ok and type(kind) == "string" and not (issecretvalue and issecretvalue(kind)) and kind or nil
+		end
+	end
+	facts.sanctuary, facts.contested = pvpType == "sanctuary", pvpType == "contested"
+	facts.scenario = want("scenario") and select(2, IsInInstance()) == "scenario" or false
+	-- (A fight against players: as the Cards' Entering a PvP fight tells it,
+	-- read out of fights, where it's plain, and held into the fight.)
+	if want("pvpfight") and ns.CardPvpFight then
+		local state = ns.pvpFightState or {}
+		ns.pvpFightState = state
+		local ok, how = pcall(ns.CardPvpFight)
+		how = ok and how or nil
+		if not facts.combat then state.held = how ~= nil end
+		facts.pvpfight = facts.combat and (state.held or how ~= nil) or false
+	else
+		facts.pvpfight = false
+	end
+	if want("aggro") and UnitThreatSituation then
+		local ok, status = pcall(UnitThreatSituation, "player")
+		facts.aggro = ok and type(status) == "number" and not (issecretvalue and issecretvalue(status)) and status >= 2
+			or false
+	else
+		facts.aggro = false
+	end
+	if want("shapeshifted") and GetShapeshiftForm then
+		local _, class = UnitClass("player")
+		local form = (class == "DRUID" or class == "SHAMAN" or class == "PRIEST" or class == "WARLOCK")
+			and GetShapeshiftForm()
+		facts.shapeshifted = type(form) == "number" and not (issecretvalue and issecretvalue(form)) and form > 0 or false
+	else
+		facts.shapeshifted = false
+	end
+	facts.warmode = want("warmode") and C_PvP ~= nil and Ask(C_PvP.IsWarModeActive) or false
+	-- (A delve: by its difficulty, 208. C_PartyInfo.IsDelveInProgress said
+	-- true out in Elwynn Forest on Forever, run q4a77.)
+	local difficulty = want("delve") and select(3, GetInstanceInfo()) or nil
+	facts.delve = type(difficulty) == "number" and not (issecretvalue and issecretvalue(difficulty))
+		and difficulty == 208 or false
+	facts.mythicplus = want("mythicplus") and C_ChallengeMode ~= nil and Ask(C_ChallengeMode.IsChallengeModeActive) or false
+	facts.housing = want("housing") and C_Housing ~= nil and Ask(C_Housing.IsInsideHouseOrPlot) or false
 end
 
 -- The words some rule names (field -> true, set by ns.CompileRule, kept till
@@ -3945,6 +4151,8 @@ do
 	local OPERATORS = { ["and"] = "and", ["&"] = "and", ["&&"] = "and", ["or"] = "or", ["|"] = "or", ["||"] = "or",
 		["not"] = "not", ["!"] = "not" }
 	local compiled = {}
+	-- (A value word's token shows as written, in messages.)
+	local AXIS_TOKEN = { __tostring = function(t) return t.axis .. ":" .. table.concat(t.values, ",") end }
 
 	local function Tokens(text)
 		local tokens = {}
@@ -3965,9 +4173,25 @@ do
 				if not word then
 					return nil, ("can't read \"%s\""):format(c)
 				end
-				word = word:lower()
-				tokens[#tokens + 1] = OPERATORS[word] or word
 				i = i + #word
+				word = word:lower()
+				if text:sub(i, i) == ":" then
+					-- (A value word, axis:value: RuleAxes.lua, 2026-11-25. A
+					-- quoted value keeps its spaces; else commas list several.)
+					local values = {}
+					local quoted = text:match('^"([^"]*)"', i + 1)
+					if quoted then
+						values[1] = quoted:lower()
+						i = i + 1 + #quoted + 2
+					else
+						local run = text:match("^[%w_,%.%-']+", i + 1) or ""
+						for value in run:gmatch("[^,]+") do values[#values + 1] = value:lower() end
+						i = i + 1 + #run
+					end
+					tokens[#tokens + 1] = setmetatable({ axis = word, values = values }, AXIS_TOKEN)
+				else
+					tokens[#tokens + 1] = OPERATORS[word] or word
+				end
 			end
 		end
 		return tokens
@@ -4007,6 +4231,17 @@ do
 				err = err or ("%s needs a word before it"):format(token:upper())
 			elseif token == ")" then
 				err = err or (tokens[pos - 1] == "(" and "a ( ) has nothing in it" or "a word is missing before a )")
+			elseif type(token) == "table" then
+				-- (axis:value: RuleAxes.lua's ns.AxisTest. Its axis read from now.)
+				local test, why
+				if ns.AxisTest then test, why = ns.AxisTest(token.axis, token.values) end
+				if not test then
+					err = err or why or ("\"%s\" isn't a word it knows"):format(tostring(token))
+					return nil
+				end
+				pos = pos + 1
+				words["axis:" .. token.axis] = true
+				return test
 			elseif ns.RULE_WORDS[token] then
 				local field = ns.RULE_WORDS[token]
 				pos = pos + 1
@@ -4040,7 +4275,7 @@ do
 		if tokens then
 			test = Or()
 			if test and tokens[pos] ~= nil then
-				test, err = nil, ("\"%s\" is out of place"):format(tokens[pos])
+				test, err = nil, ("\"%s\" is out of place"):format(tostring(tokens[pos]))
 			end
 		end
 		if test and usesHover then ns.hoverState.used = true end
@@ -5224,6 +5459,8 @@ do
 		local all = ns.factsEvery or editor and editor:IsShown() or false
 		local used = ns.factsUsed
 		local function Want(field) return all or used[field] == true end
+		-- (targetelite and the rest: phase 3, 2026-11-25.)
+		ns.SetUnitProps(facts, "target", hasTarget and not targetSelf and "target" or nil, Want)
 		-- (Your target with no nameplate: behind the camera, off the side or too
 		-- far. The game only makes plates for units in view; a plate CineMode
 		-- fades is still there. Nameplates turned off for its kind count too.
@@ -5285,6 +5522,8 @@ do
 		-- as DialogueUI does.)
 		facts.interacting = Want("interacting") and (ns.NPCWindowOpen() or ns.Flag(UnitExists("npc"))) and true
 			or false
+		ns.StateWords(facts, Want) -- (ghost, talking, mapopen and the rest: phase 2, 2026-11-25)
+		if ns.AxisWords then ns.AxisWords(facts, Want) end -- (zone:, aura: and the rest: RuleAxes.lua, phase 4)
 		-- (Under water, speed, weather and the time of day: RULE_WORDS above.)
 		facts.underwater = Want("underwater") and IsSubmerged and ns.Flag(IsSubmerged()) and true or false
 		facts.fast = Want("fast") and not facts.taxi and ns.PlayerSpeedNow() >= 12 or false

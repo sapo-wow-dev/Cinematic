@@ -49,6 +49,34 @@ function ns.RuleCameraPieces()
 	return pieces
 end
 
+-- The Values line: a menu button per axis (RuleAxes.lua), its list made
+-- when clicked. Class and camera have lines of their own.
+local VALUE_AXES = {
+	{ "zone", "Zone...", "Picks the zone you're in, or one it's inside: true there, its towns too." },
+	{ "subzone", "Subzone...", "Picks the spot you're in by its name, in your game's language." },
+	{ "instance", "Instance...", "Picks the dungeon, raid or battleground you're in." },
+	{ "window", "Window...", "Picks a kind of NPC window: true while one is open." },
+	{ "aura", "Aura...", "Picks a buff or debuff on you now: true while you have it." },
+	{ "form", "Form...", "Picks one of your forms or stances." },
+	{ "mount", "Mount...", "Picks the mount you're on now." },
+	{ "spec", "Spec...", "Picks one of your specs." },
+	{ "race", "Race...", "Picks your race." },
+	{ "targetid", "Target NPC...", "Picks the NPC you have targeted: true when you target that NPC again." },
+}
+local function ValuePieces()
+	local pieces = {}
+	for _, v in ipairs(VALUE_AXES) do
+		local axis = ns.RULE_AXES and ns.RULE_AXES[v[1]]
+		if axis and axis.Pick then
+			pieces[#pieces + 1] = { v[1] .. ":", L[v[2]], tip = v[3], pick = function()
+				local ok, list = pcall(axis.Pick)
+				return ok and list or {}
+			end }
+		end
+	end
+	return pieces
+end
+
 -- The pieces of a rule, a line of buttons each in the rule editor:
 -- { name, colour, { { word, label }... } }. Made when asked,
 -- once the language is known.
@@ -74,6 +102,19 @@ function ns.RulePieces()
 		{ "swimming", L["Swimming"] }, { "underwater", L["Under water"] }, { "flying", L["Flying"] },
 		{ "fast", L["Moving fast"] } }
 	if ns.isRetail then travel[#travel + 1] = { "gliding", L["Gliding"] } end
+	travel[#travel + 1] = { "falling", L["Falling"] }
+	location[#location + 1] = { "scenario", L["Scenarios"] }
+	location[#location + 1] = { "sanctuary", L["Sanctuary"] }
+	location[#location + 1] = { "contested", L["Contested zone"] }
+	if ns.isRetail then -- (retail's alone: hidden on Forever, hide-unclickable)
+		location[#location + 1] = { "warmode", L["War Mode"] }
+		location[#location + 1] = { "delve", L["Delves"] }
+		location[#location + 1] = { "mythicplus", L["Mythic+"] }
+		location[#location + 1] = { "housing", L["Your house"] }
+	end
+	local screen = { { "mapopen", L["Map open"] }, { "menuopen", L["Game window open"] },
+		{ "editmode", L["Edit Mode"] }, { "movie", L["Movie playing"] }, { "mouselook", L["Turning with the mouse"] } }
+	if C_GamePad then screen[#screen + 1] = { "gamepad", L["Using a gamepad"] } end
 	-- (The weather here, outdoors, and the time of day by the tint's clock,
 	-- 2026-11-23: for the Atmosphere effects' rows, and any other.)
 	local world = { { "rain", L["Rain"] }, { "snow", L["Snow"] } }
@@ -99,7 +140,8 @@ function ns.RulePieces()
 		{ L["Logic"], { 1, 1, 1 }, { { "and", "AND" }, { "or", "OR" }, { "not", "NOT" }, { "(", "(" }, { ")", ")" } } },
 		{ L["Combat"], { 1, 0.45, 0.4 }, { { "combat", L["In combat"] }, { "calm", L["Calm Timer"] },
 			{ "nocombat", L["Out of combat"] },
-			{ "entering", L["Entering combat"] }, { "leaving", L["Leaving combat"] }, { "boss", L["Boss fight"] } } },
+			{ "entering", L["Entering combat"] }, { "leaving", L["Leaving combat"] }, { "boss", L["Boss fight"] },
+			{ "pvpfight", L["PvP fight"] }, { "aggro", L["Aggro on you"] } } },
 		{ L["Camera"], { 0.95, 0.75, 0.45 }, ns.RuleCameraPieces() },
 		{ L["Target"], { 1, 0.65, 0.25 }, { { "enemy", L["Enemy targeted"] }, { "friendly", L["Friend targeted"] },
 			-- (The most used first: the kinds after, behind the line's +N, 2026-11-24.)
@@ -128,14 +170,26 @@ function ns.RulePieces()
 		{ L["Spell range"], { 0.45, 0.9, 0.9 }, ranges },
 		{ L["Nearby"], { 1, 0.5, 0.8 }, { { "elite11", L["Elite near (11 yards)"] },
 			{ "elite28", L["Elite near (28 yards)"] }, { "elite40", L["Elite near (40 yards)"] } } },
-		{ L["Location"], { 0.45, 0.75, 1 }, location },
+		-- (Retail's places typed on Forever: known, colored, reading false.)
+		{ L["Location"], { 0.45, 0.75, 1 }, location, colorOnly = { "warmode", "delve", "mythicplus", "housing" } },
 		-- (Interacting first, in sight: an NPC's or a service window, the mailbox
 		-- too. Talking to an NPC alone: interacting and npc. 2026-11-24.)
-		{ L["You"], { 0.8, 0.6, 1 }, { { "interacting", L["Interacting"] }, { "mounted", L["Mounted"] }, { "indoors", L["Indoors"] }, { "taxi", L["On a flight path"] }, { "dead", L["Dead"] }, { "casting", L["Casting"] }, { "flagged", L["PvP flagged"] },
+		-- (Talking, a conversation, second: talking and npc, 2026-11-25. Then
+		-- phase 2's words after the old ones: Frames.lua's ns.STATE_WORDS.)
+		{ L["You"], { 0.8, 0.6, 1 }, { { "interacting", L["Interacting"] }, { "talking", L["Talking"] }, { "mounted", L["Mounted"] }, { "indoors", L["Indoors"] }, { "taxi", L["On a flight path"] }, { "dead", L["Dead"] }, { "casting", L["Casting"] }, { "flagged", L["PvP flagged"] },
 			{ "group", L["Grouped"] }, { "afk", L["AFK"] }, { "outdoors", L["Outdoors"] },
-			{ "resting", L["Resting (an inn or a city)"] }, { "stealthed", L["Stealthed"] }, { "sitting", L["Sit"] } } },
+			{ "resting", L["Resting (an inn or a city)"] }, { "stealthed", L["Stealthed"] }, { "sitting", L["Sit"] },
+			{ "ghost", L["Ghost"] }, { "controlled", L["Lost control"] }, { "vehicle", L["In a vehicle"] },
+			{ "pet", L["Pet out"] }, { "dnd", L["Busy (DND)"] }, { "leader", L["Group leader"] },
+			{ "raidgroup", L["In a raid group"] }, { "maxlevel", L["Max level"] },
+			{ "shapeshifted", L["In a form"] } } },
 		{ L["Travel"], { 0.6, 0.85, 1 }, travel },
+		-- (What's on your screen and how you play, 2026-11-25.)
+		{ L["Screen"], { 0.75, 0.8, 0.95 }, screen },
 		{ L["World"], { 0.55, 0.9, 0.7 }, world },
+		-- (Value words, axis:value, 2026-11-25: RuleAxes.lua. Each button a
+		-- menu made when clicked: where you are, what you have now.)
+		{ L["Values"], { 0.95, 0.8, 0.55 }, ValuePieces() },
 		{ L["Role"], { 0.4, 0.85, 0.5 }, { { "tank", L["Tank"] }, { "healer", L["Healer"] }, { "damage", L["Damage"] } } },
 		{ L["Class"], { 0.85, 0.75, 0.6 }, classes },
 		-- (Last: the editor shows it only for the Tooltips row, tooltip:All.)
@@ -143,6 +197,19 @@ function ns.RulePieces()
 			{ "tipgather", L["Gatherable"] }, { "tipquest", L["Quest objective"] }, { "tipother", L["Anything else"] } },
 			tooltipOnly = true },
 	}
+	-- (Phase 3, 2026-11-25: more about each unit, at the end of its line:
+	-- Frames.lua's ns.UNIT_PROPS.)
+	local propLines = { [L["Target"]] = "target", [L["Mouse over"]] = "hover", [L["Focus"]] = "focus" }
+	local propLabels = { elite = L["Elite"], rare = L["Rare"], boss = L["Boss"], quest = L["Quest mob"],
+		tapped = L["Tapped by others"], critter = L["Critter"], targetingyou = L["Targeting you"] }
+	for _, group in ipairs(groups) do
+		local prefix = propLines[group[1]]
+		if prefix then
+			for _, prop in ipairs(ns.UNIT_PROPS or {}) do
+				group[3][#group[3] + 1] = { ns.UnitPropField(prefix, prop), propLabels[prop] }
+			end
+		end
+	end
 	if _G.FocusFrame == nil then -- (a client with no focus: no Focus line)
 		for i, group in ipairs(groups) do
 			if group.focus then table.remove(groups, i) break end
@@ -160,7 +227,8 @@ local function FieldColor(field)
 			for _, piece in ipairs(group[3]) do
 				local field = ns.RULE_WORDS[piece[1]]
 				if field then fieldColor[field] = group[2] end
-				for _, picked in ipairs(piece.pick or {}) do -- (a menu's words: its line's colour too)
+				local pick = type(piece.pick) == "table" and piece.pick or {} -- (a function: made when clicked)
+				for _, picked in ipairs(pick) do -- (a menu's words: its line's colour too)
 					fieldColor[ns.RULE_WORDS[picked[1]] or picked[1]] = group[2]
 				end
 			end
@@ -175,7 +243,8 @@ local LOGIC_COLOR, UNKNOWN_COLOR = { 0.7, 0.7, 0.7 }, { 1, 0.38, 0.38 }
 
 -- A rule's text with each word in its group's colour (one the rules don't
 -- know red), the logic grey, for showing.
-function ns.ColoredRule(text)
+local VALUE_COLOR, NAME_COLOR = { 0.95, 0.8, 0.55 }, { 0.6, 0.6, 0.6 }
+local function ColoredWords(text)
 	-- (A word, then what's up to the next: spaces, brackets and signs, a | doubled to show as one.)
 	return (text:gsub("([%w_]*)([^%w_]*)", function(word, between)
 		local lower = word:lower()
@@ -185,6 +254,42 @@ function ns.ColoredRule(text)
 		between = between:find("%S") and Colored(LOGIC_COLOR, (between:gsub("|", "||"))) or between
 		return word .. between
 	end))
+end
+-- A value word (axis:value, RuleAxes.lua): its color, with each value's
+-- name after it in grey where one is known ("zone:1453 (Stormwind City)").
+local function ColoredValueWord(axis, value)
+	local known = ns.RULE_AXES and ns.RULE_AXES[axis:lower()]
+	local shown = Colored(known and VALUE_COLOR or UNKNOWN_COLOR, (axis .. ":" .. value):gsub("|", "||"))
+	if not known then return shown end
+	-- (A quoted value is one; else commas list several.)
+	local values = {}
+	local quoted = value:match('^"(.*)"$')
+	if quoted then
+		values[1] = quoted
+	else
+		for one in value:gmatch("[^,]+") do values[#values + 1] = one end
+	end
+	local names = {}
+	for _, one in ipairs(values) do
+		local name = ns.AxisValueName and ns.AxisValueName(axis:lower(), one:lower())
+		if name then names[#names + 1] = name end
+	end
+	return #names > 0 and (shown .. " " .. Colored(NAME_COLOR, "(" .. table.concat(names, ", ") .. ")")) or shown
+end
+function ns.ColoredRule(text)
+	local out, i = {}, 1
+	while i <= #text do
+		local s1, e1, a1, v1 = text:find('([%w_]+):("[^"]*")', i)
+		local s2, e2, a2, v2 = text:find("([%w_]+):([%w_,%.%-']*)", i)
+		local s, e, axis, value = s1, e1, a1, v1
+		if s2 and (not s1 or s2 < s1) then s, e, axis, value = s2, e2, a2, v2 end
+		if not s then break end
+		out[#out + 1] = ColoredWords(text:sub(i, s - 1))
+		out[#out + 1] = ColoredValueWord(axis, value)
+		i = e + 1
+	end
+	out[#out + 1] = ColoredWords(text:sub(i))
+	return table.concat(out)
 end
 
 -- A row's ticks as a rule: the ticked words joined by OR, always first
@@ -325,6 +430,24 @@ end
 local editor, target
 local EDIT_W = 560
 
+-- (What counts for some of phase 2's words, 2026-11-25: field -> its tooltip's line.)
+local STATE_TIPS = {
+	talking = "Gossip, quest text, a book or a talking head.",
+	controlled = "Stunned, feared, charmed and the like.",
+	menuopen = "Spellbook, map, character, settings and the like.",
+	movie = "A game cinematic or movie.",
+	mouselook = "A mouse button held to turn.",
+	pvpfight = "In a battleground or arena, or with an enemy player in the fight.",
+	aggro = "A mob is attacking you. Where the game hides threat, false.",
+	shapeshifted = "A druid's, shaman's, priest's or warlock's form; not a stance.",
+}
+for _, prefix in ipairs({ "target", "hover", "focus" }) do -- (phase 3's unit words that need a line)
+	local field = function(prop) return ns.UnitPropField and ns.UnitPropField(prefix, prop) or prefix .. prop end
+	STATE_TIPS[field("boss")] = "A world boss, or a dungeon or raid boss. Boss fight is the fight itself."
+	STATE_TIPS[field("tapped")] = "Tagged by someone else: no loot or credit for you."
+	STATE_TIPS[field("critter")] = "A critter, totem or pet."
+	STATE_TIPS[field("quest")] = "Needed for one of your quests."
+end
 local function BuildEditor()
 	local BACKDROP = BackdropTemplateMixin and "BackdropTemplate" or nil
 	editor = CreateFrame("Frame", "CinematicRuleEditor", UIParent, BACKDROP)
@@ -538,14 +661,18 @@ local function BuildEditor()
 			local button
 			if piece.pick then
 				-- (A menu of words: the one picked goes in.)
+				-- (pick: a list, or a function making one when clicked: the
+				-- Values line's, where you are and what you have now.)
 				button = Piece(piece[2], function(self)
+					local list = type(piece.pick) == "function" and piece.pick() or piece.pick
 					ns.ContextMenu(self, function(_, root)
-						for _, picked in ipairs(piece.pick) do
+						for _, picked in ipairs(list) do
 							root:CreateButton(picked[2], function() Insert(picked[1]) end)
 						end
+						if #list == 0 then root:CreateButton(L["Nothing to pick here now"], function() end) end
 					end)
 				end, group[2], false)
-				Tip(button, L["Picks one camera: true while that one's running."])
+				Tip(button, piece.tip and L[piece.tip] or L["Picks one camera: true while that one's running."])
 			else
 				button = Piece(piece[2], function() Insert(word) end, group[2], field ~= nil)
 			end
@@ -568,6 +695,8 @@ local function BuildEditor()
 					Tip(button, tip .. "\n\n" .. "")
 				elseif field == "enemy" or field == "friendly" or field == "target" then
 					Tip(button, tip .. "\n\n" .. L["Out of fights only."])
+				elseif STATE_TIPS[field] then -- (phase 2's words that need a line on what counts)
+					Tip(button, tip .. "\n\n" .. L[STATE_TIPS[field]])
 				elseif field:find("hostile$") then -- (the unit words: what hostile and neutral mean)
 					Tip(button, tip .. "\n\n" .. L["A unit you can attack, red to you."])
 				elseif field:find("neutral$") then

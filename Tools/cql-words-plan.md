@@ -188,6 +188,41 @@ only. Offline: `Tools/offline/unitwords.lua`, `hoverwords.lua` ALL PASS. In game
 `mousewords` kit test's `units` step 7/7 (queue q68c0, Forever) and its editor step 26/26
 (q52b5). Retail not run.
 
+## Phase 2 status (2026-11-25)
+
+Built, uncommitted: `ns.STATE_WORDS` + `ns.StateWords` (Frames.lua), 19 words, each read only
+while a rule names it (the facts' `Want`): ghost, dnd, vehicle, pet, leader, raidgroup, maxlevel,
+falling, controlled, talking, movie, mapopen, menuopen, editmode, mouselook, gamepad, sanctuary,
+contested, scenario. Editor: talking second on You, the rest at the end of You; falling on
+Travel; scenario/sanctuary/contested on Location; a new Screen line (map, game window, Edit
+Mode, movie, mouse turning, gamepad where C_GamePad exists). Found offline: a secret
+HasFullControl read as "controlled"; fixed (secret = false). Offline:
+`Tools/offline/statewords.lua` ALL PASS (62). In game: the `mousewords` kit test's `state`
+step: run qc7ea stuck (Forever's settings window, InterfaceOptionsFrame, left open; "a vendor"
+isn't a talk), fixed; run q4a77 32/32. Then added pvpfight (the Cards' PvP fight test, held into
+the fight), aggro (plain threat only), shapeshifted (druid/shaman/priest/warlock forms),
+warmode, delve (difficulty 208: engine rule forever.partyinfo.delve-in-progress-world),
+mythicplus, housing (the last four in the editor on retail only). **lowhealth not built**: your
+health is secret on Forever even out of fights (engine rule forever.unithealth.group-secret).
+
+## Phase 3 status (2026-11-25)
+
+Built: `ns.UNIT_PROPS` + `ns.SetUnitProps` (Frames.lua): elite, rare, boss, quest, tapped,
+critter, targetingyou for target (`targetelite`... and `targetingyou`), mouse (`hover...`) and
+focus (`focus...`), at the end of each editor line. Offline: `unitwords.lua` 146 pass. In game:
+`props` step 7/7-style pass on a normal NPC (q504b, 27/27 with the editor).
+
+## Phase 4 status (2026-11-25)
+
+Built: `RuleAxes.lua` (new, after Frames.lua in both TOCs): axes zone, subzone, instance, window,
+aura, form, mount, class, race, spec, camera, targetid; Frames.lua's tokenizer reads
+`axis:value`, `axis:a,b`, `axis:"with spaces"`; `ns.AxisWords` fills `facts.axes` only for axes
+a rule names, `facts.axisSig` moves the stamp. Editor: a Values line, one menu per axis made
+when clicked; `ns.ColoredRule` shows names after ids. Offline: `valuewords.lua` 102 pass. In
+game: `values` step 15/15 (qde9b, Forever; q1d3a's one fail was the test taking the Class
+menu's first entry as yours). Retail not run for phases 2-4. Search boxes in the pickers were left out: each menu offers
+what's here and what you have.
+
 ## Phase 4: value words
 
 ### Syntax

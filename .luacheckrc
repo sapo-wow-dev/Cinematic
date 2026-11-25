@@ -355,6 +355,17 @@ read_globals = {
 	"C_DamageMeter",
 	"issecrettable",
 	"UnitIsAFK",
+	"UnitIsDND", -- (the rules' phase 2 words, 2026-11-25)
+	"UnitHasVehicleUI",
+	"C_PlayerInteractionManager",
+	"GetShapeshiftForm",
+	"UnitIsQuestBoss",
+	"GetSpecializationInfo", -- (the rules' spec: axis, RuleAxes.lua)
+	"GetSpecializationInfoByID",
+	"GetNumSpecializations",
+	"C_PartyInfo",
+	"C_ChallengeMode",
+	"C_Housing",
 	"UnitIsDead",
 	"UnitInVehicle",
 	"UnitIsDeadOrGhost",

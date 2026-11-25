@@ -80,6 +80,7 @@ Support\TitanPanel.lua
 Support\TomTom.lua
 Support\ShamanPower.lua
 Frames.lua
+RuleAxes.lua
 UI\QuestStandIn.lua
 UI\CooldownStacks.lua
 UI\CooldownRing.lua
