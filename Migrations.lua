@@ -5873,6 +5873,47 @@ STEPS[#STEPS + 1] = function()
 	end
 	ns.db.newZoneOffV1 = true
 end
+-- Rules' "npc" means any NPC targeted now (2026-11-24); what it meant before,
+-- an NPC's or a service window open, is "interacting". So a rule written
+-- before says interacting, doing what it did. Every place a rule is kept:
+-- the rows' (frameRules), the triggers' conditions (cameraRows <id>.cond),
+-- the Cooldown Manager's groups (cql) and the combat sound lists
+-- ("edge#rule#sounds;..."). Once, in every profile and reset point.
+local NPC_WORD = "%f[%w_][Nn][Pp][Cc]%f[^%w_]"
+local function NpcToInteracting(text)
+	return (text:gsub(NPC_WORD, "interacting"))
+end
+function ns.NpcRuleToInteracting(t)
+	if type(t) ~= "table" then return end
+	if type(t.frameRules) == "table" then
+		for key, text in pairs(t.frameRules) do
+			if type(text) == "string" then t.frameRules[key] = NpcToInteracting(text) end
+		end
+	end
+	if type(t.cameraRows) == "table" then
+		for key, text in pairs(t.cameraRows) do
+			if type(key) == "string" and key:find("%.cond$") and type(text) == "string" then
+				t.cameraRows[key] = NpcToInteracting(text)
+			end
+		end
+	end
+	if type(t.cooldownPlaceGroups) == "table" then
+		for _, group in pairs(t.cooldownPlaceGroups) do
+			if type(group) == "table" and type(group.cql) == "string" then group.cql = NpcToInteracting(group.cql) end
+		end
+	end
+	for key, text in pairs(t) do
+		if type(text) == "string" and text:find("^%a+#[^#]*#") then t[key] = NpcToInteracting(text) end
+	end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.ruleNpcInteractingV1 then return end
+	ns.NpcRuleToInteracting(ns.db)
+	for _, list in ipairs({ ns.db.profiles or false, ns.db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do ns.NpcRuleToInteracting(saved) end
+	end
+	ns.db.ruleNpcInteractingV1 = true
+end
 
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.

@@ -1,6 +1,6 @@
 -- /cine debug rulewords: one run on the Show in rule words for travel and you
 -- (moving, autorun, rpwalk, swimming, flying, gliding, afk, outdoors,
--- resting, stealthed, sitting, npc). Steps on screen, each waiting as long as
+-- resting, stealthed, sitting, interacting). Steps on screen, each waiting as long as
 -- it takes; the Skip step button ("/cine debug rulewords skip") passes a step you can't do, the
 -- command alone again stops the run.
 --   Part A, the player's case: the Minimap row's rule set to "not combat and
@@ -30,7 +30,7 @@ local _, ns = ...
 
 local RULE = "not combat and not autorun"
 local NEW = { "moving", "autorun", "rpwalk", "swimming", "flying", "gliding", "afk", "outdoors", "resting",
-	"stealthed", "sitting", "npc" }
+	"stealthed", "sitting", "interacting" } -- (interacting: npc till 2026-11-24)
 local CONTEXT = { "combat", "taxi", "indoors", "city", "inn", "mounted", "dead" }
 local NPC_FRAMES = { "MerchantFrame", "MailFrame", "GossipFrame", "QuestFrame", "TaxiFrame", "ItemTextFrame",
 	"BankFrame", "ClassTrainerFrame", "AuctionFrame", "AuctionHouseFrame", "TradeFrame" }
@@ -623,9 +623,10 @@ local function BuildSteps(only)
 			step.t.frames = (step.t.frames and step.t.frames .. " " or "") .. frames
 		end
 	end
-	Add(Cycle("npc-vendor", "npc", "Open a vendor", "Close it", { extra = NpcExtra, more = NpcMore() }))
-	Add(Cycle("npc-mail", "npc", "Open a mailbox", "Close it", { extra = NpcExtra, more = NpcMore() }))
-	Add(Cycle("npc-quest", "npc", "Talk to a quest giver", "Close the window", { extra = NpcExtra, more = NpcMore() }))
+	Add(Cycle("npc-vendor", "interacting", "Open a vendor", "Close it", { extra = NpcExtra, more = NpcMore() }))
+	Add(Cycle("npc-mail", "interacting", "Open a mailbox", "Close it", { extra = NpcExtra, more = NpcMore() }))
+	Add(Cycle("npc-quest", "interacting", "Talk to a quest giver", "Close the window",
+		{ extra = NpcExtra, more = NpcMore() }))
 	-- Short runs: only what the full one left. "minimap": Part A without the
 	-- city. "glide" (retail): the Gliding button read off the editor's pieces
 	-- (no editor to open), then a glide.

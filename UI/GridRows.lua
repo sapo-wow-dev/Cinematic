@@ -105,6 +105,7 @@ function ns.RulePieces()
 			-- (The most used first: the kinds after, behind the line's +N, 2026-11-24.)
 			{ "target", L["Anything targeted"] }, { "targetself", L["You"] }, { "targetdead", L["Dead target"] },
 			{ "near", L["Near (11 yards)"] }, { "near28", L["Near (28 yards)"] }, { "noplate", L["Plate off screen"] },
+			{ "npc", L["Any NPC"] }, -- (hostile, neutral or friendly: Frames.lua, 2026-11-24)
 			{ "enemyplayer", L["Enemy players"] }, { "hostilenpc", L["Hostile NPCs"] }, { "neutralplayer", L["Neutral players"] },
 			{ "neutralnpc", L["Neutral NPCs"] }, { "friendlyplayer", L["Friendly players"] },
 			{ "friendlynpc", L["Friendly NPCs"] } } },
@@ -119,10 +120,11 @@ function ns.RulePieces()
 		{ L["Nearby"], { 1, 0.5, 0.8 }, { { "elite11", L["Elite near (11 yards)"] },
 			{ "elite28", L["Elite near (28 yards)"] }, { "elite40", L["Elite near (40 yards)"] } } },
 		{ L["Location"], { 0.45, 0.75, 1 }, location },
-		{ L["You"], { 0.8, 0.6, 1 }, { { "mounted", L["Mounted"] }, { "indoors", L["Indoors"] }, { "taxi", L["On a flight path"] }, { "dead", L["Dead"] }, { "casting", L["Casting"] }, { "flagged", L["PvP flagged"] },
+		-- (Interacting first, in sight: an NPC's or a service window, the mailbox
+		-- too. Talking to an NPC alone: interacting and npc. 2026-11-24.)
+		{ L["You"], { 0.8, 0.6, 1 }, { { "interacting", L["Interacting"] }, { "mounted", L["Mounted"] }, { "indoors", L["Indoors"] }, { "taxi", L["On a flight path"] }, { "dead", L["Dead"] }, { "casting", L["Casting"] }, { "flagged", L["PvP flagged"] },
 			{ "group", L["Grouped"] }, { "afk", L["AFK"] }, { "outdoors", L["Outdoors"] },
-			{ "resting", L["Resting (an inn or a city)"] }, { "stealthed", L["Stealthed"] }, { "sitting", L["Sit"] },
-			{ "npc", L["At an NPC"] } } },
+			{ "resting", L["Resting (an inn or a city)"] }, { "stealthed", L["Stealthed"] }, { "sitting", L["Sit"] } } },
 		{ L["Travel"], { 0.6, 0.85, 1 }, travel },
 		{ L["World"], { 0.55, 0.9, 0.7 }, world },
 		{ L["Role"], { 0.4, 0.85, 0.5 }, { { "tank", L["Tank"] }, { "healer", L["Healer"] }, { "damage", L["Damage"] } } },

@@ -331,6 +331,7 @@ Dev\NameConsoleTest.lua
 Dev\FarNamesTest.lua
 Dev\HoverPlateTest.lua
 Dev\MouseWordsTest.lua
+Dev\TalkNamesTest.lua
 Dev\NpcTitleTest.lua
 Dev\ThemeArtTest.lua
 Dev\FindTabsTest.lua

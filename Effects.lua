@@ -453,7 +453,21 @@ local pvpNamesFight = false
 -- the fight and for the Calm Timer (calmTime) after it, like the plates.
 -- (Always on the Nameplates page keeps a row up everywhere, and Grouped in a
 -- party or raid, whatever its other boxes say.)
+-- The All names row (AllNames, 2026-11-24): every other row's names only
+-- where it says (its ticks or rule: "not interacting" for none while you talk
+-- to an NPC). Asked once a frame. (On ns: this file's main chunk is at 200 locals.)
+ns.allNamesGate = { at = -1, up = true, combat = false }
 local function NameKeptHere(key, inCombat)
+	if key ~= "AllNames" then
+		local gate, now = ns.allNamesGate, GetTime()
+		if gate.at ~= now or gate.combat ~= (inCombat and true or false) then
+			gate.at, gate.combat = now, inCombat and true or false
+			gate.up = NameKeptHere("AllNames", inCombat) and true or false
+		end
+		if not gate.up then
+			return false
+		end
+	end
 	if key == "AllNPCs" then
 		return NameKeptHere("HostileNPCs", inCombat) and NameKeptHere("NeutralNPCs", inCombat)
 			and NameKeptHere("FriendlyNPCs", inCombat)
@@ -2835,9 +2849,24 @@ local immersiveLevel = 0
 function PlateAlphas(unit, plate, besidesHeal)
 	local body = PlateAlpha(unit, plate, besidesHeal)
 	local name = 0
+	-- (Your target, with a rule on the Target section's Names row: that rule
+	-- alone decides its name, both ways, whatever its kind's, a group's or
+	-- Service NPCs' row says; no title in its place. Without a rule, the row
+	-- only adds, as before. 2026-11-24: "not interacting" there left a
+	-- vendor's title up through the talk, Service NPCs keeping it.)
+	local targetDecides = platesForced and unit and plate ~= PersonalPlate() and IsTarget(unit)
+		and ns.TargetNameRow(unit) ~= nil and ns.RuleTest(ns.NameRuleKey("YourTarget")) ~= nil or false
 	if body <= 0 and unit and ns.SoftPlateHidden(unit) then
 		-- (A plate only soft targeting gave it: its name stays, as without one.)
 		name = GameNameShown(unit) and 1 or 0
+	elseif targetDecides then
+		-- (Not while its Nameplates row keeps the whole plate up: that brings its name.)
+		name = not (ns.HasTarget() and AlwaysShownTarget(unit)) and nameLevel.YourTarget or 0
+		-- (The Mouseover names row still adds: the mouse on it.)
+		local hover = (nameLevel.YourMouseover or 0) > 0 and ns.plates.HoverLevel(plate) * nameLevel.YourMouseover or 0
+		if hover > name then
+			name = hover
+		end
 	elseif platesForced and unit and plate ~= PersonalPlate() then
 		local kind = PlateKind(unit)
 		name = kind and nameLevel[KIND_NAME_GROUP[kind]] or 0
@@ -2882,7 +2911,7 @@ function PlateAlphas(unit, plate, besidesHeal)
 	-- how much of the name's own text shows, the rest only the title's).
 	-- (A quest giver kept by Quest givers alone shows its name: most have no title.)
 	local own, service, nameNotTitle = name, nameLevel.ServiceNPCs or 0, false
-	if service > name and platesForced and unit and plate ~= PersonalPlate() then
+	if service > name and not targetDecides and platesForced and unit and plate ~= PersonalPlate() then
 		local kind = PlateKind(unit)
 		if kind == "FriendlyNPCs" or kind == "NeutralNPCs" then
 			local match, byQuest = ns.PlateServiceMatch(plate, unit)
@@ -2903,6 +2932,17 @@ function PlateAlphas(unit, plate, besidesHeal)
 	-- (Last: 1 when the Service NPCs row is what keeps the name, for its far
 	-- behind-walls fade in PlateParts. A number: /cine debug names concats these.)
 	return alpha * opacity, body / alpha, name / alpha, mark / alpha, text, name > own and 1 or 0
+end
+
+-- (For tests: how much of a plate's name shows now, 0 to 1, and how much of
+-- that is the name's own text, the rest a title in its place.)
+function ns.PlateNameLevel(unit, plate)
+	local alpha, _, name, _, text = PlateAlphas(unit, plate)
+	return alpha * name, text
+end
+-- (For tests: a Names row's own fade level, 0 to 1: ServiceNPCs, YourTarget...)
+function ns.NameRowLevel(key)
+	return nameLevel[key] or 0
 end
 
 -- (For /cine debug names: why a plate's name is kept or not.)
@@ -3576,6 +3616,15 @@ function ns.PlateItemsWhy()
 				end
 				if duels.Level(plate) > 0.05 then
 					Add("on", L["Duel Vision shows the two players of a duel near you"], "Duel Vision")
+				end
+				-- (What holds its name down: the All names row, or your target's
+				-- Names rule. 2026-11-24.)
+				if platesForced and not NameKeptHere("AllNames", fighting) then
+					Add("block", L["Names: the All names row hides every name here"])
+				end
+				if target and platesForced and ns.TargetNameRow(unit) and ns.RuleTest(ns.NameRuleKey("YourTarget"))
+					and (nameLevel.YourTarget or 0) < 0.95 then
+					Add("block", L["Names: the Target names rule hides your target's name, whatever its kind's rows say"])
 				end
 				-- Its name alone, kept by a Names row.
 				if name > 0.05 and platesForced then
@@ -4493,13 +4542,17 @@ function ns.plates.SameAsBefore(cinematic, now)
 	local immersive = (ns.ChatCamImmersive and ns.ChatCamImmersive()) and true or false
 	-- (The Calm Timer ending, or cut: the kinds it held let go at once.)
 	local lingering = ns.FightLingering and ns.FightLingering() and true or false
+	-- (The All names row and your target's Names row turning: at once, not at
+	-- the next settled check. talknames run 3 (q0dec): All names read hidden
+	-- at 0.5 s, its names fading only from 2 s. 2026-11-24.)
+	local names = (NameKeptHere("AllNames", fight) and 1 or 0) + (NameKeptHere("YourTarget", fight) and 2 or 0)
 	local same = seen.cinematic == cinematic and seen.fight == fight and seen.target == target
-		and seen.place == place and seen.immersive == immersive and seen.lingering == lingering
+		and seen.place == place and seen.immersive == immersive and seen.lingering == lingering and seen.names == names
 		and now - (seen.at or -math.huge) < (ns.SlowChecks() and ns.plates.SETTLED_SLOW or ns.plates.SETTLED_EVERY)
 	if not same then
 		seen.cinematic, seen.fight, seen.target, seen.place, seen.immersive, seen.at = cinematic, fight, target, place,
 			immersive, now
-		seen.lingering = lingering
+		seen.lingering, seen.names = lingering, names
 	end
 	return same
 end
@@ -4509,7 +4562,10 @@ end
 do
 	local targetWatch = CreateFrame("Frame")
 	for _, event in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UPDATE_MOUSEOVER_UNIT",
-		"RAID_TARGET_UPDATE", "DUEL_REQUESTED", "DUEL_FINISHED", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED" }) do
+		"RAID_TARGET_UPDATE", "DUEL_REQUESTED", "DUEL_FINISHED", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
+		-- (An NPC talk starting or ending: the rules' interacting word, 2026-11-24.)
+		"GOSSIP_SHOW", "GOSSIP_CLOSED", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_FINISHED", "MERCHANT_SHOW",
+		"MERCHANT_CLOSED", "PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE" }) do
 		pcall(targetWatch.RegisterEvent, targetWatch, event)
 	end
 	targetWatch:SetScript("OnEvent", function() ns.plates.seen.at = nil end)

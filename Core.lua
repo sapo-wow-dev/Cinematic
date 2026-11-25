@@ -299,6 +299,7 @@ local DEFAULTS = {
 	nameKeepEnemies = false,
 	nameKeepEnemyMinions = false,
 	nameKeepGuild = false,
+	nameKeepAllNames = false, -- (the All names row: Always ticked, below)
 	frameKeysReset = true,    -- Keybinds page, Frames tab: frames shown/hidden by their key back to their rows after a reload
 	handleTooltips = false,   -- the Tooltips page's master switch (off: every tooltip shows as the game has it)
 	-- In CineMode, hide tooltips always / in combat (old settings, gone over
@@ -1937,7 +1938,7 @@ for _, part in ipairs(ns.PLATE_ICONS_ALWAYS) do
 end
 -- Names likewise (the groups are in Effects): kept up in fights, and in each place.
 for _, key in ipairs({ "Self", "HostileNPCs", "NeutralNPCs", "FriendlyNPCs", "ServiceNPCs", "Critters", "Friends",
-	"GroupMembers", "GroupMinions", "FriendlyMinions", "Enemies", "EnemyMinions", "Guild" }) do
+	"GroupMembers", "GroupMinions", "FriendlyMinions", "Enemies", "EnemyMinions", "Guild", "AllNames" }) do
 	DEFAULTS["nameCombat" .. key], DEFAULTS["nameCombatPvP" .. key] = false, false
 	for _, suffix in ipairs(ns.PLATE_PLACES) do
 		DEFAULTS["nameIn" .. suffix .. key] = false
@@ -1992,10 +1993,13 @@ for _, kind in ipairs(ns.PLATE_KINDS) do
 	DEFAULTS["plateAlways" .. kind] = false
 end
 for _, key in ipairs({ "Self", "HostileNPCs", "NeutralNPCs", "FriendlyNPCs", "ServiceNPCs", "Critters", "Friends",
-	"GroupMembers", "GroupMinions", "FriendlyMinions", "Enemies", "EnemyMinions", "Guild" }) do
+	"GroupMembers", "GroupMinions", "FriendlyMinions", "Enemies", "EnemyMinions", "Guild", "AllNames" }) do
 	DEFAULTS["nameGroup" .. key] = false
 	DEFAULTS["nameAlways" .. key] = false
 end
+-- The All names row (2026-11-24): every Names row shows only where it does
+-- (Effects.lua's NameKeptHere). Always, so nothing changes till it's edited.
+DEFAULTS.nameAlwaysAllNames = true
 -- Service NPCs' titles (Repair Vendor, Innkeeper...) up always, in every profile.
 DEFAULTS.nameAlwaysServiceNPCs = true
 -- The players you're grouped with: their names up always, on their plates.

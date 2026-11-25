@@ -214,7 +214,9 @@ ns.TestKit.Define({
 		return "nothing of its own"
 	end,
 	steps = {
-		{ key = "page", title = "the Mouseover rows on the Nameplates page", proven = "run 11 (queue q1757), 2026-11-24: 5/5",
+		-- (2026-11-24: the names rows moved to the Names icon's own Target tab;
+		-- Mouseover nameplates right under Your target's Nameplates row now.)
+		{ key = "page", title = "the Mouseover rows on the Nameplates page", proven = "run 12 (queue q03d6), 2026-11-24: 4/4",
 			run = function(r)
 			local panel = SettingsPanel or UIParent
 			for _, on in ipairs({ true, false }) do
@@ -232,7 +234,7 @@ ns.TestKit.Define({
 					tostring(pageName)))
 				-- (Your target's row in the same grid: not the page's own title.)
 				local grid = label and label:GetParent() and label:GetParent():GetParent()
-				local above = grid and FindText(grid, ns.L["Names"])
+				local above = grid and FindText(grid, ns.L["Nameplates"])
 				local names = grid and FindText(grid, ns.L["Mouseover names"])
 				if not label then
 					r:Shot("Nameplates page, no Mouseover nameplates row seen", { behind = panel })
@@ -240,14 +242,11 @@ ns.TestKit.Define({
 				else
 					if on then
 						r:Verdict(above ~= nil and above:GetTop() > label:GetTop(),
-							"Mouseover nameplates under the Target section's Names row (Your target's)")
-						r:Verdict(names ~= nil and names:GetTop() < label:GetTop(),
-							"Mouseover names right under it")
+							"Mouseover nameplates under the Target tab's Nameplates row (Your target's)")
+						r:Verdict(names == nil or not names:IsVisible(),
+							"no Mouseover names on this tab (it's on the Names icon's Target tab)")
 						local hits = r:Overlaps(label:GetParent(), panel)
 						r:Verdict(#hits == 0, "nothing over its row" .. (#hits > 0 and (": " .. table.concat(hits, ", ")) or ""))
-						local nameHits = names and r:Overlaps(names:GetParent(), panel) or {}
-						r:Verdict(#nameHits == 0, "nothing over the names row"
-							.. (#nameHits > 0 and (": " .. table.concat(nameHits, ", ")) or ""))
 						local _, namePage = ns.FindSetting("row:name:YourMouseover")
 						r:Verdict(namePage ~= nil, "/cine find row:name:YourMouseover opens it (" .. tostring(namePage) .. ")")
 					else

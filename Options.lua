@@ -11024,6 +11024,7 @@ local function CreatePlatesPanel()
 		local foot = CreateFrame("Frame", nil, content)
 		foot:SetSize(1, 1)
 		local panel, ShowTab, folderTabs, folderHeight
+		local namesAllBox -- (the Names icon's All names row, over its tabs: below)
 		local playersTop, npcTop, serviceTop, extrasTop -- (the Names icon's four grids)
 		-- (The Names icon's sections, 2026-11-16: Players, NPCs ("Names", its old
 		-- id), Service NPCs and Extras.)
@@ -11070,9 +11071,12 @@ local function CreatePlatesPanel()
 			for i, section in ipairs(sections) do
 				if folderTabs then folderTabs[i]:SetShown(IsNames(section.key) == names) end
 			end
+			-- (The Names icon's All names row over its tabs: the tabs under it.)
+			if namesAllBox then namesAllBox:SetShown(names and true or false) end
 			if folderTabs then
 				panelTop:ClearAllPoints()
-				panelTop:SetPoint("TOPLEFT", handleCheck, "BOTTOMLEFT", 2, -14 - folderHeight)
+				panelTop:SetPoint("TOPLEFT", handleCheck, "BOTTOMLEFT", 2,
+					-14 - folderHeight - (names and namesAllBox and namesAllBox.height or 0))
 			end
 			LayoutSections()
 		end
@@ -11712,16 +11716,61 @@ local function CreatePlatesPanel()
 		BeginSection(targetSection)
 		local targetTop = TableTop(targetSection.frame, PLATE_LAYOUT)
 		AddPlateRow(targetTop, 1, { "YourTarget", L["Nameplates"] })
-		local targetNameTip = L[" Your target's name, even with its kind's names off."] .. nameTip
-		AddNameRow(targetTop, 2, targetGroup, "YourTarget", L["Names"], nil, targetNameTip)
-		-- (The unit under the mouse: its whole plate, and its name alone. Off to start.)
-		AddPlateRow(targetTop, 3, { "YourMouseover", L["Mouseover nameplates"] })
-		AddNameRow(targetTop, 4, mouseGroup, "YourMouseover", L["Mouseover names"], nil,
-			L[" The name of the unit under your mouse, even with its kind's names off."] .. nameTip)
+		-- (The unit under the mouse: its whole plate. Off to start.)
+		AddPlateRow(targetTop, 2, { "YourMouseover", L["Mouseover nameplates"] })
 		EndSection(targetSection, lastLabel)
 
+		-- Your target's name and the mouse's: the Names icon's own Target tab, its
+		-- first (2026-11-24: they were on the Nameplates icon's Target tab, built
+		-- before the two icons split). Same settings and rules (name:YourTarget,
+		-- name:YourMouseover). A rule on the Target row decides your target's
+		-- name both ways (Effects.lua's PlateAlphas).
+		local namesTargetSection = Section(L["Target names"], "NamesTarget", L["Target"])
+		for i, each in ipairs(sections) do
+			if each == playersSection then
+				table.insert(sections, i, table.remove(sections))
+				break
+			end
+		end
+		BeginSection(namesTargetSection)
+		local namesTargetTop = TableTop(namesTargetSection.frame, NAME_LAYOUT)
+		local targetNameTip = L[" Your target's name, even with its kind's names off. With a rule, the rule alone " ..
+			"decides your target's name."] .. nameTip
+		AddNameRow(namesTargetTop, 1, targetGroup, "YourTarget", L["Names"], nil, targetNameTip)
+		AddNameRow(namesTargetTop, 2, mouseGroup, "YourMouseover", L["Mouseover names"], nil,
+			L[" The name of the unit under your mouse, even with its kind's names off."] .. nameTip)
+		EndSection(namesTargetSection, lastLabel)
+
+		-- All names (2026-11-24): over every Names tab, under the page's switch
+		-- (the Names icon only). Every other Names row shows only where this
+		-- one does (Effects.lua's NameKeptHere): "not interacting", say, for no
+		-- names while you talk to an NPC. Always to start. Its widgets go in a
+		-- box of their own, shown with the Names icon, the tabs under it.
+		local allNamesBox = CreateFrame("Frame", nil, content)
+		allNamesBox:SetSize(SECTION_WIDTH, 1)
+		allNamesBox:SetPoint("TOPLEFT", handleCheck, "BOTTOMLEFT", 2, -10)
+		local allNamesBefore = Widgets()
+		local allNamesTop = TableTop(allNamesBox, NAME_LAYOUT)
+		allNamesTop:ClearAllPoints()
+		allNamesTop:SetPoint("TOPLEFT", allNamesBox, "TOPLEFT", 0, 0)
+		local allNamesGroup = { key = "AllNames", label = L["All names"], cvars = {}, plateOnly = true,
+			keys = { "AllNames" } }
+		AddNameRow(allNamesTop, 1, allNamesGroup, "AllNames", L["All names"], nil,
+			L[" Every other names row shows only where this one does."])
+		allNamesBox.height = FRAME_HEADING_HEIGHT + 4 + ROW_HEIGHT + 6
+		allNamesBox:SetHeight(allNamesBox.height)
+		for object in pairs(Widgets()) do
+			if not allNamesBefore[object] and object ~= allNamesBox then object:SetParent(allNamesBox) end
+		end
+		allNamesBox:Hide()
+		-- (Found by search, /cine find row:name:AllNames: the Names icon opens.)
+		allNamesBox.searchAlways = true
+		allNamesBox.openSection = function() Pick(namesTargetSection) end
+		namesAllBox = allNamesBox
+
 		ns.PageBuildStep(true) -- (made ahead: the next frame from here)
-		for _, top in ipairs({ targetTop, columnTop, enemyTop, partsTop, playersTop, npcTop, serviceTop, extrasTop }) do
+		for _, top in ipairs({ targetTop, namesTargetTop, allNamesTop, columnTop, enemyTop, partsTop, playersTop, npcTop,
+			serviceTop, extrasTop }) do
 			ns.GridDots(content, top.rows or {})
 		end
 

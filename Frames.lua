@@ -3711,6 +3711,7 @@ ns.RULE_WORDS = {
 	targetdead = "targetdead", deadtarget = "targetdead", -- (your target dead: you looting, say)
 	targetself = "targetself", enemyplayer = "enemyplayer", hostilenpc = "hostilenpc", neutralplayer = "neutralplayer",
 	neutralnpc = "neutralnpc", friendlyplayer = "friendlyplayer", friendlynpc = "friendlynpc",
+	npc = "npc", anynpc = "npc", -- (any NPC targeted: hostile, neutral or friendly)
 	noplate = "noplate", plateoff = "noplate", offscreen = "noplate", near = "near", close = "near", near28 = "near28",
 	-- (The unit under the mouse, by what it is: ns.HoverWords below. mouseover...
 	-- reads the same.)
@@ -3743,9 +3744,10 @@ ns.RULE_WORDS = {
 	swimming = "swimming", swim = "swimming", flying = "flying", fly = "flying", outdoors = "outdoors", outside = "outdoors",
 	resting = "resting", stealthed = "stealthed", stealth = "stealthed", -- (the game's own: IsResting...)
 	-- (Sitting or lying down, by an emote, the sit key or a seat, as Camera.lua
-	-- follows it; gliding, retail's skyriding in the air; npc, at an NPC's or a
-	-- mailbox's window, or talking to one.)
-	sitting = "sitting", sit = "sitting", gliding = "gliding", skyriding = "gliding", npc = "npc",
+	-- follows it; gliding, retail's skyriding in the air; interacting, at an
+	-- NPC's or a mailbox's window, or talking to one: npc till 2026-11-24.)
+	sitting = "sitting", sit = "sitting", gliding = "gliding", skyriding = "gliding",
+	interacting = "interacting", interact = "interacting",
 	-- (2026-11-23, for the Atmosphere effects' rows: fully under water, not
 	-- swimming on top (IsSubmerged); faster than a 60% mount, 12 yards a
 	-- second (a glide's speed skyriding). The weather here, outdoors only:
@@ -4852,6 +4854,9 @@ do
 		facts.enemyplayer, facts.hostilenpc = row == "TargetEnemyPlayer", row == "TargetEnemyNPC"
 		facts.neutralplayer, facts.neutralnpc = row == "TargetNeutralPlayer", row == "TargetNeutralNPC"
 		facts.friendlyplayer, facts.friendlynpc = row == "TargetFriendlyPlayer", row == "TargetFriendlyNPC"
+		-- (Any NPC targeted, whatever it thinks of you: npc, 2026-11-24. Before,
+		-- npc meant interacting: Migrations.lua moved saved rules over.)
+		facts.npc = facts.hostilenpc or facts.neutralnpc or facts.friendlynpc
 		-- (Your target with no nameplate: behind the camera, off the side or too
 		-- far. The game only makes plates for units in view; a plate CineMode
 		-- fades is still there. Nameplates turned off for its kind count too.
@@ -4900,7 +4905,10 @@ do
 		facts.stealthed = IsStealthed and ns.Flag(IsStealthed()) and true or false
 		facts.sitting = ns.IsSitting ~= nil and ns.IsSitting() and true or false
 		facts.gliding = ns.isRetail and ns.GlidingSpeed() ~= nil or false
-		facts.npc = ns.NPCWindowOpen() or ns.Flag(UnitExists("npc")) and true or false
+		-- (An NPC's or a service window open, the mailbox and a trade too, or
+		-- the game's "npc" unit there: talking to one with its window hidden,
+		-- as DialogueUI does.)
+		facts.interacting = ns.NPCWindowOpen() or ns.Flag(UnitExists("npc")) and true or false
 		-- (Under water, speed, weather and the time of day: RULE_WORDS above.)
 		facts.underwater = IsSubmerged and ns.Flag(IsSubmerged()) and true or false
 		facts.fast = not facts.taxi and ns.PlayerSpeedNow() >= 12 or false
