@@ -457,7 +457,7 @@ ns.TestKit.Define({
 		-- opened on the Haze row (its rule kept: Close saves nothing here), the
 		-- World and Travel lines' buttons there, inside it, none on another.)
 		{ key = "worldwords", title = "world words: weather, time, under water, fast", seconds = 5, run = function(r)
-			local f = ns.RuleFacts(false)
+			local f = ns.RuleFactsAll(false) -- (every word, a rule naming it or not)
 			local raw = C_Weather and C_Weather.GetCurrentWeather and C_Weather.GetCurrentWeather()
 			local hour, minute = ns.TintParts.GetClockTime()
 			local speed = ns.PlayerSpeedNow()
@@ -488,7 +488,7 @@ ns.TestKit.Define({
 			for _, case in ipairs({ { "snow", 0.995 }, { "rain", 0.9 }, { "rain", 0.3 } }) do
 				ns.WeatherNow = function() return case[1], case[2] end
 				r:Sleep(0.6) -- (the facts are held up to 0.5 s, FACTS_SLOW_HOLD)
-				local okFacts, facts = pcall(ns.RuleFacts, false)
+				local okFacts, facts = pcall(ns.RuleFactsAll, false)
 				stormFor[#stormFor + 1] = okFacts and facts and facts.storm
 			end
 			ns.WeatherNow = realWeather

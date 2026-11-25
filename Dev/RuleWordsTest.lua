@@ -141,7 +141,10 @@ end
 
 -- The words, as the Minimap row's rule (and its editor's dots) read them.
 local function Words()
-	local facts = ns.RuleFactsFor and ns.RuleFactsFor("minimap") or {}
+	-- (Every word, a rule naming it or not: ns.factsUsed. As the Minimap row
+	-- reads them: the Calm Timer as combat.)
+	local fight = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")) or ns.InCalm()
+	local facts = ns.RuleFactsAll and ns.RuleFactsAll(fight) or {}
 	local out = {}
 	for _, word in ipairs(NEW) do out[word] = facts[word] and true or false end
 	for _, word in ipairs(CONTEXT) do out[word] = facts[word] and true or false end

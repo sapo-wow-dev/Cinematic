@@ -2907,7 +2907,7 @@ do
 	local function Snapshot()
 		local name, kind, difficulty, difficultyName, _, _, _, instanceID = GetInstanceInfo()
 		local encounter = _G.IsEncounterInProgress
-		local okFacts, facts = pcall(ns.RuleFactsNow)
+		local okFacts, facts = pcall(ns.RuleFactsAll) -- (every word, a rule naming boss or not)
 		print(("boss: %s, %s (%s, instance %s), %s (difficulty %s), in combat %s, encounter on %s, boss1 %s, rule word boss %s")
 			:format(ns.isRetail and "retail" or "classic", tostring(name), tostring(kind), tostring(instanceID),
 				tostring(difficultyName), tostring(difficulty), tostring(InCombatLockdown()),

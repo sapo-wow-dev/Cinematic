@@ -295,7 +295,8 @@ do
 	db.tintClock = "game"
 	local function Facts()
 		now = now + 1 -- (past the facts' hold: worked out again)
-		return ns.RuleFacts(false)
+		-- (Every word, named by a rule or not: only rules' words are read otherwise, ns.factsUsed.)
+		return ns.RuleFactsAll(false)
 	end
 	local function Expect(label, set, want)
 		for k, v in pairs(set) do g[k] = v end

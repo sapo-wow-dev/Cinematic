@@ -3931,6 +3931,16 @@ function ns.FocusWords(facts)
 	facts.focusnear28 = not isSelf and within ~= nil and within("focus", 4) or false
 end
 
+-- The words some rule names (field -> true, set by ns.CompileRule, kept till
+-- a /reload, 2026-11-25): ns.RuleFacts works out the rest only while the rule
+-- editor is up (its dots) or ns.RuleFactsAll asks, and reads them false
+-- otherwise. The words every row's ticks and other code read straight from
+-- the facts (combat, calm, the camera, target and place words, group,
+-- mounted, near: MARK_WHEN_WORDS) are always worked out. Rules come from
+-- profiles, shared strings, migrations and triggers too, so the words are
+-- taken as each rule is compiled, not as the settings close.
+ns.factsUsed = {}
+
 do
 	local OPERATORS = { ["and"] = "and", ["&"] = "and", ["&&"] = "and", ["or"] = "or", ["|"] = "or", ["||"] = "or",
 		["not"] = "not", ["!"] = "not" }
@@ -3973,6 +3983,7 @@ do
 		local pos = 1
 		local usesHover = false -- (a mouse word in it: ns.HoverWords reads from then on)
 		local usesFocus = false -- (a focus word: ns.FocusWords, the same)
+		local words = {} -- (every word it names: ns.factsUsed)
 		local Or
 		local function Unary()
 			local token = tokens[pos]
@@ -4001,6 +4012,7 @@ do
 				pos = pos + 1
 				if ns.hoverState.isField[field] then usesHover = true end
 				if ns.focusState.isField[field] then usesFocus = true end
+				words[field] = true
 				return function(f) return f[field] end
 			else
 				err = err or ("\"%s\" isn't a word it knows"):format(token)
@@ -4033,6 +4045,15 @@ do
 		end
 		if test and usesHover then ns.hoverState.used = true end
 		if test and usesFocus then ns.focusState.used = true end
+		if test then
+			local new = false
+			for field in pairs(words) do
+				if not ns.factsUsed[field] then ns.factsUsed[field], new = true, true end
+			end
+			-- (A word no rule named before: the shared facts worked out again
+			-- now, so the caller's test reads it right the first time.)
+			if new and ns.RefreshRuleFacts then ns.RefreshRuleFacts() end
+		end
 		compiled[text] = { test, not test and err or nil }
 		return test, not test and err or nil
 	end
@@ -4923,24 +4944,37 @@ do
 		-- Migrations.lua moved saved rules over.)
 		ns.SetKindAtoms(facts, "", row)
 		ns.FocusWords(facts) -- (your focus: focus and the rest)
+		-- (The words below the target's: only those a rule names, or all while
+		-- the rule editor is up or ns.RuleFactsAll asks; false otherwise.
+		-- ns.factsUsed. near and near28 always: the plate rows' When ticks.)
+		local editor = _G.CinematicRuleEditor
+		local all = ns.factsEvery or editor and editor:IsShown() or false
+		local used = ns.factsUsed
+		local function Want(field) return all or used[field] == true end
 		-- (Your target with no nameplate: behind the camera, off the side or too
 		-- far. The game only makes plates for units in view; a plate CineMode
 		-- fades is still there. Nameplates turned off for its kind count too.
 		-- Plates can't be measured (restricted), so one pinned at the top counts as shown.
 		-- Where CineMode holds offscreen plates on, Effects.lua's OffscreenWhy,
 		-- a target behind you keeps its plate: then it means too far only.)
-		facts.noplate = hasTarget and not targetSelf and C_NamePlate ~= nil
+		facts.noplate = Want("noplate") and hasTarget and not targetSelf and C_NamePlate ~= nil
 			and C_NamePlate.GetNamePlateForUnit("target") == nil or false
 		-- (Your target up close, where its plate goes to the top: see TargetWithin.)
 		facts.near = hasTarget and not targetSelf and TargetWithin(2) or false
 		facts.near28 = hasTarget and not targetSelf and TargetWithin(4) or false
 		ns.HoverWords(facts, now, true) -- (the unit under the mouse: hover and the rest)
-		LookForRangeSpells()
+		local bands = all
+		for _, band in ipairs(RANGE_BANDS) do bands = bands or used[band.field] == true end
+		if bands then LookForRangeSpells() end
 		for i, band in ipairs(RANGE_BANDS) do
-			facts[band.field] = hasTarget and not targetSelf and TargetInBand(i) or false
+			facts[band.field] = bands and hasTarget and not targetSelf and TargetInBand(i) or false
 		end
-		local elites = ElitesNear()
-		facts.elite11, facts.elite28, facts.elite40 = elites[11], elites[28], elites[40]
+		if Want("elite11") or Want("elite28") or Want("elite40") then
+			local elites = ElitesNear()
+			facts.elite11, facts.elite28, facts.elite40 = elites[11], elites[28], elites[40]
+		else
+			facts.elite11, facts.elite28, facts.elite40 = false, false, false
+		end
 		facts.bg = place == "pvp"
 		-- (Apart, for rules: battlegrounds, and arenas.)
 		facts.arena = facts.bg and select(2, IsInInstance()) == "arena"
@@ -4951,62 +4985,73 @@ do
 		-- (The open world: not capital cities, as the grids' Cities is apart.)
 		facts.world = not facts.bg and not facts.instance and not facts.city
 		facts.group = ns.InGroup() and true or false
-		facts.flagged = ns.IsPvPFlagged() and true or false
+		facts.flagged = Want("flagged") and ns.IsPvPFlagged() and true or false
 		facts.mounted = ns.Flag(IsMounted()) and true or false
 		-- (On a flight path, whatever camera plays: cam_flight is only our Flight camera.)
 		facts.taxi = ns.Flag(ns.OnTaxi()) and true or false
 		-- (You dead, or a ghost after releasing. A secret answer counts as alive.)
-		facts.dead = ns.Flag(UnitIsDeadOrGhost("player")) and true or false
-		facts.indoors = IsIndoors and ns.Flag(IsIndoors()) and true or false
+		facts.dead = Want("dead") and ns.Flag(UnitIsDeadOrGhost("player")) and true or false
+		facts.indoors = Want("indoors") and IsIndoors and ns.Flag(IsIndoors()) and true or false
 		-- (Moving, auto-run and RP walk: as Core.lua follows them, the game has no API for them.)
 		local moving = ns.playerMoving and not facts.taxi and true or false
-		local rpWalk = moving and ns.IsRPWalking ~= nil and ns.IsRPWalking() and true or false
+		local rpWalk = moving and (Want("rpwalk") or Want("autorun")) and ns.IsRPWalking ~= nil and ns.IsRPWalking()
+			and true or false
 		facts.moving, facts.rpwalk = moving, rpWalk
-		facts.autorun = rpWalk or (moving and ns.IsAutoRunning ~= nil and ns.IsAutoRunning()) and true or false
-		facts.afk = ns.Flag(UnitIsAFK("player")) and true or false
-		facts.swimming = IsSwimming and ns.Flag(IsSwimming()) and true or false
-		facts.flying = IsFlying and ns.Flag(IsFlying()) and true or false
-		facts.outdoors = IsOutdoors and ns.Flag(IsOutdoors()) and true or false
-		facts.resting = IsResting and ns.Flag(IsResting()) and true or false
-		facts.stealthed = IsStealthed and ns.Flag(IsStealthed()) and true or false
-		facts.sitting = ns.IsSitting ~= nil and ns.IsSitting() and true or false
-		facts.gliding = ns.isRetail and ns.GlidingSpeed() ~= nil or false
+		facts.autorun = rpWalk or (moving and Want("autorun") and ns.IsAutoRunning ~= nil and ns.IsAutoRunning())
+			and true or false
+		facts.afk = Want("afk") and ns.Flag(UnitIsAFK("player")) and true or false
+		facts.swimming = Want("swimming") and IsSwimming and ns.Flag(IsSwimming()) and true or false
+		facts.flying = Want("flying") and IsFlying and ns.Flag(IsFlying()) and true or false
+		facts.outdoors = Want("outdoors") and IsOutdoors and ns.Flag(IsOutdoors()) and true or false
+		facts.resting = Want("resting") and IsResting and ns.Flag(IsResting()) and true or false
+		facts.stealthed = Want("stealthed") and IsStealthed and ns.Flag(IsStealthed()) and true or false
+		facts.sitting = Want("sitting") and ns.IsSitting ~= nil and ns.IsSitting() and true or false
+		facts.gliding = Want("gliding") and ns.isRetail and ns.GlidingSpeed() ~= nil or false
 		-- (An NPC's or a service window open, the mailbox and a trade too, or
 		-- the game's "npc" unit there: talking to one with its window hidden,
 		-- as DialogueUI does.)
-		facts.interacting = ns.NPCWindowOpen() or ns.Flag(UnitExists("npc")) and true or false
+		facts.interacting = Want("interacting") and (ns.NPCWindowOpen() or ns.Flag(UnitExists("npc"))) and true
+			or false
 		-- (Under water, speed, weather and the time of day: RULE_WORDS above.)
-		facts.underwater = IsSubmerged and ns.Flag(IsSubmerged()) and true or false
-		facts.fast = not facts.taxi and ns.PlayerSpeedNow() >= 12 or false
-		local weather, intensity = ns.WeatherNow()
+		facts.underwater = Want("underwater") and IsSubmerged and ns.Flag(IsSubmerged()) and true or false
+		facts.fast = Want("fast") and not facts.taxi and ns.PlayerSpeedNow() >= 12 or false
+		local weather, intensity
+		if Want("rain") or Want("snow") or Want("sandstorm") or Want("weather") or Want("storm") then
+			weather, intensity = ns.WeatherNow()
+		end
 		facts.rain, facts.snow, facts.sandstorm = weather == "rain", weather == "snow", weather == "sandstorm"
 		facts.weather = weather ~= nil
 		-- (Heavy rain only: the game reports light-looking snow near 1, and
 		-- snow brought the Lightning row's thunder, 2026-11-24.)
 		facts.storm = weather == "rain" and intensity >= 0.6 or false
-		local time = ns.TimeOfDayWord()
+		local time = (Want("dawn") or Want("day") or Want("dusk") or Want("night")) and ns.TimeOfDayWord() or nil
 		facts.dawn, facts.day, facts.dusk, facts.night = time == "dawn", time == "day", time == "dusk", time == "night"
 		-- (Casting or channeling. Secret in a fight on some clients, so false there.)
-		facts.casting = ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player"))
+		facts.casting = Want("casting") and (ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player")))
+			or false
 		-- (A boss fight: an encounter on, the game's boss frames up, or a boss
 		-- targeted: a world boss, or in a dungeon or raid an elite at ?? or 2+
 		-- levels above you (retail's dungeon bosses are +2, trash +0: tested).
 		-- Not ?? alone: out in the world that's any mob far above you.)
-		local rank, level
-		if hasTarget and enemy then
-			rank, level = UnitClassification("target"), UnitLevel("target")
-			if issecretvalue and (issecretvalue(rank) or issecretvalue(level)) then rank, level = nil, nil end
+		if Want("boss") then
+			local rank, level
+			if hasTarget and enemy then
+				rank, level = UnitClassification("target"), UnitLevel("target")
+				if issecretvalue and (issecretvalue(rank) or issecretvalue(level)) then rank, level = nil, nil end
+			end
+			local mine = UnitLevel("player")
+			local encounter = _G.IsEncounterInProgress
+			facts.boss = (encounter and ns.Flag(encounter())) or ns.Flag(UnitExists("boss1"))
+				or rank == "worldboss" or (facts.instance and ELITE_RANKS[rank] and type(level) == "number"
+					and (level == -1 or (type(mine) == "number" and level >= mine + 2))) or false
+		else
+			facts.boss = false
 		end
-		local mine = UnitLevel("player")
-		local encounter = _G.IsEncounterInProgress
-		facts.boss = (encounter and ns.Flag(encounter())) or ns.Flag(UnitExists("boss1"))
-			or rank == "worldboss" or (facts.instance and ELITE_RANKS[rank] and type(level) == "number"
-				and (level == -1 or (type(mine) == "number" and level >= mine + 2))) or false
-		local role = ns.PlayerRole()
+		local role = (Want("tank") or Want("healer") or Want("damage")) and ns.PlayerRole() or nil
 		facts.tank, facts.healer, facts.damage = role == "TANK", role == "HEALER", role == "DAMAGER"
 		-- (Your class: true for its word; the others never set, so nil.)
 		local _, class = UnitClass("player")
-		if class then facts[class:lower()] = true end
+		if class and Want(class:lower()) then facts[class:lower()] = true end
 		-- (The stamp moves only when a fact did: standing still, the rows'
 		-- answers stay kept across workings out.)
 		local changed = false
@@ -5024,6 +5069,26 @@ do
 	-- The same, in a fight only while really in one (the nameplates and unit frame parts).
 	function ns.RuleFactsNow()
 		return ns.RuleFacts(InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")))
+	end
+	-- Worked out again at once, as handed out last (ns.CompileRule, a rule
+	-- naming a word none did: see ns.factsUsed). Only once they've been worked
+	-- out at all: not while the addon loads.
+	function ns.RefreshRuleFacts()
+		if facts.always then
+			factsAt = nil
+			ns.RuleFacts(facts.combat)
+		end
+	end
+	-- Every word worked out, whether a rule names it or not (debug commands
+	-- and tests that read the words themselves). The next full working out
+	-- goes back to the words in use.
+	function ns.RuleFactsAll(inCombat)
+		if inCombat == nil then inCombat = InCombatLockdown() or ns.Flag(UnitAffectingCombat("player")) end
+		ns.factsEvery, factsAt = true, nil
+		local ok, out = pcall(ns.RuleFacts, inCombat)
+		ns.factsEvery = nil
+		if not ok then error(out, 0) end
+		return out
 	end
 end
 

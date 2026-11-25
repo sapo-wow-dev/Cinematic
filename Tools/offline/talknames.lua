@@ -59,7 +59,8 @@ local function RunClient(client)
 	UnitIsDeadOrGhost = function() return false end
 	local function Facts()
 		Tick()
-		return ns.RuleFacts(false)
+		-- (Every word, named by a rule or not: only rules' words are read otherwise, ns.factsUsed.)
+		return ns.RuleFactsAll(false)
 	end
 	for _, row in ipairs({ "TargetEnemyNPC", "TargetNeutralNPC", "TargetFriendlyNPC" }) do
 		g.targetRow = row
