@@ -259,6 +259,9 @@ ns.TestKit.Define({
 	title = "Gating audit fixes",
 	about = "the 2026-11-25 gating fixes in game: every switch off, nothing of it runs or shows; one Reload click",
 	needs = "Out of combat, anywhere (a town with NPCs is best: their plates are read)",
+	-- (Leaves Visions, Cameras, Style, Atmosphere wanted but not loaded till
+	-- a reload: the queue runs it last, Q.Order.)
+	leavesPartsOut = true,
 	settings = { "styleGeneral", "visualEffects", "cameraModes", "handleFrames", "handlePlates", "handleNames",
 		"handleQuality", "handleBubbles", "handleTooltips", "mouseover", "showInChat", "handleCooldowns" },
 	cvars = { "chatBubbles", "chatBubblesParty", "farclip", "horizonStart", "Sound_MusicVolume", "weatherDensity",
@@ -856,6 +859,8 @@ ns.TestKit.Define({
 			r:Verdict(#running == 0, "Enable Cameras off: no trigger, script, zoom guard, Skyriding, Quest Cam or Chat Cam loop: "
 				.. Joined(running))
 			r:Log("Cameras' loops still up: " .. Joined(Running(audit, PartFiles("cameras"))))
+			-- (Run 6: the scripts' watcher stayed on the whole sample; what held it.)
+			if ns.CameraWatcherWhy then r:Log("probe camera watcher kept on by: " .. tostring(ns.CameraWatcherWhy())) end
 			r:Verdict(ns.IsCameraOffHere and ns.IsCameraOffHere("idle") and true or false,
 				"the AFK camera is off: " .. tostring(ns.CameraOffWhy and ns.CameraOffWhy("idle")))
 			PutBackKeys(r, { "cameraModes" }, 1)

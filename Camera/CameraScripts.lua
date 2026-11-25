@@ -3340,10 +3340,29 @@ zoomer.watcher = watcher
 -- in-game gating test saw it work out the scene every frame. Audit 2026-11-25.)
 local function WatcherWanted()
 	if not ns.db then return false end
+	-- (A raised zoom max held till your camera's back under it: looked at here,
+	-- once a second, not every frame. Zoomed out past it, that hold kept the
+	-- loop on for good: run 6 of the in-game gating test, x169. Audit 2026-11-25)
+	if maxHeldTo and not run and Zoom() <= maxHeldTo + 0.5 then
+		maxHeldTo = nil
+		if ns.LowerZoomMax then ns.LowerZoomMax() end
+	end
 	-- (Not a scene you stopped (stoppedFor): with Enable Cameras off nothing can
 	-- start again, so it waits; run 4 saw the loop run on its 2 s clear-out.)
 	return ns.Setting("cameraModes") ~= false or run ~= nil or zoomer.yours ~= nil or zoomer.release ~= nil
-		or zoomer.moving or maxHeldTo ~= nil or (exitBox ~= nil and exitBox:IsShown())
+		or zoomer.moving or (exitBox ~= nil and exitBox:IsShown())
+end
+-- (/cine debug gating: what keeps the watcher on, if anything.)
+function ns.CameraWatcherWhy()
+	local on = {}
+	if ns.db and ns.Setting("cameraModes") ~= false then on[#on + 1] = "Enable Cameras" end
+	if run then on[#on + 1] = "a script playing" end
+	if zoomer.yours then on[#on + 1] = "your zoom held" end
+	if zoomer.release then on[#on + 1] = "its zoom easing back" end
+	if zoomer.moving then on[#on + 1] = "zooming" end
+	if maxHeldTo then on[#on + 1] = ("zoom max held till %.1f (now %.1f)"):format(maxHeldTo, Zoom() or -1) end
+	if exitBox and exitBox:IsShown() then on[#on + 1] = "its Stop button" end
+	return #on > 0 and table.concat(on, ", ") or "nothing"
 end
 ns.FeatureLoop(watcher, function(_, elapsed)
 	if not ns.db then return end

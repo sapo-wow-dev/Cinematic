@@ -32,6 +32,12 @@ Test: Tools/offline/scriptwatchermatrix.lua retail
 | Matrix | Cell | Before | After |
 |--------|------|--------|-------|
 | script-watcher-loop | cameras=off script=none | loop on | loop off |
+| script-watcher-loop | cameras=off script=zoomedOut | loop on | loop off |
+
+(zoomedOut, follow-up from run 6, 2026-11-25: a script stopped with the camera still out past where it began
+holds its raised zoom max till you zoom back in; checked each frame, so zoomed out it kept the loop on for
+good (x169). Now checked in the loop's once-a-second wanted(), and the hold doesn't keep it on.
+ns.CameraWatcherWhy says what does, for the gating test.)
 
 ## Expectations changed
 | File | Check | Was | Now | OK'd |

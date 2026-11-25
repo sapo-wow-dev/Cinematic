@@ -10,11 +10,12 @@
 local client = arg and arg[1] or "forever"
 local made = {}
 local cvars = { cameraDistanceMaxZoomFactor = "1.9" }
+local camZoom = 10
 local function Install()
 	-- luacheck: push ignore 111 112 113 121 122
 	GetCVar = function(name) return cvars[name] end
 	SetCVar = function(name, value) cvars[name] = tostring(value) end
-	GetCameraZoom = function() return 10 end
+	GetCameraZoom = function() return camZoom end
 	UnitAffectingCombat = function() return false end
 	IsIndoors = function() return false end
 	-- luacheck: pop
@@ -50,18 +51,36 @@ Matrix.Run({
 	name = "script-watcher-loop",
 	fixed = { client = client },
 	dims = {
+		-- (zoomedOut last: on the old code its held zoom max outlives the cell.)
+		{ "script", { "none", "playing", "zoomedOut" } },
 		{ "cameras", { "on", "off" } },
-		{ "script", { "playing", "none" } },
 	},
 	cell = function(c)
 		ns.StopCameraScript()
+		camZoom = 10
 		db.cameraModes, db.cameraScenes = true, true
-		if c.script == "playing" then
+		-- (A cell before's held zoom max let go: one frame with the camera back in.)
+		ns.SyncFeatureLoops()
+		local update = watcher._scripts and watcher._scripts.OnUpdate
+		if update then pcall(update, watcher, 0.05) end
+		if c.script == "playing" or c.script == "zoomedOut" then
 			-- (A slow zoom of its own, played as by hand: still going 2 s later.)
 			local zoom = ns.NewCameraScriptStep("zoom")
 			zoom.to, zoom.secs, zoom.past = 30, 20, "yes"
 			local script = { id = "watcherTest", name = "Watcher test", steps = { zoom }, ending = {}, rules = {} }
 			if ns.PlayCameraScript(script) ~= true then return "didn't play" end
+			-- (Stopped with the camera still out past where it began: its raised zoom
+			-- max held till you zoom back in. Run 6 of the in-game gating test.)
+			if c.script == "zoomedOut" then
+				-- (A second of its frames first: its zoom step raises the max.)
+				for _ = 1, 20 do
+					now = now + 0.05
+					local update = watcher._scripts and watcher._scripts.OnUpdate
+					if update then pcall(update, watcher, 0.05) end
+				end
+				camZoom = 30
+				ns.StopCameraScript()
+			end
 		end
 		db.cameraModes = c.cameras == "on"
 		now = now + 2
@@ -73,5 +92,6 @@ Matrix.Run({
 	pins = {
 		{ "", "loop on" },
 		{ "cameras=off script=none", "loop off" },
+		{ "cameras=off script=zoomedOut", "loop off" },
 	},
 })
