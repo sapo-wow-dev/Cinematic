@@ -5362,6 +5362,12 @@ do
 		read = function(f)
 		f.resting = IsResting and ns.Flag(IsResting()) and true or false
 	end })
+	-- You dead or a ghost (a secret answer counts as alive): after dying,
+	-- releasing, coming back to life.
+	ns.AddEventFact({ name = "dead", fields = { "dead" }, events = { "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" },
+		read = function(f)
+		f.dead = ns.Flag(UnitIsDeadOrGhost("player")) and true or false
+	end })
 	-- (target, enemy and friendly as worked out, before SetTargetWords.)
 	local anyTarget, enemyTarget = false, false -- (enemyTarget nil: the game won't say)
 	-- target, enemy and friendly mean what the grids' Enemy targeted and
@@ -5516,7 +5522,7 @@ do
 		-- (On a flight path, whatever camera plays: cam_flight is only our Flight camera.)
 		facts.taxi = ns.Flag(ns.OnTaxi()) and true or false
 		-- (You dead, or a ghost after releasing. A secret answer counts as alive.)
-		facts.dead = Want("dead") and ns.Flag(UnitIsDeadOrGhost("player")) and true or false
+		-- (dead: by event, ns.AddEventFact.)
 		facts.indoors = Want("indoors") and IsIndoors and ns.Flag(IsIndoors()) and true or false
 		-- (Moving, auto-run and RP walk: as Core.lua follows them, the game has no API for them.)
 		local moving = ns.playerMoving and not facts.taxi and true or false
