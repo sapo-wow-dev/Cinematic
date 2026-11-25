@@ -40,6 +40,33 @@ for _, known in ipairs({
 	table.insert(ns.ADDON_FRAMES, known)
 end
 
+-- Its windows (the guides list, the editor, its question boxes): its own
+-- popups, unnamed, on UIParent, each with an okBtn and a backdrop from its
+-- own folder (Guidelime's F.createPopupFrame). Windows a player opens, so
+-- left alone, with the buttons and boxes inside them. (The addon kit's run
+-- q3814, 2026-11-25: its guides window was NOT COVERED.) Each frame looked
+-- at once.
+local function IsGuidelimePopup(frame)
+	if rawget(frame, "okBtn") == nil or type(frame.GetBackdrop) ~= "function" then return false end
+	local ok, backdrop = pcall(frame.GetBackdrop, frame)
+	local bg = ok and type(backdrop) == "table" and backdrop.bgFile
+	return type(bg) == "string" and bg:lower():find("/guidelime/icons/", 1, true) ~= nil
+end
+ns.IsGuidelimePopup = IsGuidelimePopup
+ns.WhenAddonLoads("Guidelime", function()
+	local looked = setmetatable({}, { __mode = "k" })
+	ns.AddScanner(function()
+		for _, child in ipairs({ UIParent:GetChildren() }) do
+			if not looked[child] then
+				looked[child] = true
+				if ns.Reachable(child) and not child:GetName() and IsGuidelimePopup(child) then
+					ns.LeaveAloneFrame(child)
+				end
+			end
+		end
+	end)
+end)
+
 -- (The addon kit: Guidelime needs Questie, which loads with it and puts its
 -- own quest tracker in the game's place.)
 ns.AddonKitExpect("Guidelime", "frame.quests", "ObjectiveTrackerFrame.*", "Questie (it needs it) hides the game's tracker")
