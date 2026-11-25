@@ -620,17 +620,39 @@ ns.TestKit.Define({
 			if chat and open then
 				local TAB = "tabOn:Chat/page:2"
 				Apply(r, { { "handleFrames", true }, { "handleChat", true }, { TAB, false }, { "chatShowWhileTyping", true } }, 2)
-				local idle = Try(chat.GetAlpha, chat)
-				pcall(open, "")
-				r:Sleep(1.5)
-				local off = Try(chat.GetAlpha, chat)
-				Close()
+				-- (A chat line coming in peeks the window up whatever the typing does:
+				-- run 4, in Elwynn, saw it at 0.64. Lines counted while typing; with one,
+				-- tried again, up to 3 times, after the peek has gone.)
+				local lines = 0
+				local counter = CreateFrame("Frame")
+				for _, event in ipairs({ "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_EMOTE", "CHAT_MSG_TEXT_EMOTE",
+					"CHAT_MSG_MONSTER_SAY", "CHAT_MSG_MONSTER_YELL", "CHAT_MSG_MONSTER_EMOTE", "CHAT_MSG_CHANNEL",
+					"CHAT_MSG_WHISPER", "CHAT_MSG_GUILD", "CHAT_MSG_PARTY", "CHAT_MSG_SYSTEM", "CHAT_MSG_LOOT" }) do
+					pcall(counter.RegisterEvent, counter, event)
+				end
+				counter:SetScript("OnEvent", function() lines = lines + 1 end)
+				local idle, off
+				for try = 1, 3 do
+					idle = Try(chat.GetAlpha, chat)
+					lines = 0
+					pcall(open, "")
+					r:Sleep(1.5)
+					off = Try(chat.GetAlpha, chat)
+					Close()
+					if lines == 0 then break end
+					r:Log(("C6 try %d: %d chat line(s) came in while typing (chat %s): again"):format(try, lines, tostring(off)))
+					r:Sleep(4) -- (the peek gone)
+				end
+				counter:UnregisterAllEvents()
+				counter:SetScript("OnEvent", nil)
 				Apply(r, { { TAB, true } }, 0.2)
 				pcall(open, "")
 				r:Sleep(1.5)
 				local on = Try(chat.GetAlpha, chat)
 				Close()
-				if type(idle) ~= "number" or idle >= 0.99 then
+				if lines > 0 then
+					r:Skip(("C6 typing with the tab off: chat lines kept coming in (%d in the last try): needs a quiet spot"):format(lines))
+				elseif type(idle) ~= "number" or idle >= 0.99 then
 					r:Skip(("C6 typing with the tab off: your Chat row shows the chat in CineMode (alpha %s), nothing to tell apart")
 						:format(tostring(idle)))
 				else
