@@ -534,11 +534,14 @@ end
 local historyLoader = CreateFrame("Frame")
 historyLoader:RegisterEvent("PLAYER_LOGIN")
 historyLoader:SetScript("OnEvent", function()
+	-- (Its tick off: nothing stays on disk. Its page off, the tick still on:
+	-- kept as saved, not shown or added to, till the page is on again. It
+	-- was wiped by the page too, and shown with it off. Audit 2026-11-25.)
 	local on = ns.Setting("chatHistory")
-	if not on then
-		ns.chardb.chatHistory = nil -- (off: nothing stays on disk)
+	if ns.db and not ns.db.chatHistory then
+		ns.chardb.chatHistory = nil
 	end
-	local history = ns.chardb.chatHistory
+	local history = on and ns.chardb.chatHistory or nil
 	for index = 1, NUM_CHAT_WINDOWS or 10 do
 		local chatFrame = _G["ChatFrame" .. index]
 		if chatFrame and index ~= 2 then -- (2: the combat log, all noise)
