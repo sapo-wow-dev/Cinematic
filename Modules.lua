@@ -51,7 +51,7 @@ ns.MODULE_STAND_INS = {
 	-- (No theme, override or row look: the game's look, as with every Style
 	-- page off. The swipe texture the cooldown text uses either way.)
 	style = {
-		StyleOverride = Nothing, ThemePanel = Nothing, ThemeRing = Nothing, ThemeOrnament = Nothing,
+		StyleOverride = Nothing, StyleOverrideText = Nothing, ThemePanel = Nothing, ThemeRing = Nothing, ThemeOrnament = Nothing,
 		ThemeTailArt = Nothing, HideThemeSlice = Nothing, ThemeNoSnap = Nothing, DressThemeGrain = Nothing,
 		DressThemeCorners = Nothing, RefreshQuestTrackerStyle = Nothing, RestoreStyleThemeBackup = Nothing,
 		RestoreDeletedStyleTheme = Nothing, DressThemeSlice = No, PlateLooksOn = No, PlateLookNow = No,
