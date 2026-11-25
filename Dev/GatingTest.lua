@@ -652,14 +652,9 @@ ns.TestKit.Define({
 			end
 			-- Enable Style off: no Style loop, no game setting held for a Style page.
 			Apply(r, { { "styleGeneral", false } }, 3)
+			-- (Nameplate Layout's flush too: run 2 saw it x8 here, its hidden level
+			-- boxes kept from before Style went off; 11e50fe: none with Style off.)
 			local styleFiles = PartFiles("style")
-			-- (Nameplate Layout's flush also places what the Nameplates page's parts
-			-- grid moves when it hides the level box (Forever): that page's, not
-			-- Style's, so with the Nameplates page on it's left out here. Run 2: x8.)
-			local copy = {}
-			for file, v in pairs(styleFiles) do copy[file] = v end
-			if ns.db.handlePlates and ns.PlateLayoutLevelHidden then copy["PlateLayout.lua"] = nil end
-			styleFiles = copy
 			local running = Running(Loops(r, 4.5), styleFiles)
 			r:Verdict(#running == 0, "Enable Style off: no loop of Style's files: " .. Joined(running))
 			local held = ActiveSets("Combat Text Style")
