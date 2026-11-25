@@ -23,6 +23,8 @@ local COUNT_NAMES = { always = "Always counts", shown = "Counts while shown", ne
 function ns.CreatePlateLayoutPage(kit)
 	if ns.isRetail then return end
 	local PARTS = ns.PLATE_LAYOUT_PARTS
+	-- (One range for every way of moving: PlateLayout.lua's. Audit 2026-11-25.)
+	local RANGE, Clamp = ns.PLATE_LAYOUT_RANGE, ns.PlateLayoutClamp
 	local canvas, content = kit.CreateScrollPage()
 	canvas:Hide() -- (at once: a build that stops partway never leaves the page up)
 	local title = kit.Label(content, "GameFontNormalLarge", L["Nameplate Layout"])
@@ -209,9 +211,9 @@ function ns.CreatePlateLayoutPage(kit)
 	end
 	local customLine = kit.BoxLine(content)
 	customLine:SetPoint("LEFT", lastCenter, "RIGHT", 16, 0)
-	customLine:Box(L["Shift"], CenterField("cx"), -100, 100, 1, "%d", 1,
+	customLine:Box(L["Shift"], CenterField("cx"), -RANGE.x, RANGE.x, 1, "%d", 1,
 		L["Moves the whole plate left or right."], Changed, 40)
-	customLine:Box(L["Up"], CenterField("cy"), -60, 60, 1, "%d", 1,
+	customLine:Box(L["Up"], CenterField("cy"), -RANGE.y, RANGE.y, 1, "%d", 1,
 		L["Moves the whole plate down or up."], Changed, 40)
 
 	-- The previewer in the shared preview frame, as Nameplate Style's (Options.lua):
@@ -467,6 +469,40 @@ function ns.CreatePlateLayoutPage(kit)
 			game.onLayoutDirty = RedrawOverlay
 			ns.PlateLayoutApply(game, layout or false)
 		end
+		-- (Kept in view: every part shown inside the stage's room. A part moved far
+		-- gets the plate drawn smaller and moved over, so it can still be seen and
+		-- grabbed. Audit 2026-11-25: one dragged off the preview was lost.)
+		local copy = CopyOf()
+		if copy and game:IsShown() then
+			local bl, br, bb, bt
+			for _, part in ipairs(PARTS) do
+				local frame = Field(copy, part.path)
+				if frame and Visible(frame) and (not LISTS[part.key] or HasIcon(frame))
+					and (part.key ~= "softTarget" or (frame.Icon and Visible(frame.Icon))) then
+					local l, r, b, t = Rect(frame)
+					if l and r - l > 1 then
+						bl, br = bl and math.min(bl, l) or l, br and math.max(br, r) or r
+						bb, bt = bb and math.min(bb, b) or b, bt and math.max(bt, t) or t
+					end
+				end
+			end
+			local left, right, low, high = 8, width - 8, lift + BOTTOM_STRIP, height - TOP
+			if bl and br > bl and bt > bb and (bl < left or br > right or bb < low or bt > high) then
+				local f = math.min(1, (right - left) / (br - bl), (high - low) / (bt - bb))
+				-- (Scaled about the plate's anchor, its bottom middle, then moved inside.)
+				local ax, ay = width / 2, holder.gameLift
+				local nl, nr = ax + (bl - ax) * f, ax + (br - ax) * f
+				local nb, nt = ay + (bb - ay) * f, ay + (bt - ay) * f
+				local dx = nl < left and left - nl or nr > right and right - nr or 0
+				local dy = nb < low and low - nb or nt > high and high - nt or 0
+				local fitted = scale * f
+				holder.gameScale = fitted
+				holder.gameShift = -dx / fitted -- (its x offset is in the plate's own units)
+				holder.gameLift = holder.gameLift + dy
+				holder:Refresh()
+				ns.PlateLayoutApply(game, layout or false)
+			end
+		end
 		RedrawOverlay()
 	end
 	holder.onStates = Redraw
@@ -505,6 +541,8 @@ function ns.CreatePlateLayoutPage(kit)
 		if not key then
 			drag = nil
 			overlay:SetScript("OnUpdate", nil)
+			-- (Dropped: the preview fitted again, so a part moved far stays in view.)
+			if Redraw then Redraw() end
 			kit.Refresh()
 			return
 		end
@@ -517,8 +555,9 @@ function ns.CreatePlateLayoutPage(kit)
 			if not (drag and copy) then return end
 			local cx, cy = GetCursorPosition()
 			local scale = copy:GetEffectiveScale()
-			local nx = drag.px + (cx - drag.x) / scale
-			local ny = drag.py + (cy - drag.y) / scale
+			-- (Inside the range every way of moving shares: the boxes', the keys'. Audit 2026-11-25.)
+			local nx = Clamp(drag.px + (cx - drag.x) / scale, RANGE.x)
+			local ny = Clamp(drag.py + (cy - drag.y) / scale, RANGE.y)
 			if math.abs(nx) < 3 then nx = 0 end
 			if math.abs(ny) < 3 then ny = 0 end
 			local part = Part(true)
@@ -571,8 +610,8 @@ function ns.CreatePlateLayoutPage(kit)
 		self:SetPropagateKeyboardInput(false)
 		local by = IsShiftKeyDown() and 5 or 1
 		local part = Part(true)
-		part.x = (part.x or 0) + step[1] * by
-		part.y = (part.y or 0) + step[2] * by
+		part.x = Clamp((part.x or 0) + step[1] * by, RANGE.x)
+		part.y = Clamp((part.y or 0) + step[2] * by, RANGE.y)
 		if part.x == 0 then part.x = nil end
 		if part.y == 0 then part.y = nil end
 		local ok = pcall(Changed)
@@ -709,9 +748,9 @@ function ns.CreatePlateLayoutPage(kit)
 	-- (Number boxes, not sliders: wheel or type, one line, the Nameplate Style page's W and H boxes.)
 	local moveLine = kit.BoxLine(partsPanel)
 	moveLine:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -72)
-	moveLine:Box(L["Left / right"], PartField("x", 0), -150, 150, 1, "%d", 1,
+	moveLine:Box(L["Left / right"], PartField("x", 0), -RANGE.x, RANGE.x, 1, "%d", 1,
 		L["Moves it left or right, in the plate's own units. The arrow keys over the plate do the same."], Changed, 44)
-	moveLine:Box(L["Down / up"], PartField("y", 0), -100, 100, 1, "%d", 1,
+	moveLine:Box(L["Down / up"], PartField("y", 0), -RANGE.y, RANGE.y, 1, "%d", 1,
 		L["Moves it down or up, in the plate's own units."], Changed, 44)
 	local sizeLine = kit.BoxLine(partsPanel)
 	sizeLine:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -102)

@@ -379,6 +379,13 @@ Check("cast bar laid out again: the game's place till the next frame", Near(L(ca
 Flush()
 Check("next frame: 5 right again, not 10", Near(L(castText), gameTextL + 5), L(castText) - gameTextL)
 
+-- (Past the range, as a shared or older layout could hold: held to it. Audit 2026-11-25.)
+Set({ parts = { level = { x = 400 } } })
+Check("a saved 400 right lands 250 right (the range)", Near(L(ufA.PlayerLevelDiffFrame), game.level[1] + 250),
+	L(ufA.PlayerLevelDiffFrame) - game.level[1])
+Set({ center = "custom", cx = -999, parts = {} })
+Check("a custom shift past the range is held to it too", Near(L(ufA.HealthBarsContainer), game.health[1] - 250))
+
 -- 7. Sized ---------------------------------------------------------------------
 Set({ parts = { marker = { scale = 1.5 } } })
 now = Snapshot(ufA)

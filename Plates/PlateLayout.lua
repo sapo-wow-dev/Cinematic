@@ -124,6 +124,11 @@ end
 local function Num(value, default)
 	return type(value) == "number" and value == value and value or default
 end
+-- How far a part (or the whole plate) moves, every way (the boxes, dragging,
+-- the arrow keys, a saved or shared layout): the user, 2026-11-25. Audit 2026-11-25.
+ns.PLATE_LAYOUT_RANGE = { x = 250, y = 150 }
+local function Clamp(value, range) return math.max(-range, math.min(range, value)) end
+ns.PlateLayoutClamp = Clamp
 -- Whether a part's settings move it at all.
 local function PartMoves(p)
 	return p and (Num(p.x, 0) ~= 0 or Num(p.y, 0) ~= 0 or Num(p.scale, 1) ~= 1 or (p.to and SIDES[p.side or "right"]))
@@ -367,7 +372,9 @@ end
 local Extents -- (below: needs the apply)
 function ns.PlateLayoutShift(layout, shown)
 	if type(layout) ~= "table" then return 0, 0 end
-	if layout.center == "custom" then return Num(layout.cx, 0), Num(layout.cy, 0) end
+	if layout.center == "custom" then
+		return Clamp(Num(layout.cx, 0), ns.PLATE_LAYOUT_RANGE.x), Clamp(Num(layout.cy, 0), ns.PLATE_LAYOUT_RANGE.y)
+	end
 	if layout.center ~= "balanced" then return 0, 0 end
 	-- (Measured as the plate looks: with its level box hidden by Cinematic, without it
 	-- and crowd control moved in beside the bar. Audit 2026-11-25.)
@@ -589,7 +596,8 @@ local function ApplyPlateLayout(plate, layout, rootOff)
 		if frame and frame.ClearAllPoints then
 			local t = Watch(frame, plate)
 			local p = path == "SoftTargetFrame" and parts.softTarget or nil
-			local dx, dy = rootX + Num(p and p.x, 0), rootY + Num(p and p.y, 0)
+			local R = ns.PLATE_LAYOUT_RANGE
+			local dx, dy = rootX + Clamp(Num(p and p.x, 0), R.x), rootY + Clamp(Num(p and p.y, 0), R.y)
 			local scale = math.max(0.25, Num(p and p.scale, 1))
 			if dx == 0 and dy == 0 and scale == 1 then
 				PutBack(frame, t)
@@ -623,7 +631,8 @@ local function ApplyPlateLayout(plate, layout, rootOff)
 							hang = { side[1], target, side[2], side[3] * gap, side[4] * gap }
 						end
 					end
-					Place(frame, t, Num(p and p.x, 0), Num(p and p.y, 0), scale, hang)
+					local R = ns.PLATE_LAYOUT_RANGE
+					Place(frame, t, Clamp(Num(p and p.x, 0), R.x), Clamp(Num(p and p.y, 0), R.y), scale, hang)
 				end
 			end
 		end

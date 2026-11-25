@@ -4,7 +4,7 @@ layout, started that kind's layout empty, so its plates lost every change made f
 Found by: audit 2026-11-25
 Code: Plates/PlateLayoutPage.lua: Editing, OwnFromAll (new), the Own layout tick, ns.PlateLayoutPreset (keeps started)
 Clients: forever (no Layout tab on retail)
-Base: HEAD
+Base: 684f769^
 
 ## Before / after
 - Before: Layout for on Hostile shows All plates' layout. Nudge one part (or tick Own layout) and Hostile gets a
