@@ -81,18 +81,25 @@ ns.TestKit.Define({
 		end },
 		{ key = "hearth", title = "a real Hearthstone", run = function(r)
 			r:Set("teleportVision", true)
-			-- (Its success, not a loading screen: a Hearthstone on the same
-			-- continent has none, run 1 stuck waiting for one.)
-			r:WaitFor("Cast your Hearthstone (or a teleport) and let it take you",
-				{ events = { "UNIT_SPELLCAST_SUCCEEDED", "PLAYER_ENTERING_WORLD" } })
+			-- (A new Hearthstone or teleport cast, started and ended: not a
+			-- loading screen (one on the same continent has none: run 1 stuck),
+			-- nor any spell's success (run 2 woke on another spell, no cast seen).)
+			local before, shownDuring = ns.departCast, false
+			r:WaitFor("Cast your Hearthstone (or a teleport) and let it take you", { check = function()
+				local cast = ns.departCast
+				if cast and cast ~= before and not cast.done and ns.TeleportVisionShown() then shownDuring = true end
+				return cast and cast ~= before and (cast.done or GetTime() > cast.endsAt + 3) and true
+			end })
 			r:Sleep(4)
 			local cast = ns.departCast
-			r:Log(("the cast: %s, done %s"):format(cast and cast.kind or "none", tostring(cast and cast.done)))
+			r:Log(("the cast: %s, scene %s, done %s"):format(cast and cast.kind or "none", tostring(cast and cast.scene),
+				tostring(cast and cast.done)))
+			r:Verdict(shownDuring, "the portal showed during the cast (its scene playing)")
 			r:Verdict(not ns.TeleportVisionShown(), "no portal 4 s after the cast")
 			r:Verdict(Tooltip() >= 0.99, ("tooltip alpha %.2f (1 wanted)"):format(Tooltip()))
 			local bar = _G.PlayerCastingBarFrame or _G.CastingBarFrame
 			r:Verdict(not (bar and bar.cinematicTeleHidden), "cast bar not held faded")
-			r:Verdict(not cast or cast.done ~= nil, "the cast marked over")
+			r:Verdict(cast ~= nil and cast ~= before and cast.done ~= nil, "a new cast seen, and marked over")
 			r:Shot("4 s after the cast")
 		end },
 	},
