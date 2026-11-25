@@ -28,6 +28,7 @@ out.html
 
 # The test queue's list (Tools/testqueue.py): sessions' queued tests, this PC only
 Dev/TestQueueList.lua
+Dev/TestQueueErrorClaims.json
 
 # Archived test logs (.claude/skills/test/read_log.py): game data from this PC, kept here
 Tools/tests/logs/
