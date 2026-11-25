@@ -807,6 +807,7 @@ ns.TestKit.Define({
 			-- (Rebuilt look, 2026-11-25: the user, "this looks like shit"; proven again in run q2e75.)
 			-- (Its guides rebuilt as marks off the plate, 2026-11-25, proven in run q2431; then
 			-- picking a part shows it and the Buffs sample: to prove again.)
+			proven = "platematch q7ba3 + qa2a4 (2026-11-25): guides in all three centers, every part picked shows, popped out, no keyboard held, 27 of 27",
 			run = function(r)
 			if not (ns.OpenOptions and ns.PlateLayoutApply) then return r:Skip(NoStyle()) end
 			if InCombatLockdown() then
