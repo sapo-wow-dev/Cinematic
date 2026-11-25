@@ -53,13 +53,15 @@ export default {
     }
 
     // 2: /claude in a thread -> queue it for the PC (claude_desk.py)
+    // Discord gives 3 s to answer and posting the job can take longer, so
+    // both answer "thinking..." now and fill in the reply once it's posted.
     if (interaction.type === 2 && interaction.data.name === "claude") {
-      return reply(await queueClaude(interaction, env))
+      return later(ctx, interaction, env, queueClaude)
     }
 
     // 2 (data.type 3): right-click a message > Apps > Claude: support/feature
     if (interaction.type === 2 && interaction.data.type === 3 && MESSAGE_COMMANDS[interaction.data.name]) {
-      return reply(await queueClaudeMessage(interaction, env))
+      return later(ctx, interaction, env, queueClaudeMessage)
     }
 
     // 5: the form was sent -> answer "working on it" now, file the issue after
@@ -278,10 +280,30 @@ async function fileIssue(interaction, user, env) {
     lastReport.delete(user.id)
   }
 
+  await editReply(interaction, env, message)
+}
+
+// Answer "thinking..." (only they see it) now; work(interaction, env) runs
+// after and its string replaces it.
+function later(ctx, interaction, env, work) {
+  ctx.waitUntil((async () => {
+    let message
+    try {
+      message = await work(interaction, env)
+    } catch (err) {
+      console.log("Deferred command failed:", err)
+      message = "Something went wrong (Worker > Logs says why)."
+    }
+    await editReply(interaction, env, message)
+  })())
+  return json({ type: 5, data: { flags: 64 } })
+}
+
+async function editReply(interaction, env, content) {
   await fetch(`https://discord.com/api/v10/webhooks/${env.DISCORD_APP_ID}/${interaction.token}/messages/@original`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: message, allowed_mentions: { parse: [] } }),
+    body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
   })
 }
 
