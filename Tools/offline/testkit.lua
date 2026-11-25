@@ -158,6 +158,13 @@ local function RunClient(client)
 	table.sort(labels)
 	Check("row: answers, Edit Mode, Skip step, Stop, Report issue", table.concat(labels, ",") == "No,Open Edit Mode,Report issue,Skip step,Stop,Yes",
 		table.concat(labels, ","))
+	-- (What you're asked to click: big, under the box, glowing; the controls small up top. 2026-11-25.)
+	local yes, stop = run.buttons.Yes, run.buttons.Stop
+	Check("the answers and Edit Mode are big, in their own row", table.concat(ns.TestKit.bigLabels or {}, ",") == "No,Open Edit Mode,Yes"
+		and yes:GetParent() ~= stop:GetParent(), -- (the stand-in's sizes are all one)
+		table.concat(ns.TestKit.bigLabels or {}, ","))
+	Check("the box names them, YOUR TURN", (box or ""):find("Your turn: click No, Open Edit Mode or Yes below.", 1, true) ~= nil
+		and (box or ""):find("YOUR TURN", 1, true) ~= nil, box)
 	Click(run.buttons.Yes)
 	Advance(0.5)
 	Check("Yes clicked: the wait returned it", got == "Yes", got)
@@ -409,6 +416,36 @@ local function RunClient(client)
 		and text:find("another feature", 1, true) ~= nil, text)
 	Check("inspect: the test's own file named THIS TEST'S FEATURE",
 		text:find("error x2", 1, true) and text:find("UI/CooldownBoth.lua:120 | THIS TEST'S FEATURE", 1, true) ~= nil, text)
+
+	-- Each error with the step it came in (2026-11-25), and your turn / hands off.
+	local stepErr = { kind = "error", message = "boom in step two", count = 0, source = "CinematicDev",
+		stack = "      [CinematicDev/Frames.lua]:10: in function" }
+	entries = { stepErr }
+	local seen, modes = {}, {}
+	ns.TestKit.Define({ name = "kitsteperr", key = "kitStepErrTest", title = "Kit step errors", steps = {
+		{ key = "one", run = function(r) modes.one = r.mode end },
+		{ key = "two", run = function(r)
+			seen.context = ns.DevErrorContext()
+			stepErr.count = stepErr.count + 3
+			r:WaitFor("Waiting for the game", { handsOff = true, check = function() return true end })
+			modes.wait = r.mode
+			r:WaitFor("Hit a mob once", { check = function() return true end })
+			modes.ask = r.mode
+		end },
+		{ key = "three", run = function(r) modes.three = r.mode end },
+	} })
+	ns.HandleSlash("debug kitsteperr")
+	Advance(5)
+	local slog = CinematicDB.kitStepErrTestLog
+	Check("context: the test and step", seen.context == "kitsteperr step 2/3 two", seen.context)
+	Check("a step's own error line", Has(slog, "step 2 two error: error x3: boom in step two") ~= nil, Has(slog, "error x3"))
+	Check("no error line for the clean steps", Has(slog, "step 1 one error:") == nil and Has(slog, "step 3 three error:") == nil)
+	Check("the run's line says the step it first came in",
+		Has(slog, "during the test: error x3: .* | first in step 2 two") ~= nil, Has(slog, "during the test: error"))
+	Check("hands off: a step the test does, a handsOff wait; your turn: a wait with words",
+		modes.one == "off" and modes.wait == "off" and modes.ask == "you" and modes.three == "off",
+		("%s %s %s %s"):format(tostring(modes.one), tostring(modes.wait), tostring(modes.ask), tostring(modes.three)))
+	Check("logged as hands off / asked", Has(slog, "hands off: Waiting for the game") ~= nil and Has(slog, "asked: Hit a mob once") ~= nil)
 	ns.DevErrorEntries = nil
 end
 

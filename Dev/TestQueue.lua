@@ -47,6 +47,12 @@
 --     that test after it (Q.PartsToLoad, Q.WaitReload, Q.Login).
 --   * At the end: a Reload button, which saves the results for the sessions
 --     (Tools/testqueue.py wait <id> sees them then).
+--   * The redesign (the user, 2026-11-25: "clear indication if it needs me",
+--     "what step opened the error", "basically a releasable feature"):
+--     Needs you is per step, only the steps a run takes (Q.RunAsks, the
+--     catalog from Tools/testscan.py); the panel at the right while it runs
+--     (YOUR TURN / HANDS OFF, every test's state, errors with their step), the
+--     summary at the end; out of every screenshot.
 local _, ns = ...
 local Kit = ns.TestKit
 if not Kit then return end
@@ -54,6 +60,7 @@ if not Kit then return end
 local Q = {}
 ns.TestQueue = Q
 local LOG_CAP = 300
+local tracker -- (the queue's panel while it runs, below)
 local GAP = 3 -- (seconds between tests: the next one's name on the box)
 
 local function Entries()
@@ -108,18 +115,61 @@ function Q.Needs(name, entry)
 	local parts = {}
 	if where and where ~= "" then parts[#parts + 1] = tostring(where) end
 	if cat then
-		local asks = tonumber(cat.asks) or 0
+		local asks, reloads, first, which = Q.RunAsks(name, entry, cat)
 		if asks > 0 then
-			local first = tostring(cat.first or "")
+			first = tostring(first or "")
 			if #first > 70 then first = first:sub(1, 68) .. "..." end
 			parts[#parts + 1] = (first ~= "" and ("asks: \"%s\""):format(first) or "asks you something")
 				.. (asks > 1 and (" +%d more"):format(asks - 1) or "")
+				.. (which and (" (%s)"):format(which) or "")
 		end
-		if (tonumber(cat.reloads) or 0) > 0 then parts[#parts + 1] = "a Reload click" end
+		if reloads > 0 then parts[#parts + 1] = reloads > 1 and ("%d Reload clicks"):format(reloads) or "a Reload click" end
 	end
 	if #parts > 0 then return "you", table.concat(parts, "; ") end
 	if not cat then return "unknown", "Not scanned yet (testqueue.py catalog)" end
 	return "off", "Nothing to do"
+end
+
+-- What this run of a test asks of you: only the steps it takes (the user,
+-- 2026-11-25: a step left out of the run "false flagging" it as Needs you).
+-- The catalog's steps are matched to the test's by key ("solo" for a loop's
+-- solo1, solo2...); a test the scan couldn't read step by step counts whole.
+-- Returns asks, reloads, the first one's words, and which steps ask.
+function Q.RunAsks(name, entry, cat)
+	cat = cat or (type(ns.TestQueueCatalog) == "table" and ns.TestQueueCatalog[name])
+	if not cat then return 0, 0, "", nil end
+	local plan = Kit.StepPlan and Kit.StepPlan(name, entry and entry.args or "")
+	if type(cat.steps) ~= "table" or not plan then
+		return tonumber(cat.asks) or 0, tonumber(cat.reloads) or 0, cat.first, nil
+	end
+	local byKey = {}
+	for _, s in ipairs(cat.steps) do if s.key then byKey[s.key] = byKey[s.key] or s end end
+	local function Find(key)
+		key = tostring(key or "")
+		if byKey[key] then return byKey[key] end
+		local best
+		for k, s in pairs(byKey) do
+			if k ~= "" and key:sub(1, #k) == k and key:sub(#k + 1):match("^%d*$") and (not best or #k > #best.key) then best = s end
+		end
+		return best
+	end
+	local setup = type(cat.setup) == "table" and cat.setup or {}
+	local asks, reloads, first = tonumber(setup.asks) or 0, tonumber(setup.reloads) or 0, setup.first
+	if first == "" then first = nil end
+	local which = {}
+	for _, picked in ipairs(plan) do
+		local s = Find(picked.key)
+		if not s then
+			-- (A step the scan didn't see: the whole test counts, to be safe.)
+			return tonumber(cat.asks) or 0, tonumber(cat.reloads) or 0, cat.first, nil
+		end
+		local n = (tonumber(s.asks) or 0) + (tonumber(s.reloads) or 0)
+		asks, reloads = asks + (tonumber(s.asks) or 0), reloads + (tonumber(s.reloads) or 0)
+		if (tonumber(s.asks) or 0) > 0 and not first and s.first ~= "" then first = s.first end
+		if n > 0 then which[#which + 1] = tostring(picked.number) end
+	end
+	local said = #which > 0 and ((#which == 1 and "step " or "steps ") .. table.concat(which, ", ")) or nil
+	return asks, reloads, first or "", said
 end
 
 -- The entries not run yet, in the order queued.
@@ -197,6 +247,8 @@ local function Record(entry, result, run, oldKey)
 		local copy = {}
 		for i, line in ipairs(CinematicDB[logKey]) do copy[i] = line end
 		CinematicDB["testQueue_" .. entry.id .. "Log"] = copy
+		-- (The kit's errors after this test, written later, go here too.)
+		if run then run.copyKey = "testQueue_" .. entry.id .. "Log" end
 	end
 	Note(("client=%s id=%s test=%s session=%q result=%s log=testQueue_%sLog"):format(Q.client, entry.id, entry.test,
 		tostring(entry.session or "?"), result, entry.id))
@@ -262,6 +314,7 @@ local function EndButtons(sub)
 	local function Close()
 		endWatch:UnregisterAllEvents()
 		Kit.HideButtons()
+		Q.HideTracker()
 		if ns.PadTestBoxHide then ns.PadTestBoxHide() end
 	end
 	if Q.InFight() then
@@ -281,6 +334,8 @@ function Q.Finish(how)
 	local state = State()
 	CinematicDB.testQueueRun = nil
 	Hook(false)
+	-- (The error window, held through the queue: open if errors came.)
+	if ns.DevErrorWindowRelease then ns.DevErrorWindowRelease() end
 	if not state then return end
 	-- (Each test once: a requeued one is in ids twice.)
 	local fails, ran, total, done, seen = 0, 0, 0, DoneIds(), {}
@@ -293,6 +348,14 @@ function Q.Finish(how)
 		end
 	end
 	Note(("queue %s: %d of %d run, %d with a FAIL"):format(how, ran, total, fails))
+	-- (The panel turns into the summary: every test's result and every error.)
+	local errs = 0
+	for _, r in pairs(state.results or {}) do errs = errs + #(r.errors or {}) + (r.extra or 0) end
+	state.ended = how == "stopped" and "stopped" or (fails > 0 or errs > 0) and "failed" or "done"
+	state.endWords = ("%d of %d run: %d passed, %d with a FAIL, %d error%s."):format(ran, total, ran - fails, fails, errs,
+		errs == 1 and "" or "s")
+	Q.lastState = state
+	if tracker and tracker:IsShown() then Q.UpdateTracker() end
 	local left = #Q.Pending()
 	local sub = "Reload to save the results for the sessions." .. (left > 0 and (" %d left for later."):format(left) or "")
 	Box(("Test queue %s: %d of %d run, %d with a FAIL."):format(how, ran, total, fails), sub,
@@ -329,7 +392,7 @@ function Q.WaitFight(state, entry)
 	Note(("waiting for the fight to end before id=%s (%d/%d)"):format(entry.id, state.index, #state.ids))
 	Box(("%s - %s"):format(Where(state, entry), Title(entry)),
 		"Waiting for your fight to end: it starts as soon as you're out of combat.", 1, 0.6, 0.3)
-	Q.buttons = Kit.ShowButtons({ { label = "Start anyway", fn = function() FightOver(true) end },
+	Q.buttons = Kit.ShowButtons({ { label = "Start anyway", big = true, fn = function() FightOver(true) end },
 		{ label = "Stop queue", fn = function() Q.Stop() end } })
 	fightWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
 	fightWatch:SetScript("OnEvent", function() FightOver(false) end)
@@ -392,6 +455,7 @@ function Q.Next()
 		return Q.StartOld(state, entry)
 	end
 	if not Kit.Has(entry.test) then
+		Q.KeepResult(entry, "skipped", nil, "not a kit test: passed over")
 		Record(entry, "NOT-A-KIT-TEST")
 		state.failed = state.failed or {}
 		state.failed[id] = true
@@ -416,6 +480,7 @@ function Q.Next()
 		-- recorded it and cleared current, the next is on its way. kitcheck
 		-- 1 2 got a second, DID-NOT-START line, 2026-11-23.)
 		if state.current == id and not Going() then
+			Q.KeepResult(entry, "skipped", nil, "didn't start")
 			Record(entry, "DID-NOT-START")
 			state.current = nil
 			Q.Next()
@@ -636,6 +701,7 @@ local function OldResult(entry, how)
 			if line:find("%f[%w]FAIL%f[%W]") then fail = fail + 1 end
 		end
 	end
+	Q.KeepResult(entry, how ~= "done" and "stopped" or fail > 0 and "fail" or "pass", { pass = pass, fail = fail, skip = 0 })
 	Record(entry, ("%s pass=%d fail=%d (older test, %s)"):format(how == "done" and "RAN" or "STOPPED", pass, fail,
 		how == "done" and "Done clicked" or "the queue stopped; it may still be going: type its command again to stop it"),
 		nil, old.logKey)
@@ -688,6 +754,8 @@ function Q.Requeue(run)
 	if not entry or (run and entry.test ~= run.def.name) then return end
 	state.current = nil -- (onFinish passes it by: nothing recorded)
 	state.ids[#state.ids + 1] = entry.id
+	state.requeued = state.requeued or {}
+	state.requeued[entry.id] = true
 	Note(("requeued by you: id=%s test=%s at step %s (%d/%d), runs again at the end"):format(entry.id, entry.test,
 		tostring(run and run.stepNumber or "-"), state.index or 0, #state.ids))
 	if run and Going() == run then
@@ -711,6 +779,8 @@ Kit.onFinish = function(run, done, summary)
 	state.current = nil
 	live = true
 	if run.fail > 0 then state.failed = state.failed or {}; state.failed[entry.id] = true end
+	Q.KeepResult(entry, run.fail > 0 and "fail" or done and "pass" or "stopped", run)
+	if state.requeued then state.requeued[entry.id] = nil end
 	Record(entry, ("%s pass=%d fail=%d skip=%d (%s)"):format(done and "DONE" or "STOPPED", run.pass, run.fail, run.skip,
 		tostring(summary or "")), run)
 	if state.stopped then return end
@@ -726,51 +796,23 @@ Kit.onFinish = function(run, done, summary)
 	C_Timer.After(GAP, Q.Next)
 end
 
--- Which group a test runs in (the user, 2026-11-25: "stuff that is quick and
--- doesnt require a reload could go first"): 1 hands off (and names passed
--- over), 2 needs you, 3 has a Reload click of its own, 4 leaves parts out
--- (the test's leavesPartsOut, Gating's: every test after it waits on the
--- queue's Reload, so it goes last).
-function Q.Group(entry)
-	local def = Kit.Has(entry.test)
-	if def and def.leavesPartsOut then return 4 end
-	local cat = type(ns.TestQueueCatalog) == "table" and ns.TestQueueCatalog[entry.test]
-	local reloads = Q.RunAsks and select(2, Q.RunAsks(entry.test, entry)) or (cat and tonumber(cat.reloads) or 0)
-	if reloads > 0 then return 3 end
-	local kind = Q.Needs(entry.test, entry)
-	if kind == "you" or kind == "older" then return 2 end
-	return 1
-end
-
--- The entries by group, the queued order kept inside each.
-function Q.Order(list)
-	local keyed = {}
-	for i, entry in ipairs(list) do keyed[i] = { entry = entry, group = Q.Group(entry), at = i } end
-	table.sort(keyed, function(a, b)
-		if a.group ~= b.group then return a.group < b.group end
-		return a.at < b.at
-	end)
-	local out = {}
-	for i, k in ipairs(keyed) do out[i] = k.entry end
-	return out
-end
-
--- Runs the given entries (default: every queued one): quick ones first (Q.Order).
+-- Runs the given entries (default: every queued one) in order.
 function Q.Start(list)
 	if Going() or State() then
 		ns.Print("test queue: a test is running; stop it first.")
 		return
 	end
-	list = Q.Order(list or Q.Pending())
+	list = list or Q.Pending()
 	if #list == 0 then
 		ns.Print("test queue: nothing to run.")
 		return
 	end
 	local ids = {}
 	for i, entry in ipairs(list) do ids[i] = entry.id end
-	CinematicDB.testQueueRun = { ids = ids, index = 0 }
+	CinematicDB.testQueueRun = { ids = ids, index = 0, results = {} }
 	began = GetTime()
 	Hook(true)
+	Q.ShowTracker()
 	Note(("queue start: %d test(s) from %s"):format(#ids, table.concat(Sessions(list), ", ")))
 	Q.Next()
 end
@@ -1097,6 +1139,7 @@ function Q.Open(sound)
 	if Going() or State() then return nil end
 	if not panel then Build() end
 	Kit.HideButtons()
+	Q.HideTracker() -- (the last run's summary)
 	if ns.PadTestBoxHide then ns.PadTestBoxHide() end
 	local items, queuedNames = {}, {}
 	local pending = Q.Pending()
@@ -1148,6 +1191,287 @@ function Q.Open(sound)
 	return panel.buttons
 end
 Q.Offer = Q.Open
+
+-- The queue's panel while it runs ------------------------------------------------
+-- (The user, 2026-11-25: "full redesign ... clear indication if it needs me
+-- ... know what step opened the error ... basically a releasable feature".)
+-- At the right of the screen, the whole queue at a glance: what's going now
+-- with YOUR TURN or HANDS OFF in big letters, every test's state (waiting,
+-- running at step n/m, passed, failed, stopped), its counts and errors, and
+-- each error with the test and step it came in. At the end it's the summary.
+-- Faded out for every screenshot (Kit.onShot), out of the shot like the red
+-- error window.
+local TW, TROWS, TROW_H = 380, 10, 34
+local STATUS = { -- (word, r, g, b)
+	waiting = { "WAITING", 0.55, 0.55, 0.55 }, running = { "RUNNING", 0.48, 0.72, 1 },
+	pass = { "PASSED", 0.35, 0.85, 0.45 }, fail = { "FAILED", 1, 0.38, 0.32 },
+	stopped = { "STOPPED", 1, 0.6, 0.3 }, skipped = { "SKIPPED", 0.6, 0.6, 0.6 },
+	again = { "AGAIN", 1, 0.82, 0 },
+}
+local NOW = { -- the big chip: (word, r, g, b)
+	you = { "YOUR TURN", 1, 0.6, 0.15 }, off = { "HANDS OFF", 0.42, 0.66, 1 },
+	starting = { "NEXT UP", 0.75, 0.75, 0.75 }, fight = { "FIGHT FIRST", 1, 0.6, 0.3 },
+	older = { "YOUR TURN", 1, 0.6, 0.15 },
+	done = { "DONE", 0.35, 0.85, 0.45 }, failed = { "DONE", 1, 0.38, 0.32 }, stopped = { "STOPPED", 1, 0.6, 0.3 },
+}
+
+-- A test's result kept on the run's state for the panel: its status, counts
+-- and errors (each with the step it first came in; a few at most).
+function Q.KeepResult(entry, status, run, why)
+	local state = State()
+	if not (state and entry) then return end
+	state.results = state.results or {}
+	local errors = {}
+	for i, e in ipairs(run and run.errorList or {}) do
+		if i > 6 then break end
+		errors[i] = { kind = e.kind, count = e.count, where = e.where, mine = e.mine or nil,
+			message = e.message and tostring(e.message):sub(1, 90), first = e.first }
+	end
+	state.results[entry.id] = { status = status, why = why, pass = run and run.pass, fail = run and run.fail,
+		skip = run and run.skip, errors = errors, extra = run and run.errorList and #run.errorList > 6 and (#run.errorList - 6) or nil }
+end
+
+local function Tracker()
+	if tracker then return tracker end
+	local f = CreateFrame("Frame")
+	tracker = f
+	f:SetFrameStrata("FULLSCREEN_DIALOG")
+	f:SetSize(TW, 200)
+	f:EnableMouse(true)
+	f:SetMovable(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", f.StartMoving)
+	f:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+		local point, _, rel, x, y = self:GetPoint(1)
+		CinematicDB.testQueuePanelAt = { point = point, rel = rel, x = x, y = y }
+	end)
+	local edge = Fill(f, "BACKGROUND", 0.42, 0.66, 1, 1, -8)
+	edge:SetPoint("TOPLEFT", -2, 2)
+	edge:SetPoint("BOTTOMRIGHT", 2, -2)
+	f.edge = edge
+	local fill = Fill(f, "BACKGROUND", 0.035, 0.035, 0.045, 0.96, -7)
+	fill:SetAllPoints()
+	f.title = Text(f, 16, 1, 1, 1)
+	f.title:SetPoint("TOPLEFT", 14, -12)
+	f.title:SetText("Test queue")
+	f.count = Text(f, 13, 0.62, 0.62, 0.62)
+	f.count:SetPoint("TOPRIGHT", -14, -14)
+	if f.count.SetJustifyH then f.count:SetJustifyH("RIGHT") end
+	-- What's going now: the big chip and its words.
+	f.chip = CreateFrame("Frame", nil, f)
+	f.chip:SetSize(TW - 28, 30)
+	f.chip:SetPoint("TOPLEFT", 14, -38)
+	f.chip.back = Fill(f.chip, "BACKGROUND", 1, 1, 1, 0.15)
+	f.chip.back:SetAllPoints()
+	f.chip.word = Text(f.chip, 17, 1, 1, 1)
+	f.chip.word:SetPoint("LEFT", 10, 0)
+	f.now = Text(f, 13, 0.9, 0.9, 0.9)
+	f.now:SetPoint("TOPLEFT", f.chip, "BOTTOMLEFT", 0, -6)
+	f.now:SetWidth(TW - 28)
+	if f.now.SetWordWrap then f.now:SetWordWrap(true) end
+	f.rows = {}
+	for i = 1, TROWS do
+		local row = CreateFrame("Frame", nil, f)
+		row:SetSize(TW - 28, TROW_H)
+		row.status = Text(row, 11, 1, 1, 1)
+		row.status:SetPoint("TOPLEFT", 0, -3)
+		row.status:SetWidth(62)
+		row.title = Text(row, 13, 1, 1, 1)
+		row.title:SetPoint("TOPLEFT", 66, -2)
+		row.title:SetWidth(TW - 28 - 66)
+		row.detail = Text(row, 11, 0.6, 0.6, 0.6)
+		row.detail:SetPoint("TOPLEFT", 66, -18)
+		row.detail:SetWidth(TW - 28 - 66)
+		row.line = Fill(row, "BORDER", 1, 1, 1, 0.06)
+		row.line:SetPoint("BOTTOMLEFT")
+		row.line:SetPoint("BOTTOMRIGHT")
+		row.line:SetHeight(1)
+		f.rows[i] = row
+	end
+	f.errHead = Text(f, 12, 1, 0.45, 0.4)
+	f.errLines = {}
+	for i = 1, 6 do
+		local fs = Text(f, 11, 0.85, 0.85, 0.85)
+		fs:SetWidth(TW - 28)
+		f.errLines[i] = fs
+	end
+	f.foot = Text(f, 12, 0.62, 0.62, 0.62)
+	f.foot:SetWidth(TW - 28)
+	if f.foot.SetWordWrap then f.foot:SetWordWrap(true) end
+	f.elapsed = 0
+	f:SetScript("OnUpdate", function(self, dt)
+		self.elapsed = self.elapsed + dt
+		if self.elapsed < 0.5 then return end
+		self.elapsed = 0
+		Q.UpdateTracker()
+	end)
+	f:Hide()
+	return f
+end
+
+-- The unique ids in the run's order (a requeued test is in it twice: its
+-- last place counts, "AGAIN" until then).
+local function TrackerIds(state)
+	local last, out = {}, {}
+	for i, id in ipairs(state.ids) do last[id] = i end
+	for i, id in ipairs(state.ids) do if last[id] == i then out[#out + 1] = id end end
+	return out
+end
+
+local function ErrorWord(e)
+	return ("%s x%d%s"):format(tostring(e.kind), tonumber(e.count) or 1, e.where and (" at " .. tostring(e.where)) or "")
+end
+
+-- What's going now, for the chip: a mode and its words.
+function Q.TrackerNow(state)
+	if state.ended then return state.ended, state.endWords or "" end
+	local run, entry = Going(), ById(state.current)
+	if state.waitingFight then
+		return "fight", ("%s starts when your fight is over."):format(Title(ById(state.waitingFight)))
+	end
+	if state.old and entry then return "older", ("%s: click Done on the strip when its box says it's finished."):format(Title(entry)) end
+	if run and entry then
+		local step = run.step and ("step %d/%d: %s"):format(run.stepNumber or 0, #run.def.steps,
+			tostring(run.step.title or run.step.key)) or "getting ready"
+		local mode = run.mode == "you" and "you" or "off"
+		local asked = mode == "you" and run.asked and ("\n|cffffc070%s|r"):format(run.asked) or ""
+		return mode, ("%s, %s%s"):format(Title(entry), step, asked)
+	end
+	local nextEntry = ById(state.ids[(state.index or 0) + 1])
+	return "starting", nextEntry and ("%s, from %s"):format(Title(nextEntry), Short(nextEntry.session)) or "Wrapping up..."
+end
+
+function Q.UpdateTracker()
+	local f = tracker
+	local state = State() or Q.lastState
+	if not (f and f:IsShown() and state) then return end
+	local ids = TrackerIds(state)
+	local results = state.results or {}
+	local running = Going()
+	-- Header: where the queue is, how long.
+	local doneCount = 0
+	for _, id in ipairs(ids) do if results[id] then doneCount = doneCount + 1 end end
+	f.count:SetText(("%d of %d done%s"):format(doneCount, #ids,
+		began and ns.PadTestTime and ("  |cff4a4a4a|||r  " .. ns.PadTestTime(GetTime() - began)) or ""))
+	-- The chip.
+	local mode, words = Q.TrackerNow(state)
+	local chip = NOW[mode] or NOW.starting
+	f.chip.word:SetText(chip[1])
+	f.chip.word:SetTextColor(chip[2], chip[3], chip[4])
+	f.chip.back:SetColorTexture(chip[2], chip[3], chip[4], 0.18)
+	f.edge:SetColorTexture(chip[2], chip[3], chip[4], 1)
+	f.now:SetText(words)
+	local y = -38 - 30 - 6 - (f.now:GetStringHeight() or 14) - 12
+	-- The rows: a window of TROWS around the one going.
+	local at = 1
+	for i, id in ipairs(ids) do if id == state.current or (not results[id] and at == 1) then at = i break end end
+	local first = math.max(1, math.min(at - 2, #ids - TROWS + 1))
+	local shown = 0
+	for i = 1, TROWS do
+		local row, id = f.rows[i], ids[first + i - 1]
+		local entry = id and ById(id)
+		if entry then
+			shown = shown + 1
+			row:ClearAllPoints()
+			row:SetPoint("TOPLEFT", f, "TOPLEFT", 14, y)
+			y = y - TROW_H
+			local r = results[id]
+			local key = r and r.status or (id == state.current and "running")
+				or (state.requeued and state.requeued[id] and "again") or "waiting"
+			local s = STATUS[key] or STATUS.waiting
+			row.status:SetText(s[1])
+			row.status:SetTextColor(s[2], s[3], s[4])
+			row.title:SetText(Title(entry))
+			row.title:SetTextColor(key == "waiting" and 0.75 or 1, key == "waiting" and 0.75 or 1, key == "waiting" and 0.75 or 1)
+			local detail
+			if r and r.pass then
+				local errs = #(r.errors or {}) + (r.extra or 0)
+				detail = ("%d pass, %d fail, %d skip%s"):format(r.pass, r.fail or 0, r.skip or 0,
+					errs > 0 and ("  |cffff7060%d error%s|r"):format(errs, errs == 1 and "" or "s") or "")
+			elseif r then
+				detail = r.status == "skipped" and (r.why or "not run") or (r.why or "")
+			elseif key == "running" and running and running.step then
+				detail = ("step %d/%d %s"):format(running.stepNumber or 0, #running.def.steps, tostring(running.step.key))
+					.. (running.mode == "you" and "  |cffffa733your turn|r" or "  |cff7ab8ffhands off|r")
+			else
+				local need, needWords = Q.Needs(entry.test, entry)
+				detail = need == "off" and "|cff5fbf6ehands off|r" or need == "you" and ("|cffe6b85aneeds you:|r " .. needWords)
+					or needWords
+			end
+			row.detail:SetText(("|cff9a9a9a%s|r  %s"):format(Short(entry.session), detail or ""))
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	if #ids > TROWS then
+		f.rows[TROWS].detail:SetText(f.rows[TROWS].detail:GetText() .. ("  |cff6e6e6e(%d more)|r"):format(#ids - TROWS))
+	end
+	-- Every error, with its test and step.
+	local lines = {}
+	for _, id in ipairs(ids) do
+		local r, entry = results[id], ById(id)
+		for _, e in ipairs(r and r.errors or {}) do
+			lines[#lines + 1] = ("|cffffffff%s|r %s: %s%s"):format(entry and entry.test or id,
+				e.first or "after it", ErrorWord(e), e.mine and "  |cffff7060(this test's)|r" or "")
+		end
+	end
+	y = y - 8
+	f.errHead:ClearAllPoints()
+	f.errHead:SetPoint("TOPLEFT", f, "TOPLEFT", 14, y)
+	f.errHead:SetShown(#lines > 0)
+	if #lines > 0 then
+		f.errHead:SetText(("ERRORS  (%d)  |cff9a9a9aeach with the test and step it came in|r"):format(#lines))
+		y = y - 18
+	end
+	for i, fs in ipairs(f.errLines) do
+		fs:ClearAllPoints()
+		fs:SetPoint("TOPLEFT", f, "TOPLEFT", 14, y)
+		if lines[i] then
+			fs:SetText(i == #f.errLines and #lines > i and ("... and %d more: in the log"):format(#lines - i + 1) or lines[i])
+			fs:Show()
+			y = y - 15
+		else
+			fs:Hide()
+		end
+	end
+	f.foot:ClearAllPoints()
+	f.foot:SetPoint("TOPLEFT", f, "TOPLEFT", 14, y - 8)
+	f.foot:SetText(state.ended and "Reload to save the results for the sessions (the button above your screen)."
+		or "Your turn shows here and on the box, with a sound. Drag to move.")
+	f:SetHeight(-y + 8 + (f.foot:GetStringHeight() or 14) + 14)
+	Q.trackerLines, Q.trackerChip = lines, chip[1]
+end
+
+function Q.ShowTracker()
+	local f = Tracker()
+	f:SetScale(UIParent:GetEffectiveScale())
+	f:ClearAllPoints()
+	local at = CinematicDB.testQueuePanelAt
+	if type(at) == "table" and at.point then
+		f:SetPoint(at.point, UIParent, at.rel or at.point, tonumber(at.x) or 0, tonumber(at.y) or 0)
+	else
+		f:SetPoint("RIGHT", UIParent, "RIGHT", -24, 40)
+	end
+	f:SetAlpha(1)
+	f:Show()
+	Q.tracker = f
+	Q.UpdateTracker()
+end
+
+function Q.HideTracker()
+	if tracker then tracker:Hide() end
+end
+
+-- Out of every screenshot a test takes; back after.
+Kit.onShot = function(hide)
+	if tracker and tracker:IsShown() then tracker:SetAlpha(hide and 0 or 1) end
+end
+-- Your turn / hands off: the panel at once, not at its next tick.
+Kit.onMode = function()
+	if tracker and tracker:IsShown() then Q.UpdateTracker() end
+end
 
 -- After a /reload: a run picked up by its test's Reload button goes on; a
 -- run cut off otherwise ends here and what's left is offered again.

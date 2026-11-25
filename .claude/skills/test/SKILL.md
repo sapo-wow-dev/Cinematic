@@ -157,8 +157,8 @@ Inside a step (each `run = function(r)`, in a coroutine):
 | `r:Fields(label, { name = fn, ... })` | several reads of one thing in one line, each on its own |
 | `r:Verdict(ok, text)`, `r:Pass`, `r:Fail`, `r:Skip(why)` | PASS / FAIL / SKIP lines; make them unable to pass by accident |
 | `r:Set(key, v)`, `r:Keep(k, v)` | change a setting / keep own state, undo first |
-| `r:WaitFor(text, { events = {...}, filter = fn } or { check = fn })` | asks the user (box), waits for ONE event or a check, no time limit; returns what woke it |
-| `r:Prompt(text, sub, seconds, buttons)` | the box without waiting |
+| `r:WaitFor(text, { events = {...}, filter = fn } or { check = fn })` | asks the user (box, YOUR TURN), waits for ONE event or a check, no time limit; returns what woke it. `handsOff = true` when the user does nothing (a wait on the game): HANDS OFF, no sound, not counted as an ask |
+| `r:Prompt(text, sub, seconds, buttons, handsOff)` | the box without waiting |
 | `r:Click(text, fn, label)` | a call the game takes only from your click (SendChatMessage...): a button, `fn(r)` runs **in the click**, returns `ok, ...`. Made straight from a step it runs in a timer's `resume()` and is blocked ("blocked: resume()"; the kit then says so) |
 | `buttons = {...}` (WaitFor opts, Prompt, a step's `buttons`) | **buttons, never "type /cine ..."**: answers (`"Yes"`: the wait returns `"button", "Yes"`), `{ label, fn }`, `{ kind = "editmode" }` (opens Edit Mode by a secure click, no taint), `{ kind = "reload" }` (secure /reload; the run picks up at the next step after it). Skip step and Stop are on every step by themselves. A step that needs the player to change a game setting gives the button that opens it. Old tests: `ns.TestKit.ShowButtons(entries)` / `HideButtons()` |
 | `r:Sleep(s)`, `r:Shot(label, { behind = frame or {frames} })` | wait; a paced screenshot (1.5 s before, 1.2 s after); `behind` puts a solid background behind the frame(s) the shot is about, for that shot only (`pad`, `color` optional). **Give every shot of a frame or text a `behind`**: it reads far better than against the world |
@@ -230,11 +230,35 @@ python -I Tools/testqueue.py wait <id>      (run_in_background: it ends when the
 ```
 
 - The game shows a picker: queued tests first, then every kit test, each with
-  Hands off / Needs you and what it asks (scanned from the test's
-  r:WaitFor / r:Prompt / r:Click words). A wait with no words that still needs
-  the user (a fight, a place) can't be seen: give the test `needs = "..."`
-  in its Define, or `--needs` here. The user checks groups (Hands off, Needs
-  me) and runs them.
+  Hands off / Needs you and what it asks. **Per step** (Tools/testscan.py,
+  2026-11-25): each step is read with the helper functions it calls, and only
+  the steps this run takes count (`cdmgrid 1 2` is hands off though step 13
+  asks), with which steps ask ("(steps 3, 5)"). `python -I Tools/testscan.py
+  <test>` prints a test's steps. A wait with words is YOUR TURN unless it says
+  so: **every wait or prompt the user does nothing for gets `handsOff = true`**
+  (`r:WaitFor("Waiting for X to load", { handsOff = true, check = ... })`, a
+  step's `say` with `handsOff = true`, or words saying "hands off"); a Reload
+  box counts as a Reload click, not an ask. A wait with no words that still
+  needs the user (a fight, a place) can't be seen: give the test
+  `needs = "..."` in its Define, or `--needs` here. The user checks groups
+  (Hands off, Needs me) and runs them.
+- Buttons you're asked to click (Reload, Open Edit Mode, Target yourself, a
+  prompt's answers, r:Click's) are big under the box with a pulsing orange
+  glow, and the box says "Your turn: click Reload below."; Skip step / Stop /
+  Stop queue / Requeue / Report issue stay small up top. A plain
+  `Kit.ShowButtons` entry goes big with `big = true`.
+- While it runs: every box opens with **YOUR TURN** (orange edge, a sound,
+  again every 45 s up to 3 times while it waits) or **HANDS OFF** (blue, no
+  sound), and the queue's panel at the right shows every test (WAITING /
+  RUNNING step n/m / PASSED / FAILED / STOPPED / SKIPPED / AGAIN), its counts
+  and errors, and each error with the test and step it came in; at the end
+  it's the summary. The panel and the red error window are out of every
+  r:Shot. An older test's own big prompt (ns.TestPrompt) goes on the kit's
+  box, not a second box.
+- Errors per step: each step's errors get a `step 3 probe error:` line, the
+  run's `during the test:` lines end `| first in step 3 probe`, and every
+  saved deverror line says `[in <test> step 3/7 probe]` (or `after <test>'s
+  DONE`, `test queue, between tests`).
 - **Report issue**: the user can flag a test while it runs (the button on
   every step's row, and on the older-test strip): the test, its step, what
   it asked, and their message. `wait` prints each as `ISSUE the user
@@ -293,9 +317,22 @@ python -I .claude/skills/test/read_log.py <key> [client]
 `errors during the test: N kind(s)` and one line per error that grew: kind,
 count, first Cinematic file:line, and `THIS TEST'S FEATURE` or `another
 feature` (give the test `files = { "UI/X.lua", ... }` so it can tell). What
-fires after DONE until the /reload comes as `errors after the test:` lines.
-List every one in the reply with its owner, and get each fixed: here, or
-sent to the session that owns it. Never "not this feature" and move on.
+fires after DONE until the /reload (in the queue: until the next test
+starts) comes as `errors after the test:` lines, in the queue's copy too; a
+test's own Reload button inspects what came before it. List every one in the
+reply with its owner, and get each fixed: here, or sent to the session that
+owns it. Never "not this feature" and move on. The red error window stays
+shut while a run (or the whole queue) goes, so it never covers a shot; it
+opens at the end if errors came (ns.DevErrorWindowHeld / Release).
+
+Both `read_log.py <key>` and the queue's `wait` print an `== errors:` block
+(errorlog.py): the kit's tally, each inspected error once with its count,
+place and owner, the saved deverror / BLOCKED / ERROR lines since the test
+started that the kit's lines don't cover (an older test, a mid-run reload),
+and each matched to Tools/errors/known.lua (KNOWN accepted / REGRESSION /
+open, or NEW: /error's root-first rules). `wait` exits 1 on any error (an
+`ERRORS:` line) but prints no requeue for errors alone: the run was good, the
+errors get fixed.
 
 **Auto fix (USER RULE, 2026-11-25: "i need the test kit to auto fix
 errors").** `wait` also prints `== queue errors`: every saved error of the
@@ -309,7 +346,7 @@ without asking, whoever's feature or file it is; commit only your own lines
 X fixes it. `python -I Tools/testqueue.py errors --session "<name>"` runs the
 same sweep by hand.
 
-Prints the test's log, the session's deverror / BLOCKED / ERROR / chat lines,
+Prints the test's log, the errors block, the session's chat / blocked lines,
 the screenshots taken since it started (open every one), the game's own logs
 (the console's errors and warnings from the last UI session, saved even
 without `-console`, and Logs/FrameXML.log's load errors since the test

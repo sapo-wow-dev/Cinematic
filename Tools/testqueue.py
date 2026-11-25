@@ -26,7 +26,6 @@ The list is Dev/TestQueueList.lua (git-ignored), read by the game at /reload; a 
 writing it at once. A test changed after it was queued runs with the code loaded at that /reload.
 """
 import argparse
-import glob
 import importlib.util
 import os
 import random
@@ -38,18 +37,15 @@ import time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 QUEUE = os.path.join(ROOT, "Dev", "TestQueueList.lua")
 sys.path.insert(0, os.path.join(ROOT, ".claude", "skills", "test"))
+import errorlog  # noqa: E402
 import savedlogs  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "Tools"))
+import testscan  # noqa: E402
 
 HEAD = ("-- The test queue's list (Tools/testqueue.py writes it, Dev/TestQueue.lua runs it). Not kept in git.\n"
         "local _, ns = ...\nns.TestQueueList = {\n")
 FIELDS = ("id", "test", "args", "session", "note", "needs", "client", "added")
 CLIENTS = ("forever", "retail")
-PROMPT = re.compile(r'\b(?:r|run)\s*:\s*(WaitFor|Prompt|Click)\(\s*("(?:[^"\\]|\\.)*"|[^\s,)]+)')
-SAY = re.compile(r'\bsay\s*=\s*("(?:[^"\\]|\\.)*")')
-SECURE = re.compile(r'kind\s*=\s*"(reload|editmode|targetself)"')
-NEEDS = re.compile(r'\bneeds\s*=\s*"((?:[^"\\]|\\.)*)"')
-DEFINE = re.compile(r'TestKit\.Define\(\{')
-NAME = re.compile(r'\bname\s*=\s*"([^"]+)"')
 ENTRY = re.compile(r"^\s*\{(.*)\},\s*$")
 FIELD = re.compile(r'(\w+) = "((?:[^"\\]|\\.)*)"')
 ISSUE = re.compile(r'\bissue client=(\S+) id=(\S+) test=(\S+) step=(\S+) msg="((?:[^"\\]|\\.)*)"')
@@ -78,54 +74,28 @@ def read(path):
     return out
 
 
-def strip_comments(text):
-    text = re.sub(r"--\[(=*)\[.*?\]\1\]", "", text, flags=re.S)
-    return re.sub(r"--[^\n]*", "", text)
-
-
 def scan(root=ROOT):
-    """{test name: {asks, first, reloads, needs, file}}: what each kit test asks of the user, from its code.
+    """{test name: {asks, first, reloads, needs, file, setup, steps}}: what each kit test asks of the user, step by
+    step (Tools/testscan.py). The totals are a full run's; the game adds up just the steps a run picks."""
+    return testscan.scan(root)
 
-    asks: prompts that wait on the user (r:WaitFor / r:Prompt / r:Click with words, a step's say =, an Edit Mode
-    or Target yourself button); first: the first one's words; reloads: Reload buttons; needs: the test's own
-    needs = "...". A file with one test is read whole (its helpers ask too); with several, each test's part."""
-    out = {}
-    for path in sorted(glob.glob(os.path.join(root, "Dev", "*.lua"))):
-        base = os.path.basename(path)
-        if base in ("TestKit.lua", "TestKitWrap.lua", "TestQueue.lua", "TestQueueList.lua"):
-            continue
-        text = strip_comments(open(path, encoding="utf-8", errors="ignore").read())
-        starts = [m.start() for m in DEFINE.finditer(text)]
-        for i, at in enumerate(starts):
-            name = NAME.search(text[at:at + 600])
-            if not name:
-                continue
-            part = text if len(starts) == 1 else text[at:starts[i + 1] if i + 1 < len(starts) else len(text)]
-            asks, first = 0, ""
-            for _kind, arg in PROMPT.findall(part):
-                if arg == "nil":
-                    continue
-                asks += 1
-                if not first and arg.startswith('"'):
-                    first = unlua(arg[1:-1])
-            for arg in SAY.findall(part):
-                asks += 1
-                first = first or unlua(arg[1:-1])
-            secure = SECURE.findall(part)
-            asks += sum(1 for k in secure if k != "reload")
-            needs = NEEDS.search(text[at:at + 1500])
-            out[name.group(1)] = {"asks": asks, "first": first, "reloads": secure.count("reload"),
-                                  "needs": unlua(needs.group(1)) if needs else "",
-                                  "file": os.path.relpath(path, root).replace(os.sep, "/")}
-    return out
+
+def catalog_line(name, c):
+    def part(asks, reloads, first, key=None):
+        return "{ %sasks = %d, reloads = %d, first = %s }" % ("key = %s, " % lua_str(key) if key else "", asks,
+                                                             reloads, lua_str(first))
+    steps = c.get("steps")
+    return '\t[%s] = { asks = %d, reloads = %d, first = %s, file = %s, setup = %s%s },\n' % (
+        lua_str(name), c["asks"], c["reloads"], lua_str(c["first"]), lua_str(c["file"]),
+        part(*(c.get("setup") or (0, 0, ""))),
+        "" if steps is None else ", steps = { %s }" % ", ".join(
+            part(s["asks"], s["reloads"], s["first"], s["key"]) for s in steps))
 
 
 def write(path, entries, catalog=None):
     catalog = scan() if catalog is None else catalog
     body = "".join("\t{ %s },\n" % ", ".join("%s = %s" % (k, lua_str(e.get(k, ""))) for k in FIELDS) for e in entries)
-    cat = "".join('\t[%s] = { asks = %d, reloads = %d, first = %s, file = %s },\n' % (
-        lua_str(name), c["asks"], c["reloads"], lua_str(c["first"]), lua_str(c["file"]))
-        for name, c in sorted(catalog.items()))
+    cat = "".join(catalog_line(name, c) for name, c in sorted(catalog.items()))
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write(HEAD + body + "}\n-- What each kit test asks of you (testqueue.py scans the tests' code).\n"
@@ -265,6 +235,16 @@ def remove(path, ids=(), session=None, catalog=None):
         keep = [e for e in entries if e.get("id") not in ids and not (session and e.get("session") == session)]
         write(path, keep, catalog)
     return len(entries) - len(keep)
+
+
+def run_errors(qid, client, log_key):
+    """Prints a result's errors (errorlog.py: the kit's inspected ones in its copied log, and the saved
+    deverror / BLOCKED / ERROR lines since it started, matched to the known errors); returns how many kinds."""
+    for c, path in savedlogs.saved_files():
+        if c == client:
+            tables = savedlogs.log_tables(path)
+            return errorlog.report(tables.get(log_key, []), tables.get("log", []))
+    return 0
 
 
 # The queue-wide error sweep (the user, 2026-11-25: "i need the test kit to auto fix errors"). A test's own errors
@@ -416,19 +396,22 @@ def sweep(session, client=None, show=print, files=None, claims_path=CLAIMS):
     return mine
 
 
-def wait(path, qid, timeout_min, keep, poll=5.0, found=results, catalog=None, reported=issues, swept=None):
-    """Until every client the entry asked for (--client) saved a result; exit 0 when all are clean."""
+def wait(path, qid, timeout_min, keep, poll=5.0, found=results, catalog=None, reported=issues, errors_of=run_errors,
+         swept=None):
+    """Until every client the entry asked for (--client) saved a result; exit 0 when all are clean (no FAIL, stop,
+    reported issue or error: every error gets listed in the reply, whoever's it is)."""
     entry = next((e for e in read(path) if e.get("id") == qid), None)
     if entry is None and qid not in found():
         raise SystemExit("testqueue: no %s in the queue" % qid)
     stop = time.time() + timeout_min * 60
-    said = set()
+    said, errs = set(), 0
     while True:
         got = found().get(qid, {})
         for client, (saved, r) in sorted(got.items()):
             if client not in said:
                 said.add(client)
                 print("%s %s, saved %s: %s" % (qid, client, time.strftime("%H:%M", time.localtime(saved)), r["result"]))
+                errs += errors_of(qid, client, r["log"])
                 print("log: python -I .claude/skills/test/read_log.py %s %s" % (r["log"][:-3], client))
         left = owed(entry, got)
         if got and not left:
@@ -437,14 +420,18 @@ def wait(path, qid, timeout_min, keep, poll=5.0, found=results, catalog=None, re
                 print("ISSUE the user reported (%s, step %s): %s" % (client, step, msg))
             if not keep:
                 remove(path, ids=(qid,), catalog=catalog)
-            clean = all(good(r["result"]) for _, r in got.values()) and not told
-            # (The queue-wide sweep: errors claimed for this session get fixed, no asking.)
+            passed = all(good(r["result"]) for _, r in got.values()) and not told
             session = (entry or {}).get("session") or next(iter(got.values()))[1]["session"]
-            mine = sum((swept or sweep)(session, client) for client in sorted(got))
-            if not clean and entry is not None:
+            for client in sorted(got):
+                errs += (swept or sweep)(session, client)
+            clean = passed and not errs
+            if errs:
+                print("ERRORS: %d kind(s) above; list each with its owner, get every one fixed" % errs)
+            # (Errors alone don't requeue: the run itself was good, the errors get fixed.)
+            if not passed and entry is not None:
                 # (The session offers a Requeue button; the user, 2026-11-23: "sometimes i just mess it up".)
                 print("requeue: %s" % requeue_command(entry))
-            return 0 if clean and not mine else 1
+            return 0 if clean else 1
         if time.time() > stop:
             print("testqueue: %s still owed by %s after %d min (the game saves on /reload; is it still queued?)" % (
                 qid, " and ".join(left), timeout_min))
@@ -502,12 +489,29 @@ def _selftest(fails, sweep):
         with open(os.path.join(dev, "QuietTest.lua"), "w", encoding="utf-8") as f:
             f.write('ns.TestKit.Define({ name = "quiettest", key = "quietTest",\n'
                     '  steps = { { key = "a", run = function(r) r:WaitFor(nil, { check = f }); r:Shot("x") end } } })\n')
+        # (Per step, 2026-11-25: a run of the hands-off steps isn't "Needs you" for one step that asks.)
+        with open(os.path.join(dev, "MixedTest.lua"), "w", encoding="utf-8") as f:
+            f.write('local steps = { { key = "look", run = function(r) r:Shot("a") end } }\n'
+                    'local function Wait(r) r:WaitFor("Waiting for it to load", { handsOff = true, check = f }) end\n'
+                    'for i = 1, 2 do steps[#steps + 1] = { key = "row" .. i, run = function(r) Wait(r)\n'
+                    '  r:WaitFor("The test does it: hands off", { check = f }) end } end\n'
+                    'steps[#steps + 1] = { key = "hit", say = "Hit a mob \\"once\\" -- not a comment", run = function(r) end }\n'
+                    'steps[#steps + 1] = { key = "auto", say = "Watch it fade", handsOff = true, seconds = 5, run = function(r) end }\n'
+                    'ns.TestKit.Define({ name = "mixedtest", key = "mixedTest", setup = function(r)\n'
+                    '  r:Prompt("Stand still") end, steps = steps })\n')
         cat = scan(tmp)
-        ask, quiet = cat.get("asktest", {}), cat.get("quiettest", {})
-        check("scan: helper prompt + Reload prompt counted, comment and frame:Click() not", ask.get("asks") == 2
-              and ask.get("reloads") == 1 and ask.get("first") == "Hit any mob once", ask)
+        ask, quiet, mixed = cat.get("asktest", {}), cat.get("quiettest", {}), cat.get("mixedtest", {})
+        check("scan: helper prompt counted; comment, frame:Click() and the Reload box (a reload) not",
+              ask.get("asks") == 1 and ask.get("reloads") == 1 and ask.get("first") == "Hit any mob once", ask)
         check("scan: the test's needs", ask.get("needs") == "be near a mob", ask)
         check("scan: a wait on the game only is hands off", quiet.get("asks") == 0 and quiet.get("reloads") == 0, quiet)
+        steps = mixed.get("steps") or []
+        check("scan: steps from a built list, in order, by key",
+              [s["key"] for s in steps] == ["look", "row", "hit", "auto"], steps)
+        check("scan: handsOff = true and \"hands off\" words aren't asks; a say is",
+              [s["asks"] for s in steps] == [0, 0, 1, 0] and steps[2]["first"] == 'Hit a mob "once" -- not a comment',
+              steps)
+        check("scan: the setup on its own", mixed.get("setup") == (1, 0, "Stand still"), mixed.get("setup"))
         path = os.path.join(tmp, "TestQueueList.lua")
         a, n = add(path, "kitcheck", "", 'Hover "plate" fix', "a note\nwith a line", known, catalog=cat)
         b, n = add(path, "hoverplate", "2 3", "Other session", "", known, needs="be in a city", catalog=cat)
@@ -520,7 +524,8 @@ def _selftest(fails, sweep):
         check("a Lua table the game reads", text.startswith("-- ") and "ns.TestQueueList = {" in text
               and text.rstrip().endswith("}"))
         check("the catalog in the same file",
-              '["asktest"] = { asks = 2, reloads = 1, first = "Hit any mob once"' in text, text[-300:])
+              '["asktest"] = { asks = 1, reloads = 1, first = "Hit any mob once"' in text
+              and 'steps = { { key = "a", asks = 1, reloads = 1, first = "Hit any mob once" } }' in text, text[-600:])
         try:
             add(path, "nosuchtest", "", "x", "", known)
             check("an unknown test refused", False)
@@ -576,6 +581,31 @@ def _selftest(fails, sweep):
         with contextlib.redirect_stdout(out):
             wait(path, g, 0.01, False, poll=0.01, catalog=cat, found=lambda: {g: {"forever": good_run}}, reported=dict)
         check("a clean result: no requeue line", "requeue:" not in out.getvalue(), out.getvalue())
+        # Errors (2026-11-25): a good run with errors isn't clean, but isn't requeued either.
+        h, n = add(path, "kitcheck", "", "Errors", "", known, catalog=cat)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = wait(path, h, 0.01, False, poll=0.01, catalog=cat, found=lambda: {h: {"forever": good_run}},
+                        reported=dict, errors_of=lambda *_: 2)
+        check("errors: exit 1, ERRORS line, no requeue", code == 1 and "ERRORS: 2 kind(s)" in out.getvalue()
+              and "requeue:" not in out.getvalue(), out.getvalue())
+        test_log = ["10:00:00 start: /cine debug kitcheck", "10:01:00 DONE: 3 pass, 0 fail, 0 skip; errors +0, blocked +36",
+                    "10:01:00   during the test: blocked x36: CinematicDev: UNKNOWN() (in combat) | at Frames.lua:4936"
+                    " | another feature: say whose and get it fixed | first in step 3 probe",
+                    "10:01:05   after the test: error x1: attempt to index nil | at nil | owner: check the file"]
+        game = ["09:00:00 session: ---- login", "09:30:00 deverror: error: before the test",
+                "10:00:30 deverror: blocked: CinematicDev: UNKNOWN() (in combat)\n  [CinematicDev/Frames.lua]:4936:",
+                "10:00:40 deverror: error: something else [in kitcheck step 5/7 shots]\n  [CinematicDev/Core.lua]:1:"]
+        out = io.StringIO()
+        n = errorlog.report(test_log, game, show=lambda s: out.write(s + "\n"))
+        text = out.getvalue()
+        check("errorlog: kit lines + the saved one not in them, not the one before the test",
+              n == 3 and "blocked x36 at Frames.lua:4936" in text and "errors +0, blocked +36" in text
+              and "something else" in text and "before the test" not in text, text)
+        check("errorlog: each error's step (the kit's first in, the saved line's [in], after DONE)",
+              "during the test, in step 3 probe: blocked x36" in text and "after the test, in after DONE: error x1" in text
+              and "[in kitcheck step 5/7 shots]" in text and "(no test or step said)" not in text, text)
+        check("errorlog: no test log, nothing read", errorlog.report([], game, show=lambda s: None) == 0)
         check("either: any one client is enough", owed({"client": ""}, {"retail": clean}) == [])
         check("older tests can be queued (namescale)", "namescale" in old_tests() and "namescale" in kit_tests())
         check("remove by session", remove(path, session="Other session", catalog=cat) == 1 and read(path) == [])

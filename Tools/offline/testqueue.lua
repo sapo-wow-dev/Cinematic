@@ -119,17 +119,23 @@ local function RunClient(client)
 	Check("a test that asks: Needs you, with its words", needsRow and Q.Needs("cdmgrid") == "you"
 		and select(2, Q.Needs("cdmgrid")):find('asks: "Right-click one of your tracked buffs off" +1 more', 1, true) ~= nil,
 		select(2, Q.Needs("cdmgrid")))
-	-- (The run's order, 2026-11-25: hands off, needs you, own Reload, leaves parts out; queued order inside each.)
-	local realCards = ns.TestQueueCatalog.cardevents
-	ns.TestQueueCatalog.cardevents = { asks = 0, reloads = 1 }
-	local ordered = Q.Order({ { id = "o1", test = "gating" }, { id = "o2", test = "cardevents" },
-		{ id = "o3", test = "cdmgrid" }, { id = "o4", test = "kitcheck", args = "" }, { id = "o5", test = "nosuchtest" },
-		{ id = "o6", test = "kitcheck", args = "1 2" } })
-	local got = {}
-	for i, entry in ipairs(ordered) do got[i] = entry.id end
-	Check("run order: quick first, Reload ones next, parts left out last",
-		table.concat(got, " ") == "o4 o5 o6 o3 o2 o1", table.concat(got, " "))
-	ns.TestQueueCatalog.cardevents = realCards
+	-- Per step (2026-11-25): only the steps a run takes count. kitcheck's step 4
+	-- asks here (a pretend catalog); a run of steps 1 2 is hands off.
+	local realCat = ns.TestQueueCatalog.kitcheck
+	local steps = {}
+	for i, step in ipairs(Kit.Has("kitcheck").steps) do
+		steps[i] = { key = step.key, asks = i == 4 and 1 or 0, reloads = 0, first = i == 4 and "Click Yes" or "" }
+	end
+	ns.TestQueueCatalog.kitcheck = { asks = 1, reloads = 0, first = "Click Yes", setup = { asks = 0, reloads = 0, first = "" },
+		steps = steps }
+	local kindAll, wordsAll = Q.Needs("kitcheck", { args = "" })
+	Check("per step: a full run with the asking step is Needs you, step named",
+		kindAll == "you" and wordsAll:find('asks: "Click Yes" (step 4)', 1, true) ~= nil, wordsAll)
+	Check("per step: steps 1 2 only are hands off", Q.Needs("kitcheck", { args = "1 2" }) == "off")
+	steps[5].key = "unknownkey"
+	Check("per step: a step the scan didn't see counts the whole test", Q.Needs("kitcheck", { args = "1 2" }) == "off"
+		and Q.Needs("kitcheck", { args = "5" }) == "you")
+	ns.TestQueueCatalog.kitcheck = realCat
 	Click(Q.buttons["None"])
 	Check("None: nothing checked", Count() == 0 and Txt(Q.buttons["Run checked"]) == "Run checked")
 	Click(Q.buttons["Needs me"])
@@ -153,15 +159,42 @@ local function RunClient(client)
 	rows[1].Toggle()
 	Check("a row click unchecks it", not Q.model.checked.qa)
 	rows[1].Toggle()
+	-- (Errors after a test's DONE, 2026-11-25: one comes after qa's and after
+	-- qc's; each goes into that test's own copied log, qa's when qc starts.)
+	local errEntry = { kind = "blocked", message = "CinematicDev: UNKNOWN()", count = 1, source = "CinematicDev",
+		stack = "      [CinematicDev/Frames.lua]:4936: in function <CinematicDev/Frames.lua:4928>" }
+	ns.DevErrorEntries = function() return { errEntry } end
+	local realFinish, finished = Kit.onFinish, 0
+	Kit.onFinish = function(r, ...)
+		realFinish(r, ...)
+		finished = finished + 1
+		errEntry.count = errEntry.count + finished -- (qa: +1, qc: +2)
+	end
+	-- (The red error window held through the queue, 2026-11-25: it covered shots.)
+	local hides, releases, heldBetween = 0, 0, nil
+	ns.DevErrorWindowHide = function() hides = hides + 1 end
+	ns.DevErrorWindowRelease = function() releases = releases + 1 end
+	local finishForHold = Kit.onFinish
+	Kit.onFinish = function(r, ...)
+		finishForHold(r, ...)
+		if heldBetween == nil then heldBetween = ns.DevErrorWindowHeld() and Kit.Running() == nil end
+	end
 	Click(Q.buttons["Run checked"])
 	Check("Run checked closes the picker", not Q.IsOpen())
 	Check("first test's name on the box", box:find("Queue 1/3 (Session one) - Test kit check", 1, true) ~= nil, box)
 	Advance(4)
-	Check("the test's own box says where the queue is", box:find("^Queue 1/3 %(Session one%) %- Test kit check, step") ~= nil, box)
+	Check("the test's own box says where the queue is", box:find("Queue 1/3 %(Session one%) %- Test kit check, step") ~= nil, box)
+	Check("the box opens with HANDS OFF on a step the test does", box:find("^|cff7ab8ffHANDS OFF|r") ~= nil, box)
+	Check("the panel is up: the queue, HANDS OFF, the test running",
+		Q.tracker and Q.tracker:IsShown() and Q.trackerChip == "HANDS OFF", tostring(Q.trackerChip))
 	Check("first test running", Kit.Running() and Kit.Running().def.name == "kitcheck")
 	local run = Kit.Running()
 	Check("the test's row has Stop queue", run and run.buttons and run.buttons["Stop queue"] ~= nil)
+	Check("error window held while a test runs, hidden at its start", ns.DevErrorWindowHeld() and hides >= 1, hides)
 	Advance(120)
+	Check("error window held between tests too", heldBetween == true, tostring(heldBetween))
+	Check("error window released once, at the queue's end", releases == 1 and not ns.DevErrorWindowHeld(), releases)
+	ns.DevErrorWindowHide, ns.DevErrorWindowRelease = nil, nil
 	local qa, qb, qc = Result("qa"), Result("qb"), Result("qc")
 	Check("qa DONE with its counts", qa and qa:find("result=DONE pass=%d+ fail=%d+ skip=%d+") ~= nil, qa)
 	Check("qb not a kit test, passed over", qb and qb:find("result=NOT-A-KIT-TEST", 1, true) ~= nil, qb)
@@ -176,12 +209,33 @@ local function RunClient(client)
 	Check("between tests: the result and what's next", between ~= nil, between)
 	Check("an unknown test isn't called needs you", between and between:find("(not known if it needs you)", 1, true) ~= nil, between)
 	Check("the last box is the queue's end", box:find("^Test queue done") ~= nil, box)
+	-- The panel's summary: each test's state, the unknown one passed over.
+	Q.UpdateTracker()
+	local st = Q.lastState
+	Check("summary: qa and qc PASSED, qb SKIPPED, chip DONE",
+		st and st.results.qa.status == "pass" and st.results.qc.status == "pass" and st.results.qb.status == "skipped"
+		and Q.trackerChip == "DONE", tostring(Q.trackerChip))
+	local statuses = {}
+	for _, row in ipairs(Q.tracker.rows) do if row:IsShown() then statuses[#statuses + 1] = row.status:GetText() end end
+	Check("summary rows: PASSED, SKIPPED, PASSED", table.concat(statuses, ",") == "PASSED,SKIPPED,PASSED",
+		table.concat(statuses, ","))
 	local qcLines = 0
 	for _, line in ipairs(CinematicDB.testQueueLog) do if line:find("id=qc test=%S+ session=") then qcLines = qcLines + 1 end end
 	Check("qc (ends inside its start) has one result line, not a DID-NOT-START too", qcLines == 1, qcLines)
 	if qcLines ~= 1 then for _, l in ipairs(CinematicDB.testQueueLog) do print("   " .. l) end end
 	Check("qa's log kept apart (qc ran the same test after)", Has(CinematicDB.testQueue_qaLog, "DONE: ") ~= nil
 		and Has(CinematicDB.testQueue_qaLog, "2 of 7 step") == nil)
+	Kit.onFinish = realFinish
+	Check("errors after qa's DONE: in qa's copy, at qc's start",
+		Has(CinematicDB.testQueue_qaLog, "errors after the test %(DONE to the next test's start%): 1 kind") ~= nil
+		and Has(CinematicDB.testQueue_qaLog, "after the test: blocked x1: .* | at Frames.lua:4936") ~= nil,
+		Has(CinematicDB.testQueue_qaLog, "errors after the test"))
+	Check("qc's copy doesn't take qa's", Has(CinematicDB.testQueue_qcLog, "after the test: blocked x1") == nil)
+	Kit.FlushAfterErrors("/reload")
+	Check("errors after the last test: in its copy at the reload",
+		Has(CinematicDB.testQueue_qcLog, "after the test: blocked x2: .* | at Frames.lua:4936") ~= nil,
+		Has(CinematicDB.testQueue_qcLog, "errors after the test"))
+	ns.DevErrorEntries = nil
 	Check("session names quoted on the line", qa and qa:find('session="Session one"', 1, true) ~= nil, qa)
 	Check("queue done box, Reload offered", box:find("Test queue done: 3 of 3 run", 1, true) ~= nil
 		and Q.buttons and Q.buttons.Reload ~= nil, box)
@@ -340,8 +394,8 @@ local function RunClient(client)
 		oldRuns = oldRuns + 1
 		CinematicDB.fakeOldLog = { "start " .. test, "PASS one", "FAIL two", "verdicts: PASS FAIL" }
 	end
-	ns.TestQueueList = { { id = "qo", test = "fakeold", args = "", session = "Old one" }, { id = "qk", test = "kitcheck", args = "1", session = "S", needs = "Anywhere" } }
-	Q.Start() -- (qk's needs: both Needs you, so the queued order stays, Q.Order)
+	ns.TestQueueList = { { id = "qo", test = "fakeold", args = "", session = "Old one" }, { id = "qk", test = "kitcheck", args = "1", session = "S" } }
+	Q.Start()
 	Check("older test: told on the box first", box:find("Queue 1/2 (Old one) - fakeold (older test)", 1, true) ~= nil
 		and box:find("click Done when its box says it's finished", 1, true) ~= nil, box)
 	Advance(4)

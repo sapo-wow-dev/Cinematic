@@ -3,7 +3,8 @@
 usage:
   read_log.py                 every test log in each client's saved file (lines, PASS/FAIL counts), archived
   read_log.py <key> [client]  that log in full (key: mapPinLog, or just mapPin), then from the same session:
-                              CinematicDB.log's deverror / BLOCKED / ERROR / chat lines, and the screenshots
+                              its errors (errorlog.py: the kit's inspected ones and CinematicDB.log's deverror /
+                              BLOCKED / ERROR lines since it started, each matched to Tools/errors), chat lines, the screenshots
                               taken since the test started (paths, to open), and the game's own logs: the
                               console's errors/warnings from the last UI session and FrameXML.log since the
                               test started (gamelogs.py). Archived to Tools/tests/logs/.
@@ -16,6 +17,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import errorlog  # noqa: E402
 import gamelogs  # noqa: E402
 import savedlogs  # noqa: E402
 
@@ -98,9 +100,11 @@ def one(key, want):
                 if c and seconds(c) <= at:
                     begin = i
                     break
-        notes = [l for l in game[begin:] if NOTE.search(l)]
-        print("\n== CinematicDB.log from %s: %d deverror/BLOCKED/ERROR/chat line(s)" % (
-            game[begin][:8] if game else "?", len(notes)))
+        # The errors: the kit's inspection lines and the saved ones, each once, matched to the known errors.
+        print()
+        errorlog.report(lines, game)
+        notes = [l for l in game[begin:] if NOTE.search(l) and not errorlog.SESSION_NOTE.search(l)]
+        print("\n== CinematicDB.log from %s: %d chat/blocked/taint line(s)" % (game[begin][:8] if game else "?", len(notes)))
         for line in notes[-60:]:
             print(line)
 

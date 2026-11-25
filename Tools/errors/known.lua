@@ -2,6 +2,30 @@
 -- our code that keeps it from coming back. Format and workflow: README.md.
 -- Check after editing: python -I Tools/errors/errors.py selftest
 return {
+  -- Our dev tools ---------------------------------------------------------
+  {
+    id = "solo-split-companion",
+    status = "fixed",
+    title = "Another addon errors at load because our solo (addon kit) kept it but not its companion addon (Questie without QuestieDB)",
+    match = {
+      any = { "attempt to index global 'LibQuestieDB'", "QuestieInit.lua:428: attempt to call a nil value" },
+    },
+    why = {
+      call = "Questie's files index the global LibQuestieDB at load; it's made by the QuestieDB addon, so with QuestieDB off it's nil",
+      caller = "/cine debug solo (Dev/AddonTest.lua ns.SoloAddons), from the addon kit's solo step: Guidelime's target kept Questie (Guidelime uses it) but only required dependencies and libraries came with it",
+      path = "addon kit target Guidelime -> solo keeps Guidelime + Questie -> QuestieDB (only an OptionalDep in Questie's TOC) turned off -> /reload -> Questie loads without it: 7 errors every reload; after solo off the list read stale (GetAddOnInfo's reason) so the split outlived it",
+      rule = "an addon's companion addons (QuestieDB, EllesmereUI's modules) are separate entries, often only OptionalDeps; GetAddOnInfo's DISABLED reason stays stale till the next login (engine rule forever.addons.enable-no-character)",
+      pattern = "any tool that turns addons on or off by the dependency list alone, or reads on/off from GetAddOnInfo's reason",
+    },
+    dont = "Don't keep an addon in solo without its own parts (folders starting with its name), and don't read on/off from GetAddOnInfo's reason: use GetAddOnEnableState. Every solo and solo off checks the list after the reload (ns.SoloCheck).",
+    fix = "2026-11-25: solo keeps a kept addon's own parts; on/off read from the enable state; after every solo reload ns.SoloCheck says SPLIT (a kept addon loaded, a part of it that solo turned off still off) and kept addons' load errors, after solo off NOT BACK (an addon not as it was); the addon kit's probes step fails on either. Tools/offline/addontestsmarts.lua",
+    seen = { "2026-11-25" },
+    example = [[error: Interface/AddOns/Questie/Database/QuestieDB.lua:130: attempt to index global 'LibQuestieDB' (a nil value)
+[Questie/Database/QuestieDB.lua]:130: in main chunk
+error: Interface/AddOns/Questie/Modules/QuestieInit.lua:428: attempt to call a nil value
+[Questie/Modules/QuestieInit.lua]:428: in function 'OnAddonLoaded']],
+    source = "the dev error window, 2026-11-25 (addon kit run for Guidelime, then every reload after)",
+  },
   -- Menus -----------------------------------------------------------------
   {
     id = "menu-row-smartnav-fight",

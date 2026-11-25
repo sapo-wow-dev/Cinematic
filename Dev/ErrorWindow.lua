@@ -11,6 +11,7 @@ local STACK_LINES = 8
 
 local entries, byKey = {}, {}
 local window, busy, dirty = nil, false, false
+local held = false -- (an error came while a test held the window back)
 local lastHandler = { message = nil, at = nil } -- (BugGrabber's copy of one just heard)
 
 local function Plain(value)
@@ -138,8 +139,9 @@ function Render()
 	local lines = {}
 	for i = #entries, 1, -1 do -- newest first
 		local entry = entries[i]
-		lines[#lines + 1] = ("|cffff6060%s|r x%d  |cffffd060%s|r  (%s)\n  %s"):format(
-			date("%H:%M:%S", entry.time), entry.count, entry.kind, entry.source, entry.message)
+		lines[#lines + 1] = ("|cffff6060%s|r x%d  |cffffd060%s|r  (%s)%s\n  %s"):format(
+			date("%H:%M:%S", entry.time), entry.count, entry.kind, entry.source,
+			entry.context and ("  |cff7ab8ffin " .. entry.context .. "|r") or "", entry.message)
 		if entry.stack then lines[#lines + 1] = "|cff909090" .. entry.stack .. "|r" end
 	end
 	window.text = table.concat(lines, "\n")
@@ -160,8 +162,11 @@ local function Add(kind, message, stack)
 			if other == entry then table.remove(entries, i) break end
 		end
 	else
+		-- (context: the test and step it first came in, TestKit.lua's
+		-- ns.DevErrorContext; the user, 2026-11-25: "know what step opened the error".)
+		local ok, context = pcall(function() return ns.DevErrorContext and ns.DevErrorContext() end)
 		entry = { kind = kind, message = message, count = 1, time = time(),
-			stack = Trim(stack, kind), source = Source(message, stack) }
+			stack = Trim(stack, kind), source = Source(message, stack), context = ok and context or nil }
 		byKey[key] = entry
 		if #entries >= MAX_ENTRIES then
 			local old = table.remove(entries, 1)
@@ -172,7 +177,14 @@ local function Add(kind, message, stack)
 	end
 	entries[#entries + 1] = entry
 	window = window or CreateWindow()
-	window:Show()
+	-- (Held while a kit test or the test queue runs: it covered the test's
+	-- screenshots, 2026-11-25. The kit logs each error; the window opens at
+	-- the end, ns.DevErrorWindowRelease.)
+	if ns.DevErrorWindowHeld and ns.DevErrorWindowHeld() then
+		held = true
+	else
+		window:Show()
+	end
 	-- (Drawn once a frame at most: errors come dozens a second in a fight.)
 	if not dirty then
 		dirty = true
@@ -192,7 +204,10 @@ local function SaveToLog(kind, message, stack)
 	if logged[key] or not ns.Log then return end
 	logged[key] = true
 	local lines = Trim(stack, kind)
-	ns.Log("deverror", ("%s: %s%s"):format(tostring(kind), Plain(message), lines and ("\n" .. lines) or ""))
+	-- (Where it came, after the message: "[in kitcheck step 3/7 probe]".)
+	local entry = byKey[tostring(kind) .. "\0" .. Plain(message)]
+	local where = entry and entry.context and (" [in " .. entry.context .. "]") or ""
+	ns.Log("deverror", ("%s: %s%s%s"):format(tostring(kind), Plain(message), where, lines and ("\n" .. lines) or ""))
 end
 
 function ns.DevTap(kind, message, stack)
@@ -316,4 +331,17 @@ function ns.DevErrorWindowShow()
 	window = window or CreateWindow()
 	window:Show()
 	Render()
+end
+
+-- A test starting: out of its shots (it comes back at the end if new errors
+-- came while it was held).
+function ns.DevErrorWindowHide()
+	if window then window:Hide() end
+end
+
+-- The hold's end: opened if an error came while it was held.
+function ns.DevErrorWindowRelease()
+	if not held then return end
+	held = false
+	ns.DevErrorWindowShow()
 end
