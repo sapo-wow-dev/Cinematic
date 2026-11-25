@@ -526,15 +526,19 @@ ns.TestKit.Define({
 				UpdateNow()
 				r:Sleep(1)
 				local kept = Try(errors.GetAlpha, errors)
-				Apply(r, { { "hideErrorsOutOfCombat", true } }, 0.2)
+				-- (Both boxes: the pass picks In combat's during the Calm Timer after a
+				-- fight too (ns.FightLingering), and run 8's probe showed the pass ran with
+				-- Out of combat's ticked yet nothing hidden: a fight just over, in Elwynn.)
+				Apply(r, { { "hideErrorsInCombat", true }, { "hideErrorsOutOfCombat", true } }, 0.2)
 				local passOk, passErr = UpdateNow()
 				local hidden = Try(errors.GetAlpha, errors)
 				-- (Run 7: hidden stayed 0.5 as in run 1, after runs 3-6 passed. Why, if so.)
 				r:Log(("probe E5 ticked: the pass ran %s%s; hide setting %s, Quality of life %s, enabled %s, fight %s, by us %s")
 					:format(tostring(passOk), passOk and "" or (" (" .. tostring(passErr) .. ")"),
 					tostring(ns.Setting("hideErrorsOutOfCombat")), tostring(ns.db.handleQuality), tostring(ns.db.enabled),
-					tostring(InCombatLockdown()), tostring(ns.errorsHiddenByUs)))
-				Apply(r, { { "hideErrorsOutOfCombat", false } }, 0.2)
+					tostring(InCombatLockdown()), tostring(ns.errorsHiddenByUs))
+					.. (" Calm Timer %s"):format(tostring(ns.FightLingering and ns.FightLingering() or false)))
+				Apply(r, { { "hideErrorsInCombat", false }, { "hideErrorsOutOfCombat", false } }, 0.2)
 				UpdateNow()
 				local back = Try(errors.GetAlpha, errors)
 				r:Verdict(kept and math.abs(kept - 0.5) < 0.01 and hidden == 0 and back == 1,
