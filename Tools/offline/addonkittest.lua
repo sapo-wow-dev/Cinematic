@@ -110,8 +110,22 @@ Advance(3)
 
 -- 3 after that reload (what's loaded is what was left on): the probes step for the baseline (step 3).
 for _, a in ipairs(addons) do a.loaded = a.enabled end
+-- (CineMode on at login, as in run qb556: the probes wait till it's off and
+-- the frames' fade back in is over.)
+local cineOn, cineOffAt, probedAt, cineAtProbe = true, nil, nil, nil
+local IsOn, Toggle, KitRun = ns.IsCineModeOn, Cinematic_ToggleCineMode, ns.AddonKit.Run
+ns.IsCineModeOn = function() return cineOn end
+Cinematic_ToggleCineMode = function() cineOn = not cineOn if not cineOn then cineOffAt = now end end
+ns.AddonKit.Run = function(...)
+	probedAt, cineAtProbe = now, cineOn
+	return KitRun(...)
+end
 ns.HandleSlash("debug addonkit 3")
-Advance(5)
+Advance(8)
+Check("CineMode on at login: off before the probes", probedAt ~= nil and cineAtProbe == false, tostring(cineAtProbe))
+Check("and the fade back in over first", probedAt and cineOffAt
+	and probedAt - cineOffAt >= (ns.db.fadeInTime or 1.5), probedAt and cineOffAt and (probedAt - cineOffAt))
+ns.IsCineModeOn, Cinematic_ToggleCineMode, ns.AddonKit.Run = IsOn, Toggle, KitRun
 log = CinematicDB.addonKitTestLog
 local base = CinematicDB.addonKitnoneLog
 Check("baseline: no other addon loaded", Has(log, "PASS.*no other addon loaded") ~= nil, Has(log, "FAIL"))

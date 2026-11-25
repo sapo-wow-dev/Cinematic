@@ -7,8 +7,10 @@
 -- It sets its frames' alpha all the time (target changes, combat, mouseover):
 -- its own frames are hooked, and game frames it sets are checked every frame.
 -- Its Skyriding HUD follows the Encounter bar row, its Mythic+ tools get rows
--- of their own, and its tooltip, chat bubble and minimap looks and its AFK
--- screen each have an Addon Conflicts row against Cinematic's.
+-- of their own, and its tooltip, chat bubble and minimap looks, its AFK
+-- screen, its action buttons' texts and its group frames (Heal Vision) each
+-- have an Addon Conflicts row against Cinematic's. What the addon kit finds
+-- different with it loaded is declared near the end (ns.AddonKitExpect).
 local _, ns = ...
 local L = ns.L
 
@@ -892,6 +894,117 @@ ns.WhenAddonLoads("EllesmereUI", function()
 		about = "What plays while you're away: Cinematic's AFK camera, or EllesmereUI's AFK screen",
 	})
 end)
+
+-- Its action bars draw their own buttons, with key and macro texts set per
+-- bar in its own options: the Standard Frames page's Hide keybinds and Hide
+-- macro names never reached them, only the game's pet and stance buttons it
+-- keeps in its bars. Those stand aside too, so its bars look one way.
+ns.WhenAddonLoads("EllesmereUIActionBars", function()
+	local function Theirs() return "EllesmereUI" end
+	local row = ns.AddConflict({ key = "hideKeybinds", addon = "EllesmereUI", label = "Action button texts",
+		group = "frames", noBoth = true,
+		about = "Key and macro names on action buttons: the Standard Frames page's Hide keybinds and " ..
+			"Hide macro names, or EllesmereUI's own per-bar settings",
+		theirs = Theirs,
+		ours = function() return ns.db and (ns.db.hideKeybinds or ns.db.hideMacroText) and true or false end,
+		onPick = function() if ns.ApplyHideKeybinds then ns.ApplyHideKeybinds() end end })
+	ns.AddFeatureYield("hideKeybinds", Theirs, row)
+	ns.AddFeatureYield("hideMacroText", Theirs, row)
+end)
+
+-- Its party and raid frames stand in for the game's, which it hides: Heal
+-- Vision (the game's frames only) had nothing to fade. Its nameplate part
+-- (Heal Vision's plates) isn't touched by this.
+ns.WhenAddonLoads("EllesmereUIRaidFrames", function()
+	ns.AddFeatureYield("healVisionFrames", function() return "EllesmereUI" end, {
+		key = "healVisionFrames", addon = "EllesmereUI", label = "Heal Vision on group frames", group = "frames",
+		noBoth = true,
+		about = "Heal Vision works on the game's party and raid frames, which EllesmereUI's own replace",
+		ours = function() return ns.db and ns.HealVisionAny and ns.HealVisionAny() or false end,
+		onPick = function() if ns.ApplyHealVisionFrames then ns.ApplyHealVisionFrames() end end,
+	})
+end)
+
+-- What the addon kit (Tools/addon-kit) is meant to find different with it
+-- loaded, against the run with no addon (diff.py check EllesmereUI). Each
+-- part hides or replaces the game's frames named here; its own fade with
+-- the rows above. (Read from this file's text: literal strings only.)
+-- Its frames linked as the game's parts (LINKS above, and its quest tracker).
+ns.AddonKitExpect("EllesmereUI", "link.*", "*", "its frames claimed as the game's parts (LINKS)")
+-- Action bars: the game's bars on its hidden parent, its own buttons in
+-- their place; the game's pet and stance buttons moved into its bars.
+ns.AddonKitExpect("EllesmereUIActionBars", "frame.*", "MultiBar*.*", "its own bars replace the game's (hidden parent)")
+ns.AddonKitExpect("EllesmereUIActionBars", "frame.mainbar", "MainActionBar.alpha", "it keeps the main bar at 0")
+ns.AddonKitExpect("EllesmereUIActionBars", "frame.mainbar", "MainMenuBarVehicleLeaveButton.parent",
+	"its leave-vehicle button spot")
+ns.AddonKitExpect("EllesmereUIActionBars", "frame.pet", "PetActionBar.parent", "its pet bar replaces the game's")
+ns.AddonKitExpect("EllesmereUIActionBars", "frame.stance", "StanceBar.parent", "its stance bar replaces the game's")
+ns.AddonKitExpect("EllesmereUIActionBars", "touch.MultiBar*", "*", "its own bars replace the game's (hidden parent)")
+ns.AddonKitExpect("EllesmereUIActionBars", "touch.ActionButton_", "*", "the game's buttons hidden with their bar")
+ns.AddonKitExpect("EllesmereUIActionBars", "touch.MainActionBar", "alpha", "it keeps the main bar at 0")
+ns.AddonKitExpect("EllesmereUIActionBars", "touch.MainMenuBarVehicleLeaveButton", "parent",
+	"its leave-vehicle button spot")
+ns.AddonKitExpect("EllesmereUIActionBars", "touch.PetActionBar", "parent", "its pet bar replaces the game's")
+ns.AddonKitExpect("EllesmereUIActionBars", "touch.PetActionButton_", "*", "the game's pet buttons in its pet bar")
+ns.AddonKitExpect("EllesmereUIActionBars", "touch.StanceBar", "parent", "its stance bar replaces the game's")
+ns.AddonKitExpect("EllesmereUIActionBars", "touch.StanceButton_", "*", "the game's stance buttons in its stance bar")
+ns.AddonKitExpect("EllesmereUIActionBars", "addons.yields", "hideKeybinds", "its bars' own texts: row above")
+ns.AddonKitExpect("EllesmereUIActionBars", "addons.yields", "hideMacroText", "its bars' own texts: row above")
+-- Unit frames and cast bar: the game's on a hidden parent of its own.
+ns.AddonKitExpect("EllesmereUIUnitFrames", "frame.player", "PlayerFrame.*", "its player frame replaces the game's")
+ns.AddonKitExpect("EllesmereUIUnitFrames", "frame.target", "TargetFrame.parent", "its target frame replaces the game's")
+ns.AddonKitExpect("EllesmereUIUnitFrames", "frame.focus", "FocusFrame.parent", "its focus frame replaces the game's")
+ns.AddonKitExpect("EllesmereUIUnitFrames", "frame.petframe", "PetFrame.parent", "its pet frame replaces the game's")
+ns.AddonKitExpect("EllesmereUIUnitFrames", "touch.PlayerFrame", "*", "its player frame replaces the game's")
+ns.AddonKitExpect("EllesmereUIUnitFrames", "touch.TargetFrame", "parent", "its target frame replaces the game's")
+ns.AddonKitExpect("EllesmereUIUnitFrames", "touch.FocusFrame", "parent", "its focus frame replaces the game's")
+ns.AddonKitExpect("EllesmereUIUnitFrames", "touch.PetFrame", "parent", "its pet frame replaces the game's")
+ns.AddonKitExpect("EllesmereUIUnitFrames", "touch.PetFrameHappiness", "*", "hidden with the game's pet frame")
+ns.AddonKitExpect("EllesmereUIResourceBars", "frame.castbar", "PlayerCastingBarFrame.parent",
+	"its cast bar replaces the game's")
+ns.AddonKitExpect("EllesmereUIResourceBars", "touch.PlayerCastingBarFrame", "parent", "its cast bar replaces the game's")
+ns.AddonKitExpect("EllesmereUIResourceBars", "link.swingbars", "*", "its swing timer, claimed above (LINKS)")
+-- Party and raid frames.
+ns.AddonKitExpect("EllesmereUIRaidFrames", "touch.PartyFrame", "*", "its party frames replace the game's")
+ns.AddonKitExpect("EllesmereUIRaidFrames", "touch.CompactPartyFrame", "alpha", "its party frames replace the game's")
+ns.AddonKitExpect("EllesmereUIRaidFrames", "touch.CompactRaidFrameContainer", "*", "its raid frames replace the game's")
+ns.AddonKitExpect("EllesmereUIRaidFrames", "addons.yields", "healVisionFrames", "its own group frames: row above")
+-- Chat: its own window draws the lines (fed from the game's AddMessage by a
+-- post-hook: ours still run), the game's buttons and tab dock at 0.
+ns.AddonKitExpect("EllesmereUIChat", "frame.chat*", "*.alpha", "its own chat buttons and tabs in their place")
+ns.AddonKitExpect("EllesmereUIChat", "touch.ChatFrame*Button", "alpha", "its own chat buttons in their place")
+ns.AddonKitExpect("EllesmereUIChat", "touch.GeneralDockManager", "alpha", "its own tab strip in its place")
+ns.AddonKitExpect("EllesmereUIChat", "touch.QuickJoinToastButton", "alpha", "its own chat buttons in their place")
+ns.AddonKitExpect("EllesmereUIChat", "hook.ChatFrame1.AddMessage", "state", "its post-hook copies lines to its window")
+-- (Its chat panels are made a moment after login: claimed then, FindChat.)
+ns.AddonKitExpect("EllesmereUIChat", "link.chat*", "*", "its chat panel, buttons and tabs, claimed by FindChat")
+ns.AddonKitExpect("EllesmereUIChat", "chat.linesOnly", "chatIsDefault", "false: its chat window draws the lines")
+ns.AddonKitExpect("EllesmereUIChat", "chat.linesOnly", "linesOnly", "false: a message brings up its window")
+-- Minimap: the map moved out of the cluster, the cluster and its parts at 0.
+ns.AddonKitExpect("EllesmereUIMinimap", "touch.Minimap", "parent", "it moves the map out of the cluster")
+ns.AddonKitExpect("EllesmereUIMinimap", "touch.MinimapCluster", "alpha", "it keeps the cluster at 0, drawing its own")
+ns.AddonKitExpect("EllesmereUIMinimap", "touch.GameTimeFrame", "alpha", "its own calendar button")
+ns.AddonKitExpect("EllesmereUIMinimap", "touch.MinimapCompassTexture", "*", "its own map border")
+ns.AddonKitExpect("EllesmereUIMinimap", "touch.MinimapZoneText", "*", "its own zone name bar")
+ns.AddonKitExpect("EllesmereUIMinimap", "touch.TimeManagerClockButton", "*", "its own clock")
+ns.AddonKitExpect("EllesmereUIMinimap", "touch.AddonCompartmentFrame", "*", "its own addon buttons drawer")
+-- Quest tracker (its custom one on Forever, the game's at 0) and cooldowns.
+ns.AddonKitExpect("EllesmereUIQuestTracker", "frame.quests", "ObjectiveTrackerFrame.alpha", "its own tracker")
+ns.AddonKitExpect("EllesmereUIQuestTracker", "touch.ObjectiveTrackerFrame", "alpha", "its own tracker")
+ns.AddonKitExpect("EllesmereUICooldownManager", "frame.cooldownsbars", "BuffBarCooldownViewer.alpha",
+	"its own buff bars")
+ns.AddonKitExpect("EllesmereUICooldownManager", "touch.BuffBarCooldownViewer", "alpha", "its own buff bars")
+ns.AddonKitExpect("EllesmereUICooldownManager", "addons.yields", "cooldown*", "its own icon spots: yields above")
+-- Bags: the game's on a hidden parent; its toggles hooked (ToggleAllBags
+-- replaced: it opens its own bags).
+ns.AddonKitExpect("EllesmereUIBags", "touch.BankFrame", "parent", "its own bank window")
+ns.AddonKitExpect("EllesmereUIBags", "touch.ContainerFrame*", "parent", "its own bag window")
+ns.AddonKitExpect("EllesmereUIBags", "touch.*AllBags", "sameAsLogin", "it opens its own bags")
+ns.AddonKitExpect("EllesmereUIBags", "touch.ToggleB*", "sameAsLogin", "it opens its own bags")
+-- Game functions it post-hooks (hooksecurefunc: ours still run).
+ns.AddonKitExpect("EllesmereUIBlizzardSkin", "*.InspectUnit", "*", "post-hook for its tooltip's item level")
+ns.AddonKitExpect("EllesmereUIBlizzardSkin", "*.MerchantFrame_Update", "*", "post-hooks for its merchant window")
+ns.AddonKitExpect("EllesmereUIForeverEssentials", "*.TakeTaxiNode", "*", "post-hook for its flight timer")
 
 -- Its parts that draw only windows you open (bags and bank, group finder,
 -- friends list) or a palette shown while you hold its key (Quickdraw): left

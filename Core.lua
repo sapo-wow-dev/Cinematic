@@ -1539,6 +1539,9 @@ do
 		db = db or ns.db
 		if not db then return false end
 		if not ns.Setting("handleHealVision") then return false end -- (its page's switch, and the Visions')
+		-- (The game's frames only: off while an addon's own party and raid
+		-- frames stand in for them, its Addon Conflicts row: EllesmereUI's.)
+		if not plates and ns.FeatureYieldedTo and ns.FeatureYieldedTo("healVisionFrames") then return false end
 		-- (The tab your role goes by off: its role's own, or Default's; or Unit Frames, over them.)
 		local role = ns.PlayerRole()
 		local tab = ns.HEAL_VISION_TABS[(role and db["healVisionOwn_" .. role]) and role or "DEFAULT"]

@@ -83,6 +83,8 @@ EllesmereUI_PadOverlayLayer gamepad layer for its popups, hidden till one opens
 # Opened by a click (windows, popups, tooltips, menus): left as they are.
 EUITeleportPopup its teleport-to-dungeon prompt, shown on joining a Group Finder group: left alone like a dialog
 EUITeleportButton inside EUITeleportPopup
+EllesmereUILootRolls its loot roll list in place of the game's roll popups (no row fades those): a prompt to click, left alone (v9.9.4)
+EllesmereUILootRollsTip that list's own tooltip, on hover
 EUIClientGatePopup warning popup for an unsupported client
 EUIConfirmDimmer dimmer behind its confirm popup
 EUIConfirmMacroOverlay inside its confirm popup's button

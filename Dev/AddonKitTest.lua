@@ -133,6 +133,16 @@ for i = 1, MAX do
 		else
 			r:Verdict(Loaded(target), target .. " loaded")
 		end
+		-- (CineMode can come on at login before the kit's own check turns it
+		-- off, a moment later: probes taken then read its fades as the addon's,
+		-- 85 FAILs in EllesmereUI's stage of run qb556, 2026-11-25, while the
+		-- baseline's stage never came on. Off, then the frames' fade back in
+		-- over, before the probes, every stage alike.)
+		if ns.IsCineModeOn and ns.IsCineModeOn() and Cinematic_ToggleCineMode then
+			pcall(Cinematic_ToggleCineMode)
+			r:Log("CineMode came on at login: off before the probes")
+		end
+		r:Sleep(((ns.db and tonumber(ns.db.fadeInTime)) or 1.5) + 1)
 		local lines = ns.AddonKit.Run(target)
 		CinematicDB[LogKey(target)] = lines
 		local errors = 0

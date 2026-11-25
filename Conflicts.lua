@@ -15,6 +15,7 @@ local GROUPS = {
 	{ key = "scenes", label = "Cards and scenes" },
 	{ key = "quest", label = "Quest Vision" },
 	{ key = "windows", label = "Windows" },
+	{ key = "frames", label = "Frames" },
 	{ key = "style", label = "Style" },
 }
 local PICK_LABELS = { theirs = "Theirs", ours = "Ours", both = "Both" }
@@ -25,7 +26,8 @@ local PICK_TIPS = {
 }
 local PAGE = "Addon Conflicts"
 -- Addons with rows (Support/): the page is listed with one of them loaded.
-local ADDONS = { "DaylightUI", "DynamicCam", "ElvUI", "Leatrix_Plus", "NaowhForever_QoL", "RareScanner" }
+-- (EllesmereUI: its rows were never on the page with it alone, 2026-11-25.)
+local ADDONS = { "DaylightUI", "DynamicCam", "ElvUI", "EllesmereUI", "FlareUI", "Leatrix_Plus", "NaowhForever_QoL", "RareScanner" }
 
 -- Holding their frames hidden ------------------------------------------------
 

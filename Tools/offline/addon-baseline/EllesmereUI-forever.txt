@@ -1,4 +1,4 @@
-# version 9.9.2
+# version 9.9.4
 EnableMouse(false or a variable) in EllesmereUI/EUI_SpecOverrides_Session.lua
 EnableMouse(false or a variable) in EllesmereUI/EUI_UnlockMode_PointPicker.lua
 EnableMouse(false or a variable) in EllesmereUI/EUI_UnlockMode_PointVisuals.lua
@@ -20,6 +20,7 @@ EnableMouse(false or a variable) in EllesmereUIActionBars/EUI_ActionBars_Disposa
 EnableMouse(false or a variable) in EllesmereUIActionBars/EUI_ActionBars_ExtraBars.lua
 EnableMouse(false or a variable) in EllesmereUIActionBars/EUI_ActionBars_ForeverSwingSweep.lua
 EnableMouse(false or a variable) in EllesmereUIActionBars/EUI_ActionBars_Init.lua
+EnableMouse(false or a variable) in EllesmereUIActionBars/EUI_ActionBars_PopulatePicker.lua
 EnableMouse(false or a variable) in EllesmereUIActionBars/EUI_ActionBars_QuickKeybind.lua
 EnableMouse(false or a variable) in EllesmereUIActionBars/EUI_ActionBars_XPBar.lua
 EnableMouse(false or a variable) in EllesmereUIActionBars/EllesmereUIActionBars.lua
@@ -324,6 +325,8 @@ frame EllesmereUIDragonRidingAnchor
 frame EllesmereUIFishingCastButton
 frame EllesmereUIFrame
 frame EllesmereUIJunkList
+frame EllesmereUILootRolls
+frame EllesmereUILootRollsTip
 frame EllesmereUIMailAltList
 frame EllesmereUIMicroMenu
 frame EllesmereUIMinimapButton
@@ -392,12 +395,14 @@ hooks CharacterFrame:UpdatePortrait
 hooks ClassTrainerFrame_Update
 hooks CompactRaidFrameManager_UpdateShown
 hooks CompactUnitFrame_SetUpFrame
+hooks ConfirmLootRoll
 hooks CooldownViewerBuffBarItemMixin:OnCooldownIDSet
 hooks CooldownViewerBuffIconItemMixin:OnCooldownIDSet
 hooks CooldownViewerEssentialItemMixin:OnCooldownIDSet
 hooks CooldownViewerUtilityItemMixin:OnCooldownIDSet
 hooks DebuffFrame:Show
 hooks EAB:ApplyBarOpacity
+hooks EAB:FinishSetup
 hooks EAB:RefreshMouseover
 hooks EJSuggestFrame_RefreshDisplay
 hooks EditModeManagerFrame:Hide
@@ -518,6 +523,7 @@ hooks UnitFrameManaBar_UpdateTypeOld
 hooks UnitPopup_OpenMenu
 hooks UpdateMicroButtons
 hooks _EABR_RequestRefresh
+hooks _EAB_Apply
 partial mouse handling in EllesmereUI/EUI_SpecOverrides_Borders.lua
 partial mouse handling in EllesmereUI/EllesmereUI_AuraKit.lua
 partial mouse handling in EllesmereUI/EllesmereUI_FriendsList.lua
@@ -541,6 +547,7 @@ partial mouse handling in EllesmereUIDamageMeters/EUI_DamageMeters_Window.lua
 partial mouse handling in EllesmereUIForeverEssentials/EllesmereUIForeverEssentials.lua
 partial mouse handling in EllesmereUIForeverEssentials/EllesmereUIForeverEssentials_ClassicSpellbook.lua
 partial mouse handling in EllesmereUIForeverEssentials/EllesmereUIForeverEssentials_Fishing.lua
+partial mouse handling in EllesmereUIForeverEssentials/EllesmereUIForeverEssentials_LootFeed.lua
 partial mouse handling in EllesmereUIForeverEssentials/EllesmereUIForeverEssentials_MapTravel.lua
 partial mouse handling in EllesmereUIMinimap/EUI_Minimap_Apply.lua
 partial mouse handling in EllesmereUIMinimap/EUI_Minimap_Layout.lua

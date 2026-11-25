@@ -16362,7 +16362,11 @@ do
 	local TEXTS = { { "HotKey", "HotKey", "hideKeybinds" }, { "Name", "Name", "hideMacroText" } }
 	local setting = {} -- (each text hooked: the setting that hides it)
 	local faded = {} -- (each text we set to 0: given back its alpha once, when unticked)
+	-- (Off while another addon's bars draw their own key and macro texts: its
+	-- Addon Conflicts row, EllesmereUI's. Ours never reached its buttons, only
+	-- the game's pet and stance buttons it keeps, so those alone lost theirs.)
 	local function Hidden(key)
+		if ns.FeatureYieldedTo and ns.FeatureYieldedTo(key) then return false end
 		return ns.db ~= nil and ns.db[key] == true
 	end
 	local function Fix(text)

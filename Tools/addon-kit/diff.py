@@ -220,6 +220,14 @@ def compare(base, run, addon, expects, risk=None):
                 continue
             if probe == "context.state":
                 continue
+            # (An alpha on a frame hidden in both runs draws nothing: what the
+            # game left from fading its last line, ActionStatus 0.010 then and 1
+            # now in EllesmereUI's run q8e26, 2026-11-25.)
+            if field.endswith("alpha"):
+                seen = field[:-len("alpha")] + "visible"
+                if a.get(seen) == "false" and b.get(seen) == "false":
+                    notes.append("hidden in both: %s %s: %s then, %s now (draws nothing)" % (probe, field, was, now))
+                    continue
             why = declared(probe, field)
             if not why and any(v.search(probe + " " + field) for v in volatile):
                 notes.append("can't tell: %s %s: %s then, %s now (the game's state moved)" % (probe, field, was, now))
@@ -398,6 +406,16 @@ def selftest():
     fails, expected, _ = compare(Run(nbase), Run(newrow), "Fake", [])
     check("a frame probe the baseline lacks (the addon's frame on our row) is its own, not a FAIL",
           not any("prdpower" in f for f in fails) and any("prdpower" in e for e in expected), "; ".join(fails))
+    hbase = ["H format=1 client=forever build=16001 label=x addons=", "R touch.ActionStatus	visible	false	v1",
+             "R touch.ActionStatus	alpha	0.010	v1", "R frame.buffs	BuffFrame.visible	true	v1",
+             "R frame.buffs	BuffFrame.alpha	1	v1", "D 2 probes, 0 errors"]
+    hrun = ["H format=1 client=forever build=16001 label=x addons=Fake", "R touch.ActionStatus	visible	false	v1",
+            "R touch.ActionStatus	alpha	1	v1", "R frame.buffs	BuffFrame.visible	true	v1",
+            "R frame.buffs	BuffFrame.alpha	0	v1", "D 2 probes, 0 errors"]
+    fails, _, notes = compare(Run(hbase), Run(hrun), "Fake", [])
+    check("an alpha on a frame hidden in both runs is a note, a shown frame's still FAILs",
+          not any("ActionStatus" in f for f in fails) and any("BuffFrame.alpha" in f for f in fails)
+          and any("hidden in both" in n for n in notes), "; ".join(fails))
     sbase = ["H format=1 client=forever build=16001 label=x addons=", "R context.state	pet	false	v1",
              "R frame.petframe	PetFrame.shown	false	v1", "R frame.player	PlayerFrame.shown	true	v1",
              "D 2 probes, 0 errors"]
