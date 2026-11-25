@@ -10139,6 +10139,9 @@ local function CreateQualityPanel()
 		if ns.RefreshTalentLink then ns.RefreshTalentLink() end
 		if ns.RefreshTalentCalc then ns.RefreshTalentCalc() end
 		if ns.RefreshAhDressUp then ns.RefreshAhDressUp() end
+		-- (Audit 2026-11-25: the XP bar's "(N left)" and the windows' drag strips follow it too.)
+		if ns.RefreshXpLeft then ns.RefreshXpLeft() end
+		if ns.RefreshPanelStrips then ns.RefreshPanelStrips() end
 	end)
 
 	local stack = Stack(switch, "check")
@@ -10268,7 +10271,11 @@ local function CreateQualityPanel()
 		title = Label(content, "GameFontNormalLarge", L["Hunter"])
 		title:SetPoint("TOPLEFT", 16, -16)
 		switch = PageSwitch(content, "handleHunter", L["Enable Page"],
-			L["Turns the Hunter helpers on or off."], title)
+			L["Turns the Hunter helpers on or off."], title, function()
+			-- (Audit 2026-11-25: a vendor's Fill buttons and the right-click pull follow it at once.)
+			if ns.RefreshHunterFill then ns.RefreshHunterFill() end
+			if ns.RefreshHunterPull then ns.RefreshHunterPull() end
+		end)
 		stack = Stack(switch, "check")
 		-- (Hunter.lua: Classic Era only. WoW Forever has the game's own setting.)
 		if ns.isClassicEra then

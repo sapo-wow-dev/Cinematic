@@ -508,6 +508,18 @@ local function SettingsChanged()
 	if ns.ApplyShoulderCam then ns.ApplyShoulderCam() end
 	if ns.ApplyWheelSwitches then ns.ApplyWheelSwitches() end -- (MarkerWheel.lua: the Wheels pages' switches)
 	if ns.ApplyFrameLinks then ns.ApplyFrameLinks() end -- (FrameLinks.lua: the Links page tabs' switches)
+	-- (Audit 2026-11-25: a profile with these off put them back only at the next reload:
+	-- Graphics+, the XP bar's "(N left)", the inspect Talents buttons, the dressing room
+	-- by the auction house, a vendor's Fill buttons, the hunter's right-click pull, the
+	-- windows' drag strips.)
+	if ns.ApplyGraphicsPlus then ns.ApplyGraphicsPlus() end
+	if ns.RefreshXpLeft then ns.RefreshXpLeft() end
+	if ns.RefreshTalentLink then ns.RefreshTalentLink() end
+	if ns.RefreshTalentCalc then ns.RefreshTalentCalc() end
+	if ns.RefreshAhDressUp then ns.RefreshAhDressUp() end
+	if ns.RefreshHunterFill then ns.RefreshHunterFill() end
+	if ns.RefreshHunterPull then ns.RefreshHunterPull() end
+	if ns.RefreshPanelStrips then ns.RefreshPanelStrips() end
 	-- (A profile with the Keyboard Map's page off: an open map closes, as its switch does.)
 	if ns.KeyboardMapClose and ns.KeyboardMapShown and ns.KeyboardMapShown() and not ns.PageOn("keyboardMap") then
 		ns.KeyboardMapClose()

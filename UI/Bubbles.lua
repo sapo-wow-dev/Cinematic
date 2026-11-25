@@ -18,11 +18,19 @@ local function OffHere(db, kind)
 	return not ns.RowOnNow(BUBBLE_ROWS[kind], db["bubbles" .. kind .. "Always"], true)
 end
 
+-- Whether the page is on, with the switches it's under (Chat's Show tab, the HUD's
+-- General). (Audit 2026-11-25: its loop, events and the speech-behind read the page's
+-- own switch alone, so with Chat's Show off the bubble settings kept being written.)
+local function BubblesOn(db)
+	return db and db.handleBubbles and not ns.MasterOff("handleBubbles", db) and true or false
+end
+ns.BubblesOn = BubblesOn -- (Chat.lua's speech from behind; Audit 2026-11-25)
+
 -- Whether the page has that kind (Say, Yell, Party, NPC) off now. (Chat.lua: such a line
 -- has no bubble to wait for.)
 function ns.BubbleKindOff(kind)
 	local db = ns.db
-	return db and db.handleBubbles and not ns.MasterOff("handleBubbles", db) and BUBBLE_ROWS[kind] and OffHere(db, kind) or false
+	return BubblesOn(db) and BUBBLE_ROWS[kind] and OffHere(db, kind) or false
 end
 
 local function ApplyCVars(db)
@@ -871,7 +879,7 @@ function ns.IsBubbleOnScreen(text)
 				-- (From the world's own bottom: between the letterbox bars, Letterbox.lua.)
 				local up = ns.worldSqueeze or 0
 				left, right, bottom, top = left * scale, right * scale, bottom * scale - up, top * scale - up
-				local lifting = ns.db and ns.db.handleBubbles and ns.db.bubblesOffTop
+				local lifting = BubblesOn(ns.db) and ns.db.bubblesOffTop -- (Audit 2026-11-25)
 				if ns.speechWatch and placeTold ~= text then
 					placeTold = text -- (once a line: this is asked each frame while chat waits)
 					ns.Print(("speech: its bubble from %.0f, %.0f to %.0f, %.0f of %.0f x %.0f%s"):format(left, bottom,
@@ -989,7 +997,7 @@ local watcher = CreateFrame("Frame")
 local function OnUpdate(self, elapsed)
 	if next(hideLines) then HideKindBubbles() end
 	StyleBubbles()
-	if ns.db and ns.db.handleBubbles then HookBubbles() end
+	if BubblesOn(ns.db) then HookBubbles() end -- (Audit 2026-11-25)
 	watchLeft = watchLeft - elapsed
 	if watchLeft <= 0 then
 		ns.SetOnUpdate(self, nil)
@@ -1001,25 +1009,32 @@ end
 local ticker = CreateFrame("Frame")
 -- (Runs only while the page is on, once a second on a game timer: no loop
 -- at all otherwise.)
+-- (Audit 2026-11-25: with the switch it's under turned off, it runs once more
+-- to put the game's bubble settings back, then stops.)
+local wasOn = false
 ns.FeatureLoop(ticker, function()
-	if ns.db and ns.db.handleBubbles then ApplyCVars(ns.db) end
+	if BubblesOn(ns.db) then
+		ApplyCVars(ns.db)
+	elseif wasOn then
+		ns.ApplyBubbles()
+	end
 end, function()
-	return ns.db and ns.db.handleBubbles and true or false
+	return BubblesOn(ns.db) or wasOn
 end, 1)
 
-local wasOn = false
 -- The settings changing (on the page, a profile, a reset) or a new place.
 function ns.ApplyBubbles()
 	local db = ns.db
 	if not db then return end
-	if db.handleBubbles then
+	local on = BubblesOn(db) -- (Audit 2026-11-25: with the switches it's under)
+	if on then
 		ApplyCVars(db)
 	elseif wasOn then
 		RestoreCVars()
 	end
-	wasOn = db.handleBubbles and true or false
+	wasOn = on
 	StyleBubbles()
-	if db.handleBubbles then HookBubbles() end
+	if on then HookBubbles() end
 end
 
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -1042,7 +1057,7 @@ watcher:SetScript("OnEvent", ns.Profiled("chat bubbles event", function(self, ev
 		ns.SetOnUpdate(self, OnUpdate)
 	-- (Also while the Style page is on, or any bubble is still styled from
 	-- before.) (And while the page is on at all, to keep new bubbles off the top.)
-	elseif ns.db and (ns.db.handleBubbles or ns.StyleOn("bubblesStyle") or Styled()) then
+	elseif ns.db and (BubblesOn(ns.db) or ns.StyleOn("bubblesStyle") or Styled()) then -- (Audit 2026-11-25)
 		watchLeft = WATCH_FOR
 		ns.SetOnUpdate(self, OnUpdate)
 	end

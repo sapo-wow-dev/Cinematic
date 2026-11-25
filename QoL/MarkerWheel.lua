@@ -1212,15 +1212,23 @@ end
 -- The secure wheels told (their snippets read "cineoff") and the master
 -- wheel laid out again: now, or in a fight as it ends.
 local switchPending = CreateFrame("Frame")
+-- (Whether a wheel's key is on: its Keybinds tab. Audit 2026-11-25.)
+local function WheelKeyOn(button)
+	local name = button and button.GetName and button:GetName()
+	if not (name and Cinematic_KeyOn) then return true end
+	return Cinematic_KeyOn("CLICK " .. name .. ":LeftButton") and true or false
+end
 function ns.ApplyWheelSwitches()
 	if InCombatLockdown() then
 		switchPending:RegisterEvent("PLAYER_REGEN_ENABLED")
 		return
 	end
-	CinematicMenuWheel:SetAttribute("cineoff", not WheelOn("wheelMenuOn") or nil)
+	-- (And off with its key's Keybinds tab off: its key clicks a secure button,
+	-- which Bindings.xml can't ask Cinematic_KeyOn. Audit 2026-11-25.)
+	CinematicMenuWheel:SetAttribute("cineoff", not (WheelOn("wheelMenuOn") and WheelKeyOn(_G.CinematicMenuWheelButton)) or nil)
 	for _, wheel in ipairs(wheels) do
 		wheel:Hide()
-		wheel:SetAttribute("cineoff", not WheelOn(wheel.switch) or nil)
+		wheel:SetAttribute("cineoff", not (WheelOn(wheel.switch) and WheelKeyOn(wheel.keyButton)) or nil)
 	end
 	ns.RebuildMasterWheel()
 end
@@ -1254,6 +1262,9 @@ watcher:SetScript("OnEvent", function(_, event)
 	-- (The master wheel's wheels, as saved: the settings are loaded now.)
 	if event == "PLAYER_ENTERING_WORLD" then
 		ns.ApplyWheelSwitches() -- (the master wheel laid out again too)
+		-- (A Keybinds tab switched: the wheels' keys follow it. Options.lua's hooks, made
+		-- after this file. Audit 2026-11-25.)
+		if ns.tabSwitchHooks then ns.tabSwitchHooks["tabOn:Keybinds:"] = ns.ApplyWheelSwitches end
 	end
 	if InCombatLockdown() then
 		return

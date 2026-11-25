@@ -654,7 +654,15 @@ function ns.UpdateCVars(cinematic, fightStarting)
 	-- and Out of combat boxes, CineMode or not (the addon off: always shown).
 	if UIErrorsFrame then
 		local hide = ns.db.enabled and ns.Setting(fighting and "hideErrorsInCombat" or "hideErrorsOutOfCombat")
-		UIErrorsFrame:SetAlpha(hide and 0 or 1)
+		-- (1 written back only if we hid it: each pass wrote 1 with both boxes off, over
+		-- whatever another addon set. On ns: the main chunk's locals. Audit 2026-11-25.)
+		if hide then
+			UIErrorsFrame:SetAlpha(0)
+			ns.errorsHiddenByUs = true
+		elseif ns.errorsHiddenByUs then
+			UIErrorsFrame:SetAlpha(1)
+			ns.errorsHiddenByUs = nil
+		end
 	end
 end
 

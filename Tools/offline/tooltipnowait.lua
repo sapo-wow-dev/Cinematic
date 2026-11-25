@@ -54,6 +54,7 @@ local function Case(name, setup, want, route)
 	world = { exists = { mouseover = true }, same = {}, plates = {}, unit = SECRET, owner = UIParent }
 	for k in pairs(quest) do quest[k] = nil end
 	db.enabled, db.handleTooltips, db.tooltipNoWaitQuest, db.tooltipFullAfter = true, true, true, 2
+	db.mouseover = true -- (the Tooltips page is under Mouseover's Show: Audit 2026-11-25, OK'd by the user)
 	setup()
 	local ok, yes = pcall(ns.TooltipSkipsWait, tooltip)
 	local last = ns.tooltipNoWaitLast or {}

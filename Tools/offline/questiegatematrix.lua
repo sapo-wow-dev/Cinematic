@@ -79,6 +79,7 @@ Matrix.Run({
 		local db = ns.db
 		-- (Our paths into Questie's support, as play reaches them.)
 		db.enabled, db.handleTooltips, db.tooltipNoWaitQuest, db.tooltipFullAfter = true, true, true, 2
+		db.mouseover = true -- (the Tooltips page is under Mouseover's Show: Audit 2026-11-25, OK'd by the user)
 		db.questVision, db.questItemButton, db.targetQuestIcon = true, true, true
 		local tooltip = wow.CreateFrame("GameTooltip")
 		rawset(tooltip, "GetUnit", function() return "Young Wolf", "mouseover" end)

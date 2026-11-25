@@ -337,6 +337,10 @@ end
 -- CinematicReloadKey instead (an override, set out of fights and kept through
 -- them), unless the Keybinds tab has it off.
 local keyOwner, boundKeys
+local boundOn -- (the Keybinds tab's switch as BindKey last saw it; Audit 2026-11-25)
+local function KeyOn()
+	return not Cinematic_KeyOn or Cinematic_KeyOn("CINEMATIC_RELOAD") and true or false
+end
 if ns.reloadBlocked then
 	local reloadKey = SecureReload("CinematicReloadKey", UIParent)
 	reloadKey:SetScript("PreClick", Save)
@@ -345,7 +349,8 @@ if ns.reloadBlocked then
 end
 local function BindKey()
 	if not keyOwner or InCombatLockdown() then return end
-	local on = not Cinematic_KeyOn or Cinematic_KeyOn("CINEMATIC_RELOAD")
+	local on = KeyOn()
+	boundOn = on
 	local keys = on and table.concat({ GetBindingKey("CINEMATIC_RELOAD") }, " ") or ""
 	if keys == boundKeys then return end
 	boundKeys = keys
@@ -414,7 +419,14 @@ end
 button:RegisterEvent("PLAYER_ENTERING_WORLD")
 button:RegisterEvent("UI_SCALE_CHANGED")
 button:RegisterEvent("DISPLAY_SIZE_CHANGED")
+-- (Audit 2026-11-25: a key bound or a fight over: looked at then, not every half second.)
+button:RegisterEvent("UPDATE_BINDINGS")
+button:RegisterEvent("PLAYER_REGEN_ENABLED")
 button:SetScript("OnEvent", function(_, event, _, isReload)
+	if event == "UPDATE_BINDINGS" or event == "PLAYER_REGEN_ENABLED" then
+		Update()
+		return
+	end
 	Place()
 	if event == "PLAYER_ENTERING_WORLD" then
 		Update()
@@ -426,4 +438,15 @@ button:SetScript("OnEvent", function(_, event, _, isReload)
 		end
 	end
 end)
-C_Timer.NewTicker(0.5, Update)
+-- (Audit 2026-11-25: was a game timer running Update twice a second for good, the
+-- key's binding string built each time on Forever. Now the feature loops' once-a-second
+-- look asks only whether the button or the key is out of step with its settings (the
+-- tick, its page, a profile, the Keybinds tab), and Update runs just then.)
+local function OutOfStep()
+	if not Locked() then
+		local on = (ns.reloadTestShowButton or ns.Setting("reloadButton")) and true or false
+		if on ~= (button:IsShown() and true or false) then return true end
+	end
+	return keyOwner ~= nil and not InCombatLockdown() and KeyOn() ~= boundOn
+end
+ns.FeatureLoop(CreateFrame("Frame"), Update, OutOfStep, 0.5)

@@ -688,7 +688,8 @@ ns.NameRevealsMinimap = Wanted
 local function AnyReveal()
 	if cursor.On and cursor.On() then return true end
 	local db = ns.db
-	return db and db.handleMinimap ~= false and ns.CanSweepMinimap() and (db.minimapRevealNodes
+	-- (With the switches the Minimap page is under too. Audit 2026-11-25.)
+	return db and ns.PageOn("handleMinimap") and ns.CanSweepMinimap() and (db.minimapRevealNodes
 		or db.minimapRevealTurnIns or db.minimapRevealAreas or db.minimapRevealIcons
 		or db.minimapRevealMapPin) or false
 end
@@ -1606,7 +1607,7 @@ end
 
 function cursor.On()
 	local db = ns.db
-	return db ~= nil and db.handleMinimap ~= false and db.minimapNodesByCursor == true
+	return db ~= nil and ns.PageOn("handleMinimap") and db.minimapNodesByCursor == true -- (Audit 2026-11-25)
 		and ns.CanCursorSweepMinimap()
 end
 
@@ -2517,7 +2518,7 @@ end
 
 local function QuestReveal()
 	local db = ns.db
-	return db and db.handleMinimap ~= false and ns.CanRevealQuestsOnly()
+	return db and ns.PageOn("handleMinimap") and ns.CanRevealQuestsOnly() -- (Audit 2026-11-25)
 		and (db.minimapRevealAreas or db.minimapRevealTurnIns) or false
 end
 

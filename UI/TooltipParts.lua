@@ -28,9 +28,14 @@ local unitFillCount
 -- Whether a part (ns.TOOLTIP_PARTS) is taken out now: unticked in the
 -- column for now (On first hover, or After once revealed). With
 -- tooltipFullAfter off, none is.
+-- (Whether the Tooltips page is on, with the Mouseover Show it's under. Audit 2026-11-25:
+-- the fading, the countdown and No wait read the page's switch alone.)
+local function PageOn(db)
+	return db and db.enabled and db.handleTooltips and not ns.MasterOff("handleTooltips", db) and true or false
+end
 local function Cut(part)
 	local db = ns.db
-	if not (db and db.enabled and db.handleTooltips and not ns.MasterOff("handleTooltips", db)) or (db.tooltipFullAfter or 0) <= 0 then
+	if not PageOn(db) or (db.tooltipFullAfter or 0) <= 0 then
 		return false
 	end
 	return not db["tooltipShow" .. part .. (revealed and "Later" or "First")]
@@ -40,7 +45,7 @@ end
 -- Tooltips page switched off: then tooltips are left as the game has them).
 local function FadeTime()
 	local db = ns.db
-	local time = db and db.enabled and db.handleTooltips and db.tooltipFadeTime
+	local time = PageOn(db) and db.tooltipFadeTime -- (Audit 2026-11-25)
 	return time and time > 0 and time or nil
 end
 
@@ -965,7 +970,7 @@ local function StartCountdown(tooltip)
 	end
 	-- (Page switched off: the After column changes nothing, so no countdown.)
 	local db = ns.db
-	local after = db and db.enabled and db.handleTooltips and db.tooltipFullAfter or 0
+	local after = PageOn(db) and db.tooltipFullAfter or 0 -- (Audit 2026-11-25)
 	if after > 0 then
 		fullTimer = C_Timer.NewTimer(after, function()
 			fullTimer = nil
@@ -1026,7 +1031,7 @@ end
 ns.tooltipNoWaitLast = nil
 local function SkipsWait(tooltip)
 	local db = ns.db
-	if not (db and db.enabled and db.handleTooltips and db.tooltipNoWaitQuest) or (db.tooltipFullAfter or 0) <= 0 then
+	if not (PageOn(db) and db.tooltipNoWaitQuest) or (db.tooltipFullAfter or 0) <= 0 then -- (Audit 2026-11-25)
 		return false
 	end
 	local tried, yes, route = {}, false, nil

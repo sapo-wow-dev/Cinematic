@@ -1020,7 +1020,8 @@ local function SpeakOrPeek(line)
 			tostring(chatFrame:GetName()), tostring(chatFrame:IsShown()), tostring(chatFrame:IsVisible()),
 			tostring(chatFrame:GetEffectiveAlpha()), tostring(ns.db.chatSpeechBehind)))
 	end
-	if not (ns.db.handleBubbles and ns.db.chatSpeechBehind and ns.ShowSpeechBehind
+	-- (Audit 2026-11-25: with the switches the bubbles page is under, ns.BubblesOn.)
+	if not (ns.BubblesOn and ns.BubblesOn(ns.db) and ns.db.chatSpeechBehind and ns.ShowSpeechBehind
 			and ns.ChatWindowShown(chatFrame)) then
 		PeekWindow(chatFrame, line[2], nil, line[5])
 	elseif ChatUnseen(chatFrame) then

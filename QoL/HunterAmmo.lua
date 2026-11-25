@@ -272,6 +272,10 @@ local function UpdateFillButtons()
 		end
 	end
 end
+-- (The Hunter page's switch: an open vendor's Fill buttons go or come back. Audit 2026-11-25.)
+function ns.RefreshHunterFill()
+	if MerchantFrame and MerchantFrame:IsShown() then UpdateFillButtons() end
+end
 
 if MerchantFrame_Update then
 	hooksecurefunc("MerchantFrame_Update", UpdateFillButtons)

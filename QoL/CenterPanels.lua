@@ -370,6 +370,10 @@ local HANDLE_HEIGHT = 24
 local HANDLE_RIGHT = 64
 
 local handles = {} -- frame -> its title bar strip
+-- (Whether any strip is up: the windows are looked at once more to take them down,
+-- then not at all with the switches off. Audit 2026-11-25: next(handles) kept every
+-- window open and close rearranging them for good once one strip was ever made.)
+local stripsUp = false
 
 -- Not with a controller: the gamepad cursor stops on every frame that takes the
 -- mouse, and the strip is an invisible one along the window's top (in the bags,
@@ -629,9 +633,13 @@ local function Arrange()
 		return
 	end
 	HookOpen()
+	local up = false -- (Audit 2026-11-25)
 	for frame, handle in pairs(handles) do
-		handle:SetShown(StripShown(CanDrag(frame)))
+		local shown = StripShown(CanDrag(frame))
+		handle:SetShown(shown)
+		up = up or shown
 	end
+	stripsUp = up
 	if not OpenPanels() then
 		return
 	end
@@ -724,7 +732,9 @@ local function PlaceOther(frame, left)
 		MakeDraggable(frame, left)
 	end
 	if handles[frame] then
-		handles[frame]:SetShown(StripShown(ns.Setting("dragPanels")))
+		local shown = StripShown(ns.Setting("dragPanels"))
+		handles[frame]:SetShown(shown)
+		stripsUp = stripsUp or shown -- (Audit 2026-11-25)
 	end
 	local spot = Spot(frame)
 	if spot and not Held(frame) and ns.Flag(frame:IsShown()) and not Locked(frame) and not UnderMouse(frame) then
@@ -822,7 +832,7 @@ local function ArrangeAgain()
 end
 
 function Placed()
-	if not (ns.db and (ns.Setting("centerPanels") or ns.Setting("dragPanels") or next(handles)
+	if not (ns.db and (ns.Setting("centerPanels") or ns.Setting("dragPanels") or stripsUp -- (Audit 2026-11-25)
 		or ns.TalkWindowPlace and ns.TalkWindowPlace() or ns.ShopFollowsTalk and ns.ShopFollowsTalk())) then
 		return
 	end
@@ -958,6 +968,19 @@ function ns.ForgetPanelSpots()
 		ns.db.questTalkBubbleSpot = nil -- (and its bubble, while not over an NPC)
 	end
 	wipe(dropped)
+end
+
+-- The Quality of life page's switch (or Drag windows): the strips taken down at once
+-- with dragging off, put up again with it on. (Audit 2026-11-25.)
+function ns.RefreshPanelStrips()
+	if not ns.db then return end
+	local up = false
+	for frame, handle in pairs(handles) do
+		local shown = StripShown(CanDrag(frame))
+		handle:SetShown(shown)
+		up = up or shown
+	end
+	stripsUp = up
 end
 
 if GetUIPanel then

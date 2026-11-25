@@ -118,13 +118,24 @@ watcher:SetScript("OnEvent", function(_, event, mouseButton)
 		end
 		pullButton:SetAttribute("macrotext", "/target mouseover\n/startattack\n/cast !" .. AutoShotName())
 		ApplyDriver()
-		ns.SetOnUpdate(watcher, ns.Profiled("Hunter right-click watch", function()
+		-- (Audit 2026-11-25: only while the setting's on, or till what it bound is let go.
+		-- It ran every frame for every Classic Era hunter, the setting off by default.)
+		ns.FeatureLoop(watcher, ns.Profiled("Hunter right-click watch", function()
 			-- Right button held: the binding stays as it was pressed (swapping it
 			-- mid-press would leave a right-drag turning stuck).
 			if not IsMouseButtonDown("RightButton") then
 				SetPull(WantPull())
 			end
 			ApplyDriver() -- (the setting changed: page, profile or Reset)
-		end))
+		end), function()
+			return Wanted() or bound or driverOn
+		end)
 	end
 end)
+
+-- The Hunter page's switch, a profile or Reset: the watch started or let go at once
+-- (the feature loops are synced once a second anyway). (Audit 2026-11-25.)
+function ns.RefreshHunterPull()
+	ApplyDriver()
+	ns.WakeFeatureLoop(watcher)
+end

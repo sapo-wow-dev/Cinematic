@@ -62,7 +62,9 @@ end
 
 function ns.QuestieMinimapOn()
 	local db = ns.db
-	return db ~= nil and db.handleMinimap ~= false and db.minimapQuestie == true and not look.broken
+	-- (The Minimap page with the switches it's under: Minimap's Show tab, the HUD's
+	-- General. Audit 2026-11-25: it read the page's own switch alone.)
+	return db ~= nil and ns.PageOn("handleMinimap") and db.minimapQuestie == true and not look.broken
 		and ns.QuestieLoaded()
 end
 

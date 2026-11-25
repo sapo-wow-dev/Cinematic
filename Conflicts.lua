@@ -132,19 +132,29 @@ end
 -- Looked at twice a second once there's a row (their frames are made as
 -- they're first needed, and their versions switch on and off in their own
 -- options), and just after a line that can bring a chat bubble.
-local ticker
+-- (Audit 2026-11-25: only while a row that hides frames has Ours picked, or a frame is
+-- still held to let go. It ran for good once any row existed, every pick Theirs too.)
+local loopFrame
 local BUBBLE_EVENTS = { "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_MONSTER_SAY", "CHAT_MSG_MONSTER_YELL",
 	"CHAT_MSG_PARTY" }
 local function Tick()
 	ns.UpdateConflictHolds()
 end
+local function HoldsWanted()
+	if next(held) then return true end
+	for _, row in ipairs(ns.CONFLICTS) do
+		if row.hide and ns.ConflictPick(row) == "ours" then return true end
+	end
+	return false
+end
 function ns.OnConflictAdded()
-	if ticker then return end
-	ticker = C_Timer.NewTicker(0.5, ns.Profiled("Addon Conflicts", Tick))
+	if loopFrame then return end
+	loopFrame = CreateFrame("Frame")
+	ns.FeatureLoop(loopFrame, ns.Profiled("Addon Conflicts", Tick), HoldsWanted, 0.5)
 	local watcher = CreateFrame("Frame")
 	for _, event in ipairs(BUBBLE_EVENTS) do watcher:RegisterEvent(event) end
 	watcher:SetScript("OnEvent", function()
-		C_Timer.After(0.05, Tick)
+		if HoldsWanted() then C_Timer.After(0.05, Tick) end
 	end)
 end
 
@@ -153,6 +163,7 @@ function ns.SetConflictPick(row, pick)
 	ns.GetDB().conflictPicks[row.id] = pick
 	if row.onPick then pcall(row.onPick, pick) end
 	ns.UpdateConflictHolds()
+	if loopFrame then ns.WakeFeatureLoop(loopFrame) end -- (Audit 2026-11-25)
 	if ns.ConflictsChanged then ns.ConflictsChanged() end
 end
 
