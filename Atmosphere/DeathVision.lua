@@ -223,7 +223,8 @@ local function CorpseRunLevel()
 	-- (The death camera on here, by its own code or as its script.)
 	local deathCamOn = not ns.IsCameraOffHere("death")
 		or (ns.CameraRowsScripted ~= nil and ns.CameraRowsScripted("death") and not ns.CameraOffBesidesRows("death"))
-	if not (ghost and db.enabled and db.deathScreen and deathCamOn) then
+	-- (By its Allow outside CineMode tick too, ns.Setting, as every Vision. Audit 2026-11-25)
+	if not (ghost and db.enabled and ns.Setting("deathScreen") and deathCamOn) then
 		return nil
 	end
 	local wave = WaveLevel(GetTime())
@@ -266,7 +267,7 @@ local function UpdateDeathScreen(elapsed)
 	if not deathFrame then
 		return
 	end
-	local want = db.enabled and db.deathScreen and ns.DeathCinematicWanted and ns.DeathCinematicWanted()
+	local want = db.enabled and ns.Setting("deathScreen") and ns.DeathCinematicWanted and ns.DeathCinematicWanted() -- (Audit 2026-11-25)
 	local run = CorpseRunLevel()
 	-- (Death Vision's Test: as if just dead, until it ends or Stop.)
 	local test = ns.deathVisionTest

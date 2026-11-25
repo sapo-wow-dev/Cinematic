@@ -5314,6 +5314,7 @@ local function CreateRevealPanel()
 		["Roll Vision"] = { "outsideCineRoll" }, ["Teleport Vision"] = { "outsideCineTeleport" },
 		["Duel Vision"] = { "outsideCineDuel" }, ["Emote Vision"] = { "outsideCineEmote" },
 		["Card Vision"] = { "outsideCineCards" },
+		["Death Vision"] = { "outsideCineDeath" }, -- (Audit 2026-11-25: the user, as every other Vision)
 		-- (No Always: its cards need a plate, which only CineMode keeps for
 		-- them; outside it they come only while your own plates show.)
 		["Emote Vision Nameplates"] = { cineOnly = true },

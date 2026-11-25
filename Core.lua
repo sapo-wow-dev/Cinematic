@@ -1787,6 +1787,7 @@ local OUTSIDE_CINE = {
 	questVision = "outsideCineQuest", rollWindow = "outsideCineRoll", teleportVision = "outsideCineTeleport",
 	duelPlates = "outsideCineDuel", emoteVision = "outsideCineEmote", cards = "outsideCineCards",
 	shoulderCam = "outsideCineShoulder", skyrideCam = "outsideCineSkyride", musicInCinematic = "outsideCineMusic",
+	deathScreen = "outsideCineDeath", -- (Death Vision too, as every other Vision: the user, 2026-11-25. Audit 2026-11-25)
 }
 for _, tick in pairs(OUTSIDE_CINE) do DEFAULTS[tick] = true end
 ns.OUTSIDE_CINE = OUTSIDE_CINE
