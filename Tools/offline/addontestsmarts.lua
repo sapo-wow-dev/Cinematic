@@ -64,4 +64,24 @@ for _, name in ipairs(untaken) do if name == "Questie_BaseFrame" then stillThere
 Check("a frame we took over leaves the not-ours list", before > 0 and not stillThere and #untaken == before - 1,
 	before .. " -> " .. #untaken)
 
+-- An addon's own minimap button, no Support file (Journey Tracker,
+-- 2026-11-25): the minimap scan puts it on the Addon buttons row, so the test
+-- must hide that row, or it said "no row to test".
+-- luacheck: push ignore 111 112 113 121 122
+issecurevariable = function(t, key)
+	local name = key == nil and t or key
+	if type(name) == "string" and name:find("^JourneyTracker") then return false, "JourneyTracker" end
+	return true
+end
+-- luacheck: pop
+ns.db.handleFrames, ns.db.showInMinimap = true, true
+local button = CreateFrame("Button", "JourneyTrackerMinimapButton", Minimap)
+ns.FindMinimapHeader()
+local rowKeys = {}
+for _, item in ipairs(ns.AddonTestRows("JourneyTracker")) do rowKeys[#rowKeys + 1] = item.key end
+Check("its own minimap button's row is tested (Addon buttons)", table.concat(rowKeys, ",") == "minimapaddons",
+	table.concat(rowKeys, ","))
+Check("no other addon's rows come with it", #ns.AddonTestRows("Panorama") == 0)
+button:SetParent(UIParent)
+
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))

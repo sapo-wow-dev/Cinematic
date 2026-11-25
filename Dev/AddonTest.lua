@@ -79,9 +79,16 @@ local function AddOns()
 	for i = 1, (GetNum and GetNum() or 0) do
 		local name, _, _, _, reason = GetInfo(i)
 		if name then
+			-- (On or off by its enable state: GetAddOnInfo's reason stays
+			-- DISABLED till the next login for one switched on this session, so
+			-- the addon kit's second solo, after solo off put the list back,
+			-- left Auctionator on and it loaded with Journey Tracker,
+			-- 2026-11-25. Engine rule forever.addons.enable-no-character.)
+			local state = EnableState(name)
+			local enabled = reason ~= "DISABLED"
+			if type(state) == "number" then enabled = state > 0 end
 			out[#out + 1] = {
-				name = name, enabled = reason ~= "DISABLED", loaded = IsLoaded(name) and true or false,
-				state = EnableState(name),
+				name = name, enabled = enabled, loaded = IsLoaded(name) and true or false, state = state,
 			}
 		end
 	end
@@ -476,22 +483,36 @@ local function Inventory()
 	end
 end
 
--- The rows its frames fade with: its own rows (Addons page) and the game's
--- rows naming one of its frames (FadeWithRow).
-local function Rows()
+-- The rows its frames fade with: its own rows (Addons page), the game's
+-- rows naming one of its frames (FadeWithRow), and the game's rows whose own
+-- search took one of its frames (an addon's own minimap button on the Addon
+-- buttons row, found by Frames.lua's minimap scan with no Support file).
+local function Rows(target)
+	target = target or run.target
 	local rows = {}
+	local foundIn = {}
+	for _, entry in ipairs(ns.managed or {}) do
+		if entry.frame and entry.group and Belongs(Owner(entry.frame), target) then foundIn[entry.group] = true end
+	end
 	for _, item in ipairs(ns.COMBAT_SHOW or {}) do
-		local mine = item.addon and Belongs(item.addon, run.target)
+		local mine = item.addon and Belongs(item.addon, target)
 		if not mine then
 			for _, name in ipairs(item.frames or {}) do
 				local frame = _G[name]
-				if type(frame) == "table" and Belongs(Owner(frame), run.target) then mine = true break end
+				if type(frame) == "table" and Belongs(Owner(frame), target) then mine = true break end
+			end
+		end
+		if not mine and not item.addon then
+			for _, group in ipairs(item.groups or {}) do
+				if foundIn[group] then mine = true break end
 			end
 		end
 		if mine then rows[#rows + 1] = item end
 	end
 	return rows
 end
+-- (For the offline check, Tools/offline/addontestsmarts.lua.)
+ns.AddonTestRows = Rows
 
 -- The target's managed frames a row covers. (Its own rows' frames are all
 -- its own, unnamed ones found by match() too, whatever the taint says.)
