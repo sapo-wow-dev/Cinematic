@@ -388,6 +388,21 @@ local function Shown(frame)
 	return ok and Readable(shown) and shown and true or false
 end
 
+-- How each part counts for Balanced when its Balance isn't set: the parts that
+-- only sometimes show (a marker, the elite mark, buffs, crowd control) only
+-- while they're up, the rest always (the user, 2026-11-25: "Count while shown").
+local DEFAULT_COUNT = { marker = "shown", elite = "shown", buffs = "shown", crowd = "shown" }
+ns.PLATE_LAYOUT_DEFAULT_COUNT = DEFAULT_COUNT
+function ns.PlateLayoutCountOf(layout, key)
+	local p = type(layout) == "table" and type(layout.parts) == "table" and layout.parts[key]
+	local count = type(p) == "table" and p.count or nil
+	return count or DEFAULT_COUNT[key] or "always"
+end
+-- What the game never draws on a kind's plates (Blizzard_NamePlateAuras: no buff
+-- row or crowd control on a friendly NPC's, no crowd control on a player's):
+-- never counted there. (Balanced was measured as a hostile mob's for all. Audit 2026-11-25.)
+local NEVER_ON = { friendly = { crowd = true, buffs = true }, player = { crowd = true } }
+
 -- The center shift for a layout: dx, dy (shown: [part key] = whether it's up
 -- on that plate, for parts counted only while shown; nil: as measured).
 local Extents -- (below: needs the apply)
@@ -402,13 +417,15 @@ function ns.PlateLayoutShift(layout, shown)
 	local ext = Extents(layout, shown and shown.noLevel)
 	if not ext then return 0, 0 end
 	local left, right
+	local never = shown and shown.kind and NEVER_ON[shown.kind]
 	for key, e in pairs(ext.parts) do
-		local p = layout.parts and layout.parts[key]
-		local count = p and p.count
-		local counts = key == "health" or count == nil or count == "always"
+		local count = ns.PlateLayoutCountOf(layout, key)
+		local counts = key == "health" or count == "always"
 			or (count == "shown" and (shown == nil or shown[key]))
 		-- (A level box hidden by Cinematic never counts. Audit 2026-11-25.)
 		if key == "level" and shown and shown.noLevel then counts = false end
+		-- (Nor what the game never draws on this kind's plates. Audit 2026-11-25.)
+		if never and never[key] then counts = false end
 		if counts then
 			left = left and math.min(left, e[1]) or e[1]
 			right = right and math.max(right, e[2]) or e[2]
@@ -555,20 +572,36 @@ end
 -- Parts counted only while shown: [key] = up on this plate, and a watch on
 -- their showing (frames only), so the shift follows.
 local showHooked = setmetatable({}, { __mode = "k" })
+local LIST_PARTS = { debuffs = true, buffs = true, crowd = true }
 local function ShownParts(plate, unitFrame, layout)
-	local shown
-	for key, p in pairs(type(layout.parts) == "table" and layout.parts or {}) do
-		local part = PART_BY_KEY[key]
-		if part and type(p) == "table" and p.count == "shown" then
+	-- (Every part counted while shown, by its own Balance or the default; and the
+	-- plate's kind, for what the game never draws on it. Audit 2026-11-25.)
+	local shown = { kind = plate.gameCopy and plate.kind or ns.PlateLayoutKindOf(unitFrame.unit) }
+	for _, part in ipairs(PARTS) do
+		local key = part.key
+		if ns.PlateLayoutCountOf(layout, key) == "shown" then
 			local frame = Field(unitFrame, part.path)
-			shown = shown or {}
-			shown[key] = frame and Shown(frame) or false
+			local up = frame and Shown(frame) or false
+			-- (An aura row is up whether or not it holds an icon: up only with one.)
+			if up and LIST_PARTS[key] then
+				up = false
+				local ok, kids = pcall(function() return { frame:GetChildren() } end)
+				for _, kid in ipairs(ok and kids or {}) do if Shown(kid) then up = true break end end
+			end
+			shown[key] = up
 			if frame and part.frame and not showHooked[frame] and frame.HookScript then
 				showHooked[frame] = true
 				frame:HookScript("OnShow", function() Dirty(plate) end)
 				frame:HookScript("OnHide", function() Dirty(plate) end)
 			end
 		end
+	end
+	-- (Icons come and go in an aura row without it showing or hiding: the game's own
+	-- refresh of its rows tells.)
+	local auras = unitFrame.AurasFrame
+	if auras and not showHooked[auras] and type(auras.RefreshList) == "function" then
+		showHooked[auras] = true
+		hooksecurefunc(auras, "RefreshList", function() Dirty(plate) end)
 	end
 	return shown
 end

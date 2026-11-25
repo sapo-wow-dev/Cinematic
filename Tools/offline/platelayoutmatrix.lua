@@ -280,23 +280,27 @@ local LAYOUTS = {
 -- bar (bar+5), where the game puts it with no box, and Balanced measures the plate as
 -- it looks then (no box, crowd control moved in). A crowd control hung on the bar
 -- stays there either way.
+-- (Balanced's shifts since 2026-11-25's default (Tools/audits/2026-11-25-plate-layout-balance.md):
+-- buffs and crowd control count only while they hold an icon, and this stand-in's rows hold
+-- none; the marker and elite mark frames are up, so they count. Was 19 14 14 30 / 31 26 31 30,
+-- OK'd by the user 2026-11-25.)
 local PINS = {
 	{ "level=shown layout=none center=bar", "cc=bar+30 shift=0" },
-	{ "level=shown layout=none center=balanced", "cc=bar+30 shift=19" },
+	{ "level=shown layout=none center=balanced", "cc=bar+30 shift=9" },
 	{ "level=shown layout=ccNudged center=bar", "cc=bar+40 shift=0" },
-	{ "level=shown layout=ccNudged center=balanced", "cc=bar+40 shift=14" },
+	{ "level=shown layout=ccNudged center=balanced", "cc=bar+40 shift=9" },
 	{ "level=shown layout=levelMoved center=bar", "cc=bar+40 shift=0" },
-	{ "level=shown layout=levelMoved center=balanced", "cc=bar+40 shift=14" },
+	{ "level=shown layout=levelMoved center=balanced", "cc=bar+40 shift=4" },
 	{ "level=shown layout=ccHung center=bar", "cc=bar+8 shift=0" },
-	{ "level=shown layout=ccHung center=balanced", "cc=bar+8 shift=30" },
+	{ "level=shown layout=ccHung center=balanced", "cc=bar+8 shift=9" },
 	{ "level=hidden layout=none center=bar", "cc=bar+5 shift=0" },
-	{ "level=hidden layout=none center=balanced", "cc=bar+5 shift=31" },
+	{ "level=hidden layout=none center=balanced", "cc=bar+5 shift=21" },
 	{ "level=hidden layout=ccNudged center=bar", "cc=bar+15 shift=0" },
-	{ "level=hidden layout=ccNudged center=balanced", "cc=bar+15 shift=26" },
+	{ "level=hidden layout=ccNudged center=balanced", "cc=bar+15 shift=21" },
 	{ "level=hidden layout=levelMoved center=bar", "cc=bar+5 shift=0" },
-	{ "level=hidden layout=levelMoved center=balanced", "cc=bar+5 shift=31" },
+	{ "level=hidden layout=levelMoved center=balanced", "cc=bar+5 shift=21" },
 	{ "level=hidden layout=ccHung center=bar", "cc=bar+8 shift=0" },
-	{ "level=hidden layout=ccHung center=balanced", "cc=bar+8 shift=30" },
+	{ "level=hidden layout=ccHung center=balanced", "cc=bar+8 shift=21" },
 }
 local Matrix = dofile("Tools/offline/matrix.lua")
 Matrix.Run({

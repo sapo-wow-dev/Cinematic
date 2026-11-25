@@ -4,7 +4,7 @@ list or the fields stopped them with no sign why.
 Found by: audit 2026-11-25
 Code: Plates/PlateLayoutPage.lua: OverPreview (the preview or the parts panel), Pick (takes the keys)
 Clients: forever (no Layout tab on retail)
-Base: HEAD
+Base: 2957fc8^
 
 ## Before / after
 - Before: arrows nudged only with the mouse on the preview; over the list or fields, the key went to the game and the

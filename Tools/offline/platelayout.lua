@@ -27,9 +27,12 @@ local H = { LEFT = "L", RIGHT = "R", CENTER = "C", TOP = "C", BOTTOM = "C", TOPL
 local V = { LEFT = "C", RIGHT = "C", CENTER = "C", TOP = "T", BOTTOM = "B", TOPLEFT = "T", TOPRIGHT = "T",
 	BOTTOMLEFT = "B", BOTTOMRIGHT = "B" }
 local function New(parent)
-	local f = setmetatable({ points = {}, w = 0, h = 0, scale = 1, shown = true, parent = parent, scripts = {} }, Frame)
+	local f = setmetatable({ points = {}, w = 0, h = 0, scale = 1, shown = true, parent = parent, scripts = {},
+		kids = {} }, Frame)
+	if parent then parent.kids[#parent.kids + 1] = f end
 	return f
 end
+function Frame:GetChildren() return unpack(self.kids) end
 function Frame:GetParent() return self.parent end
 function Frame:SetParent(p) self.parent = p end
 function Frame:SetSize(w, h) self.w, self.h = w, h end
@@ -409,9 +412,13 @@ local function GroupCX(keys)
 end
 local ALL = {}
 for _, part in ipairs(ns.PLATE_LAYOUT_PARTS) do ALL[#ALL + 1] = part.key end
-Set({ center = "balanced", parts = {} })
+-- (These checks count every part, as all did by default before 2026-11-25: the parts
+-- that only sometimes show set to Always counts. The new default after them.)
+local ALWAYS = { count = "always" }
+Set({ center = "balanced", parts = { marker = ALWAYS, elite = ALWAYS, buffs = ALWAYS, crowd = ALWAYS } })
 Check("balanced: the whole plate's middle on the unit", Near(GroupCX(ALL), UnitCX()), GroupCX(ALL) - UnitCX())
-Set({ center = "balanced", parts = { level = { count = "never" }, crowd = { count = "never" } } })
+Set({ center = "balanced", parts = { level = { count = "never" }, crowd = { count = "never" }, marker = ALWAYS,
+	elite = ALWAYS, buffs = ALWAYS } })
 local rest = {}
 for _, key in ipairs(ALL) do if key ~= "level" and key ~= "crowd" then rest[#rest + 1] = key end end
 Check("balanced, level and crowd control not counted: the rest centered", Near(GroupCX(rest), UnitCX()),
@@ -419,7 +426,8 @@ Check("balanced, level and crowd control not counted: the rest centered", Near(G
 Check("the parts keep their places to each other", Near(L(ufA.PlayerLevelDiffFrame) - R(ufA.HealthBarsContainer),
 	game.level[1] - game.health[2]))
 -- (Counted while shown: the level box hidden on this plate, so not counted.)
-Set({ center = "balanced", parts = { level = { count = "shown" }, crowd = { count = "never" } } })
+Set({ center = "balanced", parts = { level = { count = "shown" }, crowd = { count = "never" }, marker = ALWAYS,
+	elite = ALWAYS, buffs = ALWAYS } })
 ufA.PlayerLevelDiffFrame:Hide()
 ufA.PlayerLevelDiffFrame.scripts.OnHide()
 Flush()
@@ -431,6 +439,32 @@ local withLevel = {}
 for _, key in ipairs(rest) do withLevel[#withLevel + 1] = key end
 withLevel[#withLevel + 1] = "level"
 Check("counted while shown, shown: counted", Near(GroupCX(withLevel), UnitCX()), GroupCX(withLevel) - UnitCX())
+-- (The default since 2026-11-25: the marker, elite mark, buffs and crowd control count
+-- only while they're up; the game never draws crowd control or buffs on a friendly NPC's
+-- plate, so they never count there.)
+local STEADY = { "health", "name", "level", "debuffs", "cast", "castIcon", "castText", "castShield", "softTarget" }
+ufA.RaidTargetFrame:Hide()
+ufA.ClassificationFrame:Hide()
+Set({ center = "balanced", parts = {} })
+Check("the default: no marker, elite mark, buffs or crowd control up, the rest centered",
+	Near(GroupCX(STEADY), UnitCX()), GroupCX(STEADY) - UnitCX())
+local icon = New(ufA.AurasFrame.CrowdControlListFrame) -- (a root on it: the row up)
+ns.PlateLayoutChanged()
+Flush()
+local withCrowd = {}
+for _, key in ipairs(STEADY) do withCrowd[#withCrowd + 1] = key end
+withCrowd[#withCrowd + 1] = "crowd"
+Check("the default, crowd control up on a hostile mob: counted", Near(GroupCX(withCrowd), UnitCX()),
+	GroupCX(withCrowd) - UnitCX())
+ufA.unit = "friend"
+ns.PlateLayoutChanged()
+Flush()
+Check("the same on a friendly NPC's plate: not counted (the game never draws it there)",
+	Near(GroupCX(STEADY), UnitCX()), GroupCX(STEADY) - UnitCX())
+ufA.unit = "nameplate1"
+icon:Hide()
+ufA.RaidTargetFrame:Show()
+ufA.ClassificationFrame:Show()
 Set({ center = "custom", cx = 7, cy = -2, parts = {} })
 now = Snapshot(ufA)
 Check("custom: everything 7 right, 2 down", Near(now.health[1], game.health[1] + 7) and Near(now.level[3], game.level[3] - 2)

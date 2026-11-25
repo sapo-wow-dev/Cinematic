@@ -846,7 +846,15 @@ function ns.CreatePlateLayoutPage(kit)
 	ns.PlateLayoutHiddenBySettings = HiddenBySettings -- (the tests read it)
 	local countLabel = Caption(partsPanel, L["Balance"])
 	countLabel:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -140)
-	local countDrop = kit.Dropdown(content, PartField("count", "always"), function()
+	-- (Its default is the part's own: the ones that only sometimes show count while
+	-- they're up, the rest always. PlateLayout.lua's ns.PlateLayoutCountOf. Audit 2026-11-25.)
+	local countDrop = kit.Dropdown(content, { noSettingId = true, get = function()
+		return ns.PlateLayoutCountOf(Shown(), selected)
+	end, set = function(value)
+		local p = Part(true)
+		local default = (ns.PLATE_LAYOUT_DEFAULT_COUNT or {})[selected] or "always"
+		p.count = value ~= default and value or nil
+	end }, function()
 		local part = PartInfo()
 		local choices = { { text = L[COUNT_NAMES.always], value = "always" } }
 		if part and part.frame then choices[#choices + 1] = { text = L[COUNT_NAMES.shown], value = "shown" } end
