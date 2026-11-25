@@ -4500,6 +4500,12 @@ do
 		if band == "NearAggro" then
 			return ns.UnitNearAggro(unit)
 		end
+		-- (Any yards: "In20y", "Past20y". The fixed bands below as they were.)
+		if band:sub(-1) == "y" then
+			local side, yards = ns.MarkDistanceYards(band)
+			if yards then return ns.UnitWithinYards(unit, yards, side == "Past") end
+			return nil
+		end
 		if band == "OutOfRange" then
 			-- (Out of reach of every attack on your bars, or every helpful
 			-- spell for a friend: the longest that can say answers. A friend
@@ -4531,6 +4537,178 @@ do
 			return not within
 		end
 		return within
+	end
+
+	-- Within / past any yards (the Nameplate Style Smart rows' In<N>y and
+	-- Past<N>y, Tools/plate-distance-plan.md). Nothing reads yards to a
+	-- plate; only yes/no "rings" do, so X goes by the ring nearest it (a tie:
+	-- the nearer ring, fitting fewer plates). Rings, as tested on plates
+	-- (rule forever.range.plates-in-combat, 2026-11-25):
+	--   * the interact distances, ~11 (2) and ~28 (4): out of fights on
+	--     every client, in fights too on Forever (retail blocks them there:
+	--     rule retail.checkinteractdistance.blocked-in-combat);
+	--   * your spells' ranges, from the spellbook and the bars: attacks for
+	--     enemies, helpful ones for friends; none with a least range (they
+	--     say "not in range" up close too). Items never answer on plates.
+	-- A ring that can't say for a unit (an attack on a friend) hands over to
+	-- the next nearest. Each answer kept for the pass (RING_KEEP s): ten rows
+	-- on 40 plates ask each plate once per ring.
+	do
+		local RING_KEEP, RING_LOOK_EVERY, SHORT_YARDS, LONG_YARDS = 0.2, 3, 11, 28
+		local rings = { harmful = {}, helpful = {} } -- { yards, id } each, by yards
+		local ringsAt, kept, keptAt = -math.huge, {}, -math.huge
+		local function Spells()
+			local ids, seen = {}, {}
+			local function Add(id)
+				if type(id) == "number" and not (issecretvalue and issecretvalue(id)) and not seen[id] then
+					seen[id] = true
+					ids[#ids + 1] = id
+				end
+			end
+			pcall(function()
+				if C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines then
+					local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
+					for line = 1, C_SpellBook.GetNumSpellBookSkillLines() do
+						local info = C_SpellBook.GetSpellBookSkillLineInfo(line)
+						if info then
+							for i = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
+								local item = C_SpellBook.GetSpellBookItemInfo(i, bank)
+								if item and not item.isPassive then Add(item.spellID or item.actionID) end
+							end
+						end
+					end
+				end
+			end)
+			for slot = 1, 180 do
+				local ok, kind, id = pcall(GetActionInfo, slot)
+				if ok and kind == "spell" then Add(id) end
+			end
+			return ids
+		end
+		local function FindRings()
+			wipe(rings.harmful)
+			wipe(rings.helpful)
+			local taken = { harmful = {}, helpful = {} }
+			for _, id in ipairs(Spells()) do
+				local minRange, maxRange
+				if C_Spell and C_Spell.GetSpellInfo then
+					local ok, info = pcall(C_Spell.GetSpellInfo, id)
+					if ok and type(info) == "table" then minRange, maxRange = info.minRange, info.maxRange end
+				elseif GetSpellInfo then
+					minRange, maxRange = select(5, GetSpellInfo(id))
+				end
+				local plain = type(maxRange) == "number" and not (issecretvalue and issecretvalue(maxRange))
+					and not (type(minRange) == "number" and (issecretvalue and issecretvalue(minRange) or minRange > 0))
+				if plain and maxRange > 0 then
+					for key, test in pairs(RANGE_TESTS) do
+						local ok, is = pcall(test, id)
+						if ok and is == true and not taken[key][maxRange] then
+							taken[key][maxRange] = true
+							local list = rings[key]
+							list[#list + 1] = { yards = maxRange, id = id }
+						end
+					end
+				end
+			end
+			for _, list in pairs(rings) do table.sort(list, function(a, b) return a.yards < b.yards end) end
+		end
+		local function LookForRings()
+			local now = GetTime()
+			if now - ringsAt >= RING_LOOK_EVERY then
+				ringsAt = now
+				FindRings()
+			end
+		end
+		-- (The rings for a kind of unit, in a fight or not, nearest X first:
+		-- { yards, index (interact) or id (spell) }. A fresh list each call:
+		-- asked per X by the page, and by the plates only through Ordered's
+		-- cache below.)
+		local function Candidates(yards, key, fight)
+			local list = {}
+			if not (fight and ns.isRetail) then
+				list[#list + 1] = { yards = SHORT_YARDS, index = 2 }
+				list[#list + 1] = { yards = LONG_YARDS, index = 4 }
+			end
+			for _, ring in ipairs(rings[key]) do list[#list + 1] = ring end
+			table.sort(list, function(a, b)
+				local da, db = math.abs(a.yards - yards), math.abs(b.yards - yards)
+				if da ~= db then return da < db end
+				return a.yards < b.yards
+			end)
+			return list
+		end
+		-- ([key][fight][yards] = Candidates: no strings made per plate.)
+		local ordered, orderedAt = {}, -math.huge
+		local function Ordered(yards, key, fight)
+			if ringsAt ~= orderedAt then wipe(ordered) orderedAt = ringsAt end
+			local byKey = ordered[key] or {}
+			ordered[key] = byKey
+			local byFight = byKey[fight] or {}
+			byKey[fight] = byFight
+			local list = byFight[yards]
+			if not list then
+				list = Candidates(yards, key, fight)
+				byFight[yards] = list
+			end
+			return list
+		end
+		local function Ask(unit, ring)
+			local now = GetTime()
+			if now - keptAt > RING_KEEP then wipe(kept) keptAt = now end
+			local forUnit = kept[unit]
+			if not forUnit then forUnit = {} kept[unit] = forUnit end
+			local answer = forUnit[ring]
+			if answer == nil then
+				if ring.index then
+					local ok, near = pcall(CheckInteractDistance, unit, ring.index)
+					if ok and type(near) == "boolean" and not (issecretvalue and issecretvalue(near)) then
+						answer = near
+					end
+				else
+					answer = SpellReaches(ring.id, unit)
+				end
+				if answer == nil then answer = "?" end
+				forUnit[ring] = answer
+			end
+			if answer == "?" then return nil end
+			return answer
+		end
+		-- True, false, or nil when no ring can say. past: past the yards.
+		function ns.UnitWithinYards(unit, yards, past)
+			if not unit then return nil end
+			LookForRings()
+			local fight = InCombatLockdown()
+			local key = ns.IsEnemyUnit(unit) == false and "helpful" or "harmful"
+			for _, ring in ipairs(Ordered(yards, key, fight)) do
+				local within = Ask(unit, ring)
+				if within ~= nil then
+					if past then return not within end
+					return within
+				end
+			end
+			return nil
+		end
+		-- (What X is measured with on this character, for the page: out of
+		-- fights and in one, enemies' rings: yards and a name each.)
+		function ns.YardsRingInfo(yards)
+			LookForRings()
+			local function Name(ring)
+				if not ring then return nil end
+				if ring.index then return ring.yards, L["interact distance"] end
+				local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(ring.id)
+					or GetSpellInfo and GetSpellInfo(ring.id)
+				return ring.yards, name or tostring(ring.id)
+			end
+			local calm, fight = Candidates(yards, "harmful", false)[1], Candidates(yards, "harmful", true)[1]
+			local calmYards, calmName = Name(calm)
+			local fightYards, fightName = Name(fight)
+			return calmYards, calmName, fightYards, fightName
+		end
+		-- /cine debug range's ring lines, and the offline test's way in.
+		function ns.YardsRings()
+			LookForRings()
+			return rings, SHORT_YARDS, LONG_YARDS, Candidates
+		end
 	end
 
 	-- A unit's rank, for the rules' elite words and the Nameplates page's

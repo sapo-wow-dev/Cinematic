@@ -78,6 +78,7 @@ OFFLINE_TESTS = [
     ("Exit CineMode: back at once and stays as its row ends", "Tools/offline/exitrowtick.lua"),
     ("nameplate previews: the game's own plate, dressed by the plates' code", "Tools/offline/gameplate.lua"),
     ("/cine debug platematch on the stand-in", "Tools/offline/platematch.lua"),
+    ("Smart rows within / past any yards: ids, rings, fights", "Tools/offline/platedistance.lua"),
     ("no addon's support runs with it not loaded; late loads followed, forever", "Tools/offline/noaddons.lua", "forever"),
     ("no addon's support runs with it not loaded; late loads followed, retail", "Tools/offline/noaddons.lua", "retail"),
     ("party flicker (DaylightUI range fade)", "Tools/offline/partyflicker.lua"),

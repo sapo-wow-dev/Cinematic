@@ -13477,6 +13477,20 @@ do
 			-- (Near aggro range, its own tip: Frames' ns.UnitNearAggro.)
 			local NEAR_AGGRO_TIP = L["Only hostile NPCs roughly close enough to attack you."]
 			local DISTANCE_TIP = L["Only units roughly that far from you."]
+			-- (Any yards, Core's In<N>y / Past<N>y, and the fixed In/Past ones
+			-- not listed above: named from their yards.)
+			local function DistanceName(distance)
+				if DISTANCE_NAMES[distance] then return DISTANCE_NAMES[distance] end
+				local side, yards = ns.MarkDistanceYards(distance)
+				if not side then return nil end
+				return (side == "In" and L["Within %d yards"] or L["Past %d yards"]):format(yards)
+			end
+			local function DistanceShort(distance)
+				if DISTANCE_SHORT[distance] then return DISTANCE_SHORT[distance] end
+				local side, yards = ns.MarkDistanceYards(distance)
+				if not side then return nil end
+				return (side == "In" and L["in %d yd"] or L["past %d yd"]):format(yards)
+			end
 			-- A row's names and tip from its id: its kind's name (label), what's
 			-- under it (sub: its Who, Distance and number), all in one line (full);
 			-- a name of your own (markNames) for label and full instead, its own
@@ -13503,12 +13517,12 @@ do
 					kind = { base, AggroName(ns.MARK_AGGRO_FLAGS[base]), L["Any enemy attacking whoever is ticked."] }
 				end
 				local who = reaction and WhoName(reaction)
-				local far = distance and DISTANCE_SHORT[distance]
+				local far = distance and DistanceShort(distance)
 				local number = copy and "(" .. copy .. ")"
 				local scope = who and far and who .. ", " .. far or who or far
 				local sub = scope and number and scope .. " " .. number or scope or number
 				local fullScope = (who or "") .. (who and distance and ", " or "")
-					.. (distance and DISTANCE_NAMES[distance] or "")
+					.. (distance and DistanceName(distance) or "")
 				return { id = id, base = base, reaction = reaction, distance = distance, label = kind[2], sub = sub,
 					full = kind[2] .. (fullScope ~= "" and " - " .. fullScope or "") .. (number and " " .. number or ""),
 					tip = kind[3] .. (reaction and " " .. (REACTION_TIPS[reaction]
@@ -13860,12 +13874,26 @@ do
 				end
 				return list
 			end
+			-- (Within... and Past... take the yards box after the dropdown;
+			-- the fixed 11 / 28 / 40 ones are those now, an old row's shown as
+			-- Within or Past with its yards: DistanceSide.)
+			local DEFAULT_YARDS = 20
 			local function DistanceChoices()
-				local list = { { value = "Any", text = L["Any distance"] } }
-				for _, band in ipairs(ns.MARK_DISTANCES) do
-					list[#list + 1] = { value = band, text = DISTANCE_NAMES[band] }
-				end
-				return list
+				return { { value = "Any", text = L["Any distance"] }, { value = "In", text = L["Within..."] },
+					{ value = "Past", text = L["Past..."] }, { value = "OutOfRange", text = DISTANCE_NAMES.OutOfRange },
+					{ value = "NearAggro", text = DISTANCE_NAMES.NearAggro } }
+			end
+			-- (A pick's Distance as the dropdown has it: In / Past for any yards.)
+			local function DistanceSide(distance)
+				return ns.MarkDistanceYards(distance) or distance
+			end
+			-- (A pick's Distance from the dropdown: the yards it had kept, an
+			-- old fixed one kept as it is while its side stays.)
+			local function DistanceFor(distance, value)
+				if value ~= "In" and value ~= "Past" then return value end
+				local side, yards = ns.MarkDistanceYards(distance)
+				if side == value then return distance end
+				return value .. (yards or DEFAULT_YARDS) .. "y"
 			end
 			-- (A Who of those ticked the row kind picked has: none or all of them,
 			-- Any. Whether one's ticked, and ticking or unticking one; the last
@@ -14042,18 +14070,88 @@ do
 						Text = function() return pick.who == "Any" and L["Any"] or WhoName(pick.who) end,
 					})
 				Tooltip(whoPick, L["Tick Enemy, Neutral or Friendly to limit this row to those. Tick all three for any."])
-				local distancePick = Choice(parent, widths[4], DistanceChoices, function() return pick.distance end,
+				local distancePick = Choice(parent, widths[4], DistanceChoices,
+					function() return DistanceSide(pick.distance) end,
 					function(value)
-						pick.distance = value
+						pick.distance = DistanceFor(pick.distance, value)
 						changed()
 					end)
 				Tooltip(distancePick, L["How far from you the units must be."])
+				-- Within / Past's yards (5-45), and what measures them on this
+				-- character (Frames' ns.YardsRingInfo: the game reads no yards,
+				-- only a few fixed distances): "= 28 yd" after the box.
+				local yardsBox = ns.SkinEditBox(CreateFrame("EditBox", nil, parent, "InputBoxTemplate"))
+				yardsBox:SetSize(30, 20)
+				yardsBox:SetAutoFocus(false)
+				yardsBox:SetNumeric(true)
+				yardsBox:SetMaxLetters(2)
+				yardsBox:SetJustifyH("CENTER")
+				yardsBox.searchSkip = true
+				local measured = parent:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+				measured:SetJustifyH("LEFT")
+				-- (For /cine debug platerange: each box, its pick and hint.)
+				ns.yardsBoxes = ns.yardsBoxes or setmetatable({}, { __mode = "k" })
+				ns.yardsBoxes[yardsBox] = { pick = pick, measured = measured }
+				local function Yards()
+					local _, yards = ns.MarkDistanceYards(pick.distance)
+					return yards
+				end
+				local function SaveYards(self)
+					local side, yards = ns.MarkDistanceYards(pick.distance)
+					local typed = tonumber(self:GetText())
+					if side and typed then
+						typed = math.max(ns.MARK_YARDS_MIN, math.min(ns.MARK_YARDS_MAX, math.floor(typed)))
+						if typed ~= yards then
+							pick.distance = side .. typed .. "y"
+							changed()
+						end
+					end
+					self:SetText(tostring(Yards() or ""))
+				end
+				yardsBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+				yardsBox:SetScript("OnEditFocusLost", SaveYards)
+				yardsBox:SetScript("OnEscapePressed", function(self)
+					self:SetText(tostring(Yards() or ""))
+					self:ClearFocus()
+				end)
+				local function MeasuredText()
+					local yards = Yards()
+					if not yards or not ns.YardsRingInfo then return "", "" end
+					local calm, calmName, fight, fightName = ns.YardsRingInfo(yards)
+					if not calm then return L["can't measure"], L["Nothing on this character measures distance."] end
+					-- (Just the yards: "= 20 yd (30)" ran 26 px past the drawer,
+					-- run q7875; the fight's yards are in the tip.)
+					local short = (L["%d yd"]):format(calm)
+					local tip = (L["Measured at %d yards: %s."]):format(calm, calmName)
+					if fight and fight ~= calm then
+						short = short .. "*"
+						tip = tip .. "\n" .. (L["In fights: %d yards: %s."]):format(fight, fightName)
+					elseif not fight then
+						tip = tip .. "\n" .. L["In fights nothing measures it."]
+					end
+					return short, tip
+				end
+				Tooltip(yardsBox, L["Yards from you (5 to 45); the game measures only a few distances, so the nearest is used."])
+				yardsBox:HookScript("OnEnter", function(self)
+					local _, tip = MeasuredText()
+					if tip ~= "" and GameTooltip:IsOwned(self) then
+						GameTooltip:AddLine(tip, 1, 1, 1, true)
+						GameTooltip:Show()
+					end
+				end)
 				return kindPick, function(after)
 					local kind = KindInfo(pick)
 					typePick:SetShown(kind[3] ~= nil)
 					whoPick:SetShown(#(ns.MARK_ROW_KINDS[PickedKind(pick)] or {}) > 0)
+					local hasYards = Yards() ~= nil
+					yardsBox:SetShown(hasYards)
+					measured:SetShown(hasYards)
+					if hasYards then
+						if not yardsBox:HasFocus() then yardsBox:SetText(tostring(Yards())) end
+						measured:SetText((MeasuredText()))
+					end
 					local last = kindPick
-					for _, each in ipairs({ typePick, whoPick, distancePick, after }) do
+					for _, each in ipairs({ typePick, whoPick, distancePick, yardsBox, measured, after }) do
 						if each:IsShown() then
 							each:ClearAllPoints()
 							each:SetPoint("LEFT", last, "RIGHT", 6, 0)
@@ -14743,7 +14841,9 @@ do
 				-- (in its place, its settings with it: RetypeRow).
 				if lineAt.Row then
 					local pick = PickOf(kind)
-					local kindPick, PlacePicks = PickLine(drawer, pick, { 100, 110, 90, 120 }, function()
+					-- (Type and Distance 10 narrower since the yards box and its
+					-- hint joined the line, run q7875.)
+					local kindPick, PlacePicks = PickLine(drawer, pick, { 100, 100, 90, 110 }, function()
 						RetypeRow(kind, pick)
 						-- (Nothing free to make it: back to its own.)
 						local own = PickOf(kind)

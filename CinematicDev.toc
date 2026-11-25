@@ -251,6 +251,8 @@ Dev\MinimapCopy.lua
 Dev\LowManaTest.lua
 Dev\WhyTest.lua
 Dev\AggroTest.lua
+Dev\PlateRingsProbe.lua
+Dev\PlateRangeTest.lua
 Dev\ThresholdTest.lua
 Dev\FlickerTest.lua
 Dev\PartyFlickerTest.lua

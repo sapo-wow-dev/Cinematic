@@ -1042,6 +1042,18 @@ end
 -- aggro range: a hostile NPC about close enough to attack you (a guess from
 -- the levels: ns.UnitNearAggro).
 ns.MARK_DISTANCES = { "In11", "In28", "In40", "Past28", "Past40", "OutOfRange", "NearAggro" }
+-- Any yards (Tools/plate-distance-plan.md, 2026-11-25): "In<N>y" within N,
+-- "Past<N>y" past it, N from MARK_YARDS_MIN to MAX; the y ends the number so
+-- a copy's still reads ("npcEnemyIn20y2"). The fixed ones above stay as they
+-- were (old rows, built-in profiles, shared strings): In28 is within 28.
+ns.MARK_YARDS_MIN, ns.MARK_YARDS_MAX = 5, 45
+-- (A Distance's side and yards: "In" or "Past" and N, for the y ones and the
+-- fixed In/Past ones; nil for the rest: Out of range, Near aggro range.)
+function ns.MarkDistanceYards(distance)
+	if type(distance) ~= "string" then return nil end
+	local side, yards = distance:match("^(%u%l+)(%d+)y?$")
+	if (side == "In" or side == "Past") and yards then return side, tonumber(yards) end
+end
 -- A row's kind, Who (nil: all its units; one or more, in MARK_REACTIONS'
 -- order: "EnemyNeutral"), number (nil: the first) and Distance (nil: any):
 -- "npcEnemyPast403": "npc", "Enemy", 3, "Past40".
@@ -1069,8 +1081,14 @@ function MarkRowSplit(id)
 		if rest:sub(1, #who) == who then reaction, rest = reaction .. who, rest:sub(#who + 1) end
 	end
 	if reaction == "" then reaction = nil end
-	for _, band in ipairs(ns.MARK_DISTANCES) do
-		if rest:sub(1, #band) == band then distance, rest = band, rest:sub(#band + 1) break end
+	local side, yards, after = rest:match("^(%u%l+)(%d+)y(.*)$")
+	if (side == "In" or side == "Past") and tonumber(yards) >= ns.MARK_YARDS_MIN
+		and tonumber(yards) <= ns.MARK_YARDS_MAX and not yards:find("^0") then
+		distance, rest = side .. yards .. "y", after
+	else
+		for _, band in ipairs(ns.MARK_DISTANCES) do
+			if rest:sub(1, #band) == band then distance, rest = band, rest:sub(#band + 1) break end
+		end
 	end
 	if not rest:find("^%d*$") then
 		return id, nil, nil, nil

@@ -3185,6 +3185,9 @@ end
 -- /cine debug marks: each plate's mark now, and why it sits where it does
 -- (the Height setting, how much of the plate shows and from what, where the
 -- mark over the plate ended up).
+-- (A plate's mark frame, if one's made: for /cine debug platerange.)
+function ns.PlateMarkFrame(plate) return arrows[plate] end
+
 function ns.ReportTargetMarks()
 	local function Num(value)
 		if type(value) ~= "number" then return tostring(value) end
