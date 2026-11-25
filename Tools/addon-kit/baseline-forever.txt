@@ -1,4 +1,4 @@
-H format=1 client=forever build=16001 label=none addons=
+H format=1 client=forever build=16001 label=none addons= run=2026-11-25_13:04:54
 R addons.yields	cooldownCenter	ours	v1
 R addons.yields	cooldownDefaults	ours	v1
 R chat.linesOnly	chatIsDefault	true	v1
@@ -153,7 +153,7 @@ R frame.encounter	EncounterBar.forbidden	false	v1
 R frame.encounter	EncounterBar.parent	UIParent	v1
 R frame.encounter	EncounterBar.shown	true	v1
 R frame.encounter	EncounterBar.visible	true	v1
-R frame.extra	ExtraActionBarFrame.alpha	1	v1
+R frame.extra	ExtraActionBarFrame.alpha	0	v1
 R frame.extra	ExtraActionBarFrame.exists	true	v1
 R frame.extra	ExtraActionBarFrame.forbidden	false	v1
 R frame.extra	ExtraActionBarFrame.parent	none	v1
@@ -278,7 +278,7 @@ R frame.player	PlayerFrame.forbidden	false	v1
 R frame.player	PlayerFrame.parent	UIParent	v1
 R frame.player	PlayerFrame.shown	true	v1
 R frame.player	PlayerFrame.visible	true	v1
-R frame.prd	PersonalResourceDisplayFrame.alpha	0	v1
+R frame.prd	PersonalResourceDisplayFrame.alpha	1	v1
 R frame.prd	PersonalResourceDisplayFrame.exists	true	v1
 R frame.prd	PersonalResourceDisplayFrame.forbidden	false	v1
 R frame.prd	PersonalResourceDisplayFrame.parent	UIParent	v1
@@ -986,7 +986,7 @@ R touch.Event	kind	table	v1
 R touch.Event	sameAsLogin	same	v1
 R touch.EventRegistry	kind	table	v1
 R touch.EventRegistry	sameAsLogin	same	v1
-R touch.ExtraActionBarFrame	alpha	1	v1
+R touch.ExtraActionBarFrame	alpha	0	v1
 R touch.ExtraActionBarFrame	forbidden	false	v1
 R touch.ExtraActionBarFrame	kind	frame	v1
 R touch.ExtraActionBarFrame	parent	none	v1
@@ -1127,8 +1127,8 @@ R touch.GameTooltip	alpha	1	v1
 R touch.GameTooltip	forbidden	false	v1
 R touch.GameTooltip	kind	frame	v1
 R touch.GameTooltip	parent	UIParent	v1
-R touch.GameTooltip	shown	false	v1
-R touch.GameTooltip	visible	false	v1
+R touch.GameTooltip	shown	true	v1
+R touch.GameTooltip	visible	true	v1
 R touch.GameTooltipHeaderText	alpha	1	v1
 R touch.GameTooltipHeaderText	forbidden	false	v1
 R touch.GameTooltipHeaderText	kind	frame	v1
@@ -1630,7 +1630,7 @@ R touch.PartyFrame	kind	frame	v1
 R touch.PartyFrame	parent	UIParent	v1
 R touch.PartyFrame	shown	true	v1
 R touch.PartyFrame	visible	true	v1
-R touch.PersonalResourceDisplayFrame	alpha	0	v1
+R touch.PersonalResourceDisplayFrame	alpha	1	v1
 R touch.PersonalResourceDisplayFrame	forbidden	false	v1
 R touch.PersonalResourceDisplayFrame	kind	frame	v1
 R touch.PersonalResourceDisplayFrame	parent	UIParent	v1
@@ -2024,12 +2024,12 @@ R touch.SubZoneTextString	kind	frame	v1
 R touch.SubZoneTextString	parent	SubZoneTextFrame	v1
 R touch.SubZoneTextString	shown	true	v1
 R touch.SubZoneTextString	visible	false	v1
-R touch.SuperTrackedFrame	alpha	1	v1
+R touch.SuperTrackedFrame	alpha	0	v1
 R touch.SuperTrackedFrame	forbidden	false	v1
 R touch.SuperTrackedFrame	kind	frame	v1
 R touch.SuperTrackedFrame	parent	UIParent	v1
-R touch.SuperTrackedFrame	shown	false	v1
-R touch.SuperTrackedFrame	visible	false	v1
+R touch.SuperTrackedFrame	shown	true	v1
+R touch.SuperTrackedFrame	visible	true	v1
 R touch.SwingTimerMainHandFrame	alpha	0	v1
 R touch.SwingTimerMainHandFrame	forbidden	false	v1
 R touch.SwingTimerMainHandFrame	kind	frame	v1
@@ -2272,4 +2272,4 @@ R touch.ZoneTextString	kind	frame	v1
 R touch.ZoneTextString	parent	ZoneTextFrame	v1
 R touch.ZoneTextString	shown	true	v1
 R touch.ZoneTextString	visible	false	v1
-D 616 probes, 0 errors; saved 2026-11-25 11:46
+D 616 probes, 0 errors; saved 2026-11-25 13:15
