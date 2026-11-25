@@ -2827,6 +2827,8 @@ local function Start(script, trigger, camera)
 	run.co = coroutine.create(function() DoSteps(script.steps) end)
 	ns.ApplyCVarSet(FOLLOW_CVARS, true)
 	ns.Log("state", ("camera script %s started (%s)"):format(script.name, trigger or "played"))
+	-- (Its watcher at once, resting or not, now the run is there: Audit 2026-11-25.)
+	if zoomer.watcher then ns.WakeFeatureLoop(zoomer.watcher) end
 end
 
 local stoppedFor -- trigger..camera a script was stopped for: not again until that trigger's over
@@ -3332,7 +3334,16 @@ end
 ns.ScriptTriggerNow = zoomer.TriggerNowSeen -- (the offline checks)
 
 local watcher = CreateFrame("Frame")
-ns.SetOnUpdate(watcher, function(_, elapsed)
+zoomer.watcher = watcher
+-- (Every frame while Enable Cameras is on, or something of a script is still
+-- playing or easing back; with it off and nothing left, no loop at all: the
+-- in-game gating test saw it work out the scene every frame. Audit 2026-11-25.)
+local function WatcherWanted()
+	if not ns.db then return false end
+	return ns.Setting("cameraModes") ~= false or run ~= nil or zoomer.yours ~= nil or zoomer.release ~= nil
+		or zoomer.moving or maxHeldTo ~= nil or stoppedFor ~= nil or (exitBox ~= nil and exitBox:IsShown())
+end
+ns.FeatureLoop(watcher, function(_, elapsed)
 	if not ns.db then return end
 	local key, camera, held, afresh = zoomer.TriggerNowSeen()
 	-- No script playing and nothing of one still easing back (its zoom, your
@@ -3500,7 +3511,7 @@ ns.SetOnUpdate(watcher, function(_, elapsed)
 	elseif exitBox and exitBox:IsShown() then
 		exitBox:Hide()
 	end
-end)
+end, WatcherWanted) -- (Audit 2026-11-25)
 
 -- The running script's Edge haze (0-1), or nil (Focus.lua asks).
 function ns.CameraScriptHaze()
