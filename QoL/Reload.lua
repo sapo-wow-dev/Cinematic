@@ -52,6 +52,12 @@ end
 -- not be the same one after).
 local function Save()
 	if not ns.db or not ns.Setting("reloadKeepWindows") then return end
+	-- (A test kit run or the test queue going, dev copy: nothing kept for
+	-- after the reload; each test opens what it needs. The user, 2026-11-25.)
+	if ns.TestKitHoldsWindows and ns.TestKitHoldsWindows() then
+		ns.db.reloadState = nil
+		return
+	end
 	local state = { at = time(), windows = {}, bags = BagsOpen() }
 	for _, window in ipairs(WINDOWS) do
 		if Shown(_G[window[1]]) then state.windows[#state.windows + 1] = window[1] end

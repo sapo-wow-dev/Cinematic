@@ -871,6 +871,29 @@ local function ContextLine(run)
 	for _, part in ipairs(Kit.ContextLines(run.def, run)) do Say(run, part) end
 end
 
+-- Every window closed (the game's, the settings, bags, Cinematic's that Escape
+-- closes), as a test starts and as it ends: each test opens what it needs,
+-- the next starts clean (the user, 2026-11-25: Reload's "keep windows open"
+-- brought the last test's windows back). Not in a fight (Forever's gamepad
+-- code blocks panels hidden from our code there): left as they are.
+local function CloseWindows(run, when)
+	if InCombatLockdown() then
+		Say(run, ("  windows left as they are (%s): in a fight"):format(when))
+		return
+	end
+	if SettingsPanel and SettingsPanel:IsShown() then pcall(HideUIPanel, SettingsPanel)
+	elseif InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then pcall(HideUIPanel, InterfaceOptionsFrame) end
+	if CloseAllWindows then pcall(CloseAllWindows) end
+	if CloseAllBags then pcall(CloseAllBags) end
+	Kit.windowsClosed = (Kit.windowsClosed or 0) + 1 -- (the offline check's)
+end
+
+-- (QoL/Reload.lua: a run or the test queue going, its "keep windows open"
+-- keeps nothing for after a reload.)
+function ns.TestKitHoldsWindows()
+	return (current and not current.stopped) and true or (CinematicDB and CinematicDB.testQueueRun) and true or false
+end
+
 function Kit.Finish(run, done)
 	if current ~= run or run.stopped then return end
 	run.stopped = true
@@ -885,6 +908,7 @@ function Kit.Finish(run, done)
 		local ok, err = pcall(run.def.finish, run)
 		if not ok then Say(run, "  own finish failed: " .. tostring(err)) end
 	end
+	CloseWindows(run, "end")
 	ConsoleEnd(run)
 	Say(run, "put back: " .. PutBack(run.def))
 	local errors, blocked = Counts()
@@ -1084,6 +1108,7 @@ function Kit.Start(name, arg, resume)
 	run.cineTicker = C_Timer.NewTicker(1, function() if current == run then KeepCineOff(run) end end)
 	-- The setup in a coroutine of its own (it may wait), then the steps one by one.
 	run.index = 0
+	CloseWindows(run, "start")
 	run.co = coroutine.create(function() if def.setup then def.setup(run) end end)
 	run:Resume(run.co)
 end

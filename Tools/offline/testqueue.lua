@@ -233,9 +233,20 @@ local function RunClient(client)
 	-- looks at 5 s): the queue still wraps up (2026-11-25: stuck on "That was
 	-- the last one. Wrapping up..." after Gating audit fixes).
 	ns.TestQueueList = { { id = "qr", test = "kitcheck", args = "", session = "S" } }
+	local closedBefore = Kit.windowsClosed or 0
 	Q.Start()
 	Advance(4)
 	run = Kit.Running()
+	-- (Windows closed as a test starts and ends; Reload's "keep windows open"
+	-- keeps nothing while a test or the queue goes. The user, 2026-11-25.)
+	Check("windows closed as the test starts", (Kit.windowsClosed or 0) == closedBefore + 1, Kit.windowsClosed)
+	local realReloadUI = ReloadUI
+	ReloadUI = function() end
+	local realSetting = ns.Setting
+	ns.Setting = function(key) if key == "reloadKeepWindows" then return true end return realSetting(key) end
+	ns.db.reloadState = { at = 1 }
+	ns.Reload()
+	Check("a reload mid-test keeps no windows to reopen", ns.TestKitHoldsWindows() and ns.db.reloadState == nil)
 	run:SaveResume()
 	run.stopped = true -- (the reload)
 	Login(false, true)
@@ -248,6 +259,11 @@ local function RunClient(client)
 		and CinematicDB.testQueueRun == nil and (Result("qr") or ""):find("result=DONE", 1, true) ~= nil, box)
 	Check("quick end after the Reload: not called cut off", Has(CinematicDB.testQueueLog, "already moved on: 1/1") ~= nil
 		and not (Result("qr") or ""):find("CUT%-OFF"), Result("qr"))
+	Check("windows closed as the resumed test starts and ends", (Kit.windowsClosed or 0) == closedBefore + 3, Kit.windowsClosed)
+	ns.Reload()
+	Check("after the queue, a reload keeps open windows again", not ns.TestKitHoldsWindows()
+		and type(ns.db.reloadState) == "table", tostring(ns.db.reloadState))
+	ns.db.reloadState, ns.Setting, ReloadUI = nil, realSetting, realReloadUI
 
 	-- A /reload of your own mid-test: cut off, the rest offered.
 	ns.TestQueueList = { { id = "qg", test = "kitcheck", args = "", session = "S" }, { id = "qh", test = "kitcheck", args = "", session = "S" } }
