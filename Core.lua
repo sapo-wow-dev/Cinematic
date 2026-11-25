@@ -2748,24 +2748,41 @@ end
 -- "dungeon", "raid", "pvp", "inn" (resting outside a capital) or nil. Cities
 -- are checked first because Dalaran is an instance. A flight leaving a city or
 -- inn doesn't count as being there.
+-- (The game asked only when it says the place may have changed: a zone, a
+-- loading screen, resting (ns.placeWatch), and again for 0.5 s after each;
+-- a flight read live. The 2026-11-25 audit, fix card
+-- Tools/audits/2026-11-25-event-fact-place.md: it was asked every frame.)
+ns.placeWatch = { fresh = false, settleTill = -math.huge, frame = CreateFrame("Frame") }
+for _, event in ipairs({ "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS", "PLAYER_ENTERING_WORLD",
+	"PLAYER_UPDATE_RESTING" }) do
+	ns.placeWatch.frame:RegisterEvent(event)
+end
+ns.placeWatch.frame:SetScript("OnEvent", function()
+	ns.placeWatch.fresh, ns.placeWatch.settleTill = false, GetTime() + 0.5
+end)
 function ns.GetPlaceType()
-	local onTaxi = ns.OnTaxi()
-	if ns.IsInCity() then
-		return not onTaxi and "city" or nil
-	end
-	local inInstance, instanceType = IsInInstance()
-	if inInstance then
-		if instanceType == "party" or instanceType == "scenario" then
-			return "dungeon"
-		elseif instanceType == "raid" then
-			return "raid"
-		elseif instanceType == "pvp" or instanceType == "arena" then
-			return "pvp"
+	local w, now = ns.placeWatch, GetTime()
+	if not w.fresh or now <= w.settleTill then
+		w.fresh, w.place = true, nil
+		if ns.IsInCity() then
+			w.place = "city"
+		else
+			local inInstance, instanceType = IsInInstance()
+			if inInstance and (instanceType == "party" or instanceType == "scenario") then
+				w.place = "dungeon"
+			elseif inInstance and instanceType == "raid" then
+				w.place = "raid"
+			elseif inInstance and (instanceType == "pvp" or instanceType == "arena") then
+				w.place = "pvp"
+			elseif IsResting() then
+				w.place = "inn"
+			end
 		end
 	end
-	if IsResting() and not onTaxi then
-		return "inn"
+	if (w.place == "city" or w.place == "inn") and ns.OnTaxi() then
+		return nil
 	end
+	return w.place
 end
 ns.GetPlaceType = ns.Profiled("GetPlaceType", OncePerFrame(ns.GetPlaceType))
 
