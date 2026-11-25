@@ -3103,7 +3103,7 @@ do
 				["HUD:hud"] = false, ["HUD:units"] = "Combat", ["HUD:prd"] = "Combat", ["HUD:party"] = "Combat", ["HUD:bars"] = "Combat",
 				-- (Timers, the rows once called Trackers: in Info since 2026-11-18, user.)
 				["HUD:buffs"] = "Combat", ["HUD:combat"] = "Info", ["HUD:cdm"] = "Combat",
-				["HUD:swingtimer"] = "Combat", Gamepad = "Combat",
+				["HUD:swingtimer"] = "Combat", ["HUD:rangehint"] = "Combat", Gamepad = "Combat",
 				Nameplates = "Nameplates", ["Nameplate Names"] = "Nameplates" },
 			colors = {
 			["Combat"] = { 0.35, 0.6, 0.9 }, Nameplates = { 0.85, 0.55, 0.25 }, Info = { 0.45, 0.75, 0.45 },
@@ -3112,7 +3112,7 @@ do
 			Tooltips = { 0.35, 0.6, 0.9 }, ["Map & Quests"] = { 0.35, 0.6, 0.9 },
 			["Buffs & Debuffs"] = { 0.35, 0.6, 0.9 }, Timers = { 0.35, 0.6, 0.9 }, ["Menus & Info"] = { 0.35, 0.6, 0.9 },
 			["Combat Text"] = { 0.35, 0.6, 0.9 }, ["Cooldown Manager"] = { 0.35, 0.6, 0.9 },
-			["Swing Timer"] = { 0.35, 0.6, 0.9 }, Gamepad = { 0.35, 0.6, 0.9 },
+			["Swing Timer"] = { 0.35, 0.6, 0.9 }, ["Range Hint"] = { 0.35, 0.6, 0.9 }, Gamepad = { 0.35, 0.6, 0.9 },
 		}, pages = {
 			-- (A standard: your faction's battle banner.)
 			{ "Standard Frames", function()
@@ -3158,6 +3158,9 @@ do
 				tabOf = "HUD:cdm" },
 			{ "Swing timer", "Interface\\Icons\\INV_Sword_04", label = "Swing Timer", section = "Swing Timer",
 				tabOf = "HUD:swingtimer" },
+			-- (Range Hint, after Swing Timer: the user, 2026-11-25. UI/RangeHint.lua.)
+			{ "Range hint", "Interface\\Icons\\INV_Misc_Spyglass_03", label = "Range Hint", section = "Range Hint",
+				tabOf = "HUD:rangehint" },
 		} },
 		-- (Cameras: what everyone has; Dev: the dev copy's own, to the right)
 		-- (master: Enable Cameras; its pages with no switch of their own show Off with it)
@@ -9255,6 +9258,8 @@ local function CreateCombatPanel()
 			tabs = "cdm", icon = "Interface\\Icons\\Spell_Nature_TimeStop" },
 		{ keys = { "swingtimer" }, label = "Swing Timer", section = "Swing Timer", before = "Swing timer",
 			tabs = "swing", icon = "Interface\\Icons\\INV_Sword_04" },
+		{ keys = { "rangehint" }, label = "Range Hint", section = "Range Hint", before = "Range hint",
+			tabs = "range", icon = "Interface\\Icons\\INV_Misc_Spyglass_03" },
 		{ keys = { "interface" }, label = "Menus & Info", section = "Menus & Info", last = true,
 			icon = "Interface\\Icons\\INV_Misc_Bag_07" },
 		{ keys = { "other" }, label = "Other Frames in CineMode", section = "What Shows", before = "Standard Frames" },
@@ -9882,7 +9887,7 @@ local function CreateCombatPanel()
 			-- (Your cast bar: a sub-tab of Unit Frames' Show in too, its look the Cast Style tab's, 2026-11-16.)
 			{ "playercast", L["Your cast bar"], L["Cast bar"] },
 			{ "bars", L["Action bars"] }, { "buffs", L["Buffs and debuffs"] }, { "combat", L["Timers"] },
-			{ "cdm", L["Cooldown Manager"] }, { "swingtimer", L["Swing timer"] },
+			{ "cdm", L["Cooldown Manager"] }, { "swingtimer", L["Swing timer"] }, { "rangehint", L["Range hint"] },
 			-- (The chat window's row: the Chat icon's Show in tab.)
 			{ "chat", L["Chat window"] },
 			{ "interface", L["Info and menus"] }, { "minimap", L["Minimap"] }, { "quests", L["Quest tracker"] },
@@ -9905,6 +9910,7 @@ local function CreateCombatPanel()
 			combat = L["CineMode hides timers and meters: pick which show, and when."],
 			cdm = L["CineMode hides the Cooldown Manager: pick which bars show, and when."],
 			swingtimer = L["CineMode hides your swing timer: pick when it shows."],
+			rangehint = L["CineMode hides the range hint: pick when it shows."],
 			chat = L["CineMode hides the chat window: pick when it shows."],
 			interface = L["CineMode hides info frames and menus: pick which show, and when."],
 			minimap = L["CineMode hides the minimap: pick which parts show, and when."],
@@ -9979,7 +9985,7 @@ local function CreateCombatPanel()
 		-- wrapping. Made the first time the HUD icon shows, the hub's icons all in.
 		local LIST_TABS = { ["HUD:units"] = "units", ["HUD:prd"] = "prd", ["HUD:party"] = "party", ["HUD:bars"] = "bars",
 			["HUD:chat"] = "chat", ["HUD:minimap"] = "minimap", ["HUD:quests"] = "quests", ["HUD:buffs"] = "buffs",
-			["HUD:combat"] = "timers", ["HUD:cdm"] = "cdm", ["HUD:swingtimer"] = "swing",
+			["HUD:combat"] = "timers", ["HUD:cdm"] = "cdm", ["HUD:swingtimer"] = "swing", ["HUD:rangehint"] = "range",
 			["Mouseover groups"] = "mouse", ["Nameplates"] = "plates",
 			["Nameplate Names"] = "names" }
 		-- (What each icon is for, under its name: its Show in tab's tip, else these.)
@@ -16874,6 +16880,52 @@ local function CreateSwingPanel()
 	RegisterSubpage(canvas, L["Swing timer"], L["Swing Timer"])
 end
 
+-- Sub-page: Range Hint (UI/RangeHint.lua): a mark under your character while
+-- your target is out of reach of a spell, per class. Its spot: Edit Mode.
+local function CreateRangeHintPanel()
+	local canvas, content = CreateScrollPage()
+
+	local title = Label(content, "GameFontNormalLarge", L["Range Hint"])
+	local tabs = ns.PageTabs(content, ns.ShowInTabs("range"), ns.ShowInIndex("range", "Range hint"))
+	title:SetPoint("TOPLEFT", tabs, "BOTTOMLEFT", 8, -14)
+
+	local subtitle = PageIntro(content, title,
+		L["A small mark under your character while your target is out of your spell's range."])
+
+	local handleCheck = PageSwitch(content, "handleRangeHint", L["Enable Page"],
+		L["Turns the range hint on or off."], subtitle, function()
+			if ns.RangeHintRefresh then ns.RangeHintRefresh() end
+		end)
+
+	local hosts, _, TabsShown = ns.PageTabsBelow(content, handleCheck, {
+		{ L["Settings"], L["Which spell's range it checks."] },
+	}, "Range hint/page", nil, nil, nil, nil, true)
+	local settings = hosts[1]
+
+	-- (Per class: your current one's.)
+	local className = UnitClass("player")
+	local spellLabel = Label(settings, "GameFontHighlight", L["Spell for %s"]:format(className))
+	spellLabel:SetPoint("TOPLEFT", settings, "TOPLEFT", 0, 0)
+	local spell = Dropdown(settings, ns.RangeHintSpellKey(), ns.RangeHintChoices, 240, function()
+		if ns.RangeHintRefresh then ns.RangeHintRefresh() end
+	end)
+	if spell then
+		spell:SetPoint("TOPLEFT", spellLabel, "BOTTOMLEFT", 0, -6)
+		Tooltip(spell, L["The mark shows while your target is out of this spell's range. Auto uses the longest-range attack on your bars."])
+		GreyUnless(spell, function(db) return db.handleRangeHint end)
+	end
+	local where = Label(settings, "GameFontDisableSmall", L["Move it in Edit Mode."])
+	where:SetPoint("TOPLEFT", spell or spellLabel, "BOTTOMLEFT", 0, -10)
+	-- (A sound as it came up: built 2026-11-25, removed the same day, the user.)
+
+	canvas:SetScript("OnShow", PageShown(function()
+		Refresh()
+		TabsShown()
+	end, content))
+	canvas:Hide()
+	RegisterSubpage(canvas, L["Range hint"], L["Range Hint"])
+end
+
 -- Sub-page: the Cooldown Manager (the game's, or Forever Enhanced Cooldown Manager).
 local function CreateCooldownPanel()
 	local canvas, content = CreateScrollPage()
@@ -20039,6 +20091,7 @@ do
 	local HEADINGS = {
 		{ "units", L["Unit frames"] }, { "prd", L["Personal Resource Display"] }, { "bars", L["Action bars"] },
 		{ "combat", L["Timers"] }, { "cdm", L["Cooldown Manager"] }, { "swingtimer", L["Swing timer"] },
+		{ "rangehint", L["Range hint"] },
 		{ "interface", L["Info and menus"] }, { "minimap", L["Minimap"] },
 		{ "party", L["Party frames (not raid-style)"] }, { "raid", L["Raid frames"] },
 		{ "rsparty", L["Party frames (raid-style)"] }, { false, L["Other"] },
@@ -22433,6 +22486,8 @@ ns.OnLanguage(function()
 		CreateSwingPanel()
 		Lap("CreateSwingPanel")
 	end
+	CreateRangeHintPanel()
+	Lap("CreateRangeHintPanel")
 	-- (Only with a Cooldown Manager: the game's, on clients that have it, or the addon.
 	-- ProfileModules.lua.)
 	if ns.HasCooldownManager() then

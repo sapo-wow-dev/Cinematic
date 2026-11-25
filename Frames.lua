@@ -69,6 +69,8 @@ local FRAME_GROUPS = {
 	topcenter = { "UIWidgetTopCenterContainerFrame" },
 	misc = { "DurabilityFrame" },
 	swing = { "SwingTimerMainHandFrame", "SwingTimerOffHandFrame", "SwingTimerRangedFrame" },
+	-- Our Range Hint's mark under your character (UI/RangeHint.lua).
+	rangehint = { "CinematicRangeHint" },
 	-- Your cast bars: retail's, Classic's, the pet's (vehicles, mind control)
 	-- and Forever's in gamepad mode. (Target and focus cast bars sit inside
 	-- their unit frames and fade with them.)
@@ -738,6 +740,7 @@ ns.SHOW_IN_SWITCH = {
 	party = "showInParty", rsparty = "showInParty", raid = "showInRaid", bars = "showInBars", chat = "showInChat",
 	minimap = "showInMinimap", quests = "showInQuests", buffs = "showInBuffs", combat = "showInTimers",
 	swingtimer = "showInSwing", cdm = "showInCooldowns", interface = "showInInterface", other = "showInOther",
+	rangehint = "showInRange",
 }
 ns.SHOW_IN_SWITCHES = {}
 do
@@ -764,7 +767,7 @@ ns.SHOW_IN_CHILDREN = {
 	showInUnits = { "personalResources" }, showInPrd = { "prdKeepUp" },
 	showInMinimap = { "handleMinimap", "minimapKeepOpen" }, showInQuests = { "handleQuests" },
 	showInChat = { "handleChat", "handleBubbles" }, showInBuffs = { "handleBuffs" },
-	showInCooldowns = { "handleCooldowns" }, showInSwing = { "handleSwing" },
+	showInCooldowns = { "handleCooldowns" }, showInSwing = { "handleSwing" }, showInRange = { "handleRangeHint" },
 	mouseover = { "handleTooltips", "cursorHide" }, handlePlates = { "handlePlateIcons" },
 	-- (The Style hub's: under Enable Style as before, through their icon's.)
 	-- (plateLayout: Nameplate Style's Layout tab, PlateLayout.lua, 2026-11-25.)
@@ -2634,6 +2637,11 @@ ns.COMBAT_SHOW = {
 		-- with its support switched off, was faded with the group but in no
 		-- row's list, so Always on this row never brought it up, 2026-11-16.)
 		groups = { "swing" } },
+	-- Range Hint's mark (UI/RangeHint.lua), its own icon after Swing Timer's
+	-- (2026-11-25): In combat ticked to start with.
+	{ key = "rangehint", label = L["Range hint"], default = true, morePage = "Range hint",
+		tip = L["A small mark under your character while your target is out of your spell's range."],
+		frames = FRAME_GROUPS.rangehint, groups = { "rangehint" } },
 	-- Always ticked to start with (CINE_SHOW_DEFAULT), as before it had a row,
 	-- and nothing else: untick it and tick In combat to hide your cast bar
 	-- in CineMode but for fights.
@@ -2784,6 +2792,7 @@ local ROW_SECTIONS = {
 	-- (The swing timer and the Cooldown Manager: sections of their own, their
 	-- icons' Show in, 2026-11-17; the Trackers' (combat) till then.)
 	swing = "swingtimer", castbar = "playercast", -- (your cast bar: Unit Frames' Show in)
+	rangehint = "rangehint",
 	meters = "combat", cooldowns = "cdm",
 	cooldownsutility = "cdm", cooldownsbuffs = "cdm", cooldownsbars = "cdm", encounter = "combat",
 	mirror = "combat",
@@ -2905,6 +2914,7 @@ local HOVER_ROW_BY_GROUP = {
 	raidready = "raidready",
 	minimap = "minimap", buffs = "buffs", buffcollapse = "buffcollapse", quests = "quests", questtimer = "questtimer", misc = "durability",
 	swing = "swing", castbar = "castbar", meters = "meters", cooldowns = "cooldowns", waypoint = "waypoint",
+	rangehint = "rangehint",
 	gamepadbars = "gamepadbars", gamepadlegend = "gamepadlegend", gamepadreticle = "gamepadreticle",
 	chat = "chat", barart = "mainbar", voice = "voice", encounter = "encounter",
 }

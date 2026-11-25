@@ -3389,6 +3389,10 @@ local FOLLOW_GROUPS = {
 	-- chained one under the other, so the first slides the rest.)
 	{ key = "shoulderCamFollowSwing", frames = { "SwingTimerMainHandFrame", "SwingTimerOffHandFrame",
 		"SwingTimerRangedFrame" } },
+	-- (Range Hint's mark under you, UI/RangeHint.lua: the user, 2026-11-25.)
+	-- (gate: only with Range Hint on; off, it's left where it is.)
+	{ key = "shoulderCamFollowRangeHint", frames = { "CinematicRangeHint" },
+		gate = function() return ns.RangeHintOn and ns.RangeHintOn() end },
 	{ key = "shoulderCamFollowEssential", frames = { "EssentialCooldownViewer" } },
 	{ key = "shoulderCamFollowUtility", frames = { "UtilityCooldownViewer" } },
 	{ key = "shoulderCamFollowBuffIcons", frames = { "BuffIconCooldownViewer" } },
@@ -3469,7 +3473,7 @@ local function PickFollows()
 	local db = ns.db
 	for name in pairs(FOLLOWS) do FOLLOWS[name] = nil end
 	for _, group in ipairs(FOLLOW_GROUPS) do
-		if db and db[group.key] then
+		if db and db[group.key] and (not group.gate or group.gate()) then
 			for _, name in ipairs(group.frames) do FOLLOWS[name] = group.key end
 		end
 	end
@@ -4193,6 +4197,7 @@ function ns.CreateShoulderCamPanel(kit)
 		shoulderCamFollowCast = L["Cast bar"],
 		shoulderCamFollowPRD = L["Personal Resource Display"],
 		shoulderCamFollowSwing = L["Swing timers"],
+		shoulderCamFollowRangeHint = L["Range hint"],
 		shoulderCamFollowEssential = L["Cooldowns: essential"],
 		shoulderCamFollowUtility = L["Cooldowns: utility"],
 		shoulderCamFollowBuffIcons = L["Tracked buffs: icons"],

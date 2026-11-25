@@ -91,6 +91,7 @@ UI\CooldownBoth.lua
 UI\CooldownMissing.lua
 UI\CooldownRules.lua
 UI\CooldownGrid.lua
+UI\RangeHint.lua
 Visions\HealVisionFrames.lua
 UI\Chat.lua
 UI\ChatCopy.lua
