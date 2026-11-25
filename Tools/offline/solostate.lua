@@ -96,4 +96,23 @@ local offStuck = table.concat(CinematicDB.soloOffUnconfirmed or {}, ", ")
 Check("solo off names an addon it couldn't turn back on", offStuck:find("Auctionator (still off)", 1, true) ~= nil, offStuck)
 fake.on = Enable
 
+-- An addon on for this character only: loaded, but its state with no
+-- character reads 0. The addon kit's no-addon stage left ElvUI on that way and
+-- it loaded after the reload (run qa37c, 2026-11-25).
+CinematicDB.soloAddons, CinematicDB.soloBack = nil, nil
+list[#list + 1] = { "OneChar", 0, nil }
+calls = {}
+ns.SoloAddons("none", true)
+did = table.concat(calls, ", ")
+Check("an addon loaded but reading 0 (on for this character only) is turned off", did:find("off OneChar", 1, true) ~= nil, did)
+Check("solo off will turn it back on", ((CinematicDB.soloAddons or {}).turnedOff or {}).OneChar ~= nil)
+-- (Still loaded, now off by solo's own switch: the next solo leaves it off,
+-- and its solo off doesn't turn it on.)
+CinematicDB.soloAddons = nil
+calls = {}
+ns.SoloAddons("JourneyTracker", true)
+did = table.concat(calls, ", ")
+Check("an addon solo turned off this session isn't read as on", not did:find("OneChar", 1, true)
+	and ((CinematicDB.soloAddons or {}).turnedOff or {}).OneChar == nil, did)
+
 print(fails == 0 and "ALL PASS" or (fails .. " FAILED"))

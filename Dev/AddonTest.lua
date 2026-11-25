@@ -80,7 +80,11 @@ end
 -- 2026-11-25: solo asked MikScrollingBattleText_Forever on and Guidelime off,
 -- and after the reload the opposite had loaded; nothing said which switch
 -- didn't take. Now each one is checked as it's made.)
+-- (The addons solo turned off this session: still loaded till the reload,
+-- and off, which AddOns below must not read as on.)
+local offThisSession = {}
 local function Switch(name, on)
+	offThisSession[name] = not on or nil
 	local function Took()
 		local state = EnableState(name)
 		if on then return type(state) == "number" and state > 0 end
@@ -105,6 +109,11 @@ local function AddOns()
 			local state = EnableState(name)
 			local enabled = reason ~= "DISABLED"
 			if type(state) == "number" then enabled = state > 0 end
+			-- (Loaded now, it's on, unless solo turned it off this session: the
+			-- state with no character reads 0 for an addon on for this character
+			-- only. ElvUI was, and the addon kit's no-addon stage never turned it
+			-- off, run qa37c 2026-11-25. Engine rule forever.addons.state-per-character.)
+			if not enabled and IsLoaded(name) and not offThisSession[name] then enabled = true end
 			out[#out + 1] = {
 				name = name, enabled = enabled, loaded = IsLoaded(name) and true or false, state = state,
 			}
