@@ -5090,6 +5090,14 @@ do
 		for _, field in ipairs(entry.fields) do f[field] = false end
 		if type(class) == "string" then f[class:lower()] = true end
 	end })
+	-- Your role (ns.PlayerRole: your spec's, else the group finder's): after
+	-- a spec, talent or role change, or the group's.
+	ns.AddEventFact({ name = "role", fields = { "tank", "healer", "damage" }, events = {
+		"PLAYER_SPECIALIZATION_CHANGED", "ACTIVE_TALENT_GROUP_CHANGED", "PLAYER_TALENT_UPDATE",
+		"PLAYER_ROLES_ASSIGNED", "GROUP_ROSTER_UPDATE" }, read = function(f)
+		local role = ns.PlayerRole()
+		f.tank, f.healer, f.damage = role == "TANK", role == "HEALER", role == "DAMAGER"
+	end })
 	-- (target, enemy and friendly as worked out, before SetTargetWords.)
 	local anyTarget, enemyTarget = false, false -- (enemyTarget nil: the game won't say)
 	-- target, enemy and friendly mean what the grids' Enemy targeted and
@@ -5299,8 +5307,7 @@ do
 		else
 			facts.boss = false
 		end
-		local role = (Want("tank") or Want("healer") or Want("damage")) and ns.PlayerRole() or nil
-		facts.tank, facts.healer, facts.damage = role == "TANK", role == "HEALER", role == "DAMAGER"
+		-- (tank, healer, damage: by event, ns.AddEventFact.)
 		-- (Class and the rest the game announces by event: ns.AddEventFact.)
 		ns.ReadEventFacts(facts, Want, now)
 		-- (The stamp moves only when a fact did: standing still, the rows'
