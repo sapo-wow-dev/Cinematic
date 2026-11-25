@@ -122,10 +122,38 @@ local function PutBack(frame, wanted)
 		return true
 	end
 end
+-- A held part no shown plate has (its plate gone, or the part's frame changed)
+-- let go, as a plate's removal does (LetGo): the in-game gating test's run 7
+-- found 54 parts held at 0 on plates no longer up, the keeper running on for
+-- them with every switch off, and a pooled plate coming back with them hidden.
+-- (Every part is faded through EachPartFrame on a plate: so one not found there
+-- now is no plate's.) Audit 2026-11-25.
+local function LetGoOrphans()
+	local ok, plates = pcall(C_NamePlate.GetNamePlates)
+	if not ok or type(plates) ~= "table" then return end
+	local up = {}
+	for _, plate in ipairs(plates) do
+		local unitFrame = plate.UnitFrame
+		if unitFrame then
+			for part in pairs(PART_FRAMES) do
+				EachPartFrame(unitFrame, part, function(frame) up[frame] = true end)
+			end
+		end
+	end
+	local fade = ns.platePartsKept.Fade
+	for frame in pairs(held) do
+		if not up[frame] then
+			fade(frame, 1)
+			ns.ProfileCount("plate parts: let go, no plate")
+		end
+	end
+end
+ns.platePartsKept.LetGoOrphans = LetGoOrphans -- (Tools/offline/platekeeper.lua)
 function ns.platePartsKept.Tick(self)
 	local now = GetTime()
 	if now >= sweepAt then
 		sweepAt = now + SWEEP
+		LetGoOrphans()
 		for frame, wanted in pairs(held) do
 			if PutBack(frame, wanted) and not polled[frame] then
 				ns.ProfileCount("plate parts: put back by the sweep")

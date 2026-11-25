@@ -527,8 +527,13 @@ ns.TestKit.Define({
 				r:Sleep(1)
 				local kept = Try(errors.GetAlpha, errors)
 				Apply(r, { { "hideErrorsOutOfCombat", true } }, 0.2)
-				UpdateNow()
+				local passOk, passErr = UpdateNow()
 				local hidden = Try(errors.GetAlpha, errors)
+				-- (Run 7: hidden stayed 0.5 as in run 1, after runs 3-6 passed. Why, if so.)
+				r:Log(("probe E5 ticked: the pass ran %s%s; hide setting %s, Quality of life %s, enabled %s, fight %s, by us %s")
+					:format(tostring(passOk), passOk and "" or (" (" .. tostring(passErr) .. ")"),
+					tostring(ns.Setting("hideErrorsOutOfCombat")), tostring(ns.db.handleQuality), tostring(ns.db.enabled),
+					tostring(InCombatLockdown()), tostring(ns.errorsHiddenByUs)))
 				Apply(r, { { "hideErrorsOutOfCombat", false } }, 0.2)
 				UpdateNow()
 				local back = Try(errors.GetAlpha, errors)

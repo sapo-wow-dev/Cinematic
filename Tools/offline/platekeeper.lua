@@ -51,11 +51,27 @@ local function Part(alpha)
 	f.IsShown = function(self) return self.shown end
 	return f
 end
+-- (The plates up, as C_NamePlate.GetNamePlates gives them: the keeper's sweep lets
+-- go of a part no shown plate has. Audit 2026-11-25, OK'd by the user: this test's
+-- plates were never listed, so the sweep let theirs go.)
+local shown = {}
+C_NamePlate = C_NamePlate or {} -- luacheck: ignore 111 121
+C_NamePlate.GetNamePlates = function() -- luacheck: ignore 122
+	local list = {}
+	for _, plate in ipairs(shown) do list[#list + 1] = plate end
+	return list
+end
 local function UnitFrame(container)
 	local u = { name = Part(), aggroHighlight = Part(), aggroHighlightBase = Part(), aggroHighlightAdditive = Part(),
 		aggroFlash = Part(), HealthBarsContainer = Part(), RaidTargetFrame = Part(), WidgetContainer = Part() }
 	if container then u.CastBarsContainer = Part() else u.castBar = Part() end
+	shown[#shown + 1] = { UnitFrame = u }
 	return u
+end
+local function Gone(u)
+	for i = #shown, 1, -1 do
+		if shown[i].UnitFrame == u then table.remove(shown, i) end
+	end
 end
 local function Count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
 local function FadeAll(u, level)
@@ -93,6 +109,7 @@ Check(math.abs(u.HealthBarsContainer.a - 0.3) < 1e-6, "the health bar's containe
 local v = UnitFrame(false)
 FadeAll(v, 0.5)
 Check(Count(kept.polled) == 9, ("two plates: %d polled (4 + 4 threat + 1 cast bar)"):format(Count(kept.polled)))
+Gone(u)
 kept.LetGo(u)
 local stillU = false
 for frame in pairs(kept.held) do
