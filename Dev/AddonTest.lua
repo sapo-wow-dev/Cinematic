@@ -984,6 +984,19 @@ function ns.AddonTest(words)
 				ns.IsAddonFramesOn(known.key) and "on" or "OFF", tostring(known.loaded)))
 		end
 	end
+	-- (Whether it's set up so its frames show: its ready recipe, which the
+	-- addon kit and its support test use to set it up. This one only says.)
+	local recipe = ns.TestKit and ns.TestKit.AddonReadyRecipe(target)
+	if recipe then
+		local ok, yes, why = pcall(recipe.ready)
+		local line = ("ready: %s (%s)%s"):format(ok and yes and "yes" or "NO", tostring(recipe.about),
+			ok and (yes and "" or (": " .. tostring(why))) or (": ready() error " .. tostring(yes)))
+		Log(line)
+		if not (ok and yes) then ns.Print("addontest: " .. target .. " isn't set up: " .. tostring(recipe.about)
+			.. ". /cine debug addonkit " .. target .. " sets it up first.") end
+	else
+		Log("ready: no recipe for " .. target .. " (/addon-support writes one)")
+	end
 	SetCine(false)
 	-- (Its frames as they come and go, every 2 seconds.)
 	run.ticker = C_Timer.NewTicker(2, Inventory)

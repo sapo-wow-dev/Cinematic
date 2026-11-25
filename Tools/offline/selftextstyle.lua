@@ -290,6 +290,22 @@ do
 	_G.BattleTextForeverDB = { enabled = false }
 	ns.RefreshSelfTextStyle()
 	Check("BattleText switched off in its options: Text on You draws", ns.StyleOn("selfTextStyle"))
+	-- (A character with settings of its own: its switch is in its own table,
+	-- not the shared one. 2026-11-25, read from 1.43.0.)
+	_G.BattleTextForeverDB = { enabled = true }
+	_G.BattleTextForeverCharDB = { own = true, settings = { enabled = false } }
+	ns.RefreshSelfTextStyle()
+	Check("BattleText off in this character's own settings: Text on You draws", ns.StyleOn("selfTextStyle"))
+	_G.BattleTextForeverCharDB = { own = true, settings = { enabled = true } }
+	_G.BattleTextForeverDB = { enabled = false }
+	ns.RefreshSelfTextStyle()
+	Check("BattleText on in this character's own settings, off shared: it stands aside",
+		not ns.StyleOn("selfTextStyle") and ct._alpha == 1)
+	_G.BattleTextForever = { db = { enabled = false } }
+	ns.RefreshSelfTextStyle()
+	Check("BattleText's live settings off: Text on You draws", ns.StyleOn("selfTextStyle"))
+	_G.BattleTextForever, _G.BattleTextForeverCharDB = nil, nil
+	_G.BattleTextForeverDB = { enabled = false }
 	_G.MikSBT = nil
 	ns.RefreshSelfTextStyle()
 	Check("MSBT on: Text on You stands aside", not ns.StyleOn("selfTextStyle") and ct._alpha == 1)

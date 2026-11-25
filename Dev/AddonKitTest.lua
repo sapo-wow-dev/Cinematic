@@ -5,6 +5,8 @@
 -- each addon named (none named: every installed addon with a Support file):
 --   solo     the addon list set to just that addon with Cinematic
 --            (/cine debug solo), and one Reload button: your one action each
+--   ready    the addon set up by its recipe (ns.TestKit.DefineAddonReady),
+--            or its clicks in the box when it can't do it itself
 --   probes   every addon kit probe (Dev/AddonKit.lua), CineMode off, into
 --            CinematicDB.addonKit<Target>Log
 --   rows     for an addon: the addon test, quick (/cine debug addontest
@@ -20,10 +22,31 @@ local MAX = 12 -- (targets in one run: none and 11 addons; run it again for more
 
 local function Plan() return CinematicDB.addonKitPlan end
 
+-- Each run's logs under its own keys (addonKitR<run>_<Target>Log), so two
+-- runs in one test queue can't overwrite each other's baseline: one session's
+-- run took the none stage after another's and the first was judged against
+-- it (qcbb3, 2026-11-25). The run: its plan's time, digits only.
+local KEEP_RUNS = 4
+local function RunStamp(at) return (tostring(at or ""):gsub("%D", "")) end
 local function LogKey(target, rows)
-	return "addonKit" .. target:gsub("[^%w]", "") .. (rows and "Rows" or "") .. "Log"
+	local plan = Plan()
+	local stamp = plan and RunStamp(plan.at) or ""
+	return "addonKitR" .. stamp .. "_" .. (target:gsub("[^%w]", "")) .. (rows and "Rows" or "") .. "Log"
 end
 ns.AddonKitLogKey = LogKey
+-- The newest KEEP_RUNS runs' logs kept, older ones dropped (each run is ~600
+-- lines a stage in the saved file).
+local function PruneRuns(stamp)
+	local runs = type(CinematicDB.addonKitRuns) == "table" and CinematicDB.addonKitRuns or {}
+	runs[#runs + 1] = stamp
+	while #runs > KEEP_RUNS do
+		local old = table.remove(runs, 1)
+		for key in pairs(CinematicDB) do
+			if type(key) == "string" and key:find("^addonKitR" .. old .. "_") then CinematicDB[key] = nil end
+		end
+	end
+	CinematicDB.addonKitRuns = runs
+end
 
 -- An installed addon's folder name as typed in any case (slash commands
 -- come lower case: "daylightui"), or nil.
@@ -87,7 +110,8 @@ local steps = {
 			end
 		end
 		while #targets > MAX do r:Log("left out (more than " .. MAX .. "): " .. table.remove(targets)) end
-		CinematicDB.addonKitPlan = { targets = targets, at = date("%Y-%m-%d %H:%M") }
+		CinematicDB.addonKitPlan = { targets = targets, at = date("%Y-%m-%d %H:%M:%S") }
+		PruneRuns(RunStamp(CinematicDB.addonKitPlan.at))
 		-- (A setting saved for the run, so a reload picks the run up again: the kit's undo.)
 		r:Set("handleChat", ns.db.handleChat)
 		r:Log("plan: " .. table.concat(targets, ", "))
@@ -120,6 +144,11 @@ for i = 1, MAX do
 		if type(solo) == "table" then ns.SoloAddons("off", true) end
 		ns.SoloAddons(target == "none" and "none" or table.concat(want, " "), true)
 		r:Log(("solo for %s: %s"):format(target, table.concat(CinematicDB.soloAddons and CinematicDB.soloAddons.keep or {}, ", ")))
+		-- (Each switch read back by solo itself: one that didn't take is named
+		-- now, not found after the reload as another addon's probes.)
+		local stuck = CinematicDB.soloAddons and CinematicDB.soloAddons.unconfirmed
+		r:Verdict(not stuck, ("%s: every addon switched as solo asked%s"):format(target,
+			stuck and (": didn't switch: " .. table.concat(stuck, ", ")) or ""))
 		r:WaitFor(("Reload, for %s alone with Cinematic (%d of %d)"):format(target == "none" and "no other addon" or target,
 			i, #plan.targets), { check = function() return false end, buttons = { { kind = "reload" } } })
 	end }
@@ -127,11 +156,32 @@ for i = 1, MAX do
 		local plan = Plan()
 		local target = plan and plan.targets[i]
 		if not target then return r:Skip("no target " .. i) end
+		-- (The addon list as solo meant it: no kept addon without a part of it,
+		-- no load errors from one. Known error solo-split-companion, 2026-11-25.)
+		if ns.SoloCheck then
+			local problems = ns.SoloCheck(CinematicDB.soloAddons)
+			for _, line in ipairs(problems) do r:Log("solo check: " .. line) end
+			r:Verdict(#problems == 0, ("%s: the addon list as solo meant it%s"):format(target,
+				#problems > 0 and (" (" .. table.concat(problems, "; ") .. ")") or ""))
+		end
 		local loaded = ns.AddonKit.Loaded()
 		if target == "none" then
 			r:Verdict(#loaded == 0, "no other addon loaded" .. (#loaded > 0 and (": " .. table.concat(loaded, ", ")) or ""))
 		else
 			r:Verdict(Loaded(target), target .. " loaded")
+			-- (And nothing else: solo set MikScrollingBattleText_Forever on and
+			-- Guidelime off, and after the reload Guidelime was loaded and it
+			-- wasn't, qcbb3 2026-11-25. Its probes were Guidelime's.)
+			local keep = type(CinematicDB.soloAddons) == "table" and CinematicDB.soloAddons.keep or {}
+			local extra = {}
+			for _, name in ipairs(loaded) do
+				if name ~= target and not Has(keep, name) then extra[#extra + 1] = name end
+			end
+			r:Verdict(#extra == 0, target .. ": nothing loaded that solo didn't keep" ..
+				(#extra > 0 and (": " .. table.concat(extra, ", ") .. " (solo's addon list didn't take)") or ""))
+			if not Loaded(target) or #extra > 0 then
+				return r:Fail(target .. ": the addon list isn't solo's, so its probes would be another addon's: left out")
+			end
 		end
 		-- (CineMode can come on at login before the kit's own check turns it
 		-- off, a moment later: probes taken then read its fades as the addon's,
@@ -142,6 +192,9 @@ for i = 1, MAX do
 			pcall(Cinematic_ToggleCineMode)
 			r:Log("CineMode came on at login: off before the probes")
 		end
+		-- (Set up as its recipe says, so its frames are up for the probes and
+		-- rows: Guidelime with no guide loaded shows no arrow to test.)
+		if target ~= "none" and Loaded(target) then r:AddonReady(target) end
 		r:Sleep(((ns.db and tonumber(ns.db.fadeInTime)) or 1.5) + 1)
 		local lines = ns.AddonKit.Run(target, plan.at)
 		CinematicDB[LogKey(target)] = lines
@@ -152,7 +205,7 @@ for i = 1, MAX do
 		r:Verdict(errors == 0, ("%s: every probe ran (%s)"):format(target, lines[#lines]:sub(3)))
 		if target ~= "none" and Loaded(target) and ns.AddonTest then
 			ns.AddonTest(target .. " quick")
-			r:WaitFor("The addon test is hiding and showing " .. target .. "'s rows: hands off", {
+			r:WaitFor("The addon test is hiding and showing " .. target .. "'s rows", { handsOff = true,
 				check = function() return not ns.AddonTestRunning() end })
 			CinematicDB[LogKey(target, true)] = CinematicDB.addonTestLog
 			local fails, log = 0, CinematicDB.addonTestLog or {}

@@ -367,6 +367,14 @@ Dev\ElvFishBarTest.lua
 Dev\FlareUISupportTest.lua
 Dev\GuidelimeSupportTest.lua
 Dev\GlassSupportTest.lua
+Dev\QuestieSupportTest.lua
+Dev\BattleTextForeverSupportTest.lua
+Dev\DaylightUISupportTest.lua
+Dev\EllesmereUISupportTest.lua
+Dev\ElvUISupportTest.lua
+Dev\MikScrollingBattleText_ForeverSupportTest.lua
+Dev\PlatynatorSupportTest.lua
+Dev\RXPGuidesSupportTest.lua
 Dev\AddonTest.lua
 Dev\EuiCooldownTest.lua
 Dev\BuffFadeTest.lua

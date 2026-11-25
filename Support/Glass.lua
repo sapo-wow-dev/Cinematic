@@ -12,7 +12,9 @@
 -- fading the window left them up: those fade with the Chat window row, and
 -- are linked as each window's panel (FrameLinks.lua) so a message the Chat
 -- page lets through still brings them up. A window dragged out of Glass's
--- dock is the game's again (its Glass frame hidden) and fades as usual.
+-- dock is the game's again (its Glass frame hidden) and fades as usual. Its
+-- extra windows (a chat window shown again in a window of its own) fade with
+-- the Chat window row the same way, linked to the window they show.
 local _, ns = ...
 local L = ns.L
 
@@ -71,6 +73,27 @@ local function FindLines()
 				ns.AddFoundFrame(frame, "chat", true, true)
 			end
 			ns.ClaimLinkPart("Glass", "chatwindow", frame, { window = window })
+		end
+	end
+	-- Its extra windows (a chat window shown a second time, in a window of
+	-- its own: none till a player adds one in its options) are unnamed
+	-- frames on UIParent, not in GlassFrame, so they stayed up while the chat
+	-- faded. Reached through its global addon object: each view's .frame
+	-- draws the lines of .source, a game chat window. (Glass 2.2.0,
+	-- Components/ExtraWindow.lua:267-289, Modules/ExtraWindows.lua.)
+	local glass = _G.Glass
+	if type(glass) ~= "table" or type(glass.GetModule) ~= "function" then return end
+	local ok, extra = pcall(glass.GetModule, glass, "ExtraWindows", true)
+	if not ok or type(extra) ~= "table" or type(extra.views) ~= "table" then return end
+	for _, view in pairs(extra.views) do
+		local frame = type(view) == "table" and not view.released and view.frame
+		local window = type(view) == "table" and view.source
+		if type(frame) == "table" and ns.Reachable(frame) then
+			if not ns.IsFaded(frame) then ns.AddFoundFrame(frame, "chat", true, true) end
+			if type(window) == "table" and type(window.GetName) == "function"
+				and (window:GetName() or ""):match("^ChatFrame%d+$") then
+				ns.ClaimLinkPart("Glass", "chatwindow", frame, { window = window })
+			end
 		end
 	end
 end

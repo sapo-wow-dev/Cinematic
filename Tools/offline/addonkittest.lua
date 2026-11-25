@@ -127,14 +127,25 @@ Check("and the fade back in over first", probedAt and cineOffAt
 	and probedAt - cineOffAt >= (ns.db.fadeInTime or 1.5), probedAt and cineOffAt and (probedAt - cineOffAt))
 ns.IsCineModeOn, Cinematic_ToggleCineMode, ns.AddonKit.Run = IsOn, Toggle, KitRun
 log = CinematicDB.addonKitTestLog
-local base = CinematicDB.addonKitnoneLog
+-- (Each run's logs under its own keys: addonKitR<run>_<Target>Log.)
+local function RunLog(target, rows)
+	return CinematicDB[ns.AddonKitLogKey(target, rows)]
+end
+local base = RunLog("none")
 Check("baseline: no other addon loaded", Has(log, "PASS.*no other addon loaded") ~= nil, Has(log, "FAIL"))
-Check("baseline: every probe ran, kept as addonKitnoneLog", base and base[1]:find("^H ") and Has(log, "PASS.-none: every probe ran"),
+Check("baseline: every probe ran, kept under this run's key", base and base[1]:find("^H ") and Has(log, "PASS.-none: every probe ran"),
 	base and base[#base])
 
--- 4 an addon's turn (step 5): DaylightUI loaded; its probes, then the addon test, waited on.
-Find("DaylightUI").loaded, Find("DaylightUI_Chat").loaded = true, true
-Find("DaylightUI").enabled, Find("DaylightUI_Chat").enabled = true, true
+-- (Its ready recipe asks for clicks in game: here it's ready as it is.)
+if ns.TestKit.DefineAddonReady then
+	ns.TestKit.DefineAddonReady("DaylightUI", { ready = function() return true end })
+end
+-- 4 an addon's turn (step 5): solo for DaylightUI, as its solo step sets it,
+-- reloaded; its probes, then the addon test, waited on.
+ns.SoloAddons("off", true)
+ns.SoloAddons("DaylightUI", true)
+for _, a in ipairs(addons) do a.loaded = a.enabled end
+Check("solo for DaylightUI keeps its part", Find("DaylightUI_Chat").loaded and not Find("SomeOtherAddon").loaded)
 local testRunning = false
 ns.AddonTest = function(words)
 	testRunning = true
@@ -145,11 +156,13 @@ ns.AddonTestRunning = function() return testRunning end
 ns.HandleSlash("debug addonkit 5")
 Advance(10)
 log = CinematicDB.addonKitTestLog
-local run = CinematicDB.addonKitDaylightUILog
-Check("DaylightUI: its probes kept as addonKitDaylightUILog, with it in the addons list",
+local run = RunLog("DaylightUI")
+Check("DaylightUI: its probes kept under this run's key, with it in the addons list",
 	run and run[1]:find("addons=DaylightUI,DaylightUI_Chat") ~= nil, run and run[1])
 Check("DaylightUI: the addon test ran quick and its log was kept",
-	CinematicDB.addonKitDaylightUIRowsLog and CinematicDB.addonKitDaylightUIRowsLog[1] == "start DaylightUI quick")
+	RunLog("DaylightUI", true) and RunLog("DaylightUI", true)[1] == "start DaylightUI quick")
+Check("the run's keys carry its stamp (two runs can't share them)", ns.AddonKitLogKey("none"):find("^addonKitR%d+_noneLog$") ~= nil,
+	ns.AddonKitLogKey("none"))
 Check("DaylightUI: the step passed", Has(log, "PASS.-DaylightUI: its rows hide") ~= nil, Has(log, "FAIL"))
 Check("the run finished", Has(log, "DONE") ~= nil)
 -- The chat probe tells the two apart: the miss behind the kit.
@@ -161,6 +174,19 @@ local function Field(lines, probe, field)
 end
 Check("chat.linesOnly: on with no addon, off with DaylightUI's chat",
 	Field(base, "chat.linesOnly", "linesOnly") == "true" and Field(run, "chat.linesOnly", "linesOnly") == "false")
+
+-- 5 solo's list didn't take (qcbb3, 2026-11-25): another addon still loaded
+-- at an addon's stage. The stage fails and keeps no probes, so another
+-- addon's frames are never judged as this one's.
+CinematicDB[ns.AddonKitLogKey("DaylightUI")] = nil
+Find("SomeOtherAddon").loaded = true
+ns.HandleSlash("debug addonkit 5")
+Advance(10)
+log = CinematicDB.addonKitTestLog
+Check("an addon solo didn't keep, still loaded: the stage FAILs and names it",
+	Has(log, "FAIL.-nothing loaded that solo didn't keep: SomeOtherAddon") ~= nil, Has(log, "FAIL"))
+Check("and keeps no probes for it", RunLog("DaylightUI") == nil)
+Find("SomeOtherAddon").loaded = false
 
 if fails > 0 then
 	for _, line in ipairs(CinematicDB.addonKitTestLog or {}) do print("  | " .. line) end

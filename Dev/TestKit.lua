@@ -331,6 +331,8 @@ Kit.ConsoleWords = ConsoleWords
 
 local function UndoKey(def) return def.key .. "Undo" end
 
+local readyRecipes = {} -- (other addons' ready recipes: Kit.DefineAddonReady, below)
+
 local function PutBack(def)
 	local undo = CinematicDB and CinematicDB[UndoKey(def)]
 	if not undo then return "nothing to put back" end
@@ -348,6 +350,15 @@ local function PutBack(def)
 	if def.putBack then
 		local ok, text = pcall(def.putBack, undo.extra or {})
 		said[#said + 1] = ok and tostring(text or "own state put back") or ("own put back failed: " .. tostring(text))
+	end
+	-- (What an addon's ready recipe changed, whichever test made it ready.)
+	for key in pairs(undo.extra or {}) do
+		local addon = type(key) == "string" and key:match("^ready:(.+)$")
+		local recipe = addon and readyRecipes[addon]
+		if recipe and recipe.putBack then
+			local ok, text = pcall(recipe.putBack, undo.extra)
+			said[#said + 1] = ok and tostring(text or (addon .. " put back")) or (addon .. " put back failed: " .. tostring(text))
+		end
 	end
 	if undo.cineWas and ns.IsCineModeOn and not ns.IsCineModeOn() and Cinematic_ToggleCineMode then
 		pcall(Cinematic_ToggleCineMode)
@@ -435,6 +446,70 @@ function Run:Keep(key, value)
 	local undo = CinematicDB[UndoKey(self.def)]
 	undo.extra = undo.extra or {}
 	if undo.extra[key] == nil then undo.extra[key] = value == nil and NIL or value end
+end
+
+-- Another addon set up for a test (the user, 2026-11-25: "even just getting
+-- the addon to work or set it up for a test can take me hours ... the test
+-- kits should set that up for me or guide me"). /addon-support learns how
+-- the addon works (Tools/addon-kit/addons/<Addon>.md) and writes its recipe
+-- once, next to its support test:
+--   ns.TestKit.DefineAddonReady("Guidelime", {
+--     about = "a guide loaded with a step the arrow points to", -- what "ready" means
+--     ready = function() return ok, "why not" end,  -- set up, so its frames show
+--     make = function(r) ... end,   -- sets it up itself: its own calls, its saved
+--                                   -- settings (r:Keep what it changes, putBack it)
+--     putBack = function(extra) ... end, -- undoes make (gets the run's r:Keep values)
+--     guide = { "Open its window: ...", "Click ..." }, -- your clicks, when make can't
+--   })
+-- r:AddonReady(addon) in a step: ready already, or made ready, or the guide's
+-- numbered clicks in the box till ready() says so (Can't do it = a FAIL that
+-- says why). Every addon test calls it before it checks frames: the addon
+-- kit's stages, each support test's setup. Its putBack runs at the end of
+-- whichever test made it ready.
+function Kit.DefineAddonReady(addon, recipe)
+	assert(type(addon) == "string" and type(recipe) == "table" and recipe.ready, "DefineAddonReady needs an addon and ready()")
+	readyRecipes[addon:lower()] = recipe
+end
+function Kit.AddonReadyRecipe(addon) return addon and readyRecipes[addon:lower()] end
+
+function Run:AddonReady(addon)
+	local recipe = Kit.AddonReadyRecipe(addon)
+	if not recipe then
+		Say(self, ("  ready %s: no ready recipe (run /addon-support %s to write one: its frames may not show)"):format(addon, addon))
+		return nil
+	end
+	local function Ready()
+		local ok, yes, why = pcall(recipe.ready)
+		if not ok then return false, "ready() error: " .. tostring(yes) end
+		return yes and true or false, why
+	end
+	if ns.AddonUp and not ns.AddonUp(addon) then
+		return self:Fail(("%s ready: it isn't loaded"):format(addon))
+	end
+	local yes, why = Ready()
+	if yes then
+		Say(self, ("  ready %s: already (%s)"):format(addon, recipe.about or "set up"))
+		return self:Pass(addon .. " ready: " .. (recipe.about or "set up"))
+	end
+	Say(self, ("  ready %s: not yet (%s)"):format(addon, tostring(why)))
+	if recipe.make then
+		self:Keep("ready:" .. addon:lower(), true) -- (so its putBack runs after this test)
+		recipe.make(self)
+		yes, why = Ready()
+		Say(self, ("  ready %s: after its setup %s (%s)"):format(addon, yes and "ready" or "not yet", tostring(why)))
+	end
+	if not yes and recipe.guide then
+		local lines = {}
+		for i, line in ipairs(recipe.guide) do lines[#lines + 1] = i .. ". " .. line end
+		local _, label = self:WaitFor(("Set %s up for the test (%s):\n%s\nIt goes on by itself once it's done."):format(
+			addon, recipe.about or "so its frames show", table.concat(lines, "\n")),
+			{ check = function() return (Ready()) end, buttons = { "Can't do it" } })
+		if label == "Can't do it" then
+			return self:Fail(("%s ready: you couldn't (%s; still %s)"):format(addon, recipe.about or "set up", tostring(select(2, Ready()))))
+		end
+		yes, why = Ready()
+	end
+	return self:Verdict(yes, ("%s ready: %s%s"):format(addon, recipe.about or "set up", yes and "" or (" (" .. tostring(why) .. ")")))
 end
 
 -- Buttons under the box ---------------------------------------------------------

@@ -28,6 +28,42 @@ local function Guide()
 end
 local function Arrow() return _G.GuidelimeArrow end
 
+-- Ready for a test: its guide window open, a guide loaded, its arrow up
+-- (Tools/addon-kit/addons/Guidelime.md). Its window closed: the recipe opens
+-- it (Guidelime.toggleMainFrame, what /lime does). Its guide is kept per
+-- character, loaded once it's back after a reload; the call that loads one
+-- is inside the addon (not global), so that's your clicks.
+ns.TestKit.DefineAddonReady("Guidelime", {
+	about = "its guide window open, a guide loaded, its arrow pointing somewhere",
+	ready = function()
+		if not (Guide() and ns.Flag(Guide():IsShown())) then return false, "its guide window is closed" end
+		if not Arrow() then return false, "no arrow yet (saved guide: "
+			.. tostring(_G.GuidelimeDataChar and _G.GuidelimeDataChar.currentGuide) .. ")" end
+		return ns.Flag(Arrow():IsShown()), "the arrow is hidden (no step that goes to a place)"
+	end,
+	make = function(r)
+		local data = _G.GuidelimeDataChar
+		if data and data.mainFrameShowing == false and _G.Guidelime and _G.Guidelime.toggleMainFrame then
+			r:Keep("guideWasClosed", true)
+			_G.Guidelime.toggleMainFrame()
+			r:Log("opened Guidelime's guide window (as /lime does)")
+			r:Sleep(1)
+		end
+	end,
+	putBack = function(extra)
+		if extra.guideWasClosed and _G.GuidelimeDataChar and _G.GuidelimeDataChar.mainFrameShowing
+			and _G.Guidelime and _G.Guidelime.toggleMainFrame then
+			_G.Guidelime.toggleMainFrame()
+			return "Guidelime's guide window closed again"
+		end
+	end,
+	guide = {
+		"In Guidelime's guide window, click the line \"Click here in order to start by loading a guide\".",
+		"Pick any guide in the list and click Load guide.",
+		"Already has one? Click a step that says to go to a place.",
+	},
+})
+
 local function Effective(frame)
 	local alpha = frame:GetEffectiveAlpha()
 	if issecretvalue and issecretvalue(alpha) then return nil end

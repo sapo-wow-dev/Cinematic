@@ -7,6 +7,9 @@ sub-addons: folders named <AddonName>_*), reads its .toc, Lua and XML, and
 prints a Markdown report:
 
   1. where it is installed (clients, versions, website ids)
+  1b. how it works, to set it up for a test: slash commands, first-run
+     setup, defaults, its show/hide/fade settings, calls a test can make,
+     the states its code checks (instance, group, vehicle...), its events
   2. frames it creates (named, built names, unnamed count), each named one
      marked handled or UNHANDLED against the Support file and its frame list
      (Tools/offline/addon-frames/<Support>.txt), as Tools/addon-check.py does
@@ -288,6 +291,86 @@ def show_counts(title, kinds):
         print(f"- {kind}: {n} in `{f}`")
     print()
 
+
+# 1b. How it works, for setting it up for a test (the user, 2026-11-25:
+# "even just getting the addon to work or set it up for a test can take me
+# hours"): where a player starts it, what it saves, what turns its parts on,
+# the calls a test can make, and the states its frames wait for.
+SLASH = re.compile(r"SLASH_(\w+?)\d+\s*=\s*[\"'](/[^\"']+)[\"']")
+ACE_CMD = re.compile(r"RegisterChatCommand\s*\(\s*[\"']([^\"']+)[\"']")
+DEFAULTS = re.compile(r"\b(\w*[Dd]efaults?\w*)\s*=\s*\{")
+SETTING = re.compile(r"\b([a-z]\w*(?:[Ss]how|[Hh]ide|[Ee]nabled?|[Ff]ade|[Aa]lpha|[Mm]ouse[Oo]ver|[Vv]isib\w*|[Ll]ock\w*|"
+                     r"[Cc]ombat|[Hh]over)\w*|(?:show|hide|enable|fade|alpha|mouseover|visible|lock|hover)\w*)"
+                     r"\s*=\s*(true|false|-?\d+(?:\.\d+)?)\s*[,}]")
+FIRST_RUN = re.compile(r"\b(\w*(?:[Ii]nstall|[Ww]izard|[Ww]elcome|[Ff]irst[Rr]un|[Tt]utorial|[Oo]nboard|[Ss]etup[A-Z])\w*)")
+VERBS = r"(?:[Ss]how|[Tt]oggle|[Oo]pen|[Ll]oad|[Ss]tart|[Ee]nable|[Ss]elect|[Ss]et|[Bb]egin|[Ii]nit|[Uu]pdate[A-Z]\w*Frame)"
+ENTRY = re.compile(r"^\s*(?:local\s+)?(?:function\s+([A-Za-z_][\w.:]*[.:]" + VERBS + r"\w*)\s*\(|"
+                   r"([A-Za-z_][\w.]*\." + VERBS + r"\w*)\s*=\s*function)")
+EVENT = re.compile(r"RegisterEvent\s*\(\s*[\"']([A-Z_]+)[\"']")
+STATE = [
+    ("an instance", r"\bIsInInstance\b|\bGetInstanceInfo\b"), ("a group", r"\bIsInGroup\b|\bIsInRaid\b|\bGetNumGroupMembers\b"),
+    ("a vehicle", r"\bUnitInVehicle\b|\bUnitHasVehicleUI\b"), ("pvp / a battleground", r"\bC_PvP\.\w+|\bUnitIsPVP\b|\bIsActiveBattlefieldArena\b"),
+    ("a target", r"\bUnitExists\s*\(\s*[\"']target"), ("combat", r"\bUnitAffectingCombat\b|PLAYER_REGEN_DISABLED"),
+    ("a quest", r"\bC_QuestLog\.\w+|\bGetQuestLogTitle\b"), ("mounted / flying", r"\bIsMounted\b|\bIsFlying\b"),
+    ("a pet", r"\bUnitExists\s*\(\s*[\"']pet|\bHasPetUI\b"), ("resting / a city", r"\bIsResting\b"),
+]
+slashes, entries, events, settings_seen = OrderedDict(), [], defaultdict(int), OrderedDict()
+first_run, defaults_at, states = OrderedDict(), [], defaultdict(list)
+for rel, path in files:
+    # (Its translations and data tables are words, not how it works.)
+    if not path.lower().endswith(".lua") or re.search(r"locali[sz]ation|(^|/)(data|db)/", rel, re.I):
+        continue
+    for i, line in enumerate(read(path).splitlines(), 1):
+        code = re.sub(r"--.*$", "", line)
+        bare = re.sub(r"\"(?:[^\"\\]|\\.)*\"|'(?:[^'\\]|\\.)*'", '""', code)  # (strings out)
+        where = f"{rel}:{i}"
+        for m in SLASH.finditer(code):
+            slashes.setdefault(m.group(2), where)
+        for m in ACE_CMD.finditer(code):
+            slashes.setdefault("/" + m.group(1), where)
+        if DEFAULTS.search(code):
+            defaults_at.append(where)
+        for m in SETTING.finditer(code):
+            settings_seen.setdefault(m.group(1), (m.group(2), where))
+        for m in FIRST_RUN.finditer(bare):
+            first_run.setdefault(m.group(1), where)
+        m = ENTRY.match(code)
+        if m:
+            entries.append((where, m.group(1) or m.group(2)))
+        for m in EVENT.finditer(code):
+            events[m.group(1)] += 1
+        for label, pattern in STATE:
+            if re.search(pattern, code):
+                states[label].append(where)
+
+print("## 1b. How it works (to set it up for a test)\n")
+print("Read these to learn how a player starts it and what turns each part on; write it down in "
+      "Tools/addon-kit/addons/<Addon>.md and turn it into its ready recipe (ns.TestKit.DefineAddonReady), "
+      "so a test sets it up itself.\n")
+print(f"### Slash commands ({len(slashes)})\n")
+print("\n".join(f"- {cmd} `{w}`" for cmd, w in slashes.items()) or "none (its settings: Interface > AddOns, or its own button)")
+print()
+show("First run: install / setup / welcome (it may wait for this before it shows anything)",
+     [(w, n) for n, w in first_run.items()])
+show("Defaults tables (what a fresh install has on)", [(w, "") for w in defaults_at])
+picked = list(settings_seen.items())
+print(f"### Settings that show, hide or fade its parts ({len(picked)})\n")
+print("Its own switches: one off by default means its frame never shows till a test turns it on "
+      "(set it in its saved table, r:Keep the old value, put it back).\n")
+for name, (value, w) in (picked if SHOW_ALL else picked[:40]):
+    print(f"- {name} = {value} `{w}`")
+if not SHOW_ALL and len(picked) > 40:
+    print(f"- ... {len(picked) - 40} more (--all)")
+print()
+show("Calls a test can make (Show / Toggle / Open / Load / Enable / Set ...)", entries)
+print("### States its code checks (a frame may only show in these)\n")
+print("\n".join(f"- {label}: {len(w)} (`{w[0]}`)" for label, w in states.items()) or "none")
+print()
+top = sorted(events.items(), key=lambda kv: -kv[1])
+print(f"### Events it listens to ({len(top)})\n")
+print(", ".join(f"{e}" + (f" x{n}" if n > 1 else "") for e, n in (top if SHOW_ALL else top[:40]))
+      + ("" if SHOW_ALL or len(top) <= 40 else f", ... {len(top) - 40} more (--all)") or "none")
+print()
 
 print("## 2. Frames it creates\n")
 # Every named frame, as Tools/addon-check.py finds them (pcall(CreateFrame,

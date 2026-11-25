@@ -60,7 +60,8 @@ local function RunClient(client)
 	local cine = true
 	ns.IsCineModeOn = function() return cine end
 	Cinematic_ToggleCineMode = function() cine = not cine end
-	ns.PadTestBox = function() end
+	local box
+	ns.PadTestBox = function(text, sub) box = tostring(text) .. " | " .. tostring(sub) end
 	ns.PadTestBoxHide = function() end
 
 	CinematicDB.kitCheckStandInLog = nil -- (another client's run, no reload between)
@@ -333,6 +334,50 @@ local function RunClient(client)
 		and Has(CinematicDB.kitFloodTestLog, "150 line%(s%) logged, 0 repeat%(s%) counted, 10 over the cap") ~= nil,
 		Has(CinematicDB.kitFloodTestLog, "logged"))
 	ConsoleGetAllCommands, ConsoleIsActive = nil, nil
+
+	-- An addon's ready recipe (2026-11-25): set up by its own make, its
+	-- putBack after; else its clicks numbered in the box till ready; Can't do
+	-- it = a FAIL; no recipe = a line saying so; not loaded = a FAIL.
+	local upWas = ns.AddonUp
+	local up = { MadeAddon = true, ClickAddon = true, CantAddon = true }
+	ns.AddonUp = function(name) return up[name] == true end
+	local made, madeBack, clicked = false, false, false
+	ns.TestKit.DefineAddonReady("MadeAddon", { about = "its window open",
+		ready = function() return made, "closed" end,
+		make = function(r) made = true r:Keep("madeWasClosed", true) end,
+		putBack = function(extra) madeBack = extra.madeWasClosed == true return "MadeAddon closed again" end })
+	ns.TestKit.DefineAddonReady("ClickAddon", { about = "a guide loaded", ready = function() return clicked, "no guide" end,
+		guide = { "Open its window.", "Load a guide." } })
+	ns.TestKit.DefineAddonReady("CantAddon", { about = "a dungeon", ready = function() return false, "not in one" end,
+		guide = { "Go into a dungeon." } })
+	ns.TestKit.Define({ name = "kitready", key = "kitReadyTest", title = "Kit ready", steps = {
+		{ key = "made", run = function(r) r:AddonReady("MadeAddon") end },
+		{ key = "click", run = function(r) r:AddonReady("ClickAddon") end },
+		{ key = "cant", run = function(r) r:AddonReady("CantAddon") end },
+		{ key = "none", run = function(r) r:AddonReady("NoRecipeAddon") end },
+		{ key = "off", run = function(r) r:AddonReady("OffAddon") end },
+	} })
+	ns.TestKit.DefineAddonReady("OffAddon", { ready = function() return true end })
+	ns.HandleSlash("debug kitready")
+	Advance(2)
+	local rLog = CinematicDB.kitReadyTestLog
+	Check("ready: made ready by its own setup", Has(rLog, "PASS made: MadeAddon ready: its window open") ~= nil, Has(rLog, "made:"))
+	Check("ready: its clicks numbered in the box", (box or ""):find("1. Open its window.\n2. Load a guide.", 1, true) ~= nil, box)
+	clicked = true
+	Advance(1)
+	Check("ready: goes on by itself once done", Has(rLog, "PASS click: ClickAddon ready: a guide loaded") ~= nil, Has(rLog, "click:"))
+	Advance(1)
+	local cant = ns.TestKit.Running() and ns.TestKit.Running().buttons["Can't do it"]
+	Check("ready: a Can't do it button", cant ~= nil)
+	if cant then Click(cant) end
+	Advance(3)
+	rLog = CinematicDB.kitReadyTestLog
+	Check("ready: Can't do it = a FAIL with why", Has(rLog, "FAIL cant: CantAddon ready: you couldn't %(a dungeon; still not in one%)") ~= nil,
+		Has(rLog, "cant:"))
+	Check("ready: no recipe said", Has(rLog, "ready NoRecipeAddon: no ready recipe") ~= nil)
+	Check("ready: not loaded = a FAIL", Has(rLog, "FAIL off: OffAddon ready: it isn't loaded") ~= nil)
+	Check("ready: its putBack ran after the test", madeBack and Has(rLog, "MadeAddon closed again") ~= nil, Has(rLog, "closed again"))
+	ns.AddonUp = upWas
 
 	-- The list.
 	local printed = {}

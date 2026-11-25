@@ -7,7 +7,8 @@
 -- the fix is for (Forever decides it at login, from the gamepad in use).
 -- Steps:
 --   0 solo    FlareUI alone with Cinematic (a Reload), if it isn't loaded
---   1 setup   FlareUI up, its target frame made; mode; how TargetFrame is kept
+--   1 setup   FlareUI up, its target frame made (its ready recipe below: you
+--             turn Unit Frames on if it's off); mode; how TargetFrame is kept
 --   2 target  you target anything (skipped if you already have a target)
 --   3 rows    hands off: the Target row hidden, then shown, then CineMode on
 --             and off: TargetFrame stays invisible each time (gamepad), and
@@ -143,6 +144,90 @@ local function CheckOwn(r, key, name)
 	if not wasShown then frame:Hide() end
 end
 
+-- Ready for a test: its unit frames made (Tools/addon-kit/addons/FlareUI.md).
+-- Every FlareUI module starts off, and one only starts at login, so turning
+-- Unit Frames on takes a reload: the recipe closes its tour (or welcome) and
+-- opens its window on that page, and the guide is the clicks. Its other pages
+-- (buffs, quest tracker, XP bar...) aren't needed: rows with no frame are
+-- just untested, and battleground frames are the "own" step's business.
+local function FlareDB()
+	local flare = _G.FlareUI
+	return type(flare) == "table" and type(flare.db) == "table" and flare.db or nil
+end
+local function FlareGamepadUI()
+	local flare = _G.FlareUI
+	return type(flare) == "table" and type(flare.IsGamepadUI) == "function" and flare.IsGamepadUI() or false
+end
+local function FlarePanel()
+	local flare = _G.FlareUI
+	local panel = type(flare) == "table" and flare.SettingsPanel
+	return type(panel) == "table" and panel or nil
+end
+local function Welcome()
+	for _, name in ipairs({ "FlareUI_Tour", "FlareUI_Welcome" }) do
+		local frame = _G[name]
+		if frame and ns.Flag(frame:IsShown()) then return frame end
+	end
+end
+
+ns.TestKit.DefineAddonReady("FlareUI", {
+	about = "its Unit Frames page on: its player and target frames made, its tour closed",
+	ready = function()
+		local db = FlareDB()
+		if not (db and type(db.profile) == "table") then return false, "its settings didn't load" end
+		if Welcome() then return false, "its setup tour (or welcome) is open" end
+		if not (_G.FlareUI_UF_Player and _G.FlareUI_UF_Target) then
+			local uf = db.profile.unitframes
+			local on = type(uf) == "table" and uf.enabled
+			return false, on and "Unit Frames on but no frames yet (a reload pending, or its frames' own switch off)"
+				or "its Unit Frames page is off"
+		end
+		return true
+	end,
+	make = function(r)
+		if InCombatLockdown() then r:Log("FlareUI setup: in a fight, left alone") return end
+		local db = FlareDB()
+		local tour = Welcome()
+		if tour and db and type(db.global) == "table" then
+			-- (Closing it marks it seen: put back after.)
+			r:Keep("flare:welcomeSeen", db.global.welcomeSeen == nil and "<nil>" or db.global.welcomeSeen)
+			tour:Hide()
+			r:Log("closed FlareUI's " .. tour:GetName())
+		end
+		local panel = FlarePanel()
+		if not (_G.FlareUI_UF_Player and _G.FlareUI_UF_Target) and panel and panel.Open and not FlareGamepadUI() then
+			-- (Not in the Gamepad UI: FlareUI says code opening its window there can hang the game.)
+			r:Keep("flare:panelOpened", true)
+			pcall(panel.Open, panel, "uf")
+			r:Log("opened FlareUI's window on its Unit Frames page")
+		end
+	end,
+	putBack = function(extra)
+		local done = {}
+		local panel = FlarePanel()
+		if extra["flare:panelOpened"] and panel and panel.IsShown and panel.Hide and not InCombatLockdown()
+			and panel:IsShown() then
+			pcall(panel.Hide, panel)
+			done[#done + 1] = "its window closed"
+		end
+		local was = extra["flare:welcomeSeen"]
+		local db = FlareDB()
+		if was ~= nil and db and type(db.global) == "table" then
+			if was == "<nil>" then was = nil end
+			db.global.welcomeSeen = was
+			done[#done + 1] = "its tour's seen mark as it was"
+		end
+		if #done > 0 then return "FlareUI: " .. table.concat(done, ", ") end
+	end,
+	guide = {
+		"Window not open? Click the minimap's addon button, then FlareUI.",
+		"In FlareUI's window, click Unit Frames on the left.",
+		"Click Turn On.",
+		"Click Reload Now at the bottom of FlareUI's window.",
+		"Click Reload Now in the box that opens.",
+	},
+})
+
 ns.TestKit.Define({
 	name = "flareui",
 	key = "flareUISupportTest",
@@ -184,6 +269,7 @@ ns.TestKit.Define({
 				{ check = function() return false end, buttons = { { kind = "reload" } } })
 		end },
 		{ key = "setup", title = "FlareUI and how it keeps TargetFrame", run = function(r)
+			if ns.AddonUp("FlareUI") then r:AddonReady("FlareUI") end
 			if not ns.AddonUp("FlareUI") or not Ours() then
 				r:Fail("FlareUI isn't loaded, or its target frame is off: turn it on and run again")
 				return

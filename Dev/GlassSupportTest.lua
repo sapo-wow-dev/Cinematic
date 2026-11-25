@@ -18,6 +18,23 @@ local function GeneralPanel()
 	return cf, cf and ns.chatPeekPanels and ns.chatPeekPanels[cf]
 end
 
+-- Ready for a test: Glass's chat made and General's line frame claimed by
+-- our scanner (Support/Glass.lua), a moment after login. Nothing to set up:
+-- it takes over the chat by itself (Tools/addon-kit/addons/Glass.md). For
+-- lines without anyone talking, a test can turn on its demo mode
+-- (Glass:GetModule("Demo"):SetActive(true), off with false); this doesn't.
+ns.TestKit.DefineAddonReady("Glass", {
+	about = "its chat frame up, General's lines on a Glass frame",
+	ready = function()
+		local container = rawget(_G, "GlassFrame")
+		if type(container) ~= "table" then return false, "its chat frame (GlassFrame) isn't made" end
+		local _, panel = GeneralPanel()
+		if not panel then return false, "General's Glass frame isn't found yet" end
+		return ns.Flag(container:IsShown()), "its chat frame is hidden"
+	end,
+	make = function(r) r:Sleep(3) end, -- (our scanner claims its frames soon after login)
+})
+
 local function Glassless(r)
 	local IsLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
 	if not IsLoaded("Glass") then r:Skip("Glass isn't loaded") return true end
