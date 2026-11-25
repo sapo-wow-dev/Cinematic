@@ -1085,9 +1085,11 @@ local function ApplyPlate(plate, personal)
 	-- of the hurt too, tested 2026-11-19. HealVisionFrames.lua.)
 	local healHeld = plate ~= personal and ns.HealVisionPlateUnit
 		and ns.HealVisionPlateUnit(plate.namePlateUnitToken or unitFrame.unit)
+	local levelBox = 1
 	for _, part in ipairs(ns.PLATE_PARTS) do
 		local level = (healHeld or plate == personal) and 1 or (mine and mine[part] or levels[part]) or 1
 		if part == "Level" and look and look.level ~= nil then level = look.level and 1 or 0 end
+		if part == "Level" then levelBox = level end
 		if part == "Name" then
 			if ours then
 				level = 0
@@ -1110,6 +1112,10 @@ local function ApplyPlate(plate, personal)
 			EachPartFrame(unitFrame, part, Fade, level, ns.platePartsKept.Polled(unitFrame, part))
 		end
 	end
+	-- (A level box faded away: the layout moves crowd control in beside the bar,
+	-- where the game puts it with no box, and leaves the box out of Balanced.
+	-- PlateLayout.lua, Style loaded. Audit 2026-11-25.)
+	if ns.PlateLayoutLevelHidden then ns.PlateLayoutLevelHidden(plate, plate ~= personal and levelBox < 0.05) end
 	-- (And the guild line under a name shown alone: PlateGuild.lua. It sits
 	-- under our text, so it fades in with its new look.)
 	ns.SetPlateGuild(plate, plate ~= personal and nameAlpha * (ours and (SwapShares(SwapFade(plate))) or 1) or 0,

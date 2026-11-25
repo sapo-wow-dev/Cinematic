@@ -369,7 +369,9 @@ function ns.PlateLayoutShift(layout, shown)
 	if type(layout) ~= "table" then return 0, 0 end
 	if layout.center == "custom" then return Num(layout.cx, 0), Num(layout.cy, 0) end
 	if layout.center ~= "balanced" then return 0, 0 end
-	local ext = Extents(layout)
+	-- (Measured as the plate looks: with its level box hidden by Cinematic, without it
+	-- and crowd control moved in beside the bar. Audit 2026-11-25.)
+	local ext = Extents(layout, shown and shown.noLevel)
 	if not ext then return 0, 0 end
 	local left, right
 	for key, e in pairs(ext.parts) do
@@ -377,6 +379,8 @@ function ns.PlateLayoutShift(layout, shown)
 		local count = p and p.count
 		local counts = key == "health" or count == nil or count == "always"
 			or (count == "shown" and (shown == nil or shown[key]))
+		-- (A level box hidden by Cinematic never counts. Audit 2026-11-25.)
+		if key == "level" and shown and shown.noLevel then counts = false end
 		if counts then
 			left = left and math.min(left, e[1]) or e[1]
 			right = right and math.max(right, e[2]) or e[2]
@@ -541,6 +545,11 @@ local function ShownParts(plate, unitFrame, layout)
 	return shown
 end
 
+-- [plate] = true while Cinematic hides its level box (PlateParts' Level part at
+-- 0: the Plate parts grid, a Nameplate Style row's Look). The box is only
+-- see-through there, so the game keeps crowd control beside it: moved in here.
+local levelHidden = setmetatable({}, { __mode = "k" })
+
 -- Puts layout (nil: the plate's own, by its unit's kind) on a plate whose
 -- UnitFrame is the game's (or our copy's). rootOff: no center shift (the
 -- balance measure).
@@ -559,12 +568,20 @@ local function ApplyPlateLayout(plate, layout, rootOff)
 	elseif layout == nil then
 		layout = Active() and ns.PlateLayoutFor(ns.PlateLayoutKindOf(unitFrame.unit)) or false
 	end
-	if not layout and not layoutHooked[unitFrame] then return end -- (never touched: the game's as it is)
+	-- (Never touched: the game's as it is. A level box hidden by Cinematic still
+	-- moves crowd control in, with no layout too: see ns.PlateLayoutLevelHidden.)
+	local noLevel = levelHidden[plate]
+	if not layout and not layoutHooked[unitFrame] and not noLevel then return end
 	HookLayout(plate, unitFrame)
 	local parts = layout and type(layout.parts) == "table" and layout.parts or {}
 	local rootX, rootY = 0, 0
 	if layout and not rootOff then
-		rootX, rootY = ns.PlateLayoutShift(layout, ShownParts(plate, unitFrame, layout))
+		local shown = ShownParts(plate, unitFrame, layout)
+		if noLevel then
+			shown = shown or {}
+			shown.noLevel = true
+		end
+		rootX, rootY = ns.PlateLayoutShift(layout, shown)
 	end
 	-- (Roots first: the chain hangs on them.)
 	for _, path in ipairs(ROOTS) do
@@ -587,12 +604,18 @@ local function ApplyPlateLayout(plate, layout, rootOff)
 			if frame and frame.ClearAllPoints then
 				local t = Watch(frame, plate)
 				local p = parts[part.key]
-				if not (layout and PartMoves(p)) then
+				-- (Crowd control with the level box hidden by Cinematic: where the game puts
+				-- it with no level box, right of the bar (UpdateControlAnchors), not beside
+				-- a box that's only see-through. Audit 2026-11-25.)
+				local besideBar = noLevel and part.key == "crowd" and not (p and p.to)
+				if not ((layout and PartMoves(p)) or besideBar) then
 					PutBack(frame, t)
 				elseif Seed(frame, part.path, unitFrame, t) then
-					local scale = part.scale and math.max(0.25, Num(p.scale, 1)) or 1
+					local scale = part.scale and math.max(0.25, Num(p and p.scale, 1)) or 1
 					local hang
-					if part.hang and p.to then
+					if besideBar and unitFrame.HealthBarsContainer then
+						hang = { "LEFT", unitFrame.HealthBarsContainer, "RIGHT", 5, 0 }
+					elseif part.hang and p.to then
 						local side = SIDES[p.side or "right"] or SIDES.right
 						local target = HangTarget(unitFrame, p.to)
 						if target and not Loops(frame, target, unitFrame) then
@@ -600,13 +623,23 @@ local function ApplyPlateLayout(plate, layout, rootOff)
 							hang = { side[1], target, side[2], side[3] * gap, side[4] * gap }
 						end
 					end
-					Place(frame, t, Num(p.x, 0), Num(p.y, 0), scale, hang)
+					Place(frame, t, Num(p and p.x, 0), Num(p and p.y, 0), scale, hang)
 				end
 			end
 		end
 	end
 end
 ApplyPlate = function(plate) ns.Guard(ApplyPlateLayout, plate) end
+-- Whether Cinematic hides a plate's level box (PlateParts.lua's ApplyPlate,
+-- each pass: nothing done unless it changed). Audit 2026-11-25: crowd control
+-- kept a gap the box's width beside a hidden box, and Balanced counted it.
+function ns.PlateLayoutLevelHidden(plate, hidden)
+	hidden = hidden and true or nil
+	if not plate or levelHidden[plate] == hidden then return end
+	if ns.isRetail then return end -- (Forever only, as the rest of the layout)
+	levelHidden[plate] = hidden
+	ApplyPlate(plate)
+end
 -- (For the page's preview and the tests: a layout on a stand-in plate.)
 function ns.PlateLayoutApply(plate, layout, rootOff)
 	local ok, err = pcall(ApplyPlateLayout, plate, layout or false, rootOff)
@@ -653,8 +686,9 @@ end
 -- Each part's extents off the unit's middle on the measuring copy, with the
 -- layout on and no center shift: { parts = { [key] = { left, right } } }.
 -- (Cached per layout until it changes.)
-Extents = function(layout)
-	local cached = extentsCache[layout]
+Extents = function(layout, noLevel)
+	local byLevel = extentsCache[layout]
+	local cached = byLevel and byLevel[noLevel and "noLevel" or "level"]
 	if cached and cached.version == version then return cached end
 	local plate = MeasurePlate()
 	if not plate then return nil end
@@ -662,7 +696,7 @@ Extents = function(layout)
 	local copy = plate.gameCopy
 	plate:Show()
 	ns.SetGamePlateUnit(plate, "hostile", "Defias Bandit")
-	ns.SetGamePlateLevel(plate, true)
+	ns.SetGamePlateLevel(plate, not noLevel)
 	ns.SetGamePlateStates(plate, { casting = true, marker = true, debuffs = true, buffs = true, crowd = true, quest = true })
 	ApplyPlateLayout(plate, layout, true)
 	local scaleOf = copy:GetEffectiveScale()
@@ -689,7 +723,9 @@ Extents = function(layout)
 		end
 	end
 	plate:Hide()
-	extentsCache[layout] = made
+	byLevel = extentsCache[layout] or {}
+	byLevel[noLevel and "noLevel" or "level"] = made
+	extentsCache[layout] = byLevel
 	return made
 end
 ns.PlateLayoutExtents = function(layout) return layout and Extents(layout) or nil end
