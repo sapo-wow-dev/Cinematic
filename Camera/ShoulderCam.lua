@@ -3883,6 +3883,17 @@ local function GiveBackForLogout()
 			end
 		end
 	end
+	-- (Load Cameras unticked: no Cameras code after this reload to write the
+	-- offset fresh or give anything back, so all the rest goes back now: the
+	-- offset and the focus too. Audit 2026-11-25.)
+	if ns.ModuleWanted("cameras") then return end
+	for cvar, value in pairs(yours) do
+		if aim.soft[cvar] == nil and aim.outline[cvar] == nil then
+			if not Same(GetCVar(cvar), value) then SetCVar(cvar, value) end
+			yours[cvar] = nil
+		end
+	end
+	if next(yours) == nil then ns.db.shoulderCamYours = nil end
 end
 
 local events = CreateFrame("Frame")
