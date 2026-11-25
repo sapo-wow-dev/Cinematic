@@ -24,6 +24,7 @@ end
 
 local function RunClient(client)
 	print("== " .. client)
+	CinematicDB, CinematicCharDB = nil, nil -- (each client a new install: the last one's settings gone)
 	local ns, wow = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc")
 	if not ns.ApplyHealVisionFrames then
 		Check("Visions loaded", false)
@@ -105,12 +106,15 @@ local function RunClient(client)
 		return false
 	end
 
-	-- The tick: off to start with, one of the role tabs' own settings.
-	Check("tick off to start with", ns.DEFAULTS.healVisionKeepAuras == false, ns.DEFAULTS.healVisionKeepAuras)
+	-- The tick: on for a new install (this load is one) and Reset, one of the
+	-- role tabs' own settings. (Players from before: keepaurasupdate.lua.)
+	Check("a new install", ns.newInstall == true, tostring(ns.newInstall))
+	Check("tick on to start with", ns.DEFAULTS.healVisionKeepAuras == true, ns.DEFAULTS.healVisionKeepAuras)
+	Check("new install: not turned off by the update", ns.db.healVisionKeepAuras ~= false and ns.HealVisionKeepAuras(),
+		tostring(ns.db.healVisionKeepAuras))
 	local roleKey = false
 	for _, key in ipairs(ns.HEAL_VISION_ROLE_KEYS) do if key == "healVisionKeepAuras" then roleKey = true end end
 	Check("tick is a role tab setting", roleKey)
-	Check("off: not kept", ns.HealVisionKeepAuras() == false)
 
 	-- (Heal Vision on here, healthy ones hidden: as the test sets it.)
 	local db = ns.db

@@ -1456,8 +1456,9 @@ DEFAULTS.healVisionMouseoverAlpha = 0 -- the member under the mouse fades in to 
 DEFAULTS.healVisionReadyCheck = true
 -- Aura icons and the dispel glow on raid-style frames: shown on hidden
 -- members too (faded by parts, HealVisionFrames.lua's KeepAuras), or off:
--- faded with their member. Off to start with (2026-11-23).
-DEFAULTS.healVisionKeepAuras = false
+-- faded with their member. On for new installs and Reset; setups from
+-- before keep it off (Migrations.lua's keepAurasOffV1, 2026-11-25).
+DEFAULTS.healVisionKeepAuras = true
 DEFAULTS.healVisionDispel = true -- so do members with a debuff you can dispel
 DEFAULTS.healVisionAnyDebuff = false -- or with any debuff
 -- The page's Tank, Healer and Damage tabs: while you're that role, with

@@ -249,7 +249,7 @@ ns.TestKit.Define({
 			if check and check:IsVisible() then
 				local hits = r:Overlaps(check, check:GetParent())
 				r:Verdict(#hits == 0, "the tick overlaps nothing: " .. (#hits > 0 and table.concat(hits, ", ") or "clear"))
-				r:Verdict(not check:GetChecked(), "unticked to start (as reset gives it)")
+				r:Verdict(not check:GetChecked(), "unticked to start (the test set it off, to click it on)")
 				-- (Scrolled to it first: run 2's shot showed the page's top, the
 				-- tick below Dead, out of sight.)
 				local scroll = canvas.scroll

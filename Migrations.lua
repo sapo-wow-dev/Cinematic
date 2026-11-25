@@ -5958,6 +5958,34 @@ STEPS[#STEPS + 1] = function()
 	ns.db.nearbyEnemiesOffV1 = true
 end
 
+-- Heal Vision's Debuffs: Show while hidden (healVisionKeepAuras,
+-- HealVisionFrames.lua's KeepAuras, 2026-11-25): on to start for fresh
+-- installs and Reset. Setups from before keep their frames fading as they
+-- did: off, in the settings, saved profiles and reset points, and each role
+-- tab's own copy (healVisionKeepAuras_<ROLE>: its default is on too). Once.
+-- (db: the saved settings; Tools/offline/keepaurasupdate.lua hands in old ones.)
+function ns.KeepAurasOffForOld(db)
+	local function Off(store)
+		if type(store) ~= "table" then return end
+		for _, key in ipairs({ "healVisionKeepAuras", "healVisionKeepAuras_TANK", "healVisionKeepAuras_HEALER",
+			"healVisionKeepAuras_DAMAGER" }) do
+			if store[key] == nil then store[key] = false end
+		end
+	end
+	Off(db)
+	for _, list in ipairs({ db.profiles or false, db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do
+			Off(saved)
+			if type(saved) == "table" then Off(saved.settings) end
+		end
+	end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.keepAurasOffV1 then return end
+	if not ns.newInstall then ns.KeepAurasOffForOld(ns.db) end
+	ns.db.keepAurasOffV1 = true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only

@@ -69,7 +69,9 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
   sessions' side, `Tools/testqueue.py`, has its own `selftest`.
 - `healtworules.lua`: Heal Vision's Unit Frames and Nameplates tabs each have their own Show in rule (frames start in
   dungeons and raids, plates everywhere but cities), the saved rules' once-only update and the page's Reset.
-- `healauras.lua`: Heal Vision's Debuffs: Show while hidden tick (healVisionKeepAuras, off to start with): raid-style members faded by their parts,
+- `keepaurasupdate.lua`: Heal Vision's Debuffs: Show while hidden is on for new installs and Reset, off for players
+  from before (Migrations.lua's keepAurasOffV1): their settings, role tabs' copies, saved profiles and reset points.
+- `healauras.lua`: Heal Vision's Debuffs: Show while hidden tick (healVisionKeepAuras, on for a new install): raid-style members faded by their parts,
   not whole, their aura icons and forbidden parts left at full, the game's own frame alpha left alone; the page's tick found and clicked on; and
   `/cine debug healauras` (Dev/HealAurasTest.lua) through to DONE, settings and the row's rule put back. Both clients.
 - `loopsoff.lua`: a feature loop runs no update loop with its page off, even with the page's rows ticked, and
