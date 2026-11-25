@@ -36,6 +36,11 @@ end
 local function NoteOurs(who, name, amount)
 	local now = GetTime()
 	guard.oursAt = now
+	-- (The watch asleep: on again now, from this zoom. Audit 2026-11-25.)
+	if not guard.watching and guard.frame then
+		guard.restart = true
+		ns.WakeFeatureLoop(guard.frame)
+	end
 	local n = tonumber(amount) or 0
 	guard.frameAsk = (guard.frameAsk or 0) + (name == "CameraZoomIn" and -n or n)
 	guard.frameWho = who
@@ -157,6 +162,12 @@ local function Watch(_, elapsed)
 	local now = GetTime()
 	local zoom = GetCameraZoom()
 	if type(zoom) ~= "number" then return end
+	-- (Woken after a sleep: the last line's from long ago, no jump or swing from it. Audit 2026-11-25.)
+	if guard.restart then
+		guard.restart, guard.extreme, guard.dir = nil, nil, nil
+		wipe(guard.turns)
+		trace.n = 0
+	end
 	local prev = trace.n > 0 and trace.z[trace.head] or zoom
 	-- (The camera still, none of ours or yours lately, nothing sent this
 	-- frame: nothing for the guard, and the trace takes a line only every
@@ -228,7 +239,14 @@ local function Watch(_, elapsed)
 end
 
 local frame = CreateFrame("Frame")
-ns.SetOnUpdate(frame, Watch)
+-- (Only while one of ours zoomed lately (the trace's length): no zoom of ours,
+-- nothing to guard or trace. Woken by NoteOurs. Audit 2026-11-25: it watched
+-- every frame for good.)
+guard.frame = frame
+ns.FeatureLoop(frame, Watch, function()
+	guard.watching = GetTime() - guard.oursAt < TRACE_SECS
+	return guard.watching
+end)
 -- A /reload or logout keeps the last 30 sec in the saved log, if one of our
 -- zooms ran in that time: a line per quarter second, about 120 (the log keeps 500).
 frame:RegisterEvent("PLAYER_LOGOUT")

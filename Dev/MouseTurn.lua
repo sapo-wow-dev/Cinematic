@@ -13,6 +13,9 @@
 -- Untested in game (2026-11-11): one frame behind the mouse, so a swipe's
 -- first frame still gets through.
 local _, ns = ...
+-- (The rest of this file: only with Cameras loaded, Modules.lua. Audit 2026-11-25:
+-- it ran with Cameras left out, holding your mouse look speed.)
+ns.Module("cameras", function()
 
 local WHO = "mouseturn"
 local YAW, PITCH = "cameraYawMoveSpeed", "cameraPitchMoveSpeed"
@@ -33,9 +36,14 @@ local function Readable(value)
 	return type(value) == "number" and not (issecretvalue and issecretvalue(value))
 end
 
+-- (Its tab on the Camera Settings page a container: off, it's off, as is
+-- Enable Cameras. Read through ns.Setting, and the tab's own key too, as its
+-- settings are hung under it only once the page is made. Audit 2026-11-25.)
+local TAB = "tabOn:Camera Settings:Mouse Turn"
 local function On()
 	local db = ns.db
-	return db and db.cameraModes ~= false and (db.mouseTurnCap or db.mouseTurnRamp) and true or false
+	if not db or ns.Setting("cameraModes") == false or db[TAB] == false then return false end
+	return (ns.Setting("mouseTurnCap") or ns.Setting("mouseTurnRamp")) and true or false
 end
 
 local function Release()
@@ -60,7 +68,7 @@ local function OthersHold(cvar)
 	return ns.SpeedHeld(cvar) and not ns.SpeedHeld(cvar, WHO)
 end
 
-local function Apply(db)
+local function Apply()
 	if state.scale >= 0.995 then
 		if state.held or state.pitchHeld then
 			ns.Log("state", "mouse turn: back to your speed")
@@ -73,7 +81,7 @@ local function Apply(db)
 	end
 	ns.SetHeldSpeed(WHO, YAW, ns.HoldSpeed(WHO, YAW) * state.scale)
 	state.held = true
-	if db.mouseTurnCapPitch and not OthersHold(PITCH) then
+	if ns.Setting("mouseTurnCapPitch") and not OthersHold(PITCH) then -- (Audit 2026-11-25: ns.Setting)
 		ns.SetHeldSpeed(WHO, PITCH, ns.HoldSpeed(WHO, PITCH) * state.scale)
 		state.pitchHeld = true
 	elseif state.pitchHeld then
@@ -107,7 +115,7 @@ local function Update(_, elapsed)
 
 	-- The cap.
 	local capScale = 1
-	if db.mouseTurnCap then
+	if ns.Setting("mouseTurnCap") then -- (Audit 2026-11-25: ns.Setting)
 		local cap = tonumber(db.mouseTurnCapSpeed) or 180
 		local target = state.want > cap and math.max(LOWEST, cap / state.want) or 1
 		if target < state.capScale then
@@ -121,7 +129,7 @@ local function Update(_, elapsed)
 
 	-- The ramp: time into this turn, back to the start once still a moment.
 	local rampScale = 1
-	if db.mouseTurnRamp then
+	if ns.Setting("mouseTurnRamp") then -- (Audit 2026-11-25: ns.Setting)
 		if state.want > 15 then
 			state.turning, state.still = state.turning + elapsed, 0
 		else
@@ -134,7 +142,7 @@ local function Update(_, elapsed)
 	end
 
 	state.scale = math.min(capScale, rampScale)
-	Apply(db)
+	Apply()
 end
 
 local frame = CreateFrame("Frame")
@@ -146,3 +154,4 @@ end)
 
 -- (For a debug look; the log's "state" lines show it slowing and back.)
 ns.mouseTurnState = state
+end) -- (ns.Module "cameras")

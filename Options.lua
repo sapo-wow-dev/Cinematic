@@ -10213,14 +10213,16 @@ local function CreateQualityPanel()
 		L["Puts the time at the start of brought-back lines."]), "check", 24)
 	GreyUnless(chatTime, function(db) return db.chatHistory end)
 	stack:Header(content, L["Login and reload"])
-	-- (Camera.lua.)
-	local loginZoom = stack:Add(Check(content, "loginZoom", L["Reset the zoom on login and /reload"],
-		L["The camera zooms to the distance below when you log in or reload."]), "check")
-	loginZoom:HookScript("OnClick", Refresh) -- grey out / enable the slider below
-	local loginDistance = stack:Add(Slider(content, "loginZoomDistance", L["Zoom to"], 2, 39, 0.5,
-		L["%.1f yards"]), "slider", 24)
-	Tooltip(loginDistance, L["The camera distance to start at."])
-	GreyUnless(loginDistance, function(db) return db.loginZoom end)
+	-- (Camera.lua: none with Cameras left out, Modules.lua. Audit 2026-11-25: they showed, doing nothing.)
+	if ns.ModuleLoaded("cameras") then
+		local loginZoom = stack:Add(Check(content, "loginZoom", L["Reset the zoom on login and /reload"],
+			L["The camera zooms to the distance below when you log in or reload."]), "check")
+		loginZoom:HookScript("OnClick", Refresh) -- grey out / enable the slider below
+		local loginDistance = stack:Add(Slider(content, "loginZoomDistance", L["Zoom to"], 2, 39, 0.5,
+			L["%.1f yards"]), "slider", 24)
+		Tooltip(loginDistance, L["The camera distance to start at."])
+		GreyUnless(loginDistance, function(db) return db.loginZoom end)
+	end
 	-- (Reload.lua.)
 	stack:Add(Check(content, "reloadButton", L["Reload button on the screen"],
 		L["A button at the top of the screen that reloads the UI in one click."]), "check")
@@ -22643,8 +22645,10 @@ ns.OnLanguage(function()
 		ns.CreateWheelsPanels(ns.lowHealthKit)
 		Lap("CreateWheelsPanels")
 	end
-	CreateFishingPanel()
-	Lap("CreateFishingPanel")
+	if ns.ModuleLoaded("cameras") then -- (its code is Camera.lua's: none with Cameras left out. Audit 2026-11-25)
+		CreateFishingPanel()
+		Lap("CreateFishingPanel")
+	end
 	CreateQualityPanel()
 	Lap("CreateQualityPanel")
 	if ns.CreateKeyboardMapPage then -- (KeyboardMap.lua)

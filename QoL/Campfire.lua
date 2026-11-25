@@ -634,13 +634,23 @@ local driver = CreateFrame("Frame")
 -- cursor resting on a fire (Emote Vision's card, a trigger), the Campfire
 -- scene's cozy camera (it looks for your tent), or the button still up. No
 -- loop at all otherwise.)
+-- (Audit 2026-11-25: it read sceneOffCampfire, nil by default, so it ran every
+-- frame for everyone, Cameras left out too. The scene now: Cameras loaded, the
+-- Scenes page on (Enable Cameras above it) and its row giving it a camera here;
+-- or a cozy camera on now.)
+local function Wanted()
+	if not ns.db then return false end
+	if ButtonOn() or ns.SignalWanted("CAMPFIRE_REST") then return true end
+	if not (ns.ModuleLoaded("cameras") and ns.Setting("cameraScenes") ~= false) then return false end
+	return ns.TriggerHasCamera("Campfire") or (ns.IsCozy ~= nil and ns.IsCozy()) or false
+end
 ns.FeatureLoop(driver, ns.Profiled("Campfire sit button", OnUpdate), function()
 	if alpha > 0 or cozy.on then return true end
-	if not ns.db then return false end
-	return ButtonOn() or not ns.db.sceneOffCampfire or ns.SignalWanted("CAMPFIRE_REST")
+	return Wanted()
 end)
 
-GameTooltip:HookScript("OnShow", OnTooltipShow)
+-- (Nothing wanting it: the tooltip isn't read. Audit 2026-11-25.)
+GameTooltip:HookScript("OnShow", function() if Wanted() then OnTooltipShow() end end)
 
 -- Camp Benefits: sitting by a Welcoming Campfire for its minute gives it, or
 -- renews it if you have it already. As it arrives, or its end moves later,

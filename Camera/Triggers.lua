@@ -56,22 +56,39 @@ local function Parts(key)
 	if gateCache.version ~= version or gateCache.own ~= own then
 		gateCache.version, gateCache.own, gateCache.list = version, own, {}
 	end
-	local parts = gateCache.list[key]
-	if parts then return parts end
 	local id = own and ns.OursTriggerId and ns.OursTriggerId(key) or nil
+	-- (Its tabs on the Triggers page switched off, as for your own triggers
+	-- (CustomTriggers.lua's PartOff): Starts or Scenes off, it never starts;
+	-- Timing off, no wait, cooldown or chance. Audit 2026-11-25: ours ignored them.)
+	local offs = ""
+	if id and ns.db then
+		local tabKeys = gateCache.tabKeys or {}
+		gateCache.tabKeys = tabKeys
+		local keys = tabKeys[id]
+		if not keys then
+			keys = {}
+			for i, part in ipairs({ "starts", "timing", "scenes" }) do keys[i] = ("tabOn:Trigger:%s:%s"):format(id, part) end
+			tabKeys[id] = keys
+		end
+		offs = (ns.db[keys[1]] == false and "s" or "") .. (ns.db[keys[2]] == false and "t" or "")
+			.. (ns.db[keys[3]] == false and "c" or "")
+	end
+	local parts = gateCache.list[key]
+	if parts and parts.offs == offs then return parts end
 	local function Num(field, default, low, high)
 		local value = id and tonumber(ns.TriggerField(id, field)) or default
 		return math.max(low, math.min(high, value))
 	end
 	parts = { delay = Num("delay", 0, 0, 600), cd = Num("cd", 0, 0, 86400), chance = Num("chance", 100, 1, 100),
-		pri = id and tonumber(ns.TriggerField(id, "pri")) or nil }
+		pri = id and tonumber(ns.TriggerField(id, "pri")) or nil, offs = offs, off = offs:find("[sc]") ~= nil }
+	if offs:find("t") then parts.delay, parts.cd, parts.chance = 0, 0, 100 end
 	local cond = id and ns.TriggerField(id, "cond")
 	if type(cond) == "string" and cond:find("%S") and ns.CompileRule then
 		parts.condText = cond
 		parts.test = ns.CompileRule(cond)
 		parts.bad = parts.test == nil
 	end
-	parts.gated = parts.delay > 0 or parts.cd > 0 or parts.chance < 100 or parts.condText ~= nil
+	parts.gated = parts.off or parts.delay > 0 or parts.cd > 0 or parts.chance < 100 or parts.condText ~= nil
 	gateCache.list[key] = parts
 	return parts
 end
@@ -87,9 +104,11 @@ local function Held(key, episode, why)
 end
 -- Whether one of ours may start now (always, while it's the one playing).
 local function Gate(key, parts, now)
-	if key == lastPicked or not parts.gated then return true end
 	local episode = episodes[key]
 	local L = ns.L
+	-- (Its Starts or Scenes tab off: not even while it's the one playing. Audit 2026-11-25.)
+	if parts.off then return Held(key, episode, L["Its Starts or Scenes tab is off"]) end
+	if key == lastPicked or not parts.gated then return true end
 	if parts.delay > 0 and now - episode.since < parts.delay then return false end
 	if parts.cd > 0 and lastStart[key] and now - lastStart[key] < parts.cd then
 		return Held(key, episode, (L["Cooldown: %d of %d sec left"]):format(

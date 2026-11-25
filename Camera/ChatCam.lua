@@ -1646,6 +1646,13 @@ watcher:SetScript("OnEvent", function(_, event, text, name, ...)
 		DebugLine(event, text, name, guid, "text can't be read")
 		return
 	end
+	-- (Chat Cam off, or turned off here with no conversation on, and no script
+	-- scene of it showing subtitles: nothing to wait for a bubble for. Audit
+	-- 2026-11-25: each line ran the bubble scan and the debug log anyway.)
+	local subtitles = Immersive() and ns.ShowSubtitle and ScriptScene()
+	if not subtitles and not fake and (not On() or (not convo and ns.IsCameraOffHere("chatcam"))) then
+		return
+	end
 	-- (Only lines the game draws a bubble for: a speaker near you. A yell from
 	-- across an instance has none, and no one here to look at.)
 	ns.WhenBubble(text, function(bubbled, noBubble)

@@ -391,7 +391,10 @@ function ns.SkyrideLandingBusy()
 	return pose.landing and GetTime() < (pose.landedBy or 0)
 end
 local watcher = CreateFrame("Frame")
-ns.SetOnUpdate(watcher, function(_, elapsed)
+-- (Only while you skyride with the page on here (ns.SkyridingNow wakes it as
+-- that starts), or a flight of it still to put away: else no watch every
+-- frame. Audit 2026-11-25: it ran for good.)
+ns.WakeSkyrideWatch = ns.FeatureLoop(watcher, function(_, elapsed)
 	local db = ns.db
 	local flying = db and ns.SkyridingNow and ns.SkyridingNow()
 	if not flying then
@@ -428,7 +431,7 @@ ns.SetOnUpdate(watcher, function(_, elapsed)
 	end
 	if db.skyrideClimb or db.skyrideDive or db.skyrideTurn then Sample(db) end
 	watch.since = 0
-end)
+end, function() return watch.flying or (ns.SkyridingNow ~= nil and ns.SkyridingNow()) end) -- (Audit 2026-11-25)
 
 -- A pitch key pressed or let go (way "up" or "down"). Pressed in the air with
 -- the camera playing: diving or climbing at once, or, the other way, levelling

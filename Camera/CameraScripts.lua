@@ -3027,6 +3027,10 @@ heardFrame:SetScript("OnEvent", function(_, event, text, name)
 	else
 		text, name = Plain(text), Plain(name) or "?"
 		if not text or not ns.db or not ns.db.enabled then return end
+		-- (Only for a script playing (its rules hear lines), a chat one on, or a
+		-- Chat row set to a script: else no bubble to wait for. Audit 2026-11-25:
+		-- every NPC line ran the bubble scan.)
+		if not (run or convo or ScriptRow("Chat") or ScriptRow("ChatNearby")) then return end
 		-- (Only lines the game draws a bubble for, a speaker near you: a yell
 		-- from across an instance has none. It comes a frame or so late.)
 		ns.WhenBubble(text, function(bubbled)
@@ -3068,7 +3072,11 @@ function ns.SkyridingNow()
 	if up then
 		sky.downSince = nil
 		sky.upSince = sky.upSince or now
-		if now - sky.upSince >= Db("skyrideCamStart", 0.5) then sky.on = true end
+		if now - sky.upSince >= Db("skyrideCamStart", 0.5) and not sky.on then
+			sky.on = true
+			-- (SkyrideCam.lua's watch, asleep on the ground: on now. Audit 2026-11-25.)
+			if ns.WakeSkyrideWatch then ns.WakeSkyrideWatch() end
+		end
 	else
 		sky.upSince = nil
 		sky.downSince = sky.downSince or now
@@ -3093,26 +3101,31 @@ local function TriggerNow()
 	if not ns.db or not ns.db.enabled or not ns.ActiveEvent then return nil end
 	-- (A window open keeps them all from triggering, but those a window starts.)
 	local held = ns.WindowPausesCams()
+	-- (Your scenes: only with the Scenes page on, Enable Cameras above it. Audit 2026-11-25.)
+	local scenesOn = ns.Setting("cameraScenes") ~= false
 	-- (A scene of yours its key started: first, walking or not.)
-	local scene = not held and ns.CustomKeyScene and ns.CustomKeyScene()
+	local scene = scenesOn and not held and ns.CustomKeyScene and ns.CustomKeyScene()
 	if scene then
 		local camera = ns.TriggerSetting(scene, "camera")
 		if IsScript(camera) then return scene, camera end
 	end
 	-- (One an interaction started, the mailbox say: with its window open too.)
-	scene = ns.CustomInteractScene and ns.CustomInteractScene()
+	scene = scenesOn and ns.CustomInteractScene and ns.CustomInteractScene()
 	if scene then
 		local camera = ns.TriggerSetting(scene, "camera")
 		if IsScript(camera) then return scene, camera end
 	end
 	-- (One of yours on while you're mounted, flying or swimming: on the move too.)
-	scene = not held and ns.CustomTravelScene and ns.CustomTravelScene()
+	scene = scenesOn and not held and ns.CustomTravelScene and ns.CustomTravelScene()
 	if scene then
 		local camera = ns.TriggerSetting(scene, "camera")
 		if IsScript(camera) then return scene, camera end
 	end
 	-- (Skyriding Cam's page: its own script, made from its settings.)
 	if not held and not ns.OnTaxi() and ns.SkyridingNow() then return "Skyride", "script:skyride" end
+	-- (Enable Cameras off: no other camera of ours, so no scene worked out for one,
+	-- every frame. Audit 2026-11-25.)
+	if ns.Setting("cameraModes") == false then return nil end
 	local now = GetTime()
 	local key, camera = ns.ActiveEvent()
 	-- (The Calm Timer after a fight, as the cameras' own code waits it out:

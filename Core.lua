@@ -4900,6 +4900,8 @@ function Cinematic_StartCam(camera, quiet, via)
 			Print(L["death camera test stopped"])
 		elseif not ns.db.enabled then
 			Print(L["Cinematic is off: turn it on first"])
+		elseif ns.Setting("cameraModes") == false then -- (Audit 2026-11-25: as every camera of ours)
+			Print(L["Enable Cameras is off"])
 		elseif not ns.db.deathOrbit then
 			Print(L["the death camera is off: turn it on for Death on the Scenes page"])
 		elseif ns.playerMoving then
@@ -4921,13 +4923,22 @@ function Cinematic_StartCam(camera, quiet, via)
 	-- camera (RP walk, auto-run): the key plays the script instead, walking or
 	-- not, its stop rules deciding when it ends.
 	local scriptId = camera == "idle" and "afk" or camera
-	local script = ns.FindCameraScript and ns.FindCameraScript(scriptId)
+	-- (As the Scripts page has it; that page off, ours as shipped. Audit 2026-11-25:
+	-- it played your edited copy with the page off.)
+	local script = ns.CameraScriptToPlay and ns.CameraScriptToPlay(scriptId)
 	local moving = camera == "walk" or camera == "run"
+	-- (Enable Cameras off: nothing starts, but what's on stops. Audit 2026-11-25:
+	-- a script still played.)
+	local camerasOff = ns.Setting("cameraModes") == false
 	if script and (moving or script.rules.walkOn == false) then
 		local playing = ns.PlayingCameraScript()
 		if playing and playing.id == scriptId then
 			ns.StopCameraScript()
 			Print(L["%s stopped"]:format(L[CAM_NAMES[camera]]))
+			return
+		end
+		if camerasOff then
+			Print(L["Enable Cameras is off"])
 			return
 		end
 		if camera == "tele" then
@@ -4954,6 +4965,10 @@ function Cinematic_StartCam(camera, quiet, via)
 		ns.manualCam = nil
 		ns.stillSince = now -- the standing-still timer starts afresh
 		Print(L["%s stopped"]:format(L[CAM_NAMES[camera]]))
+		return
+	end
+	if camerasOff then -- (Audit 2026-11-25: it set the camera, which then never played)
+		Print(L["Enable Cameras is off"])
 		return
 	end
 	if camera == "idle" and not ns.db.idleOrbit then

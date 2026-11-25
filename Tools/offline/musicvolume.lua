@@ -83,6 +83,8 @@ Check("1 fresh install: volume left alone", Near(Volume(), 0.55), cvars.Sound_Mu
 Check("1 Audio page off: the repair waits", savedDB.musicVolumeNearZeroV1 == nil)
 -- (A profile picked, with CineMode music: the Atmosphere hub and Audio page on.)
 savedDB.profileChosen, savedDB.visualEffects, savedDB.musicInCinematic = true, true, true
+-- (And Enable Cameras: its scenes, check 5's camera music, are under it. Audit 2026-11-25, OK'd by the user.)
+savedDB.cameraModes = true
 local ns = Login()
 Check("1 Audio page on", ns.PageSetting("musicInCinematic") == true)
 Check("1 normal volume left alone", Near(Volume(), 0.55), cvars.Sound_MusicVolume)

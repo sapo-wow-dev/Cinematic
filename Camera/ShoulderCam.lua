@@ -189,10 +189,11 @@ local function PauseReason()
 			return "mounting"
 		end
 	end
-	if not db.shoulderCamAllowFlight and UnitOnTaxi and ns.Flag(UnitOnTaxi("player")) then
+	-- (Through ns.Setting: their tab off allows nothing. Audit 2026-11-25: read raw.)
+	if not ns.Setting("shoulderCamAllowFlight") and UnitOnTaxi and ns.Flag(UnitOnTaxi("player")) then
 		return "flight"
 	end
-	if not db.shoulderCamAllowDeath and UnitIsDead and ns.Flag(UnitIsDead("player")) then
+	if not ns.Setting("shoulderCamAllowDeath") and UnitIsDead and ns.Flag(UnitIsDead("player")) then
 		return "dead"
 	end
 	local camera = ns.ActiveEvent and select(2, ns.ActiveEvent())

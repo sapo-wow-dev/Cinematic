@@ -1227,8 +1227,11 @@ do
 			SetRecast(padKey, (padWant and "cast") or (reel and padOn and "reel"))
 		end
 	end), function()
-		return castButton ~= nil and (poleEquipped or next(bound) ~= nil or REEL_CVARS.active
-			or GetTime() < reelHeldUntil or ns.FishCamOn() or FishingChannel()) and true or false
+		-- (The pole, the fish camera or a cast only with the Fishing page on; what
+		-- we set still to give back either way. Audit 2026-11-25: it ran per frame
+		-- with a pole on and the page off.)
+		return castButton ~= nil and ((ns.Setting("handleFishing") and (poleEquipped or ns.FishCamOn() or FishingChannel()))
+			or next(bound) ~= nil or REEL_CVARS.active or GetTime() < reelHeldUntil) and true or false
 	end)
 end
 
@@ -1872,7 +1875,9 @@ campfireWatcher:RegisterUnitEvent("UNIT_AURA", "player")
 campfireWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 local function CheckIdleBuffs()
 	local found = false
-	if ns.db and ns.db.cozyBuffs then
+	-- (Only with the Scenes page on, Enable Cameras above it: no scene to use it
+	-- otherwise. Audit 2026-11-25: every aura change of yours was scanned.)
+	if ns.db and ns.db.cozyBuffs and ns.Setting("cameraScenes") ~= false then
 		for name in ns.db.cozyBuffs:gmatch("[^,]+") do
 			name = name:match("^%s*(.-)%s*$")
 			if name ~= "" and HasBuffNamed(name) then
@@ -2176,9 +2181,10 @@ function ns.ActiveEvent()
 	local off
 	if camera and EVENT_CAM[camera] then
 		off = ns.IsCameraOffHere(EVENT_CAM[camera])
-	else
-		local standIn = ns.ScriptStandIn and ns.ScriptStandIn(camera)
-		off = standIn and ns.CameraOffBesidesRows(standIn)
+	elseif type(camera) == "string" and camera:find("^script:") then
+		-- (A script of yours stands in for none of ours: it goes by Enable Cameras and
+		-- Stop camera too. Audit 2026-11-25: it played with Enable Cameras off.)
+		off = ns.CameraOffBesidesRows(ns.ScriptStandIn and ns.ScriptStandIn(camera) or "script")
 	end
 	if off then
 		key, camera = nil, nil

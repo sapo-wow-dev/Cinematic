@@ -176,6 +176,12 @@ local function Rows()
 	local db = ns.db
 	return db and type(db.cameraRows) == "table" and db.cameraRows or nil
 end
+-- Whether yours run at all: the Triggers page and the Scenes page on, Enable
+-- Cameras above them. Off, none fires, ticks or listens. (Audit 2026-11-25:
+-- only the Triggers page's own tick was read, and the loop and events ran on.)
+local function YoursOn()
+	return ns.Setting("cameraTriggers") ~= false and ns.Setting("cameraScenes") ~= false
+end
 
 -- An emote as its token, lower case: "/lol" or "lol" -> "laugh", by the
 -- game's own emote commands (any language, any alias); else as typed.
@@ -424,7 +430,7 @@ end
 -- Something says start: its cooldown, Only if and chance first, then its wait.
 local function TryStart(unit, now)
 	if unit.on or unit.pendingAt then return end
-	if ns.db and ns.db.cameraTriggers == false then return end -- (the Triggers page off: none of yours fire)
+	if ns.db and not YoursOn() then return end -- (the Triggers page off: none of yours fire. Audit 2026-11-25: or the Scenes page, Enable Cameras)
 	if (unit.partsOff or ""):find("[sc]") then -- (its Starts or Scenes tab off)
 		Skip(unit, L["Its Starts or Scenes tab is off"])
 		return
@@ -635,7 +641,7 @@ local function Tick()
 	local newEmote = emote and emote.at ~= lastEmoteAt and type(emote.token) == "string" and emote.token:lower()
 	lastEmoteAt = emote and emote.at
 	local moving = ns.playerMoving and not (ns.OnTaxi and ns.OnTaxi())
-	local off = ns.db and ns.db.cameraTriggers == false -- (the Triggers page off: those on end, none start)
+	local off = ns.db and not YoursOn() -- (the Triggers page off: those on end, none start. Audit 2026-11-25: YoursOn)
 	for _, unit in ipairs(units) do
 		Parse(unit)
 		if off then
@@ -714,7 +720,11 @@ local sources = {}
 local function SyncNow(force)
 	local rows = Rows()
 	if not rows then return end
-	if not force and synced.rows == rows and synced.custom == rows.custom and synced.extras == rows.extras then return end
+	-- (Also as yours go on or off: the 1 s check below brings that in. Audit 2026-11-25.)
+	local on = YoursOn()
+	if not force and synced.rows == rows and synced.custom == rows.custom and synced.extras == rows.extras
+		and synced.on == on then return end
+	synced.on = on
 	if synced.rows ~= rows then ns.triggerLibVersion = ns.triggerLibVersion + 1 end -- (another profile)
 	synced.rows, synced.custom, synced.extras = rows, rows.custom, rows.extras
 	if ns.ApplyBuiltInOrders then ns.ApplyBuiltInOrders() end
@@ -770,8 +780,17 @@ local function SyncNow(force)
 	for key in tostring(rows.extras or ""):gmatch("[^,]+") do
 		if ns.SceneTakesTriggers(key) and not sceneUnits[key] then AddUnits(key, false) end
 	end
-	Watch()
-	ticker:SetShown(#units > 0)
+	-- (Off: those on end, none waits, and no loop or events till they're on. Audit 2026-11-25.)
+	if on then
+		Watch()
+	else
+		watcher:UnregisterAllEvents()
+		for _, unit in ipairs(units) do
+			unit.pendingAt = nil
+			if unit.on then Stop(unit) end
+		end
+	end
+	ticker:SetShown(#units > 0 and on)
 end
 -- (Moving old scenes over adds to the library, which asks for this again:
 -- asked while it runs, it runs once more after.)

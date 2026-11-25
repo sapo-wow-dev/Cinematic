@@ -1053,6 +1053,14 @@ local function Wanted()
 		and ns.CombatWaitOver("quest", GetTime())
 end
 
+-- Whether a quest giver's talk is followed at all: the quest camera or its
+-- script on here for it (its row has a camera; none with Enable Cameras or the
+-- Scenes page off). (Audit 2026-11-25: every talk was followed, its loop
+-- running through it, with Quest Cam off.)
+local function TalkWanted(which)
+	return ns.db and ns.db.enabled and ns.TriggerHasCamera(which or "Quest") and true or false
+end
+
 local function PlainGuid(unit)
 	local guid = UnitGUID(unit)
 	if type(guid) == "string" and not (issecretvalue and issecretvalue(guid)) then return guid end
@@ -1073,6 +1081,12 @@ local passWatcher = CreateFrame("Frame")
 passWatcher:Hide()
 passWatcher:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 passWatcher:SetScript("OnEvent", function(self)
+	-- (Only for the quest camera or its script, or Quest talk's Opposite clicked
+	-- (ns.ClickedX): else no watch every frame on a unit. Audit 2026-11-25.)
+	if not (TalkWanted("Quest") or TalkWanted("QuestGossip")
+		or (ns.QuestVisionSetting and ns.QuestVisionSetting("questTalk"))) then
+		return
+	end
 	local guid = PlainGuid("mouseover")
 	if not guid then
 		return
@@ -1230,6 +1244,9 @@ local function OnEvent(_, event)
 		end
 		if not which and not cam.since then
 			return
+		end
+		if not cam.since and not TalkWanted(which) then
+			return -- (no quest camera or script for it here: not followed. Audit 2026-11-25)
 		end
 		if not cam.since and not (ns.Flag(UnitExists("npc")) and not ns.Flag(UnitIsPlayer("npc"))) then
 			return -- shared by a player, or from an item: nobody to talk to

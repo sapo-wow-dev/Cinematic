@@ -475,7 +475,8 @@ end
 local NOW_HOLD = 0.1
 local nowCache = { at = -1 }
 function ns.TriggerRowNow(key)
-	if ns.db and ns.db.cameraScenes == false then return nil end -- (the Scenes page off: no scene plays)
+	-- (The Scenes page off, or Enable Cameras above it: no scene plays. Audit 2026-11-25: was the page's own tick only.)
+	if ns.db and ns.Setting("cameraScenes") == false then return nil end
 	if ns.db and DroppedSet()[key] then return nil end -- (taken off its scene's Triggers)
 	if ns.FeatureYieldedTo and ns.FeatureYieldedTo("scene:" .. key) then return nil end -- (another addon's own)
 	if ns.db and TRIGGER[key] then key = ns.SceneLead(key) end -- (a group's member: its lead's rows)
