@@ -58,6 +58,15 @@ local function PreviewsOnPage(r)
 	if ns.db then ns.db.stylePreviewOut = nil end
 end
 
+-- Why Style's calls are missing: left out by its Load box, or ticked back on
+-- but not loaded till the next /reload (the Gating test leaves it so).
+local function NoStyle()
+	if ns.ModuleWanted and ns.ModuleWanted("style") and ns.ModuleLoaded and not ns.ModuleLoaded("style") then
+		return "Style isn't loaded till your next /reload (an earlier test left it out)"
+	end
+	return "Style isn't loaded"
+end
+
 -- Reads -------------------------------------------------------------------------
 
 local function S(value)
@@ -453,7 +462,7 @@ ns.TestKit.Define({
 		{ key = "preview", title = "Nameplate Style's preview on the game's plate: every sample and state",
 			proven = "platematch runs 13-14 (2026-11-23): all 4 samples and 19 states as your settings draw them, debuffs inside, picks clear at 480/380/300",
 			run = function(r)
-			if not (ns.MakePlateRowLookPreview and ns.MakeGamePlate) then return r:Skip("Style isn't loaded") end
+			if not (ns.MakePlateRowLookPreview and ns.MakeGamePlate) then return r:Skip(NoStyle()) end
 			if InCombatLockdown() then
 				r:WaitFor("Leave the fight first.", { check = function() return not InCombatLockdown() and "out" end })
 			end
@@ -799,7 +808,7 @@ ns.TestKit.Define({
 			-- (Its guides rebuilt as marks off the plate, 2026-11-25, proven in run q2431; then
 			-- picking a part shows it and the Buffs sample: to prove again.)
 			run = function(r)
-			if not (ns.OpenOptions and ns.PlateLayoutApply) then return r:Skip("Style isn't loaded") end
+			if not (ns.OpenOptions and ns.PlateLayoutApply) then return r:Skip(NoStyle()) end
 			if InCombatLockdown() then
 				r:WaitFor("Leave the fight first.", { check = function() return not InCombatLockdown() and "out" end })
 			end
@@ -813,7 +822,16 @@ ns.TestKit.Define({
 			if _G.SettingsPanel and _G.SettingsPanel:IsShown() then pcall(HideUIPanel, _G.SettingsPanel) end
 			r:Sleep(0.5)
 			pcall(ns.OpenOptions, "Nameplate Layout")
-			r:Sleep(1.2)
+			-- (Till it's built and shown, 15 s at most: the settings are made a few ms a frame
+			-- now (lazy pages), and run q0d55's 1.2 s came before the page was there.)
+			local openedAt = GetTime()
+			r:WaitFor(nil, { check = function()
+				local made = ns.plateLayoutPage
+				if made and made.canvas:IsVisible() then return "up" end
+				if GetTime() - openedAt > 15 then return "timeout" end
+			end })
+			r:Log(("  the Layout page up after %.1f s"):format(GetTime() - openedAt))
+			r:Sleep(0.3)
 			local page = ns.plateLayoutPage
 			local panel = _G.SettingsPanel
 			r:Verdict(page ~= nil and page.canvas:IsVisible(), "the Layout page built and shown")
@@ -1107,7 +1125,7 @@ ns.TestKit.Define({
 		{ key = "layoutlive", title = "a layout on your target's real plate: moved, kept, put back, no errors",
 			proven = "platematch q2b06 + q57bf (2026-11-25): 14 moved, kept through the game's re-layout, 0 errors, all back",
 			run = function(r)
-			if not ns.PlateLayoutApply then return r:Skip("Style isn't loaded") end
+			if not ns.PlateLayoutApply then return r:Skip(NoStyle()) end
 			r:WaitFor("Target any mob with a nameplate (no need to fight it).", { check = function()
 				if InCombatLockdown() then return nil end
 				local p = UnitExists("target") and C_NamePlate.GetNamePlateForUnit("target")
@@ -1180,7 +1198,7 @@ ns.TestKit.Define({
 		{ key = "layoutfight", title = "a layout kept in a fight (optional: Skip step if you'd rather not fight)",
 			proven = "platematch qb095, q2b06, q57bf (2026-11-25): kept in fights, 0 errors",
 			run = function(r)
-			if not ns.PlateLayoutApply then return r:Skip("Style isn't loaded") end
+			if not ns.PlateLayoutApply then return r:Skip(NoStyle()) end
 			if ns.noRealLayout then return r:Skip("no fight offline") end
 			local logBefore = #(CinematicDB.log or {})
 			r:Set("styleGeneral", true)
