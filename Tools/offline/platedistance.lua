@@ -136,6 +136,31 @@ local function RunClient(client, toc)
 	Check("UnitInBand In20y as UnitWithinYards", (now + 1) and ns.UnitInBand("nameplate1", "In20y") == true)
 	Check("UnitInBand old In11 still interact 2", ns.UnitInBand("nameplate1", "In11") == false)
 	Check("UnitInBand old Past28 still interact 4", ns.UnitInBand("nameplate2", "Past28") == true)
+
+	-- Enemies within (the Nameplates page's NearbyEnemies row) ---------------
+	Check("NearbyEnemies is a plate unit row", (function()
+		for _, row in ipairs(ns.PLATE_UNIT_ROWS) do if row == "NearbyEnemies" then return true end end
+	end)() == true)
+	Check("fresh install: Always on, 20 yards", ns.DEFAULTS.plateAlwaysNearbyEnemies == true
+		and ns.DEFAULTS.plateNearbyYards == 20)
+	Check("fresh install: the migration left it alone", ns.db.plateAlwaysNearbyEnemies == nil
+		or ns.db.plateAlwaysNearbyEnemies == true, tostring(ns.db.plateAlwaysNearbyEnemies))
+	local old = { plateAlwaysEnemies = true, profiles = { A = { x = 1 }, B = { plateAlwaysNearbyEnemies = true } },
+		profileResetPoints = { R = { settings = {} } } }
+	ns.NearbyEnemiesOffForOld(old)
+	Check("setups from before: off in the settings, a profile and a reset point",
+		old.plateAlwaysNearbyEnemies == false and old.profiles.A.plateAlwaysNearbyEnemies == false
+		and old.profileResetPoints.R.settings.plateAlwaysNearbyEnemies == false)
+	Check("a profile that had it on keeps it", old.profiles.B.plateAlwaysNearbyEnemies == true)
+	SetCVar("nameplateShowEnemies", "0")
+	SetCVar("nameplateShowEnemyPlayers", "0")
+	ns.EnablePlateRow("NearbyEnemies")
+	-- (Recorded as the addon's own value: written now, or once a hold on it lets go.)
+	local ours = (ns.chardb or ns.db).cvarsOurs or {}
+	Check("its plates on in the game's options: enemies and enemy players",
+		ours.nameplateShowEnemies == "1" and ours.nameplateShowEnemyPlayers == "1",
+		tostring(ours.nameplateShowEnemies) .. " " .. tostring(ours.nameplateShowEnemyPlayers))
+	Check("the page's settings switch knows it", ns.HasPlateSettings("NearbyEnemies") == true)
 end
 
 RunClient("forever", "CinematicDev.toc")

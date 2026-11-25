@@ -1212,6 +1212,9 @@ local function UnitRowActive(row)
 	if row == "MyPet" then
 		return Ask(UnitExists, "pet")
 	end
+	if row == "NearbyEnemies" then
+		return true -- (who's near: InUnitRow, per plate)
+	end
 	return ns.InGroup()
 end
 
@@ -1223,6 +1226,11 @@ local function InUnitRow(row, unit, kind)
 	if row == "QuestMobs" then
 		return kind ~= "Friends" and kind ~= "Enemies" and ns.IsQuestMob(unit)
 	end
+	-- (Enemies nearby: hostile NPCs and enemy players within its yards.)
+	if row == "NearbyEnemies" then
+		return (kind == "EnemyNPCs" or kind == "Enemies") and ns.UnitWithinYards ~= nil
+			and ns.UnitWithinYards(unit, ns.db.plateNearbyYards or 20) == true
+	end
 	local wanted = row == "GroupMembers" and "Friends" or "FriendlyMinions"
 	if kind ~= wanted or (row == "GroupMinions" and Ask(UnitIsUnit, unit, "pet")) then
 		return false -- (your pet has its own row)
@@ -1231,7 +1239,7 @@ local function InUnitRow(row, unit, kind)
 end
 
 -- How far each unit row holds its plates up, faded like keptLevel. row -> 0 to 1.
-local unitRowLevel = { MyPet = 0, GroupMembers = 0, GroupMinions = 0, QuestMobs = 0 }
+local unitRowLevel = { MyPet = 0, GroupMembers = 0, GroupMinions = 0, QuestMobs = 0, NearbyEnemies = 0 }
 
 local function UnitRowAlpha(unit, kind)
 	local alpha = 0
@@ -3477,7 +3485,8 @@ function ns.PlatesWhy()
 	local target = TargetKeptUp()
 	if target then Add("on", L["Your target's plate stays up (Your target row)"]) end
 	local rowLabels = { MyPet = "Your pet's plate", GroupMembers = "Group members' plates",
-		GroupMinions = "Group members' minions' plates", QuestMobs = "Quest mobs' plates" }
+		GroupMinions = "Group members' minions' plates", QuestMobs = "Quest mobs' plates",
+		NearbyEnemies = "Plates of enemies within its yards" }
 	for row, level in pairs(unitRowLevel) do
 		if level > 0.5 and rowLabels[row] then
 			Add("on", L["%s stay up (their own row)"]:format(L[rowLabels[row]]), row == "QuestMobs" and "Quest Vision" or page)
@@ -3535,7 +3544,8 @@ function ns.PlateItemsWhy()
 	local kindLabels = { Enemies = "Enemy players", EnemyMinions = "Enemy minions", EnemyNPCs = "Hostile NPCs",
 		EnemyMinor = "Minor hostile NPCs", NeutralNPCs = "Neutral NPCs", NeutralMinor = "Minor neutral NPCs",
 		Friends = "Friendly players", FriendlyMinions = "Friendly minions", FriendlyNPCs = "Friendly NPCs" }
-	local unitRowLabels = { MyPet = "Your pet", GroupMembers = "Group members", GroupMinions = "Group members' minions" }
+	local unitRowLabels = { MyPet = "Your pet", GroupMembers = "Group members", GroupMinions = "Group members' minions",
+		NearbyEnemies = "Enemies within" }
 	local placeLabels = { Cities = "Cities", Instances = "Dungeons and raids", PvP = "PvP", BGs = "Battlegrounds" }
 	local nameLabels = ns.plates.NAME_ROW_LABELS
 	local fighting, lingering = InCombatLockdown(), FightLingering()
@@ -3595,7 +3605,7 @@ function ns.PlateItemsWhy()
 						Add(body > 0.05 and "off" or "block", L["Its row, %s, has nothing ticked that applies right now"]
 							:format(kindLabel))
 					end
-					for _, row in ipairs({ "MyPet", "GroupMembers", "GroupMinions" }) do
+					for _, row in ipairs({ "MyPet", "GroupMembers", "GroupMinions", "NearbyEnemies" }) do
 						if unitRowLevel[row] > 0.05 and InUnitRow(row, unit, kind) then
 							Add("on", L["The %s row keeps it up, whatever its kind's row says: %s"]:format(L[unitRowLabels[row]],
 								Ticks(row, fighting)))
@@ -3887,7 +3897,8 @@ local PLATE_KIND_CVARS = {
 local PLATE_ROW_PARENT = { EnemyMinions = "Enemies", EnemyMinor = "EnemyNPCs", NeutralMinor = "NeutralNPCs",
 	FriendlyMinions = "Friends" }
 -- The unit rows go by their units' kinds (your target's could be any: none).
-local UNIT_ROW_KIND = { MyPet = "FriendlyMinions", GroupMembers = "Friends", GroupMinions = "FriendlyMinions" }
+local UNIT_ROW_KIND = { MyPet = "FriendlyMinions", GroupMembers = "Friends", GroupMinions = "FriendlyMinions",
+	NearbyEnemies = "EnemyNPCs" } -- (enemy players' too: EnablePlateRow)
 local pendingPlateRows = {}
 
 -- The Game Settings page: the HUD row that sets your own value of a name or
@@ -3959,6 +3970,8 @@ function ns.HasPlateSettings(kind)
 end
 
 function ns.EnablePlateRow(kind)
+	-- (Enemies nearby covers enemy players too: their plates on as well.)
+	if kind == "NearbyEnemies" then ns.EnablePlateRow("Enemies") end
 	kind = UNIT_ROW_KIND[kind] or kind
 	if not PLATE_KIND_CVARS[kind] then
 		return

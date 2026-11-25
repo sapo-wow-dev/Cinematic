@@ -11160,6 +11160,10 @@ local function CreatePlatesPanel()
 			{ "GroupMinions", L["Minions"], true, true },
 		}
 		local ENEMY_KINDS = {
+			-- (Enemies nearby: a unit row, with its yards box: below.)
+			-- ("Enemies in [20] yd": "Enemies within" ran its yd into the
+			-- Always column's dot, run qa2ae.)
+			{ "NearbyEnemies", L["Enemies in"], title = L["Enemies within"] },
 			{ "Enemies", L["Enemy players"] },
 			{ "EnemyMinions", L["Minions"], true },
 			{ "EnemyNPCs", L["Hostile NPCs"] },
@@ -11174,6 +11178,7 @@ local function CreatePlatesPanel()
 			MyPet = L[" Your pet's nameplate, whatever the Minions rows say, grouped or not."],
 			GroupMembers = L[" Your party or raid members' nameplates, whatever Friendly players says."],
 			GroupMinions = L[" Your party or raid members' pets, whatever the Minions rows say."],
+			NearbyEnemies = L[" Hostile NPCs and enemy players within these yards of you, whatever their rows say."],
 		}
 		-- Friendly rows: in dungeons and raids, Friendly Plates in Dungeons and
 		-- Raids decides (below the Nameplates grid), so they have no Instances box.
@@ -11310,6 +11315,58 @@ local function CreatePlatesPanel()
 				end
 				rowTop.labelShift, rowTop.band = TOGGLE_W, i
 				AddPlateRow(rowTop, 1, kind)
+				-- Enemies within [20] yd: its yards in a box in the label, what
+				-- measures them (Frames' ns.YardsRingInfo) in the box's tip.
+				if kind[1] == "NearbyEnemies" then
+					local label = lastLabel
+					local yd = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+					yd:SetText(L["yd"])
+					local nearBox = ns.SkinEditBox(CreateFrame("EditBox", nil, content, "InputBoxTemplate"))
+					nearBox:SetSize(26, 18)
+					nearBox:SetAutoFocus(false)
+					nearBox:SetNumeric(true)
+					nearBox:SetMaxLetters(2)
+					nearBox:SetJustifyH("CENTER")
+					RecordKey(content, "plateNearbyYards")
+					-- (Found by search, /cine find and OpenOptionsAt by its key.)
+					nearBox.settingKey, nearBox.searchLabel = "plateNearbyYards", L["Enemies within"]
+					label:SetWidth(math.max(40, label:GetStringWidth() + 2))
+					nearBox:SetPoint("LEFT", label, "RIGHT", 6, 0)
+					yd:SetPoint("LEFT", nearBox, "RIGHT", 4, 0)
+					-- (For /cine debug platerange: the box, its yd and the row's grid.)
+					ns.nearbyYardsBox, ns.nearbyYardsText = nearBox, yd
+					ns.nearbyYardsGrid = rowTop.rows and rowTop.rows[#rowTop.rows]
+					local function Yards() return ns.GetDB().plateNearbyYards or ns.DEFAULTS.plateNearbyYards end
+					nearBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+					nearBox:SetScript("OnEditFocusLost", function(self)
+						local typed = tonumber(self:GetText())
+						if typed then
+							ns.GetDB().plateNearbyYards = math.max(ns.MARK_YARDS_MIN, math.min(ns.MARK_YARDS_MAX,
+								math.floor(typed)))
+						end
+						self:SetText(tostring(Yards()))
+					end)
+					nearBox:SetScript("OnEscapePressed", function(self)
+						self:SetText(tostring(Yards()))
+						self:ClearFocus()
+					end)
+					Tooltip(nearBox, L["Yards from you (5 to 45); the game measures only a few distances, so the nearest is used."])
+					nearBox:HookScript("OnEnter", function(self)
+						if not (ns.YardsRingInfo and GameTooltip:IsOwned(self)) then return end
+						local calm, calmName, fight, fightName = ns.YardsRingInfo(Yards())
+						if calm then
+							GameTooltip:AddLine((L["Measured at %d yards: %s."]):format(calm, calmName), 1, 1, 1, true)
+							if fight and fight ~= calm then
+								GameTooltip:AddLine((L["In fights: %d yards: %s."]):format(fight, fightName), 1, 1, 1, true)
+							end
+							GameTooltip:Show()
+						end
+					end)
+					nearBox.Refresh = function(self)
+						if not self:HasFocus() then self:SetText(tostring(Yards())) end
+					end
+					controls[#controls + 1] = nearBox
+				end
 				local box = CreateFrame("Frame", nil, content)
 				box:SetPoint("TOPLEFT", rowTop, "TOPLEFT", 0, -FRAME_HEADING_HEIGHT - 4 - ROW_HEIGHT)
 				box:SetSize(SECTION_WIDTH, 0.001)

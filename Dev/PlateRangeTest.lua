@@ -13,9 +13,23 @@
 --             "= N yd" hint shown, what they cover (r:Overlaps), a shot;
 --             then 24 typed in: the row becomes npcsIn24y with its look
 --             (PASS/FAIL)
--- Settings put back at the end (your rows, names and switches). CineMode
--- off. Into CinematicDB.plateRangeTestLog. Dev copy only.
+--   4 nearby  the Nameplates page's Enemies within row (NearbyEnemies) at 20
+--             yd, the Hostile NPCs and Enemy players rows emptied: CineMode
+--             on (the test turns it on and back), 10 samples over 5 s of the
+--             enemy plates: within 20 yd shown with that row as the reason
+--             (ns.PlateItemsWhy), further hidden; the row's yards box on the
+--             page and what it covers; a shot (PASS/FAIL)
+-- Settings put back at the end (your rows, names and switches, CineMode as
+-- it was). Steps 1-3 proven (run 5, qc8fe): left out unless "full". Into
+-- CinematicDB.plateRangeTestLog. Dev copy only.
 local _, ns = ...
+-- (Step 4's: the kinds' ticks emptied, the row and its yards.)
+local KIND_PREFIXES = { "plateAlways", "plateGroup", "plateCombat", "plateCombatPvP", "plateCinematic", "plateInCities",
+	"plateInInstances", "plateInPvP", "plateInBGs", "plateTargetEnemy", "plateTargetFriendly" }
+local NEAR_SETTINGS = { "handlePlates", "plateAlwaysNearbyEnemies", "plateNearbyYards" }
+for _, kind in ipairs({ "EnemyNPCs", "Enemies" }) do
+	for _, prefix in ipairs(KIND_PREFIXES) do NEAR_SETTINGS[#NEAR_SETTINGS + 1] = prefix .. kind end
+end
 
 local IN, PAST = "npcsIn20y", "npcsPast20y"
 local SETTINGS = { "styleGeneral", "handlePlateStyle", "plateMarks", "markOrder", "markNames",
@@ -23,6 +37,7 @@ local SETTINGS = { "styleGeneral", "handlePlateStyle", "plateMarks", "markOrder"
 	PAST .. "MarkStyle", PAST .. "MarkColor", PAST .. "MarkR", PAST .. "MarkG", PAST .. "MarkB",
 	"npcsIn24yMarkStyle", "npcsIn24yMarkColor", "npcsIn24yMarkR", "npcsIn24yMarkG", "npcsIn24yMarkB",
 	IN .. "When", PAST .. "When", "npcsIn24yWhen" }
+for _, key in ipairs(NEAR_SETTINGS) do SETTINGS[#SETTINGS + 1] = key end
 local PLATES = ns.CVarSet("Plate range test: plates", "/cine debug platerange: enemy and friendly plates on for the run",
 	{ values = { nameplateShowEnemies = "1", nameplateShowFriends = "1", nameplateShowFriendlyNpcs = "1" } })
 
@@ -44,14 +59,23 @@ ns.TestKit.Define({
 	needs = "Stand where mobs or NPCs have plates, out of a fight",
 	settings = SETTINGS,
 	cvars = { "nameplateShowEnemies", "nameplateShowFriendlyNpcs", "nameplateMaxDistance" },
+	-- (CineMode left alone by the kit: step 4 needs it on, and puts it back.)
+	cineMode = true,
 	putBack = function(extra)
+		local said = {}
 		if extra.plates then
 			ns.ApplyCVarSet(PLATES, false)
-			return "plates put back"
+			said[#said + 1] = "plates put back"
 		end
+		if extra.cineWas and (extra.cineWas == "on") ~= (ns.IsCineModeOn() and true or false)
+			and Cinematic_ToggleCineMode then
+			pcall(Cinematic_ToggleCineMode)
+			said[#said + 1] = "CineMode back " .. extra.cineWas
+		end
+		return #said > 0 and table.concat(said, ", ") or nil
 	end,
 	steps = {
-		{ key = "rows", title = "two rows for the run", run = function(r)
+		{ key = "rows", title = "two rows for the run", proven = "run 5 qc8fe (Forever)", run = function(r)
 			r:Keep("plates", true)
 			ns.ApplyCVarSet(PLATES, true)
 			for _, key in ipairs({ "styleGeneral", "handlePlateStyle", "plateMarks" }) do r:Set(key, true) end
@@ -79,7 +103,7 @@ ns.TestKit.Define({
 			r:Log(("rings: interact %d and %d; spells: %s"):format(short, long,
 				#list > 0 and table.concat(list, ", ") or "none"))
 		end },
-		{ key = "plates", title = "plates against the rows", run = function(r)
+		{ key = "plates", title = "plates against the rows", proven = "run 5 qc8fe (Forever)", run = function(r)
 			local count = r:WaitFor("Stand where mobs or NPCs have plates, out of a fight. No need to move.", {
 				check = function() return not InCombatLockdown() and #Plates() >= 1 and #Plates() end })
 			r:Log("plates up: " .. tostring(count))
@@ -126,7 +150,7 @@ ns.TestKit.Define({
 			end
 			r:Shot("plates: green arrow within 20 yd, red glow past")
 		end },
-		{ key = "drawer", title = "the drawer's yards box", run = function(r)
+		{ key = "drawer", title = "the drawer's yards box", proven = "run 5 qc8fe (Forever)", run = function(r)
 			if InCombatLockdown() then return r:Skip("in a fight: the settings stay shut") end
 			local ok, err = pcall(ns.OpenOptionsAt, "Nameplate Marks")
 			if not ok then return r:Fail("couldn't open Nameplate Marks: " .. tostring(err)) end
@@ -180,6 +204,125 @@ ns.TestKit.Define({
 			r:Verdict(order:find("npcsIn24y", 1, true) ~= nil and not order:find("npcsIn20y", 1, true),
 				"typed 24: the row is npcsIn24y now (order " .. order .. ")")
 			r:Verdict(ns.db.npcsIn24yMarkStyle == "arrow", "its look came with it: " .. tostring(ns.db.npcsIn24yMarkStyle))
+		end },
+		{ key = "nearby", title = "Enemies within 20 yd, in CineMode", run = function(r)
+			r:Keep("plates", true)
+			ns.ApplyCVarSet(PLATES, true)
+			r:Keep("cineWas", ns.IsCineModeOn() and "on" or "off")
+			r:Set("handlePlates", true)
+			r:Set("plateAlwaysNearbyEnemies", true)
+			r:Set("plateNearbyYards", 20)
+			for _, kind in ipairs({ "EnemyNPCs", "Enemies" }) do
+				for _, prefix in ipairs(KIND_PREFIXES) do r:Set(prefix .. kind, false) end
+			end
+			local rules = ns.db.frameRules or {}
+			for _, kind in ipairs({ "EnemyNPCs", "Enemies" }) do
+				local rule = rules["plate:" .. kind]
+				if type(rule) == "string" and rule:find("%S") then
+					r:Log(("note: your %s row has a rule (%s): it may keep plates up too"):format(kind, rule))
+				end
+			end
+			local function Enemies()
+				local list = {}
+				for _, each in ipairs(Plates()) do
+					local okR, reaction = pcall(UnitReaction, each.unit, "player")
+					local okA, attack = pcall(UnitCanAttack, "player", each.unit)
+					if okR and type(reaction) == "number" and reaction <= 3 and okA and attack == true then
+						list[#list + 1] = each
+					end
+				end
+				return list
+			end
+			-- (Shown within, hidden past: proven on Forever, run 7 qa2ae; "full" runs it.)
+			if not r:Proven("run 7 qa2ae (Forever): enemy plates shown within the row's yards, hidden past") then
+			local count = r:WaitFor("Stand where red mobs have plates, some near and some further. No need to move.", {
+				check = function() return not InCombatLockdown() and #Enemies() >= 1 and #Enemies() end })
+			r:Log("enemy plates up: " .. tostring(count))
+			if not ns.IsCineModeOn() and Cinematic_ToggleCineMode then pcall(Cinematic_ToggleCineMode) end
+			r:Prompt("CineMode on: watching the enemy plates.", "Stay where you are.", 3)
+			r:Sleep(3)
+			r:Verdict(ns.IsCineModeOn(), "CineMode on")
+			-- Both ways on the plates up, no walking (run q781d had one enemy,
+			-- past 20 yd: "shown" never seen): the row's yards set past the
+			-- nearest enemy (it must show), then short of it (it must hide).
+			local reach
+			for _, yards in ipairs({ 5, 8, 11, 15, 20, 25, 28, 30, 35, 40, 45 }) do
+				for _, each in ipairs(Enemies()) do
+					if not reach and ns.UnitWithinYards(each.unit, yards) == true then reach = yards end
+				end
+			end
+			if not reach then return r:Fail("no enemy within 45 yards any check can say") end
+			local short
+			for _, yards in ipairs({ 5, 8, 11, 15, 20, 25, 28, 30, 35, 40 }) do
+				if yards < reach then short = yards end
+			end
+			r:Log(("nearest enemy first within %d yd; short of it: %s yd"):format(reach, tostring(short)))
+			local right, wrong, near, far, examples = 0, 0, 0, 0, {}
+			for i = 1, 10 do
+				local yards = (i <= 5 or not short) and reach or short
+				if ns.db.plateNearbyYards ~= yards then
+					ns.db.plateNearbyYards = yards
+					r:Log(("row set to %d yd"):format(yards))
+					r:Sleep(2) -- (the half-second refresh and the fade)
+				end
+				r:Prompt(("Checking enemy plates at %d yd: %d of 10"):format(yards, i), "Stay where you are.",
+					(11 - i) * 0.5)
+				local items = {}
+				for _, item in ipairs(ns.PlateItemsWhy and ns.PlateItemsWhy() or {}) do items[item.key] = item end
+				for _, each in ipairs(Enemies()) do
+					local within = ns.UnitWithinYards(each.unit, yards)
+					local okG, guid = pcall(UnitGUID, each.unit)
+					local item = okG and type(guid) == "string" and items[guid]
+					local shown = item and item.status ~= "hidden" or false
+					local byRow = false
+					for _, reason in ipairs(item and item.reasons or {}) do
+						if (reason.text or ""):find(ns.L["Enemies within"], 1, true) then byRow = true end
+					end
+					if within == true then near = near + 1 elseif within == false then far = far + 1 end
+					local ok = within == true and shown and byRow or within == false and not shown or within == nil
+					if ok then right = right + 1 else
+						wrong = wrong + 1
+						if #examples < 6 then
+							local okN, name = pcall(UnitName, each.unit)
+							examples[#examples + 1] = ("%s: within %s, shown %s, by the row %s"):format(
+								okN and type(name) == "string" and name or each.unit, tostring(within), tostring(shown),
+								tostring(byRow))
+						end
+					end
+				end
+				r:Sleep(0.5)
+			end
+			r:Log(("enemy plate looks: %d within, %d further; %d right, %d wrong"):format(near, far, right, wrong))
+			if #examples > 0 then r:Log("wrong: " .. table.concat(examples, "; ")) end
+			-- (A plate moving across the line between samples: 1 in 10 let off.)
+			r:Verdict(right + wrong > 0 and wrong <= math.max(1, (right + wrong) / 10),
+				("enemies within the row's yards shown by it, further hidden (%d of %d)"):format(right, right + wrong))
+			r:Verdict(near > 0 and (far > 0 or not short), ("both ways seen: %d within, %d further"):format(near, far))
+			ns.db.plateNearbyYards = reach
+			r:Sleep(2)
+			r:Shot(("CineMode: the row at %d yd, the nearest enemy's plate up"):format(reach))
+			ns.db.plateNearbyYards = 20
+			end
+			-- The row's yards box on the Nameplates page (opened at its own
+			-- setting: run q781d's page opened scrolled away from it).
+			if InCombatLockdown() then return r:Skip("in a fight: the settings stay shut") end
+			pcall(ns.OpenOptionsAt, "Nameplates", nil, "plateNearbyYards")
+			r:Sleep(0.8)
+			local box = ns.nearbyYardsBox
+			if not (box and box:IsVisible()) then
+				return r:Fail("the Enemies within row's yards box isn't in view, opened at its setting")
+			end
+			if box.Refresh then box:Refresh() end
+			r:Verdict(box:GetText() == "20", "its box says 20: " .. tostring(box:GetText()))
+			-- (Its yd must end before the row's grid starts: run qa2ae's ran
+			-- into the Always column's dot. Overlaps against the page said
+			-- "past the edge of Frame", the scroll child narrower than the grid.)
+			local yd, grid = ns.nearbyYardsText, ns.nearbyYardsGrid
+			local ydRight, gridLeft = yd and yd:GetRight(), grid and grid:GetLeft()
+			r:Verdict(ydRight and gridLeft and ydRight <= gridLeft,
+				("the box and its yd end before the grid (%s of %s)"):format(tostring(ydRight and math.floor(ydRight)),
+					tostring(gridLeft and math.floor(gridLeft))))
+			r:Shot("Nameplates page: Enemies within [20] yd", { behind = box:GetParent() })
 		end },
 	},
 })

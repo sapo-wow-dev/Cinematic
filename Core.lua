@@ -1608,7 +1608,12 @@ ns.PLATE_TARGET_ROWS = { "MyEnemyPlayerTarget", "MyEnemyNPCTarget", "MyNeutralPl
 	"MyFriendlyPlayerTarget", "MyFriendlyNPCTarget" }
 -- YourMouseover: the Target section's Mouseover row, under Your target: the
 -- unit under the mouse has its whole plate up while it's there (off to start).
-ns.PLATE_UNIT_ROWS = { "MyPet", "GroupMembers", "GroupMinions", "YourTarget", "YourMouseover" }
+-- NearbyEnemies: Enemies nearby, top of the enemy grid: hostile NPCs' and
+-- enemy players' plates within plateNearbyYards of you (Frames'
+-- ns.UnitWithinYards, the nearest distance the game can measure), whatever
+-- their kind's row says. Always to start (fresh installs and Reset;
+-- Migrations keeps it off for setups from before, 2026-11-25).
+ns.PLATE_UNIT_ROWS = { "MyPet", "GroupMembers", "GroupMinions", "YourTarget", "YourMouseover", "NearbyEnemies" }
 for _, row in ipairs(ns.PLATE_UNIT_ROWS) do
 	for _, prefix in ipairs({ "plateAlways", "plateCombat", "plateCombatPvP", "plateCinematic", "plateGroup" }) do
 		DEFAULTS[prefix .. row] = false
@@ -1618,6 +1623,8 @@ for _, row in ipairs(ns.PLATE_UNIT_ROWS) do
 	end
 end
 DEFAULTS.plateAlwaysYourTarget = true
+DEFAULTS.plateAlwaysNearbyEnemies = true
+DEFAULTS.plateNearbyYards = 20
 -- Your target's name row, the Target section's Names: YourTarget, as its
 -- plate's (its rule names kinds), the Names grid's Target row. See Effects.
 ns.NAME_TARGET_ROWS = { "YourTarget" }

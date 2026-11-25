@@ -5935,6 +5935,29 @@ STEPS[#STEPS + 1] = function()
 	ns.db.ruleNpcInteractingV1 = true
 end
 
+-- The Nameplates page's Enemies within (NearbyEnemies, 2026-11-25): Always
+-- to start for fresh installs and Reset, so enemy plates near you show in
+-- CineMode. Setups from before keep plates as they had them: its Always off,
+-- in the settings, saved profiles and reset points. Once.
+-- (db: the saved settings; Tools/offline/migrate-test.lua hands in old ones.)
+function ns.NearbyEnemiesOffForOld(db)
+	local function Off(store)
+		if type(store) == "table" and store.plateAlwaysNearbyEnemies == nil then store.plateAlwaysNearbyEnemies = false end
+	end
+	Off(db)
+	for _, list in ipairs({ db.profiles or false, db.profileResetPoints or false }) do
+		for _, saved in pairs(type(list) == "table" and list or {}) do
+			Off(saved)
+			if type(saved) == "table" then Off(saved.settings) end
+		end
+	end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.nearbyEnemiesOffV1 then return end
+	if not ns.newInstall then ns.NearbyEnemiesOffForOld(ns.db) end
+	ns.db.nearbyEnemiesOffV1 = true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only
