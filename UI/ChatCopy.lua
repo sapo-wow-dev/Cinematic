@@ -398,19 +398,37 @@ local function CreateButton(chatFrame)
 	return button
 end
 
--- Bottom right, left of the scroll-to-bottom arrow while that's up.
-local function PlaceButton(button, chatFrame)
-	local arrow = chatFrame.ScrollToBottomButton
+-- Where a chat window's lines show: the window, or the frame another addon
+-- draws them on while it keeps the window hidden (Glass: its frame is the
+-- window's linked panel, Support/Glass.lua). Only the selected tab's panel:
+-- Glass's frame for a tab you aren't on can say shown. nil: nowhere now.
+local function LinesFrame(chatFrame)
+	if ns.Flag(chatFrame:IsVisible()) then return chatFrame end
+	local panel = ns.chatPeekPanels and ns.chatPeekPanels[chatFrame]
+	if panel and ns.Flag(panel:IsVisible()) and ns.ChatWindowShown and ns.ChatWindowShown(chatFrame) then
+		return panel
+	end
+end
+
+-- Bottom right, left of the scroll-to-bottom arrow while that's up. On a
+-- panel the button sits on the panel (a child of the hidden window would
+-- never show).
+local function PlaceButton(button, chatFrame, place)
+	local arrow = place == chatFrame and chatFrame.ScrollToBottomButton or nil
 	local anchor = arrow and ns.Flag(arrow:IsShown()) and arrow or nil
-	if button.anchor == anchor and button.placed then
+	if button.anchor == anchor and button.place == place and button.placed then
 		return
 	end
-	button.anchor, button.placed = anchor, true
+	button.anchor, button.place, button.placed = anchor, place, true
+	if button:GetParent() ~= place then
+		button:SetParent(place)
+		button:SetFrameLevel(place:GetFrameLevel() + 10)
+	end
 	button:ClearAllPoints()
 	if anchor then
 		button:SetPoint("RIGHT", anchor, "LEFT", -2, 0)
 	else
-		button:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", -2, 2)
+		button:SetPoint("BOTTOMRIGHT", place, "BOTTOMRIGHT", -2, 2)
 	end
 end
 
@@ -421,11 +439,12 @@ local function Update(enabled)
 		local chatFrame = _G[frameName]
 		if chatFrame and chatFrame.GetMessageInfo then
 			local button = buttons[chatFrame]
-			local show = enabled and ns.Flag(chatFrame:IsVisible())
-				and (ns.Flag(chatFrame:IsMouseOver()) or button and ns.Flag(button:IsMouseOver()))
+			local place = enabled and LinesFrame(chatFrame)
+			local show = place
+				and (ns.Flag(place:IsMouseOver()) or button and ns.Flag(button:IsMouseOver()))
 			if show then
 				button = button or CreateButton(chatFrame)
-				PlaceButton(button, chatFrame)
+				PlaceButton(button, chatFrame, place)
 			end
 			if button and button:IsShown() ~= (show and true or false) then
 				button:SetShown(show)
@@ -433,6 +452,11 @@ local function Update(enabled)
 		end
 	end
 end
+
+-- (For the dev copy's tests, Dev/GlassSupportTest.lua: each window's button
+-- and one look now, as the loop below takes.)
+ns.chatCopyButtons = buttons
+function ns.ChatCopyCheck() Update(ns.Setting("chatCopyButton")) end
 
 local watcher = CreateFrame("Frame")
 -- (Runs only while the button's switched on, or one's still up: no loop at

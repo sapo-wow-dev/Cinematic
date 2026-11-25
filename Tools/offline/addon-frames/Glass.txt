@@ -1,0 +1,8 @@
+# Glass's named frames that Support/Glass.lua doesn't name, each with why it
+# needs no line there (Tools/addon-check.py check 3). A new frame of its that's
+# in neither = a MISS: decide it (a row, a fade, or here with why).
+# One per line: name or glob (*), a space, why. Checked against v2.2.0,
+# 2026-11-25 (addon kit run q9ef0).
+
+GlassUpdaterFrame a ticker only, draws nothing (Modules/UIManager.lua:44)
+GlassSocialMover an empty mover for the game's social button (QuickJoinToastButton; not made where the game has none): the button keeps its own row (Components/SocialButton.lua:195)

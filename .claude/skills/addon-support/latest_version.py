@@ -28,6 +28,7 @@ KNOWN_REPOS = {
     "ellesmereui": "EllesmereGaming/EllesmereUI",
     "elvui": "tukui-org/ElvUI",
     "flareui": "malkkav/FlareUI",
+    "glass": "mixxorz/Glass",
     "guidelime": "max-ri/Guidelime",
     "questie": "Questie/Questie",
     "rxpguides": "RestedXP/RXPGuides",

@@ -84,3 +84,31 @@ ns.WhenAddonLoads("Glass", function()
 	ns.LeaveAlone(names)
 	ns.AddScanner(FindLines)
 end)
+
+-- The addon kit's expectations (Tools/addon-kit/diff.py), checked against
+-- Glass 2.2.0 on Forever (run q9ef0, 2026-11-25). Its three hooks on game code
+-- we hook too put its own function in place after ours, and all three call
+-- ours through: SetItemRef with hooksecurefunc (and its link clicks call the
+-- global SetItemRef), ChatFrame1.AddMessage with an AceHook prehook that
+-- always calls the old one, FCF_OpenTemporaryWindow with a raw hook that
+-- calls the old one first. Our copy of chat lines, our links and the slash
+-- completion's whisper windows still run.
+ns.AddonKitExpect("Glass", "hook.SetItemRef", "state", "its hooksecurefunc: ours still runs")
+ns.AddonKitExpect("Glass", "touch.SetItemRef", "sameAsLogin", "its hooksecurefunc: ours still runs")
+ns.AddonKitExpect("Glass", "hook.ChatFrame1.AddMessage", "state", "its prehook calls ours through")
+ns.AddonKitExpect("Glass", "hook.FCF_OpenTemporaryWindow", "state", "its raw hook calls ours first")
+ns.AddonKitExpect("Glass", "touch.FCF_OpenTemporaryWindow", "sameAsLogin", "its raw hook calls ours first")
+-- It claims the chat: the game's windows sit hidden in GlassFrame and their
+-- lines draw on its frames (linked as their panels, above), so a message
+-- brings up its frame rather than our copy of the line (UI/Chat.lua).
+ns.AddonKitExpect("Glass", "chat.linesOnly", "chatIsDefault", "false: its frames draw the lines")
+ns.AddonKitExpect("Glass", "chat.linesOnly", "linesOnly", "false: a message brings up its frame, no copy")
+ns.AddonKitExpect("Glass", "link.chatwindow", "*", "its line frames are the windows' panels")
+ns.AddonKitExpect("Glass", "touch.ChatFrame_", "*", "hidden in GlassFrame: its frames draw the lines")
+-- Its tabs: it fades them itself (left alone, above).
+ns.AddonKitExpect("Glass", "touch.ChatFrame_Tab", "alpha", "its own tab fade")
+-- Its dock: the menu button sits on the tab bar, the channel button hidden.
+ns.AddonKitExpect("Glass", "*.chatmenu", "*", "moved to its tab bar: fades with it")
+ns.AddonKitExpect("Glass", "touch.ChatFrameMenuButton", "parent", "moved to its tab bar: fades with it")
+ns.AddonKitExpect("Glass", "*.chatchannels", "*", "hidden by its dock")
+ns.AddonKitExpect("Glass", "touch.ChatFrameChannelButton", "*", "hidden by its dock")

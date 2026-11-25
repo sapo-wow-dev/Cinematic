@@ -832,7 +832,7 @@ end
 -- DaylightUI's chat keeps the game's windows at alpha 0 under a window of its
 -- own (or restyles them, its classic style): the copy showed over it, every
 -- new line twice (a player, 2026-11-24).
-local OTHER_CHAT_ADDONS = { "Chattynator", "DaylightUI_Chat" }
+local OTHER_CHAT_ADDONS = { "Chattynator", "DaylightUI_Chat", "Glass" }
 function ns.ChatIsDefault()
 	if ns.LinkClaimants and ns.LinkClaimants("chatwindow") then return false end
 	local IsLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
@@ -921,9 +921,18 @@ end
 function ns.HoldScrolledChat(now)
 	for i = 1, NUM_CHAT_WINDOWS or 10 do
 		local chatFrame = _G["ChatFrame" .. i]
+		local atBottom
 		if chatFrame and chatFrame.AtBottom and ns.Flag(chatFrame:IsShown()) then
+			atBottom = chatFrame:AtBottom()
+		elseif chatFrame and ns.ChatWindowShown(chatFrame) then
+			-- (Glass keeps the window hidden and scrolls its own frame, the
+			-- window's panel: its state says whether it's at the bottom.)
+			local panel = ns.chatPeekPanels[chatFrame]
+			local state = panel and rawget(panel, "state")
+			if type(state) == "table" then atBottom = state.scrollAtBottom end
+		end
+		if chatFrame then
 			-- (Only a plain false: a secret answer mustn't keep chat up for good.)
-			local atBottom = chatFrame:AtBottom()
 			if not (issecretvalue and issecretvalue(atBottom)) and atBottom == false then
 				if (ns.chatPeekUntil[chatFrame] or 0) <= now then ns.framesWake = "chat scrolled up" end
 				ns.chatPeekUntil[chatFrame] = now + ns.HoldTime("chatPeekTime")
