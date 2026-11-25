@@ -1296,10 +1296,11 @@ local function InUnitRow(row, unit, kind)
 	if row == "QuestMobs" then
 		return kind ~= "Friends" and kind ~= "Enemies" and ns.IsQuestMob(unit)
 	end
-	-- (Enemies nearby: hostile NPCs and enemy players within its yards.)
+	-- (Enemies in ~30 yd: hostile NPCs and enemy players that near; the
+	-- test sets ns.plates.nearYards to try others.)
 	if row == "NearbyEnemies" then
 		return (kind == "EnemyNPCs" or kind == "Enemies") and ns.UnitWithinYards ~= nil
-			and ns.UnitWithinYards(unit, ns.db.plateNearbyYards or 20) == true
+			and ns.UnitWithinYards(unit, ns.plates.nearYards or ns.NEAR_YARDS) == true
 	end
 	local wanted = row == "GroupMembers" and "Friends" or "FriendlyMinions"
 	if kind ~= wanted or (row == "GroupMinions" and Ask(UnitIsUnit, unit, "pet")) then
@@ -3172,7 +3173,7 @@ function ns.plates.RollStep()
 end
 ns.plates.RollStep = ns.Profiled("Plates refresh step", ns.plates.RollStep)
 
--- Enemies in [N] yd's plates fade in and out as they cross its yards, at the
+-- Enemies in ~30 yd's plates fade in and out as they cross it, at the
 -- Fade in / Fade out times, instead of popping (user, 2026-11-25). Who's
 -- inside is looked at every NEAR_EVERY s (Frames' ns.UnitWithinYards keeps
 -- its answers a pass anyway); each frame only the plates still fading are
@@ -3622,7 +3623,7 @@ function ns.PlatesWhy()
 	if target then Add("on", L["Your target's plate stays up (Your target row)"]) end
 	local rowLabels = { MyPet = "Your pet's plate", GroupMembers = "Group members' plates",
 		GroupMinions = "Group members' minions' plates", QuestMobs = "Quest mobs' plates",
-		NearbyEnemies = "Plates of enemies within its yards" }
+		NearbyEnemies = "Plates of enemies within ~30 yd" }
 	for row, level in pairs(unitRowLevel) do
 		if level > 0.5 and rowLabels[row] then
 			Add("on", L["%s stay up (their own row)"]:format(L[rowLabels[row]]), row == "QuestMobs" and "Quest Vision" or page)
@@ -3681,7 +3682,7 @@ function ns.PlateItemsWhy()
 		EnemyMinor = "Minor hostile NPCs", NeutralNPCs = "Neutral NPCs", NeutralMinor = "Minor neutral NPCs",
 		Friends = "Friendly players", FriendlyMinions = "Friendly minions", FriendlyNPCs = "Friendly NPCs" }
 	local unitRowLabels = { MyPet = "Your pet", GroupMembers = "Group members", GroupMinions = "Group members' minions",
-		NearbyEnemies = "Enemies within" }
+		NearbyEnemies = "Enemies in ~30 yd" }
 	local placeLabels = { Cities = "Cities", Instances = "Dungeons and raids", PvP = "PvP", BGs = "Battlegrounds" }
 	local nameLabels = ns.plates.NAME_ROW_LABELS
 	local fighting, lingering = InCombatLockdown(), FightLingering()

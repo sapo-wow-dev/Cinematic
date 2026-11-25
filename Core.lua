@@ -1044,10 +1044,12 @@ end
 -- aggro range: a hostile NPC about close enough to attack you (a guess from
 -- the levels: ns.UnitNearAggro).
 ns.MARK_DISTANCES = { "In11", "In28", "In40", "Past28", "Past40", "OutOfRange", "NearAggro" }
--- Any yards (Tools/plate-distance-plan.md, 2026-11-25): "In<N>y" within N,
--- "Past<N>y" past it, N from MARK_YARDS_MIN to MAX; the y ends the number so
--- a copy's still reads ("npcEnemyIn20y2"). The fixed ones above stay as they
--- were (old rows, built-in profiles, shared strings): In28 is within 28.
+-- Yards (Tools/plate-distance-plan.md, 2026-11-25): "In<N>y" within N,
+-- "Past<N>y" past it; the y ends the number so a copy's still reads
+-- ("npcEnemyIn30y2"). The page makes In30y / Past30y only (ns.NEAR_YARDS:
+-- your spell nearest 30); other N, 5 to 45, still read (rows made with the
+-- yards box that day). The fixed ones above stay as they were (old rows,
+-- built-in profiles, shared strings): In28 is within 28.
 ns.MARK_YARDS_MIN, ns.MARK_YARDS_MAX = 5, 45
 -- (A Distance's side and yards: "In" or "Past" and N, for the y ones and the
 -- fixed In/Past ones; nil for the rest: Out of range, Near aggro range.)
@@ -1617,11 +1619,12 @@ ns.PLATE_TARGET_ROWS = { "MyEnemyPlayerTarget", "MyEnemyNPCTarget", "MyNeutralPl
 	"MyFriendlyPlayerTarget", "MyFriendlyNPCTarget" }
 -- YourMouseover: the Target section's Mouseover row, under Your target: the
 -- unit under the mouse has its whole plate up while it's there (off to start).
--- NearbyEnemies: Enemies nearby, top of the enemy grid: hostile NPCs' and
--- enemy players' plates within plateNearbyYards of you (Frames'
--- ns.UnitWithinYards, the nearest distance the game can measure), whatever
--- their kind's row says. Always to start (fresh installs and Reset;
--- Migrations keeps it off for setups from before, 2026-11-25).
+-- NearbyEnemies: Enemies in ~30 yd, top of the enemy grid: hostile
+-- NPCs' and enemy players' plates within about ns.NEAR_YARDS of you (Frames'
+-- ns.UnitWithinYards: your spell nearest it), whatever their kind's row
+-- says. Always to start (fresh installs and Reset; Migrations keeps it off
+-- for setups from before, 2026-11-25). No yards to set: a number box
+-- promised distances only a few spells can tell (the user, 2026-11-25).
 ns.PLATE_UNIT_ROWS = { "MyPet", "GroupMembers", "GroupMinions", "YourTarget", "YourMouseover", "NearbyEnemies" }
 for _, row in ipairs(ns.PLATE_UNIT_ROWS) do
 	for _, prefix in ipairs({ "plateAlways", "plateCombat", "plateCombatPvP", "plateCinematic", "plateGroup" }) do
@@ -1633,7 +1636,7 @@ for _, row in ipairs(ns.PLATE_UNIT_ROWS) do
 end
 DEFAULTS.plateAlwaysYourTarget = true
 DEFAULTS.plateAlwaysNearbyEnemies = true
-DEFAULTS.plateNearbyYards = 20
+ns.NEAR_YARDS = 30 -- (Smart rows' Within / Past too)
 -- Your target's name row, the Target section's Names: YourTarget, as its
 -- plate's (its rule names kinds), the Names grid's Target row. See Effects.
 ns.NAME_TARGET_ROWS = { "YourTarget" }

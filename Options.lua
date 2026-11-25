@@ -11191,10 +11191,10 @@ local function CreatePlatesPanel()
 			{ "GroupMinions", L["Minions"], true, true },
 		}
 		local ENEMY_KINDS = {
-			-- (Enemies nearby: a unit row, with its yards box: below.)
-			-- ("Enemies in [20] yd": "Enemies within" ran its yd into the
-			-- Always column's dot, run qa2ae.)
-			{ "NearbyEnemies", L["Enemies in"], title = L["Enemies within"] },
+			-- (A unit row: enemies near you, by your spell nearest 30 yards.
+			-- No yards box since 2026-11-25: it promised any number.)
+			-- ("Enemies within ~30 yd" was cut short in the label column, run q76d2.)
+			{ "NearbyEnemies", L["Enemies in ~30 yd"] },
 			{ "Enemies", L["Enemy players"] },
 			{ "EnemyMinions", L["Minions"], true },
 			{ "EnemyNPCs", L["Hostile NPCs"] },
@@ -11209,7 +11209,7 @@ local function CreatePlatesPanel()
 			MyPet = L[" Your pet's nameplate, whatever the Minions rows say, grouped or not."],
 			GroupMembers = L[" Your party or raid members' nameplates, whatever Friendly players says."],
 			GroupMinions = L[" Your party or raid members' pets, whatever the Minions rows say."],
-			NearbyEnemies = L[" Hostile NPCs and enemy players within these yards of you, whatever their rows say."],
+			NearbyEnemies = L[" Hostile NPCs and enemy players within about 30 yards (your spell nearest 30 yards), whatever their rows say."],
 		}
 		-- Friendly rows: in dungeons and raids, Friendly Plates in Dungeons and
 		-- Raids decides (below the Nameplates grid), so they have no Instances box.
@@ -11346,57 +11346,11 @@ local function CreatePlatesPanel()
 				end
 				rowTop.labelShift, rowTop.band = TOGGLE_W, i
 				AddPlateRow(rowTop, 1, kind)
-				-- Enemies within [20] yd: its yards in a box in the label, what
-				-- measures them (Frames' ns.YardsRingInfo) in the box's tip.
+				-- (Enemies in ~30 yd: for /cine debug platerange, its label
+				-- and the row's grid, to check the label ends before it.)
 				if kind[1] == "NearbyEnemies" then
-					local label = lastLabel
-					local yd = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-					yd:SetText(L["yd"])
-					local nearBox = ns.SkinEditBox(CreateFrame("EditBox", nil, content, "InputBoxTemplate"))
-					nearBox:SetSize(26, 18)
-					nearBox:SetAutoFocus(false)
-					nearBox:SetNumeric(true)
-					nearBox:SetMaxLetters(2)
-					nearBox:SetJustifyH("CENTER")
-					RecordKey(content, "plateNearbyYards")
-					-- (Found by search, /cine find and OpenOptionsAt by its key.)
-					nearBox.settingKey, nearBox.searchLabel = "plateNearbyYards", L["Enemies within"]
-					label:SetWidth(math.max(40, label:GetStringWidth() + 2))
-					nearBox:SetPoint("LEFT", label, "RIGHT", 6, 0)
-					yd:SetPoint("LEFT", nearBox, "RIGHT", 4, 0)
-					-- (For /cine debug platerange: the box, its yd and the row's grid.)
-					ns.nearbyYardsBox, ns.nearbyYardsText = nearBox, yd
+					ns.nearbyRowLabel = lastLabel
 					ns.nearbyYardsGrid = rowTop.rows and rowTop.rows[#rowTop.rows]
-					local function Yards() return ns.GetDB().plateNearbyYards or ns.DEFAULTS.plateNearbyYards end
-					nearBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-					nearBox:SetScript("OnEditFocusLost", function(self)
-						local typed = tonumber(self:GetText())
-						if typed then
-							ns.GetDB().plateNearbyYards = math.max(ns.MARK_YARDS_MIN, math.min(ns.MARK_YARDS_MAX,
-								math.floor(typed)))
-						end
-						self:SetText(tostring(Yards()))
-					end)
-					nearBox:SetScript("OnEscapePressed", function(self)
-						self:SetText(tostring(Yards()))
-						self:ClearFocus()
-					end)
-					Tooltip(nearBox, L["Yards from you (5 to 45); the game measures only a few distances, so the nearest is used."])
-					nearBox:HookScript("OnEnter", function(self)
-						if not (ns.YardsRingInfo and GameTooltip:IsOwned(self)) then return end
-						local calm, calmName, fight, fightName = ns.YardsRingInfo(Yards())
-						if calm then
-							GameTooltip:AddLine((L["Measured at %d yards: %s."]):format(calm, calmName), 1, 1, 1, true)
-							if fight and fight ~= calm then
-								GameTooltip:AddLine((L["In fights: %d yards: %s."]):format(fight, fightName), 1, 1, 1, true)
-							end
-							GameTooltip:Show()
-						end
-					end)
-					nearBox.Refresh = function(self)
-						if not self:HasFocus() then self:SetText(tostring(Yards())) end
-					end
-					controls[#controls + 1] = nearBox
 				end
 				local box = CreateFrame("Frame", nil, content)
 				box:SetPoint("TOPLEFT", rowTop, "TOPLEFT", 0, -FRAME_HEADING_HEIGHT - 4 - ROW_HEIGHT)
@@ -13567,16 +13521,21 @@ do
 			local DISTANCE_TIP = L["Only units roughly that far from you."]
 			-- (Any yards, Core's In<N>y / Past<N>y, and the fixed In/Past ones
 			-- not listed above: named from their yards.)
+			-- (~30: ns.NEAR_YARDS, by your spell nearest it, the only one the
+			-- page makes; "about" said, as it's a spell's range, not a ruler.)
 			local function DistanceName(distance)
 				if DISTANCE_NAMES[distance] then return DISTANCE_NAMES[distance] end
 				local side, yards = ns.MarkDistanceYards(distance)
 				if not side then return nil end
+				-- ("~30 yd": "Within ~30 yards" was cut short in its dropdown, run q76d2.)
+				if yards == ns.NEAR_YARDS then return side == "In" and L["Within ~30 yd"] or L["Past ~30 yd"] end
 				return (side == "In" and L["Within %d yards"] or L["Past %d yards"]):format(yards)
 			end
 			local function DistanceShort(distance)
 				if DISTANCE_SHORT[distance] then return DISTANCE_SHORT[distance] end
 				local side, yards = ns.MarkDistanceYards(distance)
 				if not side then return nil end
+				if yards == ns.NEAR_YARDS then return side == "In" and L["in ~30 yd"] or L["past ~30 yd"] end
 				return (side == "In" and L["in %d yd"] or L["past %d yd"]):format(yards)
 			end
 			-- A row's names and tip from its id: its kind's name (label), what's
@@ -13962,26 +13921,23 @@ do
 				end
 				return list
 			end
-			-- (Within... and Past... take the yards box after the dropdown;
-			-- the fixed 11 / 28 / 40 ones are those now, an old row's shown as
-			-- Within or Past with its yards: DistanceSide.)
-			local DEFAULT_YARDS = 20
-			local function DistanceChoices()
-				return { { value = "Any", text = L["Any distance"] }, { value = "In", text = L["Within..."] },
-					{ value = "Past", text = L["Past..."] }, { value = "OutOfRange", text = DISTANCE_NAMES.OutOfRange },
+			-- (Within / Past ~30 yards, by your spell nearest 30: no yards box,
+			-- it promised any number and only a few spells can tell, the user
+			-- 2026-11-25. A row's own older distance, 11 / 28 / 40 or a box's
+			-- yards from that day, stays listed for it, as it works.)
+			local NEAR_IN, NEAR_PAST = "In" .. ns.NEAR_YARDS .. "y", "Past" .. ns.NEAR_YARDS .. "y"
+			local function DistanceChoices(pick)
+				local list = { { value = "Any", text = L["Any distance"] },
+					{ value = NEAR_IN, text = DistanceName(NEAR_IN) }, { value = NEAR_PAST, text = DistanceName(NEAR_PAST) },
+					{ value = "OutOfRange", text = DISTANCE_NAMES.OutOfRange },
 					{ value = "NearAggro", text = DISTANCE_NAMES.NearAggro } }
-			end
-			-- (A pick's Distance as the dropdown has it: In / Past for any yards.)
-			local function DistanceSide(distance)
-				return ns.MarkDistanceYards(distance) or distance
-			end
-			-- (A pick's Distance from the dropdown: the yards it had kept, an
-			-- old fixed one kept as it is while its side stays.)
-			local function DistanceFor(distance, value)
-				if value ~= "In" and value ~= "Past" then return value end
-				local side, yards = ns.MarkDistanceYards(distance)
-				if side == value then return distance end
-				return value .. (yards or DEFAULT_YARDS) .. "y"
+				local own = pick and pick.distance
+				local listed = false
+				for _, choice in ipairs(list) do listed = listed or choice.value == own end
+				if own and not listed and DistanceName(own) then
+					table.insert(list, 4, { value = own, text = DistanceName(own) })
+				end
+				return list
 			end
 			-- (A Who of those ticked the row kind picked has: none or all of them,
 			-- Any. Whether one's ticked, and ticking or unticking one; the last
@@ -14158,69 +14114,41 @@ do
 						Text = function() return pick.who == "Any" and L["Any"] or WhoName(pick.who) end,
 					})
 				Tooltip(whoPick, L["Tick Enemy, Neutral or Friendly to limit this row to those. Tick all three for any."])
-				local distancePick = Choice(parent, widths[4], DistanceChoices,
-					function() return DistanceSide(pick.distance) end,
+				local distancePick = Choice(parent, widths[4], function() return DistanceChoices(pick) end,
+					function() return pick.distance end,
 					function(value)
-						pick.distance = DistanceFor(pick.distance, value)
+						pick.distance = value
 						changed()
 					end)
 				Tooltip(distancePick, L["How far from you the units must be."])
-				-- Within / Past's yards (5-45), and what measures them on this
-				-- character (Frames' ns.YardsRingInfo: the game reads no yards,
-				-- only a few fixed distances): "= 28 yd" after the box.
-				local yardsBox = ns.SkinEditBox(CreateFrame("EditBox", nil, parent, "InputBoxTemplate"))
-				yardsBox:SetSize(30, 20)
-				yardsBox:SetAutoFocus(false)
-				yardsBox:SetNumeric(true)
-				yardsBox:SetMaxLetters(2)
-				yardsBox:SetJustifyH("CENTER")
-				yardsBox.searchSkip = true
+				-- What measures a yards distance on this character, after the
+				-- dropdown: "30 yd" (Frames' ns.YardsRingInfo: your spell nearest
+				-- it), the spell in the dropdown's tip. Nothing for the rest.
 				local measured = parent:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 				measured:SetJustifyH("LEFT")
-				-- (For /cine debug platerange: each box, its pick and hint.)
-				ns.yardsBoxes = ns.yardsBoxes or setmetatable({}, { __mode = "k" })
-				ns.yardsBoxes[yardsBox] = { pick = pick, measured = measured }
+				-- (For /cine debug platerange: each line's pick and hint.)
+				ns.yardsHints = ns.yardsHints or setmetatable({}, { __mode = "k" })
+				ns.yardsHints[measured] = pick
 				local function Yards()
 					local _, yards = ns.MarkDistanceYards(pick.distance)
 					return yards
 				end
-				local function SaveYards(self)
-					local side, yards = ns.MarkDistanceYards(pick.distance)
-					local typed = tonumber(self:GetText())
-					if side and typed then
-						typed = math.max(ns.MARK_YARDS_MIN, math.min(ns.MARK_YARDS_MAX, math.floor(typed)))
-						if typed ~= yards then
-							pick.distance = side .. typed .. "y"
-							changed()
-						end
-					end
-					self:SetText(tostring(Yards() or ""))
-				end
-				yardsBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-				yardsBox:SetScript("OnEditFocusLost", SaveYards)
-				yardsBox:SetScript("OnEscapePressed", function(self)
-					self:SetText(tostring(Yards() or ""))
-					self:ClearFocus()
-				end)
 				local function MeasuredText()
 					local yards = Yards()
 					if not yards or not ns.YardsRingInfo then return "", "" end
 					local calm, calmName, fight, fightName = ns.YardsRingInfo(yards)
 					if not calm then return L["can't measure"], L["Nothing on this character measures distance."] end
-					-- (Just the yards: "= 20 yd (30)" ran 26 px past the drawer,
-					-- run q7875; the fight's yards are in the tip.)
 					local short = (L["%d yd"]):format(calm)
-					local tip = (L["Measured at %d yards: %s."]):format(calm, calmName)
+					local tip = (L["Measured with %s (%d yards)."]):format(calmName, calm)
 					if fight and fight ~= calm then
 						short = short .. "*"
-						tip = tip .. "\n" .. (L["In fights: %d yards: %s."]):format(fight, fightName)
+						tip = tip .. "\n" .. (L["In fights: %s (%d yards)."]):format(fightName, fight)
 					elseif not fight then
 						tip = tip .. "\n" .. L["In fights nothing measures it."]
 					end
 					return short, tip
 				end
-				Tooltip(yardsBox, L["Yards from you (5 to 45); the game measures only a few distances, so the nearest is used."])
-				yardsBox:HookScript("OnEnter", function(self)
+				distancePick:HookScript("OnEnter", function(self)
 					local _, tip = MeasuredText()
 					if tip ~= "" and GameTooltip:IsOwned(self) then
 						GameTooltip:AddLine(tip, 1, 1, 1, true)
@@ -14232,14 +14160,10 @@ do
 					typePick:SetShown(kind[3] ~= nil)
 					whoPick:SetShown(#(ns.MARK_ROW_KINDS[PickedKind(pick)] or {}) > 0)
 					local hasYards = Yards() ~= nil
-					yardsBox:SetShown(hasYards)
 					measured:SetShown(hasYards)
-					if hasYards then
-						if not yardsBox:HasFocus() then yardsBox:SetText(tostring(Yards())) end
-						measured:SetText((MeasuredText()))
-					end
+					if hasYards then measured:SetText((MeasuredText())) end
 					local last = kindPick
-					for _, each in ipairs({ typePick, whoPick, distancePick, yardsBox, measured, after }) do
+					for _, each in ipairs({ typePick, whoPick, distancePick, measured, after }) do
 						if each:IsShown() then
 							each:ClearAllPoints()
 							each:SetPoint("LEFT", last, "RIGHT", 6, 0)
@@ -14929,9 +14853,9 @@ do
 				-- (in its place, its settings with it: RetypeRow).
 				if lineAt.Row then
 					local pick = PickOf(kind)
-					-- (Type and Distance 10 narrower since the yards box and its
-					-- hint joined the line, run q7875.)
-					local kindPick, PlacePicks = PickLine(drawer, pick, { 100, 100, 90, 110 }, function()
+					-- (The yards box gone, 2026-11-25: Type and Distance back to
+					-- their widths; Distance's 120 holds "Within ~30 yd".)
+					local kindPick, PlacePicks = PickLine(drawer, pick, { 100, 110, 90, 120 }, function()
 						RetypeRow(kind, pick)
 						-- (Nothing free to make it: back to its own.)
 						local own = PickOf(kind)

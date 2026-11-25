@@ -93,21 +93,32 @@ local function RunClient(client, toc)
 		now = now + 1 -- (a new pass: no kept answers)
 		return ns.UnitWithinYards(unit, x, past)
 	end
-	-- Rings for enemies out of a fight: 11, 20 (Shock), 28, 30 (Bolt); Charge out.
+	-- Your spells first, the one nearest X (20 Shock, 30 Bolt; Charge out),
+	-- the same in fights and out; the interact distances (11, 28) only for a
+	-- unit no spell can say for (2026-11-25, "the closest spell we can").
 	Check("enemy at 15, within 20 (Shock) = true", Within("nameplate1", 20) == true)
-	Check("enemy at 15, within 11 = false", Within("nameplate1", 11) == false)
+	Check("enemy at 15, within 11: Shock 20, the nearest spell = true", Within("nameplate1", 11) == true)
 	Check("enemy at 15, past 20 = false", Within("nameplate1", 20, true) == false)
 	Check("enemy at 35, within 30 (Bolt) = false", Within("nameplate2", 30) == false)
-	Check("enemy at 35, past 29 (nearest 28/30 -> 28) = true", Within("nameplate2", 29, true) == true)
-	Check("enemy at 15, within 13 (tie 11 vs ... nearest 11) = false", Within("nameplate1", 13) == false)
+	Check("enemy at 35, past 29 (Bolt 30) = true", Within("nameplate2", 29, true) == true)
+	Check("enemy at 15, within 13: Shock 20 = true", Within("nameplate1", 13) == true)
+	-- ~30, the page's one distance: Bolt, out of fights and in.
+	units.nameplate5 = { yards = 29, enemy = true }
+	Check("~30: enemy at 29 within (Bolt), not the 28 interact", Within("nameplate5", 30) == true)
+	fight = true
+	Check("~30 in a fight: the same answer", Within("nameplate5", 30) == true)
+	fight = false
 	-- (24: 20 and 28 are 4 off each: the nearer ring, 20.)
 	Check("tie 24 -> 20: enemy at 15 within", Within("nameplate1", 24) == true)
 	units.nameplate4 = { yards = 22, enemy = true }
 	Check("tie 24 -> 20 not 28: enemy at 22 not within", Within("nameplate4", 24) == false)
 	-- A friend: attacks can't say; Heal 40 and the interact rings do.
-	Check("friend at 12, within 30 -> 28 = true", Within("nameplate3", 30) == true)
-	Check("friend at 12, within 11 = false", Within("nameplate3", 11) == false)
+	Check("friend at 12, within 30: Heal 40, its only spell = true", Within("nameplate3", 30) == true)
 	Check("friend at 12, within 40 (Heal) = true", Within("nameplate3", 40) == true)
+	-- (No spell that can say: the interact distances, out of fights.)
+	units.nameplate6 = { yards = 12, enemy = nil }
+	Check("a unit no spell answers for, within 11 by the interact distance = false",
+		Within("nameplate6", 11) == false)
 	-- One call per unit and ring per pass.
 	now = now + 1
 	calls.interact, calls.spell = 0, 0
@@ -135,8 +146,11 @@ local function RunClient(client, toc)
 	Check("YardsRingInfo 24: 20 Shock", calmY == 20 and calmName == "Shock", tostring(calmY) .. " " .. tostring(calmName))
 	local fightY
 	calmY, _, fightY = ns.YardsRingInfo(12)
-	Check("YardsRingInfo 12: 11 interact; fight 20 (spells only)", calmY == 11 and fightY == 20,
+	Check("YardsRingInfo 12: Shock 20, in fights too", calmY == 20 and fightY == 20,
 		tostring(calmY) .. " " .. tostring(fightY))
+	local nearY, nearName, nearFightY = ns.YardsRingInfo(ns.NEAR_YARDS)
+	Check("YardsRingInfo ~30: Bolt 30, in fights too", nearY == 30 and nearName == "Bolt" and nearFightY == 30,
+		tostring(nearY) .. " " .. tostring(nearName) .. " " .. tostring(nearFightY))
 	-- The old fixed bands, through UnitInBand.
 	Check("UnitInBand In20y as UnitWithinYards", (now + 1) and ns.UnitInBand("nameplate1", "In20y") == true)
 	Check("UnitInBand old In11 still interact 2", ns.UnitInBand("nameplate1", "In11") == false)
@@ -146,8 +160,8 @@ local function RunClient(client, toc)
 	Check("NearbyEnemies is a plate unit row", (function()
 		for _, row in ipairs(ns.PLATE_UNIT_ROWS) do if row == "NearbyEnemies" then return true end end
 	end)() == true)
-	Check("fresh install: Always on, 20 yards", ns.DEFAULTS.plateAlwaysNearbyEnemies == true
-		and ns.DEFAULTS.plateNearbyYards == 20)
+	Check("fresh install: Always on, ~30 yards, no yards setting", ns.DEFAULTS.plateAlwaysNearbyEnemies == true
+		and ns.NEAR_YARDS == 30 and ns.DEFAULTS.plateNearbyYards == nil)
 	Check("fresh install: the migration left it alone", ns.db.plateAlwaysNearbyEnemies == nil
 		or ns.db.plateAlwaysNearbyEnemies == true, tostring(ns.db.plateAlwaysNearbyEnemies))
 	local old = { plateAlwaysEnemies = true, profiles = { A = { x = 1 }, B = { plateAlwaysNearbyEnemies = true } },
@@ -180,7 +194,8 @@ local function RunClient(client, toc)
 	C_NamePlate.GetNamePlates = function() return { plate } end
 	local reachable = ns.Reachable
 	ns.Reachable = function(f) return f ~= plate and reachable(f) end
-	ns.db.handlePlates, ns.db.plateAlwaysNearbyEnemies, ns.db.plateNearbyYards = true, true, 20
+	ns.db.handlePlates, ns.db.plateAlwaysNearbyEnemies = true, true
+	ns.plates.nearYards = 20 -- (the test's own distance: Shock 20 tells 15 from 35)
 	units.nameplate1 = { yards = 15, enemy = true }
 	for _ = 1, 40 do now = now + 0.1 pcall(ns.UpdatePlates, true, 0.1) end -- (CineMode: the row's own level up)
 	local Step = ns.plates.nearFrame:GetScript("OnUpdate")
@@ -200,6 +215,7 @@ local function RunClient(client, toc)
 	ns.plates.nearFrame:GetScript("OnEvent")(ns.plates.nearFrame, "NAME_PLATE_UNIT_REMOVED", "nameplate1")
 	Check("a plate's unit leaving forgets its level", ns.plates.nearLevels.nameplate1 == nil)
 	ns.Reachable = reachable
+	ns.plates.nearYards = nil
 end
 
 RunClient("forever", "CinematicDev.toc")

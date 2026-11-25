@@ -4840,14 +4840,15 @@ do
 		return within
 	end
 
-	-- Within / past any yards (the Nameplate Style Smart rows' In<N>y and
-	-- Past<N>y, Tools/plate-distance-plan.md). Nothing reads yards to a
-	-- plate; only yes/no "rings" do, so X goes by the ring nearest it (a tie:
-	-- the nearer ring, fitting fewer plates). Rings, as tested on plates
+	-- Within / past some yards (the Nameplate Style Smart rows' In<N>y and
+	-- Past<N>y, ~30 since 2026-11-25; Enemies within ~30 yd). Nothing reads
+	-- yards to a plate; only yes/no "rings" do, so X goes by your spell
+	-- nearest it (a tie: the shorter, fitting fewer plates), the interact
+	-- distances only with no spell that can say. Rings, as tested on plates
 	-- (rule forever.range.plates-in-combat, 2026-11-25):
-	--   * the interact distances, ~11 (2) and ~28 (4): out of fights on
-	--     every client, in fights too on Forever (retail blocks them there:
-	--     rule retail.checkinteractdistance.blocked-in-combat);
+	--   * the interact distances, ~11 (2) and ~28 (4): out of fights only,
+	--     every client (blocked in fights: rules retail.checkinteractdistance.
+	--     blocked-in-combat, forever.range.plates-in-combat);
 	--   * your spells' ranges, from the spellbook and the bars: attacks for
 	--     enemies, helpful ones for friends; none with a least range (they
 	--     say "not in range" up close too). Items never answer on plates.
@@ -4933,13 +4934,22 @@ do
 				list[#list + 1] = { yards = SHORT_YARDS, index = 2 }
 				list[#list + 1] = { yards = LONG_YARDS, index = 4 }
 			end
-			for _, ring in ipairs(rings[key]) do list[#list + 1] = ring end
-			table.sort(list, function(a, b)
+			-- (Your spells first, the one nearest X leading: the same spell in
+			-- fights and out, on every client, so a row means the same all
+			-- the time (the user, 2026-11-25: "we get the closest spell we
+			-- can"). The interact distances only after them: a unit no spell
+			-- can say for, or a character with none.)
+			local function Nearest(a, b)
 				local da, db = math.abs(a.yards - yards), math.abs(b.yards - yards)
 				if da ~= db then return da < db end
 				return a.yards < b.yards
-			end)
-			return list
+			end
+			local spells = {}
+			for _, ring in ipairs(rings[key]) do spells[#spells + 1] = ring end
+			table.sort(spells, Nearest)
+			table.sort(list, Nearest)
+			for i, ring in ipairs(list) do spells[#spells + 1] = ring list[i] = nil end
+			return spells
 		end
 		-- ([key][fight][yards] = Candidates: no strings made per plate.)
 		local ordered, orderedAt = {}, -math.huge
