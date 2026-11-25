@@ -309,6 +309,7 @@ Dev\ResetCvarsTest.lua
 Dev\KeybindSwitchTest.lua
 Dev\CdmRoundTest.lua
 Dev\LoadPartsTest.lua
+Dev\GatingTest.lua
 Dev\PageCostTest.lua
 Dev\ProfilePartsTest.lua
 Dev\LevelEmoteTest.lua
