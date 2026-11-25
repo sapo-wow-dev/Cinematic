@@ -206,6 +206,7 @@ Plates\PlateLayout.lua
 Plates\PlateLayoutPage.lua
 Style\CombatTextTexts.lua
 Style\CombatTextStyle.lua
+Style\CombatTextSpells.lua
 Style\CombatTextPage.lua
 Style\SelfTextStyle.lua
 Style\SelfTextPage.lua

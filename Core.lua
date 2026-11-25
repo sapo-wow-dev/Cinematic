@@ -1123,6 +1123,9 @@ function ns.MarkRowDefault(key)
 	-- (Name Style's rows' settings too: NameRowLook.lua.)
 	local nameDefault = ns.NameRowDefault and ns.NameRowDefault(key)
 	if nameDefault ~= nil then return nameDefault end
+	-- (Combat Text Style's spells' settings too: CombatTextTexts.lua.)
+	local spellDefault = ns.CombatTextSpellDefault and ns.CombatTextSpellDefault(key)
+	if spellDefault ~= nil then return spellDefault end
 	local split = markRowSplit[key]
 	if split == nil then
 		local id, rest = key:match("^(%l[%a%d]-)(Mark%u%a*)$")

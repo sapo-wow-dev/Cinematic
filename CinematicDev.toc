@@ -207,6 +207,7 @@ Plates\PlateLayout.lua
 Plates\PlateLayoutPage.lua
 Style\CombatTextTexts.lua
 Style\CombatTextStyle.lua
+Style\CombatTextSpells.lua
 Style\CombatTextPage.lua
 Style\SelfTextStyle.lua
 Style\SelfTextPage.lua
@@ -281,6 +282,7 @@ Dev\LookDockTest.lua
 Dev\BlockedLineTest.lua
 Dev\SecretErrorTest.lua
 Dev\CombatTextKeepTest.lua
+Dev\CombatTextSpellsTest.lua
 Dev\GameSettingsEditTest.lua
 Dev\SelfTextProbe.lua
 Dev\SelfTextCatalog.lua

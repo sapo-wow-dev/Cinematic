@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-25", page = "Combat Text Style", title = "Combat text by spell",
+		text = "A new Spells tab on Combat Text Style gives any of your spells its own color, size and look, its " ..
+			"crits and DoT ticks too." },
 	{ date = "2026-11-25", page = "Advanced Frames", client = "forever", title = "Guidelime support",
 		text = "Guidelime's guide window, its ongoing steps and its waypoint arrow get a row each, so you can hide " ..
 			"the guide and keep the arrow pointing the way." },

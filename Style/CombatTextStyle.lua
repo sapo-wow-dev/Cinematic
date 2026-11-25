@@ -193,8 +193,14 @@ local EDGE, EDGE_ALPHA, DROP, SHADOW_ALPHA = 1 / 40, 0.35, 1 / 28, 0.8
 -- at 120 and the words are scaled the rest, as Combat Vision's. Audit
 -- 2026-11-22: big crits stopped growing at 120.)
 local FONT_MAX = 120
+-- (A number's setting: its spell's own (the Spells tab), else its text's.)
+local function NumberGet(number, setting)
+	local own = number.spell and CT.SpellOwn(number.spell, setting)
+	if own ~= nil and own ~= false then return own end
+	return CT.Get(number.id or "all", setting, number.via)
+end
 local function SetSize(number, size)
-	local font = CT.Get(number.id or "all", "Font", number.via)
+	local font = NumberGet(number, "Font")
 	local file = font and font ~= "game" and ns.StyleFontFile(font) or GAME_FONT
 	local text = number.text
 	local scale = text.SetTextScale and size > FONT_MAX and size / FONT_MAX or 1
@@ -206,7 +212,7 @@ local function SetSize(number, size)
 	if text.SetTextScale then text:SetTextScale(scale) end
 	number.textScale = scale
 	text:SetShadowOffset(0, 0)
-	local look = CT.Get(number.id or "all", "Edge", number.via) or "game"
+	local look = NumberGet(number, "Edge") or "game"
 	-- (The game's: the shadow alone, no edge, the player saw side by side;
 	-- "shadow", an older name for it.)
 	local edge = look == "both" or look == "edge"
@@ -443,17 +449,38 @@ end
 -- in instead of the world's (a preview's: the options window is over the
 -- world's frames), at the world's size. tag: a partly landed hit's flag
 -- ("GLANCING"). color: in place of the text's. Gives the number, or nil.
+-- from: the spell it came from ({ name, icon, school, tick, pet }: TakeCast,
+-- TakeTick), nil if not known: one on the Spells tab's list draws in its own
+-- look over the text's (its own settings first, then the text's), or not at
+-- all with its switch off (CombatTextTexts.lua's Spells).
 local fanSide = 1
-local function Spawn(plate, unit, amount, id, via, layer, tag, color, cast)
+local function Spawn(plate, unit, amount, id, via, layer, tag, color, cast, from)
 	local node = NODE[id]
 	if not node or not CT.Shows(id, via, layer) then return end
 	local crit = node.crit and true or false
-	color = color or CT.Color(id, via)
+	local spell = type(from) == "table" and type(from.name) == "string" and not node.word and from.name or nil
+	-- (A real hit's spell: learned for the Add list, whether listed or not.)
+	if spell and not layer and CT.NoteSeen then CT.NoteSeen(from, CT.Kind(id)) end
+	if spell and not CT.SpellActive(spell) then spell = nil end
+	if spell and not CT.SpellShows(spell) then
+		if ns.combatTextRecord then ns.combatTextRecord(("spell %s: switched off, not drawn"):format(spell)) end
+		return
+	end
+	color = color or (spell and (crit and CT.SpellOwn(spell, "CR") ~= nil and CT.SpellCritColor(spell)
+		or CT.SpellColor(spell))) or CT.Color(id, via)
 	if #live >= MAX_LIVE then Retire(1) end
 	local now = GetTime()
 	local number = NewNumber(layer)
-	number.id, number.via = id, via
-	local function Get(setting) return CT.Get(id, setting, via) end
+	number.id, number.via, number.spell = id, via, spell
+	local function Get(setting)
+		if spell then
+			local own = CT.SpellOwn(spell, setting)
+			if own ~= nil then return own end
+		end
+		return CT.Get(id, setting, via)
+	end
+	-- (A spell's ticks set to Smaller.)
+	local tickScale = spell and from.tick and CT.SpellOwn(spell, "Ticks") == "small" and CT.TICK_SMALL or 1
 	-- (cast: how long its spell's cast took, in seconds, if known. Each second
 	-- of it makes the number CastSize bigger and CastTime longer, up to
 	-- CAST_MAX. Not known, or instant: as it is, 100%.)
@@ -462,7 +489,7 @@ local function Spawn(plate, unit, amount, id, via, layer, tag, color, cast)
 		if not (type(cast) == "number" and cast > 0 and per > 0) then return 1 end
 		return math.min(CT.CAST_MAX or 1.5, 1 + per * cast)
 	end
-	local size = BASE_SIZE * CVarNumber("WorldTextScale_v2", 1) * (Get("Size") or 1) * Grown("CastSize")
+	local size = BASE_SIZE * CVarNumber("WorldTextScale_v2", 1) * (Get("Size") or 1) * Grown("CastSize") * tickScale
 	-- (its middle where a hit's bottom starts, half a hit above; one set to
 	-- start over the bar (a crit, as the game's) lower)
 	local onBar = Get("Start") == "bar"
@@ -543,6 +570,10 @@ local function Spawn(plate, unit, amount, id, via, layer, tag, color, cast)
 	live[#live + 1] = number
 	ns.WakeFeatureLoop(holder)
 	RecordSpawn(number, plate, unit, amount, color, crit, size)
+	if ns.combatTextRecord and type(from) == "table" and from.name then
+		ns.combatTextRecord(("spell %s%s: %s"):format(tostring(from.name), from.tick and " (tick)" or "",
+			spell and "its own look (Spells tab)" or "not on the Spells tab, the text's look"))
+	end
 	return number
 end
 
@@ -837,7 +868,7 @@ end
 -- swing for 0 and its own hit, with one line between them): the second goes
 -- with the first.
 local swingAt, swingPlate
-local TakeCast, PeekCast -- (below: the cast a spell's hit came from; whether one waits)
+local TakeCast, PeekCast, TakeTick -- (below: the cast a spell's hit came from; whether one waits; a tick's spell)
 
 -- In a group or raid (2026-11-19): others' hits in your own schools (five
 -- frost mages on one boss) land in the instants of yours, and the first
@@ -885,6 +916,21 @@ local function StillThere(hit)
 end
 
 local PetCastJustDone -- (below: your pet's cast finished just before, taken)
+local PetSpellTaken   -- (below: the spell of the pet cast just taken, for its look: { name, icon, school })
+-- The cast a hit of yours came from and its spell (the Spells tab's look):
+-- TakeCast's, or a tick's TakeTick's. A swing still takes a cast, as
+-- before (its size), but never a spell's look.
+local function CastOf(school, guid, at, tick, via)
+	if not school then return nil end
+	if tick then return TakeTick(school, guid, at) end
+	local swing = via == "swing" or via == "swingGlance"
+	-- (heal: true a heal, false a damage hit; a swing's nil: any cast its school fits, as before.)
+	local heal = nil
+	if not swing then heal = via == "heal" end
+	local cast, from = TakeCast(school, at, heal)
+	if swing then from = nil end
+	return cast, from
+end
 local function Mine(hit, lineKind)
 	-- (1b, 2026-11-21: under a filter listing your pet (MSBT's) its hits come
 	-- with lines in your colors, so an imp's Firebolt took a line and drew as
@@ -898,7 +944,8 @@ local function Mine(hit, lineKind)
 		if ns.CombatTextBy and ns.CombatTextBy("pet") ~= "ours" then return end
 		if not (hit[1] and StillThere(hit)) then return end
 		local crit = NODE[hit.id] and NODE[hit.id].crit
-		return Spawn(hit[1], hit[2], hit[3], crit and "petCrit" or "pet", hit.via, nil, hit.tag)
+		return Spawn(hit[1], hit[2], hit[3], crit and "petCrit" or "pet", hit.via, nil, hit.tag, nil, nil,
+			PetSpellTaken(hit.school))
 	end
 	if hit.melee then swingAt, swingPlate = hit.at or GetTime(), hit[1] end
 	ns.combatTextWhose.mine = ns.combatTextWhose.mine + 1
@@ -911,8 +958,8 @@ local function Mine(hit, lineKind)
 		return
 	end
 	if hit.school then group.Mark(hit, hit.at or GetTime()) end
-	local cast = hit.school and TakeCast(hit.school, hit.at or GetTime())
-	Spawn(hit[1], hit[2], hit[3], hit.id, hit.via, nil, hit.tag, nil, cast)
+	local cast, from = CastOf(hit.school, hit.guid, hit.at or GetTime(), lineKind == "tick", hit.via)
+	Spawn(hit[1], hit[2], hit[3], hit.id, hit.via, nil, hit.tag, nil, cast, from)
 end
 
 -- A hit on a plate: shown now if a line came for it, else held for one.
@@ -1009,8 +1056,8 @@ local function Claim(plate, unit, amount, id, via, melee, tag, school)
 	if id ~= "swing" and id ~= "swingCrit" and id ~= "swingGlance" then color = CT.SPELL end
 	if not LogRunning() then
 		local function Show()
-			local cast = school and TakeCast(school, GetTime())
-			return Spawn(plate, unit, amount, id, via, nil, tag, nil, cast)
+			local cast, from = CastOf(school, hit.guid, GetTime(), false, via)
+			return Spawn(plate, unit, amount, id, via, nil, tag, nil, cast, from)
 		end
 		local now = claimAt or GetTime()
 		if meter.Fighting(now) then return Show() end
@@ -1142,27 +1189,48 @@ end
 -- else's.
 local PET_WAIT = 2.5 -- (seconds a pet's finished cast waits for its hit)
 local petCasts = {}
+-- (Each pet cast's spell, by its time: its hit drawn in the Spells tab's
+-- look for it, 2026-11-25. { name, icon }.)
+local petSpellAt, petTaken = {}, nil
+local function NotePetCast(spell)
+	local now = GetTime()
+	while petCasts[1] and now - petCasts[1] > PET_WAIT do petSpellAt[table.remove(petCasts, 1)] = nil end
+	if #petCasts < 6 then
+		petCasts[#petCasts + 1] = now
+		local name = spell and Plain(spell) and ns.CombatTextSpellNameOf and ns.CombatTextSpellNameOf(spell)
+		petSpellAt[now] = name and { name = name, icon = ns.CombatTextSpellIconOf(spell) } or nil
+	end
+end
 local petWatch = CreateFrame("Frame")
 pcall(petWatch.RegisterUnitEvent, petWatch, "UNIT_SPELLCAST_SUCCEEDED", "pet")
-petWatch:SetScript("OnEvent", function()
-	local now = GetTime()
-	while petCasts[1] and now - petCasts[1] > PET_WAIT do table.remove(petCasts, 1) end
-	if #petCasts < 6 then petCasts[#petCasts + 1] = now end
-end)
+petWatch:SetScript("OnEvent", function(_, _, _, _, spell) NotePetCast(spell) end)
 -- (Tools/offline/linekinds.lua: a pet cast as the event would note it.)
-ns.CombatTextLines.NotePetCast = function() petCasts[#petCasts + 1] = GetTime() end
+ns.CombatTextLines.NotePetCast = NotePetCast
+-- (A pet cast's time taken by its hit: its spell kept for the look.)
+local function TakePetCast(i)
+	local at = table.remove(petCasts, i)
+	petTaken = at and petSpellAt[at] or nil
+	if at then petSpellAt[at] = nil end
+end
+PetSpellTaken = function(school)
+	local taken = petTaken
+	petTaken = nil
+	if not taken then return nil end
+	return { name = taken.name, icon = taken.icon, school = tonumber(school), pet = true }
+end
 -- (1b: a cast of your pet's finished at most PET_FLIGHT before now: taken.)
 local PET_FLIGHT = 0.6
 PetCastJustDone = function(now)
 	for i, at in ipairs(petCasts) do
 		if now - at >= 0 and now - at <= PET_FLIGHT then
-			table.remove(petCasts, i)
+			TakePetCast(i)
 			return true
 		end
 	end
 	return false
 end
 local function PetHit(hit, now)
+	petTaken = nil -- (a swing takes no cast: no spell's look left from before)
 	local node = NODE[hit.id]
 	if not node or node.word then return false end
 	-- (A heal is never your pet's: a groupmate's on a friend you target.)
@@ -1180,7 +1248,7 @@ local function PetHit(hit, now)
 	-- casting at, and it casts at yours. A recording, 2026-11-19: every
 	-- Firebolt left out with the pet's target check alone.)
 	local petTarget, yourTarget = Is(hit[2], "pettarget"), hit.onTarget or Is(hit[2], "target")
-	while petCasts[1] and now - petCasts[1] > PET_WAIT do table.remove(petCasts, 1) end
+	while petCasts[1] and now - petCasts[1] > PET_WAIT do petSpellAt[table.remove(petCasts, 1)] = nil end
 	local cast = petCasts[1] and true or false
 	local record = ns.combatTextRecord
 	if record then
@@ -1201,7 +1269,7 @@ local function PetHit(hit, now)
 	-- your own and your pet's numbers, ever.)
 	if hit.melee then return not grouped end
 	if cast then
-		table.remove(petCasts, 1)
+		TakePetCast(1)
 		return true
 	end
 	return false
@@ -1271,7 +1339,8 @@ Unclaimed = function(hit, now)
 	if hit[1] and hit[2] and PetHit(hit, now) and StillThere(hit) then
 		Trace("PET'S: no line, on your pet's target")
 		local crit = NODE[hit.id] and NODE[hit.id].crit
-		return Spawn(hit[1], hit[2], hit[3], crit and "petCrit" or "pet", hit.via, nil, hit.tag)
+		return Spawn(hit[1], hit[2], hit[3], crit and "petCrit" or "pet", hit.via, nil, hit.tag, nil, nil,
+			PetSpellTaken(hit.school))
 	end
 	ns.combatTextWhose.others = ns.combatTextWhose.others + 1
 	Trace("LEFT OUT")
@@ -1539,18 +1608,125 @@ local castAt
 -- is its length, for every tick while it lasts. Which school each spell's
 -- hits come in is learned as they're taken, so a DoT's tick doesn't take a
 -- cast of another school. Nothing waiting: not known, its number as it is.
+-- (The Spells tab, 2026-11-25: each cast keeps its spell's name and icon
+-- too, so its hit can be drawn in that spell's look. A spell whose casts
+-- have never been taken by a hit (a DoT's, a curse's: no hit of its own)
+-- is learned as one (noHit) and waits for no hit after that: before, a
+-- Corruption cast took the Shadow Bolt hit landing after it. A learned
+-- spell's own school goes first, then one not learned yet.)
 local CAST_WAIT = 2.5 -- (seconds a finished cast waits for its hit: a long flight)
 local castStarts = {} -- [spell] = when its cast began
-local casts = {}      -- { at, secs, spell } each, oldest first
-local channel         -- { secs, spell, ends }
+local casts = {}      -- { at, secs, spell, name, icon } each, oldest first
+local channel         -- { secs, spell, ends, name, icon }
 local schoolsOf = {}  -- [spell] = { [school] = hits taken }
-local TakeCastLast    -- { at, school, secs, spell }: the cast the last spell hit took
+local noHit = {}      -- [spell] = casts no hit took
+local TakeCastLast    -- { at, school, secs, spell, name, icon }: the cast the last spell hit took
+-- (A spell's name and icon, plain: nil where the game won't say.)
+local function SpellNameOf(spell)
+	local name
+	if C_Spell and C_Spell.GetSpellName then
+		local ok, value = pcall(C_Spell.GetSpellName, spell)
+		if ok and Plain(value) then name = value end
+	end
+	if not name and GetSpellInfo then
+		local ok, value = pcall(GetSpellInfo, spell)
+		if ok and Plain(value) then name = value end
+	end
+	return type(name) == "string" and name ~= "" and name or nil
+end
+local function SpellIconOf(spell)
+	local icon
+	if C_Spell and C_Spell.GetSpellTexture then
+		local ok, value = pcall(C_Spell.GetSpellTexture, spell)
+		if ok and Plain(value) then icon = value end
+	end
+	if not icon and GetSpellTexture then
+		local ok, value = pcall(GetSpellTexture, spell)
+		if ok and Plain(value) then icon = value end
+	end
+	return (type(icon) == "number" or type(icon) == "string") and icon or nil
+end
+ns.CombatTextSpellNameOf, ns.CombatTextSpellIconOf = SpellNameOf, SpellIconOf
+-- Whether a spell can hurt (true), only help (false: a buff or a heal), or
+-- not known (nil). A buff's cast waited for a hit and took one: Water Shield
+-- drawn as a damage spell (run q1b8f, 2026-11-25, a shaman).
+local function HarmfulOf(spell, name)
+	local function Ask(fn, arg)
+		if not (fn and arg) then return nil end
+		local ok, value = pcall(fn, arg)
+		if ok and Plain(value) and value ~= nil then return value and true or false end
+		return nil
+	end
+	local harm = C_Spell and Ask(C_Spell.IsSpellHarmful, spell)
+	local help = C_Spell and Ask(C_Spell.IsSpellHelpful, spell)
+	if harm == nil then harm = Ask(IsHarmfulSpell, name) end
+	if help == nil then help = Ask(IsHelpfulSpell, name) end
+	if harm then return true end
+	if help then return false end
+	return nil
+end
+-- A spell's school from its own description ("...Shadow damage over 12
+-- sec."), the game's own school words: one school named, that one; none or
+-- several, not known (0). Before, a DoT with no hit of its own fit any
+-- school, so an Immolate tick taken first made Corruption Fire for the
+-- session and its real ticks fell to Shadow's look (run q0530, 2026-11-25).
+local SCHOOL_WORDS = { { 2, "STRING_SCHOOL_HOLY" }, { 4, "STRING_SCHOOL_FIRE" }, { 8, "STRING_SCHOOL_NATURE" },
+	{ 16, "STRING_SCHOOL_FROST" }, { 32, "STRING_SCHOOL_SHADOW" }, { 64, "STRING_SCHOOL_ARCANE" } }
+local descSchool = {} -- [spell] = school (0: not known)
+local function SchoolOfText(spell)
+	if descSchool[spell] ~= nil then return descSchool[spell] end
+	local text
+	for _, fn in ipairs({ C_Spell and C_Spell.GetSpellDescription, _G.GetSpellDescription }) do
+		if not text and fn then
+			local ok, value = pcall(fn, spell)
+			if ok and Plain(value) and type(value) == "string" and value ~= "" then text = value end
+		end
+	end
+	local found = 0
+	if text then
+		for _, each in ipairs(SCHOOL_WORDS) do
+			local word = _G[each[2]]
+			if type(word) == "string" and Plain(word) and word ~= "" and text:find(word, 1, true) then
+				found = found == 0 and each[1] or -1
+			end
+		end
+	end
+	if found < 0 then found = 0 end
+	-- (An empty description may come later: asked again next cast.)
+	if text then descSchool[spell] = found end
+	return found
+end
+-- Casts on each mob (your target as it was cast), for its ticks to find
+-- their spell (TakeTick): { at, spell, name, icon } each, newest last.
+local DOT_KEEP = 40   -- (seconds a cast stays a tick's candidate: the longest DoT, and some)
+local dotCasts = {}   -- [mob's guid] = casts
+local tickSchool = {} -- [spell] = the school its ticks came in
+local function DropOld(now)
+	while casts[1] and now - casts[1].at > CAST_WAIT do
+		local gone = table.remove(casts, 1)
+		noHit[gone.spell] = (noHit[gone.spell] or 0) + 1
+	end
+end
+local function NoteDotCast(spell, name, icon, now)
+	SchoolOfText(spell) -- (its description's school, for its ticks: TakeTick)
+	local ok, guid = pcall(UnitGUID, "target")
+	if not (ok and Plain(guid) and type(guid) == "string") then return end
+	local list = dotCasts[guid] or {}
+	dotCasts[guid] = list
+	while list[1] and now - list[1].at > DOT_KEEP do table.remove(list, 1) end
+	if #list >= 8 then table.remove(list, 1) end
+	list[#list + 1] = { at = now, spell = spell, name = name, icon = icon }
+	-- (Mobs not cast at for a while: forgotten.)
+	for each, other in pairs(dotCasts) do
+		if each ~= guid and (not other[#other] or now - other[#other].at > DOT_KEEP) then dotCasts[each] = nil end
+	end
+end
 local castWatch = CreateFrame("Frame")
 for _, event in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START",
 	"UNIT_SPELLCAST_CHANNEL_STOP" }) do
 	pcall(castWatch.RegisterUnitEvent, castWatch, event, "player")
 end
-castWatch:SetScript("OnEvent", function(_, event, _, _, spell)
+local function OnCastEvent(_, event, _, _, spell)
 	if not (Plain(spell) and spell) then return end
 	local now = GetTime()
 	if event == "UNIT_SPELLCAST_START" then
@@ -1559,7 +1735,8 @@ castWatch:SetScript("OnEvent", function(_, event, _, _, spell)
 		local ok, _, _, _, startMs, endMs = pcall(UnitChannelInfo, "player")
 		local secs = ok and Plain(startMs) and Plain(endMs) and tonumber(startMs) and tonumber(endMs)
 			and (endMs - startMs) / 1000 or nil
-		channel = secs and secs > 0 and { secs = secs, spell = spell, ends = now + secs + 0.3 } or nil
+		channel = secs and secs > 0 and { secs = secs, spell = spell, ends = now + secs + 0.3,
+			name = SpellNameOf(spell), icon = SpellIconOf(spell) } or nil
 	elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
 		if channel then channel.ends = math.min(channel.ends, now + 0.3) end
 	elseif spell ~= AUTO_ATTACK then
@@ -1574,10 +1751,16 @@ castWatch:SetScript("OnEvent", function(_, event, _, _, spell)
 		-- (A channel's own start comes as a finished cast too: its ticks take the channel.)
 		if channel and channel.spell == spell and now < channel.ends then return end
 		local secs = began and now - began < 15 and now - began or 0
-		while casts[1] and now - casts[1].at > CAST_WAIT do table.remove(casts, 1) end
-		if #casts < 8 then casts[#casts + 1] = { at = now, secs = secs, spell = spell } end
+		local name, icon = SpellNameOf(spell), SpellIconOf(spell)
+		DropOld(now)
+		if #casts < 8 then
+			casts[#casts + 1] = { at = now, secs = secs, spell = spell, name = name, icon = icon, harmful = HarmfulOf(spell, name),
+				school = SchoolOfText(spell) }
+		end
+		NoteDotCast(spell, name, icon, now)
 	end
-end)
+end
+castWatch:SetScript("OnEvent", OnCastEvent)
 -- Whether a school's hit could be this spell's: none of its hits learned
 -- yet, or this school its most.
 local function SchoolFits(spell, school)
@@ -1594,36 +1777,124 @@ local function Learn(spell, school)
 	schoolsOf[spell] = seen
 	seen[school] = (seen[school] or 0) + 1
 end
--- Seconds of the cast this hit came from, or nil (not known: 100%).
-TakeCast = function(school, now)
+-- A cast a direct hit of this school can take: its spell's learned school
+-- this one (first pass), or not learned yet and not a spell that never hits.
+-- Whether its description's school (if it names one) is this one.
+local function TextFits(spell, school)
+	local named = descSchool[spell]
+	return not named or named == 0 or named == school
+end
+local function CastFits(cast, school, pass, heal)
+	if not TextFits(cast.spell, school) then return false end
+	-- (A heal never takes a harmful spell's cast, a damage hit never a buff's or heal's.)
+	if heal ~= nil and cast.harmful ~= nil and cast.harmful == heal then return false end
+	if pass == 1 then return schoolsOf[cast.spell] ~= nil and SchoolFits(cast.spell, school) end
+	return schoolsOf[cast.spell] == nil and (noHit[cast.spell] or 0) < 2
+end
+-- What a cast says of itself: { name, icon, school } for the spell's look.
+local function From(cast, school)
+	return cast and cast.name and { name = cast.name, icon = cast.icon, school = school } or nil
+end
+-- The cast this hit came from: its seconds (nil: not known, 100%) and the
+-- spell ({ name, icon, school }, or nil).
+-- heal: true for a heal, false for a damage hit (nil: either), so a buff's
+-- cast is never a damage hit's.
+TakeCast = function(school, now, heal)
 	school = tonumber(school)
 	if not school then return nil end
 	local record = ns.combatTextRecord
 	if channel and now <= channel.ends and SchoolFits(channel.spell, school) then
 		Learn(channel.spell, school)
 		if record then record(("cast: a tick of channel %s, %.1f s"):format(tostring(channel.spell), channel.secs)) end
-		return channel.secs
+		return channel.secs, From(channel, school)
 	end
 	-- (An area spell's other hits, in the instant of the one that took its
 	-- cast: the same cast, 2026-11-19. Before, the first alone grew.)
 	local last = TakeCastLast
 	if last and last.school == school and math.abs(now - last.at) <= group.SAME then
 		if record then record(("cast: spell %s again (an area spell's hits in one instant)"):format(tostring(last.spell))) end
-		return last.secs
+		return last.secs, From(last, school)
 	end
-	while casts[1] and now - casts[1].at > CAST_WAIT do table.remove(casts, 1) end
-	for i, cast in ipairs(casts) do
-		if SchoolFits(cast.spell, school) then
-			table.remove(casts, i)
-			Learn(cast.spell, school)
-			TakeCastLast = { at = now, school = school, secs = cast.secs, spell = cast.spell }
-			if record then record(("cast: spell %s, %.2f s, school %d"):format(tostring(cast.spell), cast.secs, school)) end
-			return cast.secs
+	DropOld(now)
+	for pass = 1, 2 do
+		for i, cast in ipairs(casts) do
+			if CastFits(cast, school, pass, heal) then
+				table.remove(casts, i)
+				Learn(cast.spell, school)
+				TakeCastLast = { at = now, school = school, secs = cast.secs, spell = cast.spell, name = cast.name, icon = cast.icon }
+				if record then record(("cast: spell %s (%s), %.2f s, school %d"):format(tostring(cast.spell),
+					tostring(cast.name), cast.secs, school)) end
+				return cast.secs, From(cast, school)
+			end
 		end
 	end
 	if record then record(("cast: none waiting for school %d (100%%)"):format(school)) end
 	return nil
 end
+-- A DoT's tick (its log line says so, Forever): a channel's, else the spell
+-- of yours on this mob it's from. First a spell whose ticks came in this
+-- school, cast last; then one that never hits on its own (Corruption), in
+-- this school or not learned; then the one spell of yours in this school
+-- on it, if only one (Immolate's hit and its ticks). Two DoTs of one school
+-- on one mob: the one cast last. Never a waiting cast (a Shadow Bolt in
+-- flight isn't a tick's). Gives seconds and the spell, as TakeCast.
+TakeTick = function(school, guid, now)
+	school = tonumber(school)
+	if not school then return nil end
+	local record = ns.combatTextRecord
+	if channel and now <= channel.ends and SchoolFits(channel.spell, school) then
+		Learn(channel.spell, school)
+		if record then record(("tick: of channel %s"):format(tostring(channel.name))) end
+		return channel.secs, From(channel, school)
+	end
+	DropOld(now)
+	local list = guid and dotCasts[guid]
+	local picked
+	if list then
+		for i = #list, 1, -1 do
+			local cast = list[i]
+			if now - cast.at <= DOT_KEEP and tickSchool[cast.spell] == school then picked = cast break end
+		end
+		if not picked then
+			for i = #list, 1, -1 do
+				local cast = list[i]
+				if now - cast.at <= DOT_KEEP and not tickSchool[cast.spell] and (noHit[cast.spell] or 0) > 0
+					and TextFits(cast.spell, school) and (schoolsOf[cast.spell] == nil or SchoolFits(cast.spell, school)) then
+					picked = cast
+					break
+				end
+			end
+		end
+		if not picked then
+			local only
+			for _, cast in ipairs(list) do
+				if now - cast.at <= DOT_KEEP and not tickSchool[cast.spell] and schoolsOf[cast.spell] ~= nil
+					and TextFits(cast.spell, school) and SchoolFits(cast.spell, school) then
+					if only and only.spell ~= cast.spell then only = false break end
+					if only == nil then only = cast end
+				end
+			end
+			picked = only or nil
+		end
+	end
+	if not picked then
+		if record then record(("tick: no spell of yours on it for school %d"):format(school)) end
+		return nil
+	end
+	tickSchool[picked.spell] = school
+	if record then record(("tick: spell %s (%s), school %d"):format(tostring(picked.spell), tostring(picked.name), school)) end
+	local from = From(picked, school)
+	if from then from.tick = true end
+	return nil, from
+end
+-- (Tools/offline/combattextspells.lua: the matching, driven as the game would.)
+ns.CombatTextSpellMatch = {
+	OnCast = OnCastEvent, TakeCast = function(...) return TakeCast(...) end, TakeTick = TakeTick, TextSchool = SchoolOfText,
+	Reset = function()
+		wipe(castStarts) wipe(casts) wipe(schoolsOf) wipe(noHit) wipe(dotCasts) wipe(tickSchool)
+		channel, TakeCastLast = nil, nil
+	end,
+}
 -- Whether a cast of yours waits for a hit of this school (TakeCast's, not
 -- taking it): In a group's score.
 PeekCast = function(school, now)
@@ -1633,14 +1904,14 @@ PeekCast = function(school, now)
 	local last = TakeCastLast
 	if last and last.school == school and math.abs(now - last.at) <= group.SAME then return true end
 	for _, cast in ipairs(casts) do
-		if now - cast.at <= CAST_WAIT and SchoolFits(cast.spell, school) then return true end
+		if now - cast.at <= CAST_WAIT and (CastFits(cast, school, 1) or CastFits(cast, school, 2)) then return true end
 	end
 	return false
 end
 -- A miss with no school of its own (the game sends misses as physical) while
 -- a long cast of yours waits for its hit: that spell's, the cast used up.
 local function TakeLongCast(now)
-	while casts[1] and now - casts[1].at > CAST_WAIT do table.remove(casts, 1) end
+	DropOld(now)
 	for i, cast in ipairs(casts) do
 		if cast.secs > 0 then
 			table.remove(casts, i)
@@ -2015,7 +2286,9 @@ end
 -- layer: the frame to draw it in (Spawn).
 local SAMPLE_VIA = { swingCrit = "swing", spellCrit = "spellNature", healCrit = "heal", pet = "swing", petCrit = "spellFire" }
 -- cast: its spell's cast in seconds (a long cast's bigger, CastSize).
-function ns.CombatTextSample(frame, id, layer, via, cast)
+-- spell: a spell's name (a Spells tab row's sample: in its look); tick: as
+-- its tick.
+function ns.CombatTextSample(frame, id, layer, via, cast, spell, tick)
 	local node = NODE[id]
 	if not node then return end
 	if node.word then
@@ -2024,7 +2297,7 @@ function ns.CombatTextSample(frame, id, layer, via, cast)
 	if node.sample then
 		return Spawn(frame, nil, node.sample, id, via or SAMPLE_VIA[id] or node.critOf or id, layer,
 			id == "swingGlance" and "GLANCING" or nil,
-			nil, cast)
+			nil, cast, spell and { name = spell, tick = tick } or nil)
 	end
 end
 end) -- (ns.Module "style")

@@ -57,6 +57,7 @@ local PROFILE_TABLES = {
 	"lowHealthThemeEdits", "lowHealthMyThemes", -- (Vitals Vision's themes: players' versions of ours, and their own)
 	"lowHealthFromTheme", -- (which of the profile's Vitals settings its theme put on, not the player)
 	"followHud", -- (the Follow HUD's pieces set up on this profile and how to undo them: FollowHud.lua)
+	"combatTextSpells", -- (Combat Text Style's Spells tab: which spells have a look of their own, CombatTextTexts.lua)
 }
 ns.PROFILE_TABLES = PROFILE_TABLES
 ns.IS_PROFILE_TABLE = {}
@@ -1262,6 +1263,14 @@ function ns.ProfileTableShaped(key, value)
 	elseif key == "hoverGroups" then
 		for _, group in pairs(value) do
 			if type(group) ~= "table" or (group.members ~= nil and type(group.members) ~= "table") then return false end
+		end
+	elseif key == "combatTextSpells" then
+		-- (Each: a spell's name to { school, kind, icon, ticks }.)
+		for name, info in pairs(value) do
+			if type(name) ~= "string" or type(info) ~= "table" then return false end
+			if info.school ~= nil and type(info.school) ~= "number" then return false end
+			if info.kind ~= nil and info.kind ~= "damage" and info.kind ~= "heal" and info.kind ~= "pet" then return false end
+			if info.icon ~= nil and type(info.icon) ~= "number" and type(info.icon) ~= "string" then return false end
 		end
 	end
 	return true

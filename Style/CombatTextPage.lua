@@ -24,6 +24,18 @@ local HEALS = { { 0, "heal", nil, 2.5 }, { 0.6, "heal", nil, 0 }, { 1.2, "healCr
 	{ 2.05, "heal" } }
 local CRIT_WITH = { swing = "swingCrit", ability = "spellCrit", spell = "spellCrit", heal = "healCrit" }
 local function StepsFor(id)
+	-- (A Spells tab row: its hit, its crit, a long cast's, and a tick if it
+	-- ticks, each in its look. A fifth: the spell; a sixth: as a tick.)
+	local spell = CT.SpellName(id)
+	if spell then
+		local base = CT.SpellBase(spell)
+		local info = CT.SpellInfo(spell) or {}
+		local via = base == "pet" and (info.school and CT.SCHOOL_NODE[info.school] or "spell") or nil
+		local steps = { { 0, base, via, 0, spell }, { 0.8, CT.CritOf(base), via or base, 2.5, spell },
+			{ 1.6, base, via, 2.5, spell } }
+		if info.ticks then steps[#steps + 1] = { 2.3, base, via, 0, spell, true } end
+		return steps
+	end
 	local node = id and CT.NODE[id]
 	if not node or id == "all" or id == "damage" then return nil end
 	-- (Spells: each school, then a crit of one.)
@@ -53,6 +65,7 @@ end
 -- Whether a text's hits can come from a cast (spells and heals: their
 -- CastSize, CastTime; a swing, an ability or a miss never has one).
 local function Casts(id)
+	if CT.SpellName(id) then return true end
 	local node = CT.NODE[id]
 	if node and (node.word or node.misses) then return false end
 	return id == "all" or id == "damage" or id:find("^spell") ~= nil or id:find("^heal") ~= nil
@@ -166,7 +179,8 @@ function ns.CreateCombatTextStylePanel(kit)
 	local function Play()
 		Follow()
 		local kind = preview.SampleKind and preview.SampleKind()
-		local steps = StepsFor(focus)
+		-- (A spell picked on the Spells tab plays alone there: CombatTextSpells.lua.)
+		local steps = StepsFor((ns.combatTextSpellFocus and ns.combatTextSpellFocus()) or focus)
 		if not steps then
 			steps = (kind == "Friendly" or kind == "Player") and HEALS or MIX
 		end
@@ -174,7 +188,7 @@ function ns.CreateCombatTextStylePanel(kit)
 		for _, step in ipairs(steps) do
 			C_Timer.After(step[1], function()
 				if this == round and preview:IsVisible() then
-					ns.CombatTextSample(preview.plate or plate, step[2], layer, step[3], step[4])
+					ns.CombatTextSample(preview.plate or plate, step[2], layer, step[3], step[4], step[5], step[6])
 				end
 			end)
 		end
@@ -208,6 +222,7 @@ function ns.CreateCombatTextStylePanel(kit)
 	local hosts, _, TabsShown = ns.PageTabsBelow(content, preview, {
 		{ L["General"], L["Turn our numbers on, and hide the game's."] },
 		{ L["Look"], L["Each text starts out looking like the one it's under. Changing one only changes that one."] },
+		{ L["Spells"], L["A look of their own for any of your spells."] },
 	}, "Combat Text Style/page", nil, nil, nil, function()
 		local was = focus
 		focus = nil -- (the mix again; a text's Look panel opened plays that text)
@@ -1056,6 +1071,11 @@ function ns.CreateCombatTextStylePanel(kit)
 	box:HookScript("OnShow", Layout)
 	Into(2, lookTop) -- (Start from a look at the tab's top, the table under it)
 
+	-- Spells: a look of their own for any of your spells (CombatTextSpells.lua).
+	if ns.BuildCombatTextSpells then
+		Into(3, ns.BuildCombatTextSpells(kit, content, stack, preview, Changed))
+	end
+
 	-- Reset page: every text's settings too (fields aren't the page's keys).
 	if kit.OnReset then
 		kit.OnReset(content, function()
@@ -1063,6 +1083,7 @@ function ns.CreateCombatTextStylePanel(kit)
 				CT.Reset(node.id)
 				ns.GetDB()[CT.Key(node.id, "Show")] = nil
 			end
+			if ns.ResetCombatTextSpells then ns.ResetCombatTextSpells() end -- (the Spells tab's looks; the list stays)
 			Changed()
 		end)
 	end

@@ -260,6 +260,13 @@ local function Up(step, via)
 end
 -- Gives the value and the text it's from ("all" for All texts').
 function CT.Get(id, setting, via)
+	-- (A spell's row, the Spells tab's: its own, else its school's text's.)
+	local spell = CT.SpellName(id)
+	if spell then
+		local own = CT.SpellOwn(spell, setting)
+		if own ~= nil then return own, id end
+		return CT.Get(CT.SpellBase(spell), setting, via)
+	end
 	via = via or (NODE[id] and NODE[id].critOf)
 	local step = id
 	for _ = 1, 12 do
@@ -278,6 +285,14 @@ end
 -- What a text would have with nothing of its own: its built-in, else its
 -- group's.
 function CT.Usual(id, setting)
+	local spell = CT.SpellName(id)
+	if spell then
+		-- (Its crits' color: its own color; its ticks: as its hits.)
+		local at = ({ CR = 1, CG = 2, CB = 3 })[setting]
+		if at then return CT.Color(id)[at], id end
+		if setting == "Ticks" then return "same", id end
+		return CT.Get(CT.SpellBase(spell), setting)
+	end
 	local built = BUILTIN[id] and BUILTIN[id][setting]
 	if built ~= nil then return built, id end
 	if id == "all" then return DEFAULTS[Key("all", setting)], "all" end
@@ -287,6 +302,8 @@ end
 -- A text's color ({ r, g, b }). via: the hit a crit crits. A built-in
 -- color: the style theme's, if it has one for it.
 function CT.Color(id, via)
+	local spell = CT.SpellName(id)
+	if spell then return CT.SpellColor(spell) or CT.Color(CT.SpellBase(spell), via) end
 	via = via or (NODE[id] and NODE[id].critOf)
 	local step = id
 	for _ = 1, 12 do
@@ -372,6 +389,8 @@ end
 
 -- A text's name, for the page ("Misses").
 function CT.Label(id)
+	local spell = CT.SpellName(id)
+	if spell then return spell end
 	local node = NODE[id]
 	return node and L[node.label] or id
 end
@@ -400,6 +419,16 @@ function CT.OwnParts(id)
 	end
 	local word = db[Key(id, "Word")]
 	if type(word) == "string" and word:match("%S") and not seen.Text then own[#own + 1] = "Text" end
+	-- (A spell's crits' color is Color; its ticks, Text.)
+	if CT.SpellName(id) then
+		for _, setting in ipairs(CT.SPELL_EXTRA) do
+			local part = setting == "Ticks" and "Text" or "Color"
+			if db[Key(id, setting)] ~= nil and not seen[part] then
+				seen[part] = true
+				own[#own + 1] = part
+			end
+		end
+	end
 	table.sort(own)
 	return own
 end
@@ -411,13 +440,39 @@ function CT.Reset(id)
 	if not db then return end
 	for _, setting in ipairs(CT.LOOK_SETTINGS) do db[Key(id, setting)] = nil end
 	db[Key(id, "Word")] = nil
+	if CT.SpellName(id) then
+		for _, setting in ipairs(CT.SPELL_EXTRA) do db[Key(id, setting)] = nil end
+	end
 end
 
 -- A field for the page's controls: what applies, its own once set (the
 -- same as it'd have anyway saved as none, as the Names rows' are).
 function CT.Field(id, setting)
-	if not PART_OF[setting] then return Key(id, setting) end
 	local key = Key(id, setting)
+	-- (A spell's crits' color, all three its own together; its ticks.)
+	local spell = CT.SpellName(id)
+	if spell and CT.SPELL_EXTRA_OF[setting] then
+		return {
+			key = key,
+			get = function()
+				local own = CT.SpellOwn(spell, setting)
+				if own ~= nil then return own end
+				return (CT.Usual(id, setting))
+			end,
+			set = function(value)
+				local db = ns.GetDB()
+				if value == (CT.Usual(id, setting)) then value = nil end
+				if setting ~= "Ticks" and value ~= nil then
+					local now = CT.SpellCritColor(spell)
+					for i, each in ipairs({ "CR", "CG", "CB" }) do
+						if db[Key(id, each)] == nil then db[Key(id, each)] = now[i] end
+					end
+				end
+				db[key] = value
+			end,
+		}
+	end
+	if not PART_OF[setting] then return key end
 	return {
 		key = key,
 		get = function() return (CT.Get(id, setting)) end,
@@ -437,5 +492,210 @@ function CT.Field(id, setting)
 			db[key] = value
 		end,
 	}
+end
+
+-- Spells (2026-11-25, the Spells tab, the player's ask: a color for each
+-- spell). The game never says which spell hit; CombatTextStyle.lua matches
+-- your casts to their hits (TakeCast, TakeTick). A spell on the tab's list
+-- (ns.db.combatTextSpells, per profile: { [name] = { school, kind, icon,
+-- ticks } }, kind "damage", "heal" or "pet") has its own settings over the
+-- text its hit is drawn as: ct_sp:<name>_<setting>, nothing saved its
+-- school's. Keyed by name: every rank of a spell is one. Over a look's
+-- settings: its crits' color (CR, CG, CB; none: its color), its ticks
+-- (Ticks: "same", or "small" for a smaller number) and Show.
+CT.SPELLS_TAB = "tabOn:Combat Text Style/page:3"
+CT.SPELL_EXTRA = { "CR", "CG", "CB", "Ticks" }
+CT.SPELL_EXTRA_OF = { CR = true, CG = true, CB = true, Ticks = true }
+CT.TICK_SMALL = 0.75 -- (a tick's size, "small", times its hit's)
+CT.SEEN_MAX = 60     -- (spells kept in the Add list's "hit with" part, per character)
+local SPELL_PREFIX = "sp:"
+function CT.SpellId(name) return SPELL_PREFIX .. name end
+function CT.SpellName(id)
+	if type(id) ~= "string" or id:sub(1, 3) ~= SPELL_PREFIX then return nil end
+	return id:sub(4)
+end
+local function SpellList(make)
+	local db = ns.db
+	if not db then return nil end
+	if type(db.combatTextSpells) ~= "table" then
+		if not make then return nil end
+		db.combatTextSpells = {}
+	end
+	return db.combatTextSpells
+end
+function CT.SpellInfo(name)
+	local list = type(name) == "string" and SpellList()
+	local info = list and list[name]
+	return type(info) == "table" and info or nil
+end
+-- Whether the Spells tab is on (right-clicked off: every spell its
+-- school's look, Tab is a container).
+function CT.SpellsOn()
+	local db = ns.db
+	return db ~= nil and db[CT.SPELLS_TAB] ~= false
+end
+-- Whether this spell's own look applies: on the list, the tab on.
+function CT.SpellActive(name)
+	return CT.SpellsOn() and CT.SpellInfo(name) ~= nil
+end
+-- Its own value of a setting (nil: none, or the tab off).
+function CT.SpellOwn(name, setting)
+	if not CT.SpellActive(name) then return nil end
+	return ns.db[Key(CT.SpellId(name), setting)]
+end
+-- The text its hits are drawn as with nothing of its own: its school's
+-- (Abilities for physical, Spells and abilities for mixed or not known yet),
+-- Heals, or Your pet.
+function CT.SpellBase(name)
+	local info = CT.SpellInfo(name)
+	if not info then return "spell" end
+	if info.kind == "heal" then return "heal" end
+	if info.kind == "pet" then return "pet" end
+	local school = tonumber(info.school)
+	if school == 1 then return "ability" end
+	return school and CT.SCHOOL_NODE[school] or "spell"
+end
+-- Its own color ({ r, g, b }), or nil.
+function CT.SpellColor(name)
+	local r = CT.SpellOwn(name, "R")
+	if r == nil then return nil end
+	return { r, CT.SpellOwn(name, "G") or r, CT.SpellOwn(name, "B") or r }
+end
+-- Its crits' color: its own, else its color (own or its school's).
+function CT.SpellCritColor(name)
+	local r = CT.SpellOwn(name, "CR")
+	if r ~= nil then return { r, CT.SpellOwn(name, "CG") or r, CT.SpellOwn(name, "CB") or r } end
+	return CT.Color(CT.SpellId(name))
+end
+-- Whether its numbers show (its own switch; the tab off: as its school's).
+function CT.SpellShows(name)
+	if not CT.SpellActive(name) then return true end
+	return ns.db[Key(CT.SpellId(name), "Show")] ~= false
+end
+-- A crit's text for a text its hits are drawn as (Fire's: Fire crits).
+function CT.CritOf(base)
+	if base == "heal" then return "healCrit" end
+	if base == "pet" then return "petCrit" end
+	if base == "swing" or base == "swingGlance" then return "swingCrit" end
+	for _, node in ipairs(NODES) do
+		if node.critOf == base and not node.pet then return node.id end
+	end
+	return "spellCrit"
+end
+
+-- The list: add (its row goes under its school, its look its school's
+-- till changed) and remove (its look and switch forgotten).
+function CT.AddSpell(name, info)
+	if type(name) ~= "string" or not name:match("%S") then return false end
+	local list = SpellList(true)
+	if not list then return false end
+	local had = list[name]
+	info = info or {}
+	list[name] = {
+		school = tonumber(info.school) or (had and had.school) or nil,
+		kind = (info.kind == "heal" or info.kind == "pet") and info.kind or (had and had.kind) or "damage",
+		icon = info.icon or (had and had.icon) or nil,
+		ticks = info.ticks or (had and had.ticks) or nil,
+	}
+	return true
+end
+function CT.RemoveSpell(name)
+	local list = SpellList()
+	if not (list and list[name]) then return false end
+	local id = CT.SpellId(name)
+	CT.Reset(id)
+	ns.db[Key(id, "Show")] = nil
+	list[name] = nil
+	return true
+end
+-- The list in the tab's order: grouped (Fire, Shadow... in the tree's
+-- order, then Spells and abilities, Heals, Your pet), by name in a group.
+-- Gives { { base, { names } }... }.
+function CT.SpellGroups()
+	local list = SpellList() or {}
+	local byBase = {}
+	for name in pairs(list) do
+		local base = CT.SpellBase(name)
+		byBase[base] = byBase[base] or {}
+		table.insert(byBase[base], name)
+	end
+	local order = {}
+	for _, node in ipairs(NODES) do
+		if node.school then order[#order + 1] = node.id end
+	end
+	for _, id in ipairs({ "ability", "spell", "heal", "pet" }) do order[#order + 1] = id end
+	local groups = {}
+	for _, base in ipairs(order) do
+		local names = byBase[base]
+		if names then
+			table.sort(names)
+			groups[#groups + 1] = { base, names }
+		end
+	end
+	return groups
+end
+function CT.SpellCount()
+	local count = 0
+	for _ in pairs(SpellList() or {}) do count = count + 1 end
+	return count
+end
+
+-- Spells you've hit with, per character (the Add list's first part):
+-- CinematicCharDB.combatTextSeen = { [name] = { school, kind, icon, hits,
+-- at, ticks } }, the oldest dropped past SEEN_MAX. A spell on the list
+-- learns its school here too (its row moves under it, keeping its look).
+-- from: { name, icon, school, tick }; kind: CT.Kind's.
+function CT.NoteSeen(from, kind)
+	if type(from) ~= "table" or type(from.name) ~= "string" then return end
+	if type(CinematicCharDB) ~= "table" then CinematicCharDB = {} end -- luacheck: ignore 111
+	local seen = CinematicCharDB.combatTextSeen
+	if type(seen) ~= "table" then
+		seen = {}
+		CinematicCharDB.combatTextSeen = seen
+	end
+	local school = tonumber(from.school)
+	local entry = seen[from.name]
+	if not entry then
+		entry = { hits = 0 }
+		seen[from.name] = entry
+		local count, oldest, oldestAt = 0, nil, math.huge
+		for name, each in pairs(seen) do
+			count = count + 1
+			local at = type(each) == "table" and tonumber(each.at) or 0
+			if name ~= from.name and at < oldestAt then oldest, oldestAt = name, at end
+		end
+		if count > CT.SEEN_MAX and oldest then seen[oldest] = nil end
+	end
+	entry.hits = (tonumber(entry.hits) or 0) + 1
+	entry.at = time and time() or 0
+	entry.kind = kind == "heal" and "heal" or kind == "pet" and "pet" or "damage"
+	if school and not from.tick then entry.school = school end
+	if school and from.tick then entry.tickSchool = school end
+	if from.icon then entry.icon = from.icon end
+	if from.tick then entry.ticks = true end
+	-- (On the list: its school once known, and whether it ticks.)
+	local info = CT.SpellInfo(from.name)
+	if info then
+		if not info.school and (entry.school or entry.tickSchool) then info.school = entry.school or entry.tickSchool end
+		if from.tick then info.ticks = true end
+		if not info.icon and from.icon then info.icon = from.icon end
+	end
+end
+function CT.Seen()
+	local seen = type(CinematicCharDB) == "table" and CinematicCharDB.combatTextSeen
+	return type(seen) == "table" and seen or {}
+end
+
+-- A spell's setting's default for profiles and sharing (Core's
+-- MarkRowDefault): a value of its type that a player's never is, so every
+-- one saved is kept and a shared one comes along; nil for any other key.
+local SPELL_KEY_TYPE = { Show = true, Pop = false, Font = "", Edge = "", Start = "", Move = "", Ticks = "" }
+function ns.CombatTextSpellDefault(key)
+	if type(key) ~= "string" or key:sub(1, 6) ~= "ct_sp:" then return nil end
+	local setting = key:match("_(%u%a*)$")
+	if not setting then return nil end
+	if SPELL_KEY_TYPE[setting] ~= nil then return SPELL_KEY_TYPE[setting] end
+	if PART_OF[setting] or CT.SPELL_EXTRA_OF[setting] then return math.huge end
+	return nil
 end
 end) -- (ns.Module "style")
