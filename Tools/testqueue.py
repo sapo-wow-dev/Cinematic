@@ -15,6 +15,10 @@ then reloads to save. Each session's `wait` sees its own result then.
     python -I Tools/testqueue.py list [--client retail]   what's queued, each client's result; --client: just what that
                                                           client still owes
     python -I Tools/testqueue.py remove <id ...> | --session "<name>"
+    python -I Tools/testqueue.py errors --session "<name>" [--client forever]
+        the last queue run's errors, load errors at its reloads and between tests too (wait prints this as well):
+        each not accepted in Tools/errors/known.lua is claimed for one session (Dev/TestQueueErrorClaims.json);
+        FIX NOW lines are this session's to fix at the root without asking. Exit 1 when any are
     python -I Tools/testqueue.py catalog         rescans every kit test for what it asks of the user (add/remove do too)
     python -I Tools/testqueue.py selftest        checks this script on a scratch copy
 
@@ -263,7 +267,156 @@ def remove(path, ids=(), session=None, catalog=None):
     return len(entries) - len(keep)
 
 
-def wait(path, qid, timeout_min, keep, poll=5.0, found=results, catalog=None, reported=issues):
+# The queue-wide error sweep (the user, 2026-11-25: "i need the test kit to auto fix errors"). A test's own errors
+# reach the session that queued it; a load error at a reload, or one between two tests, belonged to no test and
+# so to no session: the same ones came back every reload. The sweep takes every saved deverror / BLOCKED / ERROR
+# line from the reload the queue started on to the save, one per error, matched to Tools/errors/known.lua, and
+# claims each one that isn't accepted for one session (the first whose wait or `errors` sees it), so it's fixed
+# once, at its root, without asking.
+CLAIMS = os.path.join(ROOT, "Dev", "TestQueueErrorClaims.json")
+CLAIM_DAYS = 1  # (a claim older than this, its error still coming: up for grabs again)
+CLOCK = re.compile(r"^(\d\d):(\d\d):(\d\d)")
+QSTART = re.compile(r"^\d{4}-\d\d-\d\d (\d\d):(\d\d):(\d\d) queue start")
+NOTE = re.compile(r"^[\d:.]+ (deverror: |BLOCKED|ERROR: )")
+
+
+def _clock(m):
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+
+
+def error_sig(line):
+    """One error's name: its first line without the time, the kind word, the [in ...] stamp or the path's start."""
+    head = line.split("\n", 1)[0]
+    head = re.sub(r"^[\d:.]+ ", "", head)
+    head = re.sub(r"^(deverror: |ERROR: )", "", head)
+    head = re.sub(r"^(caught|warning|error|blocked|BLOCKED):? ", "", head)
+    head = re.sub(r" \[(in|after) [^\]]*\]$", "", head)
+    head = re.sub(r"(\.\.\.|\S*?)(ter)?face/AddOns/", "AddOns/", head)
+    return head.strip()
+
+
+def queue_errors(game, queue_log):
+    """{sig: {"count", "line" (the fullest one, with its stack), "first" (its time)}}: every saved error from the
+    session the last queue started in (its reload's load errors too) to the end of the log."""
+    starts = [QSTART.match(l) for l in queue_log]
+    starts = [m for m in starts if m]
+    if not starts:
+        return {}
+    at = _clock(starts[-1])
+    sessions = [i for i, l in enumerate(game) if "session: ----" in l]
+    begin = None
+    for i in reversed(sessions):  # (from the end: the log runs back over older days)
+        c = CLOCK.match(game[i])
+        if c and _clock(c) <= at:
+            begin = i
+            break
+    if begin is None:
+        return {}
+    out = {}
+    for line in game[begin:]:
+        if not NOTE.search(line):
+            continue
+        sig = error_sig(line)
+        e = out.setdefault(sig, {"count": 0, "line": line, "first": line[:8]})
+        e["count"] += 1
+        if len(line) > len(e["line"]):
+            e["line"] = line
+    return out
+
+
+_known = None
+
+
+def known_errors():
+    """(Tools/errors/errors.py, its entries), or (None, why) when lupa or known.lua can't load."""
+    global _known
+    if _known is None:
+        try:
+            sys.path.insert(0, os.path.join(ROOT, "Tools", "errors"))
+            import errors as mod
+            _known = (mod, mod.load())
+        except Exception as err:  # (lupa missing, known.lua broken: say so, carry on)
+            _known = (None, str(err))
+    return _known
+
+
+def known_line(text):
+    """KNOWN <id> [status] ... per entry it matches, or NEW."""
+    mod, entries = known_errors()
+    if mod is None:
+        return "known errors not loaded (%s)" % entries
+    hits = mod.find(text, entries)
+    if not hits:
+        return "NEW: no known entry; root first (/error), then an entry in Tools/errors/known.lua"
+    return "; ".join("KNOWN %s [%s] %s: %s" % (e["id"], e["status"], {
+        "accepted": "accepted, nothing to fix", "fixed": "REGRESSION: fixed before, back"}.get(e["status"], "open"),
+        e["title"]) for e in hits)
+
+
+def accepted(text):
+    """True when every known entry it matches is accepted (nothing to fix)."""
+    mod, entries = known_errors()
+    if mod is None:
+        return False
+    hits = mod.find(text, entries)
+    return bool(hits) and all(e["status"] == "accepted" for e in hits)
+
+
+def read_claims(path=CLAIMS):
+    import json
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def claim_errors(session, found, path=CLAIMS, now=None):
+    """Claims each unclaimed (or long-stale) error in found for session; returns [(sig, entry, owner)]."""
+    import json
+    now = time.time() if now is None else now
+    out = []
+    with Lock(path):
+        claims = read_claims(path)
+        for sig, e in sorted(found.items(), key=lambda kv: kv[1]["first"]):
+            if accepted(e["line"]):
+                continue
+            c = claims.get(sig)
+            if not c or now - c.get("at", 0) > CLAIM_DAYS * 86400:
+                c = claims[sig] = {"session": session, "at": now, "first": e["first"]}
+            out.append((sig, e, c["session"]))
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(claims, f, indent=1, sort_keys=True)
+    return out
+
+
+def sweep(session, client=None, show=print, files=None, claims_path=CLAIMS):
+    """Prints the queue run's errors, each FIX NOW (claimed for session) or whose; returns how many are this
+    session's to fix."""
+    mine, seen = 0, set()
+    for c, path in (files if files is not None else savedlogs.saved_files()):
+        if (client and c != client) or c in seen:
+            continue
+        seen.add(c)  # (the newest saved file of each client)
+        tables = savedlogs.log_tables(path)
+        found = queue_errors(tables.get("log", []), tables.get("testQueueLog", []))
+        rows = claim_errors(session, found, claims_path)
+        show("== queue errors (%s, the whole run: load errors at its reloads and between tests too): %d to fix" % (
+            c, len(rows)))
+        for sig, e, owner in rows:
+            ours = owner == session
+            mine += 1 if ours else 0
+            stack = [s.strip() for s in e["line"].split("\n")[1:5] if s.strip()]
+            show("  %s %s x%d, first %s\n    %s%s" % ("FIX NOW (yours):" if ours else "claimed by %s:" % owner, sig,
+                                                   e["count"], e["first"], known_line(e["line"]),
+                                                   "".join("\n      " + s for s in stack) if ours else ""))
+    if mine:
+        show("FIX NOW: %d error(s) are yours. Fix each at its root (/error's rules, a known.lua entry) without asking,"
+             " whoever's feature it is; commit only your own lines (USER RULE 2026-11-25)" % mine)
+    return mine
+
+
+def wait(path, qid, timeout_min, keep, poll=5.0, found=results, catalog=None, reported=issues, swept=None):
     """Until every client the entry asked for (--client) saved a result; exit 0 when all are clean."""
     entry = next((e for e in read(path) if e.get("id") == qid), None)
     if entry is None and qid not in found():
@@ -285,10 +438,13 @@ def wait(path, qid, timeout_min, keep, poll=5.0, found=results, catalog=None, re
             if not keep:
                 remove(path, ids=(qid,), catalog=catalog)
             clean = all(good(r["result"]) for _, r in got.values()) and not told
+            # (The queue-wide sweep: errors claimed for this session get fixed, no asking.)
+            session = (entry or {}).get("session") or next(iter(got.values()))[1]["session"]
+            mine = sum((swept or sweep)(session, client) for client in sorted(got))
             if not clean and entry is not None:
                 # (The session offers a Requeue button; the user, 2026-11-23: "sometimes i just mess it up".)
                 print("requeue: %s" % requeue_command(entry))
-            return 0 if clean else 1
+            return 0 if clean and not mine else 1
         if time.time() > stop:
             print("testqueue: %s still owed by %s after %d min (the game saves on /reload; is it still queued?)" % (
                 qid, " and ".join(left), timeout_min))
@@ -319,6 +475,15 @@ def show(path, client=None):
 
 def selftest():
     fails = 0
+    global sweep  # (wait's own checks never claim the real saved errors)
+    real_sweep, sweep = sweep, (lambda *a, **k: 0)
+    try:
+        return _selftest(fails, real_sweep)
+    finally:
+        sweep = real_sweep
+
+
+def _selftest(fails, sweep):
 
     def check(name, ok, detail=""):
         nonlocal fails
@@ -414,6 +579,53 @@ def selftest():
         check("either: any one client is enough", owed({"client": ""}, {"retail": clean}) == [])
         check("older tests can be queued (namescale)", "namescale" in old_tests() and "namescale" in kit_tests())
         check("remove by session", remove(path, session="Other session", catalog=cat) == 1 and read(path) == [])
+        # The queue-wide sweep (2026-11-25): the load error at the queue's reload and one between tests are swept,
+        # one line per error, a day-old session's not; each claimed once, the second session sees whose it is.
+        game = ["09:00:00 session: ---- old day ----",
+                "12:30:00 deverror: caught: AddOns/CinematicDev/Old.lua:1: gone",
+                "12:40:00 session: ---- CinematicDev dev ----",
+                "12:40:01 deverror: warning: Interface/AddOns/CinematicDev/CinematicDev.toc:232 Error loading "
+                "Interface/AddOns/CinematicDev/Style/Studio/Frames/CombatBand.lua [in test queue, between tests]",
+                "12:41:12 deverror: caught: ...terface/AddOns/CinematicDev/Visions/CombatVision.lua:321: attempt to"
+                " index field 'db' (a nil value) [in test queue, between tests]\n  [CinematicDev/Visions/CombatVision.lua]:321",
+                "12:41:12 ERROR: ...terface/AddOns/CinematicDev/Visions/CombatVision.lua:321: attempt to index field 'db'"
+                " (a nil value)\n[CinematicDev/Visions/CombatVision.lua]:321: in function <x>\n[CinematicDev/Studio.lua]:471",
+                "12:41:20 chat: not an error"]
+        qlog = ["2026-11-25 12:24:50 queue start: 5 test(s)", "2026-11-25 12:41:37 queue start: 4 test(s)"]
+        swept = queue_errors(game, qlog)
+        check("sweep: the queue's reload and between tests, one per error, not an older session's",
+              sorted(swept) == ["AddOns/CinematicDev/CinematicDev.toc:232 Error loading AddOns/CinematicDev/Style/Studio/"
+                                "Frames/CombatBand.lua",
+                                "AddOns/CinematicDev/Visions/CombatVision.lua:321: attempt to index field 'db' (a nil value)"]
+              and swept[sorted(swept)[1]]["count"] == 2 and "Studio.lua]:471" in swept[sorted(swept)[1]]["line"],
+              sorted(swept))
+        saved = os.path.join(tmp, "CinematicDev.lua")
+        with open(saved, "w", encoding="utf-8") as f:
+            f.write("CinematicDB = {\n")
+            for key, lines in (("log", game), ("testQueueLog", qlog)):
+                f.write('["%s"] = {\n' % key)
+                for line in lines:
+                    f.write('"%s",\n' % line.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n"))
+                f.write("},\n")
+            f.write("}\n")
+        claims, said = os.path.join(tmp, "claims.json"), []
+        mine = sweep("Session A", files=[("forever", saved)], show=said.append, claims_path=claims)
+        text = "\n".join(said)
+        check("sweep: both claimed for the first session, FIX NOW with the stack",
+              mine == 2 and text.count("FIX NOW (yours):") == 2 and "Studio.lua]:471" in text, text)
+        said = []
+        mine = sweep("Session B", files=[("forever", saved)], show=said.append, claims_path=claims)
+        text = "\n".join(said)
+        check("sweep: the next session sees whose they are, none its own",
+              mine == 0 and text.count("claimed by Session A:") == 2 and "FIX NOW" not in text, text)
+        stale = read_claims(claims)
+        for c in stale.values():
+            c["at"] -= 2 * 86400
+        import json
+        with open(claims, "w", encoding="utf-8") as f:
+            json.dump(stale, f)
+        check("sweep: a claim a day old with its error still coming: taken again",
+              sweep("Session B", files=[("forever", saved)], show=lambda s: None, claims_path=claims) == 2)
     print("testqueue selftest: %s" % ("all pass" if not fails else "%d FAIL" % fails))
     return 1 if fails else 0
 
@@ -439,7 +651,12 @@ def main():
     r.add_argument("ids", nargs="*")
     r.add_argument("--session")
     sub.add_parser("selftest")
+    e = sub.add_parser("errors")
+    e.add_argument("--session", required=True)
+    e.add_argument("--client", choices=["forever", "retail"])
     o = p.parse_args()
+    if o.cmd == "errors":
+        return 1 if sweep(o.session, o.client) else 0
     if o.cmd == "add":
         qid, n = add(QUEUE, o.test, " ".join(o.args), o.session, o.note, needs=o.needs,
                      client="" if o.client == "either" else o.client)

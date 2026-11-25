@@ -297,6 +297,18 @@ fires after DONE until the /reload comes as `errors after the test:` lines.
 List every one in the reply with its owner, and get each fixed: here, or
 sent to the session that owns it. Never "not this feature" and move on.
 
+**Auto fix (USER RULE, 2026-11-25: "i need the test kit to auto fix
+errors").** `wait` also prints `== queue errors`: every saved error of the
+whole queue run, load errors at its reloads and between tests too (those
+belonged to no test, so no session fixed them and they came back every
+reload). Each one not accepted in known.lua is claimed for ONE session
+(Dev/TestQueueErrorClaims.json, the first whose `wait` sees it). `FIX NOW
+(yours)` = fix it now at its root, /error's rules and a known.lua entry,
+without asking, whoever's feature or file it is; commit only your own lines
+(a file nobody committed yet: leave it in place and say so). `claimed by X` =
+X fixes it. `python -I Tools/testqueue.py errors --session "<name>"` runs the
+same sweep by hand.
+
 Prints the test's log, the session's deverror / BLOCKED / ERROR / chat lines,
 the screenshots taken since it started (open every one), the game's own logs
 (the console's errors and warnings from the last UI session, saved even
