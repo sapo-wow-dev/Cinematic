@@ -1,0 +1,32 @@
+# RXPGuides' named frames that Support/RestedXP.lua doesn't name, each with
+# why it needs no line there (Tools/addon-check.py check 3). A new frame of
+# its that's in neither = a MISS: decide it (a row, a fade, or here with why).
+# One per line: name or glob (*), a space, why. Checked against v4.11.40,
+# 2026-11-25 (addon kit run q9ef0: 47 frames on screen covered, 0 not).
+
+# Inside a frame that has a row (fade with it).
+RXPItemFrameButton* its quest item buttons, inside RXPItemFrame (RestedXP quest item row)
+RXPTargetFrame_EnemyButton* its target buttons, inside RXPTargetFrame (RestedXP targets row)
+RXPTargetFrame_FriendlyButton* its target buttons, inside RXPTargetFrame (RestedXP targets row)
+RXPQuestLogCleanupButton a button on the game's quest log window (a window, not faded)
+
+# Menus and tooltips: only up while you use them.
+RXPG_MenuFrame its guide window's dropdown menu
+RXPG_SplitsMenuFrame its level splits window's dropdown menu
+RXP_MMMenuFrame its minimap button's dropdown menu
+RXP_WMMenuFrame its world map button's dropdown menu
+RXP_TalentsMenuFrame its talents dropdown menu
+RXPItemUpgradesComparison its item upgrade tooltip, shown with the game's tooltip
+RXPGuidesNpcScanTooltip a hidden tooltip it reads NPC names from (draws nothing)
+
+# Invisible helpers: draw nothing.
+RXPDeleteJunk event and key frame for its delete-junk key
+RXPInventory_DeleteJunk a click button for its delete-junk key binding (no parent, never on screen)
+RXPJunkHandler a clear full-screen frame that passes clicks through, for its delete-junk key
+RXPGuidesTrainerFrame an OnUpdate timer for trainer windows
+RXPTELEPORTTO a 1x1 secure button for its house teleport macro (no parent)
+RXPTELEPORTHOME a 1x1 secure button for its return-home macro (no parent)
+RXP_* its vendor treasure module's event frame (no parent)
+
+# Warnings: left up on purpose.
+RXPDangerFrame its full-screen red flash for a danger warning, up a few pulses: an alert, not faded like the game's alerts
