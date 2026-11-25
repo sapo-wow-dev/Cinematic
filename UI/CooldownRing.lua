@@ -516,8 +516,9 @@ local function HideRing(ring)
 	end
 end
 
+-- (And the Buffs tab on, the tracked buffs' bar: off, no rings. Audit 2026-11-25.)
 local function On()
-	return ns.db and ns.PageOn and ns.PageOn("handleCooldowns")
+	return ns.db and ns.PageOn and ns.PageOn("handleCooldowns") and not (ns.CdmTabOff and ns.CdmTabOff("buffs"))
 end
 
 -- A row's Ring: on or off (its style is the page's; a row saved with a style
@@ -703,10 +704,12 @@ watcher:SetScript("OnEvent", function(_, event, unit, _, spellID)
 end)
 
 -- Starts or stops it as the rows say (any ring set) and the page's switch.
+-- (The page or the Buffs tab off: no events, no watch. Run again as either
+-- flips, ns.SyncSwitches. Audit 2026-11-25.)
 function ns.ApplyCooldownRing()
 	if not ns.db then return end
 	local any = ns.CooldownRowAny and ns.CooldownRowAny("ring", function(v) return v ~= nil and v ~= "off" end)
-	if any then
+	if any and On() then -- Audit 2026-11-25
 		pcall(watcher.RegisterUnitEvent, watcher, "UNIT_ABSORB_AMOUNT_CHANGED", "player")
 		pcall(watcher.RegisterUnitEvent, watcher, "UNIT_AURA", "player") -- (a charge used)
 		pcall(watcher.RegisterUnitEvent, watcher, "UNIT_SPELLCAST_SUCCEEDED", "player")

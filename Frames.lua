@@ -699,8 +699,10 @@ function ns.AnyFramePageOn()
 	local db = ns.db
 	if not db then return false end
 	if ns.frameForceOn then return true end -- (a frame hidden by its key: Keybinds page)
+	-- (Each as its tree says: the HUD's off, its sections' pages are too.
+	-- Audit 2026-11-25: they read on, and the scan kept going.)
 	for _, key in ipairs(ns.HANDLE_SWITCHES) do
-		if db[key] then return true end
+		if db[key] and ns.PageOn(key) then return true end
 	end
 	return false
 end
@@ -784,7 +786,9 @@ local function GroupHandled(group)
 	if not OWN_PAGE_GROUPS[group] then
 		return ns.ShowInSectionOn(group)
 	end
-	return db[GROUP_SWITCH[group]] and true or false
+	-- (And the Gamepad page's Show tab, where their rows are: off, let go.
+	-- Audit 2026-11-25.)
+	return db[GROUP_SWITCH[group]] and ns.PageOn("tabOn:Gamepad/tab:1") and true or false
 end
 ns.GroupHandled = GroupHandled
 
@@ -6362,7 +6366,9 @@ end
 -- debuffPeek), each with its own "Only after combat" (within the Calm Timer).
 local function PeekAllowed(harmful)
 	local prefix = harmful and "debuffPeek" or "buffPeek"
-	if not ns.db[prefix] then
+	-- (The Buffs page off, or its Show section or the HUD: no peeks, and no
+	-- work for them on each aura change. Audit 2026-11-25.)
+	if not ns.db[prefix] or not ns.PageOn("handleBuffs") then
 		return false
 	end
 	return not (ns.db[prefix .. "AfterCombat"] and GetTime() - lastCombatAt > ns.db.calmTime)
@@ -9417,7 +9423,9 @@ local function OnPadButton(button, via)
 			and "unticked on the Gamepad Frames page" or "what it's bound to"))
 		return
 	end
-	if ns.db and ns.db.gamepadPressReveal and ns.PageOn("handleGamepad") and not pendingPress then
+	-- (Its tick on the page's Settings tab: off with that tab. Audit 2026-11-25.)
+	if ns.db and ns.db.gamepadPressReveal and ns.PageOn("handleGamepad") and ns.PageOn("tabOn:Gamepad/tab:2")
+		and not pendingPress then
 		pendingPress = { at = GetTime(), button = button }
 	end
 end
@@ -10378,8 +10386,11 @@ ns.COOLDOWN_GROUP_CENTER = { essential = true, utility = true, buffs = true }
 ns.COOLDOWN_CENTER_BARS = { EssentialCooldownViewer = "essential", UtilityCooldownViewer = "utility",
 	BuffIconCooldownViewer = "buffs" }
 
--- Whether a bar's Close the gaps is on.
-function ns.CooldownGroupCentered(group)
+-- Whether a bar's Close the gaps is on. (Off with its tab or the page off,
+-- but for the page's own read, own false: Audit 2026-11-25, the bars' Layout
+-- hooks centered them again after the switch let them go.)
+function ns.CooldownGroupCentered(group, own)
+	if own ~= false and ns.CdmTabOff(group) then return false end -- Audit 2026-11-25
 	local set = ns.db.cooldownGroupDefaults[group]
 	if set and set.center ~= nil then return set.center end
 	return ns.COOLDOWN_GROUP_CENTER[group] or false
@@ -10928,8 +10939,14 @@ do
 	end
 
 	-- What an icon gets: its spell's own, else its bar's, else the base.
-	function ns.CooldownRowSetting(what, spell, group)
+	-- (Its bar's tab off, or the page: the icons as the game has them, but for
+	-- the page's own read, own false. Audit 2026-11-25.)
+	function ns.CooldownRowSetting(what, spell, group, own)
 		if not ns.db then return nil end
+		if own ~= false and group and ns.CdmTabOff(group) then -- Audit 2026-11-25
+			if what == "numbers" then return "untouched" elseif what == "ring" then return "off" end
+			return what == "ringAmount"
+		end
 		local value
 		if spell then value = ns.CooldownRowOwn(ns.BaseSpell and ns.BaseSpell(spell) or spell, what) end
 		if value == nil and group then value = ns.CooldownRowOwn(group, what) end
@@ -11836,6 +11853,22 @@ local function SyncSwitches()
 			switchesWere[key] = on
 		end
 	end
+	-- (The Gamepad page's Show tab, over the gamepad frames' rows: off, they're
+	-- let go too, GroupHandled. Audit 2026-11-25.)
+	local padShow = ns.PageOn("tabOn:Gamepad/tab:1")
+	if switchesWere["audit:padShow"] ~= nil and switchesWere["audit:padShow"] ~= padShow then
+		changed, turnedOn = true, turnedOn or padShow
+	end
+	switchesWere["audit:padShow"] = padShow
+	-- (The Cooldown Manager page and its tracked buffs' tabs: its rings and
+	-- stack counts started or stopped as they flip. Audit 2026-11-25.)
+	local cdm = (ns.PageOn("handleCooldowns") and 1 or 0) + (ns.CdmTabOff("buffs") and 0 or 2)
+		+ (ns.CdmTabOff("bars") and 0 or 4)
+	if switchesWere["audit:cdm"] ~= nil and switchesWere["audit:cdm"] ~= cdm then
+		if ns.ApplyCooldownRing then ns.ApplyCooldownRing() end
+		if ns.ApplyCooldownStacks then ns.ApplyCooldownStacks() end
+	end
+	switchesWere["audit:cdm"] = cdm
 	-- (A frame's key pressed, Keybinds page: its frames handled, page off or not.)
 	local force = ns.frameForceStamp or 0
 	if switchesWere.frameForce ~= nil and switchesWere.frameForce ~= force then
@@ -13764,7 +13797,9 @@ function ns.UpdateFrames(cinematic, elapsed)
 	-- then fades as its Standard Frames row says, the input box still up to type.)
 	local chatPage = ns.PageOn("handleChat")
 	-- (The Chat page's Typing row: where it's off, just the input box comes up.)
-	local typingWindows = typing and chatPage and ns.RowOnNow("chat:typing", ns.db.chatShowWhileTyping)
+	-- (It's on the Conversations tab: off with it. Audit 2026-11-25.)
+	local typingWindows = typing and chatPage and ns.PageOn("tabOn:Chat/page:2")
+		and ns.RowOnNow("chat:typing", ns.db.chatShowWhileTyping)
 	-- (Then the input box only while it's open: held after, it was an empty bar.)
 	local activeEditBox = not typingWindows and ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()
 	-- A whisper tab waiting to be read keeps the whole chat window up, tabs
@@ -13793,7 +13828,16 @@ function ns.UpdateFrames(cinematic, elapsed)
 	if activeEditBox then
 		ns.MarkChatHolders(activeEditBox)
 	end
-	local keepForGathering, keepForCreatures = ns.IsKeepingMinimapForTracking(now)
+	-- (The Minimap page's switch, for its extras.)
+	local minimapPage = ns.PageOn("handleMinimap")
+	-- (Keep Open's own switch since 2026-11-17: what keeps it up the whole
+	-- time; minimapPage's, Show Advanced's, what brings it up a while.)
+	local keepOpenOn = ns.PageOn("minimapKeepOpen")
+	-- (The tracking list read only while one of them is on. Audit 2026-11-25.)
+	local keepForGathering, keepForCreatures = false, false
+	if keepOpenOn or minimapPage then
+		keepForGathering, keepForCreatures = ns.IsKeepingMinimapForTracking(now)
+	end
 	-- (Quest tracker page, its switch on.)
 	local questTimerUp = ns.PageOn("handleQuests") and ns.db.questTimerShow and HasQuestTimer()
 	-- (Retail: a timer in the quest tracker keeps just that part up.)
@@ -13809,10 +13853,12 @@ function ns.UpdateFrames(cinematic, elapsed)
 	local rosterReveal = rosterRevealUntil > now
 	-- Tracking doesn't hold the minimap open in the places ticked under
 	-- "Except in" (cities and the like).
-	local trackingPaused = ns.IsTrackingOffHere()
+	local trackingPaused = (keepOpenOn or minimapPage) and ns.IsTrackingOffHere() -- (Audit 2026-11-25)
 	-- Mouseover groups: the rows the mouse is on (each held a while after it
 	-- leaves), and the events going on now, bring up every row in their groups.
-	local hoverGroups = ns.GetHoverGroups()
+	-- (The Hover Groups page off: none at all, their events and reach too,
+	-- page off = all off. Audit 2026-11-25: only hovering stopped.)
+	local hoverGroups = ns.PageOn("mouseover") and ns.GetHoverGroups() or NO_DEFAULTS
 	-- (A group set to work only in fights, or only out of them: left out
 	-- otherwise, its frames still coming up on their own. offWhen: the "when"
 	-- that's left out now. A group turned off (group.off) is always left out.)
@@ -13904,11 +13950,8 @@ function ns.UpdateFrames(cinematic, elapsed)
 	local events = tickTables.events
 	events.chat, events.whisper, events.typing = dockPeek, whisperUnread, typingWindows
 	-- (The Minimap, Quest tracker, Buffs/debuffs and Cooldown Manager pages'
-	-- extras: none while their page's switch is off.)
-	local minimapPage = ns.PageOn("handleMinimap")
-	-- (Keep Open's own switch since 2026-11-17: what keeps it up the whole
-	-- time; minimapPage's, Show Advanced's, what brings it up a while.)
-	local keepOpenOn = ns.PageOn("minimapKeepOpen")
+	-- extras: none while their page's switch is off. minimapPage and
+	-- keepOpenOn: above, with the tracking reads.)
 	local debuffPeekOn = ns.debuffPeekUntil > now or (debuffHeld and ns.db.debuffPeekUntilGone)
 	events.aura = cinematic and ns.PageOn("handleBuffs") and (buffPeekUntil > now or debuffPeekOn)
 	-- (A debuff peek alone brings up just the debuffs, not the buffs beside
@@ -14017,7 +14060,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 	-- (But the rows of the groups picked on the Death Cam page: up throughout.)
 	local deathKept = wipe(tickTables.deathKept)
 	if deathFade and ns.db.deathKeepGroups then
-		for _, group in ipairs(ns.GetHoverGroups()) do
+		for _, group in ipairs(hoverGroups) do -- (none with their page off: Audit 2026-11-25)
 			if ns.db.deathKeepGroups[ns.HoverGroupId(group)] then
 				for _, key in ipairs(group.members or NO_DEFAULTS) do deathKept[key] = true end
 			end

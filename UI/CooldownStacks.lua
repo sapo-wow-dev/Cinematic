@@ -153,8 +153,10 @@ local function HideLabel(text)
 	end
 end
 
+-- (And a tracked buffs' tab on, Buffs' or Bars': both off, none. Audit 2026-11-25.)
 local function On()
 	return ns.db and ns.db.cooldownStacks and ns.PageOn("handleCooldowns")
+		and not (ns.CdmTabOff("buffs") and ns.CdmTabOff("bars"))
 end
 
 local function ShowIcon(icon)
@@ -197,8 +199,12 @@ local function Update()
 	for _, name in ipairs(VIEWERS) do
 		local viewer = _G[name]
 		local pool = viewer and viewer.itemFramePool
+		-- (Its bar's tab off: none on its icons. Audit 2026-11-25.)
+		local tabOff = ns.CdmTabOff(ns.COOLDOWN_BUFF_GROUPS[name])
 		if type(pool) == "table" and type(pool.EnumerateActive) == "function" then
-			for icon in pool:EnumerateActive() do ShowIcon(icon) end
+			for icon in pool:EnumerateActive() do
+				if not tabOff then ShowIcon(icon) elseif labels[icon] then HideLabel(labels[icon]) end
+			end
 		end
 	end
 end
@@ -215,6 +221,8 @@ watcher:Hide()
 
 -- Your casts: one more stack each (a fresh count once the last ran out).
 watcher:SetScript("OnEvent", function(_, event, _, _, spellID)
+	-- (Off, nothing counted: page off = all off. Audit 2026-11-25.)
+	if event ~= "PLAYER_ENTERING_WORLD" and not On() then return end
 	if event == "UNIT_SPELLCAST_SUCCEEDED" then
 		local id = PlainNumber(spellID)
 		local entry = id and byCast[id]
@@ -247,9 +255,10 @@ pcall(watcher.RegisterEvent, watcher, "PLAYER_ENTERING_WORLD")
 function ns.ApplyCooldownStacks()
 	if not ns.db then return end
 	Update()
-	-- (Kept running while the page's switch is off: Update hides the
-	-- numbers then, and they come back with it.)
-	watcher:SetShown(ns.db.cooldownStacks and true or false)
+	-- (Stopped while the page's switch or its tabs are off, page off = all
+	-- off: run again as they flip, ns.SyncSwitches. Audit 2026-11-25; it
+	-- kept running and counting before.)
+	watcher:SetShown(On() and true or false)
 end
 
 -- /cine debug stacks: what it counted and found, the latest last.

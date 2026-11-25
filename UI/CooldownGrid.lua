@@ -217,7 +217,7 @@ local function LookGet(what, kind, key, tab, opts)
 		if own == nil then return nil, ns.CooldownGroupFlash(tab) and true or false end
 		return own
 	elseif what == "center" then
-		return ns.CooldownGroupCentered(key) and true or false
+		return ns.CooldownGroupCentered(key, false) and true or false -- (as set, tab off or not: Audit 2026-11-25)
 	elseif what == "stayUp" then
 		local prefix = RECHARGE[key]
 		if not (prefix and opts.KeyGet(prefix .. "WhileRecharging")) then return "off" end
@@ -231,7 +231,7 @@ local function LookGet(what, kind, key, tab, opts)
 		return own
 	end
 	local own = ns.CooldownRowOwn(key, what)
-	if own == nil then return nil, ns.CooldownRowSetting(what, nil, tab) end
+	if own == nil then return nil, ns.CooldownRowSetting(what, nil, tab, false) end -- (as set: Audit 2026-11-25)
 	return own
 end
 local function LookSet(what, kind, key, value, opts)
