@@ -38,9 +38,25 @@ function ns.CreatePlateLayoutPage(kit)
 
 	-- The layout shown and edited: the kind's own when it has one ticked, else
 	-- All plates' (read); made when first changed (write).
+	-- (A kind's own layout starts as a copy of All plates': its first change, or Own
+	-- layout ticked, used to start it empty, and that kind's plates lost every other
+	-- change made for all plates. Audit 2026-11-25.)
+	local function Copy(value)
+		if type(value) ~= "table" then return value end
+		local made = {}
+		for key, each in pairs(value) do made[key] = Copy(each) end
+		return made
+	end
+	local function OwnFromAll(layout)
+		if not layout or layout.own then return end
+		for key in pairs(layout) do layout[key] = nil end
+		for key, each in pairs(Copy(ns.PlateLayoutGet("all")) or {}) do layout[key] = each end
+		if type(layout.parts) ~= "table" then layout.parts = {} end
+		layout.own, layout.started = true, true
+	end
 	local function Editing(create)
 		local layout = ns.PlateLayoutGet(editKey, create)
-		if create and layout and editKey ~= "all" then layout.own = true end
+		if create and layout and editKey ~= "all" then OwnFromAll(layout) end
 		return layout
 	end
 	local function Shown()
@@ -143,7 +159,15 @@ function ns.CreatePlateLayoutPage(kit)
 		function(value)
 			-- (A Check's onChange saves in its place.)
 			local layout = ns.PlateLayoutGet(editKey, true)
-			layout.own = value and true or nil
+			-- (Ticked: a copy of All plates' to start from, then its own. Unticked: kept,
+			-- unused, for the next tick.)
+			if value and layout.started then
+				layout.own = true
+			elseif value then
+				OwnFromAll(layout)
+			else
+				layout.own = nil
+			end
 			Changed()
 		end)
 	own:SetPoint("LEFT", forDrop, "RIGHT", 12, 0)
@@ -853,9 +877,9 @@ end
 -- preview's copy, so it fits your plate style).
 function ns.PlateLayoutPreset(layout, which, plate)
 	if not layout then return end
-	local keepOwn = layout.own
+	local keepOwn, keepStarted = layout.own, layout.started
 	for key in pairs(layout) do layout[key] = nil end
-	layout.own, layout.parts = keepOwn, {}
+	layout.own, layout.started, layout.parts = keepOwn, keepStarted, {}
 	if which == "balanced" then
 		layout.center = "balanced"
 	elseif which == "compact" then

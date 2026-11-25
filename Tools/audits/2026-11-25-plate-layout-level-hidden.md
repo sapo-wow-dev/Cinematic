@@ -6,7 +6,7 @@ Found by: audit 2026-11-25 (the user: "what if we dont have level showing what h
 Code: Plates/PlateLayout.lua: ApplyPlateLayout, ns.PlateLayoutShift, Extents, ns.PlateLayoutLevelHidden (new);
 Plates/PlateParts.lua: ApplyPlate (tells the layout the level box's level)
 Clients: forever (retail: no layout, the call returns at once)
-Base: f5d5702
+Base: e039b75^
 
 ## Before / after
 - Before: hiding the level box only faded it to nothing. The game still saw it up, so crowd control (roots, stuns)
