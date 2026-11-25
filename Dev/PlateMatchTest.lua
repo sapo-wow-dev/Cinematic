@@ -307,7 +307,7 @@ local STATE_PIECE = {
 	marker = "RaidTargetFrame", elite = "ClassificationFrame", rare = "ClassificationFrame",
 	rareelite = "ClassificationFrame", boss = "PlayerLevelDiffFrame.highLevelTexture",
 	aggro = "aggroHighlightBase", gaining = "aggroHighlightBase", tapped = "HealthBarsContainer.healthBar",
-	debuffs = "AurasFrame.DebuffListFrame",
+	debuffs = "AurasFrame.DebuffListFrame", buffs = "AurasFrame.BuffListFrame", -- (buffs: 2026-11-25)
 	crowd = "AurasFrame.CrowdControlListFrame", -- (right of the level box: a real plate's root, 2026-11-23)
 	quest = "SoftTargetFrame.Icon",
 }
@@ -336,6 +336,9 @@ local function StateShows(copy, state)
 		want = Bit("CAST_BAR_DISPLAY_CVAR", "NamePlateCastBarDisplay", "HighlightWhenCastTarget")
 	elseif state == "elite" or state == "rare" or state == "rareelite" then
 		want = Bit("INFO_DISPLAY_CVAR", "NamePlateInfoDisplay", "RarityIcon")
+	elseif state == "buffs" then
+		-- (The game's buff row on an enemy NPC only with Buffs in your enemy aura setting.)
+		want = Bit("ENEMY_NPC_AURA_DISPLAY_CVAR", "NamePlateEnemyNpcAuraDisplay", "Buffs")
 	elseif state == "aggro" or state == "gaining" then
 		-- (The glow with Progressive on; else the bar in the threat color with Health Bar Color on.)
 		want = copy.displayAggroHighlight and true or false
@@ -793,8 +796,8 @@ ns.TestKit.Define({
 		-- kit's undo puts it back) and test layouts put on in its place.
 		{ key = "layoutpage", title = "Nameplate Style's Layout tab: the plate, its parts, balance, the keyboard",
 			-- (Rebuilt look, 2026-11-25: the user, "this looks like shit"; proven again in run q2e75.)
-			-- (Its guides rebuilt as marks off the plate, 2026-11-25; proven in run q2431.)
-			proven = "platematch q2431 (2026-11-25): marks off the plate in 3 modes, over every frame, status words, pop-out, 39/39",
+			-- (Its guides rebuilt as marks off the plate, 2026-11-25, proven in run q2431; then
+			-- picking a part shows it and the Buffs sample: to prove again.)
 			run = function(r)
 			if not (ns.OpenOptions and ns.PlateLayoutApply) then return r:Skip("Style isn't loaded") end
 			if InCombatLockdown() then
@@ -949,7 +952,8 @@ ns.TestKit.Define({
 			local statesNow = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
 			local wasStates = {}
 			for key, on in pairs(statesNow) do wasStates[key] = on end
-			local ALL_UP = { "casting", "marker", "debuffs", "crowd", "quest" }
+			-- (Buffs too since the Buffs state: Balanced measures their row, run qd5a8 read 31 off without it.)
+			local ALL_UP = { "casting", "marker", "debuffs", "buffs", "crowd", "quest" }
 			for _, key in ipairs(ALL_UP) do
 				if not statesNow[key] and ns.TogglePlatePreviewState then ns.TogglePlatePreviewState(key) end
 			end
@@ -1017,6 +1021,42 @@ ns.TestKit.Define({
 				if scroll and scroll.GetVerticalScrollRange then scroll:SetVerticalScroll(scroll:GetVerticalScrollRange()) end
 				r:Shot("Layout tab, the parts panel", { behind = panel })
 				if scroll then scroll:SetVerticalScroll(0) end
+			end
+			-- Every part, picked: on the preview where the game would draw it, or the page says your
+			-- game's settings hide it (the user, 2026-11-25: Debuffs picked, none showed; "everything
+			-- should be previewable"). The preview's states start bare, so each pick has to bring
+			-- its part up itself.
+			if measured then
+				local statesNow2 = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
+				local before2 = {}
+				for key, on in pairs(statesNow2) do if on then before2[#before2 + 1] = key end end
+				local missing, noted = {}, {}
+				for _, part in ipairs(ns.PLATE_LAYOUT_PARTS) do
+					local on = {}
+					for key, value in pairs(statesNow2) do if value then on[#on + 1] = key end end
+					for _, key in ipairs(on) do if statesNow2[key] then ns.TogglePlatePreviewState(key) end end
+					page.Select(part.key)
+					page.Redraw()
+					r:Sleep(0.2)
+					local f = copy
+					for name in part.path:gmatch("[^.]+") do f = f and f[name] end
+					local seen = f and PartShown(f, part.key)
+					local hiddenBy = ns.PlateLayoutHiddenBySettings and ns.PlateLayoutHiddenBySettings(part.key)
+					if hiddenBy then noted[#noted + 1] = part.label .. " (" .. hiddenBy .. ")" end
+					if not seen and not hiddenBy then missing[#missing + 1] = part.label end
+					if part.key == "debuffs" or part.key == "buffs" or part.key == "softTarget" or part.key == "castShield" then
+						r:Shot("Layout tab, " .. part.label .. " picked from bare: on the preview", { behind = panel })
+					end
+				end
+				r:Log("  hidden by your game's settings (the page says so): " .. (#noted > 0 and table.concat(noted, ", ") or "none"))
+				r:Verdict(#missing == 0, #missing == 0 and "every part picked shows on the preview (or the page says your settings hide it)"
+					or ("picked but not shown: " .. table.concat(missing, ", ")))
+				-- (The preview's states back as they were.)
+				local now2 = {}
+				for key, value in pairs(statesNow2) do if value then now2[#now2 + 1] = key end end
+				for _, key in ipairs(now2) do ns.TogglePlatePreviewState(key) end
+				for _, key in ipairs(before2) do if not statesNow2[key] then ns.TogglePlatePreviewState(key) end end
+				page.Redraw()
 			end
 			-- The shared preview frame (the user, 2026-11-25: "i cant pop it out"): popped out into
 			-- its window, the plate and its parts still there and clickable, then put back. Your

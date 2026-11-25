@@ -447,6 +447,33 @@ function ns.CreatePlateLayoutPage(kit)
 	end
 	holder.onStates = Redraw
 
+	-- Picking a part puts it on the preview (the user, 2026-11-25: Debuffs picked,
+	-- no debuffs shown): the preview's state that shows it turned on, the rest
+	-- kept. The elite mark takes the marker off: the game hides it under one.
+	local PART_STATE = { debuffs = "debuffs", buffs = "buffs", crowd = "crowd", marker = "marker", elite = "elite",
+		cast = "casting", castIcon = "casting", castText = "casting", castShield = "locked", softTarget = "quest" }
+	local function ShowPart(key)
+		local state = PART_STATE[key]
+		local states = ns.PlatePreviewStates and ns.PlatePreviewStates()
+		if not (state and states and ns.TogglePlatePreviewState) then return false end
+		local changed = false
+		if key == "elite" and states.marker then
+			ns.TogglePlatePreviewState("marker")
+			changed = true
+		end
+		if not states[state] then
+			ns.TogglePlatePreviewState(state)
+			changed = true
+		end
+		return changed
+	end
+	local function Pick(key)
+		selected = key
+		if ShowPart(key) then Redraw() end
+		kit.Refresh()
+		RedrawOverlay()
+	end
+
 	-- Dragging a part: the cursor's move in the plate's units, snapped to the
 	-- game's place and the bar's middle line within 3.
 	local drag
@@ -529,7 +556,7 @@ function ns.CreatePlateLayoutPage(kit)
 	end
 
 	-- (Two toggles in the stage's top right: every part up, and the lines.)
-	local ALL_UP = { "casting", "marker", "debuffs", "crowd", "quest" }
+	local ALL_UP = { "casting", "marker", "debuffs", "buffs", "crowd", "quest" }
 	local function AllUp()
 		local states = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
 		for _, key in ipairs(ALL_UP) do if not states[key] then return false end end
@@ -609,11 +636,7 @@ function ns.CreatePlateLayoutPage(kit)
 		local glow = row:CreateTexture(nil, "HIGHLIGHT")
 		glow:SetAllPoints()
 		glow:SetColorTexture(1, 1, 1, 0.08)
-		row:SetScript("OnClick", function()
-			selected = part.key
-			kit.Refresh()
-			RedrawOverlay()
-		end)
+		row:SetScript("OnClick", function() Pick(part.key) end)
 		kit.Tooltip(row, L[part.tip])
 		rows[part.key] = row
 	end
@@ -672,6 +695,51 @@ function ns.CreatePlateLayoutPage(kit)
 		L["How big it is, times the game's size."], Changed, 44)
 	local gap, gapName = sizeLine:Box(L["Gap"], PartField("gap", 0), -20, 40, 1, "%d", 1,
 		L["How far it sits from the part it hangs on."], Changed, 44)
+	-- (A part your game's nameplate settings hide: said so, under its fields, so
+	-- you don't lay out what you'll never see. The preview shows it all the same
+	-- where the game would draw it.)
+	local hiddenNote = partsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	hiddenNote:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -172)
+	hiddenNote:SetWidth(WIDTH - FIELDS_X - 16)
+	hiddenNote:SetJustifyH("LEFT")
+	hiddenNote:SetTextColor(1, 0.69, 0.38)
+	hiddenNote.searchSkip = true
+	local function Bit(cvarKey, enumName, which)
+		local registry, constants = _G.CVarCallbackRegistry, _G.NamePlateConstants
+		local values = Enum and Enum[enumName]
+		if not (registry and constants and values and constants[cvarKey] and values[which] ~= nil) then return nil end
+		local ok, on = pcall(registry.GetCVarBitfieldIndex, registry, constants[cvarKey], values[which])
+		return ok and on and true or false
+	end
+	-- (What your game's settings say for a part on an enemy NPC's plate: false = hidden.)
+	local SETTING_OF = {
+		debuffs = { "ENEMY_NPC_AURA_DISPLAY_CVAR", "NamePlateEnemyNpcAuraDisplay", "Debuffs", "debuffs" },
+		buffs = { "ENEMY_NPC_AURA_DISPLAY_CVAR", "NamePlateEnemyNpcAuraDisplay", "Buffs", "buffs" },
+		crowd = { "ENEMY_NPC_AURA_DISPLAY_CVAR", "NamePlateEnemyNpcAuraDisplay", "CrowdControl", "crowd control" },
+		castIcon = { "CAST_BAR_DISPLAY_CVAR", "NamePlateCastBarDisplay", "SpellIcon", "the spell icon" },
+		castText = { "CAST_BAR_DISPLAY_CVAR", "NamePlateCastBarDisplay", "SpellName", "the spell name" },
+		elite = { "INFO_DISPLAY_CVAR", "NamePlateInfoDisplay", "RarityIcon", "the elite mark" },
+	}
+	local function HiddenBySettings(key)
+		local each = SETTING_OF[key]
+		if each then
+			local on = Bit(each[1], each[2], each[3])
+			if on == false then return each[4] end
+			return nil
+		end
+		if key == "softTarget" then
+			-- (As the preview's own check (PlateCopy's quest state): a size over 0 and the icon
+			-- on friendly units. Run qd5a8: the friendly icon off, no icon and no note.)
+			local registry, constants = _G.CVarCallbackRegistry, _G.NamePlateConstants
+			local ok, size, friend = pcall(function()
+				return registry:GetCVarNumberOrDefault(constants.SOFT_TARGET_NAMEPLATE_SIZE_CVAR),
+					registry:GetCVarValueBool(constants.SOFT_TARGET_ICON_FRIEND_CVAR)
+			end)
+			if ok and ((type(size) == "number" and size <= 0) or not friend) then return "the soft target icon" end
+		end
+		return nil
+	end
+	ns.PlateLayoutHiddenBySettings = HiddenBySettings -- (the tests read it)
 	local countLabel = Caption(partsPanel, L["Balance"])
 	countLabel:SetPoint("TOPLEFT", partsPanel, "TOPLEFT", FIELDS_X, -140)
 	local countDrop = kit.Dropdown(content, PartField("count", "always"), function()
@@ -719,6 +787,12 @@ function ns.CreatePlateLayoutPage(kit)
 		local hangName = hangs == "plate" and L["the plate"] or nil
 		for _, other in ipairs(PARTS) do if other.key == hangs then hangName = L[other.label] end end
 		hangsText:SetText(hangName and L["Hangs on: %s"]:format(hangName) or "")
+		local hiddenWhat = HiddenBySettings(selected)
+		hiddenNote:SetShown(hiddenWhat ~= nil)
+		if hiddenWhat then
+			hiddenNote:SetText(L["Your game's nameplate settings hide %s, so it won't show on your plates. Turn it on in " ..
+				"the game's Options > Nameplates."]:format(L[hiddenWhat]))
+		end
 		local hung = p and p.to and true or false
 		hangDrop:SetShown(part and part.hang and true or false)
 		sideDrop:SetShown(hung)
@@ -770,11 +844,7 @@ function ns.CreatePlateLayoutPage(kit)
 		{ sizeLine, "Size, Gap" }, { countDrop, "Balance" }, { mirror, "Mirror" }, { resetAll, "Reset layout" } },
 		-- (Refresh: the page's controls drawn again, for a layout changed from outside it: the tests.)
 		Refresh = function() kit.Refresh() end,
-		holder = holder, overlay = overlay, Redraw = Redraw, Select = function(key)
-		selected = key
-		kit.Refresh()
-		RedrawOverlay()
-	end, Edit = function(key) editKey = key kit.Refresh() Redraw() end, hits = hits, keys = keys, canvas = canvas, readout = offText,
+		holder = holder, overlay = overlay, Redraw = Redraw, Select = Pick, Edit = function(key) editKey = key kit.Refresh() Redraw() end, hits = hits, keys = keys, canvas = canvas, readout = offText,
 		marks = { unit = unitMark, middle = groupMark, span = span }, plateParts = PARTS, copyOf = CopyOf }
 end
 

@@ -361,6 +361,8 @@ local STATE_PILLS = {
 	{ "marker", "Marker", "With a raid marker.", "More" },
 	{ "tapped", "Tapped", "Tapped by someone else: the game's grey bar.", "More" },
 	{ "debuffs", "Debuffs", "With your debuffs on it.", "More" },
+	-- (Its own buffs: the Layout tab places the buff row, 2026-11-25.)
+	{ "buffs", "Buffs", "With its own buffs on it, if your nameplate settings show buffs.", "More" },
 	{ "crowd", "Crowd control", "Rooted, stunned...: the game's row right of the level box.", "More" },
 	{ "quest", "Quest giver", "Your soft target's icon over it: the game's quest mark.", "More" },
 }

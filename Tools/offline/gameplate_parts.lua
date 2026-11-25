@@ -78,6 +78,14 @@ return function(Note)
 		copy.AurasFrame.DebuffListFrame = Sub("Frame", copy.AurasFrame)
 		copy.AurasFrame.BuffListFrame, copy.AurasFrame.CrowdControlListFrame = Sub("Frame", copy.AurasFrame),
 			Sub("Frame", copy.AurasFrame)
+		-- (The game's shown check: each list as an enemy NPC's aura setting has it, all three on
+		-- by default. Buffs could be hidden by the preview before, so it shows them again.)
+		copy.AurasFrame.UpdateShownState = function(self)
+			self:Show()
+			self.DebuffListFrame:Show()
+			self.BuffListFrame:Show()
+			self.CrowdControlListFrame:Show()
+		end
 		copy.AurasFrame.RefreshExplicitAuras = function(self) Note("auras " .. #(self.explicitAuraList or {})) end
 		-- (Each list filled on its own, as the game's RefreshList; each aura's time left noted.)
 		copy.AurasFrame.auraItemFramePool = { ReleaseAll = function() Note("auras released") end }

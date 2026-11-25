@@ -22,7 +22,7 @@ local LEVEL_FROM_YOURS = { hostile = 2, neutral = 0, friendly = 5 }
 -- The states, in the order they're put on (and taken off).
 ns.GAME_PLATE_HEALTH = 2400 -- (the sample's health total)
 ns.GAME_PLATE_STATES = { "target", "focus", "casting", "locked", "channel", "interrupted", "important", "atyou", "marker",
-	"elite", "rare", "rareelite", "boss", "aggro", "gaining", "tapped", "debuffs", "crowd", "quest" }
+	"elite", "rare", "rareelite", "boss", "aggro", "gaining", "tapped", "debuffs", "buffs", "crowd", "quest" }
 
 local function Quiet(frame, keep)
 	if type(frame) ~= "table" or type(frame.UnregisterAllEvents) ~= "function" then return end
@@ -283,37 +283,43 @@ end
 -- its own row right of the level box; the preview had no times and no row.)
 local DEBUFFS = { { 172, 24, 30 }, { 980, 18, 24 }, { 348, 12, 21 }, { 702, 31, 60 }, { 1714, 5, 12 } }
 local CROWD = { { 339, 10, 15 } }
+-- The unit's own buffs (the Buffs state, 2026-11-25: the Layout tab places the
+-- buff row, and nothing showed one): two, as the game's buff row holds
+-- (maxAuraItemsDisplayed 2), cast by the unit, not you.
+local BUFFS = { { 6673, 40, 120 }, { 1126, 25, 60 } }
 local RENEW = 4 -- (the lowest time left above: renewed before it reaches it)
-local function AuraList(spells, first)
+local function AuraList(spells, first, helpful)
 	local list = EmptyAuras()
 	local now = GetTime()
 	for i, each in ipairs(spells) do
 		local icon = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(each[1]) or 136197
-		list[first + i] = { auraInstanceID = first + i, spellId = each[1], sourceUnit = "player", isHarmful = true,
+		list[first + i] = { auraInstanceID = first + i, spellId = each[1], sourceUnit = not helpful and "player" or nil,
+			isHarmful = not helpful, isHelpful = helpful and true or nil,
 			applications = (first == 0 and i == 1) and 3 or 1, icon = icon, duration = each[3],
 			expirationTime = now + each[2] }
 	end
 	return list
 end
-local function Auras(plate, copy, debuffs, crowd)
+local function Auras(plate, copy, debuffs, crowd, buffs)
 	local auras = copy.AurasFrame
 	-- (The game's shown check first: it shows the lists your aura settings
-	-- want. Buffs and the loss of control slot left out (NPCs never show it).
-	-- Each list filled with its own: the game's explicit list would put the
-	-- same auras in every row.)
+	-- want; the buff row only with the Buffs state, the loss of control slot
+	-- never (NPCs never show it). Each list filled with its own: the game's
+	-- explicit list would put the same auras in every row.)
 	auras:UpdateShownState()
-	auras.BuffListFrame:Hide()
+	if not buffs then auras.BuffListFrame:Hide() end
 	if auras.LossOfControlFrame then auras.LossOfControlFrame:Hide() end
 	auras.explicitAuraList = EmptyAuras()
 	auras.auraItemFramePool:ReleaseAll()
 	if debuffs then auras:RefreshList(auras.DebuffListFrame, AuraList(DEBUFFS, 0)) end
 	if crowd then auras:RefreshList(auras.CrowdControlListFrame, AuraList(CROWD, 100)) end
-	plate.aurasRenewAt = (debuffs or crowd) and GetTime() + RENEW or nil
+	if buffs then auras:RefreshList(auras.BuffListFrame, AuraList(BUFFS, 200, true)) end
+	plate.aurasRenewAt = (debuffs or crowd or buffs) and GetTime() + RENEW or nil
 end
 ns.RenewGamePlateAuras = function(plate)
 	local copy = plate and plate.gameCopy
 	if copy and plate.aurasRenewAt and GetTime() >= plate.aurasRenewAt then
-		Auras(plate, copy, plate.states.debuffs, plate.states.crowd)
+		Auras(plate, copy, plate.states.debuffs, plate.states.crowd, plate.states.buffs)
 	end
 end
 
@@ -411,7 +417,7 @@ function ns.SetGamePlateStates(plate, states)
 			if piece then piece:Hide() end
 		end
 	end
-	Auras(plate, copy, states.debuffs, states.crowd)
+	Auras(plate, copy, states.debuffs, states.crowd, states.buffs)
 	if ns.StylePlateCast then ns.StylePlateCast(plate) end
 end
 

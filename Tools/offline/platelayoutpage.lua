@@ -64,6 +64,22 @@ if page then
 	Check("the right arrow: the level box 1 right, the key kept", p and p.x == 1 and propagate == false, p and p.x)
 	ns.db.plateLayoutData = nil
 	ns.PlateLayoutChanged()
+	-- (Picking a part puts it on the preview: the user, 2026-11-25, Debuffs picked, none shown.)
+	local states = ns.PlatePreviewStates()
+	local WANTS = { debuffs = { "debuffs" }, buffs = { "buffs" }, crowd = { "crowd" }, marker = { "marker" },
+		castShield = { "locked", "casting" }, softTarget = { "quest" }, castText = { "casting" } }
+	for _, key in ipairs({ "debuffs", "buffs", "crowd", "marker", "castShield", "softTarget", "castText" }) do
+		local on = {}
+		for each, value in pairs(states) do if value then on[#on + 1] = each end end
+		for _, each in ipairs(on) do if states[each] then ns.TogglePlatePreviewState(each) end end
+		page.Select(key)
+		local all = true
+		for _, want in ipairs(WANTS[key]) do if not states[want] then all = false end end
+		Check("picking " .. key .. " turns on " .. table.concat(WANTS[key], " and "), all)
+	end
+	page.Select("elite")
+	Check("picking the elite mark turns it on and the marker off (the game hides it under one)",
+		states.elite and not states.marker and true or false)
 end
 Check("no error reported while building", logged == ns.ReportError and #errors == 0)
 
