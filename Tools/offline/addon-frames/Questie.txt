@@ -2,7 +2,8 @@
 # QuestieTracker.lua: checked together) don't name, each with why it needs no
 # line there (Tools/addon-check.py check 3). A new frame of its that's in
 # neither = a MISS: decide it. One per line: name or glob (*), a space, why.
-# Checked against v12.11.1, 2026-11-21 (in game too: addontest all green).
+# Checked against v12.11.1, 2026-11-21 (in game too: addontest all green);
+# v12.14.0, 2026-11-25 (addon-check).
 
 # On screen, covered through a frame that is faded.
 QuestieFrame* its map icons: minimap ones in QuestieFrameGroup (on the Minimap), others on the world map
@@ -23,6 +24,5 @@ QuestieProfilerIndicator its profiler's on-screen button, only while profiling (
 QuestieGamepadMapTooltip its map icon tooltip for the gamepad
 QuestieWaypointMinimapTooltip its route tooltip on the minimap
 QuestieTrackerQuestTooltip its tracker's quest tooltip
-QuestieTutorialAutoRejectInBattlegrounds its one-time tutorial popup
 QuestieTutorialChooseObjectiveType its one-time tutorial popup
 QuestieTutorialShowRunes its one-time tutorial popup

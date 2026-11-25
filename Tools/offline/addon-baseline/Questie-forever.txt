@@ -1,4 +1,4 @@
-# version 12.12.0
+# version 12.14.0
 EnableMouse(false or a variable) in Questie/Modules/Options/QuestieOptionsControls.lua
 EnableMouse(false or a variable) in Questie/Modules/QuestieNameplate.lua
 EnableMouse(false or a variable) in Questie/Modules/Tracker/TrackerBaseFrame.lua
@@ -17,7 +17,6 @@ frame QuestieProfilerIndicator
 frame QuestieScanningTooltip
 frame QuestieStandaloneSettings
 frame QuestieTrackerQuestTooltip
-frame QuestieTutorialAutoRejectInBattlegrounds
 frame QuestieTutorialChooseObjectiveType
 frame QuestieTutorialShowRunes
 frame QuestieWaypointMinimapTooltip
@@ -42,6 +41,7 @@ hooks C_QuestLog:RemoveQuestWatch
 hooks ChatFrame_OnHyperlinkShow
 hooks DeleteCursorItem
 hooks ManageFramePositions
+hooks ObjectiveTrackerFrame:MarkDirty
 hooks QuestFrameGreetingPanel_OnShow
 hooks RemoveQuestWatch
 hooks ScrollFrame_OnScrollRangeChanged

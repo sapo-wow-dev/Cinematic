@@ -108,6 +108,14 @@ end
 
 ns.WhenAddonLoads("Questie", function()
 	ns.FadeWithRow("quests", "quests", { "Questie_BaseFrame" })
+	-- With its tracker on, it hides the game's. In a fight the game can show
+	-- its tracker again, and Questie can't hide it till the fight's over, so
+	-- it holds it at alpha 0 meanwhile. We fade relative to that alpha
+	-- rather than writing ours back over it, which brought the game's
+	-- tracker up beside Questie's for the rest of the fight. With its
+	-- tracker off, the alpha is the game's own 1 and the row fades it as
+	-- usual.
+	ns.FollowOwnAlpha({ "ObjectiveTrackerFrame" })
 	local buttons = {}
 	for i = 1, ItemButtons() do
 		buttons[i] = "Questie_ItemButton" .. i
@@ -183,3 +191,9 @@ function ns.QuestieObjectiveMob(unit)
 	end
 	return false
 end
+
+-- The addon kit (Tools/addon-kit): what's meant to differ with Questie loaded.
+ns.AddonKitExpect("Questie", "frame.quests", "ObjectiveTrackerFrame.*", "its quest tracker stands in: the game's hidden")
+ns.AddonKitExpect("Questie", "touch.ObjectiveTrackerFrame", "*", "its quest tracker stands in: the game's hidden")
+ns.AddonKitExpect("Questie", "hook.StaticPopup_Show", "state", "its hooksecurefunc: ours still runs, before its own")
+ns.AddonKitExpect("Questie", "touch.StaticPopup_Show", "sameAsLogin", "its hooksecurefunc: ours still runs, before its own")
