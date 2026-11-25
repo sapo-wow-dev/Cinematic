@@ -91,8 +91,11 @@ local function Plain(value)
 	return not (issecretvalue and issecretvalue(value))
 end
 
+-- (And its General tab on: who draws each kind, and our numbers, are on it;
+-- a tab is a container. Audit 2026-11-25: only the page's switch was read.)
+local GENERAL_TAB = "tabOn:Combat Text Style/page:1"
 local function PageOn()
-	return ns.StyleOn("combatTextStyle")
+	return ns.StyleOn("combatTextStyle") and ns.db[GENERAL_TAB] ~= false
 end
 
 local function On()
@@ -1458,6 +1461,8 @@ end)
 -- Who draws a kind: "ours", "game" or "none". Your pet's can be "group"
 -- (the user's ask, 2026-11-19): ours alone, the game's in a group or raid.
 local function By(kind)
+	-- (Its General tab off: the game's, as it was. Audit 2026-11-25.)
+	if ns.db and ns.db[GENERAL_TAB] == false then return "game" end
 	local value = Value(BY_KEY[kind])
 	if value == "group" and kind == "pet" then
 		return ((IsInGroup and IsInGroup()) or (IsInRaid and IsInRaid())) and "game" or "ours"
@@ -1891,7 +1896,15 @@ driver:SetScript("OnEvent", ns.Profiled("Combat text plates", function(_, event,
 		own:SetScript("OnEvent", ns.Profiled("Combat text own", function(_, _, who, action, _, _, school)
 			if On() then OnOwnHit(who, action, school) end
 		end))
-		if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(2, function() ns.Guard(ns.RefreshCombatTextStyle) end) end
+		-- (Only while the page is on, or a game setting it holds isn't let go
+		-- yet: put back, it stops. Audit 2026-11-25: it ran forever.)
+		ns.FeatureLoop(CreateFrame("Frame"), function() ns.RefreshCombatTextStyle() end, function()
+			if ns.StyleOn("combatTextStyle") then return true end
+			for _, sets in pairs(GAME_SETS) do
+				if sets.off.active or sets.on.active then return true end
+			end
+			return false
+		end, 2)
 		ns.RefreshCombatTextStyle()
 		return
 	end

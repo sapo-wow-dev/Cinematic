@@ -129,7 +129,12 @@ function ns.UnitAuraLift(frame, plate)
 	if not framesHooked[frame] and type(frame.UpdateAuras) == "function" then
 		framesHooked[frame] = true
 		-- (Auras come and go, and Buffs On Top flips: the row again after the game's layout.)
-		hooksecurefunc(frame, "UpdateAuras", function(self) Apply(self) end)
+		-- (Nothing lifted and Unit Frames Style off: nothing to do.
+		-- Audit 2026-11-25: it ran on every aura change once a shape had been used.)
+		hooksecurefunc(frame, "UpdateAuras", function(self)
+			if (lifts[self] or 0) == 0 and not ns.StyleOn("ufStyle") then return end
+			Apply(self)
+		end)
 	end
 	Apply(frame)
 end

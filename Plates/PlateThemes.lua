@@ -86,7 +86,9 @@ end
 -- page: none while it follows General, as plates always have.
 function ns.PlateThemeExtras(key)
 	local db = ns.db
-	if not (db and db.styleGeneral) then return nil, nil end
+	-- (Off with Nameplate Style's own switch too, as PlateThemeBar.
+	-- Audit 2026-11-25: only Enable Style was read, so its ground and shape stayed.)
+	if not (db and ns.StyleOn("handlePlateStyle", db)) then return nil, nil end
 	local theme = ns.PlateThemeNow(key)
 	if not theme then return nil, nil end
 	return theme.shape, theme.ground

@@ -302,6 +302,9 @@ end
 -- One tooltip dressed as the look says (look nil: as the game has it).
 -- r, g, b: its unit's or item's color, for In its color.
 local skins = setmetatable({}, { __mode = "k" })
+-- (The game's tooltips our skin is on now: none once the page is off and each
+-- is put back, so their shows then cost nothing. Audit 2026-11-25: skins stayed made.)
+local worn = setmetatable({}, { __mode = "k" })
 local function Dress(tooltip, look, r, g, b)
 	local slice = tooltip.NineSlice
 	if not slice then return end
@@ -357,8 +360,11 @@ end
 
 local function Apply(tooltip)
 	local active = ns.StyleOn("tooltipStyle")
-	if not active and not next(skins) and not next(touched) then return end
+	-- (This tooltip not dressed since its last put-back: nothing to do.
+	-- Audit 2026-11-25: any skin or faded piece made, the preview's too, ran it all.)
+	if not active and not worn[tooltip] then return end
 	Dress(tooltip, active and Look() or nil, ColorOf(tooltip))
+	worn[tooltip] = active or nil -- (the game's tooltips only, not the preview's. Audit 2026-11-25)
 end
 
 -- Every tooltip again, and the fonts and bar (the page's settings changing).

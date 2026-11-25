@@ -5539,7 +5539,9 @@ ticker:SetScript("OnEvent", ns.Profiled("Core events", function(self, event, arg
 		-- (The blank font from the settings this character logs in with: after
 		-- its own profile is loaded over the last character's. Picked before,
 		-- one character's XP choice went to the next: Tools/offline/xpfont.lua.)
-		if ns.db.hideWorldText and ns.db.combatTextStyle and ns.db.styleGeneral ~= false and ns.ModuleLoaded("style") then
+		-- (And its tab, Combat Text Style's General: a tab is a container. Audit 2026-11-25.)
+		if ns.db.hideWorldText and ns.db.combatTextStyle and ns.db.styleGeneral ~= false and ns.ModuleLoaded("style")
+			and ns.db["tabOn:Combat Text Style/page:1"] ~= false then
 			ns.blankWorldFont = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Fonts\\Blank.ttf"
 			DAMAGE_TEXT_FONT = ns.blankWorldFont
 		end

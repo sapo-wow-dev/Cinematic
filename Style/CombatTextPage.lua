@@ -256,7 +256,8 @@ function ns.CreateCombatTextStylePanel(kit)
 	-- (The XP row's relog: the tick isn't what the game draws yet.)
 	local function RestartPending()
 		local db = ns.db or {}
-		local wanted = db.hideWorldText and db.combatTextStyle and db.styleGeneral ~= false and true or false
+		local wanted = db.hideWorldText and db.combatTextStyle and db.styleGeneral ~= false
+			and db["tabOn:Combat Text Style/page:1"] ~= false and true or false -- (its tab too: Audit 2026-11-25)
 		local live = db.worldTextLive
 		if live == nil then live = ns.blankWorldFont ~= nil end
 		return wanted ~= live

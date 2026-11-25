@@ -347,7 +347,10 @@ local function Lift(ring)
 	if ring.GetRotation and lift.SetRotation then
 		local okTurn, turn = pcall(ring.GetRotation, ring)
 		if okTurn and type(Plain(turn)) == "number" then lift:SetRotation(turn) end
-		hooksecurefunc(ring, "SetRotation", function(_, angle)
+		-- (Only while it's tinted, the copy shown: turned to the ring again as it
+		-- shows, TintRings. Audit 2026-11-25: it kept turning the hidden copy.)
+		hooksecurefunc(ring, "SetRotation", function(self, angle)
+			if not ringsTinted[self] then return end
 			if type(Plain(angle)) == "number" then lift:SetRotation(angle) end
 		end)
 	end
@@ -366,6 +369,11 @@ local function TintRings(color)
 				local lift = Lift(ring)
 				if lift then
 					lift:SetVertexColor(r, g, b, RING_LIFT)
+					-- (Turned as the ring is now: its hook rests while untinted. Audit 2026-11-25.)
+					if ring.GetRotation and lift.SetRotation then
+						local okTurn, turn = pcall(ring.GetRotation, ring)
+						if okTurn and type(Plain(turn)) == "number" then lift:SetRotation(turn) end
+					end
 					lift:Show()
 				end
 			elseif ringsTinted[ring] then

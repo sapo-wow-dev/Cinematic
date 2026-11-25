@@ -161,8 +161,11 @@ local looks = {}
 function ns.StyleLook(switchKey, off)
 	local pair = looks[switchKey]
 	if not pair then
-		local function Proxy(on)
+		local function Proxy(pageOn)
 			return setmetatable({}, { __index = function(_, key)
+				-- (A setting under a switch that's off, its tab's (a tab is a
+				-- container): its default too. Audit 2026-11-25: only the page's was asked.)
+				local on = pageOn and not ns.MasterOff(key)
 				local source = on and ns.db or ns.DEFAULTS
 				local value = source and source[key]
 				local entry = shared[key]

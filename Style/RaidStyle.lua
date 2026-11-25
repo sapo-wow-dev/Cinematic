@@ -166,11 +166,19 @@ end
 local dressing = false
 local skinned = setmetatable({}, { __mode = "k" }) -- health bar -> true, once it has our border's pieces
 local valueHooked = setmetatable({}, { __mode = "k" }) -- health bar -> true, once By health follows its value
+-- (Frames dressed with Raid Style or Interface Recolor on: put back once as
+-- both go off, then left be. Audit 2026-11-25: with both off every member's
+-- update still ran all of Dress, from the game's hooks.)
+local dressed = setmetatable({}, { __mode = "k" })
 -- One compact frame as its group's look says.
 local function Dress(frame)
-	if dressing or not frame or not ns.Reachable(frame) then return end
+	if dressing or not frame then return end
+	local any = ns.StyleOn("rfStyle") or ns.StyleOn("irStyle")
+	if not (any or dressed[frame]) then return end
+	if not ns.Reachable(frame) then return end
 	local id = GroupOf(frame)
 	if not id then return end
+	dressed[frame] = any or nil -- (Audit 2026-11-25)
 	local active = ns.StyleOn("rfStyle")
 	local view = active and View(id) or nil
 	local unit = frame.displayedUnit or frame.unit

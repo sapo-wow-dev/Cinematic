@@ -2605,6 +2605,10 @@ local frameInfo = setmetatable({}, { __mode = "k" })
 -- One frame (id) as the page says, every game frame it covers.
 local function DressFrame(info)
 	local active = ns.StyleOn("ufStyle")
+	-- (Off and nothing dressed since it was last put back, RefreshUnitStyle's
+	-- settling pass: nothing to do, and no hooks till the page is first on.
+	-- Audit 2026-11-25: every target change dressed every frame, page off.)
+	if active then later.styled = true elseif not later.styled then return end
 	local view = active and View(info[1]) or nil
 	for _, frame in ipairs(GameFrames(info)) do
 		frameInfo[frame] = info
@@ -2719,9 +2723,14 @@ local function DressFrame(info)
 						later.GameSet(power, info, frame)
 					end)
 					-- (And whatever else turns it: checked as the power changes.)
-					local Keep = ns.Profiled("Unit power keep", function()
+					local Kept = ns.Profiled("Unit power keep", function()
 						KeepColor(power, frame.unit, function() Dress(info) end)
 					end)
+					-- (Nothing of ours to keep once the page is off and put back:
+					-- out first, before the profiler's wrap. Audit 2026-11-25.)
+					local function Keep()
+						if later.styled then Kept() end
+					end
 					hooksecurefunc(power, "SetValue", Keep)
 					hooksecurefunc(power, "SetMinMaxValues", Keep)
 					local fill = power:GetStatusBarTexture()
@@ -2836,6 +2845,9 @@ local function Settle()
 end
 function ns.RefreshUnitStyle(again)
 	if not ns.db then return end
+	-- (Off with nothing of ours left on the frames: nothing to do. Audit 2026-11-25.)
+	local active = ns.StyleOn("ufStyle")
+	if not (active or later.styled) then return end
 	if not again and not settling then
 		settling = true
 		C_Timer.After(0.4, Settle)
@@ -2848,6 +2860,10 @@ function ns.RefreshUnitStyle(again)
 		end)
 		if not ok then ns.Log("style", "unit frame " .. tostring(info[1]) .. " failed: " .. err) end
 	end
+	-- (Off: put back now, and again by the settling pass: nothing of ours is
+	-- left after it, so from then on the frames are left be. Audit 2026-11-25.)
+	-- (Not in a fight: what can't move in one is put back at its end, still to do.)
+	if again and not active and not InCombatLockdown() then later.styled = nil end
 end
 
 local watcher = CreateFrame("Frame")

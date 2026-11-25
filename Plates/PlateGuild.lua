@@ -23,8 +23,32 @@ local ServiceIcon -- (below: the Icons tick's icon for a title)
 local titleIcons = {} -- [title] = its Icons tick's icon file, or false for none
 local SERVICE_ICON_SIZE = 20 -- (its height on plates, before the name's scale)
 -- (Times Service NPCs' Icons size slider, nameServiceIconScale.)
+-- (A Name Style setting (the titles' Icons, Brackets, Icon size): its default
+-- while Name Style is off, Enable Style off or Style left out; page off =
+-- every setting on it off. Audit 2026-11-25: read as saved.)
+local function NameStyled(key)
+	if ns.StyleOn("plateNameStyle") then return ns.db[key] end
+	return ns.DEFAULTS[key]
+end
+-- (A Service NPCs kind's tick (nameService<kind>, Quest givers, Use Questie
+-- DB): off while its tab on the Names grid, or a switch over it, is off.
+-- Audit 2026-11-25: read as saved.)
+local function KindOn(key)
+	return not ns.MasterOff(key) and ns.db[key]
+end
+-- (Each plate's match and each title's icon kept are worked out again as that
+-- tab goes off or on: they read its ticks. Audit 2026-11-25.)
+local kindsTabOff
+local function KindsFresh()
+	local off = ns.MasterOff("nameServiceVendor")
+	if off ~= kindsTabOff then
+		kindsTabOff = off
+		wipe(serviceMatch)
+		wipe(titleIcons)
+	end
+end
 local function IconSize()
-	local scale = tonumber(ns.db.nameServiceIconScale) or 1
+	local scale = tonumber(NameStyled("nameServiceIconScale")) or 1
 	return math.max(4, math.floor(SERVICE_ICON_SIZE * scale + 0.5))
 end
 
@@ -196,7 +220,7 @@ local function LineText(plate, unit)
 	local title = PlateTitle(plate, unit)
 	-- (Service NPCs' Icons ticked: its kind's icon in its place; a title of
 	-- no kind with one, none: just the name.)
-	if title and ns.db.nameServiceIcons then
+	if title and NameStyled("nameServiceIcons") then -- (Audit 2026-11-25)
 		local icon = ServiceIcon(title)
 		if not icon then
 			return nil, false
@@ -208,7 +232,7 @@ local function LineText(plate, unit)
 	-- (Service NPCs' Brackets unticked: Baker, not <Baker>. With its When the
 	-- name shows too ticked, kept while the name's text is up over it.)
 	local nameShown = (textShares[plate] or 1) >= 0.5
-	if title and not ns.db.nameServiceBrackets and not (ns.db.nameServiceBracketsWithName and nameShown) then
+	if title and not NameStyled("nameServiceBrackets") and not (NameStyled("nameServiceBracketsWithName") and nameShown) then -- (Audit 2026-11-25)
 		title = title:sub(2, -2)
 	end
 	return title, false
@@ -254,8 +278,9 @@ function ns.DescribePlateTitle(plate, unit)
 	local questie = ns.QuestieGiverNames and ns.QuestieGiverNames()
 	local okName, name = pcall(UnitName, unit)
 	local inQuestie = questie and okName and Known(name) and questie[name] == true
-	local quest = ("quest=%s cursor=%s questie=%s"):format(ns.db.nameServiceQuest and "+" or "-", tostring(cursor),
-		questie and tostring(inQuestie) .. (ns.db.nameServiceQuestie and "(used)" or "(not used)") or "n/a")
+	-- (As they apply, their tab's switch too. Audit 2026-11-25.)
+	local quest = ("quest=%s cursor=%s questie=%s"):format(KindOn("nameServiceQuest") and "+" or "-", tostring(cursor),
+		questie and tostring(inQuestie) .. (KindOn("nameServiceQuestie") and "(used)" or "(not used)") or "n/a")
 	local title = PlateTitle(plate, unit)
 	if not title then
 		return "title=" .. tostring(titles[plate]) .. " " .. quest
@@ -263,11 +288,11 @@ function ns.DescribePlateTitle(plate, unit)
 	local kinds, fits = {}, ns.TitleKinds(title)
 	for _, kind in ipairs(ns.SERVICE_KINDS) do
 		if fits[kind.key] then
-			kinds[#kinds + 1] = kind.key .. (ns.db["nameService" .. kind.key] and "+" or "-")
+			kinds[#kinds + 1] = kind.key .. (KindOn("nameService" .. kind.key) and "+" or "-")
 		end
 	end
 	return ("title=%s kinds=%s icon=%s %s"):format(title, table.concat(kinds, ","),
-		tostring(ns.db.nameServiceIcons and ServiceIcon(title) or "-"), quest)
+		tostring(NameStyled("nameServiceIcons") and ServiceIcon(title) or "-"), quest)
 end
 
 -- From the Kinds menu (and a new language): every plate's match worked out again.
@@ -419,6 +444,7 @@ end
 -- The icon for a title, as text for a font string ("|T...|t"), or nil.
 local titleIconsSize -- (the size titleIcons' text was made at: the Icon size slider moved, made again)
 function ServiceIcon(title)
+	KindsFresh() -- (Audit 2026-11-25)
 	if titleIconsSize ~= IconSize() then
 		wipe(titleIcons)
 		titleIconsSize = IconSize()
@@ -430,7 +456,7 @@ function ServiceIcon(title)
 		local otherClass = ns.db.nameServiceClassOnly and OtherClassTitle(title)
 		for _, entry in ipairs(SERVICE_ICONS) do
 			local key = entry[1]
-			if fits[key] and ns.db["nameService" .. key] and not (key == "Trainer" and otherClass) then
+			if fits[key] and KindOn("nameService" .. key) and not (key == "Trainer" and otherClass) then -- (Audit 2026-11-25)
 				icon = key == "Profession" and ProfessionIcon(title:lower()) or false
 				if not icon then
 					local file = FirstFile(entry[2])
@@ -458,7 +484,7 @@ local function PlateQuestGiver(plate, unit)
 	end
 	questUnit[plate], questAt[plate] = guid, now
 	local giver = false
-	local questie = ns.db.nameServiceQuestie == true and ns.QuestieGiverNames and ns.AddonUp("Questie")
+	local questie = KindOn("nameServiceQuestie") == true and ns.QuestieGiverNames -- (Audit 2026-11-25) and ns.AddonUp("Questie")
 		and ns.QuestieGiverNames()
 	if questie then
 		-- (Questie's own settings decide: its level filter, for one.)
@@ -480,6 +506,7 @@ function ns.PlateServiceMatch(plate, unit)
 	if not plate or not unit then
 		return false
 	end
+	KindsFresh() -- (Audit 2026-11-25)
 	-- (Its title first: a plate given a new unit forgets its last one's match
 	-- there. Read before it, a guard on a plate an innkeeper had was kept as
 	-- the innkeeper, his name flashing up till the new-unit event, 2026-11-18.)
@@ -490,7 +517,7 @@ function ns.PlateServiceMatch(plate, unit)
 			match = false
 			local otherClass = ns.db.nameServiceClassOnly and OtherClassTitle(title)
 			for key in pairs(ns.TitleKinds(title)) do
-				if ns.db["nameService" .. key] and not (key == "Trainer" and otherClass) then
+				if KindOn("nameService" .. key) and not (key == "Trainer" and otherClass) then -- (Audit 2026-11-25)
 					match = true
 					break
 				end
@@ -501,12 +528,12 @@ function ns.PlateServiceMatch(plate, unit)
 	end
 	if match then
 		-- (Icons ticked: a title without one, Other's, shows the name instead.)
-		if ns.db.nameServiceIcons then
+		if NameStyled("nameServiceIcons") then -- (Audit 2026-11-25)
 			return true, not (title and ServiceIcon(title))
 		end
 		return true, false
 	end
-	if ns.db.nameServiceQuest and PlateQuestGiver(plate, unit) then
+	if KindOn("nameServiceQuest") and PlateQuestGiver(plate, unit) then
 		return true, true
 	end
 	return false
@@ -522,12 +549,12 @@ function ns.PlateServiceKind(plate, unit)
 		local fits = ns.TitleKinds(title)
 		local otherClass = ns.db.nameServiceClassOnly and OtherClassTitle(title)
 		for _, kind in ipairs(ns.SERVICE_KINDS) do
-			if fits[kind.key] and ns.db["nameService" .. kind.key] and not (kind.key == "Trainer" and otherClass) then
+			if fits[kind.key] and KindOn("nameService" .. kind.key) and not (kind.key == "Trainer" and otherClass) then -- (Audit 2026-11-25)
 				return kind.key
 			end
 		end
 	end
-	if ns.db.nameServiceQuest and PlateQuestGiver(plate, unit) then return "Quest" end
+	if KindOn("nameServiceQuest") and PlateQuestGiver(plate, unit) then return "Quest" end
 	return nil
 end
 
@@ -577,6 +604,9 @@ end
 -- 2026-11-22.)
 local guildLine = { look = {} }
 function guildLine.S(setting)
+	-- (Name Style off, Enable Style off or Style left out: the game's look,
+	-- guildLine.styled set once per Refresh. Audit 2026-11-25: read as saved.)
+	if not guildLine.styled then return ns.NAME_LOOK_GAME and ns.NAME_LOOK_GAME[setting] end
 	return ns.NameLookValue and (ns.NameLookValue(guildLine.row, setting))
 end
 function guildLine.Dress(line, name, look, lineColor, row, isIcon)
@@ -646,6 +676,7 @@ local function Refresh(plate)
 	-- (Each value alone: NameLookValue's second, where it's from, would go into
 	-- tonumber() as a number base.)
 	guildLine.row = row
+	guildLine.styled = ns.StyleOn("plateNameStyle") -- (Audit 2026-11-25)
 	local S = guildLine.S
 	local lineSize = tonumber(S("Line2Size")) or 1
 	local lineColor = S("Line2Color") or "name"

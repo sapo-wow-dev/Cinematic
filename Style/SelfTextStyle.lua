@@ -137,7 +137,22 @@ local STICKY_LANE = 45     -- UI units a staying crit sits further out
 local MIDDLE_Y = 50       -- the game's look: UI units up from the middle (where it draws its own)
 
 local function Secret(v) return issecretvalue and issecretvalue(v) end
-local function DB() return ns.db or {} end
+-- (Its settings as read: one on a tab switched off gives its default, a tab
+-- is a container; a kind's parts are its Kinds tab's. forced: the game's own
+-- look for its sample, ns.SelfTextGameSample. Audit 2026-11-25: the tabs
+-- gated nothing, every read was the saved one.)
+local SELF_TABS, KINDS_TAB = "tabOn:Self Text Style/", "tabOn:Self Text Style/page:3"
+local forced = {}
+local look = setmetatable({}, { __index = function(_, key)
+	if forced[key] ~= nil then return forced[key] end
+	local db = ns.db
+	if not db then return nil end
+	local tab = ns.PageSwitchOf(key)
+	if tab == nil and key:sub(1, 9) == "selfText_" then tab = KINDS_TAB end
+	if tab and db[tab] == false and tab:sub(1, #SELF_TABS) == SELF_TABS then return DEFAULTS[key] end
+	return db[key]
+end })
+local function DB() return look end
 local function Part(group, part)
 	local value = DB()["selfText_" .. group .. part]
 	if value == nil then value = PART_DEFAULTS[part] end
@@ -158,7 +173,10 @@ local function RowOn()
 	end
 	return row.on
 end
-local function On() return ns.StyleOn("selfTextStyle") and RowOn() end
+-- (And its General tab on: who draws your text is on it. Audit 2026-11-25.)
+local function On()
+	return ns.StyleOn("selfTextStyle") and (ns.db or {})["tabOn:Self Text Style/page:1"] ~= false and RowOn()
+end
 local function By() return On() and (DB().selfTextBy or "ours") or "game" end
 ns.SelfTextBy = By
 
@@ -595,8 +613,12 @@ watcher:RegisterEvent("ADDON_LOADED")
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 -- (Settings changed elsewhere, a profile, Style's own switch, its Show in
--- row: caught up within two seconds.)
-C_Timer.NewTicker(2, function() ns.Guard(ns.RefreshSelfTextStyle) end)
+-- row: caught up within two seconds.) (Only while the page is on, or what it
+-- holds isn't let go yet: put back, it stops. Audit 2026-11-25: it ran forever.)
+local held = { active = false }
+ns.FeatureLoop(CreateFrame("Frame"), function() ns.RefreshSelfTextStyle() end, function()
+	return held.active or ns.StyleOn("selfTextStyle")
+end, 2)
 
 -- The game's floating combat text kept on while ours copies it: with it off
 -- the game draws nothing to copy (/cine debug selftext, step off), and an
@@ -617,6 +639,7 @@ function ns.RefreshSelfTextStyle()
 	if ns.IsSuspended and ns.IsSuspended() then return end
 	local by = By()
 	local active = by ~= "game"
+	held.active = active -- (Audit 2026-11-25: its loop's gate)
 	ns.ApplyCVarSet(GAME_TEXT_ON, by == "ours")
 	if active then HookTexts() end
 	HideGame(active)
@@ -652,14 +675,12 @@ end
 function ns.SelfTextGameSample(words, group, board)
 	group = BY_ID[group] and group or "other"
 	local own = BY_ID[group].color
-	local saved = {}
-	local db = DB()
-	for _, key in ipairs({ "selfTextSize", "selfTextFont", "selfTextEdge", "selfTextMotion", "selfTextMerge" }) do
-		saved[key] = db[key]
-	end
-	db.selfTextSize, db.selfTextFont, db.selfTextEdge, db.selfTextMotion, db.selfTextMerge = 1, "game", "game", "up", false
-	local text = Show(board or screen, words, group, false, own[1], own[2], own[3])
-	for key, value in pairs(saved) do db[key] = value end
+	-- (Over what's read, not written into the saved ones. Audit 2026-11-25.)
+	forced.selfTextSize, forced.selfTextFont, forced.selfTextEdge, forced.selfTextMotion, forced.selfTextMerge =
+		1, "game", "game", "up", false
+	local ok, text = pcall(Show, board or screen, words, group, false, own[1], own[2], own[3])
+	wipe(forced)
+	if not ok then error(text, 0) end
 	if text then text.side, text.motion, text.middle = 0, "up", true end
 	return text
 end

@@ -322,21 +322,34 @@ local function SyncGlow(button, part)
 	end
 end
 local castWatch = CreateFrame("Frame")
-for _, event in ipairs({ "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED",
-	"UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START" }) do
-	pcall(castWatch.RegisterUnitEvent, castWatch, event, "player")
-end
 local function SyncAllGlows()
 	for button, part in pairs(parts) do
 		if part.glow then SyncGlow(button, part) end
 	end
 end
--- (And the game's own word that buttons' states changed: a queued swing, Heroic
--- Strike, unchecks as it goes off without every client calling the button's
--- SetChecked, which is all the glow watched.)
-for _, event in ipairs({ "ACTIONBAR_UPDATE_STATE", "PLAYER_ENTER_COMBAT", "PLAYER_LEAVE_COMBAT",
-	"PLAYER_REGEN_ENABLED" }) do
-	pcall(castWatch.RegisterEvent, castWatch, event)
+-- (Your casts, and the game's own word that buttons' states changed: a queued
+-- swing, Heroic Strike, unchecks as it goes off without every client calling
+-- the button's SetChecked, which is all the glow watched.) Only while a round
+-- glow is on a button (on: one just turned on; else asked): RoundGlow.
+-- (Audit 2026-11-25: every cast was watched with no round buttons, the page off.)
+local castWatching = false
+local function WatchCasts(on)
+	local want = on or false
+	if not want then
+		for _, part in pairs(parts) do
+			if part.glowOn then want = true break end
+		end
+	end
+	if want == castWatching then return end
+	castWatching = want
+	for _, event in ipairs({ "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED",
+		"UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START" }) do
+		if want then pcall(castWatch.RegisterUnitEvent, castWatch, event, "player") else castWatch:UnregisterEvent(event) end
+	end
+	for _, event in ipairs({ "ACTIONBAR_UPDATE_STATE", "PLAYER_ENTER_COMBAT", "PLAYER_LEAVE_COMBAT",
+		"PLAYER_REGEN_ENABLED" }) do
+		if want then pcall(castWatch.RegisterEvent, castWatch, event) else castWatch:UnregisterEvent(event) end
+	end
 end
 castWatch:SetScript("OnEvent", function()
 	SyncAllGlows()
@@ -449,6 +462,7 @@ local function RoundGlow(button, part, round)
 	end
 	if not part.glow then return end
 	part.glowOn = round
+	if round then WatchCasts(true) elseif castWatching then WatchCasts() end -- (Audit 2026-11-25)
 	OnIcon(part.glow, button, part, part.inset)
 	OnIcon(part.hover, button, part, part.inset)
 	-- (Its art reaches PROC_SPREAD past the round edge, outside the button: sized so
@@ -916,7 +930,12 @@ local function CdmPlan()
 end
 function ns.RefreshCooldownShape()
 	local plan = CdmPlan()
+	local was = cdmRound
 	cdmRound = plan.round and true or false
+	-- (Not round now nor just before: nothing to cut or put back, and the
+	-- viewers not hooked till one is. Audit 2026-11-25: hooked, and every
+	-- icon walked on each of their layouts, with the pages off.)
+	if not (cdmRound or was) then return end
 	EachCdmIcon(function(item, icon)
 		local ok, err = pcall(DressCdmIcon, item, icon, plan)
 		if not ok then

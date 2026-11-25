@@ -208,7 +208,9 @@ Matrix.Run({
 					local every = look == "theme" or (look == "colored" and set == "health")
 					list[#list + 1] = { ("look=%s set=%s unit=%s"):format(look, set, unit),
 						("now P=%s H=%s N=%s | after P=%s H=%s N=%s | dressed=%s"):format(P[look][set], H[look], name, after,
-							H[look], name, every and "every-frame" or "few") }
+							H[look], name, every and "every-frame" or look == "off" and "none" or "few") }
+					-- (The page off: no restyle at all, nothing dressed. Audit 2026-11-25,
+					-- OK'd by the user: was "few".)
 				end
 			end
 		end
