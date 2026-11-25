@@ -1754,7 +1754,10 @@ for page, keys in pairs({
 		-- (Audit 2026-11-25: the Visions' and Atmosphere's Style pages too, and
 		-- Text on You: off with Enable Style, as ns.StyleOn already read them.)
 		"selfTextStyle", "damageVisionLook", "lowHealthStyle", "questTalkStyled", "questItemStyle", "rollStyle",
-		"emoteStyle", "tintStyle", "letterboxStyle", "weatherStyle" },
+		"emoteStyle", "tintStyle", "letterboxStyle", "weatherStyle",
+		-- (And the Overrides tab and Visions Style: their masters were set in
+		-- Style's part, so lost with it left out. Audit 2026-11-25.)
+		"styleOverrides", "visionsStyle" },
 }) do
 	for _, key in ipairs(keys) do PAGE_SWITCH[key] = page end
 end

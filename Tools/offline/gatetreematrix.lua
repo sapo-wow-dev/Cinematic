@@ -22,6 +22,8 @@ local MASTERS = {
 	["tabOn:Vitals:cinematic"] = "lowHealth", ["tabOn:Vitals:swirl"] = "lowHealth",
 	["tabOn:Vitals:effect"] = "lowHealth", ["tabOn:Vitals:mana"] = "tabOn:VitalsVision:mana",
 	["tabOn:VitalsVision:health"] = "lowHealth", ["tabOn:VitalsVision:mana"] = "lowHealth",
+	-- (Style's Overrides tab and Visions Style: set in Style's part, lost with it left out. Audit 2026-11-25)
+	styleOverrides = "styleGeneral", visionsStyle = "styleGeneral",
 }
 local KEYS = {}
 for key in pairs(MASTERS) do KEYS[#KEYS + 1] = key end
