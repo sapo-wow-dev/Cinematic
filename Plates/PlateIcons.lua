@@ -42,6 +42,10 @@ function ns.PlateIconWanted(part, cinematic)
 	if not key then return nil end
 	local db = ns.db
 	if part ~= "TargetArrow" and not (db.handlePlateIcons and not ns.MasterOff("handlePlateIcons", db)) then return false end
+	-- (The target marks draw only with Nameplate Style's Smart page on: off, none
+	-- wanted, so their When loop rests too. The in-game gating test saw it run
+	-- with Style off. Audit 2026-11-25.)
+	if part == "TargetArrow" and not ns.StyleOn("plateMarks") then return false end
 	if db[ALWAYS_KEY[part]] then return true end
 	if not cinematic then return false end
 	local now = GetTime()

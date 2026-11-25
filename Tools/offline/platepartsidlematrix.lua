@@ -21,6 +21,7 @@ end
 local ns = dofile("Tools/offline/load.lua")(client, "CinematicDev.toc", Install)
 local db = ns.db
 db.styleGeneral, db.styleOverrides = true, true -- (Enable Style: off on a fresh install)
+db.handlePlateStyle, db.plateMarks = true, true -- (the marks' Smart page, under Default: they draw only with it on. Audit 2026-11-25, OK'd by the user)
 
 local function Upvalue(fn, name)
 	for i = 1, 255 do
