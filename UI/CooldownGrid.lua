@@ -902,7 +902,8 @@ function ns.CooldownGrid(parent, opts)
 		end
 		return #items
 	end
-	local previewRows = math.max(PreviewList("place", L["Where"], L["Where you are"], ns.COOLDOWN_PREVIEW_PLACES or {}, 6),
+	-- (Location, as the grids and the rule editor name it: 2026-11-25.)
+	local previewRows = math.max(PreviewList("place", L["Location"], L["Where you are"], ns.COOLDOWN_PREVIEW_PLACES or {}, 6),
 		PreviewList("combat", L["When"], L["Any time"], ns.COOLDOWN_PREVIEW_COMBATS or {}, 168))
 	previewMenu:SetHeight(30 + previewRows * 22)
 	local function PaintPreviewItems()
@@ -2197,7 +2198,7 @@ function ns.CooldownGrid(parent, opts)
 					r, g, b = AMBER[1], AMBER[2], AMBER[3]
 					-- (Narrow columns: no note under it, both were cut short; the
 					-- amber name and the warning lines under the headings say it.)
-					sub = compact and "" or (t.kind == "todo" and L["pick places"] or L["never applies"])
+					sub = compact and "" or (t.kind == "todo" and L["pick locations"] or L["never applies"])
 				end
 			end
 			-- (Icons alone: the places line is hidden, so the name may take two lines.)
@@ -2275,7 +2276,7 @@ function ns.CooldownGrid(parent, opts)
 		-- (No icon: the eye is Always's, it read as a setting, 2026-11-22.)
 		if previewMenu:IsShown() and grid.PaintPreviewItems then grid.PaintPreviewItems() end
 		previewButton:SetWidth(SetPill(previewButton, nil, preview and L["Preview: %s"]:format(preview.label)
-			or L["Preview a place"], preview and "chosen" or "chip"))
+			or L["Preview a location"], preview and "chosen" or "chip"))
 		if preview then
 			previewButton.text:SetTextColor(0.85, 0.93, 1)
 			previewButton.icon:SetVertexColor(0.85, 0.93, 1)
@@ -2345,8 +2346,8 @@ function ns.CooldownGrid(parent, opts)
 			-- the line only for narrow columns, where it isn't. Twice was too much.)
 			if todo[1] and compact then
 				count = count + 1
-				TroubleLine(count):SetText((#todo == 1 and L["%s has no places yet: click its heading to pick some."]
-					or L["%s have no places yet: click a heading to pick some."]):format(table.concat(todo, ", ")))
+				TroubleLine(count):SetText((#todo == 1 and L["%s has no locations yet: click its heading to pick some."]
+					or L["%s have no locations yet: click a heading to pick some."]):format(table.concat(todo, ", ")))
 			end
 			if otherDead then
 				count = count + 1

@@ -165,31 +165,32 @@ local function RunClient(client)
 	Check("shown: nothing red", red ~= nil and not shown:find(red, 1, true))
 	Check("shown: an unknown axis red", ns.ColoredRule("nosuch:1"):find(red, 1, true) ~= nil)
 
-	-- 10. The editor's Values line: a menu per axis, made when clicked.
-	local values
-	for _, group in ipairs(ns.RulePieces()) do if group[1] == ns.L["Values"] then values = group end end
-	Check("rule editor: a Values line", values ~= nil)
-	if values then
-		local menus = {}
-		for _, piece in ipairs(values[3]) do menus[piece[1]] = piece end
-		local missing = {}
-		for _, axis in ipairs({ "zone:", "subzone:", "instance:", "window:", "aura:", "form:", "mount:", "spec:",
-			"race:", "targetid:" }) do
-			if not (menus[axis] and type(menus[axis].pick) == "function") then missing[#missing + 1] = axis end
-		end
-		Check("rule editor: a menu each", #missing == 0, table.concat(missing, ", "))
-		g = { map = 1453 }
-		local zones = menus["zone:"] and menus["zone:"].pick() or {}
-		Check("Zone... here: Stormwind and the maps it's inside",
-			#zones == 3 and zones[1][1] == "zone:1453" and zones[1][2] == "Stormwind City", #zones)
-		local auras = menus["aura:"] and menus["aura:"].pick() or {}
-		Check("Aura...: your buffs now", auras[1] and auras[1][1] == "aura:465", auras[1] and auras[1][1])
-		local forms = menus["form:"] and menus["form:"].pick() or {}
-		Check("Form...: your forms", #forms == 2 and forms[2][2] == "Cat Form")
-		for word in pairs(menus) do
-			local ok = pcall(menus[word].pick)
-			if not ok then Check("menu " .. word .. " made without an error", false) end
-		end
+	-- 10. The editor's value menus (UI/RuleCatalog.lua, 2026-11-25): each axis offered where
+	-- it belongs, its menu made when clicked (RuleAxes.lua's Pick).
+	local menus = {}
+	for _, it in ipairs(ns.RuleCatalogWords("row")) do
+		if it.entry.pick then menus[it.entry.w] = { cat = it.cat.key, axis = it.entry.pick } end
+	end
+	local WANT = { ["zone:"] = "place", ["subzone:"] = "place", ["instance:"] = "place", ["window:"] = "doing",
+		["aura:"] = "you", ["form:"] = "you", ["mount:"] = "you", ["spec:"] = "char", ["race:"] = "char",
+		["targetid:"] = "units", ["camera:"] = "camera" }
+	local missing = {}
+	for word, cat in pairs(WANT) do
+		if not (menus[word] and menus[word].cat == cat) then missing[#missing + 1] = word end
+	end
+	Check("rule editor: a menu each, in its category", #missing == 0, table.concat(missing, ", "))
+	local function Pick(axis) return ns.RULE_AXES[axis].Pick() end
+	g = { map = 1453 }
+	local zones = Pick("zone")
+	Check("Zone... here: Stormwind and the maps it's inside",
+		#zones == 3 and zones[1][1] == "zone:1453" and zones[1][2] == "Stormwind City", #zones)
+	local auras = Pick("aura")
+	Check("Aura...: your buffs now", auras[1] and auras[1][1] == "aura:465", auras[1] and auras[1][1])
+	local forms = Pick("form")
+	Check("Form...: your forms", #forms == 2 and forms[2][2] == "Cat Form")
+	for word, m in pairs(menus) do
+		local ok = pcall(Pick, m.axis)
+		if not ok then Check("menu " .. word .. " made without an error", false) end
 	end
 	-- (A rule with value words isn't one the dropdowns can show: no error.)
 	local okRead = pcall(ns.ReadGridRule, "zone:1453 or combat", {})

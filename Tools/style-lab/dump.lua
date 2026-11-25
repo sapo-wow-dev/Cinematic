@@ -109,7 +109,41 @@ local FRAMES = {
 	{ id = "roll", name = "Roll window", group = "Visions", page = "Style > Visions > Roll Style", make = "MakeRollPreview" },
 	{ id = "card", name = "Zone card", group = "Visions", page = "Card Vision", make = "MakeCardPreview", width = 960, height = 540, crop = { 0, 340, 520, 170 },
 		settle = 1.6 },
+	-- The CQL rule editor (UI/RuleEditor.lua, 2026-11-25): one window, each state set by `before`.
+	{ id = "cql-units", name = "Rule editor: Units", group = "Rules", page = "any Show in row's pen", make = "LabRuleEditor",
+		before = function() ns.LabRuleEditorState("minimap", "nocombat and not hostile and (rain or night)", "units", "target") end },
+	{ id = "cql-place", name = "Rule editor: Place", group = "Rules", page = "any Show in row's pen", make = "LabRuleEditor",
+		before = function() ns.LabRuleEditorState("minimap", "world and zone:1429", "place") end },
+	{ id = "cql-here", name = "Rule editor: True here", group = "Rules", page = "any Show in row's pen", make = "LabRuleEditor",
+		before = function() ns.LabRuleEditorState("minimap", "rain or night", "here") end },
+	{ id = "cql-suggest", name = "Rule editor: suggestions", group = "Rules", page = "any Show in row's pen",
+		make = "LabRuleEditor", before = function() ns.LabRuleEditorState("minimap", "nocombat and ta", "you", nil, true) end },
+	{ id = "cql-error", name = "Rule editor: an unfinished rule", group = "Rules", page = "any Show in row's pen",
+		make = "LabRuleEditor", before = function() ns.LabRuleEditorState("minimap", "combat and (rain or", "world") end },
 }
+-- (The rule editor's lab states: the real editor opened on a stand-in row, the facts pretend.)
+ns.LabRuleEditor = function()
+	ns.RuleFactsFor = function()
+		return { nocombat = true, world = true, rain = true, day = true, npc = true, friendly = true, target = true,
+			outdoors = true, pet = true, warlock = true, moving = true, near = true, near28 = true }
+	end
+	ns.OpenRuleEditor({ key = "minimap", label = "Minimap", Text = function() return "" end, Close = function() end })
+	local editor = _G.CinematicRuleEditor
+	editor.Refresh = editor.Refresh or function() end
+	return editor
+end
+function ns.LabRuleEditorState(key, rule, cat, unit, typing)
+	if not _G.CinematicRuleEditor then ns.LabRuleEditor() end
+	ns.db.ruleEditorCat, ns.db.ruleEditorUnit = cat, unit or "target"
+	ns.OpenRuleEditor({ key = key, label = key == "minimap" and "Minimap" or key, grid = { combat = true, nocombat = true },
+		Text = function() return rule end, Close = function() end })
+	local editor = _G.CinematicRuleEditor
+	editor.ShowCategory(cat, unit)
+	if typing then
+		editor.box:SetCursorPosition(#rule)
+		editor.box:GetScript("OnTextChanged")(editor.box, true)
+	end
+end
 -- Whole settings pages, drawn as the menu draws them.
 local PAGES = {
 	{ id = "page-cinemode", name = "CineMode page", group = "Menu", page = "CineMode", pageName = "CineMode" },
@@ -189,6 +223,11 @@ end
 local function Shot(info)
 	local holder = Holder(info)
 	if not holder then return nil end
+	-- (A state set before the shot: frames shown in several states, the rule editor's.)
+	if info.before then
+		local okBefore, errBefore = pcall(info.before)
+		if not okBefore then wow.Warn(info.id .. " before: " .. tostring(errBefore)) end
+	end
 	local ok, err = pcall(holder.Refresh, holder)
 	if not ok then wow.Warn(info.id .. " refresh: " .. tostring(err)) end
 	if info.settle then Settle(holder, info.settle) end

@@ -40,7 +40,8 @@ ns.SCENE_TRIGGER_MAX = 6 -- (triggers in a scene)
 -- the choices of the kinds that have a fixed list.
 ns.CUSTOM_TRIGGER_KINDS = {
 	{ value = "emote", text = L["Emote"] }, { value = "spell", text = L["Spell cast"] },
-	{ value = "aura", text = L["Buff on you"] }, { value = "place", text = L["Place"] },
+	-- (Location, as the grids and the rule editor name where you are: 2026-11-25.)
+	{ value = "aura", text = L["Buff on you"] }, { value = "place", text = L["Location"] },
 	{ value = "moment", text = L["Moment"] }, { value = "state", text = L["State"] },
 	{ value = "interact", text = L["Interaction"] }, { value = "key", text = L["Key binding"] },
 }

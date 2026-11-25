@@ -17185,7 +17185,7 @@ local function CreateCooldownPanel()
 				name = ok and type(spellName) == "string" and spellName or tostring(each[1])
 			end
 			lines = lines or {}
-			lines[#lines + 1] = (each[3] == "todo" and L["%s in %s (no places yet)"] or L["%s in %s (never applies)"]):format(
+			lines[#lines + 1] = (each[3] == "todo" and L["%s in %s (no locations yet)"] or L["%s in %s (never applies)"]):format(
 				name, each[2])
 		end
 		tab.warnLines = lines

@@ -154,7 +154,8 @@ local function RunClient(client)
 		end
 	end
 	Check(target == ns.L["Target"], "editor: Any NPC on the Target line (" .. tostring(target) .. ")")
-	Check(you and you[1] == ns.L["You"] and you[2] == 1, "editor: Interacting first on the You line")
+	-- (The redesigned editor, 2026-11-25: Interacting leads the Doing category's NPC words.)
+	Check(you and you[1] == ns.L["Doing"] and you[2] == 1, "editor: Interacting first in Doing")
 
 	-- All names -----------------------------------------------------------
 	local NameKeptHere = Upvalue(ns.DescribePlateNameKept, "NameKeptHere")

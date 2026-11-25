@@ -270,6 +270,17 @@ local function RunClient(client)
 		end
 	end
 	ns.noRealLayout = true -- (the stand-in places every frame alike: r:Overlaps can't judge them)
+	-- (The rule editor's typing and Done, as the game has them: a cursor, enabled or not.)
+	local M = wow.Methods
+	local setText = M.SetText
+	M.SetText = function(self, text)
+		setText(self, text)
+		self._cur = #tostring(text or "")
+	end
+	M.SetCursorPosition = function(self, p) self._cur = p end
+	M.GetCursorPosition = function(self) return self._cur or 0 end
+	M.SetEnabled = function(self, on) self._off = not on end
+	M.IsEnabled = function(self) return not self._off end
 	local cine = false
 	ns.IsCineModeOn = function() return cine end
 	_G.Cinematic_ToggleCineMode = function() cine = not cine end
@@ -290,7 +301,7 @@ local function RunClient(client)
 	ToggleCharacter = function() character:Show() end
 	HideUIPanel = function(frame) frame:Hide() end
 	ns.HandleSlash("debug mousewords full") -- (full: its steps are proven, a plain run leaves them out)
-	Advance(25) -- (the editor step: four cases, a paced shot each)
+	Advance(120) -- (the editor step: every category, unit and context, a paced shot each)
 	mo, focus = { guid = "Creature-8", dead = true, name = "Kobold" }, WorldFrame
 	wow.Fire("UPDATE_MOUSEOVER_UNIT")
 	Advance(2)

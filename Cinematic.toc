@@ -40,6 +40,8 @@ Core.lua
 Migrations.lua
 Skin.lua
 UI\GridRows.lua
+UI\RuleCatalog.lua
+UI\RuleEditor.lua
 UI\HideUI.lua
 AddonSupport.lua
 UI\FrameLinks.lua

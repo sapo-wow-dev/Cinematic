@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-25", title = "A new rule editor",
+		text = "The rule editor is rebuilt: words in categories you can search, suggestions as you type, and a " ..
+			"line that shows which parts of your rule are true where you stand." },
 	{ date = "2026-11-25", page = "Nameplate Layout", client = "forever", title = "Nameplate layout",
 		text = "A new Layout tab on Nameplate Style moves, sizes and re-hangs every part of the nameplates (name, " ..
 			"level box, marker, auras, cast bar...), and can keep the plate balanced on its unit as parts come and go." },

@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CQL Editor Mockup</title>
+<!-- The CQL rule editor redesign (Tools/rule-editor-redesign-plan.md), 2026-11-25. Dev only: a look at the
+     layout and every interaction before it's built in Lua. Real words, labels and colors from
+     ns.RulePieces(); "where you stand" is pretend (the panel on the right). -->
+<style>
+:root {
+  --bg: #0d0c0b; --panel: #14110e; --edge: #3a332a; --gold: #ffd100; --text: #e8e2d4; --dim: #9a9080;
+  --well: #050505; --green: #5fe05f; --red: #ff6161; --chip: #1c1915; --sel: #2a241b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(circle at 30% 20%, #2b3a24 0%, #121a10 45%, #090b08 100%);
+  color: var(--text); font: 13px/1.35 "Trebuchet MS", "Segoe UI", system-ui, sans-serif; min-height: 100vh; }
+.stage { display: flex; gap: 22px; padding: 22px; align-items: flex-start; flex-wrap: wrap; }
+/* The editor window: 600 x 560, fixed. */
+.win { width: 600px; height: 600px; background: rgba(12,10,8,0.97); border: 1px solid var(--edge);
+  border-radius: 4px; box-shadow: 0 0 0 1px #000, 0 10px 40px rgba(0,0,0,.7); position: relative;
+  display: flex; flex-direction: column; flex: none; }
+.titlebar { display: flex; align-items: center; height: 30px; padding: 0 8px 0 14px; gap: 8px; }
+.cql { color: var(--gold); font-weight: bold; cursor: help; }
+.ruleName { flex: 1; text-align: center; color: var(--gold); }
+.btn { background: linear-gradient(#3a0d0b, #240706); border: 1px solid #5a1d18; color: var(--gold);
+  font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.btn.plain { background: #1b1814; border-color: var(--edge); color: var(--text); }
+.btn:hover { filter: brightness(1.25); }
+.btn:disabled { opacity: .45; cursor: default; filter: none; }
+.x { width: 22px; height: 22px; padding: 0; }
+/* The rule. */
+.wellWrap { position: relative; margin: 2px 14px 0; }
+.well { position: relative; height: 62px; background: var(--well); border: 1px solid var(--edge); border-radius: 3px; }
+.well.focus { box-shadow: inset 0 0 0 999px rgba(255,209,0,.06); border-color: #6b5a2a; }
+.well textarea, .well pre { position: absolute; inset: 0; margin: 0; padding: 6px 8px; font: 13px/18px Consolas, "Courier New", monospace;
+  white-space: pre-wrap; word-wrap: break-word; border: 0; overflow: hidden; }
+.well textarea { background: transparent; color: transparent; caret-color: #ddd; resize: none; outline: none; z-index: 2; }
+.well pre { color: #ccc; z-index: 1; pointer-events: none; }
+.count { position: absolute; right: 6px; bottom: 2px; font-size: 10px; color: #555; z-index: 3; }
+.suggest { position: absolute; left: 0; top: 64px; width: 340px; background: #1a1612; border: 1px solid #6b5a2a;
+  border-radius: 3px; z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.7); display: none; }
+.suggest div { padding: 3px 8px; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.suggest div.on { background: var(--sel); }
+.suggest .w { font-family: Consolas, monospace; font-size: 12px; }
+.suggest .l { color: var(--dim); flex: 1; font-size: 12px; }
+.suggest .hint { color: #666; font-size: 11px; padding: 3px 8px; border-top: 1px solid #2a241b; cursor: default; }
+/* Logic bar. */
+.logic { display: flex; gap: 4px; margin: 6px 14px 0; align-items: center; }
+.logic .sep { width: 10px; }
+.lg { background: #1b1814; border: 1px solid #4a4438; color: #fff; font: 12px Consolas, monospace; padding: 2px 9px;
+  border-radius: 3px; cursor: pointer; }
+.lg.gold { color: var(--gold); font-family: inherit; border-color: #5a4a20; }
+.lg:hover { filter: brightness(1.4); }
+/* Readout: the rule as chips, each true or false where you stand. */
+.readout { margin: 7px 14px 0; min-height: 44px; padding: 5px 8px; background: #0a0908; border: 1px solid #241f19;
+  border-radius: 3px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; }
+.chip { padding: 1px 6px 1px 5px; border-radius: 9px; background: var(--chip); border: 1px solid #333; white-space: nowrap; cursor: help; }
+.chip.t { border-color: #2f6b2f; } .chip.f { border-color: #4a3030; opacity: .75; }
+.chip .m { font-weight: bold; margin-right: 3px; } .chip.t .m { color: var(--green); } .chip.f .m { color: #c06060; }
+.op { color: #888; font: 11px Consolas, monospace; }
+.verdict { margin-left: auto; font-weight: bold; padding-left: 8px; }
+.verdict.t { color: var(--green); } .verdict.f { color: var(--gold); } .verdict.e { color: var(--red); font-weight: normal; }
+.gridNote { margin: 3px 16px 0; font-size: 11px; min-height: 14px; }
+/* Picker. */
+.picker { flex: 1; display: flex; margin: 7px 14px 0; border: 1px solid #241f19; border-radius: 3px; min-height: 0; background: #0b0a09; }
+.side { width: 128px; border-right: 1px solid #241f19; display: flex; flex-direction: column; padding: 4px 0; overflow: hidden; }
+.find { margin: 0 6px 5px; }
+.find input { width: 100%; background: #050505; border: 1px solid var(--edge); color: var(--text); padding: 3px 6px;
+  font: inherit; font-size: 12px; border-radius: 3px; outline: none; }
+.find input:focus { border-color: #6b5a2a; }
+.cat { display: flex; align-items: center; gap: 5px; padding: 2px 8px 2px 6px; cursor: pointer; font-size: 12.5px;
+  border-left: 3px solid transparent; }
+.cat:hover { background: #15120e; }
+.cat.on { background: var(--sel); border-left-color: var(--gold); }
+.cat .nm { flex: 1; }
+.cat .n { font-size: 10px; color: #777; }
+.cat .d, .wb .d, .uSw .d { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 4px var(--green); display: inline-block; }
+.cat.special .nm { font-style: italic; }
+.sideGap { height: 6px; border-bottom: 1px solid #1f1b16; margin: 0 8px 5px; }
+.pane { flex: 1; padding: 8px 10px; overflow-y: auto; position: relative; }
+.paneHead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.paneHead h3 { margin: 0; font-size: 13px; font-weight: normal; }
+.paneHead .sub { color: var(--dim); font-size: 11px; }
+.uSw { display: flex; gap: 0; margin: 0 0 8px; border: 1px solid #4a4438; border-radius: 3px; width: max-content; overflow: hidden; }
+.uSw button { background: #15120e; color: #bbb; border: 0; border-right: 1px solid #4a4438; font: inherit; font-size: 12px;
+  padding: 3px 12px; cursor: pointer; display: flex; gap: 5px; align-items: center; }
+.uSw button:last-child { border-right: 0; }
+.uSw button.on { background: #3a2f17; color: var(--gold); }
+/* A section: its name in a narrow column on the left, its words beside it (no line of its own). */
+.secRow { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 5px; }
+.sec { color: #8a826f; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; width: 62px; flex: none; padding-top: 5px; }
+.words { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+.wb { background: #16130f; border: 1px solid; border-radius: 3px; padding: 2px 8px; font: inherit; font-size: 12px;
+  cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.wb:hover { filter: brightness(1.35); }
+.wb.inRule { box-shadow: 0 0 0 1px var(--gold) inset; background: #2a2414; }
+.wb .ell { opacity: .7; }
+.resultCat { color: #8a826f; font-size: 10.5px; margin: 6px 0 3px; }
+.empty { color: #666; font-style: italic; padding: 10px 0; }
+.foot { display: flex; gap: 8px; padding: 8px 14px 10px; align-items: center; }
+.foot .sp { flex: 1; }
+/* Tooltip. */
+.tip { position: fixed; z-index: 50; max-width: 280px; background: #0d1018; border: 1px solid #5a6a8a; border-radius: 4px;
+  padding: 7px 9px; font-size: 12px; pointer-events: none; display: none; box-shadow: 0 4px 16px rgba(0,0,0,.6); }
+.tip b { color: #fff; } .tip .tw { font-family: Consolas, monospace; color: var(--gold); }
+.tip .tn { color: var(--dim); margin-top: 4px; }
+.menu { position: fixed; z-index: 60; background: #1a1612; border: 1px solid #6b5a2a; border-radius: 3px; min-width: 190px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.7); display: none; padding: 3px 0; }
+.menu div { padding: 3px 10px; cursor: pointer; font-size: 12px; }
+.menu div:hover { background: var(--sel); }
+.menu .mt { color: var(--gold); cursor: default; } .menu .mt:hover { background: none; }
+.menu .mw { color: #888; font-family: Consolas, monospace; font-size: 11px; float: right; margin-left: 12px; }
+/* The pretend panel. */
+.side2 { width: 330px; display: flex; flex-direction: column; gap: 14px; }
+.card { background: rgba(10,10,10,.85); border: 1px solid #2a2a2a; border-radius: 6px; padding: 12px 14px; }
+.card h2 { margin: 0 0 8px; font-size: 14px; color: var(--gold); font-weight: normal; }
+.card p { margin: 6px 0; color: #bbb; font-size: 12.5px; }
+.card label { display: block; margin: 4px 0; cursor: pointer; }
+.card select { width: 100%; background: #111; color: #ddd; border: 1px solid #333; padding: 4px; font: inherit; }
+.card ul { margin: 6px 0; padding-left: 18px; color: #bbb; font-size: 12.5px; }
+.card li { margin: 3px 0; }
+kbd { background: #222; border: 1px solid #444; border-radius: 3px; padding: 0 4px; font-size: 11px; }
+@media (max-width: 680px) { .stage { padding: 16px; } .win { transform-origin: top left; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="win" id="win">
+    <div class="titlebar">
+      <span class="cql" data-tip="CQL is the words a rule is written in, joined with AND, OR and NOT.">CQL</span>
+      <span class="ruleName" id="ruleName">Rule: Enemy players</span>
+      <button class="btn plain" data-tip="Pop out to move the window anywhere, or dock it back by the settings.">Pop out</button>
+      <button class="btn x" data-tip="Closes the editor, keeping the rule.">&#x2715;</button>
+    </div>
+    <div class="wellWrap">
+      <div class="well" id="well">
+        <pre id="colored"></pre>
+        <textarea id="box" spellcheck="false" maxlength="255"></textarea>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="suggest" id="suggest"></div>
+    </div>
+    <div class="logic">
+      <button class="lg" data-ins="and" data-tip="Both sides true. Words you add after a word get AND by themselves.">AND</button>
+      <button class="lg" data-ins="or" data-tip="Either side true. Right after an AND that was added for you, it takes its place.">OR</button>
+      <button class="lg" data-ins="not" data-tip="The next word or brackets false. Shift-click a word to add it with NOT.">NOT</button>
+      <button class="lg" data-ins="(" data-tip="Opens a group, around what you add next.">(</button>
+      <button class="lg" data-ins=")" data-tip="Closes the group.">)</button>
+      <span class="sep"></span>
+      <button class="lg gold" id="undo" data-tip="Undoes the last change (Ctrl+Z).">Undo</button>
+      <button class="lg gold" id="redo" data-tip="Does it again (Ctrl+Y).">Redo</button>
+      <button class="lg gold" id="clear" data-tip="Empties the rule.">Clear</button>
+    </div>
+    <div class="readout" id="readout"></div>
+    <div class="gridNote" id="gridNote"></div>
+    <div class="picker">
+      <div class="side" id="side">
+        <div class="find"><input id="find" placeholder="Find a word…" data-tip="Searches every word by its name, what you'd type and what it means. Enter adds the first."></div>
+        <div id="cats"></div>
+      </div>
+      <div class="pane" id="pane"></div>
+    </div>
+    <div class="foot">
+      <button class="btn plain" id="reset" data-tip="Drops the rule, so the row's dropdowns decide again, ticked as they were before.">Reset to grid</button>
+      <button class="btn plain" data-tip="Makes this row show whenever another row of its table does, instead of a rule.">Follow a row</button>
+      <span class="sp"></span>
+      <button class="btn" id="done" style="width:90px" data-tip="Closes the editor, keeping the rule.">Done</button>
+    </div>
+  </div>
+
+  <div class="side2">
+    <div class="card">
+      <h2>Pretend you're…</h2>
+      <select id="scene">
+        <option value="goldshire">Standing in Goldshire, out of combat, it's raining</option>
+        <option value="fight">Fighting a hostile elite that's on you</option>
+        <option value="inn">Talking to the innkeeper in the Lion's Pride Inn</option>
+        <option value="flight">On a flight path, map open</option>
+      </select>
+      <p>The green dots and the readout under the rule follow it, as they follow the game.</p>
+    </div>
+    <div class="card">
+      <h2>Opened from…</h2>
+      <select id="context">
+        <option value="row">A Show in row (Enemy players)</option>
+        <option value="tooltip">The Tooltips row</option>
+        <option value="edge">A Cards fight row (Entering combat)</option>
+        <option value="trigger">A camera trigger's Only if</option>
+      </select>
+      <p>Words that only mean something in one place show only there: the tooltip's kinds on the Tooltips row,
+        Entering/Leaving combat on fight rows. A row that can go back into its dropdowns says so under the readout.</p>
+    </div>
+    <div class="card">
+      <h2>Try</h2>
+      <ul>
+        <li>Type <kbd>ta</kbd> in the rule: suggestions, <kbd>↑</kbd><kbd>↓</kbd> <kbd>Tab</kbd>/<kbd>Enter</kbd> to take one.</li>
+        <li>Click two words: the <b>and</b> between them comes by itself. Click OR right after: it swaps.</li>
+        <li><kbd>Shift</kbd>-click a word: it goes in with NOT.</li>
+        <li>Units: switch Target / Mouse / Focus. The same words, the right ones typed.</li>
+        <li><i>True here</i>: everything true where you stand, from every list.</li>
+        <li>Find <kbd>dps</kbd>, <kbd>stun</kbd>, <kbd>buff</kbd>, <kbd>yard</kbd>.</li>
+        <li>Zone…, Aura…: pick from where you are and what you have.</li>
+        <li>Hover a chip in the readout: why it's true or false.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+<div class="menu" id="menu"></div>
+
+<script>
+// ---- The words: ns.RulePieces() regrouped (Tools/rule-editor-redesign-plan.md "Categories"). ----
+const C = { fight:[1,.45,.4], units:[1,.65,.25], dist:[.45,.9,.9], place:[.45,.75,1], you:[.8,.6,1],
+  doing:[.75,.8,.95], travel:[.6,.85,1], group:[.4,.85,.5], world:[.55,.9,.7], camera:[.95,.75,.45],
+  char:[.85,.75,.6], tip:[.95,.95,.6] };
+const rgb = c => `rgb(${c.map(v=>Math.round(v*255)).join(',')})`;
+// A word: [word, label, tip, extra] where extra: {only:"tooltip"|"edge", alias:[..], pick:axis}
+const UNIT_WORDS = [ // [prop, label, tip, sections]  (built per unit)
+  ["who", [["", "Anything", "Anything there at all."], ["self", "You", "It's you."], ["enemy", "Enemy", "One you can attack, alive."],
+    ["friendly", "Friendly", "One you can't attack, the dead too."], ["dead", "Dead", "Dead: a corpse to loot or skin."]]],
+  ["kind", [["npc", "Any NPC", "An NPC, whatever it thinks of you."], ["player", "Any player", "A player character."],
+    ["hostile", "Hostile", "A unit you can attack, red to you."], ["neutral", "Neutral", "A yellow NPC, or an enemy player you can't attack yet."]]],
+  ["rank", [["elite", "Elite", "Elite, rare elite or a world boss."], ["rare", "Rare", "Rare or rare elite."],
+    ["boss", "Boss", "A world boss, or a dungeon or raid boss. Boss fight is the fight itself."], ["critter", "Critter", "A critter, totem or pet."]]],
+  ["more", [["quest", "Quest mob", "Needed for one of your quests."], ["tapped", "Tapped by others", "Tagged by someone else: no loot or credit for you."],
+    ["targetingyou", "Targeting you", "Its target is you."]]],
+];
+const SEC_NAMES = { who: "Who", kind: "Kind", rank: "Rank", more: "More", dist: "Distance", only: "" };
+const UNITS = {
+  target: { label: "Target", prefix: "", extra: { dist: [["near", "Near (11 yards)", "Up close, about 11 yards."], ["near28", "Near (28 yards)", "About 28 yards."],
+      ["noplate", "Plate off screen", "Its nameplate isn't up: behind you, off the side or far."]],
+      only: [["targetid:", "This NPC…", "Picks the NPC you have targeted: true when you target that NPC again.", { pick: "targetid" }]] } },
+  hover: { label: "Mouse", prefix: "hover", extra: { only: [["hoverframe", "On a unit frame", "The mouse on a unit frame, not out in the world."]] } },
+  focus: { label: "Focus", prefix: "focus", extra: { dist: [["focusnear", "Near (11 yards)", "Your focus up close, about 11 yards."], ["focusnear28", "Near (28 yards)", "About 28 yards."]] } },
+};
+// The target's own spellings (target words were bare before the rest got prefixes).
+function unitWord(unit, prop) {
+  if (unit === "target") {
+    const bare = { "": "target", self: "targetself", dead: "targetdead", enemy: "enemy", friendly: "friendly", npc: "npc", player: "player",
+      hostile: "hostile", neutral: "neutral", targetingyou: "targetingyou" };
+    return bare[prop] ?? "target" + prop;
+  }
+  return UNITS[unit].prefix + prop;
+}
+const CATS = [
+  { key: "fight", name: "Fight", color: C.fight, sub: "fights and what's in them", words: [
+    ["combat", "In combat", "You're in a fight."], ["calm", "Calm Timer", "Just after a fight, till the Calm Timer runs out."],
+    ["nocombat", "Out of combat", "No fight, and the Calm Timer run out."], ["boss", "Boss fight", "An encounter, boss frames, or a boss targeted."],
+    ["pvpfight", "PvP fight", "In a battleground or arena, or with an enemy player in the fight."], ["aggro", "Aggro on you", "A mob is attacking you. Where the game hides threat, false."],
+    ["entering", "Entering combat", "The moment a fight starts.", { only: "edge" }], ["leaving", "Leaving combat", "The moment a fight ends.", { only: "edge" }]] },
+  { key: "units", name: "Units", color: C.units, sub: "your target, the mouse, your focus" },
+  { key: "dist", name: "Distance", color: C.dist, sub: "how far, by your spells", sections: [
+    ["Spell range", [["range5to10", "Within 5-10*", "Your target in reach of your shortest spell in the band."], ["range20to25", "Within 20-25*", ""],
+      ["range30to35", "Within 30-35*", ""], ["range40plus", "Within 40*", ""]]],
+    ["Elites near you", [["elite11", "Elite near (11 yards)", "An elite within 11 yards."], ["elite28", "Elite near (28 yards)", ""], ["elite40", "Elite near (40 yards)", ""]]]] },
+  { key: "place", name: "Place", color: C.place, sub: "where you are", sections: [
+    ["Kind of place", [["world", "Open world", ""], ["city", "Cities", ""], ["inn", "Inns", ""], ["bg", "BGs & arenas", ""], ["instance", "Instances", "Dungeons and raids."],
+      ["dungeon", "Dungeons", ""], ["raid", "Raids", ""], ["scenario", "Scenarios", ""], ["sanctuary", "Sanctuary", ""], ["contested", "Contested zone", ""],
+      ["indoors", "Indoors", "Inside a building or cave."], ["outdoors", "Outdoors", ""]]],
+    ["This place", [["zone:", "Zone…", "Picks the zone you're in, or one it's inside: true there, its towns too.", { pick: "zone" }],
+      ["subzone:", "Subzone…", "Picks the spot you're in by its name, in your game's language.", { pick: "subzone" }],
+      ["instance:", "Instance…", "Picks the dungeon, raid or battleground you're in.", { pick: "instance" }]]]] },
+  { key: "you", name: "You", color: C.you, sub: "your character's state", sections: [
+    ["State", [["dead", "Dead", "Dead, or a ghost."], ["ghost", "Ghost", "A ghost after releasing."], ["casting", "Casting", "Casting or channeling."],
+      ["controlled", "Lost control", "Stunned, feared, charmed and the like.", { alias: ["stunned", "cc", "stun"] }], ["stealthed", "Stealthed", ""],
+      ["mounted", "Mounted", ""], ["vehicle", "In a vehicle", ""], ["shapeshifted", "In a form", "A druid's, shaman's, priest's or warlock's form; not a stance."],
+      ["sitting", "Sit", "Sitting or lying down."], ["resting", "Resting", "In an inn or a city."], ["pet", "Pet out", ""], ["maxlevel", "Max level", ""]]],
+    ["Flags", [["afk", "AFK", ""], ["dnd", "Busy (DND)", "", { alias: ["busy"] }], ["flagged", "PvP flagged", ""]]],
+    ["What you have", [["aura:", "Aura…", "Picks a buff or debuff on you now: true while you have it.", { pick: "aura", alias: ["buff", "debuff"] }],
+      ["form:", "Form…", "Picks one of your forms or stances.", { pick: "form" }], ["mount:", "Mount…", "Picks the mount you're on now.", { pick: "mount" }]]]] },
+  { key: "doing", name: "Doing", color: C.doing, sub: "NPCs, windows, your screen", sections: [
+    ["With NPCs", [["interacting", "Interacting", "An NPC's or a service window open, the mailbox and a trade too."],
+      ["talking", "Talking", "Gossip, quest text, a book or a talking head.", { alias: ["dialog"] }],
+      ["window:", "Window…", "Picks a kind of NPC window: true while one is open.", { pick: "window" }]]],
+    ["Your screen", [["mapopen", "Map open", ""], ["menuopen", "Game window open", "Spellbook, map, character, settings and the like."],
+      ["editmode", "Edit Mode", ""], ["movie", "Movie playing", "A game cinematic or movie."], ["mouselook", "Turning with the mouse", "A mouse button held to turn."],
+      ["gamepad", "Using a gamepad", "", { alias: ["controller"] }]]]] },
+  { key: "travel", name: "Travel", color: C.travel, sub: "how you're moving", words: [
+    ["moving", "Moving", ""], ["autorun", "Auto-run", ""], ["rpwalk", "RP Walk", ""], ["swimming", "Swimming", ""], ["underwater", "Under water", ""],
+    ["flying", "Flying", ""], ["fast", "Moving fast", "Faster than a 60% mount."], ["falling", "Falling", ""], ["taxi", "On a flight path", ""]] },
+  { key: "group", name: "Group", color: C.group, sub: "your group and role", sections: [
+    ["Group", [["group", "Grouped", ""], ["raidgroup", "In a raid group", ""], ["leader", "Group leader", ""]]],
+    ["Role", [["tank", "Tank", ""], ["healer", "Healer", "", { alias: ["heal"] }], ["damage", "Damage", "", { alias: ["dps"] }]]]] },
+  { key: "world", name: "World", color: C.world, sub: "weather and time of day", sections: [
+    ["Weather", [["rain", "Rain", ""], ["snow", "Snow", ""], ["sandstorm", "Sandstorm", ""], ["storm", "Storm (heavy rain)", ""], ["weather", "Any weather", ""]]],
+    ["Time of day", [["dawn", "Dawn", ""], ["day", "Day", ""], ["dusk", "Dusk", ""], ["night", "Night", ""]]]] },
+  { key: "camera", name: "Camera", color: C.camera, sub: "Cinematic's camera modes", words: [
+    ["camera", "In a camera mode", "Any Cinematic camera running."], ["camera:", "Which camera…", "Picks one camera: true while that one's running.", { pick: "camera" }]] },
+  { key: "char", name: "Character", color: C.char, sub: "class, spec, race", sections: [
+    ["Class", ["warrior","paladin","hunter","rogue","priest","shaman","mage","warlock","druid"].map(c => [c, c[0].toUpperCase()+c.slice(1), ""])],
+    ["More", [["spec:", "Spec…", "Picks one of your specs.", { pick: "spec" }], ["race:", "Race…", "Picks your race.", { pick: "race" }]]]] },
+  { key: "tip", name: "Tooltip", color: C.tip, sub: "the tooltip being shown", only: "tooltip", words: [
+    ["tipenemy", "Enemy", ""], ["tipfriendly", "Friendly", ""], ["tipgather", "Gatherable", ""], ["tipquest", "Quest objective", ""], ["tipother", "Anything else", ""]] },
+];
+const PICKS = {
+  zone: () => [["zone:1429", "Elwynn Forest (here)"], ["zone:1415", "Eastern Kingdoms"], ["zone:947", "Azeroth"]],
+  subzone: () => state.scene === "inn" ? [['subzone:"Lion\'s Pride Inn"', "Lion's Pride Inn (here)"]] : [["subzone:goldshire", "Goldshire (here)"]],
+  instance: () => [],
+  aura: () => [["aura:6307", "Blood Pact"], ["aura:696", "Demon Skin"], ["aura:460939", "Might of Stormwind"]],
+  form: () => [],
+  mount: () => [],
+  window: () => [["window:merchant", "Vendor"], ["window:gossip", "Gossip"], ["window:questgiver", "Quest giver"], ["window:banker", "Bank"],
+    ["window:trainer", "Trainer"], ["window:taxinode", "Flight master"], ["window:mailinfo", "Mailbox"], ["window:auctioneer", "Auction house"]],
+  camera: () => ["flight","idle","cozy","tele","chatcam","script"].map(k => ["camera:" + k, k]),
+  spec: () => [["spec:265", "Affliction"], ["spec:266", "Demonology"], ["spec:267", "Destruction"]],
+  race: () => [["race:human", "Human (you)"]],
+  targetid: () => state.scene === "fight" ? [["targetid:448", "Hogger (your target)"]] : [],
+};
+const NAMES = { "zone:1429": "Elwynn Forest", "zone:1415": "Eastern Kingdoms", "zone:947": "Azeroth", "aura:6307": "Blood Pact",
+  "aura:696": "Demon Skin", "spec:265": "Affliction", "targetid:448": "Hogger" };
+
+// ---- Where you stand (pretend). ----
+const SCENES = {
+  goldshire: ["nocombat","world","outdoors","rain","weather","day","warlock","pet","target","friendly","npc","zone:1429","zone:1415","zone:947","subzone:goldshire","aura:6307","aura:696","race:human","spec:265","damage"],
+  fight: ["combat","aggro","boss","world","outdoors","day","warlock","pet","target","enemy","hostile","npc","targetelite","targetboss","targetingyou","near","near28","range20to25","range30to35","range40plus","elite11","elite28","elite40","casting","zone:1429","zone:1415","zone:947","aura:6307","targetid:448","race:human","spec:265","damage"],
+  inn: ["nocombat","inn","resting","indoors","interacting","talking","window:gossip","day","warlock","pet","target","friendly","npc","near","near28","zone:1429","zone:1415","zone:947",'subzone:"lion\'s pride inn"',"aura:6307","race:human","spec:265","damage"],
+  flight: ["nocombat","world","outdoors","taxi","moving","fast","flying","mapopen","menuopen","day","warlock","zone:1415","zone:947","aura:6307","race:human","spec:265","damage"],
+};
+const state = { scene: "goldshire", context: "row", cat: "units", unit: "target", hist: [], fut: [], autoAnd: -1, find: "", sugg: [], suggOn: 0 };
+let facts = new Set(SCENES.goldshire);
+const ALIAS = { fighting: "combat", mouseover: "hover", busy: "dnd", cc: "controlled", stunned: "controlled", dialog: "talking", dps: "damage",
+  heal: "healer", map: "mapopen", menu: "menuopen", controller: "gamepad", anynpc: "npc", deadtarget: "targetdead" };
+
+// Every word as an entry: {word, label, tip, cat, unit, only, alias, pick, color}
+function allEntries() {
+  const out = [];
+  for (const cat of CATS) {
+    if (cat.only && cat.only !== state.context) continue;
+    if (cat.key === "units") {
+      for (const unit of Object.keys(UNITS)) for (const sec of unitSections(unit)) for (const w of sec[1])
+        out.push({ word: w[0], label: w[1], tip: w[2], cat: cat, unit, sec: sec[0], ...(w[3] || {}) });
+      continue;
+    }
+    const secs = cat.sections || [["", cat.words]];
+    for (const sec of secs) for (const w of sec[1]) {
+      const x = w[3] || {};
+      if (x.only && x.only !== state.context) continue;
+      out.push({ word: w[0], label: w[1], tip: w[2], cat, sec: sec[0], ...x });
+    }
+  }
+  return out;
+}
+function unitSections(unit) {
+  const secs = UNIT_WORDS.map(([sec, list]) => [SEC_NAMES[sec], list.map(([p, l, t]) => [unitWord(unit, p), l, t])]);
+  const ex = UNITS[unit].extra;
+  if (ex.dist) secs.splice(2, 0, ["Distance", ex.dist]);
+  if (ex.only) secs.push([UNITS[unit].label + " only", ex.only]);
+  return secs;
+}
+const isTrue = w => facts.has(ALIAS[w] || w);
+
+// ---- The rule box: coloring, tokens, the readout. ----
+const box = document.getElementById("box"), colored = document.getElementById("colored");
+const colorOf = word => { const e = allEntries().find(e => e.word === word || e.word === ALIAS[word]); return e ? rgb(e.cat.color) : null; };
+const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function tokens(text) {
+  const out = []; const re = /\s*(?:([A-Za-z_][\w]*):("[^"]*"|[\w,.\-']*)|([A-Za-z_]\w*)|(&&?|\|\|?|!)|([()]))/y;
+  let m; re.lastIndex = 0;
+  while (re.lastIndex < text.length) {
+    const at = re.lastIndex; m = re.exec(text);
+    if (!m) { if (/^\s*$/.test(text.slice(at))) break; out.push({ bad: text.slice(at).trim()[0], at }); break; }
+    if (m[1]) out.push({ axis: m[1].toLowerCase(), value: m[2].toLowerCase(), raw: m[1] + ":" + m[2] });
+    else if (m[3]) { const w = m[3].toLowerCase(); out.push(["and","or","not"].includes(w) ? { op: w } : { word: w }); }
+    else if (m[4]) out.push({ op: m[4][0] === "&" ? "and" : m[4][0] === "|" ? "or" : "not" });
+    else out.push({ paren: m[5] });
+  }
+  return out;
+}
+const KNOWN_AXES = ["zone","subzone","instance","window","aura","form","mount","class","race","spec","camera","targetid"];
+function known(t) {
+  if (t.axis) return KNOWN_AXES.includes(t.axis) && t.value !== "";
+  return allEntries().some(e => e.word === t.word) || ALIAS[t.word] || ["always","never","true","false"].includes(t.word);
+}
+function truth(t) {
+  if (t.axis) return t.value.split(",").some(v => facts.has(t.axis + ":" + v));
+  if (t.word === "always" || t.word === "true") return true;
+  if (t.word === "never" || t.word === "false") return false;
+  return isTrue(t.word);
+}
+function evaluate(tks) { // recursive descent: or < and < not
+  let i = 0, err = null;
+  const atom = () => { const t = tks[i];
+    if (!t) { err = err || "it ends too soon"; return false; }
+    if (t.op === "not") { i++; return !atom(); }
+    if (t.paren === "(") { i++; const v = or(); if (!tks[i] || tks[i].paren !== ")") err = err || "a ( has no )"; else i++; return v; }
+    if (t.op) { err = err || t.op.toUpperCase() + " needs a word before it"; i++; return false; }
+    if (t.paren) { err = err || "a word is missing before a )"; i++; return false; }
+    if (t.bad) { err = err || `can't read "${t.bad}"`; i++; return false; }
+    if (!known(t)) err = err || `"${t.raw || t.word}" isn't a word it knows`;
+    i++; return truth(t); };
+  const and = () => { let v = atom(); while (tks[i] && tks[i].op === "and") { i++; const b = atom(); v = v && b; } return v; };
+  const or = () => { let v = and(); while (tks[i] && tks[i].op === "or") { i++; const b = and(); v = v || b; } return v; };
+  const v = or(); if (!err && i < tks.length) err = `"${tks[i].raw || tks[i].word || tks[i].op || tks[i].paren}" is out of place`;
+  return { v, err };
+}
+function labelOf(t) {
+  if (t.axis) { const n = NAMES[t.axis + ":" + t.value]; return t.axis + ": " + (n || t.value.replace(/"/g, "")); }
+  const e = allEntries().find(e => e.word === (ALIAS[t.word] || t.word));
+  if (!e) return t.word;
+  return e.unit && e.unit !== "target" ? UNITS[e.unit].label + ": " + e.label : (e.unit ? "Target: " + e.label : e.label);
+}
+function paint() {
+  const text = box.value;
+  colored.innerHTML = text.replace(/([A-Za-z_]\w*):("[^"]*"|[\w,.\-']*)|([A-Za-z_]\w*)|([^A-Za-z_]+)/g, (m, ax, val, w, other) => {
+    if (ax) { const ok = KNOWN_AXES.includes(ax.toLowerCase()) && val !== "";
+      const n = NAMES[ax.toLowerCase() + ":" + val.toLowerCase()];
+      return `<span style="color:${ok ? "#f2cc8c" : "var(--red)"}">${esc(m)}</span>`; }
+    if (w) { const lw = w.toLowerCase();
+      if (["and","or","not"].includes(lw)) return `<span style="color:#aaa">${w}</span>`;
+      const c = colorOf(lw) || (["always","never"].includes(lw) ? "var(--gold)" : null);
+      return c ? `<span style="color:${c}">${w}</span>` : `<span style="color:var(--red);text-decoration:underline wavy">${w}</span>`; }
+    return `<span style="color:#888">${esc(other)}</span>`;
+  }) + "​";
+  document.getElementById("count").textContent = text.length > 200 ? `${text.length}/255` : "";
+  // Readout.
+  const ro = document.getElementById("readout"); ro.innerHTML = "";
+  const tks = tokens(text);
+  if (!text.trim()) { ro.innerHTML = `<span class="verdict f" style="margin-left:0">${state.context === "row" ? "Blank: never shown." : "Empty: always."}</span>`; }
+  else {
+    for (const t of tks) {
+      if (t.op || t.paren) { const s = document.createElement("span"); s.className = "op"; s.textContent = t.op ? t.op.toUpperCase() : t.paren; ro.append(s); continue; }
+      if (t.bad) continue;
+      const ok = known(t), v = ok && truth(t);
+      const c = document.createElement("span"); c.className = "chip " + (ok ? (v ? "t" : "f") : "f");
+      c.innerHTML = `<span class="m">${ok ? (v ? "✓" : "✗") : "?"}</span>${esc(labelOf(t))}`;
+      c.dataset.tip = ok ? `<b>${esc(labelOf(t))}</b> <span class="tw">${esc(t.raw || t.word)}</span><div class="tn">${v ? "True where you stand now." : "False where you stand now."}</div>`
+        : `<b>Not a word</b><div class="tn">"${esc(t.raw || t.word)}" isn't one CQL knows. Find a word on the left, or type a few letters for suggestions.</div>`;
+      c.dataset.html = 1; ro.append(c);
+    }
+    const r = evaluate(tks); const vd = document.createElement("span");
+    if (r.err) { vd.className = "verdict e"; vd.textContent = "Not finished: " + r.err + ". Closing now puts back the rule it had."; }
+    else { vd.className = "verdict " + (r.v ? "t" : "f"); vd.textContent = r.v ? "→ Shown right now" : "→ Hidden right now"; }
+    ro.append(vd);
+    document.getElementById("done").disabled = !!r.err;
+  }
+  if (!text.trim()) document.getElementById("done").disabled = false;
+  // The grid's note: back into the dropdowns, or stays a rule.
+  const gn = document.getElementById("gridNote");
+  if (state.context === "row") {
+    const simple = text.trim() && tks.every(t => t.op === "or" || ["combat","calm","nocombat","camera","enemy","friendly","bg","world","city","group","instance","always"].includes(t.word));
+    gn.innerHTML = !text.trim() ? "" : simple ? `<span style="color:var(--green)">Goes back into the dropdowns as you close it.</span>`
+      : `<span style="color:var(--gold)">Stays the row's rule (the dropdowns can't show it).</span>`;
+  } else gn.textContent = "";
+  renderPane(); renderCats();
+}
+
+// ---- Inserting: smart spacing, AND by itself, NOT with Shift, OR swaps an added AND. ----
+function snapshot() { state.hist.push([box.value, box.selectionStart]); if (state.hist.length > 50) state.hist.shift(); state.fut = []; }
+function setText(text, cursor) { box.value = text; box.focus(); box.setSelectionRange(cursor, cursor); paint(); }
+function insert(word, opts = {}) {
+  snapshot();
+  let text = box.value, pos = box.selectionStart;
+  let before = text.slice(0, pos), after = text.slice(pos);
+  const isWord = !["and","or","not","(",")"].includes(word);
+  if (word === "or" && state.autoAnd >= 0 && /\band\s*$/.test(before) && before.replace(/\s+$/, "").length === state.autoAnd) {
+    before = before.replace(/\band\s*$/, ""); // (OR right after an AND added for you takes its place)
+  }
+  let piece = word;
+  state.autoAnd = -1;
+  if ((isWord || word === "(" || word === "not") && /[\w")]\s*$/.test(before)) { // after a word or ): AND by itself
+    before = before.replace(/\s*$/, "") + " and"; state.autoAnd = before.length;
+  }
+  if (opts.not) piece = "not " + word;
+  const lead = (before === "" || /[\s(]$/.test(before) || word === ")") ? "" : " ";
+  const trail = (word !== "(" && /^[\w(]/.test(after)) ? " " : "";
+  setText(before + lead + piece + trail + after, (before + lead + piece).length);
+}
+document.querySelectorAll(".lg[data-ins]").forEach(b => b.addEventListener("click", e => insert(b.dataset.ins)));
+document.getElementById("undo").onclick = () => { const h = state.hist.pop(); if (!h) return; state.fut.push([box.value, box.selectionStart]); setText(h[0], h[1]); };
+document.getElementById("redo").onclick = () => { const f = state.fut.pop(); if (!f) return; state.hist.push([box.value, box.selectionStart]); setText(f[0], f[1]); };
+document.getElementById("clear").onclick = () => { snapshot(); setText("", 0); };
+box.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); document.getElementById("undo").click(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === "y") { e.preventDefault(); document.getElementById("redo").click(); return; }
+  const sg = document.getElementById("suggest");
+  if (sg.style.display === "block") {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); state.suggOn = (state.suggOn + (e.key === "ArrowDown" ? 1 : -1) + state.sugg.length) % state.sugg.length; showSuggest(); return; }
+    if (e.key === "Tab" || e.key === "Enter") { e.preventDefault(); takeSuggestion(state.sugg[state.suggOn]); return; }
+    if (e.key === "Escape") { e.preventDefault(); sg.style.display = "none"; return; }
+  }
+  if (e.key === "Enter") { e.preventDefault(); }
+});
+let lastVal = "";
+box.addEventListener("input", () => { if (box.value !== lastVal) { state.hist.push([lastVal, box.selectionStart]); state.fut = []; } lastVal = box.value; state.autoAnd = -1; paint(); suggest(); });
+box.addEventListener("focus", () => document.getElementById("well").classList.add("focus"));
+box.addEventListener("blur", () => { document.getElementById("well").classList.remove("focus"); setTimeout(() => document.getElementById("suggest").style.display = "none", 150); });
+box.addEventListener("click", suggest);
+const _set = setText; // (keep lastVal in step with programmatic changes)
+setText = (t, c) => { lastVal = t; _set(t, c); };
+
+// ---- Suggestions while typing. ----
+function partial() { const before = box.value.slice(0, box.selectionStart); const m = before.match(/([A-Za-z_]\w*)$/); return m ? m[1] : ""; }
+function matches(q, limit) {
+  q = q.toLowerCase(); if (!q) return [];
+  const seen = new Set(), out = [];
+  const score = e => { const w = e.word.toLowerCase(), l = e.label.toLowerCase();
+    if (w.startsWith(q)) return 0; if (l.startsWith(q)) return 1; if ((e.alias || []).some(a => a.startsWith(q))) return 2;
+    if (l.includes(q) || w.includes(q)) return 3; if (e.tip && e.tip.toLowerCase().includes(q)) return 4; return 9; };
+  for (const e of allEntries()) { const s = score(e); if (s < 9 && !seen.has(e.word)) { seen.add(e.word); out.push([s, e]); } }
+  for (const [a, w] of Object.entries(ALIAS)) if (a.startsWith(q)) { const e = allEntries().find(x => x.word === w); if (e && !seen.has(e.word)) { seen.add(e.word); out.push([2, e]); } }
+  return out.sort((a, b) => a[0] - b[0] || a[1].word.length - b[1].word.length).slice(0, limit).map(x => x[1]);
+}
+function suggest() {
+  const q = partial(); state.sugg = q.length >= 2 ? matches(q, 6) : []; state.suggOn = 0; showSuggest();
+}
+function showSuggest() {
+  const sg = document.getElementById("suggest");
+  if (!state.sugg.length) { sg.style.display = "none"; return; }
+  sg.innerHTML = state.sugg.map((e, i) => `<div class="${i === state.suggOn ? "on" : ""}" data-i="${i}"><span class="w" style="color:${rgb(e.cat.color)}">${esc(e.word)}</span><span class="l">${esc((e.unit ? UNITS[e.unit].label + ": " : "") + e.label)}</span>${isTrue(e.word) ? '<span class="d" style="width:7px;height:7px;border-radius:50%;background:var(--green)"></span>' : ""}</div>`).join("")
+    + `<div class="hint">↑↓ to choose · Tab or Enter to take · Esc to close</div>`;
+  sg.style.display = "block";
+  sg.querySelectorAll("[data-i]").forEach(d => d.onmousedown = ev => { ev.preventDefault(); takeSuggestion(state.sugg[+d.dataset.i]); });
+}
+function takeSuggestion(e) {
+  if (!e) return; snapshot();
+  const pos = box.selectionStart, q = partial(), before = box.value.slice(0, pos - q.length), after = box.value.slice(pos);
+  if (e.pick) { setText(before + after, before.length); document.getElementById("suggest").style.display = "none"; openPick(e, box); return; }
+  const trail = /^[\w(]/.test(after) ? " " : "";
+  setText(before + e.word + trail + after, (before + e.word).length);
+  document.getElementById("suggest").style.display = "none";
+}
+
+// ---- The categories and the pane. ----
+const side = document.getElementById("cats"), pane = document.getElementById("pane");
+function inRuleSet() { return new Set(tokens(box.value).filter(t => t.word || t.axis).map(t => t.axis ? t.axis + ":" : (ALIAS[t.word] || t.word))); }
+function catEntries(cat) { return allEntries().filter(e => e.cat === cat); }
+function renderCats() {
+  const specials = [["here", "True here", "Every word true where you stand now, from every list."], ["rule", "In this rule", "The words this rule uses."]];
+  const cats = CATS.filter(c => !c.only || c.only === state.context);
+  const finding = state.find.trim();
+  const hits = finding ? new Set(matches(finding, 99).map(e => e.cat.key)) : null;
+  side.innerHTML = specials.map(([k, n, t]) => `<div class="cat special ${state.cat === k && !finding ? "on" : ""}" data-k="${k}" data-tip="${t}"><span class="nm">${n}</span><span class="n">${k === "here" ? allEntries().filter(e => isTrue(e.word)).length : inRuleSet().size}</span></div>`).join("")
+    + `<div class="sideGap"></div>` + cats.map(c => {
+      const anyTrue = catEntries(c).some(e => isTrue(e.word) && (c.key !== "units" || e.unit === state.unit || true));
+      const dim = hits && !hits.has(c.key);
+      return `<div class="cat ${state.cat === c.key && !finding ? "on" : ""}" data-k="${c.key}" style="${dim ? "opacity:.35" : ""}" data-tip="${c.sub}"><span class="nm" style="color:${rgb(c.color)}">${c.name}</span>${anyTrue ? '<span class="d"></span>' : ""}</div>`;
+    }).join("");
+  side.querySelectorAll(".cat").forEach(d => d.onclick = () => { state.cat = d.dataset.k; state.find = ""; document.getElementById("find").value = ""; renderPane(); renderCats(); });
+}
+function wordButton(e, inRule) {
+  const b = document.createElement("button"); b.className = "wb" + (inRule.has(e.word) ? " inRule" : "");
+  const col = rgb(e.cat.color); b.style.color = col; b.style.borderColor = col.replace("rgb", "rgba").replace(")", ",.45)");
+  b.innerHTML = esc(e.label) + (isTrue(e.word) ? '<span class="d"></span>' : "");
+  const where = e.unit ? UNITS[e.unit].label + ": " : "";
+  b.dataset.tip = `<b>${esc(where + e.label)}</b> <span class="tw">${esc(e.word)}${e.pick ? "…" : ""}</span>` + (e.tip ? `<div>${esc(e.tip)}</div>` : "")
+    + `<div class="tn">${e.pick ? "Opens a menu of what's here and what you have." : (isTrue(e.word) ? "True where you stand now." : "False where you stand now.") + " Click adds it; Shift-click adds NOT " + esc(e.word) + "."}</div>`;
+  b.dataset.html = 1;
+  b.onclick = ev => e.pick ? openPick(e, b) : insert(e.word, { not: ev.shiftKey });
+  return b;
+}
+function renderPane() {
+  const inRule = inRuleSet(); pane.innerHTML = "";
+  const head = (name, sub, color) => { const h = document.createElement("div"); h.className = "paneHead";
+    h.innerHTML = `<h3 style="color:${color || "var(--text)"}">${name}</h3><span class="sub">${sub}</span>`; pane.append(h); };
+  const finding = state.find.trim();
+  if (finding) {
+    const res = matches(finding, 60); head(`Words for “${esc(finding)}”`, res.length + " found");
+    if (!res.length) { pane.insertAdjacentHTML("beforeend", `<div class="empty">No word matches. Try what it does: “stun”, “buff”, “yards”…</div>`); return; }
+    let last = null, row;
+    for (const e of res) { const key = e.cat.key + (e.unit || "");
+      if (key !== last) { last = key; const s = document.createElement("div"); s.className = "resultCat"; s.textContent = e.cat.name + (e.unit ? " · " + UNITS[e.unit].label : ""); pane.append(s);
+        row = document.createElement("div"); row.className = "words"; pane.append(row); }
+      row.append(wordButton(e, inRule)); }
+    return;
+  }
+  if (state.cat === "here" || state.cat === "rule") {
+    const list = state.cat === "here" ? allEntries().filter(e => isTrue(e.word)) : allEntries().filter(e => inRule.has(e.word));
+    head(state.cat === "here" ? "True here" : "In this rule", state.cat === "here" ? "everything true where you stand now" : "the words this rule uses");
+    if (!list.length) { pane.insertAdjacentHTML("beforeend", `<div class="empty">${state.cat === "here" ? "Nothing." : "The rule has no words yet."}</div>`); return; }
+    let last = null, row; const seen = new Set();
+    for (const e of list) { if (seen.has(e.word)) continue; seen.add(e.word);
+      const key = e.cat.key + (e.unit || "");
+      if (key !== last) { last = key; const s = document.createElement("div"); s.className = "resultCat"; s.textContent = e.cat.name + (e.unit ? " · " + UNITS[e.unit].label : ""); pane.append(s);
+        row = document.createElement("div"); row.className = "words"; pane.append(row); }
+      row.append(wordButton(e, inRule)); }
+    return;
+  }
+  const cat = CATS.find(c => c.key === state.cat); head(cat.name, cat.sub, rgb(cat.color));
+  if (cat.key === "units") {
+    const sw = document.createElement("div"); sw.className = "uSw";
+    for (const u of Object.keys(UNITS)) { const b = document.createElement("button"); b.className = state.unit === u ? "on" : "";
+      const any = allEntries().some(e => e.unit === u && isTrue(e.word));
+      b.innerHTML = UNITS[u].label + (any ? '<span class="d"></span>' : "");
+      b.dataset.tip = { target: "Your target. Its words: enemy, hostile, targetelite…", hover: "The unit under your mouse. Its words start with hover.", focus: "Your focus. Its words start with focus." }[u];
+      b.onclick = () => { state.unit = u; renderPane(); }; sw.append(b); }
+    pane.append(sw);
+    const entries = allEntries().filter(e => e.unit === state.unit);
+    const secs = [...new Set(entries.map(e => e.sec))];
+    for (const s of secs) section(s, entries.filter(e => e.sec === s), inRule);
+    return;
+  }
+  const entries = catEntries(cat); const secs = [...new Set(entries.map(e => e.sec))];
+  for (const s of secs) section(s, entries.filter(e => e.sec === s), inRule);
+}
+function section(name, list, inRule) {
+  const wrap = document.createElement("div"); wrap.className = "secRow";
+  if (name) { const s = document.createElement("div"); s.className = "sec"; s.textContent = name; wrap.append(s); }
+  const row = document.createElement("div"); row.className = "words"; for (const e of list) row.append(wordButton(e, inRule));
+  wrap.append(row); pane.append(wrap);
+}
+document.getElementById("find").addEventListener("input", ev => { state.find = ev.target.value; renderPane(); renderCats(); });
+document.getElementById("find").addEventListener("keydown", ev => { if (ev.key === "Enter") { const e = matches(state.find, 1)[0]; if (e) { e.pick ? openPick(e, ev.target) : insert(e.word); } } });
+
+// ---- Value menus. ----
+const menu = document.getElementById("menu");
+function openPick(e, anchor) {
+  const list = PICKS[e.pick]();
+  menu.innerHTML = `<div class="mt">${esc(e.label.replace("…", ""))}</div>` + (list.length ? list.map(([w, l]) => `<div data-w="${esc(w)}">${esc(l)}<span class="mw">${esc(w)}</span></div>`).join("")
+    : `<div class="mt" style="color:#777">Nothing to pick here now</div>`);
+  const r = anchor.getBoundingClientRect(); menu.style.left = r.left + "px"; menu.style.top = (r.bottom + 2) + "px"; menu.style.display = "block";
+  menu.querySelectorAll("[data-w]").forEach(d => d.onclick = () => { menu.style.display = "none"; insert(d.dataset.w); });
+}
+document.addEventListener("mousedown", ev => { if (!menu.contains(ev.target)) menu.style.display = "none"; });
+
+// ---- Tooltips. ----
+const tip = document.getElementById("tip");
+document.addEventListener("mouseover", ev => { const t = ev.target.closest("[data-tip]"); if (!t) { tip.style.display = "none"; return; }
+  tip.innerHTML = t.dataset.html ? t.dataset.tip : esc(t.dataset.tip); tip.style.display = "block";
+  const r = t.getBoundingClientRect(); tip.style.left = Math.min(r.left, innerWidth - 300) + "px"; tip.style.top = (r.bottom + 6) + "px"; });
+
+// ---- The pretend panel. ----
+document.getElementById("scene").onchange = ev => { state.scene = ev.target.value; facts = new Set(SCENES[state.scene]); paint(); };
+document.getElementById("context").onchange = ev => { state.context = ev.target.value;
+  const r = { row: ["Rule: Enemy players", "combat and hostile and player"], tooltip: ["Rule: Tooltips", "hoverdead or hoverframe or tipquest"],
+    edge: ["Rule: Entering combat", "entering and boss"], trigger: ["Rule: Inn arrival", "inn and not combat and zone:1429"] }[state.context];
+  document.getElementById("ruleName").textContent = r[0]; document.getElementById("reset").style.display = state.context === "row" ? "" : "none";
+  if (state.cat === "tip" && state.context !== "tooltip") state.cat = "units";
+  setText(r[1], r[1].length); };
+setText("combat and hostile and player", 29);
+</script>
+</body>
+</html>

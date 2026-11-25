@@ -101,35 +101,34 @@ local function InWorld()
 	return false
 end
 
--- One editor line as drawn (editor.lines, UI/GridRows.lua; key: its first
--- word): rows its shown buttons take, how many shown, its +N's text,
--- buttons cut short or covered, and the widest right edge past the editor's.
-local function LineLook(r, editor, line)
-	local tops, rows, shown, cut, covered, past = {}, 0, 0, 0, {}, 0
-	local right = editor:GetRight()
-	local function Note(button, name)
-		if not button:IsVisible() then return end
-		local top = button:GetTop()
-		top = top and math.floor(top + 0.5)
-		if top and not tops[top] then tops[top], rows = true, rows + 1 end
-		local text = button.GetFontString and button:GetFontString()
-		if text and text:IsTruncated() == true then cut = cut + 1 end
-		local hits = r:Overlaps(button, editor)
-		if #hits > 0 then covered[#covered + 1] = name .. " (" .. table.concat(hits, ", ") .. ")" end
-		local edge = button:GetRight()
-		if not ns.noRealLayout and edge and right and edge > right - 6 then past = past + 1 end
+-- The rule editor's pane as drawn (UI/RuleEditor.lua, 2026-11-25): its word buttons shown
+-- (each once), those cut short, covered (r:Overlaps), past the pane's right edge, or below
+-- its bottom (it would scroll); and the sidebar entries covered.
+local function PaneLook(r, editor)
+	local seen, shown, cut, covered, past, below = {}, 0, 0, {}, {}, {}
+	local right, bottom = editor.scroll:GetRight(), editor.scroll:GetBottom()
+	for _, b in pairs(editor.wordButtons) do
+		if not seen[b] and b:IsVisible() then
+			seen[b] = true
+			shown = shown + 1
+			local name = b.it and b.it.entry.w or "?"
+			if b.text and b.text:IsTruncated() == true then cut = cut + 1 end
+			local hits = r:Overlaps(b, editor)
+			if #hits > 0 then covered[#covered + 1] = name .. " (" .. table.concat(hits, ", ") .. ")" end
+			if not ns.noRealLayout then
+				local edge, low = b:GetRight(), b:GetBottom()
+				if edge and right and edge > right - 2 then past[#past + 1] = name end
+				if low and bottom and low < bottom then below[#below + 1] = name end
+			end
+		end
 	end
-	for _, piece in ipairs(line.pieces) do
-		if piece.button:IsVisible() then shown = shown + 1 end
-		Note(piece.button, tostring(piece.field))
+	for _, b in ipairs(editor.catButtons) do
+		if b:IsVisible() then
+			local hits = r:Overlaps(b, editor)
+			if #hits > 0 then covered[#covered + 1] = "sidebar " .. tostring(b.key) .. " (" .. table.concat(hits, ", ") .. ")" end
+		end
 	end
-	local more = ""
-	if line.more and line.more:IsVisible() then
-		Note(line.more, "+N")
-		more = tostring(line.more:GetText() or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-	end
-	return { rows = rows, shown = shown, total = #line.pieces, hidden = #(line.hidden or {}), more = more,
-		cut = cut, covered = covered, past = past }
+	return { shown = shown, cut = cut, covered = covered, past = past, below = below }
 end
 
 ns.TestKit.Define({
@@ -146,10 +145,10 @@ ns.TestKit.Define({
 	end,
 	putBack = function(extra)
 		local said = {}
-		if extra.openKept and type(ns.db.ruleEditorOpen) == "table" then
-			ns.db.ruleEditorOpen.enemy = extra.openEnemy or nil
-			ns.db.ruleEditorOpen.hover = extra.openHover or nil
-			said[#said + 1] = "the editor's Target and Mouse over lines open as they were"
+		if extra.editorKept then
+			ns.db.ruleEditorCat = extra.editorCat ~= "<none>" and extra.editorCat or nil
+			ns.db.ruleEditorUnit = extra.editorUnit ~= "<none>" and extra.editorUnit or nil
+			said[#said + 1] = "the editor's last category and unit as they were"
 		end
 		if extra.ruleKept then
 			ns.db.frameRules = ns.db.frameRules or {}
@@ -164,78 +163,106 @@ ns.TestKit.Define({
 		return #said > 0 and table.concat(said, "; ") or "nothing of its own"
 	end,
 	steps = {
-		{ key = "editor", title = "the rule editor: lines capped at two rows, +N and Fewer", seconds = 12,
-			proven = "run 7 (queue q504b), 2026-11-25: phase 3's longer lines", run = function(r)
+		{ key = "editor", title = "the rule editor: every category, unit and context, drawn clean", seconds = 40,
+			proven = "run 3 (queue q23f8), 2026-11-25: 38/38, the grids' names", run = function(r)
+			-- (The redesign, 2026-11-25: Tools/rule-editor-redesign-plan.md. Each case shown as
+			-- a click would; its words in the pane, nothing cut, covered, past the edge or below
+			-- it (no scrolling for a category); the window the same size each time; a paced
+			-- shot each. No action.)
+			-- (The dev error window, if an earlier test left it up, hid the editor's top half in
+			-- run q3e73's shots: out of the way for the step, its errors kept.)
+			local errors = _G.CinematicDevErrorWindow
+			if errors and errors:IsShown() then
+				errors:Hide()
+				r:Log("the dev error window was up: hidden for the shots (" .. tostring(ns.DevErrorCount and
+					ns.DevErrorCount() or "?") .. " errors in it)")
+			end
 			ns.OpenOptions("Tooltips")
 			r:Sleep(0.5)
-			if type(ns.db.ruleEditorOpen) ~= "table" then ns.db.ruleEditorOpen = {} end
-			local open = ns.db.ruleEditorOpen
-			r:Keep("openKept", true)
-			r:Keep("openEnemy", open.enemy or false)
-			r:Keep("openHover", open.hover or false)
-			-- (The Tooltips row in each state; the Minimap row closed: no Tooltip line.)
-			local CASES = {
-				{ key = ROW, state = "closed" }, { key = ROW, state = "open" },
-				{ key = ROW, state = "in the rule", rule = "hovertargetingyou or targetingyou" }, -- (each line's last word)
-				{ key = "minimap", state = "closed" },
-			}
-			local fitsClosed = {} -- (line key -> nothing behind a +N when closed: the first closed case)
-			for _, case in ipairs(CASES) do
-				local isOpen = case.state == "open" or nil
-				open.enemy, open.hover = isOpen, isOpen
-				local rule = case.rule or ""
-				ns.OpenRuleEditor({ key = case.key, label = case.key, Text = function() return rule end,
+			r:Keep("editorKept", true)
+			r:Keep("editorCat", ns.db.ruleEditorCat or "<none>")
+			r:Keep("editorUnit", ns.db.ruleEditorUnit or "<none>")
+			local rule = "nocombat and not hostile and (rain or night)"
+			local function Open(key)
+				ns.OpenRuleEditor({ key = key, label = key, Text = function() return rule end,
 					SetText = function() end, ResetToGrid = function() end, Close = function() end })
-				r:Sleep(0.6)
-				local editor = _G.CinematicRuleEditor
-				if not (editor and editor:IsShown() and editor.lines) then
-					return r:Fail("the rule editor didn't open on " .. case.key)
-				end
-				local where = case.key .. ", " .. case.state
-				for _, line in ipairs(editor.lines) do
-					if line.key == "enemy" or line.key == "hover" then
-						local look = LineLook(r, editor, line)
-						r:Log(("%s, %s line: %d rows, %d of %d shown, %d behind %q"):format(where, line.key, look.rows,
-							look.shown, look.total, look.hidden, look.more))
-						-- (A line that fits in its two rows closed has no +N, nor Fewer
-						-- open: the Mouse over line since its ten words, 2026-11-25.)
-						local fits = fitsClosed[line.key]
-						if case.state == "open" then
-							r:Verdict(look.shown == look.total and look.more == (fits and "" or ns.L["Fewer"]),
-								("%s, %s: every word shown, %s (%d of %d, %q)"):format(where, line.key,
-								fits and "no Fewer (it fits closed)" or "Fewer", look.shown, look.total, look.more))
-						else
-							if case.state == "closed" and fits == nil then fitsClosed[line.key] = look.hidden == 0 end
-							-- (Nothing left behind it: no +N.)
-							local counted = look.hidden > 0 and look.more == "+" .. look.hidden
-								or (look.hidden == 0 and look.more == "")
-							r:Verdict(counted and look.shown + look.hidden == look.total,
-								("%s, %s: +N counts what's behind it (%q, %d shown + %d)"):format(where, line.key,
-								look.more, look.shown, look.hidden))
-							if case.rule then
-								local last = line.pieces[#line.pieces]
-								r:Verdict(last.button:IsVisible(), ("%s, %s: %s in the rule, shown"):format(where,
-									line.key, tostring(last.field)))
-							elseif not ns.noRealLayout then
-								r:Verdict(look.rows == 2, ("%s, %s: two rows (%d)"):format(where, line.key, look.rows))
-							end
+				r:Sleep(0.4)
+				return _G.CinematicRuleEditor
+			end
+			local editor = Open("minimap")
+			if not (editor and editor:IsShown() and editor.ShowCategory) then
+				return r:Fail("the rule editor didn't open")
+			end
+			local w0, h0 = editor:GetWidth(), editor:GetHeight()
+			local function Judge(where, wantWords, scrolls)
+				local look = PaneLook(r, editor)
+				r:Verdict(look.shown >= (wantWords or 1) and look.cut == 0 and #look.covered == 0 and #look.past == 0
+					and (scrolls or #look.below == 0),
+					("%s: %d words, %d cut short, %d covered, %d past the edge, %d below%s"):format(where, look.shown,
+					look.cut, #look.covered, #look.past, #look.below, #look.covered > 0 and (": " .. table.concat(look.covered,
+					"; ")) or (#look.past > 0 and (": " .. table.concat(look.past, ", ")) or "")))
+				r:Verdict(editor:GetWidth() == w0 and editor:GetHeight() == h0,
+					("%s: the window the same size (%d x %d)"):format(where, editor:GetWidth(), editor:GetHeight()))
+				r:Shot("rule editor: " .. where, { behind = editor })
+				r:Sleep(1.1) -- (paced: a shot a second)
+			end
+			if not ns.noRealLayout then
+				local bottom, top = editor:GetBottom(), editor:GetTop()
+				r:Verdict(bottom ~= nil and bottom >= 0 and top ~= nil and top <= UIParent:GetTop() + 1,
+					("the editor on screen (bottom %s, top %s)"):format(tostring(bottom), tostring(top)))
+			end
+			for _, cat in ipairs(ns.RuleCatalog()) do
+				if not cat.only then
+					if cat.units then
+						for _, unit in ipairs(cat.units) do
+							editor.ShowCategory("units", unit.key)
+							Judge("Units: " .. unit.label, 10)
 						end
-						r:Verdict(look.cut == 0 and #look.covered == 0 and look.past == 0,
-							("%s, %s: %d cut short, %d covered, %d past the right edge%s"):format(where, line.key,
-							look.cut, #look.covered, look.past,
-							#look.covered > 0 and (": " .. table.concat(look.covered, "; ")) or ""))
+					else
+						editor.ShowCategory(cat.key)
+						Judge(cat.name, 2)
 					end
 				end
-				local bottom, top = editor:GetBottom(), editor:GetTop()
-				if not ns.noRealLayout then
-					r:Verdict(bottom ~= nil and bottom >= 0 and top ~= nil and top <= UIParent:GetTop() + 1,
-						("%s: the editor on screen (bottom %s, top %s, height %s)"):format(where, tostring(bottom),
-						tostring(top), tostring(editor:GetHeight())))
-				end
-				r:Shot("rule editor: " .. where, { behind = editor })
-				editor:Hide()
 			end
-			open.enemy, open.hover = nil, nil
+			editor.ShowCategory("here")
+			Judge("True here", 1, true)
+			editor.ShowCategory("rule")
+			Judge("In this rule (4 words)", 4)
+			editor.SetFind("yards")
+			r:Sleep(0.3)
+			Judge("Find: yards", 3, true)
+			editor.SetFind("")
+			-- (Contexts: the Tooltips row's own category; a fight row's Entering/Leaving.)
+			editor = Open(ROW)
+			editor.ShowCategory("tip")
+			Judge("the Tooltips row: Tooltip", 5)
+			editor = Open("card:combatIn")
+			editor.ShowCategory("fight")
+			local entering = editor.wordButtons["entering"]
+			r:Verdict(entering ~= nil and entering:IsVisible(), "a fight row: Entering combat offered")
+			Judge("a fight row: Fight", 8)
+			-- (Typing: suggestions under the box; an error in the readout.)
+			editor = Open("minimap")
+			editor.SetRuleText("nocombat and ta", 15)
+			editor.box:GetScript("OnTextChanged")(editor.box, true)
+			r:Sleep(0.3)
+			-- (The list floats over the readout on purpose: judged by where it sits, inside the
+			-- editor's width, its top at the box's bottom. Run q3e73 counted the float as covered.)
+			local sl, sr, st = editor.sugg:GetLeft(), editor.sugg:GetRight(), editor.sugg:GetTop()
+			local el, er, bb = editor:GetLeft(), editor:GetRight(), editor.box:GetParent():GetBottom()
+			local placed = ns.noRealLayout or (sl and el and sl >= el and sr <= er and st and bb and math.abs(st - (bb - 2)) < 2)
+			r:Verdict(editor.sugg:IsVisible() and #editor.state.sugg > 0 and placed and true or false,
+				("suggestions under the box (%d; left %s right %s top %s, box bottom %s)"):format(#editor.state.sugg,
+				tostring(sl), tostring(sr), tostring(st), tostring(bb)))
+			r:Shot("rule editor: suggestions for \"ta\"", { behind = editor })
+			r:Sleep(1.1)
+			editor.SetRuleText("nocombat and (rain or", 21)
+			r:Sleep(0.3)
+			local said = tostring(editor.verdict:GetText() or "")
+			r:Verdict(said:find("Not finished", 1, true) ~= nil and not editor.done:IsEnabled(),
+				"an unfinished rule: the readout says so, Done off")
+			r:Shot("rule editor: an unfinished rule", { behind = editor })
+			editor:Hide()
 			CloseSettings()
 		end },
 		{ key = "world", title = "a unit out in the world", proven = "run 2 (queue qf726), 2026-11-24: 4/4",
@@ -417,28 +444,7 @@ ns.TestKit.Define({
 				if type(near) == "boolean" and Plain(near) then
 					r:Verdict(facts.focusnear28 == near, ("focusnear28 matches the game's 28 yards (%s)"):format(tostring(near)))
 				end
-				-- (The rule editor's Focus line: on screen, nothing cut or covered.)
-				ns.OpenOptions("Tooltips")
-				r:Sleep(0.5)
-				local rule = "focushostile and focusplayer"
-				ns.OpenRuleEditor({ key = ROW, label = ROW, Text = function() return rule end,
-					SetText = function() end, ResetToGrid = function() end, Close = function() end })
-				r:Sleep(0.6)
-				local editor = _G.CinematicRuleEditor
-				local found
-				for _, line in ipairs(editor and editor.lines or {}) do
-					if line.key == "focus" then found = line end
-				end
-				r:Verdict(found ~= nil, "rule editor: a Focus line")
-				if found then
-					local look = LineLook(r, editor, found)
-					r:Verdict(look.cut == 0 and #look.covered == 0 and look.past == 0,
-						("rule editor: Focus line %d of %d shown, %d cut short, %d covered, %d past the edge"):format(
-						look.shown, look.total, look.cut, #look.covered, look.past))
-				end
-				r:Shot("rule editor: the Focus line", { behind = editor })
-				if editor then editor:Hide() end
-				CloseSettings()
+				-- (The editor's Focus words: the editor step's Units: Focus, since 2026-11-25.)
 			end
 		end },
 		{ key = "props", title = "phase 3's words: elite, rare, boss, quest, tapped, critter, targeting you",
@@ -540,31 +546,7 @@ ns.TestKit.Define({
 				r:Log("shown: " .. shown:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 				r:Verdict(shown:find(zone[1][2], 1, true) ~= nil, "the editor shows the zone's name next to its id")
 			end
-			-- (The editor's Values line: open, nothing cut or covered.)
-			ns.OpenOptions("Tooltips")
-			r:Sleep(0.5)
-			if type(ns.db.ruleEditorOpen) ~= "table" then ns.db.ruleEditorOpen = {} end
-			local open = ns.db.ruleEditorOpen
-			local was = open["zone:"]
-			open["zone:"] = true
-			local rule = zone[1] and (zone[1][1] .. " and not combat") or "class:mage"
-			ns.OpenRuleEditor({ key = ROW, label = ROW, Text = function() return rule end,
-				SetText = function() end, ResetToGrid = function() end, Close = function() end })
-			r:Sleep(0.6)
-			local editor = _G.CinematicRuleEditor
-			local found
-			for _, l in ipairs(editor and editor.lines or {}) do if l.key == "zone:" then found = l end end
-			r:Verdict(found ~= nil, "rule editor: a Values line")
-			if found then
-				local look = LineLook(r, editor, found)
-				r:Verdict(look.shown == look.total and look.cut == 0 and #look.covered == 0 and look.past == 0,
-					("rule editor, Values line open: %d of %d shown, %d cut short, %d covered, %d past the edge"):format(
-					look.shown, look.total, look.cut, #look.covered, look.past))
-			end
-			r:Shot("rule editor: the Values line, a zone rule", { behind = editor })
-			open["zone:"] = was
-			if editor then editor:Hide() end
-			CloseSettings()
+			-- (The value menus in the editor: the editor step's Place, You and Character, since 2026-11-25.)
 		end },
 		{ key = "state", title = "phase 2's words: you, the zone, your screen, talking", seconds = 40,
 			proven = "run 2 (queue q4a77), 2026-11-25: 32/32", run = function(r)
@@ -689,29 +671,7 @@ ns.TestKit.Define({
 					return (talked and not f.talking and not f.interacting) or nil
 				end })
 			r:Verdict(talked, "talking and interacting while you talked to the NPC, both off after")
-			-- (The rule editor: the You and Screen lines, nothing cut or covered.)
-			ns.OpenOptions("Tooltips")
-			r:Sleep(0.5)
-			if type(ns.db.ruleEditorOpen) ~= "table" then ns.db.ruleEditorOpen = {} end
-			local open = ns.db.ruleEditorOpen
-			local wasYou, wasScreen = open.interacting, open.mapopen
-			open.interacting, open.mapopen = true, true -- (both lines opened: every word shown)
-			ns.OpenRuleEditor({ key = ROW, label = ROW, Text = function() return "talking and not mapopen" end,
-				SetText = function() end, ResetToGrid = function() end, Close = function() end })
-			r:Sleep(0.6)
-			local editor = _G.CinematicRuleEditor
-			for _, l in ipairs(editor and editor.lines or {}) do
-				if l.key == "interacting" or l.key == "mapopen" then
-					local look = LineLook(r, editor, l)
-					r:Verdict(look.shown == look.total and look.cut == 0 and #look.covered == 0 and look.past == 0,
-						("rule editor, %s line open: %d of %d shown, %d cut short, %d covered, %d past the edge"):format(
-						l.key, look.shown, look.total, look.cut, #look.covered, look.past))
-				end
-			end
-			r:Shot("rule editor: the You and Screen lines open", { behind = editor })
-			open.interacting, open.mapopen = wasYou, wasScreen
-			if editor then editor:Hide() end
-			CloseSettings()
+			-- (The editor's You and Doing words: the editor step's, since 2026-11-25.)
 		end },
 	},
 })

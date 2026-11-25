@@ -142,7 +142,7 @@ ns.CooldownGroupPlaces = PlacesOf
 function ns.CooldownGroupWhere(group)
 	if group.cql then return group.cql end
 	local places = PlacesOf(group)
-	if #places == 0 then return L["No place yet"] end
+	if #places == 0 then return L["No location yet"] end
 	local names = {}
 	-- (Cities and inns come with the open world on the page: not named again.)
 	local world = group.places.world

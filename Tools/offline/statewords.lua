@@ -194,37 +194,24 @@ local function RunClient(client)
 	end
 	frames.WorldMapFrame:Hide()
 
-	-- 8. The rule editor: talking second on You, the rest on their lines, a Screen line.
-	local lines = {}
-	for _, group in ipairs(ns.RulePieces()) do
-		local words = {}
-		for i, piece in ipairs(group[3]) do words[piece[1]] = i end
-		lines[group[1]] = words
+	-- 8. The rule editor (UI/RuleCatalog.lua, 2026-11-25): each word in its category.
+	local where = {}
+	for _, it in ipairs(ns.RuleCatalogWords("row")) do where[it.entry.w] = where[it.entry.w] or it.cat.key end
+	local WANT = { ghost = "you", controlled = "you", vehicle = "you", pet = "you", dnd = "you", maxlevel = "you",
+		shapeshifted = "you", leader = "place", raidgroup = "place", falling = "travel", scenario = "place",
+		sanctuary = "place", contested = "place", mapopen = "doing", menuopen = "doing", editmode = "doing",
+		movie = "doing", mouselook = "doing", talking = "doing", pvpfight = "fight", aggro = "fight" }
+	local wrongPlace = {}
+	for word, cat in pairs(WANT) do
+		if where[word] ~= cat then wrongPlace[#wrongPlace + 1] = word .. " in " .. tostring(where[word]) end
 	end
-	local L = ns.L
-	local you, travel, place, screen = lines[L["You"]] or {}, lines[L["Travel"]] or {}, lines[L["Location"]] or {},
-		lines[L["Screen"]] or {}
-	Check("rule editor: talking second on You", you.talking == 2, tostring(you.talking))
-	local missing = {}
-	for _, word in ipairs({ "ghost", "controlled", "vehicle", "pet", "dnd", "leader", "raidgroup", "maxlevel" }) do
-		if not you[word] then missing[#missing + 1] = "You:" .. word end
-	end
-	if not travel.falling then missing[#missing + 1] = "Travel:falling" end
-	for _, word in ipairs({ "scenario", "sanctuary", "contested" }) do
-		if not place[word] then missing[#missing + 1] = "Location:" .. word end
-	end
-	for _, word in ipairs({ "mapopen", "menuopen", "editmode", "movie", "mouselook" }) do
-		if not screen[word] then missing[#missing + 1] = "Screen:" .. word end
-	end
-	Check("rule editor: every phase 2 word on its line", #missing == 0, table.concat(missing, ", "))
-	local combatLine = lines[L["Combat"]] or {}
-	Check("rule editor: pvpfight and aggro on Combat, shapeshifted on You",
-		combatLine.pvpfight ~= nil and combatLine.aggro ~= nil and you.shapeshifted ~= nil)
-	local retailOnly = place.warmode ~= nil and place.delve ~= nil and place.mythicplus ~= nil and place.housing ~= nil
+	table.sort(wrongPlace)
+	Check("rule editor: every phase 2 word in its category", #wrongPlace == 0, table.concat(wrongPlace, ", "))
+	local retailOnly = where.warmode and where.delve and where.mythicplus and where.housing
 	Check("rule editor: War Mode, Delves, Mythic+ and Your house on retail only (" .. client .. ")",
-		retailOnly == (client == "retail"))
+		(retailOnly ~= nil) == (client == "retail"))
 	Check("rule editor: Using a gamepad only where the client has gamepads",
-		(screen.gamepad ~= nil) == (C_GamePad ~= nil), tostring(screen.gamepad))
+		(where.gamepad ~= nil) == (C_GamePad ~= nil), tostring(where.gamepad))
 	local red = ns.ColoredRule("nosuchword"):match("|c%x%x%x%x%x%x%x%x")
 	local colored = ns.ColoredRule(table.concat(WORDS, " or "))
 	Check("rule editor: none of them colored as unknown", red ~= nil and not colored:find(red, 1, true))

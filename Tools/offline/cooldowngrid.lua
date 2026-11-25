@@ -558,9 +558,9 @@ do
 		Check("+ adds a group with its editor open", added and grid.state.editing == added.id and grid.editor:IsShown())
 		local flagged = false
 		for _, child in ipairs({ grid:GetChildren() }) do
-			if child.col and child.col.id == added.id and child.sub and child.sub:GetText() == ns.L["pick places"] then flagged = true end
+			if child.col and child.col.id == added.id and child.sub and child.sub:GetText() == ns.L["pick locations"] then flagged = true end
 		end
-		Check("a new scene with no place says pick places under its name (no second line)", flagged
+		Check("a new scene with no location says pick locations under its name (no second line)", flagged
 			and not (grid.troubleLines[1] and grid.troubleLines[1]:IsShown()))
 		Click(grid.deleteButton)
 		Check("Delete asks first", ns.CooldownPlaceGroup(added.id) ~= nil and grid.deleteButton.text:GetText() == ns.L["Sure?"])
