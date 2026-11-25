@@ -5368,6 +5368,12 @@ do
 		read = function(f)
 		f.dead = ns.Flag(UnitIsDeadOrGhost("player")) and true or false
 	end })
+	-- Mounted: after PLAYER_MOUNT_DISPLAY_CHANGED. Always (Shoulder Cam reads
+	-- it from the facts).
+	ns.AddEventFact({ name = "mounted", fields = { "mounted" }, always = true,
+		events = { "PLAYER_MOUNT_DISPLAY_CHANGED" }, read = function(f)
+		f.mounted = ns.Flag(IsMounted()) and true or false
+	end })
 	-- (target, enemy and friendly as worked out, before SetTargetWords.)
 	local anyTarget, enemyTarget = false, false -- (enemyTarget nil: the game won't say)
 	-- target, enemy and friendly mean what the grids' Enemy targeted and
@@ -5518,7 +5524,7 @@ do
 		facts.world = not facts.bg and not facts.instance and not facts.city
 		-- (group: by event, ns.AddEventFact.)
 		-- (flagged: by event, ns.AddEventFact.)
-		facts.mounted = ns.Flag(IsMounted()) and true or false
+		-- (mounted: by event, ns.AddEventFact.)
 		-- (On a flight path, whatever camera plays: cam_flight is only our Flight camera.)
 		facts.taxi = ns.Flag(ns.OnTaxi()) and true or false
 		-- (You dead, or a ghost after releasing. A secret answer counts as alive.)
