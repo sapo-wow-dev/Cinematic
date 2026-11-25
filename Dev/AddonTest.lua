@@ -239,9 +239,25 @@ function ns.SoloAddons(words, noReload)
 	local changed = true
 	while changed do
 		changed = false
-		for name in pairs(keep) do
+		-- (A copy to walk: adding to a table pairs is walking is undefined in
+		-- Lua and can skip keys.)
+		local names = {}
+		for name in pairs(keep) do names[#names + 1] = name end
+		for _, name in ipairs(names) do
 			for _, dep in ipairs(GetDeps and { GetDeps(name) } or {}) do
 				if dep and not keep[dep] then keep[dep], changed = true, true end
+			end
+			-- (A kept addon's own parts come too, on or off: a dependency's parts
+			-- are its own pieces, not the player's picks. Questie, kept for
+			-- Guidelime, needs its QuestieDB, only an optional dependency of it;
+			-- without it Questie errored at load, 2026-11-25.)
+			if not IsLib(name) then
+				for _, each in ipairs(all) do
+					if not keep[each.name] and Belongs(each.name, name) then
+						ns.Print(("solo: %s comes with %s (its part)"):format(each.name, name))
+						keep[each.name], changed = true, true
+					end
+				end
 			end
 			for _, dep in ipairs(GetOptDeps and { GetOptDeps(name) } or {}) do
 				if dep and IsLib(dep) and not keep[dep] then keep[dep], changed = true, true end

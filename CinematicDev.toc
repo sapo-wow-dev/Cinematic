@@ -58,6 +58,7 @@ Support\DBM.lua
 Support\BigWigs.lua
 Support\Questie.lua
 Support\RestedXP.lua
+Support\Guidelime.lua
 Support\BattleTextForever.lua
 Support\MikScrollingBattleText.lua
 Support\ClassicUIForever.lua
@@ -364,6 +365,7 @@ Dev\EuiSwingTest.lua
 Dev\EuiCastTest.lua
 Dev\ElvFishBarTest.lua
 Dev\FlareUISupportTest.lua
+Dev\GuidelimeSupportTest.lua
 Dev\AddonTest.lua
 Dev\EuiCooldownTest.lua
 Dev\BuffFadeTest.lua

@@ -1,0 +1,13 @@
+# version 6.026
+EnableMouse(false or a variable) in Guidelime/Map.lua
+frame GuidelimeContextMenu
+frame GuidelimeImportMenu
+frame GuidelimePinOngoingStepsDropdown
+frame GuidelimeScanningTooltip
+frame GuidelimeTargetButton
+frame GuidelimeTargetButton*
+frame GuidelimeUseItemButton
+frame GuidelimeUseItemButton*
+frame lockBtn
+hooks TakeTaxiNode
+partial mouse handling in Guidelime/ActionButtons.lua

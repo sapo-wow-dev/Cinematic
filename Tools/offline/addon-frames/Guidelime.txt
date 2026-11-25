@@ -1,0 +1,19 @@
+# Guidelime's named frames that Support/Guidelime.lua doesn't name, each with
+# why it needs no line there (Tools/addon-check.py check 3). A new frame of its
+# that's in neither = a MISS: decide it. One per line: name or glob (*), a
+# space, why. Checked against v6.026, 2026-11-25.
+
+# On screen, covered through a frame that is faded.
+GuidelimeTargetButton* its target buttons, children of its guide window (Guidelime guide row)
+GuidelimeUseItemButton* its quest item buttons, children of its guide window (Guidelime guide row)
+lockBtn the lock button on each of its windows (the global holds the last one made): fades with that window
+
+# Menus and windows opened by hand.
+GuidelimeContextMenu its right-click menu (a dropdown list)
+GuidelimeImportMenu a menu on its options panel
+GuidelimePinOngoingStepsDropdown a dropdown on its options panel
+GuidelimeGuideFontDropdown a dropdown on its options panel
+
+# Invisible: never drawn.
+GuidelimeScanningTooltip a hidden tooltip it reads quest text from
+GuidelimeFrame its event frame: draws nothing

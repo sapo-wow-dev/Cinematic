@@ -27,6 +27,7 @@ KNOWN_REPOS = {
     "daylightui": "dayightt/DaylightUI",
     "ellesmereui": "EllesmereGaming/EllesmereUI",
     "flareui": "malkkav/FlareUI",
+    "guidelime": "max-ri/Guidelime",
     "questie": "Questie/Questie",
     "rxpguides": "RestedXP/RXPGuides",
 }

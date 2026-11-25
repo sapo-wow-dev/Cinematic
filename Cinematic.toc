@@ -63,6 +63,7 @@ Support\DBM.lua
 Support\BigWigs.lua
 Support\Questie.lua
 Support\RestedXP.lua
+Support\Guidelime.lua
 Support\BattleTextForever.lua
 Support\MikScrollingBattleText.lua
 Support\ClassicUIForever.lua

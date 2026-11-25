@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-25", page = "Advanced Frames", client = "forever", title = "Guidelime support",
+		text = "Guidelime's guide window, its ongoing steps and its waypoint arrow get a row each, so you can hide " ..
+			"the guide and keep the arrow pointing the way." },
 	{ date = "2026-11-25", title = "A new rule editor",
 		text = "The rule editor is rebuilt: words in categories you can search, suggestions as you type, and a " ..
 			"line that shows which parts of your rule are true where you stand." },
