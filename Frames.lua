@@ -5374,6 +5374,14 @@ do
 		events = { "PLAYER_MOUNT_DISPLAY_CHANGED" }, read = function(f)
 		f.mounted = ns.Flag(IsMounted()) and true or false
 	end })
+	-- Casting or channeling (secret in a fight on some clients, so false
+	-- there): after each of your casts starts, stops or is cut short.
+	ns.AddEventFact({ name = "casting", fields = { "casting" }, unitEvents = { "UNIT_SPELLCAST_START",
+		"UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_CHANNEL_STOP",
+		"UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_SUCCEEDED",
+		"UNIT_SPELLCAST_EMPOWER_START", "UNIT_SPELLCAST_EMPOWER_STOP" }, read = function(f)
+		f.casting = (ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player"))) and true or false
+	end })
 	-- (target, enemy and friendly as worked out, before SetTargetWords.)
 	local anyTarget, enemyTarget = false, false -- (enemyTarget nil: the game won't say)
 	-- target, enemy and friendly mean what the grids' Enemy targeted and
@@ -5566,9 +5574,7 @@ do
 		facts.storm = weather == "rain" and intensity >= 0.6 or false
 		local time = (Want("dawn") or Want("day") or Want("dusk") or Want("night")) and ns.TimeOfDayWord() or nil
 		facts.dawn, facts.day, facts.dusk, facts.night = time == "dawn", time == "day", time == "dusk", time == "night"
-		-- (Casting or channeling. Secret in a fight on some clients, so false there.)
-		facts.casting = Want("casting") and (ns.Flag(UnitCastingInfo("player")) or ns.Flag(UnitChannelInfo("player")))
-			or false
+		-- (casting: by event, ns.AddEventFact.)
 		-- (A boss fight: an encounter on, the game's boss frames up, or a boss
 		-- targeted: a world boss, or in a dungeon or raid an elite at ?? or 2+
 		-- levels above you (retail's dungeon bosses are +2, trash +0: tested).
