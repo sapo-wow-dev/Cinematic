@@ -4860,7 +4860,10 @@ do
 		-- cache below.)
 		local function Candidates(yards, key, fight)
 			local list = {}
-			if not (fight and ns.isRetail) then
+			-- (Never in a fight, either client: Forever blocks it on some plate
+			-- tokens too, 36 ADDON_ACTION_BLOCKED in one fight with a pet's
+			-- plate up, 2026-11-25; rule forever.range.plates-in-combat.)
+			if not fight then
 				list[#list + 1] = { yards = SHORT_YARDS, index = 2 }
 				list[#list + 1] = { yards = LONG_YARDS, index = 4 }
 			end
@@ -4894,7 +4897,9 @@ do
 			if not forUnit then forUnit = {} kept[unit] = forUnit end
 			local answer = forUnit[ring]
 			if answer == nil then
-				if ring.index then
+				if ring.index and InCombatLockdown() then
+					answer = nil -- (a list made just before a fight began: never asked in one)
+				elseif ring.index then
 					local ok, near = pcall(CheckInteractDistance, unit, ring.index)
 					if ok and type(near) == "boolean" and not (issecretvalue and issecretvalue(near)) then
 						answer = near

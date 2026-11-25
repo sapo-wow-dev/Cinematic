@@ -117,21 +117,26 @@ local function RunClient(client, toc)
 	fight = true
 	calls.interact = 0
 	local inFight = Within("nameplate1", 11)
-	if client == "retail" then
-		Check("retail fight: no interact asked", calls.interact == 0, calls.interact)
-		Check("retail fight: 11 goes by Shock 20 (enemy at 15: within)", inFight == true, tostring(inFight))
-	else
-		Check("Forever fight: interact asked", calls.interact > 0, calls.interact)
-		Check("Forever fight: within 11 = false", inFight == false, tostring(inFight))
-	end
+	-- (No interact distance in fights on either client: Forever blocks it on
+	-- some plates too, 36 blocked actions in one fight, 2026-11-25.)
+	Check(client .. " fight: no interact asked", calls.interact == 0, calls.interact)
+	Check(client .. " fight: 11 goes by Shock 20 (enemy at 15: within)", inFight == true, tostring(inFight))
+	-- (A list made out of a fight, asked in one: still no interact.)
+	fight = false
+	now = now + 1
+	ns.UnitWithinYards("nameplate1", 11)
+	fight, calls.interact = true, 0
+	now = now + 1
+	ns.UnitWithinYards("nameplate1", 11)
+	Check(client .. " fight: a ring list from before it still asks no interact", calls.interact == 0, calls.interact)
 	fight = false
 	-- The page's info.
 	local calmY, calmName = ns.YardsRingInfo(24)
 	Check("YardsRingInfo 24: 20 Shock", calmY == 20 and calmName == "Shock", tostring(calmY) .. " " .. tostring(calmName))
 	local fightY
 	calmY, _, fightY = ns.YardsRingInfo(12)
-	Check("YardsRingInfo 12: 11 interact; fight " .. (client == "retail" and "20" or "11"),
-		calmY == 11 and fightY == (client == "retail" and 20 or 11), tostring(calmY) .. " " .. tostring(fightY))
+	Check("YardsRingInfo 12: 11 interact; fight 20 (spells only)", calmY == 11 and fightY == 20,
+		tostring(calmY) .. " " .. tostring(fightY))
 	-- The old fixed bands, through UnitInBand.
 	Check("UnitInBand In20y as UnitWithinYards", (now + 1) and ns.UnitInBand("nameplate1", "In20y") == true)
 	Check("UnitInBand old In11 still interact 2", ns.UnitInBand("nameplate1", "In11") == false)
@@ -161,6 +166,40 @@ local function RunClient(client, toc)
 		ours.nameplateShowEnemies == "1" and ours.nameplateShowEnemyPlayers == "1",
 		tostring(ours.nameplateShowEnemies) .. " " .. tostring(ours.nameplateShowEnemyPlayers))
 	Check("the page's settings switch knows it", ns.HasPlateSettings("NearbyEnemies") == true)
+
+	-- Its plates fade in and out (ns.plates.NearUpdate), not pop -------------
+	-- (A hostile NPC's plate; the plate itself not touched here: Reachable
+	-- says no, so only its level is checked.)
+	UnitIsFriend = function() return false end
+	UnitIsPlayer = function() return false end
+	UnitPlayerControlled = function() return false end
+	UnitReaction = function() return 2 end
+	UnitClassification = function() return "normal" end
+	UnitGUID = function(unit) return "Creature-0-0-0-0-1-" .. tostring(unit) end
+	local plate = { namePlateUnitToken = "nameplate1", UnitFrame = { unit = "nameplate1" } }
+	C_NamePlate.GetNamePlates = function() return { plate } end
+	local reachable = ns.Reachable
+	ns.Reachable = function(f) return f ~= plate and reachable(f) end
+	ns.db.handlePlates, ns.db.plateAlwaysNearbyEnemies, ns.db.plateNearbyYards = true, true, 20
+	units.nameplate1 = { yards = 15, enemy = true }
+	for _ = 1, 40 do now = now + 0.1 pcall(ns.UpdatePlates, true, 0.1) end -- (CineMode: the row's own level up)
+	local Step = ns.plates.nearFrame:GetScript("OnUpdate")
+	local function Run(seconds)
+		for _ = 1, math.floor(seconds / 0.05 + 0.5) do now = now + 0.05 Step(ns.plates.nearFrame, 0.05) end
+		return ns.plates.nearLevels.nameplate1 or 0
+	end
+	local first = Run(0.1)
+	Check("within 20 yd: eased in, not at once", first > 0 and first < 1, ("%.2f after 0.1 s"):format(first))
+	local full = Run(ns.db.fadeInTime + 1)
+	Check("within 20 yd: fully up after the Fade in time", full == 1, ("%.2f"):format(full))
+	units.nameplate1.yards = 35
+	local going = Run(0.35)
+	Check("walked past 20 yd: eased out, not at once", going > 0 and going < 1, ("%.2f after 0.35 s"):format(going))
+	local gone = Run(ns.db.fadeOutTime + 1)
+	Check("past 20 yd: gone after the Fade out time", gone == 0, ("%.2f"):format(gone))
+	ns.plates.nearFrame:GetScript("OnEvent")(ns.plates.nearFrame, "NAME_PLATE_UNIT_REMOVED", "nameplate1")
+	Check("a plate's unit leaving forgets its level", ns.plates.nearLevels.nameplate1 == nil)
+	ns.Reachable = reachable
 end
 
 RunClient("forever", "CinematicDev.toc")

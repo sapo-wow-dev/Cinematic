@@ -1245,7 +1245,12 @@ local function UnitRowAlpha(unit, kind)
 	local alpha = 0
 	local questPlates = ns.QuestMobsShow("plate")
 	for row, level in pairs(unitRowLevel) do
-		if level > alpha and (questPlates or row ~= "QuestMobs") and InUnitRow(row, unit, kind) then
+		if row == "NearbyEnemies" then
+			-- (Each plate eased in and out as it crosses the yards, not
+			-- popped: ns.plates.NearUpdate keeps its level.)
+			level = level * (ns.plates.nearLevels[unit] or 0)
+			if level > alpha then alpha = level end
+		elseif level > alpha and (questPlates or row ~= "QuestMobs") and InUnitRow(row, unit, kind) then
 			alpha = level
 		end
 	end
@@ -3093,6 +3098,60 @@ function ns.plates.RollStep()
 	return true
 end
 ns.plates.RollStep = ns.Profiled("Plates refresh step", ns.plates.RollStep)
+
+-- Enemies in [N] yd's plates fade in and out as they cross its yards, at the
+-- Fade in / Fade out times, instead of popping (user, 2026-11-25). Who's
+-- inside is looked at every NEAR_EVERY s (Frames' ns.UnitWithinYards keeps
+-- its answers a pass anyway); each frame only the plates still fading are
+-- set again, not every plate. Levels by unit token, cleared as a plate's
+-- unit comes and goes. In CineMode with the Nameplates page on only.
+-- (On ns.plates, not locals: this file's main chunk is at Lua's 200.)
+ns.plates.nearLevels, ns.plates.nearPlates, ns.plates.nearInside = {}, {}, {}
+ns.plates.NEAR_EVERY, ns.plates.nearAt = 0.2, 0
+function ns.plates.NearUpdate(_, elapsed)
+	local p = ns.plates
+	local on = platesActive and ns.db and ns.db.handlePlates and (unitRowLevel.NearbyEnemies or 0) > 0
+	if not on then
+		-- (Out of CineMode, or the row off: the plates go by the rest; the
+		-- row's own level already faded it. Nothing set from here.)
+		if next(p.nearPlates) then wipe(p.nearPlates) wipe(p.nearLevels) end
+		return
+	end
+	local now = GetTime()
+	if now >= p.nearAt then
+		p.nearAt = now + p.NEAR_EVERY
+		wipe(p.nearInside)
+		if C_NamePlate and C_NamePlate.GetNamePlates then
+			for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+				local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+				local kind = unit and plate ~= PersonalPlate() and PlateKind(unit)
+				if kind and InUnitRow("NearbyEnemies", unit, kind) then
+					p.nearInside[unit] = true
+					p.nearPlates[unit] = plate
+				end
+			end
+		end
+	end
+	for unit, plate in pairs(p.nearPlates) do
+		local level, target = p.nearLevels[unit] or 0, p.nearInside[unit] and 1 or 0
+		if level ~= target then
+			level = ns.Approach(level, target, elapsed, target > level and ns.FadeInTime() or ns.FadeOutTime())
+			p.nearLevels[unit] = level > 0 and level or nil
+			if ns.Reachable(plate) and (plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)) == unit then
+				SetPlateAlphas(plate, PlateAlphas(unit, plate))
+			end
+		end
+		if level <= 0 and target == 0 then p.nearPlates[unit] = nil end
+	end
+end
+ns.plates.nearFrame = CreateFrame("Frame")
+ns.plates.nearFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+ns.plates.nearFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+ns.plates.nearFrame:SetScript("OnEvent", function(_, _, unit)
+	-- (A token handed to another unit starts from nothing.)
+	if unit then ns.plates.nearLevels[unit], ns.plates.nearPlates[unit] = nil, nil end
+end)
+ns.SetOnUpdate(ns.plates.nearFrame, ns.Profiled("Enemies in yd fade", ns.plates.NearUpdate))
 
 -- For /cine debug plates: the game's plate settings, the fade, and how each
 -- visible plate (and the target) is sorted.

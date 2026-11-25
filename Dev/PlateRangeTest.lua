@@ -233,8 +233,9 @@ ns.TestKit.Define({
 				end
 				return list
 			end
-			-- (Shown within, hidden past: proven on Forever, run 7 qa2ae; "full" runs it.)
-			if not r:Proven("run 7 qa2ae (Forever): enemy plates shown within the row's yards, hidden past") then
+			-- (Shown within, hidden past: run 7 qa2ae. Run again since the
+			-- plates fade in and out, 2026-11-25.)
+			do
 			local count = r:WaitFor("Stand where red mobs have plates, some near and some further. No need to move.", {
 				check = function() return not InCombatLockdown() and #Enemies() >= 1 and #Enemies() end })
 			r:Log("enemy plates up: " .. tostring(count))
@@ -245,25 +246,64 @@ ns.TestKit.Define({
 			-- Both ways on the plates up, no walking (run q781d had one enemy,
 			-- past 20 yd: "shown" never seen): the row's yards set past the
 			-- nearest enemy (it must show), then short of it (it must hide).
-			local reach
-			for _, yards in ipairs({ 5, 8, 11, 15, 20, 25, 28, 30, 35, 40, 45 }) do
-				for _, each in ipairs(Enemies()) do
-					if not reach and ns.UnitWithinYards(each.unit, yards) == true then reach = yards end
+			-- (The nearest enemy must be inside your longest check: run q44a9's
+			-- two were past a warlock's 30 yd and the step failed. Waits for one
+			-- instead; a few steps toward a mob does it.)
+			local function Reach()
+				for _, yards in ipairs({ 5, 8, 11, 15, 20, 25, 28, 30, 35, 40, 45 }) do
+					for _, each in ipairs(Enemies()) do
+						if ns.UnitWithinYards(each.unit, yards) == true then return yards end
+					end
 				end
 			end
-			if not reach then return r:Fail("no enemy within 45 yards any check can say") end
+			local reach = Reach()
+			if not reach then
+				local longest = select(1, ns.YardsRingInfo(45)) or 28
+				reach = r:WaitFor(("Step a little closer: a red mob within about %d yards of you."):format(longest), {
+					check = function() return not InCombatLockdown() and Reach() end })
+			end
+			if type(reach) ~= "number" then return r:Skip("no enemy in reach of any check") end
 			local short
 			for _, yards in ipairs({ 5, 8, 11, 15, 20, 25, 28, 30, 35, 40 }) do
 				if yards < reach then short = yards end
 			end
 			r:Log(("nearest enemy first within %d yd; short of it: %s yd"):format(reach, tostring(short)))
-			local right, wrong, near, far, examples = 0, 0, 0, 0, {}
+			local right, wrong, near, far, examples, fades = 0, 0, 0, 0, {}, {}
 			for i = 1, 10 do
+				-- (Short of every enemy picked again as it switches: run q772a's
+				-- mob walked in between, nothing crossed, and it read as a jump.)
+				if i == 6 then
+					short = nil
+					for _, yards in ipairs({ 5, 8, 11, 15, 20, 25, 28, 30, 35, 40 }) do
+						local outside = true
+						for _, each in ipairs(Enemies()) do
+							if ns.UnitWithinYards(each.unit, yards) ~= false then outside = false end
+						end
+						if outside then short = yards end
+					end
+					r:Log("short of every enemy now: " .. tostring(short) .. " yd")
+				end
 				local yards = (i <= 5 or not short) and reach or short
 				if ns.db.plateNearbyYards ~= yards then
 					ns.db.plateNearbyYards = yards
 					r:Log(("row set to %d yd"):format(yards))
-					r:Sleep(2) -- (the half-second refresh and the fade)
+					-- (The fade: some plate's level seen part way, 0 < level < 1,
+					-- as it eases in or out, not jumping. ns.plates.nearLevels.
+					-- Only judged when a plate's level moved at all.)
+					local partWay, before, moved = false, {}, false
+					for unit, level in pairs(ns.plates.nearLevels or {}) do before[unit] = level end
+					for _ = 1, 30 do
+						for unit, level in pairs(ns.plates.nearLevels or {}) do
+							if level > 0.02 and level < 0.98 then partWay = true end
+							if level ~= (before[unit] or 0) then moved = true end
+						end
+						for unit in pairs(before) do
+							if not (ns.plates.nearLevels or {})[unit] then moved = true end
+						end
+						r:Sleep(0.05)
+					end
+					fades[#fades + 1] = { yards = yards, partWay = partWay, moved = moved }
+					r:Sleep(1.5) -- (the rest of the fade)
 				end
 				r:Prompt(("Checking enemy plates at %d yd: %d of 10"):format(yards, i), "Stay where you are.",
 					(11 - i) * 0.5)
@@ -298,6 +338,17 @@ ns.TestKit.Define({
 			r:Verdict(right + wrong > 0 and wrong <= math.max(1, (right + wrong) / 10),
 				("enemies within the row's yards shown by it, further hidden (%d of %d)"):format(right, right + wrong))
 			r:Verdict(near > 0 and (far > 0 or not short), ("both ways seen: %d within, %d further"):format(near, far))
+			local said = {}
+			for _, fade in ipairs(fades) do
+				if fade.moved then
+					said[#said + 1] = ("%d yd %s"):format(fade.yards, fade.partWay and "eased" or "JUMPED")
+					r:Verdict(fade.partWay, ("the plate eased as the row went to %d yd, not popped"):format(fade.yards))
+				else
+					said[#said + 1] = ("%d yd: no plate crossed"):format(fade.yards)
+				end
+			end
+			r:Log("fades: " .. table.concat(said, ", ") .. (" (Fade in %.1f s, out %.1f s)"):format(
+				ns.db.fadeInTime or 0, ns.db.fadeOutTime or 0))
 			ns.db.plateNearbyYards = reach
 			r:Sleep(2)
 			r:Shot(("CineMode: the row at %d yd, the nearest enemy's plate up"):format(reach))
@@ -323,6 +374,47 @@ ns.TestKit.Define({
 				("the box and its yd end before the grid (%s of %s)"):format(tostring(ydRight and math.floor(ydRight)),
 					tostring(gridLeft and math.floor(gridLeft))))
 			r:Shot("Nameplates page: Enemies within [20] yd", { behind = box:GetParent() })
+		end },
+		-- 5 fight: the yards code in a fight, both features on (a Smart row in 20
+		-- yd and Enemies in 20 yd, CineMode on), your pet's plate up if you have
+		-- one: no blocked action (2026-11-25: 36 in one Forever fight from the
+		-- interact distance, now never asked in fights) and the rows still
+		-- answering by your spells.
+		{ key = "fight", title = "a fight with both on: nothing blocked", proven = "run 10 q44a9 (Forever): 0 blocked, 30/30 answered",
+			run = function(r)
+			r:Keep("plates", true)
+			ns.ApplyCVarSet(PLATES, true)
+			r:Keep("cineWas", ns.IsCineModeOn() and "on" or "off")
+			for _, key in ipairs({ "styleGeneral", "handlePlateStyle", "plateMarks", "handlePlates" }) do r:Set(key, true) end
+			r:Set("markOrder", IN)
+			r:Set(IN .. "When", true)
+			r:Set(IN .. "MarkStyle", "arrow")
+			r:Set("plateAlwaysNearbyEnemies", true)
+			r:Set("plateNearbyYards", 20)
+			if not ns.IsCineModeOn() and Cinematic_ToggleCineMode then pcall(Cinematic_ToggleCineMode) end
+			local blocked, answered, asked = 0, 0, 0
+			local watch = CreateFrame("Frame")
+			watch:RegisterEvent("ADDON_ACTION_BLOCKED")
+			watch:SetScript("OnEvent", function(_, _, addon) if addon == "CinematicDev" or addon == "Cinematic" then blocked = blocked + 1 end end)
+			local answer, which = r:WaitFor("Pull a mob and fight it for about 10 seconds.", {
+				check = function() return InCombatLockdown() and "fighting" end, buttons = { "No fight" } })
+			if answer == "button" and which == "No fight" then
+				watch:UnregisterAllEvents()
+				return r:Skip("no fight")
+			end
+			for i = 1, 20 do
+				if not InCombatLockdown() then break end
+				r:Prompt(("In the fight: %d of 20"):format(i), "Keep fighting.", (21 - i) * 0.5)
+				for _, each in ipairs(Plates()) do
+					asked = asked + 1
+					if ns.UnitWithinYards(each.unit, 20) ~= nil then answered = answered + 1 end
+				end
+				r:Sleep(0.5)
+			end
+			watch:UnregisterAllEvents()
+			r:Log(("in the fight: %d plate asks, %d answered by a spell"):format(asked, answered))
+			r:Verdict(blocked == 0, ("no blocked action from us in the fight: %d"):format(blocked))
+			r:Verdict(asked > 0 and answered > 0, "the yards still answered in the fight, by your spells")
 		end },
 	},
 })
