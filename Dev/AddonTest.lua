@@ -448,6 +448,23 @@ local function ManagedBy()
 	return map
 end
 
+-- At the end, each frame still NOT COVERED asked again, drawn now or not: one
+-- seen once before our scan had claimed it, that never drew again after,
+-- kept its first line (EllesmereUIDMFrame1 in the addon kit's run qb025,
+-- 2026-11-25, though its row hid and showed it). Its line says so.
+function ns.AddonTestCoverAgain(frames, managedBy)
+	for frame, seen in pairs(frames) do
+		if not seen.cover then
+			local cover = Coverage(frame, managedBy)
+			if cover then
+				seen.cover = cover
+				seen.line = seen.line:gsub("NOT COVERED", "covered by the end: " .. cover, 1)
+				Log("frame " .. seen.line)
+			end
+		end
+	end
+end
+
 -- One pass over every frame: the target's frames drawing on screen, each
 -- logged the first time seen (and again if its cover changes).
 local function Inventory()
@@ -827,6 +844,7 @@ Finish = function(done)
 	end
 	if done then
 		Inventory()
+		ns.AddonTestCoverAgain(run.frames, ManagedBy())
 		local open, covered = {}, 0
 		for _, seen in pairs(run.frames) do
 			if seen.cover then covered = covered + 1 else open[#open + 1] = seen.line end

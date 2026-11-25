@@ -64,6 +64,22 @@ for _, name in ipairs(untaken) do if name == "Questie_BaseFrame" then stillThere
 Check("a frame we took over leaves the not-ours list", before > 0 and not stillThere and #untaken == before - 1,
 	before .. " -> " .. #untaken)
 
+-- A frame first seen before our scan claimed it, never drawn again (the
+-- addon kit's run qb025, 2026-11-25: EllesmereUIDMFrame1 stayed NOT COVERED
+-- though its row hid and showed it): asked again at the end, it's covered;
+-- one nothing claims stays NOT COVERED.
+local meter, stray = CreateFrame("Frame", "FakeMeterFrame1", UIParent), CreateFrame("Frame", "FakeStray", UIParent)
+local seenFrames = {
+	[meter] = { line = "FakeMeterFrame1 (Frame, by Fake from its name) NOT COVERED: 375x150" },
+	[stray] = { line = "FakeStray (Frame, by Fake from its name) NOT COVERED: 10x10" },
+}
+ns.AddonTestCoverAgain(seenFrames, { [meter] = { frame = meter, group = "addon:fakeMeters" } })
+Check("claimed after it was first seen: covered by the end", seenFrames[meter].cover == "faded in addon:fakeMeters"
+	and seenFrames[meter].line:find("covered by the end: faded in addon:fakeMeters", 1, true) ~= nil,
+	seenFrames[meter].line)
+Check("never claimed: still NOT COVERED", seenFrames[stray].cover == nil
+	and seenFrames[stray].line:find("NOT COVERED", 1, true) ~= nil)
+
 -- An addon's own minimap button, no Support file (Journey Tracker,
 -- 2026-11-25): the minimap scan puts it on the Addon buttons row, so the test
 -- must hide that row, or it said "no row to test".
