@@ -619,8 +619,9 @@ local function Explain(entry)
 	-- (The game's own personal resource display switched off: Cinematic
 	-- leaves its bars out till it's back, Frames.lua.)
 	local tick = ns.whyTick
+	-- (Another addon's bars on those rows still fade then: ns.PersonalAddonBar.)
 	if not n and tick and tick.displayOff and (entry.group == "prd" or entry.group == "prdpower"
-		or entry.group == "prdmana") then
+		or entry.group == "prdmana") and not (ns.PersonalAddonBar and ns.PersonalAddonBar(entry.name)) then
 		Add(out, "on", L["The game's Personal Resource Display is switched off in its options, so Cinematic " ..
 			"leaves these bars as the game has them"], "Personal Resources")
 		return title, "unknown", out, key

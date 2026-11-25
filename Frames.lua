@@ -172,6 +172,30 @@ function ns.PersonalDisplayOn()
 	return personalPower.displayOn
 end
 personalPower.GROUPS = { prd = true, prdpower = true, prdmana = true }
+-- (Other addons' frames on those rows by their Support files, ns.FadeWithRow:
+-- name -> true. They stand in for the display, so they fade whether the
+-- game's own display is on or not.)
+personalPower.addonNames = {}
+-- The frames' pass entries: all, or with the game's display off, all but
+-- the display's own rows' frames, which have nothing to fade then. Another
+-- addon's bars on those rows still fade: EllesmereUI's resource bars, which
+-- the Personal health and resource bar rows stopped hiding once the game's
+-- display was off (addon kit run q0d2b, 2026-11-25).
+function personalPower.PassEntries(managed, displayOn, out)
+	if displayOn then return managed end
+	wipe(out)
+	for _, entry in ipairs(managed) do
+		if not personalPower.GROUPS[entry.group] or personalPower.addonNames[entry.name] then
+			out[#out + 1] = entry
+		end
+	end
+	return out
+end
+ns.PersonalPassEntries = personalPower.PassEntries -- (for the offline check, Tools/offline/prdaddonbars.lua)
+-- Whether a frame is another addon's bar on those rows (Why.lua).
+function ns.PersonalAddonBar(name)
+	return name ~= nil and personalPower.addonNames[name] == true
+end
 
 -- The queue eye (dungeon finder, battlegrounds): Forever pins it to the
 -- minimap, retail puts it beside the micro menu, so it goes with either.
@@ -14138,13 +14162,7 @@ function ns.UpdateFrames(cinematic, elapsed)
 	-- (The personal resource display switched off in the game: its rows
 	-- have nothing to fade, so they're left out, as they are, till it's back.)
 	local displayOff = not personalPower.displayOn
-	local entries = ns.managed
-	if displayOff then
-		entries = wipe(tickTables.passEntries)
-		for _, entry in ipairs(ns.managed) do
-			if not personalPower.GROUPS[entry.group] then entries[#entries + 1] = entry end
-		end
-	end
+	local entries = personalPower.PassEntries(ns.managed, not displayOff, tickTables.passEntries)
 	-- (Inspect and the Why window, Why.lua: this tick's Advanced pages' state,
 	-- for the frames being looked at.)
 	if ns.whyLook then
@@ -15123,6 +15141,7 @@ function ns.FadeWithRow(rowKey, group, names, own, hook)
 	end
 	for _, name in ipairs(names) do
 		if group and FRAME_GROUPS[group] then AddName(FRAME_GROUPS[group], name) end
+		if group and personalPower.GROUPS[group] then personalPower.addonNames[name] = true end
 		if row and row.frames then
 			AddName(row.frames, name)
 		end
