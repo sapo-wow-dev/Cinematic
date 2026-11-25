@@ -21,6 +21,15 @@
 --   5 compare    target any mob: every readable size against the real plate,
 --                then one texture put on both through the same code
 --                (ns.StylePlateBar): the same fill; the real plate put back
+--   6 layoutpage Nameplate Style's Layout tab (PlateLayoutPage.lua): built,
+--                no keyboard held, the game plate with its parts clickable, a
+--                nudge (level box 12 right, read off the copy), Balanced
+--                (what's shown centered on the unit), overlaps, switch off:
+--                the off card; a shot each
+--   7 layoutlive target any mob: every part moved on the real plates (shot),
+--                kept through the game's own re-layout (debuff padding CVar),
+--                no layout errors, switch off: all back (shot)
+--   8 layoutfight (optional, Skip step) attack a mob: kept in a fight, no errors
 -- Into CinematicDB.plateMatchTestLog. Dev copy only.
 local _, ns = ...
 
@@ -30,9 +39,24 @@ local TEMPLATES = { "NamePlateUnitFrameTemplate", "BaseNamePlateUnitFrameTemplat
 local CVARS = { "nameplateShowAll", "nameplateShowEnemies", "nameplateShowFriends", "nameplateShowFriendlyNPCs",
 	"nameplateStyle", "nameplateSize", "nameplateGlobalScale", "nameplateSelectedScale", "nameplateLargerScale",
 	"NamePlateHorizontalScale", "NamePlateVerticalScale", "nameplateResourceOnTarget", "nameplateShowDebuffsOnFriendly",
-	"nameplateAuraScale", "nameplateMotion", "nameplateShowSelf", "nameplateShowOnlyNames", "nameplateUseClassColorForFriendlyPlayerUnitNames" }
+	"nameplateAuraScale", "nameplateMotion", "nameplateShowSelf", "nameplateShowOnlyNames", "nameplateUseClassColorForFriendlyPlayerUnitNames",
+	"nameplateDebuffPadding" } -- (the layout steps lay plates out again by it)
 local WALK_LINES, COPY_LINES = 140, 260
 local copies = {} -- (our template copies, hidden at the end)
+
+-- The Style previews on their pages for the run: your Pop out choice (account-wide,
+-- stylePreviewOut) set aside (the kit puts it back at the end) and a popped one put
+-- back. (Run q53fe, 2026-11-25: popped out, every page check read "past the edge".)
+local function PreviewsOnPage(r)
+	if ns.db and ns.db.stylePreviewOut then r:Set("stylePreviewOut", nil) end
+	local popped = ns.StylePreviewDebug and ns.StylePreviewDebug()
+	local click = popped and popped.popButton and popped.popButton:GetScript("OnClick")
+	if click then
+		click(popped.popButton)
+		r:Log("  a popped-out preview put back on its page for the run")
+	end
+	if ns.db then ns.db.stylePreviewOut = nil end
+end
 
 -- Reads -------------------------------------------------------------------------
 
@@ -586,6 +610,7 @@ ns.TestKit.Define({
 		end },
 		{ key = "stylepage", title = "Nameplate Style's own page: one big game plate, the Theme list and Customize", run = function(r)
 			if not ns.OpenOptions then return r:Skip("no settings") end
+			PreviewsOnPage(r)
 			if preview then preview:Hide() end
 			if InCombatLockdown() then
 				r:WaitFor("Leave the fight first.", { check = function() return not InCombatLockdown() and "out" end })
@@ -762,6 +787,373 @@ ns.TestKit.Define({
 			r:Log("  the real plate's fill put back: " .. back)
 			r:Verdict(back:find("UI-HUD-CoolDownManager-Bar", 1, true) ~= nil, "the real plate's own fill back")
 			holder:Hide()
+		end },
+		-- Plate Layout (PlateLayout.lua, PlateLayoutPage.lua: Nameplate Style's
+		-- Layout tab, 2026-11-25). Your layout is set aside for the run (the
+		-- kit's undo puts it back) and test layouts put on in its place.
+		{ key = "layoutpage", title = "Nameplate Style's Layout tab: the plate, its parts, balance, the keyboard",
+			-- (Rebuilt look, 2026-11-25: the user, "this looks like shit"; proven again in run q2e75.)
+			-- (Its guides rebuilt as marks off the plate, 2026-11-25; proven in run q2431.)
+			proven = "platematch q2431 (2026-11-25): marks off the plate in 3 modes, over every frame, status words, pop-out, 39/39",
+			run = function(r)
+			if not (ns.OpenOptions and ns.PlateLayoutApply) then return r:Skip("Style isn't loaded") end
+			if InCombatLockdown() then
+				r:WaitFor("Leave the fight first.", { check = function() return not InCombatLockdown() and "out" end })
+			end
+			-- (Every switch over the page on: style-switch-chain.)
+			r:Set("styleGeneral", true)
+			r:Set("handlePlateStyle", true)
+			r:Set("plateLayout", true)
+			r:Set("plateLayoutData", {})
+			ns.PlateLayoutChanged()
+			PreviewsOnPage(r)
+			if _G.SettingsPanel and _G.SettingsPanel:IsShown() then pcall(HideUIPanel, _G.SettingsPanel) end
+			r:Sleep(0.5)
+			pcall(ns.OpenOptions, "Nameplate Layout")
+			r:Sleep(1.2)
+			local page = ns.plateLayoutPage
+			local panel = _G.SettingsPanel
+			r:Verdict(page ~= nil and page.canvas:IsVisible(), "the Layout page built and shown")
+			if not page then return end
+			page.Redraw()
+			local keys = page.keys
+			local okK, kb = pcall(keys.IsKeyboardEnabled, keys)
+			r:Verdict(keys:GetScript("OnKeyDown") == nil and not (okK and kb == true),
+				"the arrow-key frame holds no keyboard with the mouse off the plate (the first build took every key)")
+			local plate = page.holder.gamePlate
+			local copy = plate and plate.gameCopy
+			r:Verdict(copy ~= nil and plate:IsShown(), "the preview is the game's plate: " .. tostring(ns.GamePlateReport(plate)))
+			if not copy then return end
+			-- (Offline the stand-in places nothing: the measured checks skip there.)
+			local measured = not ns.noRealLayout
+			local count = 0
+			for _, hit in pairs(page.hits) do if hit:IsShown() then count = count + 1 end end
+			if measured then r:Verdict(count >= 4, count .. " parts clickable on the preview")
+			else r:Skip("no real layout to measure (offline): parts clickable") end
+			for _, each in ipairs({ { page.holder.unitDropdown, "Unit list" }, { page.holder.stateDropdown, "State list" } }) do
+				if each[1] then
+					local okO, hits = pcall(r.Overlaps, r, each[1], panel)
+					r:Verdict(okO and #hits == 0, each[2] .. " covers nothing: " .. (okO and table.concat(hits, ", ") or tostring(hits)))
+				end
+			end
+			r:Shot("Layout tab, the game's places", { behind = panel })
+			-- A nudge on the preview: the level box 12 right, read off our copy.
+			local box = copy.PlayerLevelDiffFrame
+			local before = box:GetLeft()
+			r:Set("plateLayoutData", { all = { parts = { level = { x = 12 } } } })
+			ns.PlateLayoutChanged()
+			page.Select("level")
+			page.Redraw()
+			if page.Refresh then page.Refresh() end -- (its pills and fields as the test's layout)
+			r:Sleep(0.3)
+			local after = box:GetLeft()
+			local moved = before and after and (after - before) * box:GetEffectiveScale() / copy:GetEffectiveScale()
+			r:Log(("  level box left %s -> %s (plate units %s)"):format(S(before), S(after), S(moved)))
+			if measured then r:Verdict(moved and math.abs(moved - 12) < 0.6, "the level box 12 right on the preview")
+			else r:Skip("no real layout to measure (offline): the nudge") end
+			-- The guides (the user, 2026-11-25: lines over the bar but under the cast bar, "wtf is
+			-- that"): marks over and under the plate, never on a part of it, over every frame of it,
+			-- and the status in words. Checked in each mode, every part up for the busiest.
+			local marks = page.marks
+			local function Box(region)
+				local ok, l, rt, b, t, eff = pcall(function()
+					return region:GetLeft(), region:GetRight(), region:GetBottom(), region:GetTop(), region:GetEffectiveScale()
+				end)
+				if not (ok and l and rt and b and t) then return nil end
+				return l * eff, rt * eff, b * eff, t * eff
+			end
+			local LISTS = { debuffs = true, buffs = true, crowd = true }
+			local function PartShown(frame, key)
+				if not (frame and frame:IsVisible()) then return false end
+				-- (The soft target's frame is up with nothing in it: its icon decides, run q0fbf.)
+				if key == "softTarget" then return frame.Icon and frame.Icon:IsVisible() or false end
+				if not LISTS[key] then return true end
+				for _, kid in ipairs({ frame:GetChildren() }) do if kid:IsVisible() then return true end end
+				return false
+			end
+			-- (What of the guides lies on a part of the plate: "<guide> on <part>" each.)
+			local function GuidesOnParts()
+				local on = {}
+				local guides = { { marks.unit.top, "Unit's upper mark" }, { marks.unit.bottom, "Unit's lower mark" },
+					{ marks.unit.name, "Unit's name" }, { marks.middle.top, "middle's upper mark" },
+					{ marks.middle.bottom, "middle's lower mark" }, { marks.middle.name, "middle's name" },
+					{ marks.span, "the joining line" }, { page.readout, "the status" } }
+				for _, guide in ipairs(guides) do
+					if guide[1]:IsVisible() then
+						local gl, gr, gb, gt = Box(guide[1])
+						for _, part in ipairs(ns.PLATE_LAYOUT_PARTS) do
+							local f = copy
+							for name in part.path:gmatch("[^.]+") do f = f and f[name] end
+							if gl and PartShown(f, part.key) then
+								local pl, pr, pb, pt = Box(f)
+								-- (Text frames reach past their words: a part's box is taken as it is.)
+								if pl and gl < pr - 0.5 and gr > pl + 0.5 and gb < pt - 0.5 and gt > pb + 0.5 then
+									on[#on + 1] = guide[2] .. " on " .. part.label
+								end
+							end
+						end
+					end
+				end
+				return on
+			end
+			local function TopOf(frame, depth)
+				local top = frame:GetFrameLevel()
+				if depth < 4 then for _, kid in ipairs({ frame:GetChildren() }) do top = math.max(top, TopOf(kid, depth + 1)) end end
+				return top
+			end
+			local function CheckGuides(mode)
+				if not (marks and measured) then return end
+				local on = GuidesOnParts()
+				r:Verdict(#on == 0, mode .. ": no guide on a part of the plate" .. (#on > 0 and (": " .. table.concat(on, "; ")) or ""))
+				local okT, top = pcall(TopOf, copy, 0)
+				r:Verdict(okT and page.overlay:GetFrameLevel() > top, ("%s: the guides over every frame of the plate (%s over %s)")
+					:format(mode, tostring(page.overlay:GetFrameLevel()), tostring(top)))
+			end
+			-- (The game's place: one mark, Unit, and the status says how far off and what centers it.)
+			local words = page.readout and page.readout:GetText() or ""
+			if marks and measured then
+				r:Verdict(marks.unit.top:IsVisible() and not marks.middle.top:IsVisible() and not marks.span:IsVisible()
+					and words:find("Balanced centers it", 1, true) ~= nil,
+					"the game's place: the Unit mark alone, the status: " .. words)
+			end
+			CheckGuides("the game's place")
+			r:Shot("Layout tab, level box 12 right, the game's place: Unit mark, status", { behind = panel })
+			-- (Custom: both marks, named, joined, and the status says by how much.)
+			r:Set("plateLayoutData", { all = { center = "custom", cx = 15, parts = { level = { x = 12 } } } })
+			ns.PlateLayoutChanged()
+			page.Redraw()
+			if page.Refresh then page.Refresh() end
+			r:Sleep(0.3)
+			words = page.readout and page.readout:GetText() or ""
+			if marks and measured then
+				r:Verdict(marks.unit.name:IsVisible() and marks.middle.name:IsVisible() and marks.span:IsVisible()
+					and (marks.unit.name:GetText() or ""):find("Unit", 1, true) ~= nil
+					and (marks.middle.name:GetText() or ""):find("Plate's middle", 1, true) ~= nil
+					and words:find("Moved 15 right", 1, true) ~= nil,
+					("Custom: both marks named (%q, %q), joined, the status: %s"):format(marks.unit.name:GetText() or "",
+					marks.middle.name:GetText() or "", words))
+				local covered = {}
+				for _, tag in ipairs({ marks.unit.name, marks.middle.name, page.readout }) do
+					-- (Against the preview's own controls (the toggles, the part boxes).)
+					local okT, over = pcall(r.Overlaps, r, tag, page.overlay)
+					if okT and #over > 0 then covered[#covered + 1] = (tag:GetText() or "?") .. ": " .. table.concat(over, ", ") end
+				end
+				r:Verdict(#covered == 0, #covered == 0 and "the names and status clear of the toggles and part boxes"
+					or table.concat(covered, "; "))
+			end
+			CheckGuides("Custom")
+			r:Shot("Layout tab, Custom 15 right: both marks, joined", { behind = panel })
+			-- Balanced, the level box and crowd control left out: what's left centered on the unit,
+			-- with every part up on the preview (All parts up), as Balanced measures them (run qb095:
+			-- checked with only a cast up, the marker's room counted but not shown: 23 off).
+			local statesNow = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
+			local wasStates = {}
+			for key, on in pairs(statesNow) do wasStates[key] = on end
+			local ALL_UP = { "casting", "marker", "debuffs", "crowd", "quest" }
+			for _, key in ipairs(ALL_UP) do
+				if not statesNow[key] and ns.TogglePlatePreviewState then ns.TogglePlatePreviewState(key) end
+			end
+			r:Set("plateLayoutData", { all = { center = "balanced", parts = { level = { count = "never" },
+				crowd = { count = "never" } } } })
+			ns.PlateLayoutChanged()
+			page.Redraw()
+			if page.Refresh then page.Refresh() end
+			r:Sleep(0.3)
+			local unitX = copy:GetCenter()
+			local l, rr
+			for _, part in ipairs(ns.PLATE_LAYOUT_PARTS) do
+				if part.key ~= "level" and part.key ~= "crowd" then
+					local f = copy
+					for name in part.path:gmatch("[^.]+") do f = f and f[name] end
+					local okR, fl, fr, eff = pcall(function() return f:GetLeft(), f:GetRight(), f:GetEffectiveScale() end)
+					if okR and fl and f:IsVisible() and fr - fl > 1 then
+						fl, fr = fl * eff / copy:GetEffectiveScale(), fr * eff / copy:GetEffectiveScale()
+						l, rr = l and math.min(l, fl) or fl, rr and math.max(rr, fr) or fr
+					end
+				end
+			end
+			local off = l and unitX and (l + rr) / 2 - unitX
+			r:Log(("  shown parts %s..%s, unit middle %s, off by %s"):format(S(l), S(rr), S(unitX), S(off)))
+			-- (The page's readout says so too, counting as Balanced does: run q2b06 it said 38 right.)
+			words = page.readout and page.readout:GetText() or ""
+			if measured then r:Verdict(words:find("Centered on the unit", 1, true) ~= nil, "the status says centered: " .. words) end
+			CheckGuides("Balanced, every part up")
+			if measured then r:Verdict(off and math.abs(off) < 1, "Balanced: what's shown centered on the unit (within 1)")
+			else r:Skip("no real layout to measure (offline): Balanced") end
+			r:Shot("Layout tab, Balanced, every part up", { behind = panel })
+			-- (The preview's states back as they were: the next preview opened shows the same.)
+			for _, key in ipairs(ALL_UP) do
+				if (statesNow[key] or false) ~= (wasStates[key] or false) and ns.TogglePlatePreviewState then
+					ns.TogglePlatePreviewState(key)
+				end
+			end
+			-- The page's own controls: none covering another.
+			if measured then
+				local okO, hits = pcall(r.Overlaps, r, page.holder, panel)
+				r:Verdict(okO and #hits == 0, "the preview covers nothing: " .. (okO and table.concat(hits, ", ") or tostring(hits)))
+				-- (Every control of the rebuilt page: shown where it should be, covering nothing.)
+				-- (Each checked with the page scrolled so it's in the window: the parts panel sits
+				-- below the first screen, run qc3be read it "past the edge".)
+				local bad = {}
+				local scroll = page.canvas.scroll
+				for _, each in ipairs(page.controls or {}) do
+					local control, name = each[1], each[2]
+					if control and control:IsVisible() then
+						-- (Scrolled only as far as brings it in, to the view's bottom: the preview is
+						-- held at the view's top as you scroll (every Style page's), so scrolled to the
+						-- top a control sat under it, run q8f7e.)
+						if scroll and scroll.GetVerticalScrollRange then
+							local bottom, contentTop = control:GetBottom(), page.canvas.content:GetTop()
+							local depth = bottom and contentTop and (contentTop - bottom) or 0
+							local want = math.max(0, depth - (scroll:GetHeight() or 0) + 12)
+							scroll:SetVerticalScroll(math.min(want, scroll:GetVerticalScrollRange()))
+						end
+						local okC, over = pcall(r.Overlaps, r, control, panel)
+						if okC and #over > 0 then bad[#bad + 1] = name .. " covers " .. table.concat(over, ", ") end
+					end
+				end
+				r:Verdict(#bad == 0, #bad == 0 and "every page control covers nothing" or table.concat(bad, "; "))
+				-- (The parts panel, scrolled into view.)
+				if scroll and scroll.GetVerticalScrollRange then scroll:SetVerticalScroll(scroll:GetVerticalScrollRange()) end
+				r:Shot("Layout tab, the parts panel", { behind = panel })
+				if scroll then scroll:SetVerticalScroll(0) end
+			end
+			-- The shared preview frame (the user, 2026-11-25: "i cant pop it out"): popped out into
+			-- its window, the plate and its parts still there and clickable, then put back. Your
+			-- pop-out choice (account-wide) as it was after.
+			local frame = page.preview
+			r:Verdict(frame and frame.popButton ~= nil, "the Layout preview is the Style pages' shared preview (a pop-out button)")
+			if frame and frame.popButton and ns.StylePreviewDebug then
+				local wasOut = ns.db.stylePreviewOut
+				local click = frame.popButton:GetScript("OnClick")
+				local poppedNow = ns.StylePreviewDebug()
+				if poppedNow ~= frame and click then click(frame.popButton) end
+				r:Sleep(0.8)
+				poppedNow = ns.StylePreviewDebug()
+				page.Redraw()
+				local shown = 0
+				for _, hit in pairs(page.hits) do if hit:IsVisible() then shown = shown + 1 end end
+				r:Verdict(poppedNow == frame and shown >= 4,
+					("popped out: %s, %d parts clickable in its window"):format(tostring(poppedNow == frame), shown))
+				r:Shot("Layout preview popped out", { behind = { panel, frame } })
+				if ns.StylePreviewDebug() == frame and click then click(frame.popButton) end
+				r:Sleep(0.6)
+				ns.db.stylePreviewOut = wasOut
+				r:Verdict(ns.StylePreviewDebug() ~= frame, "put back on the page")
+			end
+			-- Page switch off: the off card.
+			pcall(HideUIPanel, panel)
+			r:Sleep(0.5)
+			r:Set("plateLayout", false)
+			pcall(ns.OpenOptions, "Nameplate Layout")
+			r:Sleep(1)
+			local card = ns.PageOffCardWanted and ns.PageOffCardWanted("Nameplate Layout")
+			r:Verdict(card == true, "switch off: the off card (" .. tostring(card) .. ")")
+			r:Shot("Layout tab, switch off", { behind = _G.SettingsPanel })
+			pcall(HideUIPanel, _G.SettingsPanel)
+			r:Set("plateLayout", true)
+			okK, kb = pcall(keys.IsKeyboardEnabled, keys)
+			r:Verdict(not (okK and kb == true), "settings closed: no keyboard held")
+		end },
+		{ key = "layoutlive", title = "a layout on your target's real plate: moved, kept, put back, no errors",
+			proven = "platematch q2b06 + q57bf (2026-11-25): 14 moved, kept through the game's re-layout, 0 errors, all back",
+			run = function(r)
+			if not ns.PlateLayoutApply then return r:Skip("Style isn't loaded") end
+			r:WaitFor("Target any mob with a nameplate (no need to fight it).", { check = function()
+				if InCombatLockdown() then return nil end
+				local p = UnitExists("target") and C_NamePlate.GetNamePlateForUnit("target")
+				return p and p.UnitFrame and p
+			end })
+			local logBefore = #(CinematicDB.log or {})
+			local function Errors()
+				local found = {}
+				for i = logBefore + 1, #(CinematicDB.log or {}) do
+					local line = tostring(CinematicDB.log[i])
+					if line:find("plate layout:", 1, true) then found[#found + 1] = line end
+				end
+				return found
+			end
+			r:Set("styleGeneral", true)
+			r:Set("handlePlateStyle", true)
+			r:Set("plateLayout", true)
+			r:Set("plateLayoutData", {})
+			ns.PlateLayoutChanged()
+			r:Sleep(0.5)
+			r:Shot("your target's plate, the game's places", nil) -- (no panel: behind a plate it covered the plate, run qb095)
+			-- Every part moved a little, the level box hung left of the marker, the marker bigger.
+			local parts = {}
+			for _, part in ipairs(ns.PLATE_LAYOUT_PARTS) do parts[part.key] = { y = 4 } end
+			parts.level = { to = "marker", side = "left", gap = 4 }
+			parts.marker = { scale = 1.5 }
+			parts.name = { y = 10 }
+			r:Set("plateLayoutData", { all = { center = "balanced", parts = parts } })
+			ns.PlateLayoutChanged()
+			r:Sleep(0.5)
+			local report = ns.PlateLayoutReport()
+			r:Log("  " .. report)
+			local moved = tonumber(report:match("(%d+) moved")) or 0
+			-- (Offline the stand-in's parts have no anchors to move: counted in game only.)
+			if ns.noRealLayout then r:Skip("no real anchors offline: " .. moved .. " moved")
+			else r:Verdict(moved >= 8, moved .. " parts moved on the plates (every part asked, on each plate up)") end
+			r:Shot("your target's plate: name 10 up, the rest 4 up, level box left of a bigger marker, balanced",
+				nil) -- (no panel: behind a plate it covered the plate, run qb095)
+			-- Kept: the game lays every plate out again when its debuff padding
+			-- changes (its CVar callback runs the game's own UpdateAnchors, not
+			-- through our hook: the stray re-anchor path, put right next frame).
+			local padding = tonumber(GetCVar("nameplateDebuffPadding"))
+			if padding then
+				SetCVar("nameplateDebuffPadding", padding + 1)
+				r:Sleep(0.5)
+				SetCVar("nameplateDebuffPadding", padding)
+				r:Sleep(0.5)
+				report = ns.PlateLayoutReport()
+				r:Log("  after the game laid the plates out again: " .. report)
+				if not ns.noRealLayout then
+					r:Verdict((tonumber(report:match("(%d+) moved")) or 0) >= 8, "still moved after the game's own re-layout")
+				end
+				r:Shot("after the game's re-layout: the same places as the shot before", nil) -- (no panel: behind a plate it covered the plate, run qb095)
+			else
+				r:Skip("no nameplateDebuffPadding CVar on this client: re-layout not tried")
+			end
+			local errs = Errors()
+			r:Verdict(#errs == 0, #errs .. " plate layout errors" .. (errs[1] and (": " .. errs[1]) or ""))
+			-- Switch off: every part back.
+			r:Set("plateLayout", false)
+			ns.PlateLayoutChanged()
+			r:Sleep(0.5)
+			report = ns.PlateLayoutReport()
+			r:Log("  switch off: " .. report)
+			r:Verdict(report:find(" 0 moved", 1, true) ~= nil, "switch off: nothing moved")
+			local now = UnitExists("target") and C_NamePlate.GetNamePlateForUnit("target")
+			if now then r:Shot("switch off: the game's places again", nil) end
+			r:Set("plateLayout", true)
+		end },
+		{ key = "layoutfight", title = "a layout kept in a fight (optional: Skip step if you'd rather not fight)",
+			proven = "platematch qb095, q2b06, q57bf (2026-11-25): kept in fights, 0 errors",
+			run = function(r)
+			if not ns.PlateLayoutApply then return r:Skip("Style isn't loaded") end
+			if ns.noRealLayout then return r:Skip("no fight offline") end
+			local logBefore = #(CinematicDB.log or {})
+			r:Set("styleGeneral", true)
+			r:Set("handlePlateStyle", true)
+			r:Set("plateLayout", true)
+			r:Set("plateLayoutData", { all = { parts = { level = { x = 15 }, name = { y = 8 } } } })
+			ns.PlateLayoutChanged()
+			r:WaitFor("Attack a mob (Skip step to leave this out).", { check = function()
+				return InCombatLockdown() and UnitExists("target") and C_NamePlate.GetNamePlateForUnit("target") and "fight"
+			end })
+			r:Sleep(3)
+			local live = C_NamePlate.GetNamePlateForUnit("target")
+			local report = ns.PlateLayoutReport()
+			r:Log("  in the fight: " .. report)
+			local errs = {}
+			for i = logBefore + 1, #(CinematicDB.log or {}) do
+				local line = tostring(CinematicDB.log[i])
+				if line:find("plate layout:", 1, true) then errs[#errs + 1] = line end
+			end
+			r:Verdict(#errs == 0, #errs .. " plate layout errors in the fight" .. (errs[1] and (": " .. errs[1]) or ""))
+			r:Verdict((tonumber(report:match("(%d+) moved")) or 0) >= 1, "parts still moved in the fight")
+			if live then r:Shot("in a fight: level box 15 right, name 8 up", nil) end
 		end },
 	},
 })

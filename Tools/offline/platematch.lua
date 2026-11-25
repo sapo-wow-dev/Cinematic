@@ -112,6 +112,13 @@ ns.OpenOptions = function(page)
 				end
 			end
 		end
+	elseif page == "Nameplate Layout" then
+		-- (The Layout tab's page, built at login: shown in the window.)
+		local layout = ns.plateLayoutPage
+		if layout then
+			layout.canvas:SetParent(panel)
+			layout.canvas:Show()
+		end
 	elseif not panel.page then
 		local canvas = CreateFrame("Frame", nil, panel)
 		panel.page = ns.MakePlateRowLookPreview(canvas, 480, "others")
@@ -126,12 +133,15 @@ plate.UnitFrame = CreateFrame("Button", "LivePlate", plate, "NamePlateUnitFrameT
 local liveBar = plate.UnitFrame.HealthBarsContainer.healthBar
 liveBar:SetStatusBarTexture("UI-HUD-CoolDownManager-Bar")
 C_NamePlate.GetNamePlateForUnit = function(unit) return unit == "target" and plate or nil end
+C_NamePlate.GetNamePlates = function() return { plate } end -- (the plates up: the layout puts its own on each)
+plate.UnitFrame.unit = "target"
 calls = {}
 
 -- (The off card as the page's own switch decides it: the stand-in's Style switches above it start off.)
 ns.PageOffCardWanted = function(page)
 	if page == "Combat Text Style" then return not ns.db.combatTextStyle end
 	if page == "Nameplate Style" then return not ns.db.handlePlateStyle end
+	if page == "Nameplate Layout" then return not ns.db.plateLayout end
 	return false
 end
 -- (The Look panel is StylePages', opened from the grid's Look button: the stand-in has no panel, so Customize's
@@ -143,7 +153,8 @@ Advance(400) -- (19 states shot on two previews, paced)
 
 local log = CinematicDB.plateMatchTestLog
 local done = Has(log, "DONE: ")
-Check("finished DONE, nothing failed", done ~= nil and done:find(" 0 fail", 1, true) ~= nil and done:find(" 11 skip", 1, true) ~= nil,
+-- (16 skips: the preview's 11, and the layout steps' 5 measured ones (offline places nothing, no fight).)
+Check("finished DONE, nothing failed", done ~= nil and done:find(" 0 fail", 1, true) ~= nil and done:find(" 16 skip", 1, true) ~= nil,
 	done or Has(log, "verdict FAIL") or Has(log, "STOPPED"))
 Check("no Lua error in the test", Has(log, "FAIL Lua error") == nil, Has(log, "FAIL Lua error"))
 Check("full: the proven steps run too", Has(log, "proven, left out") == nil and Has(log, "step 1 templates") ~= nil)
@@ -178,8 +189,18 @@ Check("Nameplate Style off: the off card", Has(log, "verdict PASS stylepage: pag
 Check("the page: on, the preview and its picks tried; off, the off card", Count(log, "verdict PASS page: page switch on: the preview on the page") == 1
 	and Count(log, "verdict PASS page: page switch off: the off card shows") == 1
 	and Count(log, "verdict SKIP page: no real layout to measure") == 1)
-Check("a shot per sample, per state, the open dropdown, per page state, and the compare", shots == 4 + #ns.GAME_PLATE_STATES + 1 + 2 + (4 + #ns.GAME_PLATE_STATES + 3) + 1, shots)
-	-- (+1: the State dropdown open; Nameplate Style's page: a shot per unit, per state, the theme, Customize, off)
+Check("a shot per sample, per state, the open dropdown, per page state, the compare and the layout",
+	shots == 4 + #ns.GAME_PLATE_STATES + 1 + 2 + (4 + #ns.GAME_PLATE_STATES + 3) + 1 + 6 + 4, shots)
+	-- (+1: the State dropdown open; Nameplate Style's page: a shot per unit, per state, the theme, Customize, off;
+	-- +6: the Layout tab's game places, nudge (the game's place), Custom, Balanced, popped out and off; +4: the
+	-- target's plate as the game has it,
+	-- with the layout, after the game's re-layout, the switch off.)
+Check("the Layout tab built, opened, its switch on and off", Has(log, "verdict PASS layoutpage: the Layout page built and shown") ~= nil
+	and Has(log, "verdict PASS layoutpage: switch off: the off card") ~= nil)
+Check("the Layout tab holds no keyboard (the first build took every key)",
+	Count(log, "verdict PASS layoutpage: .*no keyboard") == 2, Count(log, "no keyboard"))
+Check("a layout on the target's plate: no errors, all back with the switch off",
+	Has(log, "verdict PASS layoutlive: 0 plate layout errors") ~= nil and Has(log, "verdict PASS layoutlive: switch off: nothing moved") ~= nil)
 Check("the compare's sizes logged", Count(log, "  SIZE ") == 10, Count(log, "  SIZE "))
 Check("one texture through the same code: the same fill", Has(log, "PASS compare: the same look gives the same fill") ~= nil,
 	Has(log, "FILL"))
@@ -197,11 +218,13 @@ Advance(200)
 log = CinematicDB.plateMatchTestLog
 done = Has(log, "DONE: ")
 Check("plain: finished, nothing failed", done ~= nil and done:find(" 0 fail", 1, true) ~= nil, done or Has(log, "verdict FAIL"))
-Check("plain: one step of five, the page's", Has(log, "start: /cine debug platematch, .*1 of 5 step") ~= nil
+-- (The page's step only: the three layout steps proven 2026-11-25, runs q57bf and q2431.)
+Check("plain: the page's step only, of eight", Has(log, "start: /cine debug platematch, .*1 of 8 step") ~= nil
 	and Has(log, "step %d stylepage") ~= nil and Has(log, "step %d preview") == nil, Has(log, "start:"))
 Check("plain: each unit with its debuffs and crowd control, no state loop", Count(log, "verdict PASS stylepage: page state %a+:") == 0
 	and Count(log, "verdict SKIP stylepage: %a+: places not read") == 4, Count(log, "places not read"))
 Check("plain: the theme pointed at checked (new on the previewer)", Has(log, "verdict PASS stylepage: a theme pointed at") ~= nil)
+-- (Opened once: Nameplate Style. The Layout tab's step is proven, left out.)
 Check("plain: the off pass, the state loop and Customize left out", #opened - openedBefore == 1
 	and Has(log, "verdict PASS stylepage: page switch off") == nil and Has(log, "verdict PASS stylepage: Customize opens") == nil
 	and Count(log, "  proven, not checked again") == 3, Count(log, "  proven, not checked again"))

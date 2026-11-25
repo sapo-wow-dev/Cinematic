@@ -3248,6 +3248,10 @@ do
 			-- (Nameplate Style: its Smart tab a second icon of its page's, hidden under it: canvas.hubTabs.)
 			{ "Nameplate Style", "Interface\\Icons\\Ability_Marksmanship", label = "Nameplates", section = "Interface",
 				sub = "Nameplates" },
+			-- (Layout: where each plate part sits, PlateLayoutPage.lua; Forever only for now: no
+			-- page on retail, as Self Text Style's.)
+			{ "Nameplate Layout", "Interface\\Icons\\INV_Misc_Spyglass_03", label = "Layout",
+				section = "Interface", sub = "Nameplates", tabOf = "Nameplate Style" },
 			{ "Cast Bar Style", "Interface\\Icons\\Spell_Nature_Lightning", label = "Cast Bars", section = "Interface",
 				sub = "Nameplates", tabOf = "Nameplate Style" },
 			{ "Name Style", "Interface\\Icons\\INV_Misc_Note_02", label = "Names", section = "Interface",
@@ -22598,6 +22602,10 @@ ns.OnLanguage(function()
 		Lap("CreateUnitCastStylePanel")
 		ns.CreatePlayerCastStylePanel(ns.lowHealthKit) -- (yours: Unit Frames' Your Cast Bar tab)
 		Lap("CreatePlayerCastStylePanel")
+	end
+	if ns.CreatePlateLayoutPage then -- (PlateLayoutPage.lua: Nameplate Style's Layout tab)
+		ns.CreatePlateLayoutPage(ns.lowHealthKit)
+		Lap("CreatePlateLayoutPage")
 	end
 	CreateEffectsPanel()
 	Lap("CreateEffectsPanel")

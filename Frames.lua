@@ -743,7 +743,8 @@ ns.SHOW_IN_CHILDREN = {
 	showInCooldowns = { "handleCooldowns" }, showInSwing = { "handleSwing" },
 	mouseover = { "handleTooltips", "cursorHide" }, handlePlates = { "handlePlateIcons" },
 	-- (The Style hub's: under Enable Style as before, through their icon's.)
-	handlePlateStyle = { "plateMarks", "plateCastStyle" }, ufStyle = { "unitCastStyle", "playerCastStyle" },
+	-- (plateLayout: Nameplate Style's Layout tab, PlateLayout.lua, 2026-11-25.)
+	handlePlateStyle = { "plateMarks", "plateCastStyle", "plateLayout" }, ufStyle = { "unitCastStyle", "playerCastStyle" },
 }
 for master, keys in pairs(ns.SHOW_IN_CHILDREN) do
 	ns.SetPageMaster(keys, master)

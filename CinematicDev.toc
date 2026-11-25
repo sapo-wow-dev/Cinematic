@@ -200,6 +200,8 @@ Style\PlateCastStyle.lua
 Style\PlateHealthStyle.lua
 Plates\PlateCopy.lua
 Plates\PlateRowLook.lua
+Plates\PlateLayout.lua
+Plates\PlateLayoutPage.lua
 Style\CombatTextTexts.lua
 Style\CombatTextStyle.lua
 Style\CombatTextPage.lua

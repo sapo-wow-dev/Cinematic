@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-25", page = "Nameplate Layout", client = "forever", title = "Nameplate layout",
+		text = "A new Layout tab on Nameplate Style moves, sizes and re-hangs every part of the nameplates (name, " ..
+			"level box, marker, auras, cast bar...), and can keep the plate balanced on its unit as parts come and go." },
 	{ date = "2026-11-24", title = "Search Cinematic",
 		text = "Type /cine find and a few words, or search in the settings, to get a list of every matching option; " ..
 			"click one to go straight to it." },

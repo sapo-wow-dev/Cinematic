@@ -640,6 +640,10 @@ local SHOW_IN_TABS = {
 		{ "Show", "Nameplates", "CineMode hides nameplates: pick which show, and when." },
 		{ "Icons", "Plate Icons", "Icons beside players' health bars on their nameplates." },
 		{ "Default", "Nameplate Style", "How the nameplates look, before Smart's rows." },
+		-- (Where each plate part sits: PlateLayoutPage.lua, right after Default (the user, 2026-11-25).
+		-- WoW Forever only for now.)
+		{ "Layout", "Nameplate Layout", "Where each part of the nameplates sits, and the plate's balance.",
+			has = function() return not ns.isRetail and ns.CreatePlateLayoutPage ~= nil end },
 		-- (Nameplate Style's rows, its second part: Options.lua's CreateTargetArrowPanel)
 		{ "Smart", "Nameplate Marks", "Rows that mark and color plates, like your target, focus and aggro." },
 		{ "Cast Bars", "Cast Bar Style", "How the nameplates' cast bars look." },
