@@ -5073,6 +5073,12 @@ do
 					if Want(field) then wanted = true break end
 				end
 			end
+			-- (key: an addon value that changes the answer with no game event,
+			-- /cine debug group's ns.fakeGroup: compared, no game call.)
+			if entry.key then
+				local key = entry.key()
+				if key ~= entry.lastKey then entry.fresh, entry.lastKey = false, key end
+			end
 			if not wanted then
 				for _, field in ipairs(entry.fields) do f[field] = false end
 				entry.fresh = false
@@ -5097,6 +5103,13 @@ do
 		"PLAYER_ROLES_ASSIGNED", "GROUP_ROSTER_UPDATE" }, read = function(f)
 		local role = ns.PlayerRole()
 		f.tank, f.healer, f.damage = role == "TANK", role == "HEALER", role == "DAMAGER"
+	end })
+	-- In a party or raid (ns.InGroup, /cine debug group too): after the
+	-- roster changes. Always (a plate row's When ticks read it).
+	ns.AddEventFact({ name = "group", fields = { "group" }, always = true,
+		events = { "GROUP_ROSTER_UPDATE", "GROUP_JOINED", "GROUP_LEFT" },
+		key = function() return ns.fakeGroup end, read = function(f)
+		f.group = ns.InGroup() and true or false
 	end })
 	-- (target, enemy and friendly as worked out, before SetTargetWords.)
 	local anyTarget, enemyTarget = false, false -- (enemyTarget nil: the game won't say)
@@ -5244,7 +5257,7 @@ do
 		facts.city, facts.inn = place == "city", place == "inn"
 		-- (The open world: not capital cities, as the grids' Cities is apart.)
 		facts.world = not facts.bg and not facts.instance and not facts.city
-		facts.group = ns.InGroup() and true or false
+		-- (group: by event, ns.AddEventFact.)
 		facts.flagged = Want("flagged") and ns.IsPvPFlagged() and true or false
 		facts.mounted = ns.Flag(IsMounted()) and true or false
 		-- (On a flight path, whatever camera plays: cam_flight is only our Flight camera.)

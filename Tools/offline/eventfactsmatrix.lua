@@ -54,7 +54,9 @@ ns.OnTaxi = function() return false end
 local WORDS = {
 	{ "class", "warrior" },
 	{ "role", "tank", on = { "PLAYER_SPECIALIZATION_CHANGED", "player" } },
-	{ "group", "group", on = { "GROUP_ROSTER_UPDATE" } },
+	-- (group: also "fake", /cine debug group party: no game event, the
+	-- game's answer unchanged, ns.fakeGroup.)
+	{ "group", "group", on = { "GROUP_ROSTER_UPDATE" }, changes = { "none", "flip", "fake" } },
 	{ "flagged", "flagged", on = { "UNIT_FLAGS", "player" } },
 	{ "afk", "afk", on = { "PLAYER_FLAGS_CHANGED", "player" } },
 	{ "resting", "resting", on = { "PLAYER_UPDATE_RESTING" } },
@@ -80,9 +82,10 @@ for _, w in ipairs(WORDS) do
 		Matrix.Run({
 			name = "event-facts-" .. word,
 			fixed = { client = client, word = word },
-			dims = { { "start", { "off", "on" } }, { "change", { "none", "flip" } } },
+			dims = { { "start", { "off", "on" } }, { "change", w.changes or { "none", "flip" } } },
 			cell = function(c)
 				for _, other in ipairs(WORDS) do state[other[1]] = false end
+				ns.fakeGroup = nil
 				-- (A rule naming it: the word read, ns.factsUsed.)
 				assert(ns.CompileRule(field), "rule " .. field)
 				-- The game's answer as the cell starts, its event as it came.
@@ -96,6 +99,8 @@ for _, w in ipairs(WORDS) do
 				if c.change == "flip" and w.on then
 					state[word] = not state[word]
 					if state[word] then Fire(w.on) else Fire(w.off or w.on) end
+				elseif c.change == "fake" then
+					ns.fakeGroup = "party"
 				end
 				now = now + 0.6 -- (past the facts' hold, idle or not)
 				local after = Word(field)
@@ -107,7 +112,8 @@ for _, w in ipairs(WORDS) do
 				end
 				counting = nil
 				local later = Word(field)
-				local want = state[word] and "on" or "off"
+				local want = (state[word] or ns.fakeGroup ~= nil) and "on" or "off"
+				ns.fakeGroup = nil
 				return ("after=%s later=%s right=%s polled=%s"):format(after, later,
 					tostring(after == want and later == want), reads[word] > 0 and "yes" or "no")
 			end,
@@ -120,6 +126,8 @@ for _, w in ipairs(WORDS) do
 				-- (class: no event, never changes in a session: flip is none.)
 				{ "word=class start=off change=flip", "after=off later=off right=true polled=no" },
 				{ "word=class start=on change=flip", "after=on later=on right=true polled=no" },
+				-- (/cine debug group party: in a group, either way.)
+				{ "word=group change=fake", "after=on later=on right=true polled=no" },
 			},
 		})
 	end
