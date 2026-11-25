@@ -41,6 +41,11 @@ Test: Tools/offline/quietloopsmatrix.lua retail
 | quiet-loops | part=targetIcon page=off tick=on | work | none |
 | quiet-loops | part=damage page=off | work | none |
 | quiet-loops | part=roll page=off | work | none |
+| quiet-loops | part=itemEvent page=off | work | none |
+| quiet-loops | part=itemEvent page=on tick=off | work | none |
+
+(itemEvent, follow-up from the in-game gating test run 5, 2026-11-25: a bag or quest event woke the button's
+loop with Quest Vision off, 66 frames in a town; now asked for only while the button can show or still shows.)
 
 ## Expectations changed
 | File | Check | Was | Now | OK'd |

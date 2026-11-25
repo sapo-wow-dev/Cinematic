@@ -618,8 +618,14 @@ watcher:SetScript("OnEvent", function(self, event, _, _, _, spellID)
 	-- (On the next frame, once for a burst: the quest log and bags send
 	-- several at a time, and each refresh reads the log again.)
 	self.at = 0
-	self.anyway = true
-	ns.WakeFeatureLoop(self)
+	-- (The button's refresh asked for only while it can show or still shows: with
+	-- Quest Vision off, every bag and quest event in a town woke the loop for
+	-- nothing (run 5 of the in-game gating test: x66). The reads above stay: the
+	-- plates and tooltips use them with it off too. Audit 2026-11-25.)
+	if ns.db and (ns.QuestVisionSetting("questItemButton") or button:IsShown()) then
+		self.anyway = true
+		ns.WakeFeatureLoop(self)
+	end
 end)
 watcher.at = 0
 -- (Runs only while the button's switched on, still shows, or an event asked

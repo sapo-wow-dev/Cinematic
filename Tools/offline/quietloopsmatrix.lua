@@ -89,6 +89,16 @@ local PARTS = {
 		ns.SyncFeatureLoops()
 		return UpdateFrame("QuestItemButton.lua") ~= nil
 	end,
+	-- (A bag or quest event coming in: in a town they're constant. Run 5 of the
+	-- in-game gating test saw them wake the button's loop with Quest Vision off.)
+	itemEvent = function(c)
+		db.questItemButton = c.tick == "on"
+		local frame, update = UpdateFrame("QuestItemButton.lua")
+		if update then pcall(update, frame, 3) end
+		ns.SyncFeatureLoops()
+		Send(EventFrame("QuestItemButton.lua", "BAG_UPDATE_DELAYED"), "BAG_UPDATE_DELAYED")
+		return UpdateFrame("QuestItemButton.lua") ~= nil
+	end,
 	targetIcon = function(c)
 		db.targetQuestIcon = c.tick == "on"
 		if ns.RefreshTargetQuestIcon then pcall(ns.RefreshTargetQuestIcon) end
@@ -117,14 +127,15 @@ local PARTS = {
 		return historyReads + logged > 0
 	end,
 }
-local PAGES = { itemButton = "questVision", targetIcon = "questVision", damage = "damageVision", roll = "rollWindow" }
+local PAGES = { itemButton = "questVision", itemEvent = "questVision", targetIcon = "questVision", damage = "damageVision",
+	roll = "rollWindow" }
 
 local Matrix = dofile("Tools/offline/matrix.lua")
 Matrix.Run({
 	name = "quiet-loops",
 	fixed = { client = client },
 	dims = {
-		{ "part", { "itemButton", "targetIcon", "damage", "roll" } },
+		{ "part", { "itemButton", "itemEvent", "targetIcon", "damage", "roll" } },
 		{ "page", { "on", "off" } },
 		{ "tick", { "on", "off" } },
 	},
@@ -137,6 +148,7 @@ Matrix.Run({
 	pins = {
 		{ "", "none" },
 		{ "part=itemButton page=on tick=on", "work" },
+		{ "part=itemEvent page=on tick=on", "work" },
 		{ "part=targetIcon page=on tick=on", "work" },
 		{ "part=damage page=on", "work" },
 		{ "part=roll page=on", "work" },
