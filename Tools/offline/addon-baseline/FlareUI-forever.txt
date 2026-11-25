@@ -1,4 +1,4 @@
-# version 7.0.10
+# version 7.0.16
 EnableMouse(false or a variable) in FlareUI/EditModeOverlays.lua
 EnableMouse(false or a variable) in FlareUI/Modules/ActionBars.lua
 EnableMouse(false or a variable) in FlareUI/Modules/Bags.lua
@@ -50,6 +50,8 @@ frame FlareUIPadGroupWatch
 frame FlareUIPadTrackerWatch
 frame FlareUIQuestPick
 frame FlareUIReagentBackpackClick
+frame FlareUIReagentProbeSlot
+frame FlareUIReagentProbeSlot*
 frame FlareUIVehicleExit
 frame FlareUI_
 frame FlareUI_*
@@ -109,15 +111,19 @@ frame FlareUI_XPBar
 frame MerchantItem
 hooks ActionButtonDown
 hooks ActionButtonUp
+hooks C_ChatInfo:UncensorChatLine
 hooks ClassTrainerFrame_Update
 hooks Cluster:SetEditModeScale
 hooks Cluster:SetHeaderUnderneath
+hooks Cluster:SetIconScale
 hooks Cluster:SetRotateMinimap
 hooks Cluster:SetSize
 hooks Cluster:UpdateMinimapConfig
 hooks CompactRaidFrameManager_UpdateShown
+hooks CompactRaidGroup_InitializeForGroup
+hooks CompactUnitFrame_SetUpdateAllOnUpdate
+hooks CompactUnitFrame_UpdateUnitEvents
 hooks ConfirmLootRoll
-hooks ContainerFrame_GenerateFrame
 hooks EditModeManagerFrame:SelectSystem
 hooks FCFDock_SelectWindow
 hooks FCF_OpenTemporaryWindow
