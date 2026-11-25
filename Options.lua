@@ -10127,6 +10127,8 @@ local function CreateBubblesPanel()
 	offScreenStyle:SetPoint("LEFT", offScreen.Text or offScreen.text, "RIGHT", 16, 0)
 	Tooltip(offScreenStyle, L["Opens the Chat Bubble Style page: how off-screen bubbles look and where they show."])
 	offScreenStyle:SetScript("OnClick", function() ns.OpenOptions("Bubble Style") end)
+	-- (No Bubble Style page this session: Support/DaylightUI.lua.)
+	if ns.PageGone and ns.PageGone("Bubble Style") then offScreenStyle:Hide() end
 	local emotes = stack:Add(Check(content, "chatSpeechEmotes", L["Show emotes too"],
 		L["Shows emotes in the off-screen bubbles too, instead of in chat."]), "check")
 	GreyUnless(emotes, function(db) return db.chatPeek and db.chatHideBubbled and db.chatSpeechBehind end)

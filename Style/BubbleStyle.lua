@@ -10,6 +10,9 @@ local L = ns.L
 
 
 function ns.CreateBubbleStylePanel(kit)
+	-- (Not made while an addon draws the bubbles itself: DaylightUI's,
+	-- Support/DaylightUI.lua. No page, no icon, as Text on You on retail.)
+	if ns.PageGone and ns.PageGone("Bubble Style") then return end
 	local canvas, content = kit.CreateScrollPage()
 	local title = kit.Label(content, "GameFontNormalLarge", L["Chat Bubble Style"])
 	-- (The Chat icon's Bubble Style tab, 2026-11-16: its tabs over the title.)

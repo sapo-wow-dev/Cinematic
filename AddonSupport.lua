@@ -62,6 +62,26 @@ do
 	-- with its box changed since login ran its setup by the box as it is now,
 	-- our paths into it as it was. 2026-11-23, questiegatematrix.)
 	ns.AddonSupportOffAtLoad = OffAtLoad
+	-- Whether an addon will be loaded this session: loaded already, or on for
+	-- this character and loadable (asked as our pages are made, before it
+	-- loads; never runs its code). Its Addon Support box off: no.
+	function ns.AddonWillLoad(name)
+		if OffAtLoad(name) then return false end
+		if ns.AddonUp(name) then return true end
+		local addons = _G.C_AddOns
+		local enable = addons and addons.GetAddOnEnableState or _G.GetAddOnEnableState
+		local loadable = addons and addons.IsAddOnLoadable or _G.IsAddOnLoadable
+		if not (enable and loadable) then return false end
+		-- (No character first: with one, Forever reads the wrong state. Engine
+		-- rule forever.addons.enable-no-character. The older global: character first.)
+		local okState, state = pcall(enable, name)
+		if not okState or type(state) ~= "number" then
+			okState, state = pcall(enable, nil, name)
+		end
+		if not (okState and type(state) == "number" and state > 0) then return false end
+		local okLoad, can = pcall(loadable, name)
+		return okLoad and (can == true or can == 1) or false
+	end
 	function ns.AddonUp(name)
 		if OffAtLoad(name) then return false end
 		if up[name] then return true end
@@ -390,7 +410,46 @@ end
 -- over every conflict row, 2026-11-15. Picks and the addons' own switches
 -- are still asked each time: they can change at any moment.)
 local rowsBySwitch, rowsListed = {}, 0
+-- A Style page standing aside for good, no pick and no row (an addon that
+-- draws that thing itself, so ours can't show: DaylightUI's chat bubbles).
+-- fn() returns the addon's name while its own is on. Its page isn't shown
+-- then (ns.StylePageGone). One per switch.
+local styleYields, goneRows = {}, {}
+function ns.AddStyleYield(switchKey, fn)
+	styleYields[switchKey] = fn
+end
+local function YieldedForGood(switchKey)
+	local fn = styleYields[switchKey]
+	if not fn then return nil end
+	local ok, who = pcall(fn)
+	if not (ok and who) then return nil end
+	local row = goneRows[switchKey]
+	if not row or row.addon ~= who then
+		row = { addon = who, forGood = true, styleSwitch = switchKey }
+		goneRows[switchKey] = row
+	end
+	return row
+end
+ns.StylePageGone = YieldedForGood
+
+-- Settings pages left out this session, by name (when the page is made, at
+-- our load: before the other addon loads, so fn decides by ns.AddonWillLoad).
+-- Its hub icon, search, Show in tab and Style General row all go with it.
+local pagesGone = {}
+function ns.AddPageGone(page, fn)
+	pagesGone[page] = fn
+end
+function ns.PageGone(page)
+	local fn = pagesGone[page]
+	if not fn then return false end
+	local ok, gone = pcall(fn)
+	return ok and gone and true or false
+end
 function ns.StyleSwitchYielded(switchKey)
+	if styleYields[switchKey] then
+		local row = YieldedForGood(switchKey)
+		if row then return row end
+	end
 	local rows = ns.CONFLICTS
 	if rowsListed ~= #rows then
 		wipe(rowsBySwitch)

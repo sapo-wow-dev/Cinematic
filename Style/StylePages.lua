@@ -613,7 +613,8 @@ local SHOW_IN_TABS = {
 		{ "Show Advanced", "Chat", "What brings the hidden chat up, like new messages or typing." },
 		{ "Bubbles", "Chat bubbles", "Where chat bubbles show in CineMode." },
 		-- (back: its gear's page, not the first tab's: the bubbles' own, 2026-11-24)
-		{ "Bubble Style", "Bubble Style", "How chat bubbles look, and speech from behind you.", back = "Chat bubbles" },
+		{ "Bubble Style", "Bubble Style", "How chat bubbles look, and speech from behind you.", back = "Chat bubbles",
+			has = function() return not (ns.PageGone and ns.PageGone("Bubble Style")) end },
 	},
 	-- (The HUD page's Timers section (Trackers till 2026-11-18). Cooldown Manager and Swing Timer its
 	-- tabs till 2026-11-17, their own icons since; Breath Bar's parked then.)

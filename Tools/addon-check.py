@@ -59,6 +59,10 @@ EXTRA_PREFIXES = {
 # Names a Support file mentions that are built in ways a text search can't
 # find (left out of check 1): "<Support file>": {names}.
 NOT_CHECKED = {
+    # (Its party and raid frames' holders: its Group's name .. "Holder"
+    # (DaylightUI_UnitFrames/Group.lua), "DaylightUIParty" / "DaylightUIRaid".
+    # Seen made by the addon kit's rows stage, run qded2, 2026-11-25, v2.2.7.)
+    "DaylightUI": {"DaylightUIPartyHolder", "DaylightUIRaidHolder"},
     # (Its scroll areas: "BattleTextForever" .. def.label, the labels in its AREAS
     # table, Core.lua. Read from v1.29.0, 2026-11-22.)
     "BattleTextForever": {"BattleTextForeverIncoming", "BattleTextForeverHealing",

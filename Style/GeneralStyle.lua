@@ -513,7 +513,8 @@ function ns.CreateGeneralStylePanel(kit)
 	-- loot history, never set its defaults. Each band (group) a tab.)
 	local pages, sections = {}, {}
 	for _, page in ipairs(PAGES) do
-		if not page[3][1] or ns.DEFAULTS[page[3][1]] ~= nil then
+		-- (Nor one left out this session, ns.PageGone: Bubble Style under DaylightUI's bubbles.)
+		if (not page[3][1] or ns.DEFAULTS[page[3][1]] ~= nil) and not (ns.PageGone and ns.PageGone(page[2])) then
 			pages[#pages + 1] = page
 			if page.group or not sections[1] then sections[#sections + 1] = { name = page.group or "Interface", list = {} } end
 			local list = sections[#sections].list

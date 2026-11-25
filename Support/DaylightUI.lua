@@ -304,6 +304,19 @@ ns.WhenAddonLoads("DaylightUI_UnitFrames", function()
 	-- frame's): named here too, as a class without them never shows its area.
 	ns.FadeWithRow("target", "target", { "DaylightUIComboPoints" }, true, true)
 	named.DaylightUIComboPoints = true
+	-- Its party and raid frames: buttons its fade area hands out, made as a
+	-- group (or your companions) forms, after our area scan. Their holders,
+	-- named, on the Party and Raid rows (kit run qded2: 255 frames missed).
+	-- (The raid's group has no frame list of its own, its frames found by a
+	-- search: its holder's added as found. Kit run qb3b1: 192 missed.)
+	ns.FadeWithRow("party", "party", { "DaylightUIPartyHolder" }, true, true)
+	named.DaylightUIPartyHolder, named.DaylightUIRaidHolder = true, true
+	ns.AddScanner(function()
+		local holder = _G.DaylightUIRaidHolder
+		if type(holder) == "table" and ns.Reachable(holder) and not ns.IsFaded(holder) then
+			ns.AddFoundFrame(holder, "raidplayers", true, true)
+		end
+	end)
 end)
 
 -- Its Quality of Life part has its own version of some of Cinematic's
@@ -462,29 +475,45 @@ ns.WhenAddonLoads("DaylightUI_Chat", function()
 	end)
 end)
 
-ns.WhenAddonLoads("DaylightUI_Chat", function()
-	ns.AddConflict({ key = "style:bubbles", addon = LABEL, label = "Chat bubble look", group = "style", noBoth = true,
-		styleSwitch = "bubblesStyle",
-		about = "How chat bubbles look: the Interface hub's Chat Bubble Style page, or DaylightUI's bubbles",
-		theirs = function()
-			local dui = DUI()
-			return dui and dui.Get and dui:Get("Chat", "bubbles") == true or false
-		end,
-		ours = function() return ns.StyleOn("bubblesStyle") end,
-		hide = function()
-			local list = {}
-			local all = C_ChatBubbles and C_ChatBubbles.GetAllChatBubbles and C_ChatBubbles.GetAllChatBubbles()
-			for _, bubble in pairs(type(all) == "table" and all or {}) do
-				if type(bubble) == "table" and ns.Reachable(bubble) then
-					local frame = bubble:GetChildren()
-					if type(frame) == "table" and ns.Reachable(frame) then
-						list[#list + 1] = frame
-					end
+-- Its chat bubbles (DaylightUI_Chat/Bubbles.lua, v2.x): not a look put on
+-- the game's bubble but a copy of its own, a frame on UIParent drawn over
+-- each game bubble (its .balloon) while it's up, the game's bubble set to
+-- alpha 0 under it. Ours can't show there without fighting it at every
+-- line, so with its chat part on, the Chat Bubble Style page isn't made and
+-- its look stands aside for good (the user, 2026-11-25: no Conflicts row,
+-- page hidden). Decided once, as our pages are made, before it loads: by its
+-- chat part being on for this character (its bubbles are on by default).
+-- Where bubbles show (Chat bubbles, the game's settings) still works: its
+-- copies follow the game's bubbles. Its copies are left alone: unnamed and
+-- kept in its own list, found among UIParent's children while a bubble is
+-- up, and remembered.
+local bubbleCopies = setmetatable({}, { __mode = "k" })
+local looked = setmetatable({}, { __mode = "k" })
+local function BubbleCopies()
+	local bubbles = _G.C_ChatBubbles
+	local all = bubbles and bubbles.GetAllChatBubbles and bubbles.GetAllChatBubbles()
+	if type(all) == "table" and next(all) ~= nil then
+		for _, child in ipairs({ UIParent:GetChildren() }) do
+			if not looked[child] then
+				looked[child] = true
+				if ns.Reachable(child) and rawget(child, "balloon") ~= nil and rawget(child, "said") ~= nil then
+					bubbleCopies[child] = true
+					ns.LeaveAloneFrame(child)
 				end
 			end
-			return Shells(list)
-		end,
-		onPick = function() if ns.RefreshBubbleStyle then ns.RefreshBubbleStyle() end end })
+		end
+	end
+	return bubbleCopies
+end
+
+-- (Asked once, as this file loads: its enable state, nothing of its code.
+-- Without it, nothing's registered, so nothing here runs: noaddons.lua.)
+if ns.AddonWillLoad("DaylightUI_Chat") then
+	ns.AddPageGone("Bubble Style", function() return true end)
+	ns.AddStyleYield("bubblesStyle", function() return LABEL end)
+end
+ns.WhenAddonLoads("DaylightUI_Chat", function()
+	if ns.RefreshBubbleStyle then ns.RefreshBubbleStyle() end
 end)
 
 ns.WhenAddonLoads("DaylightUI_InfoPanel", function()
@@ -578,6 +607,13 @@ end)
 -- over its frames (unnamed: its Fade.revealOverlays).
 ns.WhenAddonLoads("DaylightUI", function()
 	ns.LeaveAlone({ "DaylightUIInstaller", "DaylightUIWelcomeHolder", "GameMenuFrame" })
+	-- (Windows and previews you open, and its error text in place of the
+	-- game's: its quest log, its settings' buff bar previews, its pages on the
+	-- game's world map. Kit run qded2.)
+	ns.LeaveAlone({ "DaylightUIQuestJournal", "DaylightUIBuffsPreview", "DaylightUIDebuffsPreview",
+		"DaylightUIErrorText", "WorldMapFrame" })
+	-- (Its test mode's box of sample tick boxes, /dui test: up only then. Kit run q79da.)
+	ns.LeaveAlone({ "DaylightUITestBox" })
 	ns.AddScanner(function()
 		local dui = DUI()
 		local ui = dui and dui.InstallerUI
@@ -593,25 +629,10 @@ ns.WhenAddonLoads("DaylightUI", function()
 	end)
 end)
 
--- Its chat bubbles (DaylightUI_Chat/Bubbles.lua): a frame on UIParent drawn
--- over each game bubble (its .balloon) while that bubble is up, so it goes
--- with the game's bubbles and is left alone. Unnamed and kept in its own
--- list: found among UIParent's children, only while a bubble is up.
+-- Its chat bubble copies (BubbleCopies, above) go with the game's bubbles:
+-- left alone (the Chat bubble look row holds them hidden with Ours).
 ns.WhenAddonLoads("DaylightUI_Chat", function()
-	local bubbles = _G.C_ChatBubbles
-	local seen = setmetatable({}, { __mode = "k" })
-	ns.AddScanner(function()
-		local all = bubbles and bubbles.GetAllChatBubbles and bubbles.GetAllChatBubbles()
-		if type(all) ~= "table" or next(all) == nil then return end
-		for _, child in ipairs({ UIParent:GetChildren() }) do
-			if not seen[child] then
-				seen[child] = true
-				if ns.Reachable(child) and rawget(child, "balloon") ~= nil and rawget(child, "said") ~= nil then
-					ns.LeaveAloneFrame(child)
-				end
-			end
-		end
-	end)
+	ns.AddScanner(BubbleCopies)
 end)
 
 -- The addon kit's expectations (Tools/addon-kit/diff.py): game frames it
