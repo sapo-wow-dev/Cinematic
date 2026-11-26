@@ -50,6 +50,10 @@ local BUILT_IN = {
 		-- (Read on retail 2026-11-20: the boss dragon round the portrait, the target of target under it.)
 		classification = { x = 121.7, y = -8.3, w = 79.2, h = 78.3 },
 		tot = { x = 104.2, y = 74.2, w = 119.2, h = 48.3, atlas = "UI-HUD-UnitFrame-TargetofTarget-PortraitOn" },
+		-- (The game's frame round the art, 232x100 with the art at its middle
+		-- (TargetFrame.xml): what its cast bar hangs off. Read places agree: the
+		-- portrait at the frame's top right -26,-19 is 129,3 here.)
+		frame = { x = -19, y = -16, w = 232, h = 100 },
 	},
 }
 BUILT_IN.FOCUS = BUILT_IN.TARGET
@@ -74,6 +78,48 @@ for role, entry in pairs(BUILT_IN.TOT) do BUILT_IN.PET[role] = entry end
 BUILT_IN.PET.power = { x = 42, y = 29.5, w = 77, h = 7, atlas = BUILT_IN.TOT.power.atlas }
 BUILT_IN.PARTY = BUILT_IN.TOT
 ns.UNIT_FRAME_RECIPES = BUILT_IN
+-- A boss frame's (Boss1TargetFrame..5), from the game's code, never read: one is
+-- up only in a boss fight. Forever's BossTargetFrameMixin:OnLoad after its
+-- Camelot TargetFrameMixin:OnLoad (Mainline and Camelot TargetFrame.lua): the
+-- small art with no portrait at the 232x100 frame's middle; health 84x10, its
+-- bottom right at the frame's LEFT +145,-6; mana 84x7 right under it; the
+-- strip's top right at -86,-32 off the frame's top right; the name 55 wide at
+-- the strip's top right -56,-1, centered; the level circle (Camelot shows it) at
+-- the frame's bottom right -13,+7, the skull on it; the bars' masks the party's
+-- at 40,-43 and 40,-52. No auras (maxBuffs 0), no portrait, no dragon (no
+-- showClassification). Sizes the atlases' own; the frame's units put on the
+-- art's corner here, as every recipe is.
+local BOSS_ART = "UI-HUD-UnitFrame-Target-Boss-Small-PortraitOff"
+local function AtlasSize(atlas, w, h)
+	local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
+	if type(info) == "table" and type(info.width) == "number" and info.width > 0 then return info.width, info.height end
+	return w, h
+end
+local function BossRecipe()
+	local aw, ah = AtlasSize(BOSS_ART, 172, 64)
+	local ox, oy = (232 - aw) / 2, (100 - ah) / 2
+	local function At(x, y, w, h, more)
+		local entry = { x = x - ox, y = y - oy, w = w, h = h }
+		for key, value in pairs(more or {}) do entry[key] = value end
+		return entry
+	end
+	local rw, rh = AtlasSize(BOSS_ART .. "-Type", 98, 18)
+	local cw, ch = AtlasSize("UI-HUD-UnitFrame-SmallCircle", 38, 38)
+	return {
+		frame = { x = -ox, y = -oy, w = 232, h = 100 },
+		art = { x = 0, y = 0, w = aw, h = ah, atlas = BOSS_ART },
+		portrait = { hidden = true },
+		health = At(61, 46, 84, 10, { atlas = BOSS_ART .. "-Bar-Health" }),
+		healthMask = At(40, 43, 128, 16, { atlas = "UI-HUD-UnitFrame-Party-PortraitOff-Bar-Health-Mask", atlasSize = true }),
+		power = At(61, 57, 84, 7, { atlas = BOSS_ART .. "-Bar-Mana" }),
+		powerMask = At(40, 52, 128, 16, { atlas = "UI-HUD-UnitFrame-Party-PortraitOff-Bar-Mana-Mask", atlasSize = true }),
+		reaction = At(146 - rw, 32, rw, rh, { atlas = BOSS_ART .. "-Type" }),
+		name = At(90, 33, 55, 12, { size = 10, justify = "CENTER" }),
+		circle = At(219 - cw, 93 - ch, cw, ch, { atlas = "UI-HUD-UnitFrame-SmallCircle" }),
+		level = At(219 - cw / 2 - 9.5, 93 - ch / 2 - 7.5, 19, 14, { size = 14, justify = "CENTER" }),
+		classification = { hidden = true },
+	}
+end
 -- Retail's own, over those (12.1.5, the Preview Match run of 2026-11-20): the
 -- target's and focus's level on the left of the name strip, no circle, the
 -- name after it, left. Their place is secret there most of the time (the
@@ -445,6 +491,7 @@ local function Kept(key)
 	return db[key]
 end
 function ns.UnitFrameRecipe(id)
+	if id == "BOSS" then return BossRecipe() end
 	if not FRAME_NAMES[id] then return nil end
 	local base = BuiltIn(id) or {}
 	local client = ns.isRetail and "retail" or "classic"

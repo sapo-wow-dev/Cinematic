@@ -1929,6 +1929,27 @@ for _, info in ipairs(BARS) do TAB_NAMES[info[1]] = info[2] end
 -- unit frames' page's. spec: page, title, intro, ids, default, tabs (the
 -- page's icon's tabs: ns.ShowInTabs' key), defaultName (Default's, where
 -- it isn't on this page).
+-- (The parts' box in a plate's own units, from its top-left: { left, right,
+-- top, bottom }, down counting up. nil while it isn't laid out.)
+local function PlateBox(plate, parts)
+	local pl, pt, ps = plate:GetLeft(), plate:GetTop(), plate:GetEffectiveScale()
+	if not (pl and pt and ps and ps > 0) then return nil end
+	local l, r, t, b
+	for _, part in pairs(parts) do
+		if type(part) == "table" and part.IsShown and part:IsShown() and part.GetLeft then
+			local rl, rr, rt, rb = part:GetLeft(), part:GetRight(), part:GetTop(), part:GetBottom()
+			if rl and rr and rt and rb then
+				local k = part:GetEffectiveScale() / ps
+				rl, rr, rt, rb = rl * k - pl, rr * k - pl, pt - rt * k, pt - rb * k
+				l, r = math.min(l or rl, rl), math.max(r or rr, rr)
+				t, b = math.min(t or rt, rt), math.max(b or rb, rb)
+			end
+		end
+	end
+	if not l then return nil end
+	return { l, r, t, b }
+end
+
 local function BuildCastPage(kit, spec)
 	local canvas, content = kit.CreateScrollPage()
 	local title = kit.Label(content, "GameFontNormalLarge", L[spec.title])
@@ -1982,11 +2003,12 @@ local function BuildCastPage(kit, spec)
 	-- (Spread over the scene as plates over units, each scaled with however
 	-- big the page makes the preview: in one row at one size they sat close
 	-- together at its top, the rest of it empty.)
-	-- (spec.slots: { row id, sample kind, which of SAMPLES } each, and spec.spots
-	-- their places, as parts of the preview's width and height. The unit
-	-- frames' page: the target's and a boss's, under their frames' bars; Your
-	-- Cast Bar's: yours alone, low in the middle, as the game has it (its own
-	-- tab since 2026-11-20, user: it isn't a unit frame's).)
+	-- (spec.slots: { row id, sample kind, which of SAMPLES } each; the plates'
+	-- page's places as parts of the preview's width and height (SPOTS), the
+	-- unit frames' pages' in a row (PlaceSamples). The unit frames' page: the
+	-- target's and a boss's, under their frames' bars; Your Cast Bar's: yours
+	-- alone, in the middle, as the game has it (its own tab since 2026-11-20,
+	-- user: it isn't a unit frame's).)
 	local units = spec.tabs == "units"
 	local SLOTS = spec.slots or { { "PLATE", "plate", 1 }, { "PLATE", "plate", 2 }, { "PLATE", "plate", 3 } }
 	local SPOTS = spec.spots or { { 0.24, 0.3 }, { 0.5, 0.58 }, { 0.76, 0.3 } }
@@ -2000,18 +2022,32 @@ local function BuildCastPage(kit, spec)
 		width, height = width or PREVIEW_W, height or PREVIEW_H
 		-- (Plates are as wide as the game's, about 206: the two up top at
 		-- the sides mustn't meet.)
-		local most = units and 1.6 or 0.5 * width / ns.PlateCastLayout().container
-		-- (A unit frame over its cast bar: as big as fits its share of the preview,
-		-- side by side and top to bottom, none on another.)
+		-- (A unit frame over its cast bar: side by side in a row, a gap between,
+		-- as big as the row fits the preview under its caption, none on another.
+		-- Until 2026-11-25 each had a share round a fixed spot, which let the
+		-- target's frame run into the boss's.)
 		if units then
-			for i, plate in ipairs(plates) do
-				local share = #plates > 1 and math.min(SPOTS[i][1], 1 - SPOTS[i][1]) * 2 * 0.92 or 0.9
-				local pw, ph = plate:GetWidth(), plate:GetHeight()
-				if pw and pw > 1 then most = math.min(most, width * share / pw) end
-				if ph and ph > 1 then most = math.min(most, (height - 20) * 0.94 / ph) end
+			local GAP, PAD, TOP = 16, 8, 20
+			local sumW, maxH = 0, 1
+			for _, plate in ipairs(plates) do
+				sumW = sumW + math.max(plate:GetWidth() or 0, 1)
+				maxH = math.max(maxH, plate:GetHeight() or 0)
 			end
+			local scale = math.min(1.6, (width - 2 * PAD - GAP * (#plates - 1)) / sumW, (height - TOP - PAD) / maxH)
+			scale = math.max(0.2, scale)
+			local x = (width - sumW * scale - GAP * (#plates - 1)) / 2
+			for _, plate in ipairs(plates) do
+				local pw, ph = math.max(plate:GetWidth() or 0, 1), plate:GetHeight() or 0
+				local y = TOP + (height - TOP - PAD - ph * scale) / 2
+				plate:SetScale(scale)
+				plate:ClearAllPoints()
+				plate:SetPoint("TOPLEFT", preview, "TOPLEFT", x / scale, -y / scale)
+				x = x + pw * scale + GAP
+			end
+			return
 		end
-		local scale = math.max(units and 0.4 or 0.7, math.min(1.6, width / 340, most))
+		local most = 0.5 * width / ns.PlateCastLayout().container
+		local scale = math.max(0.7, math.min(1.6, width / 340, most))
 		for i, plate in ipairs(plates) do
 			plate:SetScale(scale)
 			plate:ClearAllPoints()
@@ -2055,8 +2091,10 @@ local function BuildCastPage(kit, spec)
 		-- copied, or a theme's. The drawn bars over it only as a stand-in.)
 		if units and ns.MakeUnitFrameSample then
 			local frameId = slot[1] == "PLAYER" and "PLAYER" or "TARGET"
-			plate.unitFrame = ns.MakeUnitFrameSample(plate, frameId, slot[1] == "BOSS" and "BOSSCAST" or frameId,
-				slot[1] == "TARGET")
+			-- (No target of target: the game's common case, your target alone (user
+			-- 2026-11-25, its cast bar under its buffs). With one up the game moves
+			-- the bar under it, a case the preview needn't show.)
+			plate.unitFrame = ns.MakeUnitFrameSample(plate, frameId, slot[1] == "BOSS" and "BOSSCAST" or frameId, false)
 			plate.caption = plate:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 			plate.caption:SetText(SlotLabel(i, info))
 			plate.caption.searchSkip = true
@@ -2148,17 +2186,58 @@ local function BuildCastPage(kit, spec)
 			-- sample, its auras and target of target, by the icon's width.)
 			bar:SetWidth(barW)
 			local frame = unit or sample
-			if id == "BOSS" then
-				bar:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", -100, 17)
-			elseif id == "PLAYER" then
-				bar:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", -24, 12)
-			else
-				local tot = sample.tot and sample.tot:IsShown()
-				bar:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 43, tot and -46 or 5)
+			-- (Off the game's frame, 232x100 round its art (the recipe's frame), not
+			-- off the art: the game's offsets are the frame's. Our drawn frames: its
+			-- own edges. 2026-11-25: off the art the target's bar sat 16 too high.)
+			local box = unit and unit.copy and unit.copy.on and unit.copyRecipe and unit.copyRecipe.frame
+			local s = box and unit.copyScale or 1
+			local function FramePoint(point, x, y)
+				if not box then
+					bar:SetPoint(point, frame, point == "TOPRIGHT" and "BOTTOMRIGHT" or "BOTTOMLEFT", x, y)
+				elseif point == "TOPRIGHT" then
+					bar:SetPoint(point, frame, "TOPLEFT", (box.x + box.w + x) * s, -(box.y + box.h - y) * s)
+				else
+					bar:SetPoint(point, frame, "TOPLEFT", (box.x + x) * s, -(box.y + box.h - y) * s)
+				end
 			end
-			local frameH = frame:GetHeight() or 0
-			local below = math.max(sample:GetHeight() - frameH, 46) + AURA_ROOM + 24
-			plate:SetSize(math.max(sample:GetWidth(), 43 + barW), 14 + frameH + below)
+			-- (The aura row's bottom left: its lowest row's first icon.)
+			local lowest
+			for _, aura in ipairs(unit and unit.auras or {}) do
+				if aura:IsShown() and aura:GetBottom() and aura:GetLeft() then
+					if not lowest or aura:GetBottom() < lowest:GetBottom() - 0.5
+						or (math.abs(aura:GetBottom() - lowest:GetBottom()) <= 0.5 and aura:GetLeft() < lowest:GetLeft()) then
+						lowest = aura
+					end
+				end
+			end
+			local tot = sample.tot and sample.tot:IsShown()
+			if id == "BOSS" then
+				FramePoint("TOPRIGHT", -100, 17)
+			elseif id == "PLAYER" then
+				FramePoint("TOPRIGHT", -24, 12)
+			elseif lowest and not tot then
+				-- (TargetSpellBarMixin:AdjustPosition: buffs under the frame and no
+				-- target of target, the bar off the aura row's bottom left +18,-10.)
+				bar:SetPoint("TOPLEFT", lowest, "BOTTOMLEFT", 18 * s, -10 * s)
+			else
+				FramePoint("TOPLEFT", 43, tot and -46 or 5)
+			end
+			-- (The plate the size of the frame and its bar, measured: a boss's
+			-- bar juts out past its frame's left, so the frame moves right.)
+			local sw, sh = sample:GetWidth() or 0, sample:GetHeight() or 0
+			local hung = PlateBox(plate, { bar, bar.Text, bar.Icon, bar.Border, bar.TextBorder, bar.BorderShield })
+			if hung then
+				local shift = math.max(-hung[1], 0)
+				if shift > 0 then
+					sample:ClearAllPoints()
+					sample:SetPoint("TOPLEFT", plate, "TOPLEFT", shift, -14)
+				end
+				plate:SetSize(math.max(sw, hung[2]) + shift, math.max(14 + sh, hung[4]) + 4)
+			else
+				local frameH = frame:GetHeight() or 0
+				local below = math.max(sh - frameH, 46) + AURA_ROOM + 24
+				plate:SetSize(math.max(sw, 43 + barW), 14 + frameH + below)
+			end
 		end
 		ns.DressCastSkin(bar, framed and (id == "PLAYER" and "PLAYER" or "TARGET") or nil)
 	end
@@ -2551,7 +2630,10 @@ end
 function ns.CreateUnitCastStylePanel(kit)
 	BuildCastPage(kit, { page = "Unit Cast Style", title = "Cast Style", tabs = "units", switch = "unitCastStyle",
 		ids = { "TARGET", "BOSS" }, default = true,
-		slots = { { "TARGET", "unit", 2 }, { "BOSS", "boss", 3 } }, spots = { { 0.28, 0.45 }, { 0.72, 0.45 } },
+		-- (The target's alone for now, user 2026-11-25. The boss's (slot { "BOSS",
+		-- "boss", 3 }, the game's small boss frame: recipe BOSS) comes back once its
+		-- level circle's place is read off a real boss frame.)
+		slots = { { "TARGET", "unit", 2 } },
 		intro = L["How the unit frames' cast bars look: your target's, your focus's, and those of bosses and " ..
 		"arena enemies. Each row's These bars picks its look: the game's (the starting choice), the " ..
 		"Default row's, or its own, set in its Look panel. The Default row is the base look for every " ..
@@ -2565,7 +2647,7 @@ end
 function ns.CreatePlayerCastStylePanel(kit)
 	BuildCastPage(kit, { page = "Player Cast Style", title = "Your Cast Bar", tabs = "units", switch = "playerCastStyle",
 		ids = { "PLAYER" }, defaultName = L["Default's (Cast Bars)"],
-		slots = { { "PLAYER", "player", 1 } }, spots = { { 0.5, 0.55 } }, previewH = 110,
+		slots = { { "PLAYER", "player", 1 } }, previewH = 110,
 		intro = L["How your cast bar looks: the game's (the starting choice), the Default row's (on the Cast Bars " ..
 		"tab), the unit frame's, or its own, set in its Look panel. Changes show right away, here and " ..
 		"on your casts."] })

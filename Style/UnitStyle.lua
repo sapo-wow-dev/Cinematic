@@ -2929,9 +2929,12 @@ local SAMPLES = {
 		faces = { "Interface\\Icons\\Achievement_Leader_King_Varian_Wrynn", "Interface\\Icons\\INV_Misc_Head_Human_01" } },
 	TOT = { framed = { 360, -86, 36, 70 }, name = "Thrall", x = 372, y = -80, w = 70, class = "SHAMAN", health = 0.86, power = { 0, 0.55, 1 },
 		amount = 0.4, small = true, faces = THRALL, parent = "TARGET" },
-	-- (The Cast Bars page's boss, over its Boss & arena cast bar: the target's look.)
+	-- (The Cast Bars page's boss, over its Boss & arena cast bar: in the game's look
+	-- the game's boss frame (recipe BOSS: small, no portrait, no dragon). No auras:
+	-- the game's boss frames have none (BossTargetFrameMixin:OnLoad, maxBuffs and
+	-- maxDebuffs 0), and its cast bar hangs where they'd be.)
 	BOSSCAST = { framed = { 300, -22, 54, 104 }, name = "Onyxia", level = 63, x = 270, y = -30, w = 150, reaction = 2,
-		boss = true, auras = true, maxHealth = 1260000, maxPower = 100000,
+		recipe = "BOSS", boss = true, maxHealth = 1260000, maxPower = 100000,
 		health = 0.48, power = { 0, 0.55, 1 }, amount = 0.8, flip = true,
 		faces = { "Interface\\Icons\\Achievement_Boss_Onyxia", "Interface\\Icons\\INV_Misc_Head_Dragon_01" } },
 	-- (The focus's target of target, dressed by the same tab: the game has one under each.)
@@ -3045,8 +3048,9 @@ local function CopyBar(copy, bar, entry, maskEntry, fadeKey, view, Place, keepCo
 	CopyMask(copy, bar, maskEntry, Place)
 end
 local function CopyLook(unit, view, on)
+	-- (sample.recipe: another frame's recipe on this one, the Cast Bars page's boss.)
 	local recipe = on and COPIED[unit.id] and ns.UnitFrameCopyable and ns.UnitFrameCopyable()
-		and ns.UnitFrameRecipe and ns.UnitFrameRecipe(unit.id)
+		and ns.UnitFrameRecipe and ns.UnitFrameRecipe(unit.sample.recipe or unit.id)
 	if not (recipe and recipe.art and recipe.health) then
 		-- (Why, for the Preview Match test's log.)
 		unit.copyWhy = not on and "look not the game's" or not COPIED[unit.id] and "not copied"
@@ -3120,7 +3124,14 @@ local function CopyLook(unit, view, on)
 	copy.art:SetVertexColor(ring and ring[1] or 1, ring and ring[2] or 1, ring and ring[3] or 1)
 	for _, part in ipairs({ unit.box, unit.plate, unit.bridge, unit.rowShadow, unit.ring }) do part:Hide() end
 	-- (The face under the art, in its round hole, as the game draws it.)
-	Place(unit.portrait, recipe.portrait or recipe.art)
+	-- (None where the game has none: a boss frame's.)
+	local noFace = recipe.portrait and recipe.portrait.hidden
+	if noFace then
+		unit.portrait:Hide()
+		unit.face:Hide()
+	else
+		Place(unit.portrait, recipe.portrait or recipe.art)
+	end
 	unit.portrait:SetDrawLayer("BACKGROUND", 1)
 	unit.face:SetDrawLayer("BACKGROUND", 1)
 	local portraitMask = recipe.portraitMask
@@ -3961,6 +3972,13 @@ function ns.MakeUnitFrameSample(parent, id, key, withToT)
 		-- target of target. Measured once it's on the screen.)
 		local list = BlockParts(unit, unit.peers)
 		local box = BoxOf(stage, list)
+		-- (What juts out above or left of the frame, the boss dragon, moves it
+		-- in: the holder's corner is its block's, nothing drawn outside it.)
+		if box and (box[1] < 0 or box[2] < 0) then
+			unit:ClearAllPoints()
+			unit:SetPoint("TOPLEFT", stage, "TOPLEFT", -math.min(box[1], 0), math.min(box[2], 0))
+			box = BoxOf(stage, list)
+		end
 		if box then
 			self:SetSize(math.max(box[3], 1), math.max(box[4], 1))
 		else

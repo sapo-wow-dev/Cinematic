@@ -4,6 +4,8 @@
 --   1 sticky    each Style hub group one run of icons; every page's preview held at the top
 --               as it scrolls
 --   2 pages     every Style page opened, one shot each
+--   castpreview Unit Frames > Cast Bars' preview in the game's look and a theme's: the
+--               target's alone, every part inside, its bar off its buffs; a shot each
 --   3 editors   Nameplates, Layout, Names, Range Hint: the editor shows, a part picks, no
 --               Copy look / Paste / Hold to compare
 --   4 model     a setting set through the editor, Undo, Redo, Reset (frame) and its count
@@ -14,7 +16,8 @@ local _, ns = ...
 
 local TOUCHED = { "styleGeneral", "tooltipStyle", "tooltipTextSize", "tooltipEdge", "tooltipBack", "tooltipAlpha",
 	"tooltipOutline", "tooltipShadow", "tooltipBar", "tooltipNames", "tooltipBarHeight", "tooltipFont",
-	"tooltipBarTexture", "tooltipBarColor", "tooltipGradient", "tooltipGradDir", "tooltipBarGround" }
+	"tooltipBarTexture", "tooltipBarColor", "tooltipGradient", "tooltipGradDir", "tooltipBarGround",
+	"unitCastStyle", "ufStyle", "ufShape" }
 
 -- Every button clicked as you would (:Click()), and what it should do checked: the user,
 -- 2026-11-25: "you also need to test buttons ... clicking [Looks] again doesnt close it,
@@ -320,6 +323,93 @@ ns.TestKit.Define({
 					r:Sleep(0.3)
 					r:Shot(page)
 				end
+			end
+		end },
+		-- (Unit Frames > Cast Bars' preview, the user 2026-11-25: the target's frame ran into
+		-- the boss's, then bars sat on auras; now the target's alone, its bar where the game
+		-- hangs it. Each look: every drawn part inside, the bar clear of its buffs.)
+		{ key = "castpreview", title = "Cast Bars' preview: the target's alone, nothing on anything",
+			handsOff = true, run = function(r)
+			r:Set("styleGeneral", true)
+			r:Set("unitCastStyle", true)
+			local ok, err = r:Probe("open Unit Cast Style", ns.OpenOptions, "Unit Cast Style")
+			r:Verdict(ok, "Cast Bars page opened" .. (ok and "" or (" - " .. tostring(err))))
+			r:Sleep(0.5)
+			local preview = ns.castPreviews and ns.castPreviews["Unit Cast Style"]
+			r:Verdict(preview and preview:IsVisible(), "its preview on screen")
+			if not (preview and preview:IsVisible()) then return end
+			local function Box(f)
+				local k = f:GetEffectiveScale()
+				local left, right, top, bottom = f:GetLeft(), f:GetRight(), f:GetTop(), f:GetBottom()
+				if not (left and right and top and bottom) then return nil end
+				return left * k, right * k, top * k, bottom * k
+			end
+			local function Inside(a, b)
+				local al, ar, at, ab = Box(a)
+				local bl, br, bt, bb = Box(b)
+				if not (al and bl) then return true end
+				return al >= bl - 2 and ar <= br + 2 and at <= bt + 2 and ab >= bb - 2
+			end
+			local function Apart(a, b)
+				local al, ar, at, ab = Box(a)
+				local bl, br, bt, bb = Box(b)
+				if not (al and bl) then return true end
+				return ar <= bl + 1 or br <= al + 1 or ab >= bt - 1 or bb >= at - 1
+			end
+			local function Drawn(plate, bar)
+				local unit = plate.unitFrame.unit
+				local list = { bar, plate.unitFrame.tot, unit, unit.dragon }
+				for _, aura in ipairs(unit.auras or {}) do list[#list + 1] = aura end
+				local shown = {}
+				for _, part in pairs(list) do
+					if part and part:IsShown() and part:GetLeft() then shown[#shown + 1] = part end
+				end
+				return shown
+			end
+			for _, look in ipairs({ "game", "theme" }) do
+				r:Set("ufStyle", look == "theme")
+				r:Set("ufShape", look == "theme" and "circle" or "game")
+				ns.RefreshUnitStyle()
+				preview:Refresh()
+				r:Sleep(0.6)
+				local plates, samples = preview.plates, preview.samples
+				local outside, over = {}, 0
+				for i, plate in ipairs(plates) do
+					for j, part in ipairs(Drawn(plate, samples[i])) do
+						if not (Inside(part, plate) and Inside(part, preview)) then
+							outside[#outside + 1] = ("sample %d part %d"):format(i, j)
+						end
+					end
+				end
+				if #plates == 2 then
+					for _, a in ipairs(Drawn(plates[1], samples[1])) do
+						for _, b in ipairs(Drawn(plates[2], samples[2])) do
+							if not Apart(a, b) then over = over + 1 end
+						end
+					end
+				end
+				r:Verdict(#outside == 0, ("%s look: every drawn part inside its sample and the preview%s"):format(look,
+					#outside == 0 and "" or (" - out: " .. table.concat(outside, ", "))))
+				-- (The target's alone for now, user 2026-11-25.)
+				r:Verdict(#plates == 1 and over == 0, ("%s look: the target's sample alone (%d)"):format(look, #plates))
+				for i, plate in ipairs(plates) do
+					local l, rr, t, b = Box(plate)
+					if l then r:Log(("%s look: sample %d at %d..%d x %d..%d, scale %.2f"):format(look, i, l, rr, b, t,
+						plate:GetScale())) end
+				end
+				-- (Inside each sample too: the target's cast bar off its buffs, the boss's
+				-- off nothing but its own frame. Theme look 2026-11-25: Drain Life on Thrall.)
+				local target = plates[1] and plates[1].unitFrame
+				local onBuffs = 0
+				for _, aura in ipairs(target and target.unit.auras or {}) do
+					if aura:IsShown() and not Apart(aura, samples[1]) then onBuffs = onBuffs + 1 end
+				end
+				r:Verdict(onBuffs == 0, ("%s look: the target's cast bar clear of its buffs (%d on it)"):format(look, onBuffs))
+				r:Verdict(not (target and target.tot and target.tot:IsShown()), look .. " look: the target with no target of target")
+				local point, relative, relativePoint, x, y = samples[1]:GetPoint(1)
+				r:Log(("%s look: target bar %s>%s %.1f,%.1f on %s"):format(look, tostring(point), tostring(relativePoint),
+					x or 0, y or 0, relative == (target and target.unit) and "its frame" or "an aura or its bars"))
+				r:Shot("Cast Bars preview, " .. look .. " look", { behind = preview })
 			end
 		end },
 		-- (The editor's pages since the old pages came back, the user 2026-11-25: "i want the

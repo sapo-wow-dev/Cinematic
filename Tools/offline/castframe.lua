@@ -5,10 +5,9 @@
 -- bars over it looked nothing like the target frame), on the style lab's
 -- real-layout stand-in (Tools/style-lab/frames.lua):
 --   each sample has its unit frame, the game's frame copied in the game's look;
---   the cast bar hung off it where the game's code hangs it (target:
---   +43,-46 under its target of target; boss: -100,+17 off its right);
---   the two (target & focus, boss & arena) side by side, none on another,
---   all inside the preview;
+--   the cast bar hung off it where the game's code hangs it (target with
+--   no target of target: +18,-10 off its aura row); the target's alone
+--   (2026-11-25: no boss for now), all inside the preview;
 --   joined to the frame (a theme's look), the bar right under its bars;
 --   Your Cast Bar's: yours alone, no frame, unless joined.
 -- Says PASS or FAIL per check; exits 1 on any FAIL.
@@ -66,6 +65,44 @@ Check("the Cast Bars page's preview is there", preview ~= nil)
 if not preview then os.exit(1) end
 Shown(preview)
 
+-- (Everything a sample draws: its frame, auras, dragon, copy's art, target of
+-- target and cast bar.)
+local function Drawn(plate, bar)
+	local unit, list = plate.unitFrame.unit, { bar, plate.unitFrame.tot }
+	list[#list + 1] = unit
+	for _, aura in ipairs(unit.auras or {}) do list[#list + 1] = aura end
+	list[#list + 1] = unit.dragon
+	if unit.copy and unit.copy.on then
+		for _, texture in ipairs(unit.copy.textures) do list[#list + 1] = texture end
+	end
+	local shown = {}
+	for _, part in pairs(list) do if part and part:IsShown() and part:GetLeft() then shown[#shown + 1] = part end end
+	return shown
+end
+-- (At the page's own size too, user 2026-11-25: at 606x300 the target's frame
+-- and dragon ran into the boss's, its target of target over the boss's auras.)
+for _, size in ipairs({ { 480, 150 }, { 606, 300 }, { 760, 300 } }) do
+	preview:SetSize(size[1], size[2])
+	for _, look in ipairs({ "game", "theme" }) do
+		db.styleGeneral = true
+		db.ufStyle = look == "theme"
+		db.ufShape = look == "theme" and "circle" or "game"
+		preview:Refresh()
+		local tag = ("%dx%d %s look"):format(size[1], size[2], look)
+		local within = true
+		for i, plate in ipairs(preview.plates) do
+			for _, part in ipairs(Drawn(plate, preview.samples[i])) do
+				if not Inside(part, plate, 2) then within = false end
+				if not Inside(part, preview, 2) then within = false end
+			end
+		end
+		Check(tag .. ": every drawn part inside its sample and the preview", within)
+		-- (The target's alone for now, user 2026-11-25: no boss beside it.)
+		Check(tag .. ": the target's sample alone", #preview.plates == 1, #preview.plates)
+	end
+end
+preview:SetSize(480, 150)
+
 for _, look in ipairs({ "game", "theme" }) do
 	db.styleGeneral = true
 	db.ufStyle = look == "theme"
@@ -80,36 +117,59 @@ for _, look in ipairs({ "game", "theme" }) do
 					frame.unit.copyWhy)
 			end
 			local _, joinedTo = bar:GetPoint(1)
-			if joinedTo ~= frame.unit.power then
-				-- (Hung off its frame where the game's code hangs it (rule
-				-- all.castbar.target-boss-place): the target's TOPLEFT at the
-				-- frame's BOTTOMLEFT +43, -46 with a target of target up; a
-				-- boss's TOPRIGHT at its BOTTOMRIGHT -100, +17.)
+			local unit = frame.unit
+			if joinedTo ~= unit.power then
+				-- (Hung where the game's code hangs it (rule all.castbar.target-boss-place):
+				-- the target, no target of target, buffs under it: its TOPLEFT off the
+				-- aura row's BOTTOMLEFT +18,-10; a boss's TOPRIGHT off its 232x100
+				-- frame's BOTTOMRIGHT -100,+17, that frame round the art (the recipe's).)
 				local point, relative, relativePoint, x, y = bar:GetPoint(1)
-				local got = ("%s>%s %s,%s"):format(tostring(point), tostring(relativePoint), tostring(x), tostring(y))
-				local want = i == 1 and "TOPLEFT>BOTTOMLEFT 43,-46" or "TOPRIGHT>BOTTOMRIGHT -100,17"
-				Check(("%s look, sample %d: the cast bar where the game hangs it"):format(look, i),
-					relative == frame.unit and got == want, got)
+				local got = ("%s>%s %.1f,%.1f"):format(tostring(point), tostring(relativePoint), x or 0, y or 0)
+				local box = unit.copy and unit.copy.on and unit.copyRecipe and unit.copyRecipe.frame
+				local s = box and unit.copyScale or 1
+				local want, onIt
+				if i == 1 then
+					want = ("TOPLEFT>BOTTOMLEFT %.1f,%.1f"):format(18 * s, -10 * s)
+					for _, aura in ipairs(unit.auras or {}) do if aura == relative then onIt = true end end
+				elseif box then
+					want = ("TOPRIGHT>TOPLEFT %.1f,%.1f"):format((box.x + box.w - 100) * s, -(box.y + box.h - 17) * s)
+					onIt = relative == unit
+				else
+					want = "TOPRIGHT>BOTTOMRIGHT -100.0,17.0"
+					onIt = relative == unit
+				end
+				Check(("%s look, sample %d: the cast bar where the game hangs it"):format(look, i), onIt and got == want,
+					got .. " want " .. want)
 			end
 			Check(("%s look, sample %d: all inside the preview"):format(look, i), Inside(plate, preview, 2))
-			local unit = frame.unit
 			local shown = 0
 			for _, aura in ipairs(unit.auras or {}) do if aura:IsShown() then shown = shown + 1 end end
-			Check(("%s look, sample %d: a row of buffs and debuffs"):format(look, i), shown == 4, shown)
+			-- (The target's: a row of buffs and debuffs. The boss's none, as the
+			-- game's boss frames (maxBuffs, maxDebuffs 0), user 2026-11-25: its
+			-- cast bar sat on them.)
+			Check(("%s look, sample %d: %s"):format(look, i, i == 1 and "a row of buffs and debuffs" or "no auras, as a boss frame"),
+				shown == (i == 1 and 4 or 0), shown)
 			Check(("%s look, sample %d: a boss's level a skull"):format(look, i), unit.skull and unit.skull:IsShown()
 				and unit.badge.text:GetAlpha() == 0)
-			if look == "game" then
-				Check(("game look, sample %d: the boss dragon round its portrait"):format(i), unit.dragon and unit.dragon:IsShown())
+			if look == "game" and i == 1 then
+				Check("game look, the target: the boss dragon round its portrait", unit.dragon and unit.dragon:IsShown())
+			elseif look == "game" then
+				-- (The game's boss frame (BossTargetFrameMixin:OnLoad): its small art,
+				-- no portrait, no dragon (no showClassification).)
+				Check("game look, the boss: the game's small boss frame art",
+					unit.copy.art:GetAtlas() == "UI-HUD-UnitFrame-Target-Boss-Small-PortraitOff", unit.copy.art:GetAtlas())
+				Check("game look, the boss: no portrait", not unit.face:IsShown() and not unit.portrait:IsShown())
+				Check("game look, the boss: no dragon", not (unit.dragon and unit.dragon:IsShown()))
 			end
 			if i == 1 then
-				local tot = frame.tot
-				Check(("%s look: the target's target of target, hung off it"):format(look), tot and tot:IsShown() and tot.hungOn == unit)
-				Check(("%s look: the target of target inside the frame's size"):format(look), tot and Inside(tot, frame, 2))
+				-- (No target of target: the game's common case, user 2026-11-25.)
+				Check(("%s look: the target with no target of target"):format(look), not (frame.tot and frame.tot:IsShown()))
+				-- (The cast bar under the buffs, none on it.)
 				local clear = true
 				for _, aura in ipairs(unit.auras or {}) do
-					if aura:IsShown() and tot and not Apart(aura, tot) then clear = false end
+					if aura:IsShown() and not Apart(aura, bar) then clear = false end
 				end
-				Check(("%s look: the target of target clear of the target's buffs"):format(look), clear)
+				Check(("%s look: the target's cast bar clear of its buffs"):format(look), clear)
 			end
 		end
 	end
