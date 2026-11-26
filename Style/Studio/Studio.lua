@@ -1013,7 +1013,9 @@ function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 		-- (A dim line under the settings while there's no step to undo; side by the preview, the
 		-- settings on a box a shade lighter than the panel, edged: on the panel's own grey they
 		-- didn't stand apart, the user 2026-11-25 "no background difference?".)
-		if side then
+		-- (opts.free too, a Smart row's drawer: its rectangle left open there, the user 2026-11-26
+		-- "finish this rectangle")
+		if side or opts.free then
 			local box = holder:CreateTexture(nil, "BACKGROUND", nil, -6)
 			box:SetPoint("TOPLEFT", holder, "TOPLEFT", -8, 6)
 			box:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 6, -8)
@@ -1049,8 +1051,8 @@ function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 		self.undoB:SetEnabled(Studio.CanUndo() ~= nil)
 		self.redoB:SetEnabled(Studio.CanRedo() ~= nil)
 		if (self.f.pickers or self.pickers) then
-			self.undoB:SetShown(Studio.CanUndo() ~= nil)
-			self.redoB:SetShown(Studio.CanRedo() ~= nil)
+			self.undoB:Hide()
+			self.redoB:Hide()
 			self.looksB:Hide()
 			self.resetB:Hide()
 		else
@@ -1058,10 +1060,15 @@ function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 		end
 		self:FlowBar()
 		if (self.f.pickers or self.pickers) then
-			local any = Studio.CanUndo() ~= nil or Studio.CanRedo() ~= nil or self.testB ~= nil
+			-- (No Undo or Redo here: each setting's x puts it back, the user 2026-11-26 "get rid of undo,
+			-- we have the X". Nor the "Nothing changed here" line that stood in for them. A Test button
+			-- kept.)
+			local any = self.testB ~= nil
 			bar:SetShown(any)
-			if self.idle then self.idle:SetShown(not any) end
-			holder:SetHeight(self.body.height + (any and (self.barHeight + 10) or 28))
+			self.undoB:Hide()
+			self.redoB:Hide()
+			if self.idle then self.idle:Hide() end
+			holder:SetHeight(self.body.height + (any and (self.barHeight + 10) or 4))
 		else
 			holder:SetHeight(self.barHeight + 12 + self.body.height)
 		end

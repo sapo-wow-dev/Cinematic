@@ -187,9 +187,12 @@ for _, info in ipairs(BARS) do
 	if id ~= "PLATE" then DEFAULTS["plateCastOn_" .. id] = false end
 	if id == "PLAYER" or id == "TARGET" then DEFAULTS["plateCastFrame_" .. id] = false end -- (the unit frame's look: FrameLooked)
 	for _, key in ipairs(BAR_KEYS) do
-		DEFAULTS[key .. "_" .. id] = DEFAULTS[key]
+		-- (The nameplates': no default of their own, empty means Default's: View.)
+		if id ~= "PLATE" then DEFAULTS[key .. "_" .. id] = DEFAULTS[key] end
 		local entry = ns.SHARED_STYLE[key]
-		if entry then
+		-- (Not the nameplates': each of theirs follows Default's till set (View); shared, a theme
+		-- picked wrote every one of them, set them all, and the following stopped. 2026-11-26.)
+		if entry and id ~= "PLATE" then
 			ns.SHARED_STYLE[key .. "_" .. id] = entry.follows
 				and { kind = entry.kind, follows = entry.follows .. "_" .. id } or entry
 		end
@@ -255,6 +258,14 @@ local function View(id)
 			if FRAME_LOOK[key] and FrameLooked(id, db) then
 				local value = FRAME_LOOK[key](ns.UnitFrameLook(id))
 				if value ~= nil then return value end
+			end
+			-- (The nameplates': each setting its own where set, else Default's, the user 2026-11-25
+			-- ("it locks everything"). The other kinds: all their own or all Default's, as before.)
+			if id == "PLATE" and OWN_KEY[key] and db and ns.StyleOn(SwitchFor(id)) then
+				local mine = db[key .. "_PLATE"]
+				-- ("general" of their own: General's, as Default's goes there too)
+				if mine ~= nil and not (ns.IsGeneralStyle and ns.IsGeneralStyle(mine)) then return look[key .. "_PLATE"] end
+				return look[key]
 			end
 			if id and OWN_KEY[key] and db and ns.StyleOn(SwitchFor(id)) and db["plateCastOwn_" .. id] then
 				return look[key .. "_" .. id]
@@ -2012,6 +2023,7 @@ local function BuildCastPage(kit, spec)
 	ns.StyleScene(preview, 0.6, 0.8) -- (StylePages.lua; Nameplate Style's tabs too, not black: the user 2026-11-25)
 	if mock then
 		caption:Hide()
+		if ns.SoftEdge then ns.SoftEdge(preview) end -- (a thin soft line round it, the user 2026-11-26)
 		-- (No scene button on its stage: it sat on the Preview list, the user 2026-11-25 "hide scenic
 		-- button". The Default tab's has none either.)
 		if preview.backButton then preview.backButton:Hide() end
@@ -2633,9 +2645,12 @@ local function BuildCastPage(kit, spec)
 				preview.minHeight = nil
 				preview.samples = { castBar } -- (the editor's parts: its bar, icon and spell name)
 				preview.lookPreview = inner -- (the tests read it)
-				ns.PlatePreviewFit(inner, PREVIEW_W, preview:GetHeight() or 170, inner.plateLift or 38)
+				-- (Popped out: fitted to the window's own height and width, as the Default tab's.)
+				inner.fitToHeight = ns.StylePreviewIsPopped and ns.StylePreviewIsPopped(preview) or nil
+				local w = inner.fitToHeight and preview:GetWidth() or PREVIEW_W
+				ns.PlatePreviewFit(inner, w, preview:GetHeight() or 170, inner.plateLift or 38)
 				if ns.StylePlateCast then ns.StylePlateCast(inner.gamePlate) end
-				if inner.fitHeight and math.abs(inner.fitHeight - (preview.fixedHeight or 0)) > 1.5 then -- (not for a pixel: run q85bc)
+				if not inner.fitToHeight and inner.fitHeight and math.abs(inner.fitHeight - (preview.fixedHeight or 0)) > 1.5 then -- (not for a pixel: run q85bc)
 					preview.fixedHeight = inner.fitHeight
 					if ns.FitStylePreview then C_Timer.After(0, function() ns.FitStylePreview(preview) end) end
 				end

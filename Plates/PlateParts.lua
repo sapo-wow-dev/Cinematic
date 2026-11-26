@@ -2183,11 +2183,16 @@ function ns.PlateKinds.Unit(unit)
 end
 ns.PlateUnitKind = ns.PlateKinds.Unit
 -- A kind's color (nil: the game's). kind: a unit's, or given (the preview's sample).
-function ns.PlateKinds.Colour(unit, kind)
+-- (class: a preview's player with no unit, its class given: PlateRowLook.lua's samples.)
+function ns.PlateKinds.Colour(unit, kind, givenClass)
 	kind = kind or ns.PlateKinds.Unit(unit)
 	local key = "plateKindColor_" .. kind
 	local how = Style(key) or "game"
 	if how == "class" then
+		if givenClass and RAID_CLASS_COLORS and RAID_CLASS_COLORS[givenClass] then
+			local c = RAID_CLASS_COLORS[givenClass]
+			return c.r, c.g, c.b
+		end
 		local ok, _, class = pcall(UnitClass, unit or "")
 		local colour = ok and Known(class) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
 		if colour then return colour.r, colour.g, colour.b end
@@ -2203,9 +2208,9 @@ function ns.PlateKinds.Colour(unit, kind)
 	return nil
 end
 ns.PlateKindColour = ns.PlateKinds.Colour
-function ns.PlateKinds.Name(unit, kind)
+function ns.PlateKinds.Name(unit, kind, givenClass)
 	local how = Style("plateNameColor") or "game"
-	if how == "same" then return ns.PlateKinds.Colour(unit, kind) end
+	if how == "same" then return ns.PlateKinds.Colour(unit, kind, givenClass) end
 	if how == "custom" then return Style("plateNameColorR") or 1, Style("plateNameColorG") or 1, Style("plateNameColorB") or 1 end
 	return nil
 end

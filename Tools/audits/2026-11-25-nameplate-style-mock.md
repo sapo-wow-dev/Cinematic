@@ -31,6 +31,20 @@ Base: HEAD (b53755f) while staged
   Shown is on the Layout tab. Plates ease at CineMode's fade times (Combat fade in time in fights, else Fade in
   time). The Show in row is on the Nameplates page's Style tab.
 
+## Later the same session (2026-11-26)
+- Cast Bars (the nameplates'): no Look from; each setting follows the Cast Style tab's Default row till
+  set, then it's theirs (PlateCastStyle.lua View, CombatBand.lua PlateField). castPlateFollowsV1 clears
+  their copies where Look from wasn't "Its own look" (they looked as Default anyway: no plate changes)
+  and drops "Unit frames'" game look (plateCastGameAs_PLATE): those few plates go to Default's look.
+  Their keys have no defaults or theme entries now (themes style Default; the nameplates follow).
+- Undo/Redo gone from the four tabs (each setting's x puts it back).
+- Layout: the same previewer and fitting as the other tabs; guides are lines behind the plate crossing
+  at its anchor; the status line short ("Anchor is 20 right of unit.").
+- Preview list: Enemy player (a Warrior) and Friendly player (a Paladin) to see the player colors.
+- A part set Hidden in Layout leaves the preview too.
+- Smart rows: a drag grip in place of the arrows; their preview smaller (150), pops out to a window.
+- Switches: the CineMode page's pill on every page title and these tabs (no On/Off words).
+
 ## Who relies on the old behavior
 - Players: rows with Plate color "class"/"reaction" keep them (still listed while picked). Rows not Custom with Look
   settings: those were unused; rowLookFollowsV1 clears them, so no plate changes. Change time: anyone who moved it
@@ -66,6 +80,10 @@ Test: Tools/offline/platekindcolors.lua (forever and retail in one run)
 | Dev/PlateMatchTest.lua, Tools/offline/platematch.lua | stylepage: lists shown; the editor's place; skips | 2 lists; right under the preview; 16 skips | 1 list; right of the preview (skipped offline); 17 skips | "OK + requeue" (2026-11-25) |
 | Tools/offline/findrankmatrix.lua (forever, retail) | query=nameplate_color top hit | Nameplates [Nameplates] (page) | Color [Nameplate Style] | "OK + requeue" (2026-11-25) |
 | Tools/offline/gameplate.lua | the Default stage's height and the plate in it | kept 210 tall (minHeight), what shows in its middle (54.49 / 63.73) | as tall as what shows (fitHeight), the plate as big as the 268 stage allows with its level box (scale ≥ 0.9), what shows inside it | "OK" (2026-11-25, after "visually not good") |
+| Tools/offline/gameplate.lua | the stage's height | as tall as what shows | the tabs' one height, ns.PLATE_STAGE_H (230), debuff room kept | "i think the previewer needs to be taller", "why arent they the same size" (2026-11-25) |
+| Dev/PlateMatchTest.lua, Tools/offline/platematch.lua | stylepage: the plate's size | drawn bigger (scale > 1) | as big as the stage allows (>= 0.85), moved over only to keep a part inside | "why arent they the same size" (2026-11-25) |
+| Dev/PlateMatchTest.lua | layoutpage: the preview's lists | Unit list for All plates, State list, Scene | the one Preview list, a kind's without its units | "why dont they use the 1 dropdown?" (2026-11-25) |
+| Dev/PlateMatchTest.lua | layoutpage: no guide on a part of the plate | every guide | their names, the joining line and the status only; the lines behind the plate, across and down | "lines behind the plate and cast bar that show its anchor point" (2026-11-25) |
 | LazyPageDefaults.lua | tabOn:Nameplates:PlateStyleShow | none | true, under handlePlates (the new Style tab) | "OK + requeue" (2026-11-25) |
 
 ## Risk

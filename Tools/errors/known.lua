@@ -729,6 +729,25 @@ error: Interface/AddOns/Questie/Modules/QuestieInit.lua:428: attempt to call a n
     source = "test queue qb32c (/cine debug stylestudio mockplates), Forever, 2026-11-25 19:37",
   },
   {
+    id = "studio-list-atlas-usage",
+    status = "fixed",
+    title = "Nameplate Style's Theme list: an option's atlas was true (a yes/no), SetAtlas refused it (Controls.lua Fill)",
+    match = { all = { "SetAtlas", "Controls.lua" } },
+    why = {
+      call = "row.sample:SetAtlas(o.atlas) in the Studio list's Fill (and the closed picker's, the tiles')",
+      caller = "the Theme tiles/list (Style/Studio/Frames/Nameplates.lua): entry.atlas from ns.StyleTexturePath's second return",
+      path = "StyleTexturePath gives (path, isAtlas, ...): isAtlas (true) stored as the atlas name -> SetAtlas(true) -> Usage error each time the list drew",
+      rule = "a multi-return's second value isn't the first's kind: read what each return is",
+      pattern = "taking a flag return for the value it flags",
+    },
+    dont = "Don't store StyleTexturePath's second return as an atlas name: the path is the name when it's true.",
+    fix = "2026-11-26: the Theme options take the path as their atlas when it's one; Controls.lua's SetSample sets an atlas only when it's a name the game has, else the file, else a plain swatch.",
+    seen = { "2026-11-26" },
+    example = [==[Texture:SetAtlas(): Usage: ("atlasName"[, useAtlasSize, filterMode, resetTexCoords, wrapModeHorizontal, wrapModeVertical])
+[CinematicDev/Style/Studio/Controls.lua]:353: in function 'Fill']==],
+    source = "the user's /cine log, 2026-11-26 07:52",
+  },
+  {
     id = "studio-panel-anchor-loop",
     status = "fixed",
     title = "Nameplate Style's tabs: the framed panel's bottom hung from the settings column, which hangs from the panel (Studio.lua:1071, SetPoint dependent region)",

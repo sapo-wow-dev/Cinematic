@@ -245,8 +245,10 @@ for _, withDebuffs in ipairs({ false, true }) do
 	local fit = inner.fitHeight
 	Check(("the plate as big as the stage allows (debuffs %s)"):format(withDebuffs and "on" or "off"), s >= 0.9,
 		tostring(s))
-	Check(("the stage only as tall as what shows (debuffs %s)"):format(withDebuffs and "on" or "off"),
-		fit ~= nil and fit < 210 and fit > lift + 20, tostring(fit))
+	-- (Later the same day: one height on every tab, room kept for debuffs, the user "the
+	-- previewer needs to be taller" and "why arent they the same size".)
+	Check(("the stage the tabs' one height (debuffs %s)"):format(withDebuffs and "on" or "off"),
+		fit ~= nil and fit == ns.PLATE_STAGE_H, tostring(fit))
 	-- (and what shows inside it: its bottom over the Preview list, its top under the stage's)
 	local _, nameTop = ns.PlatePreviewSpan(inner, inner.gamePlate.gameCopy.name)
 	local top = nameTop and (inner.gameLift or 0) + nameTop * s

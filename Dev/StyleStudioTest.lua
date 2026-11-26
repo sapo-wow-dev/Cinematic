@@ -501,6 +501,13 @@ ns.TestKit.Define({
 			r:Verdict(host ~= nil, "its editor shows")
 			if not host then return end
 			local preview = host.preview
+			-- (Docked to start: popping out is kept account-wide, and a window left out from play put
+			-- every place check off, run q4a79. Put back as it was at the end.)
+			local wasOut = ns.StylePreviewIsPopped and ns.StylePreviewIsPopped(preview)
+			if wasOut and preview.popButton then
+				preview.popButton:Click()
+				r:Sleep(0.6)
+			end
 			local pl, hl = preview and preview:GetRight(), host.holder:GetLeft()
 			r:Verdict(pl and hl and hl >= pl - 1, ("the settings right of the preview (preview right %s, settings left %s)"):format(
 				tostring(pl and math.floor(pl)), tostring(hl and math.floor(hl))))
@@ -607,13 +614,91 @@ ns.TestKit.Define({
 			-- (The settings on a box of their own, a shade off the panel: the user 2026-11-25.)
 			r:Verdict(host.box and host.box:IsVisible() and host.box:GetRight() <= (tabPanel and tabPanel:GetRight() or 0) - 1,
 				"the settings on a box of their own, inside the panel")
-			local resetB = canvas and canvas.resetButton
-			r:Verdict(not (resetB and resetB:IsShown()), "no Reset page")
+			-- (Reset page there, as every page's: the user 2026-11-25 "RESET PAGE MISSING".)
+			local hubReset
+			for _, f2 in ipairs({ canvas and canvas:GetParent() or false }) do
+				for _ = 1, 4 do
+					if not f2 then break end
+					for _, kid in ipairs({ f2:GetChildren() }) do
+						if kid.GetText and kid:GetText() == ns.L["Reset page"] and kid:IsVisible() then hubReset = kid end
+					end
+					f2 = f2:GetParent()
+				end
+			end
+			r:Verdict(hubReset ~= nil, "Reset page shown")
 			local lp = preview and preview.lookPreview
 			r:Verdict(not (lp and lp.sceneButton and lp.sceneButton:IsShown()), "no Scene button on the stage")
 			-- (Not black: every preview's backdrop, the user 2026-11-25 "black background....")
 			r:Verdict(lp and lp.styleScene and lp.styleScene:IsShown(), "the stage on every preview's backdrop, not black")
 			Steady("Default", preview, GamePlateOf(preview and preview.lookPreview))
+			-- (Aggro ticked: what shows, by your threat setting's bits, the user 2026-11-25 "aggro not
+			-- doing anything".)
+			local lpv = preview and preview.lookPreview
+			local gcopy = lpv and lpv.gamePlate and lpv.gamePlate.gameCopy
+			if gcopy and ns.TogglePlatePreviewState then
+				local hb = gcopy.HealthBarsContainer.healthBar
+				local r0, g0, b0 = hb:GetStatusBarColor()
+				if not ns.PlatePreviewStates(lpv).aggro then ns.TogglePlatePreviewState("aggro", lpv) end
+				preview:Refresh()
+				r:Sleep(0.6)
+				local r1, g1, b1 = hb:GetStatusBarColor()
+				local registry, constants = _G.CVarCallbackRegistry, _G.NamePlateConstants
+				local td = Enum and Enum.NamePlateThreatDisplay
+				local function Bit(w)
+					local ok, on = pcall(function() return registry:GetCVarBitfieldIndex(constants.THREAT_DISPLAY_CVAR, td[w]) end)
+					return ok and tostring(on) or "?"
+				end
+				local glow = gcopy.aggroHighlight and gcopy.aggroHighlight:IsVisible()
+				local flash = gcopy.aggroFlash and gcopy.aggroFlash:IsVisible()
+				r:Log(("aggro: threat bits flash %s progressive %s bar %s; glow %s flash %s; bar %.2f,%.2f,%.2f -> %.2f,%.2f,%.2f")
+					:format(Bit("Flash"), Bit("Progressive"), Bit("HealthBarColor"), tostring(glow), tostring(flash),
+					r0, g0, b0, r1, g1, b1))
+				local changed = glow or flash or math.abs(r1 - r0) + math.abs(g1 - g0) + math.abs(b1 - b0) > 0.05
+				-- (Your threat display all off: the game shows nothing for aggro, nor does the preview,
+				-- run q4a79.)
+				if Bit("Flash") == "false" and Bit("Progressive") == "false" and Bit("HealthBarColor") == "false" then
+					r:Skip("your threat display is off: the game shows nothing for aggro (nothing changed: " .. tostring(not changed) .. ")")
+				else
+					r:Verdict(changed, "Default: Aggro ticked shows on the preview's plate (see the aggro line)")
+				end
+				r:Shot("Nameplate Style, Aggro ticked")
+				ns.TogglePlatePreviewState("aggro", lpv)
+				preview:Refresh()
+				r:Sleep(0.3)
+			end
+			-- (Popped out: the plate fits the window, nothing off its top, the user 2026-11-25.)
+			if preview and preview.popButton then
+				if not ns.StylePreviewIsPopped(preview) then preview.popButton:Click() end
+				r:Sleep(0.8)
+				r:Verdict(ns.StylePreviewIsPopped(preview), "Default: the preview popped out for the check")
+				local copy2 = lpv and lpv.gamePlate and lpv.gamePlate.gameCopy
+				-- (its highest part: the name, or its debuffs over it when they show)
+				local nameTop
+				for _, part in ipairs({ copy2 and copy2.name or false, copy2 and copy2.AurasFrame and copy2.AurasFrame.DebuffListFrame or false }) do
+					if part and part:IsVisible() and part:GetTop() then
+						local t = part:GetTop() * part:GetEffectiveScale()
+						nameTop = nameTop and math.max(nameTop, t) or t
+					end
+				end
+				local pTop = preview:GetTop() and preview:GetTop() * preview:GetEffectiveScale()
+				r:Verdict(nameTop and pTop and nameTop <= pTop - 2, ("Default popped out: the plate inside the window (name top %s, window top %s)")
+					:format(tostring(nameTop and math.floor(nameTop)), tostring(pTop and math.floor(pTop))))
+				r:Shot("Nameplate Style, popped out")
+				if ns.StylePreviewIsPopped(preview) then preview.popButton:Click() end
+				r:Sleep(0.6)
+			end
+			-- (The Theme list opened: each option's picture drawn without an error, the user's log
+			-- 2026-11-26 "SetAtlas(): Usage" from its Fill.)
+			for _, row in ipairs(host.body.shownRows or {}) do
+				if row:IsShown() and row.prop.label == ns.L["Theme"] and row.control and row.control.Click then
+					row.control:Click()
+					r:Sleep(0.4)
+					r:Shot("Nameplate Style, the Theme list open")
+					row.control:Click()
+					r:Sleep(0.2)
+					break
+				end
+			end
 			r:Shot("Nameplate Style, Bar")
 			host:Pick("colors", Studio.FirstVariant(f))
 			r:Sleep(0.3)
@@ -639,6 +724,23 @@ ns.TestKit.Define({
 				r:Verdict(cb and cb > 0.8 and cr < 0.2, ("Hostile NPCs blue on the preview's plate (%s, %s, %s)"):format(
 					tostring(cr), tostring(cg), tostring(cb)))
 				r:Shot("Nameplate Style, Colors: Hostile NPCs blue")
+				-- (Another player to preview the player colors on: Enemy player, a Warrior, Class showing
+				-- the Warrior's color, the user 2026-11-26 "theres no class option to preview those colors".)
+				if inner and inner.PickSample then
+					r:Set("plateKindColor_enemyPlayers", "class")
+					inner.PickSample(4)
+					preview:Refresh()
+					r:Sleep(0.4)
+					local er, eg, eb
+					if bar then er, eg, eb = bar:GetStatusBarColor() end -- (not "bar and ...": one value)
+					local w = RAID_CLASS_COLORS and RAID_CLASS_COLORS.WARRIOR
+					r:Verdict(w and er and math.abs(er - w.r) < 0.05 and math.abs(eg - w.g) < 0.05 and math.abs(eb - w.b) < 0.05,
+						("Enemy player, Class: the Warrior's color on the preview (%s, %s, %s)"):format(tostring(er), tostring(eg), tostring(eb)))
+					r:Shot("Nameplate Style, Enemy player in Class")
+					inner.PickSample(1)
+					preview:Refresh()
+					r:Sleep(0.2)
+				end
 				Studio.Undo()
 				r:Verdict(ns.db.plateKindColor_hostileNpcs ~= "custom", "one Undo: back to the game's")
 			else
@@ -680,6 +782,14 @@ ns.TestKit.Define({
 				end
 				r:Verdict(table.concat(raises, ",") == "targetArrowY,targetArrowBareY",
 					"Layout: a Smart marks part with the two raises: " .. table.concat(raises, ","))
+				-- (At your profile's values, as Reset page leaves them: not marked edited, the user
+				-- 2026-11-26 "after a reset smart marks looks like its been edited".)
+				local base = ns.ProfileBase and ns.ProfileBase() or ns.DEFAULTS
+				r:Set("targetArrowY", base.targetArrowY)
+				r:Set("targetArrowBareY", base.targetArrowBareY)
+				local edited = #Studio.Changed(lf, "all", "smartMarks")
+				r:Verdict(edited == 0, ("Layout: Smart marks at your profile's values isn't marked edited (%d, raise %s)")
+					:format(edited, tostring(base.targetArrowY)))
 				local page = ns.plateLayoutPage
 				local lprev, led = page and page.preview, page and page.editor
 				local lr, ll = lprev and lprev:GetRight(), led and led.holder:GetLeft()
@@ -712,6 +822,84 @@ ns.TestKit.Define({
 				local gr, pl2 = gb and gb:GetRight(), pop and pop:GetLeft()
 				r:Verdict(gr and pl2 and gr <= pl2 - 2, ("Layout: Guides clear of the pop-out button (%s, %s)"):format(
 					tostring(gr and math.floor(gr)), tostring(pl2 and math.floor(pl2))))
+				-- (Default's and Layout's previews alike: one height, one Preview list, the plate the
+				-- same size, the user 2026-11-25 "why arent they the same size and why dont they use
+				-- the 1 dropdown?")
+				local dh, lh = preview and preview:GetHeight(), lprev and lprev:GetHeight()
+				-- (with the same parts up on both: more parts up on Layout's fit a smaller plate, run q7c9a)
+				local dpv, lpv2 = preview and preview.lookPreview, page and page.holder
+				if dpv and lpv2 and ns.PlatePreviewStates and ns.TogglePlatePreviewState then
+					local want, have = ns.PlatePreviewStates(dpv), ns.PlatePreviewStates(lpv2)
+					for _, key in ipairs({ "casting", "marker", "debuffs", "buffs", "crowd", "quest", "elite", "target" }) do
+						if (want[key] or false) ~= (have[key] or false) then ns.TogglePlatePreviewState(key, lpv2) end
+					end
+					if page.Redraw then page.Redraw() end
+					r:Sleep(0.3)
+				end
+				local ds = preview and preview.lookPreview and preview.lookPreview.gameScale
+				local ls = page and page.holder and page.holder.gameScale
+				r:Log("  Default's plate: " .. tostring(dpv and dpv.fitWhy) .. "; Layout's: " .. tostring(lpv2 and lpv2.fitWhy))
+				-- (a pixel of rounding allowed, run qbed7: 230 / 229)
+				r:Verdict(dh and lh and math.abs(dh - lh) <= 1.5 and lh >= 220, ("Default and Layout: one stage height (%s, %s)"):format(
+					tostring(dh and math.floor(dh)), tostring(lh and math.floor(lh))))
+				r:Verdict(page and page.holder and page.holder.oneList and not page.holder.stateDropdown,
+					"Layout: the one Preview list, as Default's")
+				r:Verdict(ds and ls and math.abs(ds - ls) < 0.02, ("Default and Layout: the plate the same size (%s, %s)"):format(
+					tostring(ds), tostring(ls)))
+				-- (A part set Hidden goes from the preview too, and comes back: the user 2026-11-25, "i set
+				-- level box to hidden and its still there?")
+				local lcopy = page and page.holder and page.holder.gamePlate and page.holder.gamePlate.gameCopy
+				local lbox = lcopy and lcopy.PlayerLevelDiffFrame
+				if lbox then
+					r:Set("styleOver_platePartLevel", "hide")
+					if page.Redraw then page.Redraw() end
+					r:Sleep(0.3)
+					local gone = lbox:GetEffectiveAlpha() < 0.05
+					r:Shot("Nameplate Layout, level box Hidden")
+					r:Set("styleOver_platePartLevel", "row")
+					if page.Redraw then page.Redraw() end
+					r:Sleep(0.3)
+					local back = lbox:GetEffectiveAlpha() > 0.9
+					r:Verdict(gone and back, ("Layout: the level box Hidden leaves the preview, and comes back (%s, %s)")
+						:format(tostring(gone), tostring(back)))
+				end
+				-- (Mirror: a switch that shows it, and twice is back exactly, the user 2026-11-26.)
+				if ns.PlateLayoutMirror and page and page.holder and page.holder.gamePlate then
+					r:Set("plateLayoutData", { all = { parts = { level = { x = 3 } } } })
+					ns.PlateLayoutChanged()
+					if page.Redraw then page.Redraw() end
+					r:Sleep(0.3)
+					local lay = ns.PlateLayoutEditing("all", true)
+					ns.PlateLayoutMirror(lay, "level", page.holder.gamePlate)
+					local mid = ns.PlateLayoutPart(lay, "level")
+					local midX, midOn = mid and mid.x, mid and mid.mirrored
+					ns.PlateLayoutChanged()
+					if page.Redraw then page.Redraw() end
+					r:Sleep(0.3)
+					ns.PlateLayoutMirror(lay, "level", page.holder.gamePlate)
+					local back = ns.PlateLayoutPart(lay, "level")
+					-- (pointing at Mirrored changes nothing: no hover preview on it, the user 2026-11-26)
+					local mprop
+					for _, each in ipairs(Studio.Props(lf, "level")) do if each.prop.label == ns.L["Mirror"] then mprop = each.prop end end
+					local mkey = mprop and Studio.KeyOf(mprop, "all")
+					if mkey and Studio.ShowFor then
+						Studio.ShowFor(lprev, mkey, "on")
+						local still = ns.PlateLayoutPart(lay, "level")
+						r:Verdict(still and still.x == 3 and not still.mirrored, ("Layout: pointing at Mirrored leaves it (x %s, mirrored %s)")
+							:format(tostring(still and still.x), tostring(still and still.mirrored)))
+					end
+					r:Verdict(midOn and midX ~= 3 and back and back.x == 3 and not back.mirrored,
+						("Layout: Mirror moves it (3 -> %s, mirrored %s) and back exactly (%s)"):format(tostring(midX),
+						tostring(midOn), tostring(back and back.x)))
+					ns.PlateLayoutChanged()
+					if page.Redraw then page.Redraw() end
+				end
+				-- (Guides just over the Preview list, at its left, the user 2026-11-25.)
+				local ud = page and page.holder and page.holder.unitDropdown
+				local gl2, gb2, ul, ut = gb and gb:GetLeft(), gb and gb:GetBottom(), ud and ud:GetLeft(), ud and ud:GetTop()
+				r:Verdict(gl2 and ul and math.abs(gl2 - ul) <= 2 and gb2 and ut and gb2 >= ut and gb2 - ut <= 6,
+					("Layout: Guides over the Preview list, at its left (left %s / %s, bottom %s over %s)"):format(
+					tostring(gl2 and math.floor(gl2)), tostring(ul and math.floor(ul)), tostring(gb2 and math.floor(gb2)), tostring(ut and math.floor(ut))))
 				Steady("Layout", lprev, GamePlateOf(page and page.holder))
 				-- (Layout off: its card inside the tabs' framed panel, clear of its edges, the user
 				-- 2026-11-25 "no fit".)
@@ -752,6 +940,46 @@ ns.TestKit.Define({
 				r:Verdict(drawerLook ~= nil and (not lr or (sr and lr * lvl:GetEffectiveScale() <= sr * drawerLook:GetEffectiveScale() + 1)),
 					("Smart: the row's plate inside its stage (level box right %s, stage right %s)"):format(
 					tostring(lr and math.floor(lr * lvl:GetEffectiveScale())), tostring(sr and math.floor(sr * drawerLook:GetEffectiveScale()))))
+				-- (Its preview smaller than the tabs' and inside its drawer, the user 2026-11-25: "smarty
+				-- dropdown previewer is too big", it ran over the rows under it.)
+				local dr = drawerLook and drawerLook:GetParent()
+				local lb, db2 = drawerLook and drawerLook:GetBottom(), dr and dr:GetBottom()
+				r:Verdict(drawerLook and drawerLook:GetHeight() <= 160 and lb and db2 and lb >= db2,
+					("Smart row: its preview %s tall, inside its drawer (bottom %s over %s)"):format(
+					tostring(drawerLook and math.floor(drawerLook:GetHeight())), tostring(lb and math.floor(lb)), tostring(db2 and math.floor(db2))))
+				-- (Each row's grip to drag it, level with its tick box; no arrows.)
+				local level, gripped = true, 0
+				for _, grip in ipairs(grid.grips or {}) do
+					if grip:IsVisible() then
+						gripped = gripped + 1
+						local _, gy = grip:GetCenter()
+						local _, ry = grip:GetParent():GetCenter()
+						if gy and ry and math.abs(gy - ry) > 1 then level = false end
+					end
+				end
+				r:Verdict(gripped >= 2 and level, ("Smart: %d rows with a grip, each level with its row"):format(gripped))
+				-- (Its settings boxed all round, the user 2026-11-26 "finish this rectangle"; its preview
+				-- out in a window and back, "need to be able to popout the smart preivewer".)
+				local rowEd = dr and dr.rowEditor
+				r:Verdict(rowEd and rowEd.box and rowEd.box:IsVisible(), "Smart row: its settings in a box of their own")
+				if drawerLook and drawerLook.popButton then
+					drawerLook.popButton:Click()
+					r:Sleep(0.4)
+					local out = drawerLook:GetParent() ~= dr and drawerLook:IsVisible()
+					-- (docked beside the settings window to start with, the user 2026-11-26)
+					local win = _G.CinematicRowPreviewWindow
+					local sw = SettingsPanel
+					local wl, wr, sl, sr = win and win:GetLeft(), win and win:GetRight(), sw and sw:GetLeft(), sw and sw:GetRight()
+					r:Verdict(win and win.docked and wl and sr and (math.abs(wl - sr) <= 8 or math.abs(wr - sl) <= 8),
+						("Smart row: its window docked beside the settings (%s..%s by %s..%s)"):format(tostring(wl and math.floor(wl)),
+						tostring(wr and math.floor(wr)), tostring(sl and math.floor(sl)), tostring(sr and math.floor(sr))))
+					r:Shot("Smart row, its preview popped out")
+					drawerLook.popButton:Click()
+					r:Sleep(0.3)
+					r:Verdict(out and drawerLook:GetParent() == dr, ("Smart row: its preview pops out and back (%s)"):format(tostring(out)))
+				else
+					r:Verdict(false, "Smart row: no pop-out button on its preview")
+				end
 				Steady("Smart row", drawerLook, GamePlateOf(drawerLook))
 				r:Shot("Smart Style, a row open")
 			else
@@ -788,8 +1016,16 @@ ns.TestKit.Define({
 				r:Verdict(hl and bl and math.abs(hl - bl) < 2 and math.abs(hr - br) < 2,
 					("Cast Bars: health and cast bars even (%s-%s, %s-%s)"):format(tostring(hl and math.floor(hl)),
 					tostring(hr and math.floor(hr)), tostring(bl and math.floor(bl)), tostring(br and math.floor(br))))
-				local pick = ns.CastLookPick and ns.CastLookPick("PLATE")
-				r:Verdict(pick ~= nil, "Cast Bars: Look from says what it is: " .. tostring(pick))
+				-- (No Look from: every setting open, each its own or Default's, the user 2026-11-26 "it
+				-- locks everything".)
+				castHost:Pick("bar", "PLATE")
+				r:Sleep(0.2)
+				local lookFrom, greyed = false, 0
+				for _, row in ipairs(castHost.body.shownRows or {}) do
+					if row:IsShown() and row.prop.label == ns.L["Look from"] then lookFrom = true end
+					if row:IsShown() and row.control and row.control.IsEnabled and not row.control:IsEnabled() then greyed = greyed + 1 end
+				end
+				r:Verdict(not lookFrom and greyed == 0, ("Cast Bars: no Look from, nothing greyed (%d greyed)"):format(greyed))
 				-- (Its settings inside the tabs' framed panel, to their last row: they ran past its
 				-- bottom, the user 2026-11-25.)
 				local cpanel = castHost.holder:GetParent().pageTabs and castHost.holder:GetParent().pageTabs.panel
@@ -824,6 +1060,19 @@ ns.TestKit.Define({
 					r:Sleep(0.4)
 				else
 					r:Verdict(false, "Cast Bars: no scroll frame to scroll")
+				end
+				-- (Turned off, then back on from outside the title's switch: the switch says On again,
+				-- the user 2026-11-25 "turning a tab back on doesnt show it on".)
+				local chead = PageOf(castHost.holder, "mockHead") and PageOf(castHost.holder, "mockHead").mockHead
+				if chead and ns.FlipPageSwitch then
+					ns.FlipPageSwitch("Cast Bar Style")
+					r:Sleep(0.3)
+					ns.FlipPageSwitch("Cast Bar Style")
+					if ns.PaintPageSwitches then ns.PaintPageSwitches() end
+					r:Sleep(0.3)
+					local on = not ns.PageSwitchOff("Cast Bar Style")
+					r:Verdict(on and chead.switch.on == true, ("Cast Bars: off and back on, its switch on again (%s, page %s)")
+						:format(tostring(chead.switch.on), on and "on" or "off"))
 				end
 				Steady("Cast Bars", cp, GamePlateOf(clp))
 				r:Shot("Cast Bars")

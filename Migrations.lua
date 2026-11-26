@@ -6039,6 +6039,36 @@ STEPS[#STEPS + 1] = function()
 	end
 end
 
+-- The nameplates' cast bars follow Default setting by setting (the user 2026-11-26: Look from
+-- "locks everything"): a setting of theirs counts only where it's set (PlateCastStyle.lua's
+-- View), so their copies, filled at every login with Default's defaults, are cleared where they
+-- weren't their own (plateCastOwn_PLATE off: they looked as Default anyway, so no plate changes).
+-- The Unit frames' game look (plateCastGameAs_PLATE) has no place now: off, Default's look.
+STEPS[#STEPS + 1] = function()
+	local db = ns.db
+	if db.castPlateFollowsV1 then return end
+	db.castPlateFollowsV1 = true
+	local function Clear(store)
+		if type(store) ~= "table" then return end
+		if not store.plateCastOwn_PLATE then
+			local drop = {}
+			for key in pairs(store) do
+				if type(key) == "string" and key:match("^plateCast.+_PLATE$") and key ~= "plateCastOwn_PLATE"
+					and key ~= "plateCastGameAs_PLATE" then
+					drop[#drop + 1] = key
+				end
+			end
+			for _, key in ipairs(drop) do store[key] = nil end
+		end
+		store.plateCastGameAs_PLATE = nil
+	end
+	Clear(db)
+	for _, saved in pairs(type(db.profiles) == "table" and db.profiles or {}) do
+		Clear(saved)
+		if type(saved) == "table" then Clear(saved.settings) end
+	end
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only

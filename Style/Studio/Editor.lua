@@ -122,12 +122,21 @@ end
 Studio.Get, Studio.Put = Get, Put
 
 -- The value a key starts at: the field's own default, the DEFAULTS one.
+-- (A key's default: your profile's value, what Reset page puts back, not the addon's own: after a
+-- reset, Smart marks (-10, the Cinema and Shoulder Cam profiles' raise) showed as edited, the user
+-- 2026-11-26.)
+local function ProfileDefault(k)
+	local base = ns.ProfileBase and ns.ProfileBase()
+	if base and base[k] ~= nil then return base[k] end
+	return ns.DEFAULTS[k]
+end
+Studio.ProfileDefault = ProfileDefault
 function Studio.DefaultOf(prop, key)
 	if prop.default ~= nil then
 		if type(prop.default) == "function" then return prop.default(key) end
 		return prop.default
 	end
-	if type(key) == "string" then return ns.DEFAULTS[key] end
+	if type(key) == "string" then return ProfileDefault(key) end
 	if type(key) == "table" and key.default ~= nil then return key.default end
 	return nil
 end
@@ -154,7 +163,7 @@ function Studio.RGBValues(prop, variant)
 	return Get(keys[1]) or 1, Get(keys[2]) or 1, Get(keys[3]) or 1
 end
 local function KeyDefault(k)
-	if type(k) == "string" then return ns.DEFAULTS[k] end
+	if type(k) == "string" then return ProfileDefault(k) end
 	if type(k) == "table" then return k.default end
 end
 Studio.KeyDefault = KeyDefault

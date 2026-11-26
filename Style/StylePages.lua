@@ -450,7 +450,7 @@ function ns.PageTabs(content, list, picked, noPalette)
 	-- (Nameplate Style's four tabs (Default, Layout, Smart, Cast Bars): the mock's chrome,
 	-- Tools/style-studio/page-mock.html, the user 2026-11-25: "i want the mock up we made in
 	-- the default, layout, smart, and cast bar tabs". Flat tabs, a solid page, a title and
-	-- its On switch, no Reset page.)
+	-- its On switch. Reset page kept: the user 2026-11-25.)
 	if hub == "Style" then
 		for _, each in ipairs(list) do
 			if each[2] == "Nameplate Style" then content.mockChrome = true end
@@ -537,7 +537,7 @@ function ns.PageTabs(content, list, picked, noPalette)
 end
 
 -- The mock's chrome on a page (Nameplate Style's four tabs): the folder tabs' framed panel
--- round the whole page (the user 2026-11-25, "like the screenshot"), no Reset page, and under the tabs its title with an On switch at the right (the
+-- round the whole page (the user 2026-11-25, "like the screenshot"), and under the tabs its title with an On switch at the right (the
 -- page's own switch: ns.PageSwitchOff / ns.FlipPageSwitch). content.MockSetPage(page):
 -- another page's title and switch, Default and Smart sharing one canvas.
 local MOCK_TITLES = { ["Nameplate Marks"] = "Smart Style" }
@@ -551,17 +551,14 @@ function ns.MockPageChrome(content, panel, page)
 	if canvas and not canvas.mockSolid then
 		canvas.mockSolid = canvas:CreateTexture(nil, "BACKGROUND", nil, -8)
 		canvas.mockSolid:SetAllPoints()
-		canvas.mockSolid:SetColorTexture(0.086, 0.071, 0.059, 1)
+		-- (a neutral dark: in the window's brown it read as a brown band behind the tabs, the user
+		-- 2026-11-26 "get rid of the brown background")
+		canvas.mockSolid:SetColorTexture(0.075, 0.075, 0.08, 1)
 	end
 	if panel and not panel.mockSolid then
 		panel.mockSolid = panel:CreateTexture(nil, "BACKGROUND", nil, -8)
 		panel.mockSolid:SetAllPoints()
 		panel.mockSolid:SetColorTexture(0.118, 0.118, 0.125, 1)
-	end
-	local reset = canvas and canvas.resetButton
-	if reset then
-		reset:Hide()
-		reset.Show = reset.Hide
 	end
 	if content.mockHead then
 		content.MockSetPage(page)
@@ -575,27 +572,14 @@ function ns.MockPageChrome(content, panel, page)
 	head.searchSkip = true
 	head.title = head:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	head.title:SetPoint("LEFT", 0, 0)
-	-- (The switch: a track and knob as the mock's, "On"/"Off" after it.)
+	-- (The CineMode page's switch, no words: the user 2026-11-26, one look for every switch.)
 	local sw = CreateFrame("Button", nil, head)
-	sw:SetSize(34, 18)
-	sw:SetPoint("RIGHT", -34, 0)
-	sw.track = sw:CreateTexture(nil, "BACKGROUND")
-	sw.track:SetAllPoints()
-	sw.track:SetTexture("Interface\\Buttons\\WHITE8x8")
-	sw.knob = sw:CreateTexture(nil, "ARTWORK")
-	sw.knob:SetSize(14, 14)
-	sw.knob:SetTexture("Interface\\Buttons\\WHITE8x8")
-	sw.word = sw:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	sw.word:SetPoint("LEFT", sw, "RIGHT", 7, 0)
+	ns.MakeSwitchLook(sw)
+	sw:SetPoint("RIGHT", -8, 0)
 	head.switch = sw
 	local function Paint()
 		local on = not (ns.PageSwitchOff and ns.PageSwitchOff(head.page))
-		sw.track:SetVertexColor(on and 0.24 or 0.23, on and 0.42 or 0.21, on and 0.23 or 0.19)
-		sw.knob:ClearAllPoints()
-		sw.knob:SetPoint(on and "RIGHT" or "LEFT", on and -2 or 2, 0)
-		sw.knob:SetVertexColor(on and 0.91 or 0.54, on and 0.95 or 0.52, on and 0.89 or 0.48)
-		sw.word:SetText(on and L["On"] or L["Off"])
-		sw.word:SetTextColor(0.6, 0.58, 0.54)
+		ns.PaintSwitchLook(sw, on)
 	end
 	sw:SetScript("OnClick", function()
 		if ns.FlipPageSwitch then ns.FlipPageSwitch(head.page) end
@@ -604,6 +588,19 @@ function ns.MockPageChrome(content, panel, page)
 	sw:SetScript("OnEnter", function(self) if ns.PageSwitchTip then ns.PageSwitchTip(self, head.page) end end)
 	sw:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	head:SetScript("OnShow", Paint)
+	-- (Again whenever any page switch changes: turned back on from the off card's Turn on, or a
+	-- tab's right-click, it still said Off, the user 2026-11-25.)
+	head.Paint = Paint
+	if not ns.mockHeads then
+		ns.mockHeads = {}
+		local function PaintAll()
+			for each in pairs(ns.mockHeads) do if each.page then each.Paint() end end
+		end
+		for _, name in ipairs({ "PaintPageSwitches", "FlipPageSwitch" }) do
+			if ns[name] then hooksecurefunc(ns, name, PaintAll) end
+		end
+	end
+	ns.mockHeads[head] = true
 	-- (What the page is for: a tooltip on its title, never a line on the page (the mock's
 	-- rule). content.mockTips[page], else the page's intro.)
 	local hover = CreateFrame("Frame", nil, head)
@@ -626,6 +623,34 @@ function ns.MockPageChrome(content, panel, page)
 	end
 	content.mockHead = head
 	content.MockSetPage(page)
+end
+
+-- A thin soft line round a preview's rectangle (the Nameplate tabs' stages, the user 2026-11-26:
+-- "try adding a thin line around the preview rectangle. soft color"). Once per frame.
+function ns.SoftEdge(frame)
+	if not frame or frame.softEdge then return end
+	frame.softEdge = {}
+	-- (on a frame of its own over the preview: on the preview itself, the stage's backdrop, a
+	-- child's, covered it)
+	local over = CreateFrame("Frame", nil, frame)
+	over:SetAllPoints(frame)
+	over:SetFrameLevel(frame:GetFrameLevel() + 40)
+	over.zoomSkip, over.searchSkip = true, true
+	frame.softEdgeFrame = over
+	for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+		local line = over:CreateTexture(nil, "OVERLAY")
+		line:SetColorTexture(0.32, 0.32, 0.35, 0.9)
+		if side == "TOP" or side == "BOTTOM" then
+			line:SetPoint(side .. "LEFT", frame, side .. "LEFT", 0, 0)
+			line:SetPoint(side .. "RIGHT", frame, side .. "RIGHT", 0, 0)
+			line:SetHeight(1)
+		else
+			line:SetPoint("TOP" .. side, frame, "TOP" .. side, 0, 0)
+			line:SetPoint("BOTTOM" .. side, frame, "BOTTOM" .. side, 0, 0)
+			line:SetWidth(1)
+		end
+		frame.softEdge[#frame.softEdge + 1] = line
+	end
 end
 
 -- A page under the mock's chrome that makes its own title, intro ("?") and Enable Page
@@ -936,6 +961,9 @@ end
 local POPOUT_SCALE = 1
 local POPOUT_MIN_SCALE = 0.75
 local popWindow, popped, popScale
+-- (Whether this preview is out in its own window now: Nameplate Style's stage fits its plate
+-- to the window's height then, not the window to the plate.)
+function ns.StylePreviewIsPopped(preview) return preview ~= nil and popped == preview end
 local UpdateSticky -- (below: a preview held at its page's top as you scroll)
 
 -- The preview's and its window's small icon buttons (2026-11-17): a dark
@@ -2129,6 +2157,98 @@ function ns.AddPreviewFit(preview)
 end
 
 -- (tooltip: the page's, unused since the buttons are icons with their own.)
+ns.StyleIconButton = IconButton -- (a Smart row's preview's own pop-out: Options.lua)
+
+-- A preview out in a small window of its own and back (a Smart row's: the user 2026-11-26 "need
+-- to be able to popout the smart preivewer"). Not the pages' pop-out: that one keeps the page's
+-- place for it and comes out on every page once used. One at a time; again, or the window's x,
+-- puts it back where it was, its size and parent as they were.
+local rowOut
+function ns.PopPreviewOut(preview, title)
+	local win = rowOut
+	if not win then
+		win = CreateFrame("Frame", "CinematicRowPreviewWindow", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+		rowOut = win
+		win:SetFrameStrata("DIALOG")
+		win:SetMovable(true)
+		win:EnableMouse(true)
+		win:RegisterForDrag("LeftButton")
+		-- (Docked to the settings, as the page previews' window is (the user 2026-11-26, "why dont we
+		-- add the dock option too"): Undock to drag it anywhere, Dock to put it back by them.)
+		win.docked = true
+		win:SetScript("OnDragStart", function(self) if not self.docked then self:StartMoving() end end)
+		win:SetScript("OnDragStop", win.StopMovingOrSizing)
+		win:SetClampedToScreen(true)
+		local back = win:CreateTexture(nil, "BACKGROUND")
+		back:SetAllPoints()
+		back:SetColorTexture(0.06, 0.06, 0.065, 0.97)
+		ns.SoftEdge(win)
+		win.title = win:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		win.title:SetPoint("TOPLEFT", 10, -8)
+		local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")
+		close:SetPoint("TOPRIGHT", 2, 2)
+		close:SetScript("OnClick", function() if win.held then ns.PopPreviewOut(win.held) end end)
+		win.dock = IconButton(win, "undock", ns.L["Undock: drag the window anywhere."])
+		win.dock:SetPoint("RIGHT", close, "LEFT", -2, 0)
+		-- Beside the settings window: right where it fits, else left.
+		function win.Place()
+			win:ClearAllPoints()
+			local settings = win.settings
+			if win.docked and settings and settings:IsShown() and settings:GetRight() then
+				local k = settings:GetEffectiveScale() / UIParent:GetEffectiveScale()
+				if settings:GetRight() * k + DOCK_GAP + win:GetWidth() <= UIParent:GetWidth() then
+					win:SetPoint("TOPLEFT", settings, "TOPRIGHT", DOCK_GAP, 0)
+				else
+					win:SetPoint("TOPRIGHT", settings, "TOPLEFT", -DOCK_GAP, 0)
+				end
+			elseif win.dragged then
+				win:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", win.dragged[1], win.dragged[2])
+			else
+				win:SetPoint("CENTER", UIParent, "CENTER", 300, 100)
+			end
+			win.dock:SetIcon(win.docked and "undock" or "dock")
+			win.dock.tip = win.docked and ns.L["Undock: drag the window anywhere."] or ns.L["Dock the window to the settings again."]
+		end
+		win:HookScript("OnDragStop", function(self)
+			if self:GetLeft() then self.dragged = { self:GetLeft(), self:GetTop() } end
+		end)
+		win.dock:SetScript("OnClick", function()
+			if win.docked and win:GetLeft() then win.dragged = { win:GetLeft(), win:GetTop() } end
+			win.docked = not win.docked
+			win.Place()
+		end)
+	end
+	if win.held == preview then
+		-- (back where it was)
+		local home = win.home
+		preview:SetParent(home.parent)
+		preview:SetScale(home.scale)
+		preview:ClearAllPoints()
+		for _, point in ipairs(home.points) do preview:SetPoint(unpack(point)) end
+		win.held, win.home = nil, nil
+		win:Hide()
+		if preview.Refresh then preview:Refresh() end
+		return false
+	end
+	if win.held then ns.PopPreviewOut(win.held) end
+	local points = {}
+	for i = 1, ns.NumPoints(preview) do points[i] = { preview:GetPoint(i) } end
+	win.home = { parent = preview:GetParent(), scale = preview:GetScale(), points = points }
+	win.settings = SettingsWindow(preview) -- (to dock beside: read before it leaves the page)
+	win.held = preview
+	local scale = 1.6
+	win:SetSize(preview:GetWidth() * scale + 16, preview:GetHeight() * scale + 36)
+	win.title:SetText(title or ns.L["Preview"])
+	preview:SetParent(win)
+	preview:SetScale(scale)
+	preview:ClearAllPoints()
+	preview:SetPoint("TOPLEFT", win, "TOPLEFT", 8 / scale, -28 / scale)
+	win.Place()
+	win:Show()
+	if preview.Refresh then preview:Refresh() end
+	return true
+end
+
 function ns.StylePopout(preview, _, title)
 	-- (Every preview that pops out: /cine debug lookdock, Dev/LookDockTest.lua.)
 	ns.STYLE_PREVIEWS = ns.STYLE_PREVIEWS or {}

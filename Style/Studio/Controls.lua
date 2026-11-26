@@ -19,6 +19,16 @@ function C.Role(role)
 	return palette and palette[role] or DEFAULT_ROLES[role]
 end
 local Role = C.Role
+-- An option's picture on a texture: its atlas where it names one the game has, else its file. A
+-- choice whose atlas isn't a name (or the client lacks it) gave "SetAtlas(): Usage" in the open list,
+-- the user's log 2026-11-26 (Controls.lua:353, x2).
+local function SetSample(tex, o)
+	if type(o.atlas) == "string" and pcall(tex.SetAtlas, tex, o.atlas) then return true end
+	if o.texture ~= nil and pcall(tex.SetTexture, tex, o.texture) then return true end
+	tex:SetTexture(FLAT)
+	return false
+end
+
 C.TEXT, C.DIM, C.FAINT = { 0.92, 0.9, 0.85 }, { 0.6, 0.58, 0.54 }, { 0.42, 0.4, 0.37 }
 C.LABEL = { 1, 1, 1 } -- (a row's name in white, as the old pages' kit.Label GameFontHighlight)
 C.QUIET = { 0.3, 0.27, 0.23 } -- (every edge that isn't picked or hovered: warm grey, not gold)
@@ -350,7 +360,7 @@ local function ListFrame()
 				row.sample:SetVertexColor(1, 1, 1)
 				if o.texture or o.atlas then
 					row.sample:Show()
-					if o.atlas then row.sample:SetAtlas(o.atlas) else row.sample:SetTexture(o.texture) end
+					SetSample(row.sample, o)
 					local tint = o.tint or { 1, 1, 1 } -- (a bar texture's green comes with it: R.Texture)
 					row.sample:SetVertexColor(tint[1], tint[2], tint[3])
 					left = 74
@@ -481,7 +491,7 @@ function C.Drop(parent, width, options, onPick, onHover)
 		self.aa:Hide()
 		local left = 8
 		if picked and (picked.texture or picked.atlas) then
-			if picked.atlas then self.sample:SetAtlas(picked.atlas) else self.sample:SetTexture(picked.texture) end
+			SetSample(self.sample, picked)
 			local tint = picked.tint or { 1, 1, 1 }
 			self.sample:SetVertexColor(tint[1], tint[2], tint[3])
 			self.sample:Show()
@@ -565,7 +575,7 @@ function C.Tiles(parent, options, onPick, onHover, few, maxW)
 			t.word:SetText("")
 			if o.texture or o.atlas then
 				t.sample:Show()
-				if o.atlas then t.sample:SetAtlas(o.atlas) else t.sample:SetTexture(o.texture) end
+				SetSample(t.sample, o)
 				local tint = o.tint or { 1, 1, 1 } -- (a bar texture's green comes with it: R.Texture)
 				t.sample:SetVertexColor(tint[1], tint[2], tint[3])
 				t:SetWidth(40)

@@ -335,11 +335,15 @@ end)
 -- picks are kept for the next panel opened.)
 local PLATE_FILL, PLATE_GROUND = "UI-HUD-CoolDownManager-Bar", "UI-HUD-CoolDownManager-Bar-BG"
 -- { pick's name, unit's name, bar color, name color, level } (the Player: you).
+-- (kindKey: its kind of unit for Default's Colors; class and plateKind: another player, the user
+-- 2026-11-26 "theres no class option to preview those colors": an enemy and a friendly one.)
 local SAMPLES = {
-	{ "Hostile", "Gnoll Brute", { 0.85, 0.12, 0.1 }, { 1, 0.25, 0.2 }, 17 },
-	{ "Neutral", "Kodo Bull", { 0.9, 0.78, 0.15 }, { 1, 0.9, 0.3 }, 14 },
-	{ "Friendly", "Stormwind Guard", { 0.2, 0.75, 0.2 }, { 0.4, 1, 0.4 }, 55 },
-	{ "Player" },
+	{ "Hostile", "Gnoll Brute", { 0.85, 0.12, 0.1 }, { 1, 0.25, 0.2 }, 17, kindKey = "hostileNpcs" },
+	{ "Neutral", "Kodo Bull", { 0.9, 0.78, 0.15 }, { 1, 0.9, 0.3 }, 14, kindKey = "neutralNpcs" },
+	{ "Friendly", "Stormwind Guard", { 0.2, 0.75, 0.2 }, { 0.4, 1, 0.4 }, 55, kindKey = "friendlyNpcs" },
+	{ "Enemy player", "Gorvak", nil, nil, nil, kindKey = "enemyPlayers", class = "WARRIOR", plateKind = "enemy player" },
+	{ "Friendly player", "Aldren", nil, nil, nil, kindKey = "friendlyPlayers", class = "PALADIN", plateKind = "friendly player" },
+	{ "Player", kindKey = "friendlyPlayers" },
 }
 local sampleNow = 1
 -- The game plate's states shown (PlateCopy.lua), picked on the second row of
@@ -743,8 +747,9 @@ function ns.MakePlateRowLookPreview(parent, width, startKind, opts)
 		unitDrop:SetWidth(unitW)
 		unitDrop:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 6, 6)
 		unitDrop:SetupMenu(function(_, root)
-			if oneList then ns.MenuTitle(root, L["Unit"]) end
-			for i, sample in ipairs(SAMPLES) do
+			-- (holder.hideUnits: Layout's list for one kind's layout, its unit fixed)
+			if oneList and not holder.hideUnits then ns.MenuTitle(root, L["Unit"]) end
+			for i, sample in ipairs(holder.hideUnits and {} or SAMPLES) do
 				root:CreateRadio(L[sample[1]], function() return holder.sample == i end, function()
 					PickSample(i)
 					return oneList and MenuResponse and MenuResponse.Refresh or nil -- (kept open: a state next)
@@ -809,7 +814,9 @@ function ns.MakePlateRowLookPreview(parent, width, startKind, opts)
 	-- scene or the dark panel; left of the zoom's - and +. A row of its own over
 	-- the picks where they'd reach it: a narrow preview.)
 	local sceneY = 6
-	if rowRight + 8 > width - 90 - sceneButton:GetWidth() then sceneY = 6 + ROW_H end
+	-- (Not with the one Preview list: its Scene button is hidden, and the row kept for it took 28
+	-- off every Nameplate tab's stage, Layout's plate the smaller for it, run q8759.)
+	if not oneList and rowRight + 8 > width - 90 - sceneButton:GetWidth() then sceneY = 6 + ROW_H end
 	sceneButton:SetPoint("BOTTOMRIGHT", -90, sceneY + (unitDrop and 5 or 0))
 	ns.lowHealthKit.Tooltip(sceneButton, L["The lake behind the plate, or plain dark."])
 	-- (Where the plate's bottom sits: over the picks. Combat Text Style places
@@ -858,7 +865,13 @@ function ns.MakePlateRowLookPreview(parent, width, startKind, opts)
 
 		local sample = SAMPLES[self.sample] or SAMPLES[1]
 		local unitName, barColor, nameColor, level = sample[2] and L[sample[2]], sample[3], sample[4], sample[5]
-		if not unitName then
+		if sample.class then
+			-- (another player: their class's color, white name for an enemy, their class's for a friend)
+			local classColor = RAID_CLASS_COLORS and RAID_CLASS_COLORS[sample.class]
+			barColor = classColor and { classColor.r, classColor.g, classColor.b } or { 0.8, 0.1, 0.1 }
+			nameColor = sample.kindKey == "friendlyPlayers" and barColor or { 1, 1, 1 }
+			level = UnitLevel("player")
+		elseif not unitName then
 			unitName = UnitName("player") or L["Player"]
 			local class = select(2, UnitClass("player"))
 			local classColor = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
@@ -869,14 +882,14 @@ function ns.MakePlateRowLookPreview(parent, width, startKind, opts)
 		local look = ns.PlateRowLookFor(kind, over) or {}
 		-- (Default's colors and Fade for the sample's kind of unit (Nameplate Style's Colors,
 		-- the mock 2026-11-25), under the row's own: Not your kill when Tapped is ticked.)
-		local sampleKind = ({ "hostileNpcs", "neutralNpcs", "friendlyNpcs", "friendlyPlayers" })[self.sample] or "hostileNpcs"
+		local sampleKind = sample.kindKey or "hostileNpcs"
 		if StatesOf(self).tapped then sampleKind = "tapped" end
 		local sampleUnit = sample[1] == "Player" and "player" or nil
 		local defaultBar, defaultName
 		if ns.PlateDefaultColoursOn and ns.PlateDefaultColoursOn() then
-			local r, g, b = ns.PlateKindColour(sampleUnit, sampleKind)
+			local r, g, b = ns.PlateKindColour(sampleUnit, sampleKind, sample.class)
 			if r then defaultBar = { r, g, b } barColor = defaultBar end
-			local nr, ng, nb = ns.PlateNameColour(sampleUnit, sampleKind)
+			local nr, ng, nb = ns.PlateNameColour(sampleUnit, sampleKind, sample.class)
 			if nr then defaultName = { nr, ng, nb } nameColor = defaultName end
 		end
 		if look.gradient == nil and ns.PlateKindFade then look.gradient = ns.PlateKindFade(sampleUnit, sampleKind) end
@@ -911,10 +924,29 @@ function ns.MakePlateRowLookPreview(parent, width, startKind, opts)
 				gameMark = ns.MakeTargetArrow(bar, bar)
 			end
 			pcall(NameLook, game.UnitFrame.name, look)
-			ns.SetGamePlateUnit(game, sample[1]:lower(), unitName, paintBar, paintName)
+			ns.SetGamePlateUnit(game, sample.plateKind or sample[1]:lower(), unitName, paintBar, paintName, sample.class)
 			ns.SetGamePlateLevel(game, look.level ~= false)
 			ns.SetGamePlateStates(game, StatesOf(self))
 			if ns.StylePlateBar then ns.StylePlateBar(game, look, self.hoverTheme) end
+			-- (Each part's Shown (Layout's, styleOver_platePart*): a part set Hidden faded away here as on
+			-- your plates; it stayed up on the preview, the user 2026-11-25 "i set level box to hidden
+			-- and its still there?". Only the parts it hid get their alpha back.)
+			if ns.StyleOverride and ns.PlatePartFrames and ns.PLATE_PARTS then
+				local unitFrame = game.UnitFrame or game.gameCopy
+				self.overHidden = self.overHidden or {}
+				for _, part in ipairs(ns.PLATE_PARTS) do
+					local hide = ns.StyleOverride("platePart" .. part) == "hide"
+					for _, frame in ipairs(ns.PlatePartFrames(unitFrame, part)) do
+						if hide then
+							frame:SetAlpha(0)
+							self.overHidden[frame] = true
+						elseif self.overHidden[frame] then
+							frame:SetAlpha(1)
+							self.overHidden[frame] = nil
+						end
+					end
+				end
+			end
 			if self.gameScale then
 				game:SetScale(self.gameScale)
 				game:ClearAllPoints()
@@ -1052,7 +1084,8 @@ end
 -- its highest part, not by fixed numbers. holder: MakePlateRowLookPreview's; width,
 -- height: its room; lift: where its plate's bottom may start. Leaves
 -- holder.previewLayout (the layout it put on) and holder.debuffLift.
-local LAYOUT_KIND = { Hostile = "hostile", Neutral = "neutral", Friendly = "friendly", Player = "player" }
+local LAYOUT_KIND = { Hostile = "hostile", Neutral = "neutral", Friendly = "friendly", Player = "player",
+	["Enemy player"] = "player", ["Friendly player"] = "player" }
 local FIT_PARTS = { "name", "HealthBarsContainer", "AurasFrame.DebuffListFrame", "AurasFrame.BuffListFrame",
 	"AurasFrame.CrowdControlListFrame", "CastBarsContainer.castBar", "PlayerLevelDiffFrame", "RaidTargetFrame",
 	"ClassificationFrame", "SoftTargetFrame.Icon" }
@@ -1082,15 +1115,17 @@ local function Span(holder, frame)
 	return (b * eff - gb * ge) / ge, (t * eff - gb * ge) / ge
 end
 ns.PlatePreviewSpan = Span -- (the tests read it)
+ns.PLATE_STAGE_H = 230 -- (every Nameplate tab's stage, Layout's too: one height)
 function ns.PlatePreviewFit(holder, width, height, lift)
 	local game = holder.gamePlate
 	local copy = game and game.gameCopy
 	local room = height - lift
-	-- (holder.oneList, Nameplate Style's stage (the mock, 2026-11-25: "visually not good",
-	-- a small plate low in a tall empty stage): the plate as big as the stage is wide, and
-	-- the stage only as tall as what shows (holder.fitHeight), no room kept for debuffs.)
+	-- (holder.oneList, the Nameplate tabs' stage: the plate as big as the stage is wide (280: at
+	-- 230 its level box ran past the edge, run q3e95), room kept over it for its debuffs, and
+	-- the stage ns.PLATE_STAGE_H tall on every tab (fitted to the plate alone it was too short,
+	-- the user 2026-11-25: "the previewer needs to be taller", "why arent they the same size").)
 	local wide, floor = 360, 89.1
-	if holder.oneList then wide, floor = 280, 1 end -- (230 cut the level box at the stage's edge, run q3e95)
+	if holder.oneList then wide = 280 end
 	-- (A first draw at the size that fits its debuffs, to measure.)
 	local scale = math.max(0.6, math.min(1.6, (room - 8) / 89.1, (width - 12) / wide))
 	holder.gameShift, holder.gameScale, holder.gameLift = nil, scale, lift
@@ -1098,7 +1133,9 @@ function ns.PlatePreviewFit(holder, width, height, lift)
 	if not copy then return end
 	-- The layout, when the Layout page is on (Forever): the sample unit's kind's.
 	local layout = false
-	if not ns.isRetail and ns.StyleOn and ns.StyleOn("plateLayout") and ns.PlateLayoutFor then
+	if holder.layoutOverride ~= nil then
+		layout = holder.layoutOverride -- (the Layout tab's: the layout being edited, false while it's off)
+	elseif not ns.isRetail and ns.StyleOn and ns.StyleOn("plateLayout") and ns.PlateLayoutFor then
 		layout = ns.PlateLayoutFor(LAYOUT_KIND[holder.SampleKind()] or "hostile") or false
 	end
 	if ns.PlateLayoutApply then ns.PlateLayoutApply(game, layout) end
@@ -1127,24 +1164,55 @@ function ns.PlatePreviewFit(holder, width, height, lift)
 	holder.previewLayout = layout
 	-- Sized and placed by what shows: cast bar to its highest part.
 	local low, high
+	-- (and how far it reaches either side of the plate's middle, in plate units: the crowd control
+	-- icon, 180 right of it, ran past the stage's edge once the plate was sized by the bar alone,
+	-- run q4643)
+	local most, least = 0, 0 -- (its parts' farthest right and left of the middle)
+	local okG, gl, gr, ge = pcall(function() return game:GetLeft(), game:GetRight(), game:GetEffectiveScale() end)
+	local mid = okG and gl and gr and ge and ge > 0 and (gl + gr) / 2 * ge or nil
 	for _, path in ipairs(FIT_PARTS) do
 		local frame = Path(copy, path)
 		if frame and Up(frame) and (not LISTS[path] or HasIcon(frame)) then
 			local b, t = Span(holder, frame)
 			if b and t and t > b then low, high = math.min(low or b, b), math.max(high or t, t) end
+			if mid then
+				local okR, l, r, fe = pcall(function() return frame:GetLeft(), frame:GetRight(), frame:GetEffectiveScale() end)
+				if okR and type(l) == "number" and type(r) == "number" and fe then
+					most = math.max(most, (r * fe - mid) / ge)
+					least = math.min(least, (l * fe - mid) / ge)
+				end
+			end
 		end
 	end
 	if not (low and high and high - low > 4) then return end
 	-- (Steady as debuffs come and go: never sized for less than the plate with its debuffs.)
 	local tall = math.max(high - low, floor)
 	if holder.oneList then
-		scale = math.max(0.6, math.min(1.6, (width - 12) / wide))
-		holder.fitHeight = math.ceil(lift + tall * scale + 22)
-		room = tall * scale + 22 -- (the stage it's sized to: centered in that, not the old room)
+		scale = math.min(1.6, (width - 12) / wide)
+		-- (Every part inside: centered on its bar while that fits; else moved over (gameShift, plate
+		-- units) by as little as keeps both sides in, and smaller only if the two can't fit at all.)
+		local span = most - least
+		if span > 0 then scale = math.min(scale, (width - 12) / span) end
+		-- (Popped out (holder.fitToHeight): the window's height is its own, so the plate fits it;
+		-- sized to the width alone, its debuffs ran off the window's top, the user 2026-11-25.)
+		if holder.fitToHeight then scale = math.min(scale, (height - lift - 22) / tall) end
+		scale = math.max(0.6, scale)
+		-- (why this size, for the tests: what it spans either side, how tall, the room it had)
+		holder.fitWhy = ("span %.0f (%.0f..%.0f), tall %.0f, width %s, room %s"):format(span, least, most, tall,
+			tostring(width), tostring(holder.fitToHeight and (height - lift - 22) or "-"))
+		-- (holder.stageH: a smaller stage of its own, a Smart row's drawer's: at the tabs' 230 it
+		-- was too big there, the user 2026-11-25 "smarty dropdown previewer is too big")
+		holder.fitHeight = math.max(holder.stageH or ns.PLATE_STAGE_H, math.ceil(lift + tall * scale + 22))
+		room = holder.fitToHeight and (height - lift) or (holder.fitHeight - lift) -- (centered in the stage it's in)
 	else
 		scale = math.max(0.6, math.min(1.6, (room - 8) / tall, (width - 12) / wide))
 	end
 	holder.gameScale = scale
+	holder.gameShift = nil
+	if holder.oneList then
+		local half = (width - 12) / 2 / scale -- (room either side of the middle, in plate units)
+		if most > half then holder.gameShift = most - half elseif -least > half then holder.gameShift = least + half end
+	end
 	holder.gameLift = lift + (room - (high - low) * scale) / 2 - low * scale
 	holder:Refresh()
 	if ns.PlateLayoutApply then ns.PlateLayoutApply(game, layout) end

@@ -1057,18 +1057,49 @@ end
 -- Shown instead: an On/Off switch right of the page's title, past its "?"
 -- (and before a Style link there, moved along), the same as that right-click.
 -- Made as the page first shows, its title's parts all there by then.
+-- The one on/off switch look, the CineMode page's (its rows' pills): a green track with a round
+-- knob at the right while on, dark with a grey knob at the left while off, no words. The user
+-- 2026-11-26: "we should start standardizing our on off switches. make them look like the main
+-- cinemode menus". MakeSwitchLook(button) once (32 x 16), PaintSwitchLook(button, on, dim).
+local SWITCH_ON_TRACK, SWITCH_ON_EDGE = { 0.23, 0.56, 0.29 }, { 0.42, 0.78, 0.48 }
+function ns.MakeSwitchLook(button, w, h)
+	w, h = w or 32, h or 16
+	button:SetSize(w, h)
+	button.edge = button:CreateTexture(nil, "BACKGROUND")
+	button.edge:SetAllPoints()
+	button.track = button:CreateTexture(nil, "BORDER")
+	button.track:SetPoint("TOPLEFT", 1, -1)
+	button.track:SetPoint("BOTTOMRIGHT", -1, 1)
+	button.knob = button:CreateTexture(nil, "ARTWORK")
+	button.knob:SetSize(h - 4, h - 4)
+	button.knob:SetTexture(ns.HELP_DISC) -- (round: a disc, tinted)
+	local hover = button:CreateTexture(nil, "HIGHLIGHT")
+	hover:SetAllPoints(button.track)
+	hover:SetColorTexture(1, 1, 1, 0.1)
+end
+function ns.PaintSwitchLook(button, on, dim)
+	button.on = on and true or false
+	button.knob:ClearAllPoints()
+	if on then
+		button.edge:SetColorTexture(SWITCH_ON_EDGE[1], SWITCH_ON_EDGE[2], SWITCH_ON_EDGE[3], 1)
+		button.track:SetColorTexture(SWITCH_ON_TRACK[1], SWITCH_ON_TRACK[2], SWITCH_ON_TRACK[3], 1)
+		button.knob:SetPoint("RIGHT", button, "RIGHT", -2, 0)
+		button.knob:SetVertexColor(0.92, 0.97, 0.92, 1)
+	else
+		button.edge:SetColorTexture(0.35, 0.35, 0.37, 1)
+		button.track:SetColorTexture(0.07, 0.07, 0.08, 1)
+		button.knob:SetPoint("LEFT", button, "LEFT", 2, 0)
+		button.knob:SetVertexColor(0.5, 0.5, 0.52, 1)
+	end
+	button:SetAlpha(dim and 0.4 or 1)
+end
+
 local function PaintHeaderSwitch(toggle)
 	if not ns.GetDB() then return end
 	local master = ns.PageSwitchOf(toggle.key)
 	local held = master and ns.GetDB()[master] == false
 	local on = not held and KeyGet(toggle.key) and true or false
-	toggle.fill:SetColorTexture(on and 0.16 or 0.22, on and 0.52 or 0.07, on and 0.2 or 0.05, 1)
-	toggle.knob:ClearAllPoints()
-	toggle.knob:SetPoint(on and "RIGHT" or "LEFT", on and -2 or 2, 0)
-	toggle.text:ClearAllPoints()
-	toggle.text:SetPoint("CENTER", on and -7 or 7, 0)
-	toggle.text:SetText(on and L["On"] or L["Off"])
-	toggle.text:SetTextColor(1, 1, 1, held and 0.4 or 1)
+	ns.PaintSwitchLook(toggle, on, held) -- (the CineMode page's switch, 2026-11-26)
 	toggle:SetEnabled(not held)
 end
 -- A page's frames' Style page, by the page's id: a palette by its switch
@@ -1088,26 +1119,11 @@ local function MakeHeaderSwitch(content, switch)
 	local at = switch.at
 	if switch.header or not (switch.check and (at or content.pageHelp)) then return end
 	local toggle = CreateFrame("Button", nil, at and at[1] or content.pageHelp:GetParent())
-	toggle:SetSize(46, 18)
 	toggle:SetPoint("LEFT", at and at[2] or content.pageHelpLast or content.pageHelp, "RIGHT", 8, 0)
 	if not at then content.pageSwitch = toggle end -- (Favorites.lua's star goes past it)
 	toggle:SetFrameLevel((at and at[1] or content.pageHelp):GetFrameLevel() + (at and 2 or 0))
 	toggle.key, toggle.check = switch.key, switch.check
-	local edge = toggle:CreateTexture(nil, "BACKGROUND")
-	edge:SetAllPoints()
-	edge:SetColorTexture(0.45, 0.38, 0.2, 1)
-	toggle.fill = toggle:CreateTexture(nil, "BORDER")
-	toggle.fill:SetPoint("TOPLEFT", 1, -1)
-	toggle.fill:SetPoint("BOTTOMRIGHT", -1, 1)
-	toggle.knob = toggle:CreateTexture(nil, "ARTWORK")
-	toggle.knob:SetSize(14, 14)
-	toggle.knob:SetColorTexture(0.85, 0.8, 0.65, 1)
-	toggle.text = toggle:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	toggle.text.searchSkip = true
-	local hl = toggle:CreateTexture(nil, "HIGHLIGHT")
-	hl:SetPoint("TOPLEFT", 1, -1)
-	hl:SetPoint("BOTTOMRIGHT", -1, 1)
-	hl:SetColorTexture(1, 1, 1, 0.12)
+	ns.MakeSwitchLook(toggle) -- (the CineMode page's switch, 2026-11-26: it was a gold-edged one with On/Off in it)
 	Tooltip(toggle, switch.tip or L["Turns this page on or off, same as right-clicking its icon."])
 	toggle:SetScript("OnClick", function(self)
 		local on = KeyGet(self.key) and true or false
@@ -3755,10 +3771,10 @@ do
 		local painted = run and debugprofilestop()
 		if run then run.show = painted - shown end
 		-- (Reset page: for a page with settings of its own)
-		-- (Not under the mock's chrome, Nameplate Style's four tabs: "remove reset features",
-		-- the user 2026-11-25; it showed here though the page's own was hidden.)
+		-- (Nameplate Style's four tabs too: hidden there for a while, the user 2026-11-25 "RESET
+		-- PAGE MISSING"; the mock's "remove reset features" was the editor's own Reset.)
 		local resetContent = tile.resetContent or tile.canvas.content
-		hub.reset:SetShown(pageKeys[resetContent] ~= nil and not (resetContent and resetContent.mockChrome))
+		hub.reset:SetShown(pageKeys[resetContent] ~= nil)
 		if ns.PaintPageSwitches then ns.PaintPageSwitches() end -- (its off card)
 		if run then run.switches = debugprofilestop() - painted end
 		ns.EndPageRun(run)
@@ -12408,6 +12424,7 @@ do
 				preview.backButton = nil
 			end
 			preview.lookPreview = inner -- (the test reads it: /cine debug platematch)
+			if ns.SoftEdge then ns.SoftEdge(preview) end -- (a thin soft line round it, the user 2026-11-26)
 			if inner then caption:Hide() end -- (the mock's stage: no caption over the plate)
 			local function MakeSample(n)
 				local plate = CreateFrame("Button", nil, preview)
@@ -12685,11 +12702,13 @@ do
 					-- heights before, and no layout: the debuffs sat on the name.)
 					self.noAutoFit = true
 					inner.kind, inner.hoverTheme = previewed, self.hoverTheme
+					inner.fitToHeight = ns.StylePreviewIsPopped and ns.StylePreviewIsPopped(self) or nil
 					ns.PlatePreviewFit(inner, width, height, inner.plateLift or 38)
-					-- (The stage as tall as what shows (the mock): the fitter sized again.)
+					-- (The stage as tall as what shows (the mock): the fitter sized again. Not while
+					-- popped out: the window keeps its own height, the plate fitted to it.)
 					-- (Not for a pixel: the measure differs by a hair between draws, and the stage
 					-- went 132, 133, 132... as it was drawn, the plate shaking, run q85bc.)
-					if inner.fitHeight and math.abs(inner.fitHeight - (self.fixedHeight or 0)) > 1.5 then
+					if not inner.fitToHeight and inner.fitHeight and math.abs(inner.fitHeight - (self.fixedHeight or 0)) > 1.5 then
 						self.fixedHeight = inner.fitHeight
 						if ns.FitStylePreview then C_Timer.After(0, function() ns.FitStylePreview(self) end) end
 					end
@@ -13120,8 +13139,10 @@ do
 					row.pickedBar:SetShown(id == previewed)
 					y = y + ROW_H
 					if moves[id] then
-						moves[id].up:SetShown(i > 1 and Group(list[i - 1]) == Group(id))
-						moves[id].down:SetShown(i < #list - 1 and Group(list[i + 1]) == Group(id))
+						-- (the grip while there's another row of its group to move past)
+						local others = false
+						for j, other in ipairs(list) do if j ~= i and Group(other) == Group(id) then others = true end end
+						moves[id].grip:SetShown(others)
 					end
 					-- (A row for some units under a row of its kind for more of
 					-- them: that one sets first. Its Who and Distance in orange.)
@@ -13184,28 +13205,80 @@ do
 				for i, each in ipairs(ns.TargetMarkOrder()) do order[i] = each end
 				return order
 			end
-			local function Move(kind, by)
-				local order = Order()
-				for i, each in ipairs(order) do
-					if each == kind and order[i + by] then
-						order[i], order[i + by] = order[i + by], each
-						break
+			-- A row's grip: drag it up or down to move the row (the user 2026-11-25: the arrows
+			-- weren't even aligned, "make them draggable with that one dotted square icon"). A gold line
+			-- shows where it lands; Default's rows (others) stay at the bottom, as the arrows kept them.
+			local dropLine
+			local function Grip(row, kind)
+				local grip = CreateFrame("Button", nil, row)
+				grip:SetSize(12, 18)
+				grid.grips = grid.grips or {} -- (the tests read them)
+				grid.grips[#grid.grips + 1] = grip
+				grip:SetPoint("LEFT", row, "LEFT", 2, 0)
+				for c = 0, 1 do
+					for r = 0, 2 do
+						local dot = grip:CreateTexture(nil, "ARTWORK")
+						dot:SetColorTexture(0.78, 0.74, 0.66, 0.9)
+						dot:SetSize(2, 2)
+						dot:SetPoint("TOPLEFT", 3 + c * 4, -4 - r * 4)
 					end
 				end
-				SetOrder(order)
-			end
-			local function MoveButton(row, kind, by)
-				local button = CreateFrame("Button", nil, row)
-				button:SetSize(14, 14)
-				button:SetPoint("LEFT", row, "LEFT", 0, by < 0 and 7 or -7)
-				local art = by < 0 and "Interface\\Buttons\\Arrow-Up-" or "Interface\\Buttons\\Arrow-Down-"
-				button:SetNormalTexture(art .. "Up")
-				button:SetPushedTexture(art .. "Down")
-				button:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-				Tooltip(button, by < 0 and L["Move this row up so a plate tries it sooner."]
-					or L["Move this row down so a plate tries it later."])
-				button:SetScript("OnClick", function() Move(kind, by) end)
-				return button
+				local lit = grip:CreateTexture(nil, "HIGHLIGHT")
+				lit:SetAllPoints()
+				lit:SetColorTexture(1, 1, 1, 0.1)
+				Tooltip(grip, L["Drag to move this row. A plate tries the rows from the top down."])
+				grip:RegisterForDrag("LeftButton")
+				local target
+				-- (Where the cursor would put it: before the first movable row whose middle is under it.)
+				local function Target()
+					local scale = grid:GetEffectiveScale()
+					local _, cy = GetCursorPosition()
+					cy = cy / scale
+					local order, last = ns.TargetMarkOrder(), nil
+					for i, id in ipairs(order) do
+						local each = rows[id]
+						if Group(id) == Group(kind) and each and each:IsShown() then
+							local top, bottom = each:GetTop(), each:GetBottom()
+							if top and bottom and cy > (top + bottom) / 2 then return i, each, "TOP" end
+							last = { i + 1, each }
+						end
+					end
+					if last then return last[1], last[2], "BOTTOM" end
+				end
+				grip:SetScript("OnDragStart", function()
+					row:SetAlpha(0.55)
+					if not dropLine then
+						dropLine = grid:CreateTexture(nil, "OVERLAY")
+						dropLine:SetColorTexture(1, 0.82, 0, 0.95)
+						dropLine:SetHeight(2)
+					end
+					ns.SetOnUpdate(grip, function()
+						local i, at, side = Target()
+						target = i
+						dropLine:ClearAllPoints()
+						if at then
+							dropLine:SetPoint(side .. "LEFT", at, side .. "LEFT", 0, 0)
+							dropLine:SetPoint(side .. "RIGHT", at, side .. "RIGHT", 0, 0)
+							dropLine:Show()
+						else
+							dropLine:Hide()
+						end
+					end)
+				end)
+				grip:SetScript("OnDragStop", function()
+					ns.SetOnUpdate(grip, nil)
+					row:SetAlpha(1)
+					if dropLine then dropLine:Hide() end
+					if not target then return end
+					local order, from = Order(), nil
+					for i, id in ipairs(order) do if id == kind then from = i end end
+					if not from or target == from or target == from + 1 then return end
+					table.remove(order, from)
+					table.insert(order, target > from and target - 1 or target, kind)
+					target = nil
+					SetOrder(order)
+				end)
+				return grip
 			end
 			-- The next free row of a kind, Who and Distance: its own id while it
 			-- isn't on the grid (Default's always is), else the first number
@@ -13685,8 +13758,22 @@ do
 						if look.fitHeight and math.abs((look:GetHeight() or 0) - look.fitHeight) > 1.5 then -- (not for a pixel: run q85bc)
 							look:SetHeight(look.fitHeight)
 							ns.PlatePreviewFit(look, PREVIEW_W, look.fitHeight, look.plateLift or 38)
+							-- (the drawer as tall as its new stage: sized before it, the stage ran over the
+							-- rows under it, the user's shot 2026-11-25)
+							if drawer.FitRow then drawer.FitRow() end
 						end
 					end
+					look.stageH = 150 -- (smaller than the tabs' stage: a row's drawer, the user 2026-11-25)
+					-- (Out in a window of its own and back, the user 2026-11-26.)
+					if ns.StyleIconButton and ns.PopPreviewOut then
+						local pop = ns.StyleIconButton(look, "pop", L["Pop out: this row's preview in a window of its own."])
+						pop:SetPoint("TOPRIGHT", -6, -6)
+						pop:SetFrameLevel(look:GetFrameLevel() + 30)
+						pop.zoomSkip = true
+						pop:SetScript("OnClick", function() ns.PopPreviewOut(look, AutoRowInfo(kind).full) end)
+						look.popButton = pop
+					end
+					if ns.SoftEdge then ns.SoftEdge(look) end
 					look.onStates = FitPlate
 					look:HookScript("OnShow", function() C_Timer.After(0, FitPlate) end)
 					C_Timer.After(0, FitPlate)
@@ -13703,6 +13790,7 @@ do
 						end
 					end
 					hooksecurefunc(host, "Redraw", Fit)
+					drawer.FitRow = Fit
 					Fit()
 					grid:Refresh()
 				end
@@ -13780,7 +13868,7 @@ do
 				end
 				-- (Default stays last: no arrows.)
 				if kind ~= "others" then
-					moves[kind] = { up = MoveButton(row, kind, -1), down = MoveButton(row, kind, 1) }
+					moves[kind] = { grip = Grip(row, kind) }
 				end
 
 				local showKey = MarkKey(kind, "Show")

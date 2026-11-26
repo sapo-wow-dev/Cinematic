@@ -654,8 +654,10 @@ ns.TestKit.Define({
 						local copy = game and game.gameCopy
 						r:Log(("  page preview %s x %s, plate scale %s"):format(S(page:GetWidth()), S(page:GetHeight()),
 							S(game and game:GetScale())))
-						r:Verdict(copy ~= nil and game:IsShown() and (ns.noRealLayout or (inner.gameScale or 0) > 1),
-							("one game plate, drawn bigger (scale %s)"):format(S(inner.gameScale)))
+						-- (As big as the 268-wide stage allows with its level box, about 0.91 (the mock's stage
+						-- beside the settings, 2026-11-25); bigger than 1 before, on a 560-wide one.)
+						r:Verdict(copy ~= nil and game:IsShown() and (ns.noRealLayout or (inner.gameScale or 0) >= 0.85),
+							("one game plate, as big as the stage allows (scale %s)"):format(S(inner.gameScale)))
 						-- (Its lists inside it, covering nothing.)
 						local covered = 0
 						-- (One Preview list since 2026-11-25, the mock: the unit and states together.)
@@ -803,6 +805,9 @@ ns.TestKit.Define({
 			-- picking a part shows it and the Buffs sample: to prove again.)
 			proven = "platematch q7ba3 + qa2a4 (2026-11-25): guides in all three centers, every part picked shows, popped out, no keyboard held, 27 of 27",
 			run = function(r)
+			-- (Its level box as its page says: your own Hidden takes it off the preview and out of the
+			-- readout, run q38ce read "Centered" where the test wants it 26 right.)
+			r:Set("styleOver_platePartLevel", "row")
 			if not (ns.OpenOptions and ns.PlateLayoutApply) then return r:Skip(NoStyle()) end
 			if InCombatLockdown() then
 				r:WaitFor("Leave the fight first.", { check = function() return not InCombatLockdown() and "out" end })
@@ -860,40 +865,21 @@ ns.TestKit.Define({
 					r:Verdict(okO and #hits == 0, each[2] .. " covers nothing: " .. (okO and table.concat(hits, ", ") or tostring(hits)))
 				end
 			end
-			-- The bottom row neat (the user, 2026-11-25: State "not in the bottom left nice and
-			-- neat", Scene "randomly offset", the Unit list gone): the Unit list with All plates
-			-- only, State at the bottom left when alone, Scene at the bottom right level with it.
-			local h, unitD, stateD, scene = page.holder, page.holder.unitDropdown, page.holder.stateDropdown, page.holder.sceneButton
-			local function Row(label)
-				if not measured then return end -- (offline: nothing placed to measure)
-				local hl, hr = h:GetLeft(), h:GetRight()
-				local sl, sc = stateD and stateD:GetLeft(), stateD and select(2, stateD:GetCenter())
-				local cr, cc = scene and scene:GetRight(), scene and select(2, scene:GetCenter())
-				local withUnit = unitD ~= nil and unitD:IsShown()
-				local wantLeft = withUnit and (unitD:GetRight() or 0) + 6 or (hl or 0) + 6
-				r:Log(("  %s: unit %s, state left %s (want %s), scene right %s of %s, centers %s / %s"):format(label,
-					tostring(withUnit), S(sl), S(wantLeft), S(cr), S(hr), S(sc), S(cc)))
-				return withUnit, sl and math.abs(sl - wantLeft) <= 1 or false,
-					cr and hr and math.abs(cr - (hr - 8)) <= 1 or false, sc and cc and math.abs(sc - cc) <= 1 or false
-			end
-			if h and stateD and scene and page.Edit then
-				local u1, s1, c1, v1 = Row("All plates")
-				if measured then
-					r:Verdict(u1 and s1, "All plates: the Unit list at the bottom left, State beside it")
-					r:Verdict(c1 and v1, "All plates: Scene at the bottom right, level with State")
-				end
+			-- The one Preview list, as the Default tab's (the user 2026-11-25: "why dont they use the 1
+			-- dropdown?"): shown with All plates and with a kind's layout, a kind's without its unit
+			-- choices (holder.hideUnits), the plate always the kind being laid out.
+			local h, unitD = page.holder, page.holder.unitDropdown
+			if h and unitD and page.Edit then
+				r:Verdict(h.oneList and unitD:IsShown() and not h.stateDropdown and not h.hideUnits,
+					"All plates: the one Preview list, its units in it")
 				page.Edit("hostile")
 				r:Sleep(0.2)
-				local u2, s2, c2, v2 = Row("Hostile")
-				if measured then
-					r:Verdict(not u2 and s2, "a kind's layout: no Unit list, State at the bottom left")
-					r:Verdict(c2 and v2, "a kind's layout: Scene at the bottom right, level with State")
-				end
-				r:Shot("Layout tab, Hostile's layout: State bottom left, Scene bottom right", { behind = panel })
+				r:Verdict(unitD:IsShown() and h.hideUnits == true, "a kind's layout: the Preview list, no unit choices")
+				r:Shot("Layout tab, Hostile's layout: the one Preview list", { behind = panel })
 				page.Edit("all")
 				r:Sleep(0.2)
 			else
-				r:Fail("the preview's bottom row read (State, Scene, Edit)")
+				r:Fail("the preview's Preview list read (Edit)")
 			end
 			-- (The guides' names at the page's own size, the user: "so small no one would know".)
 			local okF, _, nameSize = pcall(function() return page.marks.unit.name:GetFont() end)
@@ -901,17 +887,26 @@ ns.TestKit.Define({
 			r:Shot("Layout tab, the game's places", { behind = panel })
 			-- A nudge on the preview: the level box 12 right, read off our copy.
 			local box = copy.PlayerLevelDiffFrame
-			local before = box:GetLeft()
+			-- (Read against the plate's own bar, not the screen: the stage keeps every part in view,
+			-- so a box pushed past its edge moves the whole plate over, and the box's place on screen
+			-- stayed put, run q48e4 (the 268-wide stage beside the settings, 2026-11-25).)
+			local bar = copy.HealthBarsContainer
+			local function BoxLeft()
+				local l, br = box:GetLeft(), bar and bar:GetRight()
+				return l and br and (l - br) or nil
+			end
+			local before = BoxLeft()
 			r:Set("plateLayoutData", { all = { parts = { level = { x = 12 } } } })
 			ns.PlateLayoutChanged()
 			page.Select("level")
 			page.Redraw()
 			if page.Refresh then page.Refresh() end -- (its pills and fields as the test's layout)
 			r:Sleep(0.3)
-			local after = box:GetLeft()
+			local after = BoxLeft()
 			local moved = before and after and (after - before) * box:GetEffectiveScale() / copy:GetEffectiveScale()
 			r:Log(("  level box left %s -> %s (plate units %s)"):format(S(before), S(after), S(moved)))
-			if measured then r:Verdict(moved and math.abs(moved - 12) < 0.6, "the level box 12 right on the preview")
+			-- (1.5: a screen pixel is ~1.4 of the plate's own units at the stage's size, run q1d53 read 12.76)
+			if measured then r:Verdict(moved and math.abs(moved - 12) < 1.5, "the level box 12 right on the preview")
 			else r:Skip("no real layout to measure (offline): the nudge") end
 			-- The guides (the user, 2026-11-25: lines over the bar but under the cast bar, "wtf is
 			-- that"): marks over and under the plate, never on a part of it, over every frame of it,
@@ -936,9 +931,10 @@ ns.TestKit.Define({
 			-- (What of the guides lies on a part of the plate: "<guide> on <part>" each.)
 			local function GuidesOnParts()
 				local on = {}
-				local guides = { { marks.unit.top, "Unit's upper mark" }, { marks.unit.bottom, "Unit's lower mark" },
-					{ marks.unit.name, "Unit's name" }, { marks.middle.top, "middle's upper mark" },
-					{ marks.middle.bottom, "middle's lower mark" }, { marks.middle.name, "middle's name" },
+				-- (The lines themselves cross the plate behind it since 2026-11-25 (the user: "lines
+				-- behind the plate and cast bar that show its anchor point"): only their names, the
+				-- joining line and the status must keep off its parts.)
+				local guides = { { marks.unit.name, "Unit's name" }, { marks.middle.name, "middle's name" },
 					{ marks.span, "the joining line" }, { page.readout, "the status" } }
 				for _, guide in ipairs(guides) do
 					if guide[1]:IsVisible() then
@@ -970,12 +966,19 @@ ns.TestKit.Define({
 				local okT, top = pcall(TopOf, copy, 0)
 				r:Verdict(okT and page.overlay:GetFrameLevel() > top, ("%s: the guides over every frame of the plate (%s over %s)")
 					:format(mode, tostring(page.overlay:GetFrameLevel()), tostring(top)))
+				-- (the lines behind the plate, across and down through its anchor)
+				local behind = ns.platePreviewGuides
+				local plateLevel = page.holder and page.holder.gamePlate and page.holder.gamePlate:GetFrameLevel()
+				r:Verdict(behind and plateLevel and behind:GetFrameLevel() < plateLevel and marks.unit.top:IsVisible()
+					and marks.unit.across and marks.unit.across:IsVisible(),
+					("%s: the lines behind the plate, across and down (%s under %s)"):format(mode,
+					tostring(behind and behind:GetFrameLevel()), tostring(plateLevel)))
 			end
 			-- (The game's place: one mark, Unit, and the status says how far off and what centers it.)
 			local words = page.readout and page.readout:GetText() or ""
 			if marks and measured then
 				r:Verdict(marks.unit.top:IsVisible() and not marks.middle.top:IsVisible() and not marks.span:IsVisible()
-					and words:find("Balanced centers it", 1, true) ~= nil,
+					and words:find("right of unit", 1, true) ~= nil, -- (the short line since 2026-11-26)
 					"the game's place: the Unit mark alone, the status: " .. words)
 			end
 			CheckGuides("the game's place")
@@ -991,7 +994,7 @@ ns.TestKit.Define({
 				r:Verdict(marks.unit.name:IsVisible() and marks.middle.name:IsVisible() and marks.span:IsVisible()
 					and (marks.unit.name:GetText() or ""):find("Unit", 1, true) ~= nil
 					and (marks.middle.name:GetText() or ""):find("Plate's middle", 1, true) ~= nil
-					and words:find("Moved 15 right", 1, true) ~= nil,
+					and words:find("right of unit", 1, true) ~= nil, -- (the short line since 2026-11-26)
 					("Custom: both marks named (%q, %q), joined, the status: %s"):format(marks.unit.name:GetText() or "",
 					marks.middle.name:GetText() or "", words))
 				local covered = {}
@@ -1008,20 +1011,28 @@ ns.TestKit.Define({
 			-- Balanced, the level box and crowd control left out: what's left centered on the unit,
 			-- with every part up on the preview (All parts up), as Balanced measures them (run qb095:
 			-- checked with only a cast up, the marker's room counted but not shown: 23 off).
-			local statesNow = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
+			-- (Layout's own preview named: with none, "the last one used" could be another tab's,
+			-- run q97d6 in a session where Default's ran first.)
+			local lh = page.holder
+			local statesNow = ns.PlatePreviewStates and ns.PlatePreviewStates(lh) or {}
 			local wasStates = {}
 			for key, on in pairs(statesNow) do wasStates[key] = on end
 			-- (Buffs too since the Buffs state: Balanced measures their row, run qd5a8 read 31 off without it.)
 			local ALL_UP = { "casting", "marker", "debuffs", "buffs", "crowd", "quest" }
 			for _, key in ipairs(ALL_UP) do
-				if not statesNow[key] and ns.TogglePlatePreviewState then ns.TogglePlatePreviewState(key) end
+				if not statesNow[key] and ns.TogglePlatePreviewState then ns.TogglePlatePreviewState(key, lh) end
 			end
 			r:Set("plateLayoutData", { all = { center = "balanced", parts = { level = { count = "never" },
 				crowd = { count = "never" } } } })
 			ns.PlateLayoutChanged()
 			page.Redraw()
 			if page.Refresh then page.Refresh() end
-			r:Sleep(0.3)
+			-- (Up to 2 s for it to settle: read once after 0.3 s it said 51 right in a crowded zone, run
+			-- q97d6.)
+			for _ = 1, 8 do
+				r:Sleep(0.25)
+				if (page.readout and page.readout:GetText() or ""):find("Anchor is on unit", 1, true) then break end
+			end
 			local unitX = copy:GetCenter()
 			local l, rr
 			for _, part in ipairs(ns.PLATE_LAYOUT_PARTS) do
@@ -1039,7 +1050,7 @@ ns.TestKit.Define({
 			r:Log(("  shown parts %s..%s, unit middle %s, off by %s"):format(S(l), S(rr), S(unitX), S(off)))
 			-- (The page's readout says so too, counting as Balanced does: run q2b06 it said 38 right.)
 			words = page.readout and page.readout:GetText() or ""
-			if measured then r:Verdict(words:find("Centered on the unit", 1, true) ~= nil, "the status says centered: " .. words) end
+			if measured then r:Verdict(words:find("Anchor is on unit", 1, true) ~= nil, "the status says centered: " .. words) end
 			CheckGuides("Balanced, every part up")
 			if measured then r:Verdict(off and math.abs(off) < 1, "Balanced: what's shown centered on the unit (within 1)")
 			else r:Skip("no real layout to measure (offline): Balanced") end
@@ -1047,7 +1058,7 @@ ns.TestKit.Define({
 			-- (The preview's states back as they were: the next preview opened shows the same.)
 			for _, key in ipairs(ALL_UP) do
 				if (statesNow[key] or false) ~= (wasStates[key] or false) and ns.TogglePlatePreviewState then
-					ns.TogglePlatePreviewState(key)
+					ns.TogglePlatePreviewState(key, lh)
 				end
 			end
 			-- The page's own controls: none covering another.

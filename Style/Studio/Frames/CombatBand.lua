@@ -105,7 +105,8 @@ local function LookFrom(_, first, field, options, opts)
 	end
 	-- (Hidden on the first variant: it's the one the others follow.)
 	local prop = R.Choice(key, L["Look from"], options, opts)
-	prop.shown = function(_, v) return v ~= first end
+	-- (opts.hideOn: variants it's gone from, the nameplates' cast bars: each setting follows or not.)
+	prop.shown = function(_, v) return v ~= first and not (opts and opts.hideOn and opts.hideOn[v]) end
 	return prop
 end
 
@@ -443,6 +444,42 @@ ns.StyleFrame("raid", {
 -- One frame for the three cast pages (decision 4): Unit Cast Style opens on Default,
 -- Player Cast Style on Your cast bar, Cast Bar Style on Nameplates.
 local CK = Keyer("cast", "default", function(base, v) return base .. "_" .. v end)
+-- (The nameplates' (PLATE) each setting its own or Default's, one by one, the user 2026-11-25:
+-- Look from "locks everything". A field: Default's value while its own is empty; set, its own;
+-- set to what Default has, empty again (follows it once more). PlateCastStyle.lua's View reads
+-- it the same way.)
+local plateFields = {}
+local function PlateField(base)
+	if not plateFields[base] then
+		local own = base .. "_PLATE"
+		plateFields[base] = {
+			get = function()
+				local db = ns.GetDB()
+				local mine = db and db[own]
+				if mine ~= nil then return mine end
+				return ns.StyleKeyGet(base)
+			end,
+			set = function(value)
+				local db = ns.GetDB()
+				if not db then return end
+				if value == ns.StyleKeyGet(base) then db[own] = nil else db[own] = value end
+			end,
+			default = ns.DEFAULTS[base],
+			plateOwn = own,
+		}
+	end
+	return plateFields[base]
+end
+do
+	local keyer = CK
+	CK = function(base)
+		local each = keyer(base)
+		return function(v)
+			if v == "PLATE" then return PlateField(base) end
+			return each(v)
+		end
+	end
+end
 local function CastId(v) return (v ~= nil and v ~= "default") and v or nil end
 local function CastSwitch(v) return ns.CastSwitchFor and ns.CastSwitchFor(CastId(v)) or "unitCastStyle" end
 -- (A variant's settings can change: Default's while a cast page is on, a kind's
@@ -450,6 +487,7 @@ local function CastSwitch(v) return ns.CastSwitchFor and ns.CastSwitchFor(CastId
 local function CastOwn(db, v)
 	local id = CastId(v)
 	if not id then return ns.StyleOn(CastSwitch(v), db) end
+	if id == "PLATE" then return ns.CastActive and ns.CastActive(id, db) or false end -- (every setting open)
 	return ns.CastActive and ns.CastActive(id, db) and db["plateCastOwn_" .. id] and true or false
 end
 local CastTest = ByVariant("cast", CastOwn)
@@ -529,7 +567,7 @@ ns.StyleFrame("cast", {
 	parts = {
 		{ id = "bar", label = L["Bar"], region = CastSample, groups = {
 			R.Group("Look",
-				LookFrom("cast", "default", CastLookField, CastLookOptions, { free = true,
+				LookFrom("cast", "default", CastLookField, CastLookOptions, { free = true, hideOn = { PLATE = true },
 					tip = L["Pick how these cast bars look."] })),
 			R.Group("Bar",
 				R.Texture(CK("plateCastFill"), { tip = L["The bar's fill, including textures other addons share."], test = CastTest }),

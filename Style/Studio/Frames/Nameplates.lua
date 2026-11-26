@@ -184,7 +184,9 @@ local function ThemeTiles()
 		local entry = { value = theme.key, text = L[theme.name] or theme.name }
 		if theme.texture and theme.texture ~= "game" and ns.StyleTexturePath then
 			local path, atlas = ns.StyleTexturePath(theme.texture)
-			entry.texture, entry.atlas = path, atlas
+			-- (StyleTexturePath gives the path, then whether it's an atlas: its name is the path. Stored as
+			-- the atlas itself, true went to SetAtlas, the user's log 2026-11-26.)
+			if atlas then entry.atlas = path else entry.texture = path end
 		end
 		if theme.key == "game" then table.insert(list, 2, entry) else rest[#rest + 1] = entry end
 	end
@@ -608,23 +610,32 @@ for _, part in ipairs(ns.PLATE_LAYOUT_PARTS or {}) do
 	props[#props + 1] = R.Choice(LField(key, "count", COUNT_DEFAULT(key)), L["Balance"], counts, {
 		tip = L["Whether this part counts when Center is Balanced: always, only while it's up, or never."] })
 	if key ~= "health" and key ~= "cast" then
-		props[#props + 1] = R.Button(L["Mirror"], function(host)
-			local kind = host and host.variant or "all"
-			local f = Studio.frames.platelayout
-			-- (One Undo step: its fields before and after.)
-			local writes = {}
-			local list = { "x", "side" }
-			local before = {}
-			for i, field in ipairs(list) do before[i] = LayoutField(kind, key, field, field == "side" and "right" or 0).get() end
-			if ns.PlateLayoutMirror then ns.PlateLayoutMirror(ns.PlateLayoutEditing(kind, true), key, LayoutPlate()) end
-			for i, field in ipairs(list) do
-				local fieldT = LayoutField(kind, key, field, field == "side" and "right" or 0)
-				local after = fieldT.get()
-				fieldT.set(before[i])
-				writes[#writes + 1] = { fieldT, after }
+		-- (A switch that shows it, Off or Mirrored, not a button; twice is back where it was:
+		-- PlateLayoutPage.lua's PlateLayoutMirror. The user 2026-11-26.)
+		local mirrorFields = {}
+		local function MirrorField(v)
+			local kind = LNote(v) or "all"
+			if not mirrorFields[kind] then
+				-- (noHover: pointing at it does nothing, a click mirrors; its preview wrote the layout and
+				-- moved the plate, the user 2026-11-26 "why does mousing over mirrored cause the nameplate
+				-- in the previewer to move?")
+				mirrorFields[kind] = { default = "off", noHover = true,
+					get = function()
+						local p = ns.PlateLayoutPart(ns.PlateLayoutShown(kind), key)
+						return p and p.mirrored and "on" or "off"
+					end,
+					set = function(value)
+						local p = ns.PlateLayoutPart(ns.PlateLayoutShown(kind), key)
+						local now = p and p.mirrored and "on" or "off"
+						if value ~= now and ns.PlateLayoutMirror then
+							ns.PlateLayoutMirror(ns.PlateLayoutEditing(kind, true), key, LayoutPlate())
+						end
+					end }
 			end
-			Studio.Apply(f, L["Mirror"] .. " · " .. L[part.label], writes)
-		end, { tip = L["Puts it on the other side of the bar, as far out."] })
+			return mirrorFields[kind]
+		end
+		props[#props + 1] = R.Choice(MirrorField, L["Mirror"], { { "off", L["Off"] }, { "on", L["Mirrored"] } },
+			{ tip = L["On the other side of the bar, as far out. Off puts it back where it was."] })
 	end
 	props[#props + 1] = R.Note(function()
 		local what = ns.PlateLayoutHiddenBySettings and ns.PlateLayoutHiddenBySettings(key)

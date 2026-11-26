@@ -226,17 +226,18 @@ end
 
 -- The sample unit: kind "hostile" / "neutral" / "friendly" / "player", its
 -- name; color (optional): the bar's, over the game's; nameColor (optional).
-function ns.SetGamePlateUnit(plate, kind, name, color, nameColor)
+-- (kind "enemy player" / "friendly player" with class: another player, the preview's samples.)
+function ns.SetGamePlateUnit(plate, kind, name, color, nameColor, givenClass)
 	local copy = plate and plate.gameCopy
 	if not copy then return end
 	local bar = copy.HealthBarsContainer.healthBar
 	local mine = UnitEffectiveLevel and UnitEffectiveLevel("player") or UnitLevel("player") or 1
 	local game, level, levelColor
-	if kind == "player" then
-		local class = select(2, UnitClass("player"))
+	if kind == "player" or kind == "enemy player" or kind == "friendly player" then
+		local class = givenClass or select(2, UnitClass("player"))
 		local classColor = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
 		game = classColor and { classColor.r, classColor.g, classColor.b } or { 0, 1, 0 }
-		nameColor = nameColor or game -- (friendly players' names in their class color: the game's setting)
+		nameColor = nameColor or (kind == "enemy player" and { 1, 1, 1 } or game) -- (friendly players' names in their class color: the game's setting)
 		level = mine
 	else
 		game = REACTION_COLORS[kind] or REACTION_COLORS.hostile
@@ -251,7 +252,7 @@ function ns.SetGamePlateUnit(plate, kind, name, color, nameColor)
 	if bar.UpdateTextDisplay then pcall(bar.UpdateTextDisplay, bar) end
 	-- (The level as the game writes it: difficulty colors for what you can attack.)
 	local box = copy.PlayerLevelDiffFrame
-	if kind == "friendly" or kind == "player" then
+	if kind == "friendly" or kind == "player" or kind == "friendly player" then
 		levelColor = _G.UNIT_LEVEL_NON_ATTACKABLE
 	elseif box.GetDifficultyColor then
 		levelColor = box:GetDifficultyColor(level - mine)
@@ -370,7 +371,7 @@ function ns.SetGamePlateStates(plate, states)
 		return registry and constants and threatDisplay
 			and registry:GetCVarBitfieldIndex(constants.THREAT_DISPLAY_CVAR, threatDisplay[which]) or false
 	end
-	local enemy = plate.kind ~= "friendly" and plate.kind ~= "player" -- (the game shows threat on enemies only)
+	local enemy = plate.kind ~= "friendly" and plate.kind ~= "player" and plate.kind ~= "friendly player" -- (the game shows threat on enemies only)
 	local threat = enemy and (states.aggro and 3 or states.gaining and 1) or nil
 	copy.explicitThreatSituation, copy.explicitAggroFlash = threat, threat == 3 or nil
 	-- (Its UpdateThreatDisplay's pieces one by one: the flash's own check reads

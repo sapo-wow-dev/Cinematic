@@ -166,7 +166,7 @@ end
 Check("Combat Text Style and Nameplate Style opened, each with its switch on and off", combat == 2 and style == 2,
 	combat .. ", " .. style)
 Check("Nameplate Style: one big game plate, its lists, every unit and state on it",
-	Has(log, "verdict PASS stylepage: one game plate, drawn bigger") ~= nil
+	Has(log, "verdict PASS stylepage: one game plate, as big as the stage allows") ~= nil -- (was "drawn bigger": 2026-11-25)
 	and Count(log, "verdict PASS stylepage: %a+ list shown on the preview") == 1 -- (one Preview list, 2026-11-25)
 	and Count(log, "verdict SKIP stylepage: %a+: places not read") == 4
 	and Count(log, "verdict PASS stylepage: page state %a+: as your settings draw it") == #ns.GAME_PLATE_STATES)

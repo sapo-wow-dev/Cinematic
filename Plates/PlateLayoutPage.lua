@@ -95,7 +95,9 @@ function ns.CreatePlateLayoutPage(kit)
 	-- of its own that couldn't pop out didn't fit the rest of the addon.)
 	local preview = CreateFrame("Frame", nil, content)
 	preview:SetSize(560, 190)
-	preview.minHeight = 280 -- (the plate with its debuffs, its lists under it, the guides' strips over and under it)
+	-- (Every Nameplate tab's stage height, ns.PLATE_STAGE_H (PlateRowLook.lua): 280 here and
+	-- fitted to the plate on Default, the two weren't the same, the user 2026-11-25.)
+	preview.fixedHeight = ns.PLATE_STAGE_H or 230
 	-- (Beside the settings, as the mock's: the stage Nameplate Style's width (268: a wider
 	-- one and the settings ran past the page's edge, run q496d), the editor on its right.)
 	preview.fixedWidth = 268
@@ -104,6 +106,7 @@ function ns.CreatePlateLayoutPage(kit)
 	-- (Its Refresh before StylePopout: the fitter wraps it, and draws it again as it's resized.)
 	preview.Refresh = function() if Redraw then Redraw() end end
 	ns.StylePopout(preview, kit.Tooltip, L["Nameplate Layout"])
+	if ns.SoftEdge then ns.SoftEdge(preview) end -- (a thin soft line round it, the user 2026-11-26)
 	-- (The editor's width: stage, rows and the parts panel line up on it. 560, as
 	-- Nameplate Style's own preview: at 640 the right side ran under the page's
 	-- scroll bar, run qc3be.)
@@ -155,7 +158,9 @@ function ns.CreatePlateLayoutPage(kit)
 
 	-- The previewer in the shared preview frame, as Nameplate Style's (Options.lua):
 	-- filling it, its own Scene button in place of the frame's backdrop button.
-	holder = ns.MakePlateRowLookPreview(preview, WIDTH, "others")
+	-- (The one Preview list, as Default's (the user 2026-11-25): a kind's layout leaves its unit
+	-- choices out (holder.hideUnits), the plate always the kind being laid out.)
+	holder = ns.MakePlateRowLookPreview(preview, WIDTH, "others", { oneList = true })
 	holder:ClearAllPoints()
 	holder:SetAllPoints(preview)
 	holder.zoomSkip, holder.noAutoFit = true, true
@@ -168,7 +173,8 @@ function ns.CreatePlateLayoutPage(kit)
 	-- previewer keeps 90 for zoom buttons this page hasn't got).)
 	local unitDrop, stateDrop, sceneButton = holder.unitDropdown, holder.stateDropdown, holder.sceneButton
 	local function BottomRow()
-		local withUnit = unitDrop ~= nil and editKey == "all"
+		local withUnit = unitDrop ~= nil and (editKey == "all" or holder.oneList)
+		holder.hideUnits = holder.oneList and editKey ~= "all" or nil
 		if unitDrop then
 			if withUnit then unitDrop:ShowForKind() else unitDrop:Hide() end
 		end
@@ -193,7 +199,7 @@ function ns.CreatePlateLayoutPage(kit)
 	end
 	if unitDrop then
 		unitDrop.ShowForKind = unitDrop.Show
-		unitDrop.Show = function(self) if editKey == "all" then self:ShowForKind() end end
+		unitDrop.Show = function(self) if editKey == "all" or holder.oneList then self:ShowForKind() end end
 	end
 	holder.LayoutBottomRow = BottomRow -- (Edit calls it as Layout for changes)
 	BottomRow()
@@ -216,16 +222,32 @@ function ns.CreatePlateLayoutPage(kit)
 	-- The stage's strips, from its top: the toggles and status (6 to 28), the tick
 	-- names (to 46), the ticks (to 58), then the plate's room; under the plate, its
 	-- lower ticks (BOTTOM_STRIP over the Unit and State lists).
-	local TOP, BOTTOM_STRIP, TICK = 62, 14, 10
+	-- (BOTTOM_STRIP: room over the Preview list for the Guides button, the user 2026-11-25 "put
+	-- guides button above dropdown left justified"; 14 before, for the lower ticks.)
+	-- (TOP 50: the status and the names; the ticks under them gone to the lines, 2026-11-26.)
+	local TOP, BOTTOM_STRIP, TICK = 40, 28, 10
 	local NAME_Y, TICK_Y = 46, 48 -- (down from the stage's top: names' bottom, ticks' top)
+	-- (The guides behind the plate and its cast bar, the user 2026-11-25: "vertical and horizontal
+	-- lines behind the plate and cast bar that show its anchor point". On a layer of their own
+	-- under the game's plate, over the backdrop: the plate covers them where it is.)
+	local behind = CreateFrame("Frame", nil, holder)
+	behind:SetAllPoints(holder)
+	behind:SetFrameLevel(holder:GetFrameLevel() + 1)
+	if game then game:SetFrameLevel(math.max(game:GetFrameLevel(), behind:GetFrameLevel() + 2)) end
+	ns.platePreviewGuides = behind -- (the tests read it)
 	local function Mark(r, g, b)
 		local mark = { color = { r, g, b } }
-		mark.top = overlay:CreateTexture(nil, "OVERLAY")
-		mark.bottom = overlay:CreateTexture(nil, "OVERLAY")
-		for _, tick in ipairs({ mark.top, mark.bottom }) do
-			tick:SetColorTexture(r, g, b, 0.95)
-			tick:SetSize(2, TICK)
+		-- (top: its vertical line, the stage's height between the names and the lists; bottom:
+		-- unused since the lines; across: the horizontal one through the anchor, Unit's only)
+		mark.top = behind:CreateTexture(nil, "ARTWORK")
+		mark.bottom = behind:CreateTexture(nil, "ARTWORK")
+		mark.across = behind:CreateTexture(nil, "ARTWORK")
+		for _, line in ipairs({ mark.top, mark.bottom, mark.across }) do
+			line:SetColorTexture(r, g, b, 0.45)
+			line:SetSize(1, TICK)
 		end
+		mark.bottom:Hide()
+		mark.across:Hide()
 		-- (The page's own size, not the small one: "the unit line is so small no one
 		-- would know what it is", the user 2026-11-25.)
 		mark.name = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -276,7 +298,9 @@ function ns.CreatePlateLayoutPage(kit)
 	end
 	local function Visible(frame)
 		local ok, shown = pcall(frame.IsVisible, frame)
-		return ok and shown
+		-- (and not faded away by its Shown: no box to click over a hidden part, 2026-11-25)
+		local okA, alpha = pcall(frame.GetEffectiveAlpha, frame)
+		return ok and shown and not (okA and alpha and alpha < 0.05)
 	end
 	-- (An aura list is up the whole time, empty or not: a box over an empty one
 	-- sat over nothing at the plate's top, run q93c1. Up only with an icon shown.)
@@ -304,7 +328,7 @@ function ns.CreatePlateLayoutPage(kit)
 		if not copy then return end
 		local okTop, top = pcall(TopLevel, copy, 0)
 		if okTop and top >= overlay:GetFrameLevel() then overlay:SetFrameLevel(math.min(top + 5, 9000)) end
-		local cl, cr = Rect(copy)
+		local cl, cr, cb, ct = Rect(copy)
 		local gl, gr
 		for _, part in ipairs(PARTS) do
 			local frame = Field(copy, part.path)
@@ -362,23 +386,35 @@ function ns.CreatePlateLayoutPage(kit)
 		local groupX = gl and (gl + gr) / 2
 		local off = 0
 		if unitX and groupX then off = (groupX - unitX) / (copy:GetEffectiveScale() / overlay:GetEffectiveScale()) end
-		local together = not groupX or math.abs(off) < 0.5
+		-- (Within a screen pixel: "on unit". Balanced read "1 right of unit" off by a rounding,
+		-- run q1d53.)
+		local together = not groupX or math.abs(off) < 1.5
 		local layout = Shown()
 		local center = layout and layout.center or "bar"
 		local amount = math.floor(math.abs(off) + 0.5)
 		local side = off > 0 and L["right"] or L["left"]
 		-- (A mark: its two ticks at x, its name over the top one, to one side of the
 		-- tick (away from the other mark) or centered on it.)
-		local function Place(mark, x, text, nameSide)
+		-- (The anchor's height: the middle of the plate's frame, where the game hangs it on its unit.)
+		local anchorY = cb and ct and math.floor((cb + ct) / 2 + 0.5)
+		local function Place(mark, x, text, nameSide, across)
 			local on = guides and x ~= nil
-			for _, piece in ipairs({ mark.top, mark.bottom, mark.name }) do
+			for _, piece in ipairs({ mark.top, mark.across, mark.name }) do
 				piece:ClearAllPoints()
-				piece:SetShown(on)
+				piece:SetShown(on and (piece ~= mark.across or (across and anchorY ~= nil)))
 			end
+			mark.bottom:Hide()
 			if not on then return end
 			x = math.floor(x + 0.5)
-			mark.top:SetPoint("TOPLEFT", overlay, "TOPLEFT", x - 1, -TICK_Y)
-			mark.bottom:SetPoint("BOTTOMLEFT", overlay, "BOTTOMLEFT", x - 1, lift + 2)
+			-- (vertical: the whole stage under the names, down to the lists)
+			mark.top:SetPoint("TOPLEFT", overlay, "TOPLEFT", x, -TICK_Y)
+			mark.top:SetPoint("BOTTOMLEFT", overlay, "BOTTOMLEFT", x, lift + 2)
+			mark.top:SetWidth(1)
+			if across and anchorY then
+				mark.across:SetPoint("BOTTOMLEFT", overlay, "BOTTOMLEFT", 6, anchorY)
+				mark.across:SetPoint("BOTTOMRIGHT", overlay, "BOTTOMRIGHT", -6, anchorY)
+				mark.across:SetHeight(1)
+			end
 			mark.name:SetText(text)
 			if nameSide == "left" then
 				mark.name:SetPoint("BOTTOMRIGHT", overlay, "TOPLEFT", x + 1, -NAME_Y)
@@ -391,7 +427,7 @@ function ns.CreatePlateLayoutPage(kit)
 		-- (The middle's own mark only where it's yours to move: Balanced or Custom.)
 		local showMiddle = not together and center ~= "bar"
 		local right = off > 0
-		Place(unitMark, unitX, L["Unit's middle"], showMiddle and (right and "left" or "right") or "center")
+		Place(unitMark, unitX, L["Unit's middle"], showMiddle and (right and "left" or "right") or "center", true)
 		Place(groupMark, showMiddle and groupX or nil, L["Plate's middle"], right and "right" or "left")
 		span:ClearAllPoints()
 		span:SetShown(guides and showMiddle and unitX ~= nil)
@@ -402,20 +438,12 @@ function ns.CreatePlateLayoutPage(kit)
 		end
 		-- (In words, beside the toggles.)
 		status:SetShown(guides and unitX ~= nil)
+		-- (Short, the user 2026-11-26: "Anchor is 20 right of unit. thats it". Before: what shows,
+		-- how far, and Balanced's hint or what Custom moved it by.)
 		if together then
-			status:SetText("|cff7fd97f" .. L["Centered on the unit"] .. "|r")
-		elseif center == "bar" then
-			status:SetText("|cffffb060" .. L["What shows sits %d %s of the unit."]:format(amount, side) .. "|r |cffb0a890"
-				.. L["Balanced centers it."] .. "|r")
-		elseif center == "custom" then
-			-- (What you moved it by, then where that leaves what shows: run q8f7e said
-			-- "41 right" for a shift of 15, the level box's own 26 in it.)
-			local cx = layout and layout.cx or 0
-			local moved = cx == 0 and L["Not moved"] or L["Moved %d %s"]:format(math.abs(cx), cx > 0 and L["right"] or L["left"])
-			status:SetText("|cffffd100" .. moved .. ".|r |cffb0a890" .. L["What shows sits %d %s of the unit."]:format(amount, side)
-				.. "|r")
+			status:SetText("|cff7fd97f" .. L["Anchor is on unit."] .. "|r")
 		else
-			status:SetText("|cffffb060" .. L["%d %s of the unit"]:format(amount, side) .. "|r")
+			status:SetText("|cffffb060" .. L["Anchor is %d %s of unit."]:format(amount, side) .. "|r")
 		end
 		if height < 1 then status:Hide() end
 	end
@@ -423,66 +451,18 @@ function ns.CreatePlateLayoutPage(kit)
 	-- The preview drawn again: the previewer's plate, then the layout on it.
 	Redraw = function()
 		if not holder:IsVisible() then return end
-		-- (The plate as big as the frame's room allows (it's sized to the screen's
-		-- shape, and smaller popped out or held at the top), as Nameplate Style's
-		-- preview fits its: cast bar to name, or to the debuffs when they're up,
-		-- in the middle of the room between the lists and the line names.)
-		-- (The plate's tops, in its own units: its name; its debuffs; the soft target's
-		-- quest icon, the highest (24 high, hung 8 under the plate frame's 85 top:
-		-- run q0fbf, the Unit mark sat on it).)
-		local NAME_TOP, DEBUFF_TOP, SOFT_TOP = 58.3, 89.1, 102
-		local lift = holder.plateLift or 38
+		-- (Fitted as every Nameplate tab's preview is, by the same code (PlateRowLook.lua's
+		-- PlatePreviewFit): the plate the same size as Default's, moved over only to keep a part
+		-- in, smaller only if it can't fit. Here between the names' strip at the top and the
+		-- Guides button over the Preview list, and with the layout being edited on it. Its own
+		-- fitting made the plate smaller than Default's, the user 2026-11-25 "why arent they the
+		-- same size".)
+		local lift = (holder.plateLift or 38) + BOTTOM_STRIP
 		local width, height = preview:GetWidth() or WIDTH, preview:GetHeight() or 250
-		-- (Its room: between the top strips (toggles, names, ticks) and the lower ticks.)
-		local room = height - lift - BOTTOM_STRIP - TOP
-		local states = ns.PlatePreviewStates and ns.PlatePreviewStates() or {}
-		local tallest = states.quest and SOFT_TOP or DEBUFF_TOP -- (the size: steady as debuffs come and go)
-		local scale = math.max(0.6, math.min(1.6, (room - 8) / tallest, (width - 12) / 360))
-		local top = states.quest and SOFT_TOP or states.debuffs and DEBUFF_TOP or NAME_TOP
-		holder.gameShift, holder.gameScale = nil, scale
-		holder.gameLift = lift + BOTTOM_STRIP + (room - top * scale) / 2
-		holder:Refresh()
-		-- (Only with the page's switch on, 2026-11-25: off, the stage showed a layout your
-		-- plates didn't have. The editor's status line says it's off, with Turn on.)
-		local layout = StageLayout()
-		if game and game.gameCopy then
-			game.onLayoutDirty = RedrawOverlay
-			ns.PlateLayoutApply(game, layout or false)
-		end
-		-- (Kept in view: every part shown inside the stage's room. A part moved far
-		-- gets the plate drawn smaller and moved over, so it can still be seen and
-		-- grabbed. Audit 2026-11-25: one dragged off the preview was lost.)
-		local copy = CopyOf()
-		if copy and game:IsShown() then
-			local bl, br, bb, bt
-			for _, part in ipairs(PARTS) do
-				local frame = Field(copy, part.path)
-				if frame and Visible(frame) and (not LISTS[part.key] or HasIcon(frame))
-					and (part.key ~= "softTarget" or (frame.Icon and Visible(frame.Icon))) then
-					local l, r, b, t = Rect(frame)
-					if l and r - l > 1 then
-						bl, br = bl and math.min(bl, l) or l, br and math.max(br, r) or r
-						bb, bt = bb and math.min(bb, b) or b, bt and math.max(bt, t) or t
-					end
-				end
-			end
-			local left, right, low, high = 8, width - 8, lift + BOTTOM_STRIP, height - TOP
-			if bl and br > bl and bt > bb and (bl < left or br > right or bb < low or bt > high) then
-				local f = math.min(1, (right - left) / (br - bl), (high - low) / (bt - bb))
-				-- (Scaled about the plate's anchor, its bottom middle, then moved inside.)
-				local ax, ay = width / 2, holder.gameLift
-				local nl, nr = ax + (bl - ax) * f, ax + (br - ax) * f
-				local nb, nt = ay + (bb - ay) * f, ay + (bt - ay) * f
-				local dx = nl < left and left - nl or nr > right and right - nr or 0
-				local dy = nb < low and low - nb or nt > high and high - nt or 0
-				local fitted = scale * f
-				holder.gameScale = fitted
-				holder.gameShift = -dx / fitted -- (its x offset is in the plate's own units)
-				holder.gameLift = holder.gameLift + dy
-				holder:Refresh()
-				ns.PlateLayoutApply(game, layout or false)
-			end
-		end
+		holder.fitToHeight = true
+		holder.layoutOverride = StageLayout()
+		ns.PlatePreviewFit(holder, width, height - TOP, lift)
+		if game and game.gameCopy then game.onLayoutDirty = RedrawOverlay end
 		RedrawOverlay()
 	end
 	holder.onStates = Redraw
@@ -673,9 +653,9 @@ function ns.CreatePlateLayoutPage(kit)
 		RedrawOverlay()
 	end)
 	guideBox:SetOn(true)
-	kit.Tooltip(guideBox, L["Marks over and under the plate. Unit (white): where the game puts the plate on its " ..
-		"unit. Plate's middle (blue, with Balanced or Custom): the middle of what's showing. The line by these " ..
-		"buttons says how far off it is."])
+	kit.Tooltip(guideBox, L["Lines behind the plate. White: where the game anchors the plate on its unit, across " ..
+		"and down. Blue (with Balanced or Custom): the middle of what's showing. The line at the top says how far " ..
+		"off it is."])
 	allBox = Flat(overlay, L["All parts up"], 92, function()
 		-- (On: every part up, to lay them all out; off: just the cast.)
 		local states = ns.PlatePreviewStates and ns.PlatePreviewStates(holder) or {}
@@ -692,11 +672,17 @@ function ns.CreatePlateLayoutPage(kit)
 	-- the status over the stage.)
 	allBox:Hide()
 	allBox.Show = allBox.Hide
-	-- (Top right: at the bottom it sat on the State list, run qb407. Left of the pop-out
-	-- button there (the shared frame's, on hover): over it they overlapped, the user 2026-11-25.)
-	guideBox:SetPoint("TOPRIGHT", overlay, "TOPRIGHT", -36, -6)
+	-- (Just over the Preview list, at its left: the user 2026-11-25. Top right it sat by the
+	-- pop-out button.)
+	-- (On the Preview list itself, not at a guessed height: there it sat a gap above it, the user
+	-- 2026-11-26 "guides should sit above dropdown".)
+	if holder.unitDropdown then
+		guideBox:SetPoint("BOTTOMLEFT", holder.unitDropdown, "TOPLEFT", 0, 4)
+	else
+		guideBox:SetPoint("BOTTOMLEFT", overlay, "BOTTOMLEFT", 6, (holder.plateLift or 38) + 3)
+	end
 	status:SetPoint("TOPLEFT", overlay, "TOPLEFT", 8, -11)
-	status:SetPoint("RIGHT", guideBox, "LEFT", -8, 0)
+	status:SetPoint("RIGHT", overlay, "RIGHT", -40, 0)
 	-- (Two lines where it needs them: on one it was cut ("What shows sits 19 right of the
 	-- uni..."), the user 2026-11-25: "things are getting cutoff".)
 	status:SetWordWrap(true)
@@ -855,12 +841,23 @@ end
 
 -- Mirror: a hung part to the other side; else moved across the bar's middle
 -- by its own place now (measured on the preview's copy).
+-- (A switch now, mirrored or not (p.mirrored), and twice is back exactly where it was: the user
+-- 2026-11-26, "no idea when its mirrored or not", "mirror and mirror again ... its not" (0, -253,
+-- -6: each time worked out again from the plate as measured). Mirrored, it keeps how far it moved
+-- (p.mirrorBy); back, the same amount the other way, any nudge since kept.)
 function ns.PlateLayoutMirror(layout, key, plate)
 	local p = ns.PlateLayoutPart(layout, key, true)
 	local SWAP = { right = "left", left = "right", inleft = "inright", inright = "inleft" }
 	if p.to then
 		p.side = SWAP[p.side or "right"] or p.side
 		p.x = p.x and -p.x or nil
+		p.mirrored = not p.mirrored or nil
+		return
+	end
+	if p.mirrored then
+		local x = math.floor((p.x or 0) - (p.mirrorBy or 0) + 0.5)
+		p.x = x ~= 0 and x or nil
+		p.mirrored, p.mirrorBy = nil, nil
 		return
 	end
 	local copy = plate and plate.gameCopy
@@ -876,7 +873,9 @@ function ns.PlateLayoutMirror(layout, key, plate)
 	end)
 	if not (ok and type(px) == "number" and type(bx) == "number") then return end
 	local off = (px - bx) / copy:GetEffectiveScale()
-	local x = math.floor((p.x or 0) - 2 * off + 0.5)
+	local by = math.floor(-2 * off + 0.5)
+	local x = (p.x or 0) + by
 	p.x = x ~= 0 and x or nil
+	p.mirrored, p.mirrorBy = true, by
 end
 end) -- (ns.Module "style")
