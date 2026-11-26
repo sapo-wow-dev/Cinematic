@@ -224,28 +224,35 @@ for _, frame in ipairs(wow.frames or {}) do
 end
 Check("the page's preview found, holding the Look panel's previewer", pagePreview ~= nil)
 local inner = pagePreview.lookPreview
-Check("the previewer has its Unit and State lists", inner.unitDropdown ~= nil and inner.stateDropdown ~= nil
-	and inner.unitDropdown:GetParent() == inner and inner.stateDropdown:GetParent() == inner)
+-- (One Preview list since 2026-11-25, the mock: the unit first, then every state, in one dropdown.)
+Check("the previewer has its one Preview list (unit and states)", inner.unitDropdown ~= nil and inner.stateDropdown == nil
+	and inner.oneList == true and inner.unitDropdown:GetParent() == inner)
 local okR2, errR2 = pcall(pagePreview.Refresh, pagePreview)
 Check("the page's preview draws without an error", okR2, errR2)
 Check("the page's preview on the game's plate", pagePreview.gameMode == true and inner:IsShown())
 Check("one plate, bigger, centered on its bar (not moved left)", inner.gamePlate:IsShown()
 	and (inner.gameScale or 0) > 0 and not inner.gameShift, tostring(inner.gameScale))
 Check("no drawn plates over it, no Scene button on its Unit list", pagePreview.backButton == nil)
-Check("the preview kept tall enough (minHeight, not the screen's shape)", (pagePreview.minHeight or 0) >= 210)
--- (What it shows, in the middle of the room over its lists: cast bar to name, or
--- to its debuffs when they're on (it sat low, then high with debuffs: the user's shots).)
--- (2026-11-25 Style Studio: the fit measures the parts that show instead of fixed
--- heights (58.3 / 89.1), so on the stand-in it lands at 40.49 off, 49.73 on, not 29;
--- pinned to what the measured fit gives. OK'd by the user.)
+-- (2026-11-25 the mock, the user: "visually not good", a small plate low in a tall empty stage.
+-- Was: kept 210 tall (minHeight) and what shows in the middle of that room, 54.49 / 63.73.
+-- Now: the plate as big as the 268-wide stage allows with its level box (scale 0.91), the stage only as tall as what shows.)
 for _, withDebuffs in ipairs({ false, true }) do
-	-- (Ticked in the previewer's own State list: the page places it again.)
 	if (ns.PlatePreviewStates().debuffs and true or false) ~= withDebuffs then inner.ToggleState("debuffs") end
-	local s = inner.gameScale or 1
-	local middle = (inner.gameLift or 0) + (withDebuffs and 89.1 or 58.3) * s / 2
-	local want = withDebuffs and 49.73 or 40.49
-	Check(("what it shows in the middle of the room over its lists (debuffs %s)"):format(withDebuffs and "on" or "off"),
-		inner.gameLift ~= nil and math.abs(middle - want) < 0.5, tostring(middle) .. " vs " .. tostring(want))
+	-- (at the page's size: the stand-in lays nothing out, its frames 100 x 20)
+	ns.PlatePreviewFit(inner, 268, 210, inner.plateLift or 38)
+	local s = inner.gameScale or 0
+	local lift = inner.plateLift or 38
+	local fit = inner.fitHeight
+	Check(("the plate as big as the stage allows (debuffs %s)"):format(withDebuffs and "on" or "off"), s >= 0.9,
+		tostring(s))
+	Check(("the stage only as tall as what shows (debuffs %s)"):format(withDebuffs and "on" or "off"),
+		fit ~= nil and fit < 210 and fit > lift + 20, tostring(fit))
+	-- (and what shows inside it: its bottom over the Preview list, its top under the stage's)
+	local _, nameTop = ns.PlatePreviewSpan(inner, inner.gamePlate.gameCopy.name)
+	local top = nameTop and (inner.gameLift or 0) + nameTop * s
+	Check(("what shows inside the stage (debuffs %s)"):format(withDebuffs and "on" or "off"),
+		top ~= nil and (inner.gameLift or 0) >= lift - 1 and top <= (fit or 0) + 1,
+		tostring(inner.gameLift) .. " .. " .. tostring(top) .. " in " .. tostring(fit))
 end
 inner.ToggleState("debuffs")
 local before = #styled
@@ -272,7 +279,7 @@ Check("the editor on the page, on the Nameplates frame", pageContent and pageCon
 -- pick saved and the plates refreshed; pointing at one shows it, unsaved.
 local Studio = ns.Studio
 local themeProp
-for _, each in ipairs(Studio.Props(Studio.frames.plates, "plate")) do
+for _, each in ipairs(Studio.Props(Studio.frames.plates, "bar")) do
 	if each.prop.label == ns.L["Theme"] then themeProp = each end
 end
 local entries = themeProp and themeProp.prop.options() or {}

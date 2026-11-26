@@ -80,6 +80,8 @@ end
 -- Body ------------------------------------------------------------------------------
 -- body = Studio.Body(parent, width, host): body:Draw(f, variant, partId); body.height.
 local function MakeRow(body, entry)
+	-- (The nameplate editor (f.pickers): a wider name column, "Friendly players" whole, run q496d.)
+	local LABEL_W = Studio.Pickers(body) and 124 or LABEL_W
 	local prop = entry.prop
 	local row = CreateFrame("Frame", nil, body.inner)
 	row:SetSize(body.width, 24)
@@ -115,6 +117,7 @@ local function MakeRow(body, entry)
 	end)
 	local controlW = body.width - LABEL_W - 18
 	local f = body.f
+	local pickers = Studio.Pickers(body)
 	local function Variant() return body.variant end
 	local function Key() return Studio.KeyOf(prop, Variant()) end
 	local function Set(value) Studio.Set(f, prop, Variant(), value, row.part) end
@@ -127,13 +130,31 @@ local function MakeRow(body, entry)
 		end
 	end
 	local options = prop.options
+	-- (A list made by a function is told the variant shown: a choice can read "Default's"
+	-- on a Smart row and "Theme's" on Default, Nameplate Style 2026-11-25.)
+	if type(options) == "function" then
+		local raw = options
+		options = function() return raw(Variant()) end
+	end
 	local kind = prop.kind
 	local control
 	if kind == "seg" then
 		local opts = type(options) == "function" and options() or options or {}
-		-- (Too wide for one line: the buttons wrap, as the old pages showed every choice;
-		-- not a dropdown (run q8a29: Far names became one at the old buttons' size).)
-		control = C.Segments(row, opts, Set, Hover, controlW)
+		-- (The mock's rule, 2026-11-25, for the nameplate editor (f.pickers): 3 choices or
+		-- fewer, one segmented switch; more, the picker (a line opening the list). Elsewhere
+		-- too wide for one line still wraps, as the old pages showed every choice.)
+		if pickers and #opts > 3 then
+			control = C.Drop(row, controlW, options, Set, Hover)
+		else
+			control = C.Segments(row, opts, Set, Hover, controlW)
+			-- (pickers: 3 or fewer that don't fit on one line, the picker too; wrapped, Layout's
+			-- Balance stacked its three down the page, the user 2026-11-25 "this looks bad".)
+			if pickers and control:GetHeight() > 24 then
+				control:Hide()
+				control:ClearAllPoints()
+				control = C.Drop(row, controlW, options, Set, Hover)
+			end
+		end
 		if control:GetHeight() > 24 then
 			row:SetHeight(control:GetHeight() + 2)
 			row.label:ClearAllPoints()
@@ -141,6 +162,11 @@ local function MakeRow(body, entry)
 			row.mark:ClearAllPoints()
 			row.mark:SetPoint("TOPLEFT", 0, -6)
 		end
+	elseif kind == "tiles" and pickers then
+		-- (Looks judged by eye, as one picker line: its sample and name, the list with each one's.)
+		control = C.Drop(row, controlW, options, Set, Hover)
+		control:SetHeight(26)
+		row:SetHeight(28)
 	elseif kind == "tiles" then
 		control = C.Tiles(row, options, Set, Hover, prop.few or (controlW > 230 and 5 or 4), controlW)
 		row:SetHeight(30)
@@ -161,11 +187,17 @@ local function MakeRow(body, entry)
 			if prop.custom ~= nil then table.insert(writes, 1, { Key(), prop.custom }) end
 			Studio.Apply(f, Studio.Describe(f, prop, Variant(), row.part, L["Custom"]), writes)
 		end, Hover, function() return Studio.RGBValues(prop, Variant()) end)
-		if control:GetWidth() + (prop.rgb and 22 or 0) > controlW then
+		-- (f.pickers: always the picker line, its swatch after it while it's the color's own.)
+		if pickers or control:GetWidth() + (prop.rgb and 22 or 0) > controlW then
 			control:Hide()
-			local drop = C.Drop(row, math.min(controlW - 24, 150), type(options) == "function" and options() or options, Set, Hover)
-			if control.swatch then control.swatch:SetParent(row) control.swatch:ClearAllPoints() control.swatch:SetPoint("LEFT", drop, "RIGHT", 4, 0) end
 			local swatch = control.swatch
+			-- (Picking its own color (My own, Into a color): the palette opens at once.)
+			local function PickColor(value)
+				Set(value)
+				if swatch and prop.custom ~= nil and value == prop.custom then swatch:Click() end
+			end
+			local drop = C.Drop(row, pickers and (controlW - 30) or math.min(controlW - 24, 150), options, PickColor, Hover)
+			if swatch then swatch:SetParent(row) swatch:ClearAllPoints() swatch:SetPoint("LEFT", drop, "RIGHT", 4, 0) end
 			function drop:SetValueAndSwatch(value)
 				self:SetValue(value)
 				if swatch then
@@ -202,7 +234,9 @@ local function MakeRow(body, entry)
 	elseif kind == "drop" then
 		control = C.Drop(row, math.min(controlW, 200), options, Set, Hover)
 	elseif kind == "button" then
-		control = C.Button(row, prop.text or prop.label, nil, "action")
+		-- (pickers: a plain button in the settings' column; red, at the labels' edge, it read as a
+		-- warning, the user 2026-11-25 "this looks bad")
+		control = C.Button(row, prop.text or prop.label, nil, not pickers and "action" or nil)
 		control:SetScript("OnClick", function() ns.Guard(prop.run, body.host) end)
 		row.label:SetText("")
 	elseif kind == "text" then
@@ -212,7 +246,7 @@ local function MakeRow(body, entry)
 		row.label:SetText("")
 	end
 	if control then
-		control:SetPoint("LEFT", row, "LEFT", (kind == "button" or kind == "text") and 14 or LABEL_W, 0)
+		control:SetPoint("LEFT", row, "LEFT", ((kind == "button" and not pickers) or kind == "text") and 14 or LABEL_W, 0)
 		row.control = control
 	end
 	function row:Update()
@@ -264,9 +298,17 @@ local function Header(body, text)
 	rule:SetPoint("BOTTOMLEFT", 0, 0)
 	rule:SetPoint("BOTTOMRIGHT", 0, 0)
 	rule:SetColorTexture(1, 1, 1, 0.12)
+	h.rule = rule
 	return h
 end
 
+-- (The mock's pickers look, 2026-11-25: the frame's own (the nameplate editor), or one
+-- page's host asking for it (opts.pickers: the nameplates' Cast Bars tab).)
+-- (The settings' box beside the preview, and the picked part tab open into it: one color.)
+Studio.BOX = { 0.075, 0.079, 0.09 }
+function Studio.Pickers(body)
+	return (body.f and body.f.pickers) or (body.host and body.host.pickers) or false
+end
 function Studio.Body(parent, width, host)
 	local body = CreateFrame("Frame", nil, parent)
 	body:SetSize(width, 10)
@@ -296,9 +338,16 @@ function Studio.Body(parent, width, host)
 	function body:Draw(f, variant, partId)
 		local switched = self.f ~= f
 		self.f, self.variant = f, variant
+		local pickers = Studio.Pickers(self)
+		-- (A part can be for some variants only, part.shown(variant): a Smart row's Mark.)
+		local parts = {}
+		for _, p in ipairs(f.parts or {}) do
+			if not p.shown or p.shown(variant) then parts[#parts + 1] = p end
+		end
+		self.parts = parts
 		local part
-		for _, p in ipairs(f.parts or {}) do if p.id == partId then part = p end end
-		part = part or (f.parts or {})[1]
+		for _, p in ipairs(parts) do if p.id == partId then part = p end end
+		part = part or parts[1]
 		self.part = part
 		local y = 0
 		local function Place(frame, h, gap)
@@ -329,8 +378,9 @@ function Studio.Body(parent, width, host)
 		-- one line, each only where there's more than one. (Rows of pills before; the user
 		-- 2026-11-25, twice: "i hate this look".)
 		local note
-		local hasVariants = f.variants and #f.variants > 1
-		local hasParts = #(f.parts or {}) > 1
+		-- (host.only: one variant, its own (a Smart row's drawer; Default on its tab): no Applies to.)
+		local hasVariants = f.variants and #f.variants > 1 and not self.host.only
+		local hasParts = #parts > 1
 		local row = self.pickRow
 		if not row then
 			row = CreateFrame("Frame", nil, self)
@@ -346,10 +396,15 @@ function Studio.Body(parent, width, host)
 			row.partDrop:SetPoint("LEFT", row.partLabel, "RIGHT", 8, 0)
 			self.pickRow = row
 		end
+		-- (pickers, the nameplate editor: the parts are tabs under it, not a dropdown.)
+		-- (Six parts or more (Layout's ten): no room for tabs, which ran past the settings'
+		-- edge, run qb407; the mock's Part picker, a line of its own under Layout for.)
+		local partTabs = pickers and hasParts and #parts <= 5
+		local twoLines = pickers and hasParts and not partTabs and hasVariants
 		row.forLabel:SetShown(hasVariants)
 		row.variantDrop:SetShown(hasVariants)
-		row.partLabel:SetShown(hasParts)
-		row.partDrop:SetShown(hasParts)
+		row.partLabel:SetShown(hasParts and not partTabs)
+		row.partDrop:SetShown(hasParts and not partTabs)
 		row.forLabel:ClearAllPoints()
 		row.forLabel:SetPoint("LEFT", row, "LEFT", 0, 0)
 		row.partLabel:ClearAllPoints()
@@ -368,14 +423,126 @@ function Studio.Body(parent, width, host)
 		if hasParts then
 			-- (A part holding settings of yours: a gold dot after its name.)
 			local popts = {}
-			for _, p in ipairs(f.parts) do
+			for _, p in ipairs(parts) do
 				local mine = #Studio.Changed(f, variant, p.id) > 0
 				popts[#popts + 1] = { p.id, mine and (p.label .. " |cffffd100*|r") or p.label }
 			end
 			row.partDrop.options = popts
 			row.partDrop:SetValue(part and part.id)
 		end
-		if hasVariants or hasParts then Place(row, 22, 10) else row:Hide() end
+		if twoLines then
+			-- (each its label at the left, its picker at one place after both)
+			row:SetHeight(52)
+			row.forLabel:ClearAllPoints()
+			row.forLabel:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -4)
+			row.partLabel:ClearAllPoints()
+			row.partLabel:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -34)
+			for i, drop in ipairs({ row.variantDrop, row.partDrop }) do
+				drop:ClearAllPoints()
+				drop:SetPoint("TOPLEFT", row, "TOPLEFT", 110, i == 1 and 0 or -30)
+				drop:SetWidth(math.min(200, self.width - 116))
+			end
+		elseif row.twoLines then
+			row:SetHeight(22)
+			row.variantDrop:ClearAllPoints()
+			row.variantDrop:SetPoint("LEFT", row.forLabel, "RIGHT", 8, 0)
+			row.variantDrop:SetWidth(200)
+			row.partDrop:ClearAllPoints()
+			row.partDrop:SetPoint("LEFT", row.partLabel, "RIGHT", 8, 0)
+			row.partDrop:SetWidth(170)
+		end
+		row.twoLines = twoLines
+		if hasVariants or (hasParts and not partTabs) then Place(row, twoLines and 52 or 22, 10) else row:Hide() end
+		-- The parts as tabs (the mock): each name, the picked one underlined gold; on a
+		-- variant past the first (a Smart row), a dot: green while it sets something in that
+		-- part, grey while it sets nothing there; on the first, a gold dot for your changes.
+		self.tabs = self.tabs or {}
+		for _, t in ipairs(self.tabs) do t:Hide() end
+		if self.tabBase then self.tabBase:Hide() end
+		if partTabs then
+			local x = 0
+			local onFirst = variant == Studio.FirstVariant(f)
+			for i, p in ipairs(parts) do
+				local t = self.tabs[i]
+				if not t then
+					-- (Folder tabs, as the page's own (Options.lua's FolderTabs), the user 2026-11-25:
+					-- "more of a folder tab style". A box each, edged left, right and top; the picked
+					-- one the settings box's color, open into it over the line under the tabs.)
+					t = CreateFrame("Button", nil, self)
+					t:SetHeight(22)
+					t.text = C.Text(t, "GameFontNormalSmall")
+					t.bg = t:CreateTexture(nil, "BACKGROUND")
+					t.bg:SetAllPoints()
+					t.bg:SetTexture(FLAT)
+					t.edges = {}
+					for _, side in ipairs({ "LEFT", "RIGHT", "TOP" }) do
+						local e = t:CreateTexture(nil, "BORDER")
+						e:SetTexture(FLAT)
+						if side == "TOP" then
+							e:SetPoint("TOPLEFT") e:SetPoint("TOPRIGHT") e:SetHeight(1)
+						else
+							e:SetPoint("TOP" .. side) e:SetPoint("BOTTOM" .. side) e:SetWidth(1)
+						end
+						t.edges[#t.edges + 1] = e
+					end
+					t.dot = t:CreateTexture(nil, "ARTWORK")
+					t.dot:SetSize(6, 6)
+					t.dot:SetTexture(FLAT)
+					t.line = t:CreateTexture(nil, "ARTWORK") -- (kept for the tests: unused)
+					t.line:SetSize(1, 1)
+					t.line:SetAlpha(0)
+					t:SetScript("OnClick", function(btn) self.host:Pick(btn.partId) end)
+					self.tabs[i] = t
+				end
+				t.partId = p.id
+				local mine = #Studio.Changed(f, variant, p.id) > 0
+				local dotShown = (not onFirst) or mine
+				t.dot:ClearAllPoints()
+				t.dot:SetPoint("LEFT", 6, 0)
+				t.dot:SetShown(dotShown)
+				if not onFirst then
+					-- (a row: green while it sets something here, else grey)
+					if mine then t.dot:SetVertexColor(0.29, 0.75, 0.29) else t.dot:SetVertexColor(0.29, 0.27, 0.24) end
+				else
+					local a = C.Role("accent")
+					t.dot:SetVertexColor(a[1], a[2], a[3])
+				end
+				t.text:ClearAllPoints()
+				t.text:SetPoint("LEFT", dotShown and 16 or 8, 0)
+				t.text:SetText(p.label)
+				local picked = part and part.id == p.id
+				-- (picked: the settings box's color, a lit edge, white words, a pixel taller to
+				-- open over the line; the rest dark, dim edges, gold words)
+				if picked then t.bg:SetVertexColor(Studio.BOX[1], Studio.BOX[2], Studio.BOX[3], 1) else t.bg:SetVertexColor(0.05, 0.05, 0.055, 1) end
+				for _, e in ipairs(t.edges) do
+					if picked then e:SetVertexColor(0.42, 0.42, 0.42, 1) else e:SetVertexColor(0.24, 0.23, 0.21, 1) end
+				end
+				if picked then t.text:SetTextColor(1, 1, 1) else t.text:SetTextColor(1, 0.82, 0) end
+				t:SetHeight(picked and 23 or 21)
+				t:SetFrameLevel(self:GetFrameLevel() + (picked and 3 or 2))
+				t:SetWidth(math.floor(t.text:GetStringWidth() + (dotShown and 24 or 16)))
+				t:ClearAllPoints()
+				t:SetPoint("BOTTOMLEFT", self, "TOPLEFT", x, -(y + 23) + (picked and -1 or 0))
+				t:Show()
+				C.Tip(t, function()
+					if onFirst then return nil end
+					return mine and L["This row changes something here."] or L["This row changes nothing here: it's all Default's."]
+				end)
+				x = x + t:GetWidth() + 3
+			end
+			-- (the line under the tabs, across the settings, the picked tab open over it)
+			if not self.tabBase then
+				self.tabBase = self:CreateTexture(nil, "BORDER")
+				self.tabBase:SetTexture(FLAT)
+				self.tabBase:SetHeight(1)
+				self.tabBase:SetVertexColor(0.42, 0.42, 0.42, 1)
+			end
+			self.tabBase:ClearAllPoints()
+			self.tabBase:SetPoint("TOPLEFT", self, "TOPLEFT", -8, -(y + 23))
+			self.tabBase:SetPoint("RIGHT", self, "RIGHT", 6, 0)
+			self.tabBase:Show()
+			y = y + 32
+		end
 		if hasVariants then
 			local first = f.variants[1]
 			local vname = first.label
@@ -393,6 +560,20 @@ function Studio.Body(parent, width, host)
 			end
 		end
 		-- The heading: the part picked (or the frame), what it follows under it.
+		-- (pickers: no heading (the tabs say the part) and the note a tooltip on Applies to:
+		-- the user, 2026-11-25, "any descriptive text ... should just go as a tooltip".)
+		if pickers then
+			self.title:Hide()
+			self.variantNote:Hide()
+			C.Tip(row.forLabel, note)
+			if not row.forLabelHit then
+				row.forLabelHit = CreateFrame("Frame", nil, row)
+				row.forLabelHit:SetAllPoints(row.forLabel)
+				row.forLabelHit:EnableMouse(true)
+			end
+			C.Tip(row.forLabelHit, note)
+			note = nil
+		end
 		local accent = C.Role("accent")
 		self.title:SetTextColor(accent[1], accent[2], accent[3])
 		local multi = part and #(f.parts or {}) > 1
@@ -400,7 +581,7 @@ function Studio.Body(parent, width, host)
 		local vname
 		for vi, v in ipairs(f.variants or {}) do if vi > 1 and v.id == variant then vname = v.label end end
 		self.titleSub:SetText(multi and (vname and (f.label .. " · " .. vname) or f.label) or (vname or ""))
-		Place(self.title, 20, 2)
+		if not pickers then Place(self.title, 20, 2) end
 		if note then
 			self.variantNote:SetText(note)
 			Place(self.variantNote, self.variantNote:GetStringHeight(), 10)
@@ -415,25 +596,48 @@ function Studio.Body(parent, width, host)
 		if part then
 			local db = ns.GetDB() or {}
 			local groupsShown = 0
+			-- (pickers: a note (kind "text") is no line on the page; its words join the tooltip
+			-- on its group's header.)
+			local function Drawn(prop) return Studio.Shown(prop, db, variant) and not (pickers and prop.kind == "text") end
 			for _, group in ipairs(part.groups) do
 				for _, prop in ipairs(group.props) do
-					if Studio.Shown(prop, db, variant) then groupsShown = groupsShown + 1 break end
+					if Drawn(prop) then groupsShown = groupsShown + 1 break end
 				end
 			end
 			for gi, group in ipairs(part.groups) do
 				local any = false
-				for _, prop in ipairs(group.props) do if Studio.Shown(prop, db, variant) then any = true end end
+				for _, prop in ipairs(group.props) do if Drawn(prop) then any = true end end
 				if any then
-					-- (The part's own group, "Look", needs no name: the part's is the heading.)
-					if groupsShown > 1 and group.recipe ~= "Look" then
+					-- (The part's own group, "Look", needs no name: the part's is the heading.
+					-- pickers: every group named, as the tabs carry the part's.)
+					if (groupsShown > 1 or pickers) and (group.recipe ~= "Look" or pickers) then
 						local hk = part.id .. ":" .. gi
 						local head = self.heads[hk] or Header(self, "")
 						self.heads[hk] = head
 						head.text:SetText((group.label and L[group.label]) or L[group.recipe] or group.recipe)
+						-- (pickers: the mock's headings, dim gold and no line under them.)
+						if pickers then head.text:SetTextColor(0.85, 0.68, 0.38) else head.text:SetTextColor(1, 1, 1) end
+						head.rule:SetShown(not pickers)
+						if pickers then
+							local words = {}
+							if group.tip then words[#words + 1] = group.tip end
+							for _, prop in ipairs(group.props) do
+								if prop.kind == "text" and Studio.Shown(prop, db, variant) then
+									local t = type(prop.text) == "function" and prop.text(db, variant) or prop.text or prop.label
+									if t and t ~= "" then words[#words + 1] = t end
+								end
+							end
+							head:EnableMouse(#words > 0)
+							C.Tip(head, #words > 0 and table.concat(words, "\n") or nil)
+						end
 						y = y + 4
 						Place(head, 22, 4)
 					end
 					for _, prop in ipairs(group.props) do
+						if pickers and prop.kind == "text" then
+							local r = self.rows[prop]
+							if r then r:Hide() end
+						else
 						local row = self.rows[prop]
 						if not row or row.builtFor ~= f then
 							row = MakeRow(self, { prop = prop, part = part, group = group })
@@ -443,6 +647,7 @@ function Studio.Body(parent, width, host)
 						if row:Update() then
 							Place(row, row:GetHeight(), 6)
 							self.shownRows[#self.shownRows + 1] = row
+						end
 						end
 					end
 				end
@@ -711,14 +916,24 @@ end
 -- The compact host: the editor on a Style page -----------------------------------------
 -- opts: { preview = the page's own preview (a frame with :Refresh), canvas = the page's
 -- canvas (its Reset page counts the editor's keys), variant = the one this page shows }.
+-- (opts.free: placed by its caller (holder returned on host.holder), not added to a stack:
+-- a Smart row's drawer, Nameplate Style's Smart tab, the mock 2026-11-25. opts.variant: the
+-- one it edits; opts.only: no Applies to (the drawer's row is its variant).)
 function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 	opts = opts or {}
+	kit = kit or {}
 	local f = Studio.frames[frameId]
 	assert(f, "no Style frame " .. tostring(frameId))
-	f.pageCanvas = opts.canvas or content
+	if not opts.free then f.pageCanvas = opts.canvas or content end -- (a drawer's editor isn't its page)
 	local host = setmetatable({ f = f, variant = opts.variant ~= nil and opts.variant or Studio.FirstVariant(f), partId = nil,
-		preview = opts.preview, kit = kit }, { __index = Host })
-	local WIDTH = 480
+		preview = opts.preview, kit = kit, only = opts.only, pickers = opts.pickers }, { __index = Host })
+	-- (opts.side: the editor right of the page's preview, not under it (the mock,
+	-- 2026-11-25); the preview's fixedWidth (268) on its left, the settings in the rest.)
+	local side = opts.side and opts.preview
+	-- (340: what's left of the page right of a 268 preview; 452 ran past its edge, run q496d.)
+	-- (310 inside the tabs' framed panel: at 340, then 326, its pickers touched the panel's right edge,
+	-- run qded0.)
+	local WIDTH = opts.width or (side and 310 or 480)
 	local holder = CreateFrame("Frame", nil, content)
 	holder:SetSize(WIDTH, 30)
 	host.holder = holder
@@ -782,17 +997,103 @@ function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 	host.badge:Hide()
 	host.body = Studio.Body(holder, WIDTH, host)
 	host.body:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -12)
+	-- (f.pickers, the nameplate editor (the mock, 2026-11-25): no Looks or Reset ("it's
+	-- complicated, remove copy features and reset features"); Undo and Redo as words under
+	-- the settings, each only while there's a step to take.)
+	if f.pickers or host.pickers then
+		host.looksB:Hide()
+		host.resetB:Hide()
+		rule:Hide()
+		-- (The body off the bar first: the bar then hangs under it. The other way round was a
+		-- loop, the game refused it, run qb32c.)
+		host.body:ClearAllPoints()
+		host.body:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, 0)
+		bar:ClearAllPoints()
+		bar:SetPoint("TOPLEFT", host.body, "BOTTOMLEFT", 0, -10)
+		-- (A dim line under the settings while there's no step to undo; side by the preview, the
+		-- settings on a box a shade lighter than the panel, edged: on the panel's own grey they
+		-- didn't stand apart, the user 2026-11-25 "no background difference?".)
+		if side then
+			local box = holder:CreateTexture(nil, "BACKGROUND", nil, -6)
+			box:SetPoint("TOPLEFT", holder, "TOPLEFT", -8, 6)
+			box:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 6, -8)
+			-- (cool dark, as the preview's backdrop: warm brown-grey, the user 2026-11-25 "not a fan
+			-- of the background color on the right panel")
+			box:SetColorTexture(Studio.BOX[1], Studio.BOX[2], Studio.BOX[3], 1)
+			local edge = holder:CreateTexture(nil, "BACKGROUND", nil, -7)
+			edge:SetPoint("TOPLEFT", box, "TOPLEFT", -1, 1)
+			edge:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", 1, -1)
+			edge:SetColorTexture(0.27, 0.27, 0.29, 1)
+			host.box = box
+		end
+		host.idle = C.Text(holder, "GameFontDisableSmall", C.DIM)
+		host.idle:SetPoint("TOPLEFT", host.body, "BOTTOMLEFT", 0, -12)
+		host.idle:SetText(L["Nothing changed here"])
+		host.idle.searchSkip = true
+	end
 	function host:Redraw()
 		self.body:Draw(self.f, self.variant, self.partId)
 		self.partId = self.body.part and self.body.part.id
+		-- (The settings' box from the line under the part tabs down: behind the tabs it made a
+		-- second background, the user 2026-11-25. The tabs on the panel, as the page's.)
+		if self.box then
+			local base = self.body.tabBase
+			self.box:ClearAllPoints()
+			if base and base:IsShown() then
+				self.box:SetPoint("TOPLEFT", base, "TOPLEFT", 0, 0)
+			else
+				self.box:SetPoint("TOPLEFT", holder, "TOPLEFT", -8, 6)
+			end
+			self.box:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 6, -8)
+		end
 		self.undoB:SetEnabled(Studio.CanUndo() ~= nil)
 		self.redoB:SetEnabled(Studio.CanRedo() ~= nil)
-		self.looksB:SetShown(#(self.f.looks or {}) > 0) -- ("Theme's" alone is Reset's job)
+		if (self.f.pickers or self.pickers) then
+			self.undoB:SetShown(Studio.CanUndo() ~= nil)
+			self.redoB:SetShown(Studio.CanRedo() ~= nil)
+			self.looksB:Hide()
+			self.resetB:Hide()
+		else
+			self.looksB:SetShown(#(self.f.looks or {}) > 0) -- ("Theme's" alone is Reset's job)
+		end
 		self:FlowBar()
-		holder:SetHeight(self.barHeight + 12 + self.body.height)
+		if (self.f.pickers or self.pickers) then
+			local any = Studio.CanUndo() ~= nil or Studio.CanRedo() ~= nil or self.testB ~= nil
+			bar:SetShown(any)
+			if self.idle then self.idle:SetShown(not any) end
+			holder:SetHeight(self.body.height + (any and (self.barHeight + 10) or 28))
+		else
+			holder:SetHeight(self.barHeight + 12 + self.body.height)
+		end
+		if self.spacer then
+			-- (side: what's under them starts below the taller of the two)
+			local spot = side.stackSpot or side
+			self.spacer:SetHeight(math.max(1, holder:GetHeight() - (spot:GetHeight() or 0)))
+		end
 		if self.preview then Studio.Hotspots(self, self.preview) end
 		self:ShowStage()
-		if self.kit and self.kit.FitContentHeight then ns.Guard(self.kit.FitContentHeight, content) end
+		if self.kit and self.kit.FitContentHeight then
+			ns.Guard(self.kit.FitContentHeight, content)
+			-- (Again once laid out: measured as it's drawn, its last rows weren't placed yet and the
+			-- page (and the tabs' framed panel down it) stopped short of them, the user 2026-11-25.)
+			local kitNow = self.kit
+			local function Reach()
+				ns.Guard(kitNow.FitContentHeight, content)
+				-- (and at least down to this column's own bottom, its box's margin with it: measured
+				-- with the page, it came up short of it, run q1a89. The tabs' framed panel hangs from
+				-- the page's bottom, so it follows. Never the panel hung from this column: the column
+				-- hangs from the panel through the page's title, a loop the game refused, run q892b.)
+				local top, bottom = content:GetTop(), holder:GetBottom()
+				if top and bottom and holder:IsShown() then
+					local need = top - bottom + 24
+					if need > (content:GetHeight() or 0) then content:SetHeight(need) end
+				end
+			end
+			-- (Next frame, and again a moment later: a page just opened isn't laid out by then,
+			-- run q892b, Cast Bars short of its last rows till a part was picked.)
+			C_Timer.After(0, Reach)
+			C_Timer.After(0.15, Reach)
+		end
 	end
 	function host:IsVisible() return holder:IsVisible() end
 	hosts[host] = true
@@ -830,7 +1131,9 @@ function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 	-- (The editor's own words (headers, part and variant buttons, its tool bar) are left
 	-- out of the search: the markers stand for its settings, one each.)
 	host.body.searchSkip, bar.searchSkip = true, true
+	-- (A drawer's editor (opts.free): none of its own; the page's editor has them.)
 	local markers = CreateFrame("Frame", nil, holder)
+	if opts.free then markers.searchSkip = true end
 	markers:SetAllPoints(host.body)
 	markers:Hide()
 	markers.searchAlways = true
@@ -839,7 +1142,7 @@ function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 		local prop = each.prop
 		local key = prop.kind ~= "button" and prop.kind ~= "text" and Studio.KeyOf(prop, firstVariant)
 		local id = type(key) == "string" and key or (type(key) == "table" and type(key.key) == "string" and key.key) or nil
-		if id and prop.label then
+		if id and prop.label and not opts.free then
 			local m = CreateFrame("Frame", nil, markers)
 			m:SetAllPoints(markers)
 			m.searchAlways, m.settingKey, m.searchLabel, m.searchTip = true, id, prop.label, prop.tip
@@ -851,7 +1154,20 @@ function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 			end
 		end
 	end
-	stack:Add(holder, "label")
+	if opts.free then
+		-- (its caller places it)
+	elseif side then
+		-- (Beside the preview's spot; a spacer in the stack keeps what follows under both.)
+		holder:SetPoint("TOPLEFT", side.stackSpot or side, "TOPRIGHT", 14, 0)
+		if side.stackSpot then side.stackSpot.keepRoom = true end -- (the page keeps its length as the preview pins: StylePages.lua's SetRoom)
+		local spacer = CreateFrame("Frame", nil, content)
+		spacer:SetSize(1, 1)
+		spacer.searchSkip = true
+		host.spacer = spacer
+		stack:Add(spacer, "label")
+	else
+		stack:Add(holder, "label")
+	end
 	ns.Guard(host.Redraw, host) -- (an error drawing it: logged, the page and the ones after it still made)
 	return host
 end

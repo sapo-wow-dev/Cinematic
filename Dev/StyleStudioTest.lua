@@ -446,6 +446,393 @@ ns.TestKit.Define({
 				end
 			end
 		end },
+		-- (The mock built, 2026-11-25 (Tools/style-studio/page-mock.html): Nameplate Style's
+		-- preview beside the settings, parts as tabs (Bar, Colors, Name), pickers, no Looks or
+		-- Reset; Default's colors per kind of unit reach the preview; a Smart row's Colors;
+		-- Layout's parts with Shown; the Show in row on the Nameplates page's Style tab.)
+		{ key = "mockplates", title = "Nameplate Style as the mock: side preview, tabs, colors per kind", handsOff = true,
+			run = function(r)
+			local Studio = ns.Studio
+			local f = Studio.frames.plates
+			-- (Still while nothing changes, the user 2026-11-25: "the preview shakes". Its height,
+			-- its top and its plate's place sampled 15 times a tenth of a second apart.)
+			local function Steady(label, frame, plateOf)
+				if not frame then return end
+				local seen = { h = {}, t = {}, px = {}, py = {} }
+				for _ = 1, 15 do
+					local okH, h = pcall(frame.GetHeight, frame)
+					local okT, t = pcall(frame.GetTop, frame)
+					if okH and h then seen.h[#seen.h + 1] = h end
+					if okT and t then seen.t[#seen.t + 1] = t end
+					local plate = plateOf and plateOf()
+					if plate then
+						local okP, l, b = pcall(function() return plate:GetLeft(), plate:GetBottom() end)
+						if okP and l then seen.px[#seen.px + 1] = l * plate:GetEffectiveScale() end
+						if okP and b then seen.py[#seen.py + 1] = b * plate:GetEffectiveScale() end
+					end
+					r:Sleep(0.1)
+				end
+				local words, still = {}, true
+				for _, k in ipairs({ "h", "t", "px", "py" }) do
+					local lo, hi = math.huge, -math.huge
+					for _, v in ipairs(seen[k]) do lo, hi = math.min(lo, v), math.max(hi, v) end
+					if #seen[k] > 0 then
+						words[#words + 1] = ("%s %.1f-%.1f"):format(k, lo, hi)
+						if hi - lo > 0.5 then still = false end
+					end
+				end
+				r:Verdict(still, label .. ": the preview holds still (" .. table.concat(words, ", ") .. ")")
+			end
+			local function GamePlateOf(holder)
+				return function()
+					local game = holder and holder.gamePlate
+					return game and game.gameCopy and game.gameCopy.HealthBarsContainer
+				end
+			end
+			r:Set("styleGeneral", true)
+			r:Set("handlePlateStyle", true)
+			r:Set("plateKindColor_hostileNpcs", "game")
+			r:Probe("open Nameplate Style", ns.OpenOptions, "Nameplate Style")
+			r:Sleep(0.5)
+			local host
+			for h in pairs(ns.StylePageHosts and ns.StylePageHosts() or {}) do
+				if h.f == f and h:IsVisible() then host = h end
+			end
+			r:Verdict(host ~= nil, "its editor shows")
+			if not host then return end
+			local preview = host.preview
+			local pl, hl = preview and preview:GetRight(), host.holder:GetLeft()
+			r:Verdict(pl and hl and hl >= pl - 1, ("the settings right of the preview (preview right %s, settings left %s)"):format(
+				tostring(pl and math.floor(pl)), tostring(hl and math.floor(hl))))
+			-- (Nothing past the page's right edge: 452 wide ran under it, dropdown arrows and swatches
+			-- cut, run q496d's shot.)
+			local hr, pr = host.holder:GetRight(), host.holder:GetParent() and host.holder:GetParent():GetRight()
+			local canvas = f.pageCanvas
+			local cr = canvas and canvas.GetRight and canvas:GetRight()
+			local edge = cr or pr
+			r:Verdict(hr and edge and hr <= edge + 1, ("the settings inside the page (right %s, page right %s)"):format(
+				tostring(hr and math.floor(hr)), tostring(edge and math.floor(edge))))
+			local ids = {}
+			for _, p in ipairs(f.parts) do ids[#ids + 1] = p.id end
+			-- (Mark: a Smart row's only, hidden on Default.)
+			r:Verdict(table.concat(ids, ",") == "mark,bar,colors,name", "parts: " .. table.concat(ids, ","))
+			local tabs = 0
+			for _, t in ipairs(host.body.tabs or {}) do if t:IsShown() then tabs = tabs + 1 end end
+			r:Verdict(tabs == 3, ("the parts as %d tabs"):format(tabs))
+			r:Verdict(not host.looksB:IsShown() and not host.resetB:IsShown(), "no Looks or Reset")
+			-- (The parts as folder tabs: the user 2026-11-25 "more of a folder tab style".)
+			local pickedTab
+			for _, t in ipairs(host.body.tabs or {}) do if t:IsShown() and t.partId == host.partId then pickedTab = t end end
+			r:Verdict(pickedTab and pickedTab.bg and pickedTab.edges and host.body.tabBase and host.body.tabBase:IsShown(),
+				"the parts as folder tabs over a line")
+			-- (no box behind the tabs: the settings' box starts at their line, the user 2026-11-25)
+			local bt, lt = host.box and host.box:GetTop(), host.body.tabBase and host.body.tabBase:GetTop()
+			r:Verdict(bt and lt and math.abs(bt - lt) < 1.5, ("the settings' box starts at the tabs' line (%s, %s)"):format(
+				tostring(bt and math.floor(bt)), tostring(lt and math.floor(lt))))
+			-- (The mock's chrome: the title and its On switch over the page, no Reset page.)
+			-- (The page's content: the holder sits in one of its part hosts, run qb407.)
+			local function PageOf(frame, field)
+				for _ = 1, 8 do
+					if not frame then return nil end
+					if frame[field] then return frame end
+					frame = frame:GetParent()
+				end
+			end
+			local content = PageOf(host.holder, "mockHead")
+			local head = content and content.mockHead
+			r:Verdict(head and head:IsVisible() and head.title:GetText() == ns.L["Nameplate Style"]
+				and head.switch:IsVisible(), "the mock's title and On switch: " .. tostring(head and head.title:GetText()))
+			-- (Folder tabs over a framed panel round the whole page, as the Nameplates page's
+			-- sections, the user 2026-11-25: "like the screenshot".)
+			local tabPanel = content and content.pageTabs and content.pageTabs.panel
+			local ph = tabPanel and tabPanel:GetHeight() or 0
+			r:Verdict(ph > 300 and head and head:GetTop() and tabPanel:GetTop() and head:GetTop() <= tabPanel:GetTop(),
+				("the page in the tabs' framed panel (%d tall), the title inside it"):format(math.floor(ph)))
+			local pr2 = tabPanel and tabPanel:GetRight()
+			local hr2 = host.holder:GetRight()
+			r:Verdict(pr2 and hr2 and hr2 <= pr2 - 6, ("the settings clear of the panel's right edge (%s, %s)"):format(
+				tostring(hr2 and math.floor(hr2)), tostring(pr2 and math.floor(pr2))))
+			-- (Nothing showing behind the tabs, the user 2026-11-25: "tabs ... look broken" (bits of
+			-- hidden text and a box outline peeked out round them). Every shown frame and region of
+			-- the page in the tab row's strip, not the tabs themselves, is named.)
+			local tabFrames = content and content.pageTabs and content.pageTabs.frames or {}
+			local isTab = {}
+			for _, t in ipairs(tabFrames) do
+				isTab[t] = true
+				for _, kid in ipairs({ t:GetChildren() }) do isTab[kid] = true end
+				for _, reg in ipairs({ t:GetRegions() }) do isTab[reg] = true end
+			end
+			local t1 = tabFrames[1]
+			-- (In screen units: frames scaled differently (the preview's plate) compared as drawn.)
+			local function Box(o)
+				local okB, l, b, w, h = pcall(function() return o:GetLeft(), o:GetBottom(), o:GetWidth(), o:GetHeight() end)
+				local okS, sc = pcall(o.GetEffectiveScale, o)
+				if not (okB and l and b and w and h and okS and sc) then return nil end
+				return l * sc, b * sc, (l + w) * sc, (b + h) * sc
+			end
+			local tl, tb, tt, tr
+			if t1 then tl, tb, _, tt = Box(t1) end -- (not "t1 and Box(t1)": that keeps one value)
+			if tabFrames[#tabFrames] then _, _, tr = Box(tabFrames[#tabFrames]) end
+			local under = {}
+			local seen = {}
+			local function Walk(frame, depth)
+				if depth > 9 or seen[frame] or isTab[frame] or frame == tabPanel then return end
+				seen[frame] = true
+				local objs = { frame }
+				for _, reg in ipairs({ frame:GetRegions() }) do objs[#objs + 1] = reg end
+				for _, o in ipairs(objs) do
+					local okV, vis = pcall(o.IsVisible, o)
+					local okA, alpha = pcall(o.GetEffectiveAlpha, o)
+					if not isTab[o] and okV and vis and (not okA or alpha > 0.05) then
+						local l, b, rr, t = Box(o)
+						-- (its middle in the tab row's strip, left of the tabs' end; not a page-sized frame)
+						if l and tl and tr and (t - b) < 60 and (rr - l) < 400 and (b + t) / 2 > tb and (b + t) / 2 < tt + 4
+							and l < tr + 60 and rr > tl then
+							local words = o.GetText and o:GetText()
+							under[#under + 1] = ("%s %s %q at %d-%d x %d-%d (parent %s)"):format(o:GetObjectType(),
+								tostring(o:GetName()), tostring(words), math.floor(l), math.floor(rr), math.floor(b), math.floor(t),
+								tostring(o.GetParent and o:GetParent() and o:GetParent():GetObjectType()))
+						end
+					end
+				end
+				for _, kid in ipairs({ frame:GetChildren() }) do Walk(kid, depth + 1) end
+			end
+			local root = canvas
+			for _ = 1, 3 do if root and root:GetParent() then root = root:GetParent() end end
+			if root then Walk(root, 0) end
+			-- (and the world doesn't show through them: nameplates behind the window did)
+			r:Verdict(canvas and canvas.mockSolid and canvas.mockSolid:IsVisible() and tabPanel and tabPanel.mockSolid
+				and tabPanel.mockSolid:IsVisible(), "solid under the tabs and the panel: no world through them")
+			r:Verdict(#under == 0, "nothing behind the tabs: " .. (#under > 0 and table.concat(under, "; ") or "none"))
+			-- (The settings on a box of their own, a shade off the panel: the user 2026-11-25.)
+			r:Verdict(host.box and host.box:IsVisible() and host.box:GetRight() <= (tabPanel and tabPanel:GetRight() or 0) - 1,
+				"the settings on a box of their own, inside the panel")
+			local resetB = canvas and canvas.resetButton
+			r:Verdict(not (resetB and resetB:IsShown()), "no Reset page")
+			local lp = preview and preview.lookPreview
+			r:Verdict(not (lp and lp.sceneButton and lp.sceneButton:IsShown()), "no Scene button on the stage")
+			-- (Not black: every preview's backdrop, the user 2026-11-25 "black background....")
+			r:Verdict(lp and lp.styleScene and lp.styleScene:IsShown(), "the stage on every preview's backdrop, not black")
+			Steady("Default", preview, GamePlateOf(preview and preview.lookPreview))
+			r:Shot("Nameplate Style, Bar")
+			host:Pick("colors", Studio.FirstVariant(f))
+			r:Sleep(0.3)
+			local rows = 0
+			for _, row in ipairs(host.body.shownRows or {}) do if row:IsShown() then rows = rows + 1 end end
+			r:Verdict(rows == 12, ("Default's Colors: a line and a Fade per kind (%d rows)"):format(rows))
+			-- (A kind's color reaches the preview: Hostile NPCs in pure blue, the preview's first sample.)
+			local prop
+			for _, each in ipairs(Studio.Props(f, "colors")) do
+				if each.prop.key == "plateKindColor_hostileNpcs" then prop = each.prop end
+			end
+			if prop then
+				r:Set("plateKindColor_hostileNpcsR", 0) r:Set("plateKindColor_hostileNpcsG", 0) r:Set("plateKindColor_hostileNpcsB", 1)
+				Studio.Set(f, prop, Studio.FirstVariant(f), "custom")
+				r:Sleep(0.4)
+				local inner = preview and preview.lookPreview
+				-- (The previewer's game plate: its UnitFrame on the plate itself, or on its copy.)
+				local plate = inner and inner.gamePlate
+				local uf = plate and (plate.UnitFrame or (plate.gameCopy and plate.gameCopy.UnitFrame))
+				local bar = uf and uf.HealthBarsContainer and uf.HealthBarsContainer.healthBar
+				local cr, cg, cb
+				if bar then cr, cg, cb = bar:GetStatusBarColor() end
+				r:Verdict(cb and cb > 0.8 and cr < 0.2, ("Hostile NPCs blue on the preview's plate (%s, %s, %s)"):format(
+					tostring(cr), tostring(cg), tostring(cb)))
+				r:Shot("Nameplate Style, Colors: Hostile NPCs blue")
+				Studio.Undo()
+				r:Verdict(ns.db.plateKindColor_hostileNpcs ~= "custom", "one Undo: back to the game's")
+			else
+				r:Verdict(false, "no Hostile NPCs color line")
+			end
+			-- (A Smart row: its Plate color and Fade, every setting Default's till set.)
+			local variants = ns.PlateStudioVariants and ns.PlateStudioVariants() or {}
+			if variants[2] then
+				host:Pick("colors", variants[2].id)
+				r:Sleep(0.3)
+				local labels = {}
+				for _, row in ipairs(host.body.shownRows or {}) do
+					if row:IsShown() then labels[#labels + 1] = row.prop.label or "?" end
+				end
+				r:Verdict(labels[1] == ns.L["Plate color"], "a row's Colors: " .. table.concat(labels, ", "))
+				r:Shot("Nameplate Style, a Smart row's Colors")
+				host:Pick("bar", Studio.FirstVariant(f))
+				-- (Back on the short Bar part after the tall Colors: the panel hugs it again, no
+				-- empty space under it, the user 2026-11-25 "lot of empty space".)
+				r:Sleep(0.4)
+				local dPanel = content and content.pageTabs and content.pageTabs.panel
+				local dBox = host.box or host.holder
+				local gap = dPanel and dBox:GetBottom() and dPanel:GetBottom() and (dBox:GetBottom() - dPanel:GetBottom())
+				r:Verdict(gap and gap >= 4 and gap <= 40, ("Default: the panel hugs the settings after a tall part (%s under the box)"):format(
+					tostring(gap and math.floor(gap))))
+			end
+			-- (Layout: each part's Shown.)
+			local lf = Studio.frames.platelayout
+			if lf and lf.pageCanvas then
+				r:Probe("open Nameplate Layout", ns.OpenOptions, "Nameplate Layout")
+				r:Sleep(0.4)
+				local shown
+				for _, each in ipairs(Studio.Props(lf, "level")) do if each.prop.label == ns.L["Shown"] then shown = true end end
+				r:Verdict(shown, "Layout: the level box's Shown is here")
+				-- (Smart's marks' two raises: Layout's Smart marks part, the user 2026-11-25.)
+				local raises = {}
+				for _, each in ipairs(Studio.Props(lf, "smartMarks")) do
+					if type(each.prop.key) == "string" then raises[#raises + 1] = each.prop.key end
+				end
+				r:Verdict(table.concat(raises, ",") == "targetArrowY,targetArrowBareY",
+					"Layout: a Smart marks part with the two raises: " .. table.concat(raises, ","))
+				local page = ns.plateLayoutPage
+				local lprev, led = page and page.preview, page and page.editor
+				local lr, ll = lprev and lprev:GetRight(), led and led.holder:GetLeft()
+				r:Verdict(lr and ll and ll >= lr - 1, ("Layout: the settings right of the stage (%s, %s)"):format(
+					tostring(lr and math.floor(lr)), tostring(ll and math.floor(ll))))
+				local lcanvas = page and page.canvas
+				local lhr, lcr = led and led.holder:GetRight(), lcanvas and lcanvas:GetRight()
+				r:Verdict(lhr and lcr and lhr <= lcr + 1, ("Layout: the settings inside the page (%s, %s)"):format(
+					tostring(lhr and math.floor(lhr)), tostring(lcr and math.floor(lcr))))
+				-- (No choices stacked down the page: one line each, a picker where they don't fit, the
+				-- user 2026-11-25 on Balance; Mirror a plain button.)
+				local tall = {}
+				for _, row in ipairs(led and led.body.shownRows or {}) do
+					if row:IsShown() and row.control and row.control:GetHeight() > 24 then tall[#tall + 1] = row.prop.label or "?" end
+				end
+				r:Verdict(#tall == 0, "Layout: every setting on one line" .. (#tall > 0 and (": " .. table.concat(tall, ", ")) or ""))
+				local lhead = led and PageOf(led.holder, "mockHead") and PageOf(led.holder, "mockHead").mockHead
+				local ltabs = 0
+				for _, t in ipairs(led and led.body.tabs or {}) do if t:IsShown() then ltabs = ltabs + 1 end end
+				r:Verdict(ltabs == 0 and led.body.pickRow and led.body.pickRow.partDrop:IsShown(),
+					("Layout: ten parts in a Part picker, no tabs past the edge (%d tabs)"):format(ltabs))
+				r:Verdict(lhead and lhead:IsVisible() and lhead.title:GetText() == ns.L["Nameplate Layout"],
+					"Layout: the mock's title: " .. tostring(lhead and lhead.title:GetText()))
+				local readout = page and page.readout
+				r:Verdict(not (readout and readout.IsTruncated and readout:IsTruncated()),
+					"Layout: the stage's line whole, not cut: " .. tostring(readout and readout:GetText()))
+				-- (Guides clear of the pop-out button at the stage's top right, the user 2026-11-25.)
+				local gb = page and page.controls and page.controls[2] and page.controls[2][1]
+				local pop = lprev and lprev.popButton
+				local gr, pl2 = gb and gb:GetRight(), pop and pop:GetLeft()
+				r:Verdict(gr and pl2 and gr <= pl2 - 2, ("Layout: Guides clear of the pop-out button (%s, %s)"):format(
+					tostring(gr and math.floor(gr)), tostring(pl2 and math.floor(pl2))))
+				Steady("Layout", lprev, GamePlateOf(page and page.holder))
+				-- (Layout off: its card inside the tabs' framed panel, clear of its edges, the user
+				-- 2026-11-25 "no fit".)
+				r:Set("plateLayout", false)
+				if ns.PaintPageSwitches then ns.PaintPageSwitches() end
+				r:Sleep(0.3)
+				local box = ns.offCardLoad and ns.offCardLoad:GetParent()
+				local card = box and box:GetParent()
+				local lpanel = led and led.holder:GetParent().pageTabs and led.holder:GetParent().pageTabs.panel
+				local cl, pl = card and card:IsVisible() and box:GetLeft(), lpanel and lpanel:GetLeft()
+				local ct, pt = box and box:GetTop(), lpanel and lpanel:GetTop()
+				r:Verdict(cl and pl and cl >= pl + 5 and ct and pt and ct <= pt - 5,
+					("Layout off: its card inside the panel (left %s in %s, top %s under %s)"):format(tostring(cl and math.floor(cl)),
+					tostring(pl and math.floor(pl)), tostring(ct and math.floor(ct)), tostring(pt and math.floor(pt))))
+				r:Shot("Nameplate Layout, off")
+				r:Set("plateLayout", true)
+				if ns.PaintPageSwitches then ns.PaintPageSwitches() end
+				r:Sleep(0.2)
+				r:Shot("Nameplate Layout")
+			end
+			-- (Smart: no page preview, a row's drawer with its own preview and its settings.)
+			r:Probe("open Smart", ns.OpenOptions, "Nameplate Marks")
+			r:Sleep(0.4)
+			local grid = content and PageOf(content, "markGrid") and PageOf(content, "markGrid").markGrid
+			r:Verdict(not (preview and preview:IsVisible()), "Smart: no page preview over the rows")
+			local first = ns.TargetMarkOrder and ns.TargetMarkOrder()[1]
+			if grid and grid.Open and first then
+				grid.Open(first)
+				r:Sleep(0.6)
+				-- (Nothing cut off, the user 2026-11-25: the row's plate inside its stage, level box too.)
+				local drawerLook
+				for _, child in ipairs({ grid:GetChildren() }) do
+					if child:IsShown() and child.rowPreview then drawerLook = child.rowPreview end
+				end
+				local copy = drawerLook and drawerLook.gamePlate and drawerLook.gamePlate.gameCopy
+				local lvl = copy and copy.PlayerLevelDiffFrame
+				local lr, sr = lvl and lvl:IsVisible() and lvl:GetRight(), drawerLook and drawerLook:GetRight()
+				r:Verdict(drawerLook ~= nil and (not lr or (sr and lr * lvl:GetEffectiveScale() <= sr * drawerLook:GetEffectiveScale() + 1)),
+					("Smart: the row's plate inside its stage (level box right %s, stage right %s)"):format(
+					tostring(lr and math.floor(lr * lvl:GetEffectiveScale())), tostring(sr and math.floor(sr * drawerLook:GetEffectiveScale()))))
+				Steady("Smart row", drawerLook, GamePlateOf(drawerLook))
+				r:Shot("Smart Style, a row open")
+			else
+				r:Verdict(false, "Smart: no row to open")
+			end
+			-- (Cast Bars: the cast editor beside one plate casting, Bar · Colors · Spell name · Icon.)
+			r:Probe("open Cast Bars", ns.OpenOptions, "Cast Bar Style")
+			r:Sleep(0.5)
+			local castHost
+			for h in pairs(ns.StylePageHosts and ns.StylePageHosts() or {}) do
+				if h.f == Studio.frames.cast and h:IsVisible() then castHost = h end
+			end
+			r:Verdict(castHost ~= nil, "Cast Bars: its editor shows")
+			if castHost then
+				local cp = castHost.preview
+				-- (The preview's spot in the page: the preview itself pins to the top as the page scrolls.)
+				local cspot = cp and (cp.stackSpot or cp)
+				local cpr, chl = cspot and cspot:GetRight(), castHost.holder:GetLeft()
+				r:Verdict(cpr and chl and chl >= cpr - 1, ("Cast Bars: the settings right of the stage (%s, %s)"):format(
+					tostring(cpr and math.floor(cpr)), tostring(chl and math.floor(chl))))
+				local ctabs = {}
+				for _, t in ipairs(castHost.body.tabs or {}) do if t:IsShown() then ctabs[#ctabs + 1] = t.text and t.text:GetText() or "?" end end
+				r:Verdict(#ctabs == 4, "Cast Bars: the parts as tabs: " .. table.concat(ctabs, ", "))
+				-- (The game's own plate on its stage, casting, its health and cast bars even: the user
+				-- 2026-11-25, "not even bars" on the drawn one.)
+				local clp = cp and cp.lookPreview
+				local ccopy = clp and clp.gamePlate and clp.gamePlate.gameCopy
+				local hb = ccopy and ccopy.HealthBarsContainer and ccopy.HealthBarsContainer.healthBar
+				local cb = ccopy and ccopy.CastBarsContainer and ccopy.CastBarsContainer.castBar
+				r:Verdict(cb ~= nil and cb:IsVisible() and cp.samples and cp.samples[1] == cb,
+					"Cast Bars: the game's plate on the stage, casting, the editor on its cast bar")
+				local hl, hr = hb and hb:GetLeft(), hb and hb:GetRight()
+				local bl, br = cb and cb:GetLeft(), cb and cb:GetRight()
+				r:Verdict(hl and bl and math.abs(hl - bl) < 2 and math.abs(hr - br) < 2,
+					("Cast Bars: health and cast bars even (%s-%s, %s-%s)"):format(tostring(hl and math.floor(hl)),
+					tostring(hr and math.floor(hr)), tostring(bl and math.floor(bl)), tostring(br and math.floor(br))))
+				local pick = ns.CastLookPick and ns.CastLookPick("PLATE")
+				r:Verdict(pick ~= nil, "Cast Bars: Look from says what it is: " .. tostring(pick))
+				-- (Its settings inside the tabs' framed panel, to their last row: they ran past its
+				-- bottom, the user 2026-11-25.)
+				local cpanel = castHost.holder:GetParent().pageTabs and castHost.holder:GetParent().pageTabs.panel
+				-- (its box, 8 under the column, and a margin under that)
+				local box2 = castHost.box or castHost.holder
+				local hb2, pb2 = box2:GetBottom(), cpanel and cpanel:GetBottom()
+				r:Verdict(hb2 and pb2 and hb2 >= pb2 + 4, ("Cast Bars: the settings end inside the panel (%s over %s)"):format(
+					tostring(hb2 and math.floor(hb2)), tostring(pb2 and math.floor(pb2))))
+				-- (Again after a part picked and back, as a player does: the Bar part the tallest.)
+				castHost:Pick("colors", "PLATE")
+				r:Sleep(0.3)
+				castHost:Pick("bar", "PLATE")
+				r:Sleep(0.3)
+				local hb3, pb3 = box2:GetBottom(), cpanel and cpanel:GetBottom()
+				r:Verdict(hb3 and pb3 and hb3 >= pb3 + 4, ("Cast Bars: still inside the panel after Colors and back (%s over %s)"):format(
+					tostring(hb3 and math.floor(hb3)), tostring(pb3 and math.floor(pb3))))
+				r:Verdict(cp and cp.backButton == nil and preview and preview.backButton == nil,
+					"no scene button on the Default or Cast Bars stage (the user 2026-11-25)")
+				-- (Scrolled to the bottom, the preview pinned at the top: the panel still past the
+				-- settings' last row; the pin shortened the page, the user 2026-11-25 "why no fix?")
+				local cscroll = cp and cp.pin and cp.pin.scroll
+				local canvasC = castHost.holder:GetParent():GetParent()
+				cscroll = cscroll or (canvasC and canvasC.GetVerticalScrollRange and canvasC)
+				if cscroll and cscroll.GetVerticalScrollRange then
+					cscroll:SetVerticalScroll(cscroll:GetVerticalScrollRange())
+					r:Sleep(0.6)
+					local hb4, pb4 = box2:GetBottom(), cpanel and cpanel:GetBottom()
+					r:Verdict(hb4 and pb4 and hb4 >= pb4 + 4, ("Cast Bars: scrolled down, still inside the panel (%s over %s)"):format(
+						tostring(hb4 and math.floor(hb4)), tostring(pb4 and math.floor(pb4))))
+					r:Shot("Cast Bars, scrolled down")
+					cscroll:SetVerticalScroll(0)
+					r:Sleep(0.4)
+				else
+					r:Verdict(false, "Cast Bars: no scroll frame to scroll")
+				end
+				Steady("Cast Bars", cp, GamePlateOf(clp))
+				r:Shot("Cast Bars")
+			end
+			-- (The Show in row: the Nameplates page's Style tab.)
+			r:Probe("open Nameplates", ns.OpenOptions, "Nameplates")
+			r:Sleep(0.4)
+			r:Shot("Nameplates page (Show): its tabs")
+		end },
 		{ key = "model", title = "set, Undo, Redo, Reset", handsOff = true,
 			proven = "stylestudio runs q66f9, q3c49 (2026-11-25)", run = function(r)
 			local Studio = ns.Studio

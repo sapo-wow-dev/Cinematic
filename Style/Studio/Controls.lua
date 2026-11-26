@@ -57,8 +57,14 @@ end
 local Fill, Edge = C.Fill, C.Edge
 
 function C.Tip(widget, text)
+	-- (Hooked once; called again it only changes the words: the editor redraws often and
+	-- sets its headers' and tabs' tips each time.)
+	widget.studioTip = text
+	if widget.studioTipHooked then return end
+	widget.studioTipHooked = true
 	widget:HookScript("OnEnter", function(self)
-		local shown = type(text) == "function" and text(self) or text
+		local tip = self.studioTip
+		local shown = type(tip) == "function" and tip(self) or tip
 		-- (Words only: a choice list's third slot can be its color, a table, and
 		-- SetText took it as words and errored, Names page 2026-11-25, Tools/errors/known.lua.)
 		if type(shown) == "number" then shown = tostring(shown) end
@@ -266,25 +272,49 @@ local function ListFrame()
 		local max = math.max(0, body:GetHeight() - self:GetHeight())
 		self:SetVerticalScroll(math.max(0, math.min(max, self:GetVerticalScroll() - delta * 40)))
 	end)
-	list.scroll, list.body, list.rows = scroll, body, {}
+	list.scroll, list.body, list.rows, list.heads = scroll, body, {}, {}
+	-- (The mock's picker, 2026-11-25 (Tools/style-studio/page-mock.html): each entry its
+	-- sample (a bar's texture or color, a font's "Aa"), its name, and a line saying what it
+	-- is (o.sub); entries in groups under a small heading (o.group).)
 	function list.Fill()
 		local text = (find:GetText() or ""):lower()
-		local shown = 0
+		local shown, heads, y, lastGroup = 0, 0, 0, nil
+		local w = list.body:GetWidth()
 		for _, row in ipairs(list.rows) do row:Hide() end
+		for _, h in ipairs(list.heads) do h:Hide() end
 		for _, o in ipairs(list.options or {}) do
 			local name = tostring(o.text or o[2] or o.value or o[1])
 			if text == "" or name:lower():find(text, 1, true) then
+				if o.group and o.group ~= lastGroup then
+					heads = heads + 1
+					local h = list.heads[heads]
+					if not h then
+						h = C.Text(body, "GameFontDisableSmall")
+						list.heads[heads] = h
+					end
+					h:ClearAllPoints()
+					h:SetPoint("TOPLEFT", 8, -y - 7)
+					h:SetText(o.group:upper())
+					h:Show()
+					y = y + 22
+				end
+				lastGroup = o.group
 				shown = shown + 1
 				local row = list.rows[shown]
 				if not row then
 					row = CreateFrame("Button", nil, body)
 					row:SetSize(230, 22)
 					row.sample = row:CreateTexture(nil, "BACKGROUND")
-					row.sample:SetPoint("LEFT", 4, 0)
+					row.sample:SetPoint("LEFT", 6, 0)
 					row.sample:SetSize(60, 12)
+					row.aa = C.Text(row, "GameFontHighlight")
+					row.aa:SetPoint("CENTER", row, "LEFT", 36, 0)
 					row.text = C.Text(row, "GameFontHighlightSmall")
 					row.text:SetPoint("LEFT", 8, 0)
 					row.text:SetPoint("RIGHT", -6, 0)
+					row.sub = C.Text(row, "GameFontDisableSmall")
+					row.sub:SetJustifyH("LEFT")
+					row.sub:SetWordWrap(false)
 					local hi = row:CreateTexture(nil, "HIGHLIGHT")
 					hi:SetAllPoints()
 					hi:SetColorTexture(1, 1, 1, 0.07)
@@ -300,27 +330,62 @@ local function ListFrame()
 					list.rows[shown] = row
 				end
 				row.value = o.value ~= nil and o.value or o[1]
-				row:SetPoint("TOPLEFT", 0, -(shown - 1) * 22)
+				local sub = o.sub
+				local rh = sub and 34 or ((o.texture or o.atlas or o.color or o.font) and 26 or 22)
+				row:SetSize(w, rh)
+				row:ClearAllPoints()
+				row:SetPoint("TOPLEFT", 0, -y)
+				y = y + rh
 				row.text:SetText(name)
 				row.text:SetFontObject("GameFontHighlightSmall")
-				if o.font then pcall(row.text.SetFont, row.text, o.font, 12, "") end
+				row.aa:Hide()
+				if o.font then
+					-- (a font: "Aa" in it at the left, its name in it too)
+					row.aa:Show()
+					row.aa:SetText("Aa")
+					pcall(row.aa.SetFont, row.aa, o.font, 16, "")
+					pcall(row.text.SetFont, row.text, o.font, 13, "")
+				end
+				local left = 8
+				row.sample:SetVertexColor(1, 1, 1)
 				if o.texture or o.atlas then
 					row.sample:Show()
 					if o.atlas then row.sample:SetAtlas(o.atlas) else row.sample:SetTexture(o.texture) end
 					local tint = o.tint or { 1, 1, 1 } -- (a bar texture's green comes with it: R.Texture)
 					row.sample:SetVertexColor(tint[1], tint[2], tint[3])
-					row.text:SetPoint("LEFT", 72, 0)
+					left = 74
+				elseif o.color then
+					-- (a color: a small bar of it)
+					row.sample:Show()
+					row.sample:SetTexture(FLAT)
+					row.sample:SetVertexColor(o.color[1], o.color[2], o.color[3])
+					left = 74
 				else
 					row.sample:Hide()
-					row.text:SetPoint("LEFT", 8, 0)
+					if o.font then left = 64 end
+				end
+				row.text:ClearAllPoints()
+				row.sub:ClearAllPoints()
+				if sub then
+					row.text:SetPoint("TOPLEFT", left, -4)
+					row.text:SetPoint("RIGHT", -6, 0)
+					row.sub:SetPoint("TOPLEFT", row.text, "BOTTOMLEFT", 0, -2)
+					row.sub:SetPoint("RIGHT", -6, 0)
+					row.sub:SetText(sub)
+					row.sub:Show()
+				else
+					row.text:SetPoint("LEFT", left, 0)
+					row.text:SetPoint("RIGHT", -6, 0)
+					row.sub:Hide()
 				end
 				local accent = Role("accent")
 				row.pick:SetColorTexture(accent[1], accent[2], accent[3], row.value == list.current and 0.16 or 0)
 				row:Show()
 			end
 		end
-		body:SetHeight(math.max(10, shown * 22))
+		body:SetHeight(math.max(10, y))
 		list.scroll:SetVerticalScroll(0)
+		return y
 	end
 	list:SetScript("OnHide", function()
 		if list.onHover then list.onHover(nil) end
@@ -362,12 +427,16 @@ function C.OpenList(anchor, options, current, onPick, onHover, noFind)
 	end
 	f:ClearAllPoints()
 	f:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
+	-- (As wide as the box it opens from, 240 at least: descriptions fit, run the mock.)
+	local w = math.max(240, math.floor((anchor and anchor.GetWidth and anchor:GetWidth() or 240) + 0.5))
+	f:SetWidth(w)
+	f.body:SetWidth(w - 10)
 	f.find:SetShown(not noFind)
 	f.scroll:SetPoint("TOPLEFT", 4, noFind and -4 or -30)
-	f:SetHeight(math.min(300, (noFind and 10 or 36) + #options * 22))
 	f.find:SetText("")
 	f:Show()
-	f.Fill()
+	local y = f.Fill()
+	f:SetHeight(math.min(340, (noFind and 10 or 36) + (y or #options * 22)))
 	return true
 end
 function C.CloseList() if list then list:Hide() end end
@@ -385,6 +454,14 @@ function C.Drop(parent, width, options, onPick, onHover)
 	b.text:SetWordWrap(false)
 	local arrow = C.DownArrow(b)
 	arrow:SetPoint("RIGHT", -5, 0)
+	-- (The picked one's sample before its name, one line: the mock's closed picker.)
+	b.sample = b:CreateTexture(nil, "ARTWORK")
+	b.sample:SetPoint("LEFT", 6, 0)
+	b.sample:SetSize(44, 10)
+	b.sample:Hide()
+	b.aa = C.Text(b, "GameFontHighlight")
+	b.aa:SetPoint("LEFT", 8, 0)
+	b.aa:Hide()
 	b.options = options
 	b:SetScript("OnClick", function(self)
 		local opts = type(self.options) == "function" and self.options() or self.options
@@ -394,11 +471,35 @@ function C.Drop(parent, width, options, onPick, onHover)
 		self.value = value
 		local opts = type(self.options) == "function" and self.options() or self.options
 		local name = value ~= nil and tostring(value) or ""
+		local picked
 		for _, o in ipairs(opts) do
 			local v = o.value ~= nil and o.value or o[1]
-			if v == value then name = o.text or o[2] end
+			if v == value then name, picked = o.short or o.text or o[2], o end
 		end
 		self.text:SetText(name)
+		self.sample:Hide()
+		self.aa:Hide()
+		local left = 8
+		if picked and (picked.texture or picked.atlas) then
+			if picked.atlas then self.sample:SetAtlas(picked.atlas) else self.sample:SetTexture(picked.texture) end
+			local tint = picked.tint or { 1, 1, 1 }
+			self.sample:SetVertexColor(tint[1], tint[2], tint[3])
+			self.sample:Show()
+			left = 56
+		elseif picked and picked.color then
+			self.sample:SetTexture(FLAT)
+			self.sample:SetVertexColor(picked.color[1], picked.color[2], picked.color[3])
+			self.sample:Show()
+			left = 56
+		elseif picked and picked.font then
+			self.aa:SetText("Aa")
+			pcall(self.aa.SetFont, self.aa, picked.font, 14, "")
+			self.aa:Show()
+			left = 34
+		end
+		self.text:ClearAllPoints()
+		self.text:SetPoint("LEFT", left, 0)
+		self.text:SetPoint("RIGHT", -18, 0)
 	end
 	return b
 end

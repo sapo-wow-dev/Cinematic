@@ -709,6 +709,44 @@ error: Interface/AddOns/Questie/Modules/QuestieInit.lua:428: attempt to call a n
     source = "the dev error window and the saved log, 2026-11-25 12:31-12:41 (every reload of the test queue)",
   },
 
+  {
+    id = "studio-footer-anchor-loop",
+    status = "fixed",
+    title = "Nameplate Style's editor: its tool bar anchored under the settings while they still hung under it (Studio.lua:912, SetPoint dependent region)",
+    match = { all = { "Studio.lua:", "Cannot anchor to a region dependent on it", "StyleEditorPage" } },
+    why = {
+      call = "bar:SetPoint(TOPLEFT, host.body, BOTTOMLEFT) in ns.StyleEditorPage's f.pickers block",
+      caller = "ns.StyleEditorPage for the nameplate editor (f.pickers: Undo/Redo moved under the settings, the mock 2026-11-25)",
+      path = "host.body was placed under bar a line before; bar then anchored to body before body let go of bar -> a loop -> the game refuses it, the page's editor never finishes (every 'its editor shows' failed)",
+      rule = "a frame can't anchor to one that hangs (directly or not) on it: clear the other's points first",
+      pattern = "swapping which of two frames hangs under the other",
+    },
+    dont = "Don't anchor A to B while B is still anchored to A: ClearAllPoints and re-place B first.",
+    fix = "2026-11-25: the body re-placed on the holder first, then the bar under it (Style/Studio/Studio.lua).",
+    seen = { "2026-11-25" },
+    example = [[Studio.lua:912: Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: Frame:SetPoint.
+[CinematicDev/Style/Studio/Studio.lua]:912: in function 'StyleEditorPage']],
+    source = "test queue qb32c (/cine debug stylestudio mockplates), Forever, 2026-11-25 19:37",
+  },
+  {
+    id = "studio-panel-anchor-loop",
+    status = "fixed",
+    title = "Nameplate Style's tabs: the framed panel's bottom hung from the settings column, which hangs from the panel (Studio.lua:1071, SetPoint dependent region)",
+    match = { all = { "Studio.lua:", "Cannot anchor to a region dependent on it", "Relative: [SettingsPanel" } },
+    why = {
+      call = "panel:SetPoint(BOTTOM, holder, BOTTOM) in ns.StyleEditorPage's Redraw (C_Timer)",
+      caller = "host:Redraw on the Nameplate Style tabs (mockChrome), to make the panel reach the settings' last row",
+      path = "panel top <- mock title <- page title <- stack <- preview spot <- holder: the holder hangs from the panel, so the panel can't hang from it; the game refused it on every redraw (6 in 3 s, safety stop)",
+      rule = "a frame can't anchor to one that hangs (directly or not) on it",
+      pattern = "making a container reach its content by anchoring the container to the content",
+    },
+    dont = "Don't anchor the tabs' panel to anything on the page: size the page (content:SetHeight) and let the panel follow its bottom.",
+    fix = "2026-11-25: the panel follows the page's bottom only; the page grows to the column's bottom (Reach, twice), and ContentDepth skips the panel (depthSkip) so the page can shrink again.",
+    seen = { "2026-11-25" },
+    example = [==[Studio.lua:1071: Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: Frame:SetPoint. | Relative: [SettingsPanel.Container.SettingsCanvas...]==],
+    source = "test queue q892b (/cine debug stylestudio mockplates), Forever, 2026-11-25 21:07",
+  },
+
   -- Chat --------------------------------------------------------------------
   {
     id = "speech-edges-ipairs-nil",

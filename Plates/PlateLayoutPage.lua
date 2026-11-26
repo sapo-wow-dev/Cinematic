@@ -84,6 +84,9 @@ function ns.CreatePlateLayoutPage(kit)
 	local switch = kit.PageSwitch(content, "plateLayout", L["Enable Page"],
 		L["When on, the nameplates' parts sit where this page puts them. When off, where the game puts them."], intro,
 		Changed)
+	-- (The mock's chrome (Tools/style-studio/page-mock.html, 2026-11-25): its title and On
+	-- switch over the page, so this page's own out of sight, the intro the title's tooltip.)
+	ns.MockPageHeader(content, "Nameplate Layout", title, intro, switch)
 	local stack = kit.Stack(switch, "check")
 	-- The preview first, as every Style page's: the shared preview frame
 	-- (StylePages.lua's ns.StylePopout: held at the page's top as you scroll,
@@ -93,6 +96,9 @@ function ns.CreatePlateLayoutPage(kit)
 	local preview = CreateFrame("Frame", nil, content)
 	preview:SetSize(560, 190)
 	preview.minHeight = 280 -- (the plate with its debuffs, its lists under it, the guides' strips over and under it)
+	-- (Beside the settings, as the mock's: the stage Nameplate Style's width (268: a wider
+	-- one and the settings ran past the page's edge, run q496d), the editor on its right.)
+	preview.fixedWidth = 268
 	stack:Add(preview, "label")
 	if preview.SetClipsChildren then preview:SetClipsChildren(true) end
 	-- (Its Refresh before StylePopout: the fitter wraps it, and draws it again as it's resized.)
@@ -101,7 +107,7 @@ function ns.CreatePlateLayoutPage(kit)
 	-- (The editor's width: stage, rows and the parts panel line up on it. 560, as
 	-- Nameplate Style's own preview: at 640 the right side ran under the page's
 	-- scroll bar, run qc3be.)
-	local WIDTH = 560
+	local WIDTH = 268 -- (the mock's stage, 2026-11-25: the settings beside it)
 
 	-- The stage's two toggles: the Style Studio's buttons (2026-11-25: every button
 	-- looks like a button), lit while on.
@@ -153,6 +159,8 @@ function ns.CreatePlateLayoutPage(kit)
 	holder:ClearAllPoints()
 	holder:SetAllPoints(preview)
 	holder.zoomSkip, holder.noAutoFit = true, true
+	holder.plainStage = true -- (the mock's plain black stage, no Scene)
+	if holder.sceneButton then holder.sceneButton:Hide() end
 	-- (Its bottom row, the user 2026-11-25: "not in the bottom left nice and neat",
 	-- Scene "randomly offset". The Unit list only with All plates: a single kind's
 	-- layout shows that kind (Edit picks it), the two never disagreeing. State at the
@@ -172,7 +180,7 @@ function ns.CreatePlateLayoutPage(kit)
 				stateDrop:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 6, 6)
 			end
 		end
-		if sceneButton then
+		if sceneButton and sceneButton:IsShown() then
 			local level = stateDrop or unitDrop
 			sceneButton:ClearAllPoints()
 			if level then
@@ -680,14 +688,19 @@ function ns.CreatePlateLayoutPage(kit)
 		end
 		Redraw()
 	end)
-	-- (Top left: the shared frame's pop-out and zoom buttons are its top right.)
-	allBox:SetPoint("TOPLEFT", overlay, "TOPLEFT", 8, -6)
-	guideBox:SetPoint("LEFT", allBox, "RIGHT", 4, 0)
-	-- (The status in words after the toggles, short of the top right corner: the
-	-- shared preview's pop-out and zoom buttons come up there on hover.)
-	status:SetPoint("LEFT", guideBox, "RIGHT", 12, 0)
-	status:SetPoint("RIGHT", overlay, "TOPRIGHT", -44, -17)
-	status:SetWordWrap(false)
+	-- (The mock, 2026-11-25: no All parts up (the State list ticks what shows); Guides and
+	-- the status over the stage.)
+	allBox:Hide()
+	allBox.Show = allBox.Hide
+	-- (Top right: at the bottom it sat on the State list, run qb407. Left of the pop-out
+	-- button there (the shared frame's, on hover): over it they overlapped, the user 2026-11-25.)
+	guideBox:SetPoint("TOPRIGHT", overlay, "TOPRIGHT", -36, -6)
+	status:SetPoint("TOPLEFT", overlay, "TOPLEFT", 8, -11)
+	status:SetPoint("RIGHT", guideBox, "LEFT", -8, 0)
+	-- (Two lines where it needs them: on one it was cut ("What shows sits 19 right of the
+	-- uni..."), the user 2026-11-25: "things are getting cutoff".)
+	status:SetWordWrap(true)
+	if status.SetMaxLines then status:SetMaxLines(2) end
 	kit.Tooltip(allBox, L["Shows every part on the preview at once (a cast, a marker, debuffs, crowd control, " ..
 		"the soft target icon), to lay them all out. Pick what shows in the State list."])
 
@@ -733,13 +746,15 @@ function ns.CreatePlateLayoutPage(kit)
 	ns.PlateLayoutHiddenBySettings = HiddenBySettings -- (the tests read it)
 	-- The editor (Style/Studio/Frames/Nameplates.lua): its variant is Layout for, its
 	-- part the one picked on the stage (and back), its Looks the presets.
-	editor = ns.StyleEditorPage(kit, content, stack, "platelayout", { preview = preview, canvas = canvas, variant = editKey })
+	editor = ns.StyleEditorPage(kit, content, stack, "platelayout", { preview = preview, canvas = canvas, variant = editKey,
+		side = true })
 	partsPanel = editor.holder -- (the arrow keys nudge with the mouse over it too)
 	editor.partId = selected
 	local pickEditor = editor.Pick
 	function editor.Pick(self, partId, variant)
 		if variant ~= nil and variant ~= editKey then Edit(variant) end
-		if partId and partId ~= selected and partId ~= "plate" then
+		-- (Smart marks: not a part of the plate, no nudging it on the stage)
+		if partId and partId ~= selected and partId ~= "plate" and partId ~= "smartMarks" then
 			selected = partId
 			if ShowPart(partId) then Redraw() end
 		end
@@ -785,7 +800,7 @@ function ns.CreatePlateLayoutPage(kit)
 	local controls = {}
 	local function ListControls()
 		for i = #controls, 1, -1 do controls[i] = nil end
-		controls[1], controls[2], controls[3] = { own, "Own layout" }, { allBox, "All parts up" }, { guideBox, "Guides" }
+		controls[1], controls[2] = { own, "Own layout" }, { guideBox, "Guides" }
 		for _, row in ipairs(editor.body and editor.body.shownRows or {}) do
 			if row.control then controls[#controls + 1] = { row.control, "Editor: " .. (row.prop.label or row.prop.kind) } end
 		end

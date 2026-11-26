@@ -1205,9 +1205,22 @@ end
 -- Each row's Opacity: the whole plate's, times CineMode's own fade (Effects'
 -- PlateAlphas); a plate takes the first fitting row's below 100%.
 DEFAULTS.targetArrowAlpha = 1
--- How long a plate takes to change its opacity or size a whole 100% when
--- its row changes, in seconds (0: at once; PlateParts eases it).
-DEFAULTS.plateStyleFadeTime = 1.5
+-- (How long a plate takes to change its opacity or size when its row changes: CineMode's
+-- Fading since 2026-11-25 (ns.PlateChangeTime: Combat fade in time in fights, else Fade in
+-- or Fade out time). plateStyleFadeTime, its own slider, is gone: the mock, "remove it".)
+-- Default's colors, one per kind of unit, and the name's (Nameplate Style's Colors part,
+-- PlateParts' KindColour, 2026-11-25): "game" left alone, "class" (players), "theme",
+-- "custom" with R, G, B; each kind's Fade "none", "darker", "lighter" or "custom" (into R, G, B).
+for _, kind in ipairs({ "enemyPlayers", "friendlyPlayers", "hostileNpcs", "neutralNpcs", "friendlyNpcs", "tapped" }) do
+	DEFAULTS["plateKindColor_" .. kind] = "game"
+	DEFAULTS["plateKindColor_" .. kind .. "R"], DEFAULTS["plateKindColor_" .. kind .. "G"],
+		DEFAULTS["plateKindColor_" .. kind .. "B"] = 1, 1, 1
+	DEFAULTS["plateKindFade_" .. kind] = "none"
+	DEFAULTS["plateKindFade_" .. kind .. "R"], DEFAULTS["plateKindFade_" .. kind .. "G"],
+		DEFAULTS["plateKindFade_" .. kind .. "B"] = 0.1, 0.1, 0.1
+end
+DEFAULTS.plateNameColor = "game"
+DEFAULTS.plateNameColorR, DEFAULTS.plateNameColorG, DEFAULTS.plateNameColorB = 1, 1, 1
 -- Every plate's health bar width and height (retail), times its row's
 -- Width and Height; on plates no row fits too.
 DEFAULTS.plateStyleWidth = 1
@@ -4156,7 +4169,7 @@ local idleTick = { CINE = 0.1, OFF = 1, MAX_STEP = 0.25, busyUntil = 0, effects 
 function idleTick.Settle()
 	local db = ns.db
 	return math.max(db.fadeOutTime or 0, db.fadeInTime or 0, db.musicFadeTime or 0, db.zoneFadeTime or 0,
-		db.letterboxTime or 0, db.plateStyleFadeTime or 0, db.plateNameFadeTime or 0) + 0.5
+		db.letterboxTime or 0, db.plateNameFadeTime or 0) + 0.5 -- (plates' changes: the fade times above, 2026-11-25)
 end
 -- A shown tooltip keeps the full pace only while the Tooltips page handles
 -- tooltips (ns.UpdateTooltip's checks, Effects.lua). Off, the default, the

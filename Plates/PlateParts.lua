@@ -2160,16 +2160,96 @@ local function ColourBy(how, unit, r, g, b)
 	end
 	return unpack(GOLD)
 end
+-- Default's colors, one per kind of unit (Nameplate Style's Colors part, the mock,
+-- 2026-11-25: "how does picking class make sense when you still have NPCs out there?"):
+-- plateKindColor_<kind> "game" (left alone), "class" (players), "theme" (the main
+-- theme's accent) or "custom" (its R, G, B); and the name's, plateNameColor "game",
+-- "same" (its bar's) or "custom". Under every row: a plate no row colors takes these.
+ns.PLATE_UNIT_KINDS = { "enemyPlayers", "friendlyPlayers", "hostileNpcs", "neutralNpcs", "friendlyNpcs", "tapped" }
+-- (Which kind a unit is: not your kill first, then players by side, NPCs by reaction.)
+-- (On ns, not a local: this file's main chunk is at Lua's 200 locals.)
+ns.PlateKinds = {}
+function ns.PlateKinds.Unit(unit)
+	if not unit then return "hostileNpcs" end
+	if Ask(UnitIsTapDenied, unit) then return "tapped" end
+	local okGuid, guid = pcall(UnitGUID, unit)
+	if okGuid and Known(guid) and type(guid) == "string" and guid:find("^Player%-") then
+		return Ask(UnitCanAttack, "player", unit) and "enemyPlayers" or "friendlyPlayers"
+	end
+	local ok, reaction = pcall(UnitReaction, unit, "player")
+	reaction = ok and Known(reaction) and type(reaction) == "number" and reaction or 2
+	if reaction >= 5 then return "friendlyNpcs" elseif reaction == 4 then return "neutralNpcs" end
+	return "hostileNpcs"
+end
+ns.PlateUnitKind = ns.PlateKinds.Unit
+-- A kind's color (nil: the game's). kind: a unit's, or given (the preview's sample).
+function ns.PlateKinds.Colour(unit, kind)
+	kind = kind or ns.PlateKinds.Unit(unit)
+	local key = "plateKindColor_" .. kind
+	local how = Style(key) or "game"
+	if how == "class" then
+		local ok, _, class = pcall(UnitClass, unit or "")
+		local colour = ok and Known(class) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+		if colour then return colour.r, colour.g, colour.b end
+		return nil
+	elseif how == "theme" then
+		local theme = ns.ActiveStyleTheme and ns.ActiveStyleTheme()
+		local accent = theme and theme.menu and theme.menu.accent
+		if accent then return accent[1], accent[2], accent[3] end
+		return nil
+	elseif how == "custom" then
+		return Style(key .. "R") or 1, Style(key .. "G") or 1, Style(key .. "B") or 1
+	end
+	return nil
+end
+ns.PlateKindColour = ns.PlateKinds.Colour
+function ns.PlateKinds.Name(unit, kind)
+	local how = Style("plateNameColor") or "game"
+	if how == "same" then return ns.PlateKinds.Colour(unit, kind) end
+	if how == "custom" then return Style("plateNameColorR") or 1, Style("plateNameColorG") or 1, Style("plateNameColorB") or 1 end
+	return nil
+end
+ns.PlateNameColour = ns.PlateKinds.Name
+-- (Whether any of them is set: none, and nothing of this runs.)
+function ns.PlateKinds.On()
+	if not ns.db or not ns.StyleOn or not ns.StyleOn("handlePlateStyle") then return false end
+	if (Style("plateNameColor") or "game") ~= "game" then return true end
+	for _, kind in ipairs(ns.PLATE_UNIT_KINDS) do
+		if (Style("plateKindColor_" .. kind) or "game") ~= "game" then return true end
+	end
+	return false
+end
+ns.PlateDefaultColoursOn = ns.PlateKinds.On
+-- A kind's Fade (nil: none): { r, g, b } it fades into, or { mode = "darker"/"lighter" }.
+function ns.PlateKindFade(unit, kind)
+	if not (ns.db and ns.StyleOn and ns.StyleOn("handlePlateStyle")) then return nil end
+	kind = kind or ns.PlateKinds.Unit(unit)
+	local key = "plateKindFade_" .. kind
+	local how = Style(key) or "none"
+	if how == "darker" or how == "lighter" then return { mode = how } end
+	if how == "custom" then return { Style(key .. "R") or 0.1, Style(key .. "G") or 0.1, Style(key .. "B") or 0.1 } end
+	return nil
+end
+
 -- The arrow's colour for a unit, by its kind's row (nil: your target's).
 local function ArrowColour(unit, kind)
 	return ColourBy(ArrowSetting("Color", kind), unit, ArrowSetting("R", kind), ArrowSetting("G", kind),
 		ArrowSetting("B", kind))
 end
 -- The colour a row's plate color gives a unit's parts (its mark's on "same").
+-- ("@kind" / "@name": Default's colors for the unit, its bar's or its name's.)
 local function PlateColour(unit, kind)
+	if kind == "@kind" then return ns.PlateKinds.Colour(unit) end
+	if kind == "@name" then return ns.PlateKinds.Name(unit) end
 	local how = PlateHow(kind)
 	if how == "same" then
 		return ArrowColour(unit, kind)
+	end
+	if how == "default" then
+		-- (A row's "Default's colors": the unit's kind's, else its reaction's.)
+		local r, g, b = ns.PlateKinds.Colour(unit)
+		if r then return r, g, b end
+		return ReactionColour(unit)
 	end
 	return ColourBy(how, unit, ArrowSetting("PlateR", kind) or 1, ArrowSetting("PlateG", kind) or 1,
 		ArrowSetting("PlateB", kind) or 1)
@@ -2917,11 +2997,25 @@ end
 function ns.PlateRowNow(plate, unit)
 	return FittingRow(plate, unit)
 end
+-- Default's colors on the parts no row colored: the bar in its kind's, the name in
+-- the name's (Nameplate Style's Colors, the mock 2026-11-25).
+function ns.PlateKinds.Parts(unit)
+	if not ns.PlateKinds.On() then return end
+	if partKinds.bar == nil and ns.PlateKinds.Colour(unit) then partKinds.bar = "@kind" end
+	if partKinds.name == nil and ns.PlateKinds.Name(unit) then partKinds.name = "@name" end
+end
+-- (Smart's rows off, Default's colors on: those alone. RefreshTargetArrow.)
+function ns.PlateKinds.Only(unit)
+	wipe(partKinds)
+	ns.PlateKinds.Parts(unit)
+	return partKinds
+end
 local function PlateLook(plate, unit)
 	wipe(partKinds)
 	local kind, at = FittingRow(plate, unit)
 	local masterWidth, masterHeight = MasterSize()
 	if not kind then
+		ns.PlateKinds.Parts(unit)
 		return nil, partKinds, false, nil, MasterSizeOn() and { width = masterWidth, height = masterHeight } or nil
 	end
 	local mark = ArrowSetting("Style", kind) ~= "none" and kind or nil
@@ -2935,10 +3029,12 @@ local function PlateLook(plate, unit)
 	local width = (ns.plateSizes.width and ArrowSetting("PlateWidth", kind) or 1) * masterWidth
 	local height = (ns.plateSizes.height and ArrowSetting("PlateHeight", kind) or 1) * masterHeight
 	local colorRow = kind
+	local decided = false
 	while colorRow do
 		local tintKind = TintKind(colorRow)
 		local how = PlateHow(tintKind)
 		if how ~= "-" then
+			decided = true
 			if how ~= "game" then
 				for part, key in pairs(PART_KEYS) do
 					if ArrowSetting(key, tintKind) then
@@ -2951,6 +3047,8 @@ local function PlateLook(plate, unit)
 		if not at then break end
 		colorRow, at = FittingRow(plate, unit, at + 1)
 	end
+	-- (No row said: Default's colors, the bottom of them all.)
+	if not decided then ns.PlateKinds.Parts(unit) end
 	return mark, partKinds, ns.MarkRowBase(mark or kind) == "mouseover", alpha < 1 and alpha or nil,
 		(math.abs(width - 1) > 0.001 or math.abs(height - 1) > 0.001) and { width = width, height = height } or nil
 end
@@ -3122,8 +3220,18 @@ local function ApplyOpacity(plate, opacity)
 	end
 end
 
+-- How long a plate takes to change its opacity or size a whole 100%: CineMode's Fading
+-- (the mock, 2026-11-25: "why not just use the base cinemode setting that the user sets?"),
+-- Combat fade in time in a fight, else Fade in time. (Its own Change time slider, gone.)
+function ns.PlateChangeTime()
+	local db = ns.db or {}
+	if InCombatLockdown and InCombatLockdown() == true then
+		return tonumber(db.combatFadeInTime) or ns.DEFAULTS.combatFadeInTime or 0.2
+	end
+	return tonumber(db.fadeInTime) or ns.DEFAULTS.fadeInTime or 1.5
+end
 -- A plate's opacity and size don't jump to a new row's: they move toward
--- it, a whole 100% in the page's Change time (plateStyleFadeTime), turning
+-- it, a whole 100% in ns.PlateChangeTime, turning
 -- back from wherever they are if it changes again (the elite rules, a
 -- camera turned from the elite and back). A plate just come starts at its
 -- own (settled: [plate] = true once it has).
@@ -3132,7 +3240,7 @@ local settled = {}
 local easer = CreateFrame("Frame")
 easer:Hide()
 ns.SetOnUpdate(easer, function(self, elapsed)
-	local time = Style("plateStyleFadeTime") or 1.5
+	local time = ns.PlateChangeTime()
 	local step = time > 0 and elapsed / time or 1
 	for plate, goal in pairs(goals.opacity) do
 		local now = opacities[plate] or 1
@@ -3223,8 +3331,13 @@ local function RefreshTargetArrow(plate)
 		mouseoverPlate = nil
 	end
 	local arrow = arrows[plate]
-	-- (Its own colors, each part in its row's, as their Also colors say.)
-	TintTarget(plate, level, unit, kinds)
+	-- (Its own colors, each part in its row's, as their Also colors say. Smart's rows off:
+	-- Default's colors alone, while Nameplate Style's on and any is set.)
+	local tintLevel = level
+	if level <= 0 and plate ~= PersonalPlate() and ns.PlateKinds.On() then
+		kinds, tintLevel = ns.PlateKinds.Only(unit), 1
+	end
+	TintTarget(plate, tintLevel, unit, kinds)
 	if not kind then
 		level = 0
 	end
@@ -3353,7 +3466,8 @@ end
 -- Every plate's mark looked at again (a new target, focus or mouseover).
 local function RefreshMarks()
 	ns.shownMarkRows.at = nil -- (settings or When may have changed: rows looked at again)
-	if (levels.TargetArrow or 0) > 0 or next(arrows) or next(tints) or next(opacities) or next(ownSizes) then
+	if (levels.TargetArrow or 0) > 0 or next(arrows) or next(tints) or next(opacities) or next(ownSizes)
+		or ns.PlateKinds.On() then
 		for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
 			RefreshTargetArrow(plate)
 		end

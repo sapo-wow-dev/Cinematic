@@ -6006,6 +6006,39 @@ STEPS[#STEPS + 1] = function()
 	end
 end
 
+-- Smart rows' looks follow Default setting by setting (the mock, 2026-11-25: "can i
+-- change just the name's color?"): a row's own Look settings count whatever its Plate
+-- color, not only while it's Custom (PlateRowLook.lua's Own). A row that wasn't Custom
+-- had its Look settings unused: cleared now, so no plate changes. Audit 2026-11-25.
+STEPS[#STEPS + 1] = function()
+	local db = ns.db
+	if db.rowLookFollowsV1 then return end
+	db.rowLookFollowsV1 = true
+	local keys = ns.PLATE_LOOK_KEYS or { "LookTexture", "LookBorder", "LookBorderSize", "LookBorderR", "LookBorderG",
+		"LookBorderB", "LookFont", "LookTextSize", "LookOutline", "LookShadow", "LookLevel", "LookGradient", "LookGradR",
+		"LookGradG", "LookGradB" }
+	local function MarkKey(kind, key) return kind == "target" and "targetArrow" .. key or kind .. "Mark" .. key end
+	local function Clear(store)
+		if type(store) ~= "table" then return end
+		local order = type(store.markOrder) == "string" and store.markOrder or DEFAULTS.markOrder or ""
+		for id in order:gmatch("[^,]+") do
+			if id ~= "others" then
+				local colorKey = MarkKey(id, "PlateColor")
+				local how = store[colorKey]
+				if how == nil then how = DEFAULTS[colorKey] end
+				if how ~= "custom" then
+					for _, key in ipairs(keys) do store[MarkKey(id, key)] = nil end
+				end
+			end
+		end
+	end
+	Clear(db)
+	for _, saved in pairs(type(db.profiles) == "table" and db.profiles or {}) do
+		Clear(saved)
+		if type(saved) == "table" then Clear(saved.settings) end
+	end
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only

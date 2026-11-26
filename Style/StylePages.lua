@@ -447,6 +447,15 @@ function ns.PageTabs(content, list, picked, noPalette)
 		for i in ipairs(list) do at[i] = i end
 	end
 	picked = at[picked] or 1
+	-- (Nameplate Style's four tabs (Default, Layout, Smart, Cast Bars): the mock's chrome,
+	-- Tools/style-studio/page-mock.html, the user 2026-11-25: "i want the mock up we made in
+	-- the default, layout, smart, and cast bar tabs". Flat tabs, a solid page, a title and
+	-- its On switch, no Reset page.)
+	if hub == "Style" then
+		for _, each in ipairs(list) do
+			if each[2] == "Nameplate Style" then content.mockChrome = true end
+		end
+	end
 	local tabs = {}
 	-- (off: its page's switch off, its name greyed; quietOff: the tip's line is ns.PageSwitchTip's.)
 	for i, each in ipairs(list) do
@@ -479,7 +488,14 @@ function ns.PageTabs(content, list, picked, noPalette)
 	panel:SetPoint("TOPLEFT", base)
 	panel:SetPoint("RIGHT", content, "RIGHT", -8, 0)
 	panel:SetHeight(1)
+	-- (Nameplate Style's four tabs: the panel the whole page, a framed box under its folder
+	-- tabs as the Nameplates page's sections, the user 2026-11-25 ("like the screenshot").)
+	if content.mockChrome then
+		panel:SetPoint("BOTTOM", content, "BOTTOM", 0, 6)
+		panel.depthSkip = true -- (it hangs from the page's bottom: not what sizes it, Options.lua's ContentDepth)
+	end
 	ShowAt(picked)
+	if content.mockChrome then ns.MockPageChrome(content, panel, list[picked][2]) end
 	-- (Its frames' Style page, its tab gone to the Style hub: a palette right
 	-- of the last tab, shown and hidden with it. Not on the HUD page, its
 	-- sections' headings have theirs: content.headingStyleIcons. 2026-11-17.)
@@ -520,6 +536,118 @@ function ns.PageTabs(content, list, picked, noPalette)
 	return panel, Show
 end
 
+-- The mock's chrome on a page (Nameplate Style's four tabs): the folder tabs' framed panel
+-- round the whole page (the user 2026-11-25, "like the screenshot"), no Reset page, and under the tabs its title with an On switch at the right (the
+-- page's own switch: ns.PageSwitchOff / ns.FlipPageSwitch). content.MockSetPage(page):
+-- another page's title and switch, Default and Smart sharing one canvas.
+local MOCK_TITLES = { ["Nameplate Marks"] = "Smart Style" }
+function ns.MockPageChrome(content, panel, page)
+	local L = ns.L
+	local canvas = content:GetParent() and content:GetParent():GetParent()
+	-- (Solid under the tabs and the page: the window lets the world through a little, and
+	-- nameplates behind it showed through the tabs and the panel as stray words and bars,
+	-- the user 2026-11-25: "tabs ... look broken". In the window's own colors, the panel's
+	-- grey inside it.)
+	if canvas and not canvas.mockSolid then
+		canvas.mockSolid = canvas:CreateTexture(nil, "BACKGROUND", nil, -8)
+		canvas.mockSolid:SetAllPoints()
+		canvas.mockSolid:SetColorTexture(0.086, 0.071, 0.059, 1)
+	end
+	if panel and not panel.mockSolid then
+		panel.mockSolid = panel:CreateTexture(nil, "BACKGROUND", nil, -8)
+		panel.mockSolid:SetAllPoints()
+		panel.mockSolid:SetColorTexture(0.118, 0.118, 0.125, 1)
+	end
+	local reset = canvas and canvas.resetButton
+	if reset then
+		reset:Hide()
+		reset.Show = reset.Hide
+	end
+	if content.mockHead then
+		content.MockSetPage(page)
+		return
+	end
+	local head = CreateFrame("Frame", nil, content)
+	head:SetHeight(34)
+	-- (Inside the framed panel, its title gold as the Nameplates page's section titles.)
+	head:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -8)
+	head:SetPoint("RIGHT", panel, "RIGHT", -6, 0)
+	head.searchSkip = true
+	head.title = head:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	head.title:SetPoint("LEFT", 0, 0)
+	-- (The switch: a track and knob as the mock's, "On"/"Off" after it.)
+	local sw = CreateFrame("Button", nil, head)
+	sw:SetSize(34, 18)
+	sw:SetPoint("RIGHT", -34, 0)
+	sw.track = sw:CreateTexture(nil, "BACKGROUND")
+	sw.track:SetAllPoints()
+	sw.track:SetTexture("Interface\\Buttons\\WHITE8x8")
+	sw.knob = sw:CreateTexture(nil, "ARTWORK")
+	sw.knob:SetSize(14, 14)
+	sw.knob:SetTexture("Interface\\Buttons\\WHITE8x8")
+	sw.word = sw:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	sw.word:SetPoint("LEFT", sw, "RIGHT", 7, 0)
+	head.switch = sw
+	local function Paint()
+		local on = not (ns.PageSwitchOff and ns.PageSwitchOff(head.page))
+		sw.track:SetVertexColor(on and 0.24 or 0.23, on and 0.42 or 0.21, on and 0.23 or 0.19)
+		sw.knob:ClearAllPoints()
+		sw.knob:SetPoint(on and "RIGHT" or "LEFT", on and -2 or 2, 0)
+		sw.knob:SetVertexColor(on and 0.91 or 0.54, on and 0.95 or 0.52, on and 0.89 or 0.48)
+		sw.word:SetText(on and L["On"] or L["Off"])
+		sw.word:SetTextColor(0.6, 0.58, 0.54)
+	end
+	sw:SetScript("OnClick", function()
+		if ns.FlipPageSwitch then ns.FlipPageSwitch(head.page) end
+		Paint()
+	end)
+	sw:SetScript("OnEnter", function(self) if ns.PageSwitchTip then ns.PageSwitchTip(self, head.page) end end)
+	sw:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	head:SetScript("OnShow", Paint)
+	-- (What the page is for: a tooltip on its title, never a line on the page (the mock's
+	-- rule). content.mockTips[page], else the page's intro.)
+	local hover = CreateFrame("Frame", nil, head)
+	hover:SetPoint("TOPLEFT", head.title, "TOPLEFT", -2, 4)
+	hover:SetPoint("BOTTOMRIGHT", head.title, "BOTTOMRIGHT", 2, -4)
+	hover:EnableMouse(true)
+	hover:SetScript("OnEnter", function(self)
+		local tip = content.mockTips and content.mockTips[head.page] or content.introText
+		if not tip then return end
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(head.title:GetText() or "", 1, 1, 1)
+		GameTooltip:AddLine(tip, nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	function content.MockSetPage(name)
+		head.page = name
+		head.title:SetText(L[MOCK_TITLES[name] or name])
+		Paint()
+	end
+	content.mockHead = head
+	content.MockSetPage(page)
+end
+
+-- A page under the mock's chrome that makes its own title, intro ("?") and Enable Page
+-- switch (Nameplate Layout, Cast Bar Style): those out of sight, the chrome's title and
+-- switch standing for them, the intro its title's tooltip. The switch stays, unseen, where
+-- the page's settings hang from it.
+function ns.MockPageHeader(content, page, title, intro, switch)
+	if not content.mockHead then return end
+	title:SetText("")
+	title:SetHeight(1)
+	title:ClearAllPoints()
+	title:SetPoint("TOPLEFT", content.mockHead, "BOTTOMLEFT", 0, 0)
+	content.mockTips = content.mockTips or {}
+	content.mockTips[page] = content.introText
+	if intro then intro:Hide() end -- (its "?" with it)
+	if switch then
+		switch:SetAlpha(0)
+		switch:EnableMouse(false)
+		switch:SetHeight(1)
+	end
+end
+
 -- A tabbed page's title, "?" and On/Off out of sight for good: the title
 -- emptied to a line's height so what's under it moves up (and set no more),
 -- the "?" hidden, the On/Off (MakeHeaderSwitch's) never shown.
@@ -533,7 +661,11 @@ function ns.DropPageHeader(content)
 		-- (Up by the room the title and the hidden switch under it kept, so the
 		-- page's settings, or its sub-tabs, start just under the tabs.)
 		local tabs = content.pageTabs
-		if tabs and tabs.panel then
+		if content.mockHead then
+			-- (the mock's chrome: the page's settings under its title and switch)
+			title:ClearAllPoints()
+			title:SetPoint("TOPLEFT", content.mockHead, "BOTTOMLEFT", 6, 18)
+		elseif tabs and tabs.panel then
 			title:ClearAllPoints()
 			title:SetPoint("TOPLEFT", tabs.panel, "BOTTOMLEFT", 8, 14)
 		end
@@ -1421,6 +1553,10 @@ local STICKY_TIME = 0.22
 -- Its spot's room on the page set, the page's scroll length with it (else
 -- the room taken away is left as empty space at the page's bottom).
 local function SetRoom(pin, spot, height)
+	-- (spot.keepRoom: settings beside the preview, not under it (Nameplate Style's tabs): they
+	-- don't rise as it pins, so the page keeps its length; shortened, its framed panel stopped
+	-- short of the settings' last rows, the user 2026-11-25 "why no fix?".)
+	if spot.keepRoom then return end
 	local before = spot:GetHeight()
 	spot:SetHeight(height)
 	local child = pin.scroll:GetScrollChild()
@@ -1857,7 +1993,7 @@ local function FitPreview(preview)
 	local width = preview.fixedWidth or math.max(PREVIEW_W, math.floor(right - left - PAGE_MARGIN))
 	-- (minHeight: a preview that needs more room than the screen's shape gives,
 	-- Nameplate Style's two rows of game plates on an ultrawide.)
-	local height = math.max(preview.minHeight or 0, ns.StyleScreenHeight(preview) + (preview.headHeight or 0))
+	local height = preview.fixedHeight or math.max(preview.minHeight or 0, ns.StyleScreenHeight(preview) + (preview.headHeight or 0))
 	if math.abs(preview:GetWidth() - width) < 0.5 and math.abs(preview:GetHeight() - height) < 0.5 then return end
 	preview:SetSize(width, height)
 	ns.RecutStyleScene(preview)

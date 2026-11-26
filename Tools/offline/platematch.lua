@@ -144,7 +144,7 @@ Advance(400) -- (19 states shot on two previews, paced)
 local log = CinematicDB.plateMatchTestLog
 local done = Has(log, "DONE: ")
 -- (16 skips: the preview's 11, and the layout steps' 5 measured ones (offline places nothing, no fight).)
-Check("finished DONE, nothing failed", done ~= nil and done:find(" 0 fail", 1, true) ~= nil and done:find(" 16 skip", 1, true) ~= nil,
+Check("finished DONE, nothing failed", done ~= nil and done:find(" 0 fail", 1, true) ~= nil and done:find(" 17 skip", 1, true) ~= nil, -- (+1: the editor beside the preview, not measured offline, 2026-11-25)
 	done or Has(log, "verdict FAIL") or Has(log, "STOPPED"))
 Check("no Lua error in the test", Has(log, "FAIL Lua error") == nil, Has(log, "FAIL Lua error"))
 Check("full: the proven steps run too", Has(log, "proven, left out") == nil and Has(log, "step 1 templates") ~= nil)
@@ -167,13 +167,14 @@ Check("Combat Text Style and Nameplate Style opened, each with its switch on and
 	combat .. ", " .. style)
 Check("Nameplate Style: one big game plate, its lists, every unit and state on it",
 	Has(log, "verdict PASS stylepage: one game plate, drawn bigger") ~= nil
-	and Count(log, "verdict PASS stylepage: %a+ list shown on the preview") == 2
+	and Count(log, "verdict PASS stylepage: %a+ list shown on the preview") == 1 -- (one Preview list, 2026-11-25)
 	and Count(log, "verdict SKIP stylepage: %a+: places not read") == 4
 	and Count(log, "verdict PASS stylepage: page state %a+: as your settings draw it") == #ns.GAME_PLATE_STATES)
 -- (The Theme list and Customize: the Style Studio's editor since 2026-11-25.)
-Check("Nameplate Style: the editor right under the preview",
+Check("Nameplate Style: the editor right of the preview",
 	Has(log, "verdict PASS stylepage: the editor shown") ~= nil
-	and Has(log, "verdict PASS stylepage: the editor right under the preview") ~= nil)
+	and (Has(log, "verdict PASS stylepage: the editor right of the preview") ~= nil
+		or Has(log, "verdict SKIP stylepage: the editor right of the preview") ~= nil))
 Check("Nameplate Style: a theme pointed at leaves the saved one alone", Has(log, "verdict PASS stylepage: a theme pointed at") ~= nil)
 Check("Nameplate Style off: the off card", Has(log, "verdict PASS stylepage: page switch off: the off card") ~= nil)
 -- (The stand-in has no real layout: the overlap check SKIPs, never a pass.)

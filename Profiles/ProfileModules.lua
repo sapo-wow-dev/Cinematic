@@ -473,18 +473,19 @@ ns.PROFILE_MODULES = {
 			set("plateInstanceFriends", "hide")
 			set("plateInstanceFriendlyNPCs", "hide")
 		end },
-	{ key = "ultra-plates", name = "Ultra responsive nameplates", scope = { "Nameplate Style" },
+	{ key = "ultra-plates", name = "Ultra responsive nameplates", scope = { "Nameplate Style", "Nameplate Layout" },
 		tip = "In fights the plates are easy to read at a glance: the farther away a unit is, the fainter its " ..
 		"plate (past 40, 28 and within 11 yards). Normal NPCs are faint and narrower while an elite is " ..
 		"within 40 yards, an enemy after someone else is tinted orange, and mobs that aren't your kill " ..
 		"are gray. Your target and the unit under the mouse get marks, and your target's bar goes pale " ..
-		"while none of your spells can reach it. No aggro mark, and plates change quicker.",
+		"while none of your spells can reach it. No aggro mark.",
 		apply = function(set)
 			set("markOrder", "tapped,targetOutOfRange,target,mouseover,focus,allPast40,allPast28,allIn11,npc,aggroother,aggro")
 			set("markNames", { allPast40 = "Fade 40", allPast28 = "Fade 28", allIn11 = "Fade 11",
 				npc = "Fade non elite", aggroother = "Aggro not on you", targetOutOfRange = "Target out of range" })
 			-- (Not your kill first: grey before anything else, the target's arrow still on it.)
-			set("plateStyleFadeTime", 0.6)
+			-- (Plates change at CineMode's own fade times now, Combat fade in time in fights:
+			-- no plateStyleFadeTime of its own, 2026-11-25.)
 			-- Your target's arrow and the mouseover's mark in fights too, a little lower.
 			set("targetWhenCombat", true)
 			set("targetArrowY", -10)

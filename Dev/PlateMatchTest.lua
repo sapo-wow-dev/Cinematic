@@ -658,14 +658,16 @@ ns.TestKit.Define({
 							("one game plate, drawn bigger (scale %s)"):format(S(inner.gameScale)))
 						-- (Its lists inside it, covering nothing.)
 						local covered = 0
-						for _, each in ipairs({ { inner.unitDropdown, "Unit list" }, { inner.stateDropdown, "State list" } }) do
+						-- (One Preview list since 2026-11-25, the mock: the unit and states together.)
+						for _, each in ipairs(inner.oneList and { { inner.unitDropdown, "Preview list" } }
+							or { { inner.unitDropdown, "Unit list" }, { inner.stateDropdown, "State list" } }) do
 							r:Verdict(each[1] ~= nil and each[1]:IsVisible(), each[2] .. " shown on the preview")
 							local okO, hits = pcall(r.Overlaps, r, each[1], page)
 							if okO and #hits > 0 then r:Log(("  %s covers: %s"):format(each[2], table.concat(hits, ", "))) end
 							covered = covered + (okO and #hits or 0)
 						end
 						if ns.noRealLayout then r:Skip("no real layout to measure (offline)") else
-							r:Verdict(covered == 0, ("the Unit and State lists inside the preview, covering nothing (%d)"):format(covered))
+							r:Verdict(covered == 0, ("its lists inside the preview, covering nothing (%d)"):format(covered))
 						end
 						-- (Each unit with what reaches past a plate on: the debuffs over it,
 						-- crowd control right of its level box, the cast under it.)
@@ -721,9 +723,14 @@ ns.TestKit.Define({
 						local editor = content.plateEditor
 						local holder = editor and editor.holder
 						r:Verdict(holder ~= nil and holder:IsVisible(), "the editor shown")
-						local top, previewBottom = holder and holder:GetTop(), page and page:GetBottom()
-						r:Log(("  editor top %s, preview bottom %s"):format(S(top), S(previewBottom)))
-						r:Verdict(top and previewBottom and previewBottom - top < 80 or false, "the editor right under the preview")
+						-- (Beside the preview since 2026-11-25, the mock: its top level with the preview's, right of it.)
+						local top, previewTop = holder and holder:GetTop(), page and page:GetTop()
+						local left, previewRight = holder and holder:GetLeft(), page and page:GetRight()
+						r:Log(("  editor top %s left %s, preview top %s right %s"):format(S(top), S(left), S(previewTop), S(previewRight)))
+						if ns.noRealLayout then r:Skip("the editor right of the preview (no real layout offline)") else
+							r:Verdict(top and previewTop and left and previewRight and math.abs(previewTop - top) < 20
+								and left >= previewRight - 1 or false, "the editor right of the preview")
+						end
 						local okO, hits = pcall(r.Overlaps, r, holder, content)
 						if ns.noRealLayout then
 							r:Skip("no real layout to measure (offline)")

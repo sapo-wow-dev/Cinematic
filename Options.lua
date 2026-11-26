@@ -1595,8 +1595,11 @@ local function ContentDepth(content)
 		return nil
 	end
 	local lowest = top
+	-- (depthSkip: a frame that hangs from the page's bottom itself (Nameplate Style's framed
+	-- panel): counted, the page could never get shorter again, the user 2026-11-25 "lot of
+	-- empty space" under a short part after a tall one.)
 	local function consider(object)
-		if object:IsShown() then
+		if object:IsShown() and not object.depthSkip then
 			local bottom = object:GetBottom()
 			if bottom and bottom < lowest then
 				lowest = bottom
@@ -1605,7 +1608,7 @@ local function ContentDepth(content)
 	end
 	for _, child in ipairs({ content:GetChildren() }) do
 		consider(child)
-		if child:IsShown() then
+		if child:IsShown() and not child.depthSkip then
 			for _, grandchild in ipairs({ child:GetChildren() }) do consider(grandchild) end
 			for _, region in ipairs({ child:GetRegions() }) do consider(region) end
 		end
@@ -3752,7 +3755,10 @@ do
 		local painted = run and debugprofilestop()
 		if run then run.show = painted - shown end
 		-- (Reset page: for a page with settings of its own)
-		hub.reset:SetShown(pageKeys[tile.resetContent or tile.canvas.content] ~= nil)
+		-- (Not under the mock's chrome, Nameplate Style's four tabs: "remove reset features",
+		-- the user 2026-11-25; it showed here though the page's own was hidden.)
+		local resetContent = tile.resetContent or tile.canvas.content
+		hub.reset:SetShown(pageKeys[resetContent] ~= nil and not (resetContent and resetContent.mockChrome))
 		if ns.PaintPageSwitches then ns.PaintPageSwitches() end -- (its off card)
 		if run then run.switches = debugprofilestop() - painted end
 		ns.EndPageRun(run)
@@ -4132,7 +4138,15 @@ do
 		local tabs = tile.canvas.content and tile.canvas.content.pageTabs
 		card:ClearAllPoints()
 		card:SetPoint("BOTTOMRIGHT", hub.host)
-		if tabs and tabs.panel.SetIgnoreParentAlpha then
+		if tabs and tabs.panel.SetIgnoreParentAlpha and tile.canvas.content.mockChrome then
+			-- (Nameplate Style's tabs: their framed panel stays up, so the card inside it, clear
+			-- of its edges; flush against them it didn't fit, the user 2026-11-25.)
+			if tile.canvas.scroll then tile.canvas.scroll:SetVerticalScroll(0) end
+			card:ClearAllPoints()
+			card:SetPoint("TOPLEFT", tabs.panel, "TOPLEFT", 10, -10)
+			card:SetPoint("BOTTOMRIGHT", tabs.panel, "BOTTOMRIGHT", -10, 10)
+			KeepTabs(tabs, true)
+		elseif tabs and tabs.panel.SetIgnoreParentAlpha then
 			if tile.canvas.scroll then tile.canvas.scroll:SetVerticalScroll(0) end
 			-- (tabs.height: two rows of them, the Style hub's Themes tab.)
 			card:SetPoint("TOPLEFT", hub.host, "TOPLEFT", 0, -(tabs.height or (ns.FOLDER_TAB_HEIGHT + 22)))
@@ -10834,7 +10848,7 @@ function ns.FolderTabs(parent, list, onClick, width, maxWidth, onRightClick)
 			end
 			for _, tab in ipairs(tabs) do
 				if tab:IsShown() then
-					tab:SetWidth(pad < 12 and tab.textWidth + pad or math.max(40, tab.textWidth + pad))
+					tab:SetWidth((pad < 12 and tab.textWidth + pad or math.max(40, tab.textWidth + pad)))
 				end
 			end
 		end
@@ -11511,6 +11525,16 @@ local function CreatePlatesPanel()
 		-- (The Default parts tab: every kind's, but for kinds set to Use custom parts.)
 		local partsTop = PartsSection(L["Default plate parts"], "Parts", L["Default parts"])
 		defaultPartsSection = sections[#sections]
+
+		-- When Nameplate Style's look (its colors and Smart's marks) shows in CineMode: its
+		-- Show in row, moved here from the Style page (the mock, 2026-11-25: "get rid of it
+		-- all" there; the user picked this tab for it).
+		local styleShowSection = Section(L["Nameplate Style"], "PlateStyleShow", L["Style"])
+		BeginSection(styleShowSection)
+		local styleShowLast = ShowTable(content, styleShowSection.frame, { opts = { anyFight = true }, underHeader = true,
+			ns.TargetMarksShowRow(function() if ns.RefreshTargetArrows then ns.RefreshTargetArrows() end end) },
+			L["Nameplates"], L["Nameplate Style"])
+		EndSection(styleShowSection, styleShowLast)
 
 		-- Names, laid out the same way. Outside cinematic mode the game's own
 		-- name options decide.
@@ -12255,7 +12279,8 @@ do
 	-- the grid, in the color its drawer line's name has (COLUMN_COLORS).)
 	local SHOW_X, NAME_X, PREVIEW_X, PLATE_X, WHEN_X = 16, 44, 232, 290, 414
 	local ROW_W, NAME_W, PLATE_W, WHEN_W, NUMBER_W = 590, 186, 118, 128, 30 -- (When: up to the copy button)
-	local COLUMN_COLORS = { Mark = { 0.85, 0.65, 1 }, Plate = { 1, 0.8, 0.35 }, When = { 0.55, 0.8, 1 } }
+	-- (The mock, 2026-11-25: the column names one dim grey, not three colors.)
+	local COLUMN_COLORS = { Mark = { 0.6, 0.58, 0.54 }, Plate = { 0.6, 0.58, 0.54 }, When = { 0.6, 0.58, 0.54 } }
 	local DRAWER_X, LINE_H, LABEL_W = 44, 34, 48
 	-- The Also color column's parts: setting (<kind>Color<part>), name, tip,
 	-- and (targetOnly) whether only your target's plate has one: the game's
@@ -12323,14 +12348,13 @@ do
 			for _, object in ipairs({ content:GetChildren() }) do before[object] = true end
 			for _, object in ipairs({ content:GetRegions() }) do before[object] = true end
 			local stack = Stack(switch, "check")
-			-- Where they show: a Show in row (PlateIcons.lua, as the Icons page's).
-			local showHeader = stack:Header(content, L["Show in"])
-			-- (No Cine column: whether plates work outside CineMode is the CineMode
-			-- page's Outside CineMode > Nameplates; a Cine tick moved to Always,
-			-- PlateIcons.lua's MigratePlateIconWhen.)
-			local showRow = ShowTable(content, showHeader, { opts = { anyFight = true }, underHeader = true,
-				ns.TargetMarksShowRow(Changed) }, L["Nameplate Style"])
-			stack:Continue(showRow, "label")
+			-- (Its Show in row: on the Nameplates page's Style tab since 2026-11-25, the mock:
+			-- the Style page shows only the look. An empty spot where its header was: the two
+			-- parts below are placed from it, as they were from the header.)
+			local showHeader = CreateFrame("Frame", nil, content)
+			showHeader:SetSize(1, 1)
+			showHeader.searchSkip = true
+			stack:Add(showHeader, "label")
 
 			-- The preview, as the Unit Frame Style page's: a scene of plates, one
 			-- for each row of the grid (the first few, Default at the back), each
@@ -12347,6 +12371,10 @@ do
 			local gameCapable = not ns.isRetail and ns.MakeGamePlate ~= nil
 			preview:SetSize(560, 190)
 			preview.minHeight = gameCapable and 210 or nil
+			-- (Beside the settings, not over them (the mock, 2026-11-25: the first setting sat at
+			-- the page's bottom edge): a fixed narrow stage, the editor on its right.)
+			preview.fixedWidth = 268
+			preview.minHeight = nil -- (its height: what shows on it, fixedHeight below)
 			stack:Add(preview, "label")
 			ns.StylePopout(preview, Tooltip) -- (StylePages.lua)
 			if preview.SetClipsChildren then preview:SetClipsChildren(true) end
@@ -12367,7 +12395,7 @@ do
 			-- Unit and State lists, the user 2026-11-23 ("the same previewer in
 			-- both"); it filled four plates before. The drawn plates stay for
 			-- retail and a plate that can't be built.)
-			local inner = gameCapable and ns.MakePlateRowLookPreview and ns.MakePlateRowLookPreview(preview, 560, "others") or nil
+			local inner = gameCapable and ns.MakePlateRowLookPreview and ns.MakePlateRowLookPreview(preview, 268, "others", { oneList = true }) or nil
 			if inner then
 				inner:ClearAllPoints()
 				inner:SetAllPoints(preview)
@@ -12380,6 +12408,7 @@ do
 				preview.backButton = nil
 			end
 			preview.lookPreview = inner -- (the test reads it: /cine debug platematch)
+			if inner then caption:Hide() end -- (the mock's stage: no caption over the plate)
 			local function MakeSample(n)
 				local plate = CreateFrame("Button", nil, preview)
 				plate:SetSize(BAR_W + 40, 44)
@@ -12657,6 +12686,13 @@ do
 					self.noAutoFit = true
 					inner.kind, inner.hoverTheme = previewed, self.hoverTheme
 					ns.PlatePreviewFit(inner, width, height, inner.plateLift or 38)
+					-- (The stage as tall as what shows (the mock): the fitter sized again.)
+					-- (Not for a pixel: the measure differs by a hair between draws, and the stage
+					-- went 132, 133, 132... as it was drawn, the plate shaking, run q85bc.)
+					if inner.fitHeight and math.abs(inner.fitHeight - (self.fixedHeight or 0)) > 1.5 then
+						self.fixedHeight = inner.fitHeight
+						if ns.FitStylePreview then C_Timer.After(0, function() ns.FitStylePreview(self) end) end
+					end
 					for _, plate in pairs(plates) do plate:Hide() end
 					return
 				end
@@ -12696,7 +12732,7 @@ do
 			end)
 			preview.snap = true
 			ns.SetOnUpdate(preview, function(self, elapsed)
-				local time = ns.GetDB().plateStyleFadeTime or 1.5
+				local time = ns.PlateChangeTime and ns.PlateChangeTime() or 1.5 -- (CineMode's Fading, 2026-11-25)
 				local t = GetTime() - started
 				for _, plate in pairs(plates) do
 					if plate:IsShown() then
@@ -12756,7 +12792,7 @@ do
 			RecordKey(content, "plateTheme")
 			if ns.PlateStudioVariants then ns.PlateStudioVariants() end
 			content.plateEditor = ns.StyleEditorPage(ns.lowHealthKit, content, stack, "plates",
-				{ preview = preview, canvas = canvas })
+				{ preview = preview, canvas = canvas, side = true, only = true }) -- (Default's own: rows are on Smart)
 			do
 				local editor = content.plateEditor
 				local pickEditor = editor.Pick
@@ -12781,7 +12817,14 @@ do
 			for _, object in ipairs({ content:GetChildren() }) do styleMade[object] = true end
 			for _, object in ipairs({ content:GetRegions() }) do styleMade[object] = true end
 			local marksHeader = stack:Header(content, L["Smart Style"]) -- (Marks until 2026-11-16)
-			stack:Help(content, L["Each plate takes its look from the first row that fits it, top to bottom."])
+			local marksHelp = stack:Help(content, L["Each plate takes its look from the first row that fits it, top to bottom."])
+			-- (Under the mock's chrome its title says Smart Style already: the header unseen,
+			-- its words the title's tooltip, run q1a4c's shot.)
+			if content.mockHead then
+				marksHeader:SetAlpha(0)
+				marksHeader:SetHeight(1)
+				if marksHelp then marksHelp:Hide() end -- (its "?")
+			end
 			-- (The columns' headings: what a row sets on the mark, on the plate, and when.)
 			local headings = CreateFrame("Frame", nil, content)
 			headings:SetSize(ROW_W, 16)
@@ -13002,8 +13045,9 @@ do
 				return list
 			end
 			-- (Chip colors: an opacity amber, a When blue, the rest grey.)
-			local CHIP_COLORS = { fade = { 0.35, 0.25, 0.05, 1, 0.8, 0.35 }, when = { 0.08, 0.2, 0.35, 0.55, 0.8, 1 } }
-			local CHIP_PLAIN = { 0.18, 0.18, 0.18, 0.8, 0.8, 0.8 }
+			-- (The mock, 2026-11-25: one dark chip with light words, no colored ones.)
+			local CHIP_COLORS = {}
+			local CHIP_PLAIN = { 0.115, 0.105, 0.09, 0.92, 0.9, 0.85 }
 
 			-- The rows, each made the first time it's on the grid; a drawer each,
 			-- open while opened says so (kept till /reload).
@@ -13128,6 +13172,7 @@ do
 				opened[id] = true
 				grid:Refresh()
 			end
+			grid.Open = preview.OnPlateClick -- (a row's drawer opened: the tests, /cine debug stylestudio)
 			local function SetOrder(order)
 				ns.GetDB().markOrder = table.concat(order, ",")
 				if ns.PlateStudioVariants then ns.PlateStudioVariants() end -- (the editor's variants: the rows)
@@ -13615,6 +13660,56 @@ do
 			-- the level box (Forever's). Each the Default row's to start (its
 			-- own: the plate's usual look), in keys as the row's others
 			-- (PlateRowLook.lua's, nil while it's the Default row's).
+			-- A row's drawer's editor (the mock, 2026-11-25): its own preview (the one Preview
+			-- list) and Nameplate Style's editor on that row alone, made as the drawer first
+			-- opens; the drawer as tall as they need, the grid laid out again as it changes.
+			function grid.BuildRowEditor(kind, drawer, width, top)
+				local PREVIEW_W, made = 230, false
+				local function Make()
+					if made or not (ns.StyleEditorPage and ns.MakePlateRowLookPreview) then return end
+					made = true
+					local look = ns.MakePlateRowLookPreview(drawer, PREVIEW_W, kind, { oneList = true })
+					look:ClearAllPoints()
+					look:SetPoint("TOPLEFT", drawer, "TOPLEFT", 6, -top)
+					look.kind = kind
+					local host = ns.StyleEditorPage(nil, drawer, nil, "plates", { free = true, variant = kind, only = true,
+						preview = look, width = width - PREVIEW_W - 24 })
+					host.holder:SetPoint("TOPLEFT", look, "TOPRIGHT", 12, 0)
+					drawer.rowEditor, drawer.rowPreview = host, look
+					-- (Its plate fitted as the Default tab's: as big as the stage is wide with its
+					-- level box, the stage as tall as what shows. Unfitted, the level box ran past
+					-- the stage's edge, the user 2026-11-25: "things are getting cutoff".)
+					local function FitPlate()
+						if not (ns.PlatePreviewFit and look.gamePlate) then return end
+						ns.PlatePreviewFit(look, PREVIEW_W, look:GetHeight() or 150, look.plateLift or 38)
+						if look.fitHeight and math.abs((look:GetHeight() or 0) - look.fitHeight) > 1.5 then -- (not for a pixel: run q85bc)
+							look:SetHeight(look.fitHeight)
+							ns.PlatePreviewFit(look, PREVIEW_W, look.fitHeight, look.plateLift or 38)
+						end
+					end
+					look.onStates = FitPlate
+					look:HookScript("OnShow", function() C_Timer.After(0, FitPlate) end)
+					C_Timer.After(0, FitPlate)
+					local fitting
+					local function Fit()
+						local h = math.max(look:GetHeight() or 0, host.holder:GetHeight() or 0)
+						local want = top + h + 10
+						if math.abs((drawer:GetHeight() or 0) - want) > 0.5 then
+							drawer:SetHeight(want)
+							if not fitting then
+								fitting = true
+								C_Timer.After(0, function() fitting = false if drawer:IsShown() then grid:Refresh() end end)
+							end
+						end
+					end
+					hooksecurefunc(host, "Redraw", Fit)
+					Fit()
+					grid:Refresh()
+				end
+				drawer:HookScript("OnShow", Make)
+				if drawer:IsShown() then Make() end
+			end
+
 			function grid.BuildLookLine(kind, _, drawer, At)
 				local LOOK_DEFAULT = ns.PLATE_LOOK_DEFAULTS
 				for _, key in ipairs(ns.PLATE_LOOK_KEYS) do RecordKey(content, MarkKey(kind, key)) end
@@ -13749,6 +13844,7 @@ do
 				number:SetWidth(NUMBER_W - 6)
 				number:SetJustifyH("RIGHT")
 				number.searchSkip = true
+				number:SetAlpha(0) -- (the mock: no numbers, the order is the list's)
 				row.number = number
 
 				-- Its name: the kind's, its Who and number dimmed after it (orange
@@ -13887,6 +13983,7 @@ do
 					copy:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
 					Tooltip(copy, L["Copy this row."])
 					copy:SetScript("OnClick", function() CopyRow(kind) end)
+					row.copyB = copy
 					copy.Refresh = function(self)
 						local base, reaction, _, distance = ns.MarkRowBase(kind)
 						local free = FreeRow(base, reaction, distance) ~= nil
@@ -13900,6 +13997,7 @@ do
 					remove:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
 					Tooltip(remove, L["Remove this row."])
 					remove:SetScript("OnClick", function() RemoveRow(kind) end)
+					row.removeB = remove
 				end
 
 				-- The drawer: Name (your own), Row (its kind, Who and Distance),
@@ -13908,7 +14006,9 @@ do
 				-- end) and When. Default's own no Row: it's always there. Page
 				-- search finding something in it opens it (openSection).
 				-- (Plate's line named Look: its color, and Custom's Look panel.)
-				local LINES = { "Name", "Row", "Mark", "Plate", "When" }
+				-- (Mark and Look: the row's editor under these since the mock, 2026-11-25. Their
+				-- old controls are still made, kept out of sight: At below.)
+				local LINES = { "Name", "Row", "When" }
 				if kind == "others" then table.remove(LINES, 2) end
 				local LINE_NAMES = { Row = L["Row"], Name = L["Name"], Mark = L["Mark"], Plate = L["Look"],
 					When = L["When"] }
@@ -13919,6 +14019,15 @@ do
 				drawer:SetSize(DRAWER_W, LINE_H * #LINES + 8)
 				drawer:Hide()
 				drawers[kind] = drawer
+				-- (Copy and Remove in its drawer, at its Name line's end: the mock's rows carry
+				-- no icons, 2026-11-25.)
+				for i, b in ipairs({ row.copyB or false, row.removeB or false }) do
+					if b then
+						b:SetParent(drawer)
+						b:ClearAllPoints()
+						b:SetPoint("TOPRIGHT", drawer, "TOPRIGHT", -8 - (2 - i) * 24, -6)
+					end
+				end
 				drawer.openSection = function()
 					opened[kind] = true
 					grid:Refresh()
@@ -13927,6 +14036,17 @@ do
 				drawerBack:SetAllPoints()
 				drawerBack:SetColorTexture(0, 0, 0, 0.3)
 				local function At(line, control, x, dy)
+					if not lineAt[line] then
+						-- (a line gone to the row's editor: its control kept out of sight)
+						if not grid.sink then
+							grid.sink = CreateFrame("Frame", nil, grid)
+							grid.sink:Hide()
+						end
+						control:SetParent(grid.sink)
+						control:ClearAllPoints()
+						control:SetPoint("TOPLEFT", grid.sink, "TOPLEFT")
+						return control
+					end
 					control:SetPoint("LEFT", drawer, "TOPLEFT", x, -4 - LINE_H * (lineAt[line] - 0.5) + (dy or 0))
 					return control
 				end
@@ -14102,7 +14222,9 @@ do
 					local pick = PickOf(kind)
 					-- (The yards box gone, 2026-11-25: Type and Distance back to
 					-- their widths; Distance's 120 holds "Within ~30 yd".)
-					local kindPick, PlacePicks = PickLine(drawer, pick, { 100, 110, 90, 120 }, function()
+					-- (Kind 130: at 100 "Not your kill" read "Not you...", the user 2026-11-25:
+					-- "things are getting cutoff".)
+					local kindPick, PlacePicks = PickLine(drawer, pick, { 130, 110, 90, 120 }, function()
 						RetypeRow(kind, pick)
 						-- (Nothing free to make it: back to its own.)
 						local own = PickOf(kind)
@@ -14328,6 +14450,9 @@ do
 				})
 				At("When", when, LABEL_W)
 				when:SetBand(1)
+				-- (The mock, 2026-11-25: the row's look in Nameplate Style's editor (Mark, Bar,
+				-- Colors, Name), its own preview at its left, under Name, Row and When.)
+				grid.BuildRowEditor(kind, drawer, DRAWER_W, LINE_H * #LINES + 8)
 			end
 
 			-- Adding a row: just a button. The row's an Any unit with its kind's
@@ -14418,14 +14543,8 @@ do
 			end
 
 			ns.PageBuildStep(true) -- (made ahead: the next frame from here)
-			stack:Header(content, L["All marks"])
-			-- (Two raises: on a showing plate, and with none; the marks move
-			-- between them as the plate fades, as the quest mark does.)
-			local marks = stack:Add(BoxLine(content), "label")
-			marks:Box(L["Raise with a plate"], "targetArrowY", -40, 40, 1, "%d", 1,
-				L["Moves the marks up or down while the plate shows."], Changed)
-			marks:Box(L["without a plate"], "targetArrowBareY", -40, 40, 1, "%d", 1,
-				L["Moves the marks up or down while the plate is hidden."], Changed)
+			-- (The All marks line, its two raises (targetArrowY, targetArrowBareY): the Layout
+			-- tab's Smart marks part since 2026-11-25, the user "why not layout?".)
 
 			-- The two parts on frames of their own, each at the top where Show in
 			-- was; the preview (and its spot) on the page, shown with both.
@@ -14476,11 +14595,23 @@ do
 						spot:SetPoint(unpack(spotHome))
 					end
 				end
+				-- (The mock, 2026-11-25: on Smart no page preview; each row's drawer has
+				-- its own beside its settings, so the rows start at the top.)
+				if i == 2 then
+					hosts[2]:ClearAllPoints()
+					hosts[2]:SetPoint("TOPLEFT", relative, relPoint, x, y)
+				end
+				if spot then spot:SetShown(i == 1) end
+				preview:SetShown(i == 1)
 				hosts[1]:SetShown(i == 1)
 				hosts[2]:SetShown(i == 2)
 				-- (Its intro, the "?": the tab's own.)
 				if introHelp then introHelp.liveTip, introHelp.searchNote = INTROS[i], INTROS[i] end
+				content.mockTips = content.mockTips or {}
+				content.mockTips[i == 1 and "Nameplate Style" or "Nameplate Marks"] = INTROS[i]
 				ShowPlateTab(ns.ShowInIndex("plates", i == 1 and "Nameplate Style" or "Nameplate Marks"))
+				-- (The mock's chrome: the title and switch the part's own, Smart Style on Smart.)
+				if content.MockSetPage then content.MockSetPage(i == 1 and "Nameplate Style" or "Nameplate Marks") end
 				FitContentHeight(content)
 			end
 			ns.PageBuildStep(true) -- (made ahead: the next frame from here)

@@ -89,19 +89,8 @@ local function MirrorDefault(key)
 	if type(key) == "table" then return key.get() end
 	return ns.DEFAULTS[key]
 end
-local function OnDefault(_, v) return Note(v) == FIRST end
-local function OnRow(_, v) return Note(v) ~= FIRST end
-
--- Whether a row's own look shows: Default's always; a row's while its Plate
--- color is Custom (PlateRowLook.lua's Own).
-local function OwnLook(kind)
-	kind = Note(kind)
-	if kind == FIRST then return true end
-	if not ns.TargetMarkOwn then return false end
-	if ns.TargetMarkOwn("PlateColor", kind) ~= "custom" then return false end
-	return not (ns.MarkRowBase(kind) == "aggro" and ns.TargetMarkOwn("AlsoSame", kind))
-end
-local function LookOn(_, v) return OwnLook(v) end
+-- (A row's own look counts whatever its Plate color since 2026-11-25: every setting
+-- follows Default till it's set, PlateRowLook.lua's Own. No "while Custom" test here.)
 local function LookValue(v, key) return LookField(Note(v), key).get() end
 local function Targeted(_, v)
 	v = Note(v)
@@ -139,7 +128,6 @@ local function PlateColorField(kind)
 end
 
 local USUAL = L["Usual"]
-local ROW_TIP = L["On a row: used while its Plate color is Custom."]
 
 -- A color of the variant being edited: a swatch on its row's r, g, b fields (picking
 -- one may set another of its fields, setKey, to setTo).
@@ -204,30 +192,125 @@ local function ThemeTiles()
 	return list
 end
 
-local function Usual(first, options)
-	local list = { first }
+-- (The first choice of a row's list: "Default's" on a Smart row (it follows Default), the
+-- theme's on Default itself: the mock 2026-11-25.)
+local function Usual(first, options, v)
+	local word = Note(v) == FIRST and L["Theme's"] or L["Default's"]
+	local list = { { value = first.value ~= nil and first.value or first[1], text = word } }
 	for _, each in ipairs(options) do list[#list + 1] = each end
 	return list
 end
+local function OnlyDefault(_, v) return Note(v) == FIRST end
+local function OnlyRow(_, v) return Note(v) ~= FIRST end
+
+-- Default's colors, one line per kind of unit (Class only for players), and each one's
+-- Fade: PlateParts' KindColour, Core's plateKindColor_/plateKindFade_ (the mock, 2026-11-25).
+local PLATE_KINDS = { { "enemyPlayers", "Enemy players", true }, { "friendlyPlayers", "Friendly players", true },
+	{ "hostileNpcs", "Hostile NPCs" }, { "neutralNpcs", "Neutral NPCs" }, { "friendlyNpcs", "Friendly NPCs" },
+	{ "tapped", "Not your kill" } }
+local GAME_KIND = { enemyPlayers = { 0.8, 0.16, 0.12 }, friendlyPlayers = { 0.18, 0.44, 0.84 }, hostileNpcs = { 0.8, 0.16, 0.12 },
+	neutralNpcs = { 0.9, 0.78, 0.1 }, friendlyNpcs = { 0.18, 0.71, 0.18 }, tapped = { 0.54, 0.54, 0.54 } }
+local function KindColorProp(kind, label, players)
+	local key = "plateKindColor_" .. kind
+	return R.Color(key, L[label], function()
+		local list = { { value = "game", text = L["The game's"], color = GAME_KIND[kind] } }
+		if players then list[#list + 1] = { value = "class", text = L["Class"], sub = L["Each player's class color"] } end
+		list[#list + 1] = { value = "theme", text = L["Theme's accent"] }
+		list[#list + 1] = { value = "custom", text = L["My own"], sub = L["From the palette"] }
+		return list
+	end, { key .. "R", key .. "G", key .. "B" }, "custom", { shown = OnlyDefault,
+		tip = L["This kind of unit's plate color, under every Smart row."] })
+end
+local function KindFadeProp(kind, label)
+	local key = "plateKindFade_" .. kind
+	return R.Color(key, L[label], {
+		{ value = "none", text = L["None"], sub = L["One color all along the bar"] },
+		{ value = "darker", text = L["Darker"], sub = L["Fades to a darker shade of its color"] },
+		{ value = "lighter", text = L["Lighter"], sub = L["Fades to a lighter shade of its color"] },
+		{ value = "custom", text = L["Into a color"], sub = L["Fades into a color from the palette"] } },
+		{ key .. "R", key .. "G", key .. "B" }, "custom", { shown = OnlyDefault,
+		tip = L["How this kind's bar color runs along it, left to right."] })
+end
+local defaultColors, defaultFades = {}, {}
+for _, each in ipairs(PLATE_KINDS) do
+	defaultColors[#defaultColors + 1] = KindColorProp(each[1], each[2], each[3])
+	defaultFades[#defaultFades + 1] = KindFadeProp(each[1], each[2])
+end
+local function Group(recipe, label, tip, ...)
+	local g = R.Group(recipe, ...)
+	g.label, g.tip = label, tip
+	return g
+end
+
+-- A Smart row's mark (Options.lua's MARK_STYLES; the drawer's Mark line before the mock):
+-- its style, color, size, opacity and movement. Rows only.
+local function MarkStyles(v)
+	v = Note(v)
+	local base = ns.MarkRowBase and ns.MarkRowBase(v)
+	local list = { { "none", L["None"] } }
+	if base == "aggro" then list[#list + 1] = { "same", L["Your target's"] } end
+	for _, each in ipairs({ { "arrow", "Arrow" }, { "chevron", "Chevron" }, { "diamond", "Diamond" }, { "glow", "Glow" },
+		{ "brackets", "Brackets" }, { "carets", "Carets" }, { "corners", "Corners" }, { "underline", "Underline" } }) do
+		-- (The unit under the mouse: just the marks over its plate.)
+		if base ~= "mouseover" or each[1] == "arrow" or each[1] == "chevron" or each[1] == "diamond" then
+			list[#list + 1] = { each[1], L[each[2]] }
+		end
+	end
+	return list
+end
+-- (A row's plain setting's value now: its db key's or its default's.)
+local function LookValueRow(v, key)
+	local k = RowKey(Note(v), key)
+	if type(k) == "table" then return k.get() end
+	local db = DB()
+	local value = db and db[k]
+	if value == nil then value = ns.DEFAULTS[k] end
+	return value
+end
+local function MarkShown(_, v) local s = LookValueRow(v, "Style") return s ~= nil and s ~= "none" end
+local markPart = { id = "mark", label = L["Mark"], shown = function(v) return Note(v) ~= FIRST end, groups = {
+	Group("Look", "Mark", nil,
+		R.Choice(function(v) return RowKey(Note(v), "Style") end, L["Mark"], MarkStyles, { tip = L["The row's mark over the plate."] }),
+		R.Color(function(v) return RowKey(Note(v), "Color") end, L["Color"], {
+			{ value = "gold", text = L["Gold"], color = { 0.91, 0.72, 0.29 } },
+			{ value = "reaction", text = L["By reaction"], sub = L["Red, yellow or green by how the unit sees you"] },
+			{ value = "class", text = L["Class colors"], sub = L["Players in their class color; NPCs by reaction"] },
+			{ value = "custom", text = L["My own"], sub = L["From the palette"] } },
+			function(v) v = Note(v) return { RowKey(v, "R"), RowKey(v, "G"), RowKey(v, "B") } end, "custom",
+			{ shown = MarkShown, tip = L["The mark's color."] }),
+		R.Slider(function(v) return RowKey(Note(v), "Size") end, L["Size"], 50, 200, 5, "%", { scale = 100, shown = MarkShown,
+			tip = L["The mark's size."] }),
+		R.Slider(function(v) return RowKey(Note(v), "Opacity") end, L["Opacity"], 10, 100, 5, "%", { scale = 100,
+			shown = MarkShown, tip = L["The mark's own opacity (the plate's is on the Bar tab)."] }),
+		R.Switch(function(v) return RowKey(Note(v), "Bob") end, L["Moving"], { shown = MarkShown,
+			tip = L["Makes the mark move or pulse."] })),
+} }
 
 local plateParts = {
-	{ id = "plate", label = L["Plate"], groups = {
-		R.Group("Look",
-			{ kind = "tiles", label = L["Theme"], key = Global("plateTheme"), options = ThemeTiles, few = 4,
-				default = MirrorDefault, test = OnDefault,
+	markPart,
+	{ id = "bar", label = L["Bar"], region = Region("HealthBarsContainer"), groups = {
+		Group("Look", "Theme", L["Texture and border in one pick. Change either below on its own."],
+			{ kind = "tiles", label = L["Theme"], key = Global("plateTheme"), options = function()
+					local list = ThemeTiles()
+					for _, each in ipairs(list) do
+						each.tint = each.tint or { 0.85, 0.15, 0.12 } -- (a bar's red, as the plates)
+						-- ("Follow main theme": its name says which, the mock's "Main theme (Gilded Codex)")
+						if each.value == "main" then
+							local main = ns.ActiveStyleTheme and ns.ActiveStyleTheme()
+							each.short = main and main.name and L["Main theme (%s)"]:format(L[main.name]) or each.text
+						end
+					end
+					return list
+				end,
+				default = MirrorDefault, shown = OnlyDefault,
 				tip = L["The plates' bar, its texture and border, in one pick. Set on Default."] },
 			R.Note(function()
 				local theme = ns.PlateThemeNow and ns.PlateThemeNow()
 				return theme and L["%s is picked here, so it stays when the main theme changes."]:format(L[theme.name])
 					or L["The bars follow the main theme's texture and border."]
-			end),
-			R.Drop(function(v) return PlateColorField(Note(v)) end, L["Plate color"],
-				{ { "-", L["Next row's"] }, { "game", L["The game's"] }, { "same", L["Mark's"] }, { "target", L["Your target's"] },
-					{ "gold", L["Gold"] }, { "reaction", L["By reaction"] }, { "class", L["Class colors"] }, { "custom", L["Custom"] } },
-				{ inherit = "-", test = OnRow,
-					tip = L["Which color this row gives the plate; Custom gives it a look of its own here."] }),
-			R.Slider(Global("plateStyleFadeTime"), L["Change time"], 0, 10, 0.1, "s",
-				{ default = MirrorDefault, test = OnDefault, tip = L["How long plates take to change opacity or size."] }),
+			end, { shown = OnlyDefault })),
+		-- (A row: when it applies (a tooltip on its heading) and its rule.)
+		Group("Look", "When", nil,
 			R.Note(function(_, v)
 				v = Note(v)
 				local db = DB() or {}
@@ -238,88 +321,111 @@ local plateParts = {
 				if type(rule) == "string" and rule:find("%S") then return L["%s applies when: %s"]:format(name, rule) end
 				if db[key] ~= false then return L["%s applies always."]:format(name) end
 				return L["%s applies as its When column on the Smart tab says."]:format(name)
-			end),
+			end, { shown = OnlyRow }),
 			R.Button(L["Edit rule"], function(host)
 				if ns.PlateRowEditRule then ns.PlateRowEditRule(host and host.variant or FIRST) end
-			end, { tip = L["Opens the rule editor on when this row applies."] })),
-	} },
-	{ id = "health", label = L["Health bar"], region = Region("HealthBarsContainer"), groups = {
-		R.Group("Look", R.Shown("platePartHealth")),
-		R.Group("Bar",
-			{ kind = "tiles", label = L["Texture"], key = Look("LookTexture"), inherit = "default", test = LookOn,
-				tip = L["The health bar's fill."] .. " " .. ROW_TIP,
-				options = function()
-					return Usual({ value = "default", text = USUAL }, ns.StyleTextureChoices and
-						ns.StyleTextureChoices(L["The game's"], "LookTexture") or {})
+			end, { shown = OnlyRow, tip = L["Opens the rule editor on when this row applies."] })),
+		Group("Bar", "Bar", nil,
+			{ kind = "tiles", label = L["Texture"], key = Look("LookTexture"), inherit = "default",
+				tip = L["The health bar's fill."],
+				options = function(v)
+					local list = Usual({ value = "default", text = USUAL }, ns.StyleTextureChoices and
+						ns.StyleTextureChoices(L["The game's"], "LookTexture") or {}, v)
+					for _, each in ipairs(list) do each.tint = each.tint or { 0.85, 0.15, 0.12 } end
+					return list
 				end },
-			R.Choice(Look("LookGradient"), L["Gradient"], { { "default", USUAL }, { "off", L["Off"] },
-				{ "on", L["On"], L["The fill fades from its color on the left to the color below on the right."] } },
-				{ inherit = "default", test = LookOn }),
-			ColorSwatch(L["Fades to"], { "LookGradR", "LookGradG", "LookGradB" },
-				L["The color the health bar fades to, at its right end."], nil, nil,
-				function(db, v) return LookOn(db, v) and LookValue(v, "LookGradient") == "on" end),
-			ColorSwatch(L["Plate color"], { "PlateR", "PlateG", "PlateB" },
-				L["The row's color, for the parts that take it."], nil, nil,
-				function(_, v)
-					v = Note(v)
-					return v ~= FIRST and ns.TargetMarkOwn and ns.TargetMarkOwn("PlateColor", v) == "custom"
-				end),
-			R.Switch(Look("ColorBar"), L["In its color"], { test = OnRow,
-				tip = L["The health bar in the row's plate color."] }),
+			R.Choice(Look("LookBorder"), L["Border"], function(v)
+				return Usual({ "default", USUAL }, { { "game", L["The game's"] }, { "none", L["None"] },
+					{ "thin", L["Thin"] }, { "thick", L["Thick"] }, { "custom", L["My own"] } }, v)
+			end, { inherit = "default", tip = L["The health bar's border."] }),
+			R.Slider(Look("LookBorderSize"), L["Border size"], 1, 10, 1, "px", { inherit = 1,
+				shown = function(_, v) return LookValue(v, "LookBorder") == "custom" end,
+				tip = L["How thick the border is, in pixels."] }),
+			(function()
+				local p = ColorSwatch(L["Border color"], { "LookBorderR", "LookBorderG", "LookBorderB" },
+					L["The border's color, from the palette."], "LookBorder", "custom")
+				p.shown = function(_, v) return LookValue(v, "LookBorder") == "custom" end
+				return p
+			end)(),
+			R.Choice(Look("LookLevel"), L["Level box"], function(v)
+				return Usual({ "default", USUAL }, { { "show", L["Shown"] }, { "hide", L["Hidden"] } }, v)
+			end, { inherit = "default", shown = function(_, v) return not ns.isRetail and OnlyRow(nil, v) end,
+				tip = L["Whether this row's plates show their level box. Every plate's is on the Layout tab."] })),
+		-- (Groups are sorted by recipe (Editor.lua): "Place" keeps Size after Bar.)
+		Group("Place", "Size", L["Next to the game's plate."],
 			R.Slider(function(v) v = Note(v) return v == FIRST and "plateStyleWidth" or RowKey(v, "PlateWidth") end,
 				L["Width"], 25, 300, 5, "%", { scale = 100, shown = function() return (ns.plateSizes or {}).width and true or false end,
 					tip = L["The health bar's width: every plate's on Default, times that on a row's plates."] }),
 			R.Slider(function(v) v = Note(v) return v == FIRST and "plateStyleHeight" or RowKey(v, "PlateHeight") end,
 				L["Height"], 50, 300, 5, "%", { scale = 100, shown = function() return (ns.plateSizes or {}).height and true or false end,
-					tip = L["The health bar's height: every plate's on Default, times that on a row's plates."] })),
-		R.Group("Border",
-			R.Choice(Look("LookBorder"), L["Border"], { { "default", USUAL }, { "game", L["The game's"] }, { "none", L["None"] },
-				{ "thin", L["Thin"] }, { "thick", L["Thick"] }, { "custom", L["Custom"] } },
-				{ inherit = "default", test = LookOn, tip = L["The health bar's border."] .. " " .. ROW_TIP }),
-			R.Slider(Look("LookBorderSize"), L["Size"], 1, 10, 1, "px", { inherit = 1,
-				test = function(db, v) return LookOn(db, v) and LookValue(v, "LookBorder") == "custom" end,
-				tip = L["How thick the border is, in pixels."] }),
-			ColorSwatch(L["Border color"], { "LookBorderR", "LookBorderG", "LookBorderB" },
-				L["The border's color; picking one switches it to Custom."], "LookBorder", "custom", LookOn),
-			R.Switch(Look("ColorBorder"), L["In its color"], { test = Targeted,
+					tip = L["The health bar's height: every plate's on Default, times that on a row's plates."] }),
+			R.Slider(function(v) return RowKey(Note(v), "Alpha") end, L["Opacity"], 0, 100, 5, "%", { scale = 100,
+				shown = OnlyRow, tip = L["The plate's opacity while this row fits it."] })),
+	} },
+	{ id = "colors", label = L["Colors"], groups = {
+		-- (Default: a line per kind of unit, then each one's Fade.)
+		Group("Look", "Colors", L["Each kind of unit's plate color, under every Smart row. Class is for players only."],
+			unpack(defaultColors)),
+		Group("Bar", "Fade", L["How each kind's bar color runs along it, left to right."], unpack(defaultFades)),
+		-- (A row: what color it gives its plates, which parts take it, and its Fade.)
+		Group("Look", "Plate color", nil,
+			R.Color(function(v) return PlateColorField(Note(v)) end, L["Plate color"], function(v)
+				local list = { { "-", L["Don't change"], sub = L["The plate keeps the color the rows below give it"] },
+					{ "game", L["The game's"], sub = L["The game's own colors, whatever the rows below say"] },
+					{ "default", L["Default's colors"], sub = L["By kind of unit, from Default's Colors"] },
+					{ "same", L["Mark's color"], sub = L["The same color as this row's mark"] } }
+				local now = Note(v) ~= FIRST and PlateColorField(Note(v)).get()
+				if ns.MarkRowBase and v and ns.MarkRowBase(Note(v)) == "aggro" then list[#list + 1] = { "target", L["Your target's"] } end
+				list[#list + 1] = { "gold", L["Gold"], color = { 0.91, 0.72, 0.29 } }
+				list[#list + 1] = { "custom", L["One color"], sub = L["From the palette"] }
+				-- (Kept while a row still has them: before 2026-11-25 rows picked these.)
+				if now == "reaction" then list[#list + 1] = { "reaction", L["By reaction"] } end
+				if now == "class" then list[#list + 1] = { "class", L["Class colors"] } end
+				return list
+			end, function(v) v = Note(v) return { LookField(v, "PlateR"), LookField(v, "PlateG"), LookField(v, "PlateB") } end,
+				"custom", { inherit = "-", shown = OnlyRow, tip = L["Which color this row gives its plates."] }),
+			R.Switch(Look("ColorBar"), L["Bar in it"], { shown = OnlyRow, tip = L["The health bar in the row's plate color."] }),
+			R.Switch(Look("ColorName"), L["Name in it"], { shown = OnlyRow, tip = L["The name in the row's plate color."] }),
+			R.Switch(Look("ColorBorder"), L["Border in it"], { shown = function(db, v) return Targeted(db, v) end,
 				tip = L["The border the game puts round your target's health bar, in the row's plate color."] })),
+		Group("Bar", "Fade", nil,
+			R.Color(Look("LookGradient"), L["Fade"], function(v)
+				return Usual({ value = "default", text = USUAL }, {
+					{ value = "off", text = L["None"], sub = L["One color all along the bar"] },
+					{ value = "darker", text = L["Darker"], sub = L["Fades to a darker shade of its color"] },
+					{ value = "lighter", text = L["Lighter"], sub = L["Fades to a lighter shade of its color"] },
+					{ value = "on", text = L["Into a color"], sub = L["Fades into a color from the palette"] } }, v)
+			end, function(v) v = Note(v) return { LookField(v, "LookGradR"), LookField(v, "LookGradG"), LookField(v, "LookGradB") } end,
+				"on", { inherit = "default", shown = OnlyRow, tip = L["How this row's bar color runs along it, left to right."] })),
 	} },
 	{ id = "name", label = L["Name"], region = Region("name"), groups = {
-		R.Group("Look", R.Shown("platePartName")),
-		R.Group("Text",
-			{ kind = "tiles", label = L["Font"], key = Look("LookFont"), inherit = "default", test = LookOn,
-				tip = L["The name's font."] .. " " .. ROW_TIP,
-				options = function()
-					return Usual({ value = "default", text = USUAL }, ns.StyleFontChoices and ns.StyleFontChoices() or {})
+		Group("Text", "Text", nil,
+			{ kind = "tiles", label = L["Font"], key = Look("LookFont"), inherit = "default",
+				tip = L["The name's font."],
+				options = function(v)
+					return Usual({ value = "default", text = USUAL }, ns.StyleFontChoices and ns.StyleFontChoices() or {}, v)
 				end },
-			R.Slider(Look("LookTextSize"), L["Size"], 50, 200, 5, "%", { scale = 100, inherit = 1, test = LookOn,
+			R.Slider(Look("LookTextSize"), L["Size"], 50, 200, 5, "%", { scale = 100, inherit = 1,
 				tip = L["The name's size, next to its usual size."] }),
-			R.Choice(Look("LookOutline"), L["Outline"], { { -1, USUAL }, { 0, L["None"] }, { 1, L["Thin"] }, { 2, L["Thick"] } },
-				{ inherit = -1, test = LookOn, tip = L["A dark line around the name's letters."] }),
-			R.Choice(Look("LookShadow"), L["Shadow"], { { "default", USUAL }, { "game", L["The game's"] }, { "on", L["On"] },
-				{ "none", L["None"] } }, { inherit = "default", test = LookOn,
-				tip = L["A dark shadow behind the letters, down and to the right."] }),
-			R.Switch(Look("ColorName"), L["In its color"], { test = OnRow,
-				tip = L["The name in the row's plate color."] })),
+			R.Choice(Look("LookOutline"), L["Outline"], function(v)
+				return Usual({ -1, USUAL }, { { 0, L["None"] }, { 1, L["Thin"] }, { 2, L["Thick"] } }, v)
+			end, { inherit = -1, tip = L["A dark line around the name's letters."] }),
+			R.Choice(Look("LookShadow"), L["Shadow"], function(v)
+				return Usual({ "default", USUAL }, { { "game", L["The game's"] }, { "on", L["On"] }, { "none", L["None"] } }, v)
+			end, { inherit = "default", tip = L["A dark shadow behind the letters, down and to the right."] })),
+		-- ("Border" sorts after Text: the name's Color under its letters.)
+		Group("Border", "Color", L["Same as the bar: each name takes its unit's color from Colors."],
+			R.Color("plateNameColor", L["Color"], {
+				{ value = "game", text = L["The game's"], sub = L["As the game draws it"] },
+				{ value = "same", text = L["Same as the bar"], sub = L["Each name in its unit's color from Colors"] },
+				{ value = "custom", text = L["My own"], sub = L["From the palette"] } },
+				{ "plateNameColorR", "plateNameColorG", "plateNameColorB" }, "custom", { shown = OnlyDefault })),
 	} },
 }
-if not ns.isRetail then
-	plateParts[#plateParts + 1] = { id = "level", label = L["Level box"], region = Region("PlayerLevelDiffFrame"), groups = {
-		R.Group("Look",
-			R.Choice(Look("LookLevel"), L["Level box"], { { "default", USUAL }, { "show", L["Shown"] }, { "hide", L["Hidden"] } },
-				{ inherit = "default", test = LookOn, tip = L["The level box at the bar's end."] }),
-			R.Shown("platePartLevel")),
-	} }
-end
-for _, each in ipairs({ { "debuffs", "Debuffs", "Debuffs", "AurasFrame.DebuffListFrame" },
-	{ "buffs", "Buffs", "Buffs", "AurasFrame.BuffListFrame" }, { "marker", "Raid marker", "RaidMarker", "RaidTargetFrame" },
-	{ "elite", "Elite mark", "Classification", "ClassificationFrame" }, { "cast", "Cast bar", "CastBar", "CastBarsContainer.castBar" } }) do
-	plateParts[#plateParts + 1] = { id = each[1], label = L[each[2]], region = Region(each[4]),
-		groups = { R.Group("Look", R.Shown("platePart" .. each[3])) } }
-end
 
 ns.StyleFrame("plates", {
 	label = L["Nameplates"], band = "Interface", sub = "Nameplates", subRank = 1, switch = "handlePlateStyle",
+	pickers = true, -- (the mock's grammar: pickers, tabs, tooltips, Undo/Redo as words: Studio.lua)
 	pages = { ["Nameplate Style"] = FIRST },
 	variants = VARIANTS,
 	refresh = function()
@@ -457,9 +563,15 @@ local layoutParts = {
 				tip = L["Moves the whole plate down or up."] })),
 	} },
 }
+-- (Whether each part shows: the Style parts' Shown (styleOver_platePart*) moved here, the
+-- user 2026-11-25: "we have a layout tab that should control all that".)
+local SHOWN_ROW = { health = "platePartHealth", name = "platePartName", level = "platePartLevel",
+	debuffs = "platePartDebuffs", buffs = "platePartBuffs", marker = "platePartRaidMarker",
+	elite = "platePartClassification", cast = "platePartCastBar" }
 for _, part in ipairs(ns.PLATE_LAYOUT_PARTS or {}) do
 	local key = part.key
 	local props = {}
+	if SHOWN_ROW[key] then props[1] = R.Shown(SHOWN_ROW[key]) end
 	if part.hang then
 		props[#props + 1] = R.Drop(LField(key, "to", "game"), L["Hang on"], function()
 			local choices = { { "game", L["Where the game hangs it"] } }
@@ -524,6 +636,17 @@ for _, part in ipairs(ns.PLATE_LAYOUT_PARTS or {}) do
 		region = function(p) if p and p.layoutStage then return nil end return onCopy(p) end,
 		groups = { R.Group("Place", unpack(props)) } }
 end
+-- (Smart's marks over the plate: their two raises, from the Smart tab's All marks line, the
+-- user 2026-11-25 ("why not layout?"). Not a part of the game's plate: one place for every
+-- kind of plate, whatever Layout for says.)
+layoutParts[#layoutParts + 1] = { id = "smartMarks", label = L["Smart marks"], groups = {
+	R.Group("Place",
+		R.Note(L["Smart's marks over the plates. The same for every kind of plate."]),
+		R.Slider("targetArrowY", L["Down/up with a plate"], -40, 40, 1, "px",
+			{ tip = L["Moves the marks up or down while the plate shows."] }),
+		R.Slider("targetArrowBareY", L["Down/up without a plate"], -40, 40, 1, "px",
+			{ tip = L["Moves the marks up or down while the plate is hidden."] })),
+} }
 
 -- The presets as Looks: each one Undo step (the Studio counts the fields before and after).
 local function Preset(which, label, tip)
@@ -535,6 +658,7 @@ end
 ns.StyleFrame("platelayout", {
 	label = L["Nameplate Layout"], band = "Interface", sub = "Nameplates", subRank = 2, page = "Nameplate Layout",
 	switch = "plateLayout", shown = function() return not ns.isRetail end,
+	pickers = true, -- (the mock's grammar, as Nameplate Style's)
 	variants = FOR,
 	variantsLabel = L["Layout for"], -- (its variants dropdown's name)
 	looks = {
@@ -545,6 +669,7 @@ ns.StyleFrame("platelayout", {
 	},
 	refresh = function()
 		if ns.PlateLayoutChanged then ns.PlateLayoutChanged() end
+		if ns.RefreshTargetArrows then ns.RefreshTargetArrows() end -- (its Smart marks part)
 		local page = ns.plateLayoutPage
 		if page and page.Redraw then page.Redraw() end
 		if page and page.Refresh then page.Refresh() end

@@ -1,0 +1,300 @@
+<title>Theme Picker Mockups</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: three picker ideas, each inside Cinematic's panel at its in-game size (790px), stage left, picker right. Single dark look. */
+:root {
+  color-scheme: dark;
+  --ground: #0b0a09; --well: #121110; --surface: #1b1916; --stage: #070707; --edge: #2e2a24;
+  --text: #ebe6d9; --dim: #9a948a; --faint: #6b665e;
+  --gold: #f2c94c; --gold-soft: rgba(242,201,76,.12);
+  --display: "Marcellus", Georgia, serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box }
+body { background: var(--ground); color: var(--text); font: 15px/1.45 var(--body); margin: 0 }
+.wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px }
+h1 { font: 400 26px/1.2 var(--display); margin: 0 }
+.lede { color: var(--dim); margin: 4px 0 16px; font-size: 14px; max-width: 75ch }
+.seg { display: inline-flex; background: #141311; border-radius: 4px; padding: 2px; flex-wrap: wrap }
+.seg button { background: none; border: 0; color: var(--dim); font: 15px var(--body); padding: 6px 14px; border-radius: 3px; cursor: pointer }
+.seg button:hover { color: var(--text) }
+.seg button[aria-pressed="true"] { background: var(--gold-soft); color: var(--gold) }
+.blurb { color: var(--dim); font-size: 14px; margin: 10px 0 14px; min-height: 42px }
+.blurb b { color: var(--text); font-weight: 600 }
+
+.vp { width: 100%; overflow: hidden }
+.panel { width: 790px; background: var(--well); border: 1px solid #2a2520; border-radius: 4px; padding: 14px 18px 18px; transform-origin: 0 0; font-size: 14px }
+.ed { display: grid; grid-template-columns: 268px minmax(0,1fr); gap: 14px; align-items: start }
+.stage { background: var(--stage); border-radius: 6px; padding: 30px 12px 12px; position: sticky; top: 0 }
+.stage .hint { color: var(--faint); font-size: 12.5px; display: block; margin-top: 14px; text-align: center; min-height: 18px }
+.stage .hint b { color: var(--gold); font-weight: 400 }
+.parts { display: flex; gap: 2px; border-bottom: 1px solid var(--edge) }
+.parts span { color: var(--dim); padding: 6px 10px 7px; font-size: 14.5px }
+.parts span.on { color: var(--text); border-bottom: 2px solid var(--gold); margin-bottom: -1px }
+.settings { background: var(--surface); border-radius: 6px; padding: 10px 14px 12px; margin-top: 10px }
+.settings h3 { font: 400 15px var(--display); color: #d8b968; margin: 0 0 8px }
+.row { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 10px; align-items: start; min-height: 34px; margin-top: 6px }
+.row .l { color: #fff; padding-top: 4px }
+.muted { color: var(--faint); font-size: 13px }
+
+/* ---------- a plate drawn in a theme ---------- */
+.mp { --acc: #fff; --edgec: #000; --pan: rgba(0,0,0,.6); display: grid; gap: 3px; justify-items: center; width: 100% }
+.mp .nm { font: 400 13px var(--display); color: #fff; text-shadow: 0 1px 2px #000; line-height: 1 }
+.mp .bar { width: 100%; height: 12px; background: var(--pan); border: var(--bw, 1px) solid var(--edgec); position: relative; overflow: hidden }
+.mp .bar i { position: absolute; inset: 0 34% 0 0; background: var(--fill) }
+.mp.big .nm { font-size: 20px }
+.mp.big .bar { height: 15px }
+.mp.big { width: 236px; margin: 0 auto }
+.mp .cast { width: 86%; height: 5px; background: var(--pan); position: relative; overflow: hidden; border: 1px solid var(--edgec) }
+.mp .cast i { position: absolute; inset: 0 50% 0 0; background: linear-gradient(#ffd45c, #b88a12) }
+/* shapes */
+.sh-capsule .bar, .sh-capsule .cast { border-radius: 99px }
+.sh-pointed .bar { clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 6px 100%, 0 50%) }
+.sh-cut .bar { clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%) }
+.sh-hex .bar { clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 50%, calc(100% - 5px) 100%, 5px 100%, 0 50%) }
+
+/* ---------- A: gallery ---------- */
+.gal h4 { font: 400 12px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 12px 0 6px }
+.gal h4:first-child { margin-top: 0 }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px }
+.tile { background: #15130f; border: 1px solid transparent; border-radius: 5px; padding: 8px 8px 6px; cursor: pointer; display: grid; gap: 6px; text-align: left; color: var(--text); font: 13px var(--body) }
+.tile:hover { border-color: #5a4c2c }
+.tile[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) }
+.tile .tn { line-height: 1.2 }
+.tile .tn small { color: var(--faint); font-size: 11px }
+.tile .dots { display: flex; gap: 3px }
+.tile .dots s { width: 8px; height: 8px; border-radius: 50%; display: inline-block; text-decoration: none }
+.follow { grid-column: 1 / -1; grid-template-columns: 120px minmax(0,1fr); align-items: center; gap: 12px }
+.follow .ft { display: grid; gap: 1px } .follow .ft b { font-weight: 600 } .follow .ft span { color: var(--dim); font-size: 12.5px }
+
+/* ---------- B: current + popover list ---------- */
+.cur { display: flex; align-items: center; gap: 12px; background: #15130f; border: 1px solid #2e2a24; border-radius: 5px; padding: 8px 10px; cursor: pointer; width: 100%; color: var(--text); font: 14px var(--body); text-align: left }
+.cur:hover, .cur[aria-expanded="true"] { border-color: #5a4c2c }
+.cur .mp { width: 110px; flex: none }
+.cur .ct { flex: 1; display: grid } .cur .ct span { color: var(--dim); font-size: 12.5px }
+#picker { position: relative }
+.pop { position: absolute; left: -102px; right: 0; top: calc(100% + 4px); z-index: 5; background: #100f0d; border: 1px solid #3a342b; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.6); overflow: hidden }
+.pop .find { width: 100%; background: #0b0a09; border: 0; border-bottom: 1px solid #2a2520; color: var(--text); font: 14px var(--body); padding: 8px 12px }
+.pop .list { max-height: 330px; overflow-y: auto; scrollbar-color: #4a4239 transparent;
+  -webkit-mask-image: linear-gradient(transparent, #000 14px, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(transparent, #000 14px, #000 calc(100% - 18px), transparent) }
+.pop .count { padding: 6px 12px; font-size: 12px; color: var(--faint); border-top: 1px solid #2a2520 }
+.pop .grp { padding: 8px 12px 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint) }
+.opt { display: grid; grid-template-columns: 100px minmax(0,1fr) 16px; gap: 12px; align-items: center; padding: 7px 12px; cursor: pointer; background: none; border: 0; width: 100%; text-align: left; color: var(--text); font: 14px var(--body) }
+.opt:hover { background: #1b1915 }
+.opt[aria-selected="true"] { background: #1d1a11 }
+.opt .ot { display: grid; min-width: 0 } .opt .ot span { color: var(--dim); font-size: 12.5px; line-height: 1.3 }
+.opt .ck { color: var(--gold) }
+
+/* ---------- C: follow switch + swatch wheel row ---------- */
+.fsw { display: flex; align-items: center; gap: 10px; padding: 4px 0 10px; border-bottom: 1px solid #25221d; margin-bottom: 10px }
+.tg { width: 34px; height: 18px; border-radius: 9px; background: #3d6b3a; position: relative; border: 0; cursor: pointer; flex: none }
+.tg::after { content: ""; position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #e8f3e3 }
+.tg[aria-pressed="false"] { background: #3a3631 } .tg[aria-pressed="false"]::after { right: auto; left: 2px; background: #8a847a }
+.fsw span { color: var(--dim); font-size: 13.5px } .fsw b { color: var(--text); font-weight: 600 }
+.strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scroll-snap-type: x mandatory; scrollbar-color: #4a4239 transparent }
+.card { flex: 0 0 132px; scroll-snap-align: start; background: #15130f; border: 1px solid transparent; border-radius: 6px; padding: 0 0 8px; cursor: pointer; display: grid; gap: 8px; color: var(--text); font: 13px var(--body); overflow: hidden }
+.card .sky { height: 54px; display: grid; place-items: center; padding: 0 10px }
+.card .cn { padding: 0 9px; display: grid } .card .cn span { color: var(--faint); font-size: 11.5px }
+.card:hover { border-color: #5a4c2c }
+.card[aria-pressed="true"] { border-color: var(--gold) }
+.strip.off { opacity: .45; pointer-events: none }
+.nav { display: flex; justify-content: space-between; align-items: center; margin-top: 2px }
+.nav .seg button { padding: 3px 10px; font-size: 13px }
+.arrows button { background: #1d1a16; border: 0; color: var(--text); width: 28px; height: 24px; border-radius: 4px; cursor: pointer }
+.arrows button:hover { color: var(--gold) }
+
+.verdict { margin-top: 22px; background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14px; color: var(--dim) }
+.verdict h2 { font: 400 19px var(--display); color: var(--text); margin: 0 0 6px }
+.verdict b { color: var(--text); font-weight: 600 }
+.verdict ul { margin: 0; padding-left: 18px } .verdict li + li { margin-top: 4px }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px }
+</style>
+
+<div class="wrap">
+  <h1>Theme picker</h1>
+  <p class="lede">Three ways to pick a nameplate theme, each in Cinematic's panel at its in-game size. Every one shows all 19 choices as little plates in their own colors, not blank swatches. Hover a theme to see it on the big plate; click to pick it.</p>
+  <div class="seg" id="opts">
+    <button aria-pressed="false" data-o="A">A · Gallery</button>
+    <button aria-pressed="true" data-o="B">B · One line, opens a list</button>
+    <button aria-pressed="false" data-o="C">C · Follow switch + strip</button>
+  </div>
+  <p class="blurb" id="blurb"></p>
+
+  <div class="vp" id="vp">
+    <div class="panel" id="panel">
+      <div class="ed">
+        <div class="stage"><div id="bigplate"></div><span class="hint" id="hint"></span></div>
+        <div>
+          <div class="parts"><span class="on">Plate</span><span>Health bar</span><span>Name</span></div>
+          <div class="settings">
+            <h3>Look</h3>
+            <div class="row"><span class="l">Theme</span><div id="picker"></div></div>
+            <div class="row"><span class="l">Plate color</span><span class="muted" style="padding-top:5px">From the theme. <u>Pick my own</u></span></div>
+          </div>
+          <div class="settings">
+            <h3>Size</h3>
+            <div class="row"><span class="l">Width</span><input type="range" value="40" aria-label="Width" style="accent-color:var(--gold);margin-top:8px"></div>
+            <div class="row"><span class="l">Height</span><input type="range" value="35" aria-label="Height" style="accent-color:var(--gold);margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="verdict">
+    <h2>Which I'd pick</h2>
+    <ul>
+      <li><b>A</b> if the page has room: everything visible, one click, nothing hidden behind "More…". It's the tallest.</li>
+      <li><b>B</b> if space matters most: one line when closed, and the open list carries each theme's one-line description, so it's the easiest to choose from with 19 themes.</li>
+      <li><b>C</b> splits "Follow main theme" out as a switch, which is what it really is. With it on, the strip shows which theme it's following and rests until you turn it off.</li>
+    </ul>
+    <p style="margin:8px 0 0">The plates are drawn from each theme's real colors (panel, edge, accent) and bar shape. In game they'd use the real bar textures.</p>
+  </div>
+</div>
+
+<script>
+// Real themes (Style/StyleThemes.lua, Plates/PlateThemes.lua): key, name, accent, edge, panel, texture, shape, tip.
+const T = [
+  ["reel", "Silver Screen", [.9,.9,.93], [.52,.53,.58], [.045,.045,.055], "stripe", "", "Black and silver, like an old movie."],
+  ["codex", "Gilded Codex", [.95,.76,.36], [.58,.44,.22], [.15,.1,.07], "gilt", "", "Dark vellum, gold leaf and filigree."],
+  ["forge", "Emberforge", [1,.55,.16], [.56,.36,.22], [.135,.115,.1], "forged", "", "Blackened iron, rivets and molten light."],
+  ["glade", "Moonlit Glade", [.34,.7,.62], [.1,.31,.29], [.055,.12,.13], "lunar", "", "Deep teal, silver and vines."],
+  ["rime", "Frostbound", [.66,.86,1], [.36,.48,.6], [.075,.11,.155], "rime", "", "Cut ice over cold slate."],
+  ["vanguard", "Crimson Vanguard", [.95,.27,.27], [.5,.2,.22], [.075,.055,.065], "flat", "cut", "Blades and cut bars in crimson and ivory."],
+  ["hearth", "Hearthside", [.97,.76,.44], [.6,.38,.2], [.17,.115,.085], "soft", "capsule", "Soft round panels and capsule bars."],
+  ["open", "Adventurer", [1,.82,.2], [.5,.4,.2], [.07,.06,.05], "soft", "", "Gold rings, slim bars, nothing around them."],
+  ["cathedral", "Cathedral", [.95,.76,.34], [.32,.34,.58], [.06,.06,.14], "glass", "pointed", "Stained glass and pointed bars."],
+  ["rune", "Runestone", [.5,.9,.76], [.42,.44,.4], [.125,.13,.12], "forged", "hex", "Cut stone, chiseled bars, a faint glow."],
+  ["fel", "Fel Pact", [.56,.92,.3], [.2,.32,.16], [.03,.04,.028], "forged", "", "Near black, lit by fel green."],
+  ["void", "Void Whisper", [.72,.54,1], [.26,.18,.42], [.02,.015,.035], "lunar", "", "Black, with violet moving in it."],
+  ["slate", "Slate", [.78,.84,.92], [.3,.33,.38], [.085,.09,.1], "satin", "", "One flat bar, clean type."],
+  ["obsidian", "Obsidian", [.3,.88,.97], [.14,.32,.38], [.02,.025,.03], "satin", "", "Black on black, one line of cold light."],
+  ["carbon", "Carbon", [1,.72,.26], [.34,.31,.26], [.075,.075,.08], "stripe", "", "Amber gauges on charcoal."],
+  ["neon", "Neon Coast", [1,.38,.68], [.44,.16,.52], [.07,.03,.1], "sunset", "", "Blue, magenta and gold dusk sky."],
+];
+const PLAIN = [
+  ["clean", "Clean", [1,1,1], [0,0,0], [0,0,0], "flat", "", "A flat bar with a thin black border."],
+  ["minimal", "Minimal", [1,1,1], null, [0,0,0], "flat", "", "A flat bar with no border."],
+  ["game", "The game's", [1,.82,0], [0,0,0], [.08,.08,.08], "game", "", "The game's own bars, unchanged."],
+];
+const ALL = [...T, ...PLAIN];
+const MAIN = "codex"; // the main theme set on Style › General (example)
+const rgb = (c, a = 1) => `rgba(${c.map(x => Math.round(x * 255)).join(",")},${a})`;
+const FILL = {
+  flat: "#c0201c",
+  stripe: "repeating-linear-gradient(0deg,#c22 0 2px,#a51a17 2px 3px)",
+  gilt: "linear-gradient(#e8573c,#b01c14 55%,#7d120c)",
+  forged: "radial-gradient(circle at 30% 40%,#d93a2a,#8a150f 70%), #a01a14",
+  lunar: "linear-gradient(90deg,#8a140f,#d8382b 70%,#ff7a62)",
+  rime: "linear-gradient(135deg,#d8402f 0 40%,#b52018 40% 70%,#e05040 70%)",
+  soft: "linear-gradient(#f06a55,#c0201c 50%,#9a1612)",
+  glass: "linear-gradient(#ff8c78 0,#d02a20 45%,#8a0f0a 55%,#c0201c)",
+  satin: "linear-gradient(#d8352a,#a51a14)",
+  sunset: "linear-gradient(90deg,#3a3cff,#e03a9a 55%,#ffb347)",
+  game: "linear-gradient(#e02a1e,#9a1410)",
+};
+function plate(th, big, opts = {}) {
+  const [key, name, acc, edge, pan, tex, shape] = th;
+  const style = `--fill:${FILL[tex]};--edgec:${edge ? rgb(edge) : "transparent"};--pan:${rgb(pan, .75)};--bw:${edge ? (key === "clean" || key === "game" ? "1px" : "1.5px") : "0"}`;
+  return `<div class="mp ${big ? "big" : ""} ${shape ? "sh-" + (shape === "hex" ? "hex" : shape) : ""}" style="${style}">
+    ${opts.noName ? "" : `<span class="nm" style="color:${key === "game" || !big ? "#fff" : "#fff"}">${big ? "Gnoll Brute" : ""}</span>`}
+    <div class="bar"><i></i></div>${big ? `<div class="cast"><i></i></div>` : ""}</div>`;
+}
+const byKey = k => ALL.find(t => t[0] === k);
+// A tile's ground: the theme's panel color, lifted a little so near-black themes still read as a tile.
+const tileBg = th => `linear-gradient(${rgb(th[4].map(x => Math.min(1, x * 1.6 + .03)))}, ${rgb(th[4])})`;
+let picked = "main", follow = true, opt = "B", hover = null;
+
+function shown() { return hover || (picked === "main" ? MAIN : picked); }
+function drawStage() {
+  const k = shown(), th = byKey(k);
+  $("#bigplate").innerHTML = plate(th, true);
+  $("#hint").innerHTML = hover ? `Previewing <b>${th[1]}</b>` : (picked === "main" ? `Following the main theme: ${th[1]}` : th[1]);
+}
+const $ = s => document.querySelector(s);
+const dots = th => `<span class="dots">${[th[2], th[3] || [0,0,0], th[4]].map(c => `<s style="background:${rgb(c)}"></s>`).join("")}</span>`;
+
+/* A: gallery */
+function drawA(p) {
+  const tile = (th, extra = "") => `<button class="tile ${extra}" data-k="${th[0]}" aria-pressed="${picked === th[0]}" title="${th[7]}" style="background:${tileBg(th)}">
+    ${plate(th, false, { noName: true })}<span class="tn" style="color:${rgb(th[2])}">${th[1]}</span></button>`;
+  const m = byKey(MAIN);
+  p.innerHTML = `<div class="gal"><div class="grid">
+    <button class="tile follow" data-k="main" aria-pressed="${picked === "main"}">${plate(m, false, { noName: true })}
+      <span class="ft"><b>Follow main theme</b><span>Now ${m[1]}. Changes when you change it on Style › General.</span></span></button></div>
+    <h4>Themes</h4><div class="grid">${T.map(t => tile(t)).join("")}</div>
+    <h4>Plain</h4><div class="grid">${PLAIN.map(t => tile(t)).join("")}</div></div>`;
+  wire(p, ".tile");
+}
+/* B: one line + list */
+let open = false, q = "";
+function drawB(p) {
+  const cur = picked === "main" ? byKey(MAIN) : byKey(picked);
+  const optRow = (th, label, sub, key) => `<button class="opt" role="option" data-k="${key}" aria-selected="${picked === key}">
+    <span style="background:${tileBg(th)};padding:7px 6px;border-radius:4px">${plate(th, false, { noName: true })}</span><span class="ot"><span style="color:${rgb(th[2])};font-size:14px">${label}</span><span>${sub}</span></span><span class="ck">${picked === key ? "✓" : ""}</span></button>`;
+  const match = th => !q || th[1].toLowerCase().includes(q);
+  p.innerHTML = `<button class="cur" aria-expanded="${open}">${plate(cur, false, { noName: true })}
+      <span class="ct">${picked === "main" ? "Follow main theme" : cur[1]}<span>${picked === "main" ? "Now " + cur[1] : cur[7]}</span></span><span>▾</span></button>
+    ${open ? `<div class="pop"><input class="find" placeholder="Find a theme" value="${q}" aria-label="Find a theme"><div class="list" role="listbox">
+      ${!q ? optRow(byKey(MAIN), "Follow main theme", "Now " + byKey(MAIN)[1] + ", from Style › General", "main") : ""}
+      ${T.some(match) ? `<div class="grp">Themes</div>` + T.filter(match).map(t => optRow(t, t[1], t[7], t[0])).join("") : ""}
+      ${PLAIN.some(match) ? `<div class="grp">Plain</div>` + PLAIN.filter(match).map(t => optRow(t, t[1], t[7], t[0])).join("") : ""}
+      ${!ALL.some(match) ? `<div class="grp" style="text-transform:none;letter-spacing:0">No theme called "${q}"</div>` : ""}
+    </div><div class="count">Esc or click outside to close</div></div>` : ""}`;
+  p.querySelector(".cur").onclick = () => { open = !open; q = ""; draw(); if (open) p.querySelector(".find").focus(); };
+  const f = p.querySelector(".find");
+  if (f) f.oninput = () => { q = f.value.toLowerCase(); const pos = f.selectionStart; draw(); const g = p.querySelector(".find"); g.focus(); g.setSelectionRange(pos, pos); };
+  wire(p, ".opt", () => { open = false; });
+}
+/* C: follow switch + strip */
+let filter = "All";
+function drawC(p) {
+  const m = byKey(MAIN);
+  const sets = { All: ALL, Ornate: T.slice(0, 12), Flat: [...T.slice(12), ...PLAIN] };
+  const card = th => `<button class="card" data-k="${th[0]}" aria-pressed="${!follow && picked === th[0] || follow && th[0] === MAIN}" title="${th[7]}">
+    <span class="sky" style="background:${tileBg(th)}">${plate(th, false, { noName: true })}</span><span class="cn"><span style="color:${rgb(th[2])};font-size:13px">${th[1]}</span><span>${th[0] === MAIN ? "Main theme" : (PLAIN.includes(th) ? "Plain" : "Theme")}</span></span></button>`;
+  p.innerHTML = `<div class="fsw"><button class="tg" aria-pressed="${follow}" aria-label="Follow main theme"></button>
+      <span>${follow ? `Following the main theme, <b>${m[1]}</b>. Turn off to pick one for plates only.` : "Plates have their own theme."}</span></div>
+    <div class="strip ${follow ? "off" : ""}" id="strip">${sets[filter].map(card).join("")}</div>
+    <div class="nav"><div class="seg">${Object.keys(sets).map(s => `<button aria-pressed="${s === filter}" data-f="${s}">${s}</button>`).join("")}</div>
+      <span class="arrows"><button data-d="-1" aria-label="Back">‹</button> <button data-d="1" aria-label="Next">›</button></span></div>`;
+  p.querySelector(".tg").onclick = () => { follow = !follow; picked = follow ? "main" : MAIN; draw(); };
+  p.querySelectorAll(".nav .seg button").forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
+  p.querySelectorAll(".arrows button").forEach(b => b.onclick = () => $("#strip").scrollBy({ left: b.dataset.d * 280, behavior: "smooth" }));
+  wire(p, ".card");
+}
+function wire(p, sel, after) {
+  p.querySelectorAll(sel).forEach(el => {
+    el.onmouseenter = () => { hover = el.dataset.k === "main" ? MAIN : el.dataset.k; drawStage(); };
+    el.onmouseleave = () => { hover = null; drawStage(); };
+    el.onclick = () => { picked = el.dataset.k; hover = null; if (after) after(); draw(); };
+  });
+}
+const BLURB = {
+  A: "<b>Gallery.</b> Every theme as a small plate with its name, in three columns. Follow main theme is the wide tile on top and says which theme that is right now. Ornate themes first, then the plain ones.",
+  B: "<b>One line that opens a list.</b> Closed, it's one row: the current theme's plate, name and description. Click it and a list floats over the page (nothing below moves), with a find box ready to type in. Hover a line to preview it; it closes when you pick, click outside or press Esc.",
+  C: "<b>Follow switch + strip.</b> Following the main theme is a switch, since it's an on/off choice, not a theme. Turn it off and pick from a strip of cards, filtered to All, Ornate or Flat.",
+};
+function draw() {
+  $("#blurb").innerHTML = BLURB[opt];
+  ({ A: drawA, B: drawB, C: drawC })[opt]($("#picker"));
+  drawStage();
+}
+$("#opts").querySelectorAll("button").forEach(b => b.onclick = () => {
+  $("#opts").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  opt = b.dataset.o; open = false; hover = null; draw(); fit();
+});
+function fit() {
+  const s = Math.min(1, $("#vp").clientWidth / 792);
+  $("#panel").style.transform = `scale(${s})`;
+  // (room under the panel for the open list, which hangs past it)
+  const pop = $(".pop"), extra = pop ? pop.getBoundingClientRect().bottom - $("#panel").getBoundingClientRect().bottom + 8 : 0;
+  $("#vp").style.height = $("#panel").offsetHeight * s + Math.max(0, extra) + "px";
+}
+function closeB() { if (open) { open = false; hover = null; draw(); fit(); } }
+document.addEventListener("mousedown", e => { if (open && !$("#picker").contains(e.target)) closeB(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeB(); });
+window.addEventListener("resize", fit);
+new MutationObserver(fit).observe($("#panel"), { childList: true, subtree: true });
+draw(); fit();
+</script>

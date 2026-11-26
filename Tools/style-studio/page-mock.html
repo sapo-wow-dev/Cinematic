@@ -1,0 +1,1280 @@
+<title>Nameplate Style Redesign</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: the real Settings window at its in-game size (1062x851), scaled down only if the screen is narrower. Single dark look: it's a game panel. */
+:root {
+  color-scheme: dark;
+  --ground: #0b0a09; --well: #121110; --surface: #1b1916; --stage: #070707; --edge: #2e2a24;
+  --text: #ebe6d9; --dim: #9a948a; --faint: #6b665e;
+  --gold: #f2c94c; --gold-soft: rgba(242,201,76,.12); --wowgold: #ffd100;
+  --pin: #ff6b5b;
+  --display: "Marcellus", Georgia, serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box }
+body { background: var(--ground); color: var(--text); font: 15px/1.45 var(--body); margin: 0 }
+.wrap { max-width: 1110px; margin: 0 auto; padding: 24px 16px 60px }
+h1 { font: 400 26px/1.2 var(--display); margin: 0 }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px }
+.lede { color: var(--dim); margin: 4px 0 0; max-width: 75ch; font-size: 14px }
+.seg { display: inline-flex; background: #141311; border-radius: 4px; padding: 2px; flex-wrap: wrap }
+.seg button { background: none; border: 0; color: var(--dim); font: 14px var(--body); padding: 3px 10px; border-radius: 3px; cursor: pointer }
+.seg button:hover { color: var(--text) }
+.seg button[aria-pressed="true"] { background: var(--gold-soft); color: var(--gold) }
+.big.seg button { font-size: 15px; padding: 6px 16px }
+
+/* ---------- the game window ---------- */
+.viewport { width: 100%; overflow: hidden }
+.win { width: 1062px; height: 851px; position: relative; transform-origin: 0 0; border: 1px solid #000; overflow: hidden; font-size: 14px }
+.win::before { content: ""; position: absolute; inset: -30px; background: url(now.webp) center/cover; filter: blur(16px) brightness(.42) saturate(.8) }
+.win > * { position: absolute }
+.wtitle { top: 0; left: 0; right: 0; height: 38px; background: linear-gradient(#2a1a10, #150d08); border-bottom: 1px solid #4a3520; text-align: center; line-height: 38px; color: var(--wowgold); font-size: 15px }
+.wtabs { top: 50px; left: 20px; display: flex; gap: 6px }
+.wtabs span { padding: 6px 22px 5px; border: 1px solid #5a4a35; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--wowgold); background: rgba(20,14,10,.75); font-size: 14px }
+.wtabs span.on { background: rgba(40,30,20,.9); color: #fff }
+.wsearch { top: 50px; right: 20px; width: 400px; height: 26px; border: 1px solid #555; border-radius: 3px; background: rgba(0,0,0,.6); color: #888; padding: 2px 10px; font-size: 13px }
+.tree { top: 90px; left: 10px; width: 240px; bottom: 44px; background: rgba(0,0,0,.3); padding: 8px 4px; overflow: hidden }
+.tree div { padding: 3px 0 3px calc(var(--d,0) * 14px + 26px); color: #fff; white-space: nowrap; font-size: 14.5px; position: relative; cursor: default }
+.tree div.head { color: var(--wowgold); padding-left: 26px }
+.tree div.head::before { content: ""; position: absolute; left: 6px; top: 6px; width: 14px; height: 14px; background: #8c1c10; border: 1px solid #d9a441; border-radius: 2px }
+.tree div.ar::before { content: "▸"; position: absolute; left: calc(var(--d,0) * 14px + 12px); color: #c9a227; font-size: 12px; top: 4px }
+.tree div.open::before { content: "▾" }
+.tree div.click { cursor: pointer }
+.tree div.click:hover { color: var(--wowgold) }
+.tree div.sel { background: linear-gradient(90deg, rgba(255,209,0,.18), transparent); color: #fff }
+.wclose { right: 10px; bottom: 8px; padding: 4px 26px; background: linear-gradient(#7a1010, #3d0606); border: 1px solid #b33; border-radius: 3px; color: #fff; font-size: 14px }
+
+/* our part: opaque */
+.panel { top: 90px; left: 258px; right: 12px; bottom: 44px; background: var(--well); border: 1px solid #2a2520; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden }
+.hub { display: flex; gap: 18px; padding: 10px 16px 0; align-items: flex-end }
+.hgroup { display: grid; gap: 3px; justify-items: start }
+.hgroup .lbl { font-size: 12px; letter-spacing: .04em }
+.hicons { display: flex; gap: 6px }
+.hicon { width: 44px; height: 44px; border-radius: 4px; border: 1px solid #3a342b; background: radial-gradient(circle at 40% 35%, #5d5547, #1a1713); position: relative; cursor: pointer; display: grid; place-items: center; color: #d9d2c3; font: 18px var(--display) }
+.hicon:hover { border-color: #7d6a3f }
+.hicon.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) }
+.hicon::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px; border-radius: 50%; background: #4bbf4b; box-shadow: 0 0 0 1px #000 }
+.hicon .cap { position: absolute; top: 100%; margin-top: 2px; font: 11px var(--body); color: var(--faint); white-space: nowrap }
+.ptabs { display: flex; gap: 2px; padding: 14px 16px 0; border-bottom: 1px solid var(--edge) }
+.ptabs button { background: none; border: 0; color: var(--dim); font: 15px var(--body); padding: 7px 12px 8px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 7px; align-items: center }
+.ptabs button:hover { color: var(--text) }
+.ptabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--gold) }
+.ptabs .pip { width: 7px; height: 7px; border-radius: 50%; background: #4bbf4b }
+.ptabs .pip.off { background: #4a443c }
+.ptabs .search { margin-left: auto; align-self: center; width: 200px; height: 26px; border-radius: 3px; background: #0c0b0a; border: 1px solid var(--edge); color: var(--faint); font-size: 13px; padding: 3px 9px; margin-bottom: 6px }
+.body { flex: 1; overflow-y: auto; padding: 14px 18px 18px; scrollbar-color: #4a4239 transparent }
+.body::-webkit-scrollbar { width: 8px } .body::-webkit-scrollbar-thumb { background: #4a4239; border-radius: 4px }
+
+.pagehead { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+.pagehead h2 { font: 400 21px var(--display); margin: 0 }
+.switch { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); font-size: 14px; background: none; border: 0; cursor: pointer; padding: 0 }
+.switch i { width: 34px; height: 18px; border-radius: 9px; background: #3d6b3a; position: relative; display: inline-block }
+.switch i::after { content: ""; position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #e8f3e3 }
+.switch[aria-pressed="false"] i { background: #3a3631 }
+.switch[aria-pressed="false"] i::after { right: auto; left: 2px; background: #8a847a }
+.sub { color: var(--dim); font-size: 14px; margin: 2px 0 12px }
+.sub button, .link { background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; padding: 0; border-bottom: 1px dotted var(--faint) }
+
+/* editor */
+.ed { display: grid; grid-template-columns: 268px minmax(0,1fr); gap: 14px; align-items: start }
+.stage { background: var(--stage); border-radius: 6px; padding: 26px 12px 10px; position: relative; position: sticky; top: 0 }
+.undo { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px }
+.iconbtn { width: 28px; height: 26px; border-radius: 4px; background: none; border: 0; color: var(--text); font-size: 16px; cursor: pointer }
+.iconbtn:hover:not(:disabled) { background: #1d1b18; color: var(--gold) }
+.iconbtn:disabled { color: #3a3631; cursor: default }
+.stagefoot { display: grid; gap: 6px; margin-top: 14px }
+.stagefoot .hint { color: var(--faint); font-size: 12.5px }
+.hot { position: relative; cursor: pointer; border-radius: 3px; outline: 1px dashed transparent; outline-offset: 3px }
+.hot:hover { outline-color: #6b5a2e }
+.hot.picked { outline: 1px solid var(--gold) }
+.hot .tag { position: absolute; left: 50%; top: -20px; transform: translateX(-50%); font-size: 11px; color: var(--gold); white-space: nowrap; opacity: 0; pointer-events: none }
+.hot:hover .tag { opacity: 1 }
+.plate { width: 236px; margin: 0 auto; display: grid; gap: 4px; justify-items: center; position: relative }
+.pname { font: 400 20px var(--display); color: #fff; text-shadow: 0 1px 2px #000 }
+.hprow { display: flex; gap: 6px; align-items: center; width: 100% }
+.hp { flex: 1; height: 14px; background: #1a1a1a; border-radius: 3px; overflow: hidden; border: 1px solid #000 }
+.hp b { display: block; height: 100%; width: 66%; background: linear-gradient(#c22, #7a0d0d) }
+.lvl { font: 600 13px var(--body); color: #ffe27a; background: #1a1712; border: 1px solid #3b342a; border-radius: 3px; padding: 0 5px; line-height: 17px }
+.cast { width: 88%; display: grid; gap: 2px }
+.castbar { height: 7px; background: #1a1a1a; border-radius: 2px; overflow: hidden }
+.castbar b { display: block; height: 100%; width: 48%; background: linear-gradient(#ffd45c, #b88a12) }
+.spell { font-size: 12.5px; color: #fff; display: flex; align-items: center; gap: 5px }
+.spell i { width: 12px; height: 12px; background: radial-gradient(#ffcf6b, #c2410c); border-radius: 2px; display: inline-block }
+.mark { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); color: #ff5b4a; font-size: 18px; text-shadow: 0 0 6px rgba(255,80,60,.7) }
+.namefr { display: grid; justify-items: center; gap: 2px; padding: 6px 18px; margin: 0 auto; width: fit-content; border-radius: 4px; background: linear-gradient(90deg, transparent, rgba(0,0,0,.65), transparent) }
+.namefr .big { font: 400 22px var(--display); color: #ff8a7a; text-shadow: 0 1px 2px #000 }
+.namefr .sub2 { font-size: 13px; color: #d9d3c6 }
+.cicon { width: 16px; height: 16px; border-radius: 3px; background: radial-gradient(#e9e2c8, #6b5a35); flex: none }
+
+.parts { display: flex; gap: 2px; border-bottom: 1px solid var(--edge); flex-wrap: wrap }
+.parts button { background: none; border: 0; color: var(--dim); font: 14.5px var(--body); padding: 6px 10px 7px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; position: relative }
+.parts button:hover { color: var(--text) }
+.parts button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--gold) }
+.parts button.changed::after { content: ""; position: absolute; top: 6px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--gold) }
+.settings { background: var(--surface); border-radius: 6px; padding: 4px 14px 8px; margin-top: 10px }
+.group { padding: 10px 0 4px }
+.group + .group { border-top: 1px solid #25221d }
+.group h3 { font: 400 15px var(--display); color: #d8b968; margin: 0 0 6px }
+.row { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 10px; align-items: center; min-height: 34px }
+.row > .l { color: #fff }
+.chips { display: flex; gap: 5px; flex-wrap: wrap }
+.chip { background: #23201c; border: 1px solid transparent; color: var(--text); font: 14px var(--body); padding: 3px 10px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px }
+.chip:hover { border-color: #5a4c2c }
+.chip[aria-pressed="true"] { border-color: var(--gold); background: var(--gold-soft); color: var(--gold) }
+.chip .sw { width: 24px; height: 9px; border-radius: 2px; display: inline-block }
+.slide { display: flex; align-items: center; gap: 10px }
+.slide input { flex: 1; accent-color: var(--gold); min-width: 0 }
+.slide output { width: 52px; text-align: right; font-variant-numeric: tabular-nums }
+.note { color: var(--dim); font-size: 14px }
+.foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; color: var(--dim); font-size: 14px }
+.foot b { color: var(--gold); font-weight: 600 }
+.txtbtn { background: none; border: 0; color: var(--text); font: 14.5px var(--body); padding: 4px 10px; border-radius: 4px; cursor: pointer }
+.txtbtn:hover { background: #1d1b18; color: var(--gold) }
+
+/* Cinematic's own fonts (Fonts/, SIL Open Font License) */
+@font-face { font-family: cf-marcellus; src: url(assets/fonts/Marcellus-Regular.ttf) }
+@font-face { font-family: cf-almendra; src: url(assets/fonts/Almendra-Bold.ttf) }
+@font-face { font-family: cf-philosopher; src: url(assets/fonts/Philosopher-Regular.ttf) }
+@font-face { font-family: cf-cinzel; src: url(assets/fonts/CinzelDecorative-Regular.ttf) }
+@font-face { font-family: cf-germania; src: url(assets/fonts/GermaniaOne-Regular.ttf) }
+@font-face { font-family: cf-barlow; src: url(assets/fonts/BarlowCondensed-Medium.ttf) }
+@font-face { font-family: cf-bebas; src: url(assets/fonts/BebasNeue-Regular.ttf) }
+@font-face { font-family: cf-rajdhani; src: url(assets/fonts/Rajdhani-SemiBold.ttf) }
+@font-face { font-family: cf-outfit; src: url(assets/fonts/Outfit-Medium.ttf) }
+@font-face { font-family: cf-outfitbold; src: url(assets/fonts/Outfit-Bold.ttf) }
+@font-face { font-family: cf-lilita; src: url(assets/fonts/LilitaOne-Regular.ttf) }
+@font-face { font-family: cf-titan; src: url(assets/fonts/TitanOne-Regular.ttf) }
+@font-face { font-family: cf-archivoblack; src: url(assets/fonts/ArchivoBlack-Regular.ttf) }
+@font-face { font-family: cf-damion; src: url(assets/fonts/Damion-Regular.ttf) }
+.sw.fsw { display: grid; place-items: center; background: #0b0a09; color: #fff; font-size: 22px; line-height: 1; padding: 4px 6px; border-radius: 4px; min-height: 34px }
+.cur .sw.fsw { width: 96px }
+
+/* theme picker (B: one line that opens a floating list) */
+.tpick { position: relative }
+.mp { --edgec: #000; --pan: rgba(0,0,0,.6); display: grid; width: 100% }
+.mp .bar { width: 100%; height: 11px; background: var(--pan); border: var(--bw, 1px) solid var(--edgec); position: relative; overflow: hidden }
+.mp .bar i { position: absolute; inset: 0 34% 0 0; background: var(--fill) }
+.sh-capsule .bar { border-radius: 99px }
+.sh-pointed .bar, .sh-hex .bar { clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 6px 100%, 0 50%) }
+.sh-cut .bar { clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%) }
+.cur { display: flex; align-items: center; gap: 12px; background: #15130f; border: 1px solid #2e2a24; border-radius: 5px; padding: 7px 10px; cursor: pointer; width: 100%; color: var(--text); font: 14px var(--body); text-align: left }
+.cur:hover, .cur[aria-expanded="true"] { border-color: #5a4c2c }
+.cur .sw { width: 96px; flex: none; padding: 6px; border-radius: 4px }
+.cur .ct { flex: 1; display: grid; min-width: 0 } .cur .ct span { color: var(--dim); font-size: 12.5px }
+.pop { position: absolute; left: -102px; right: 0; top: calc(100% + 4px); z-index: 5; background: #100f0d; border: 1px solid #3a342b; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.7); overflow: hidden }
+.pop .find { width: 100%; background: #0b0a09; border: 0; border-bottom: 1px solid #2a2520; color: var(--text); font: 14px var(--body); padding: 8px 12px }
+.pop .list { max-height: 330px; overflow-y: auto; scrollbar-color: #4a4239 transparent;
+  -webkit-mask-image: linear-gradient(transparent, #000 14px, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(transparent, #000 14px, #000 calc(100% - 18px), transparent) }
+.pop .grp { padding: 8px 12px 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint) }
+.pop .count { padding: 6px 12px; font-size: 12px; color: var(--faint); border-top: 1px solid #2a2520 }
+.opt { display: grid; grid-template-columns: 100px minmax(0,1fr) 16px; gap: 12px; align-items: center; padding: 6px 12px; cursor: pointer; background: none; border: 0; width: 100%; text-align: left; color: var(--text); font: 14px var(--body) }
+.opt:hover { background: #1b1915 }
+.opt[aria-selected="true"] { background: #1d1a11 }
+.opt .sw { padding: 7px 6px; border-radius: 4px }
+.opt .ot { display: grid; min-width: 0 } .opt .ot span { color: var(--dim); font-size: 12.5px; line-height: 1.3 }
+.opt .ck { color: var(--gold) }
+
+/* what the preview plate shows (the old State list: Plates/PlateRowLook.lua STATE_PILLS) */
+.spick { position: relative }
+.pills { display: flex; gap: 4px; flex-wrap: wrap }
+.pill { background: #1d1a16; border: 1px solid transparent; color: var(--text); font: 13px var(--body); padding: 2px 8px; border-radius: 99px; cursor: pointer }
+.pill:hover { border-color: #5a4c2c }
+.pill .x { color: var(--faint); margin-left: 4px }
+.pill.add { color: var(--dim); border: 1px dashed #4a4239; background: none }
+.pill.add[aria-expanded="true"] { color: var(--gold); border-color: var(--gold) }
+.cur.pv { padding: 5px 10px; background: #100f0d }
+.cur.pv .ct span { line-height: 1.3 }
+.spop { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 6; background: #100f0d; border: 1px solid #3a342b; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.7) }
+.spop .list { max-height: 300px; overflow-y: auto; padding-bottom: 4px; scrollbar-color: #4a4239 transparent }
+.spop .grp { padding: 8px 12px 3px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint) }
+.spop .grp small { text-transform: none; letter-spacing: 0 }
+.sopt { display: flex; gap: 9px; align-items: center; width: 100%; background: none; border: 0; color: var(--text); font: 14px var(--body); padding: 4px 12px; cursor: pointer; text-align: left }
+.sopt:hover { background: #1b1915 }
+.sopt .bx { width: 15px; height: 15px; border-radius: 3px; border: 1px solid #5a5045; display: inline-grid; place-items: center; font-size: 11px; color: var(--gold); flex: none }
+.sopt.one .bx { border-radius: 50% }
+.sopt[aria-pressed="true"] .bx { border-color: var(--gold) }
+.spop .count { padding: 6px 12px; font-size: 12px; color: var(--faint); border-top: 1px solid #2a2520; display: flex; justify-content: space-between }
+.spop .count button { background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 0 }
+.spop .count button:hover { color: var(--gold) }
+/* the states drawn on the plate */
+.auras { display: flex; gap: 3px; justify-content: center }
+.auras i { width: 15px; height: 15px; border-radius: 2px; border: 1px solid #b33; background: radial-gradient(#8a64bb, #2a1840) }
+.auras i.buff { border-color: #3a3; background: radial-gradient(#d9c46b, #4a3a12) }
+.qmark { color: #ffd100; font: 700 22px/1 var(--display); text-shadow: 0 0 6px rgba(255,200,0,.6) }
+.nmrow { display: flex; align-items: center; gap: 6px }
+.rmark { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(#fff6a0, #e0b000); box-shadow: 0 0 4px #000; flex: none }
+.hp.tgt { box-shadow: 0 0 0 2px #fff } .hp.foc { box-shadow: 0 0 0 2px #b58cff }
+.hp.agg { box-shadow: 0 0 6px 2px #ff2a1a } .hp.gain { box-shadow: 0 0 6px 2px #ff9a1a }
+.stagefoot .pop { left: 0; right: 0 }
+.opt.nosw { grid-template-columns: minmax(0,1fr) 16px; padding: 8px 12px }
+.cur .ct > span:last-child:empty { display: none }.well { width: 34px; height: 30px; padding: 0; border: 1px solid #3a342b; border-radius: 4px; background: none; margin-top: 4px; cursor: pointer }
+/* compact pickers, two a row (Colors) */
+.group.grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 4px 12px }
+.group.grid2 > h3, .group.grid2 > .ghint { grid-column: 1 / -1 }
+.group.grid2 .row { grid-template-columns: minmax(0,1fr); gap: 3px; min-height: 0; margin: 0 }
+.group.grid2 .row > .l { color: var(--dim); font-size: 13px }
+.tpick.compact .cur { padding: 5px 8px; gap: 8px }
+.tpick.compact .cur .sw { width: 52px; padding: 4px }
+.tpick.compact .cur .ct > span:last-child { display: none }
+.group.grid2 .pop { left: 0; right: auto; width: 320px }
+.group.grid2 .row:nth-of-type(even) .pop { left: auto; right: 0 }
+/* color picker: top choices, Fade, then the named palette */
+.cpop { padding-bottom: 0 }
+.group.grid2 .cpop { width: 384px }
+.frow { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-top: 1px solid #2a2520 }
+.frow > span { font-size: 12px; color: var(--faint); width: 52px; flex: none }
+.frow .seg button { padding: 3px 9px; font-size: 13px }
+.pal { display: grid; gap: 5px; padding: 8px 12px; max-height: 260px; overflow-y: auto; border-top: 1px solid #2a2520; scrollbar-color: #4a4239 transparent }
+.prow { display: grid; grid-template-columns: 64px minmax(0,1fr); align-items: center; gap: 8px }
+.prow > span { font-size: 12px; color: var(--faint) }
+.sws { display: flex; gap: 4px; flex-wrap: wrap; align-items: center }
+.psw { width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(0,0,0,.6); padding: 0; cursor: pointer }
+.psw:hover { outline: 2px solid #fff; outline-offset: 1px }
+.psw[aria-pressed="true"] { outline: 2px solid var(--gold); outline-offset: 1px }
+.cwell { width: 30px; height: 24px; padding: 0; border: 1px solid #3a342b; border-radius: 4px; background: none; cursor: pointer }
+.hovname { color: var(--text) }
+.parts .pip { width: 7px; height: 7px; border-radius: 50%; background: #4bbf4b; display: inline-block; margin-right: 6px; vertical-align: 1px }
+.parts .pip.off { background: #4a443c }
+.partsw { padding: 10px 2px 0 }
+.row > .l.own::after { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); margin-left: 7px; vertical-align: 2px }
+.slide output { white-space: nowrap }
+.spark { position: absolute; top: -3px; width: 6px; height: 17px; margin-left: -3px; background: radial-gradient(#fff 0, rgba(255,240,180,.8) 30%, transparent 70%) }
+.secs { position: absolute; right: 4px; top: -1px; font-size: 11px; color: #fff; text-shadow: 0 1px 1px #000 }
+.row.grey { opacity: .4 } .row.grey input { pointer-events: none }
+.slide .back { font-size: 12.5px; color: var(--dim); white-space: nowrap }
+.group h3.tip { cursor: help; width: fit-content }
+.group .ghint { color: var(--faint); font-size: 12.5px; margin: -4px 0 6px }
+.rank { font-size: 13px; line-height: 1 } .cc { width: 15px; height: 15px; border-radius: 2px; background: radial-gradient(#9ad, #235); border: 1px solid #000; flex: none }
+.castbar.lock b { background: linear-gradient(#c8c8c8, #6a6a6a) } .castbar.chan b { background: linear-gradient(#7fe07f, #2a8a2a); width: 70% }
+.castbar.intr b { background: linear-gradient(#ff5a4a, #a01a10); width: 100% }
+.cast.imp .castbar { box-shadow: 0 0 6px 2px rgba(255,210,80,.8) }
+.spell em { color: #ff9a8a; font-style: normal } .spell small { color: #aaa; font-size: 11px }
+
+/* tables (Show, Smart) */
+.tbl { width: 100%; border-collapse: collapse; font-size: 14px }
+.tbl th { text-align: left; font-weight: 400; color: var(--dim); font-size: 13px; padding: 4px 8px 6px; border-bottom: 1px solid var(--edge) }
+.tbl td { padding: 7px 8px; border-bottom: 1px solid #1e1c18; vertical-align: middle }
+.tbl tr.pick td { background: #1c1913 }
+.tbl tr.rowclick { cursor: pointer }
+.tbl tr.rowclick:hover td { background: #17150f }
+.cell { color: var(--text); background: #1d1a16; border-radius: 3px; padding: 2px 8px; display: inline-block; font-size: 13.5px; cursor: pointer }
+.cell.none { color: var(--faint); background: none }
+.check { width: 16px; height: 16px; border-radius: 3px; border: 1px solid #5a5045; display: inline-grid; place-items: center; font-size: 12px; color: var(--gold); vertical-align: middle; cursor: pointer }
+.grip { color: var(--faint); cursor: grab; width: 14px }
+.drawer td { background: #15130f !important; padding: 12px }
+.addrow { margin-top: 8px }
+.cols2 { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 14px }
+
+/* layout tab */
+.arr { position: relative; height: 210px; background: var(--stage); border-radius: 6px; overflow: hidden }
+.arr .guide { position: absolute; background: rgba(110,160,255,.25) }
+.drag { position: absolute; cursor: grab; outline: 1px dashed #6b5a2e; outline-offset: 2px; border-radius: 3px; user-select: none; touch-action: none }
+.drag.picked { outline: 1px solid var(--gold) }
+.drag:active { cursor: grabbing }
+.anchor.picked { outline: 1px solid var(--gold); outline-offset: 3px; border-radius: 50% }
+.anchor { position: absolute; left: 50%; top: 92px; width: 18px; height: 18px; transform: translate(-50%,-50%); pointer-events: auto; cursor: grab; z-index: 5 !important;
+  background: linear-gradient(#6ea0ff,#6ea0ff) center/1px 100% no-repeat, linear-gradient(#6ea0ff,#6ea0ff) center/100% 1px no-repeat; z-index: 0 }
+.drag.off { opacity: .28; outline-style: dotted }
+.arr .auras { display: inline-flex }
+.unitdot { position: absolute; left: 50%; bottom: 18px; width: 70px; height: 70px; transform: translateX(-50%); border-radius: 50% 50% 10px 10px; background: radial-gradient(circle at 50% 30%, #4a3a2a, #1c150e); opacity: .8 }
+
+/* why */
+.why { margin-top: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 12px 26px }
+.why h2 { grid-column: 1 / -1; font: 400 21px var(--display); margin: 0 }
+.item { display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 8px }
+.item .n { width: 22px; height: 22px; border-radius: 50%; background: var(--pin); color: #160a08; font: 600 12px/22px var(--body); text-align: center; margin-top: 2px }
+.item p { margin: 0; color: var(--dim); font-size: 14px }
+.item p b { color: var(--text); font-weight: 600 }
+.asks { margin-top: 26px; background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14px }
+.asks h2 { font: 400 19px var(--display); margin: 0 0 6px }
+.asks ol { margin: 0; padding-left: 20px; color: var(--dim) }
+.asks b { color: var(--text); font-weight: 600 }
+.nowimg { display: block; width: 1062px; height: 851px }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px }
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>Nameplate Style, calmer</h1>
+      <p class="lede">The real Settings window at its in-game size. Click the tabs, the icons, the plate's parts and the Smart rows: they work. The game's list on the left stays the game's; only Cinematic's side changes.</p>
+    </div>
+    <div class="seg big" id="view">
+      <button aria-pressed="false" data-v="now">Now</button>
+      <button aria-pressed="true" data-v="new">Proposed</button>
+    </div>
+  </div>
+
+  <div class="viewport" id="vp">
+    <div id="nowview" hidden><img class="nowimg" src="now.webp" alt="The Nameplate Style page as it is now"></div>
+    <div class="win" id="win">
+      <div class="wtitle">Options</div>
+      <div class="wtabs"><span>Game</span><span class="on">AddOns</span></div>
+      <div class="wsearch">Search</div>
+      <div class="tree" id="tree"></div>
+      <div class="panel">
+        <div class="hub" id="hub"></div>
+        <div class="ptabs" role="tablist" id="ptabs"></div>
+        <div class="body" id="body"></div>
+      </div>
+      <div class="wclose">Close</div>
+    </div>
+  </div>
+
+  <section class="why">
+    <h2>What changed from now</h2>
+    <div class="item"><span class="n">1</span><p><b>Solid page.</b> The game no longer shows through Cinematic's side, so text sits on one even color. The game's list on the left keeps its look (it's the game's).</p></div>
+    <div class="item"><span class="n">2</span><p><b>One tab row.</b> Default, Layout, Smart and Cast Bars sit as plain tabs under the icons, each with its on/off dot (right-click toggles it, as now). Names has one page, so no tab row.</p></div>
+    <div class="item"><span class="n">3</span><p><b>Gold only for what's picked.</b> Buttons are text, not gold boxes. Undo and Redo are words in the footer, shown only when there's a step to take. No Copy look or Reset for now.</p></div>
+    <div class="item"><span class="n">4</span><p><b>Preview beside the settings, not above them.</b> At this window size there's room for both, so the first setting is at the top, not at the bottom edge.</p></div>
+    <div class="item"><span class="n">5</span><p><b>Fewer dropdowns.</b> What the preview shows is a row of toggles under it; parts are tabs, or click the part on the plate.</p></div>
+    <div class="item"><span class="n">6</span><p><b>Smart rows open in place.</b> Click a row and its look opens under it with the same editor as Default. Drag rows to reorder.</p></div>
+    <div class="item"><span class="n">7</span><p><b>Layout is dragging.</b> Drag the parts on the plate; the numbers follow. "Layout for" picks which plates get their own layout.</p></div>
+    <div class="item"><span class="n">8</span><p><b>No greyed dead rows.</b> "Plate color: Next row's" becomes a sentence saying where the color comes from, with a link to pick your own.</p></div>
+    <div class="item"><span class="n">9</span><p><b>Theme is one line that opens a list.</b> Each theme shows as a small plate in its own colors, with a line saying what it is. Find box, preview on hover, closes on pick, click outside or Esc.</p></div>
+  </section>
+
+  <section class="asks">
+    <h2>To decide before I build it</h2>
+    <ol>
+      <li><b>Hub icons:</b> kept as they are, just calmer (gold only on the picked one). Fine, or smaller?</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => s;
+
+/* ---------- the game's tree (left) ---------- */
+const TREE = [
+  ["Cinematic", 0, "head"], ["Favorites", 0], ["Profiles", 0], ["Interface", 0, "ar"], ["Addons", 0], ["Visions", 0, "ar"],
+  ["Style", 0, "ar open"], ["Interface", 1, "ar open"], ["Combat", 2, "ar"], ["Nameplates", 2, "ar open"],
+  ["Nameplates", 3, "click", "plates"], ["Names", 3, "click", "names"], ["Info", 2, "ar"], ["Visions", 1, "ar"], ["Atmosphere", 1, "ar"],
+  ["Atmosphere", 0], ["Camera", 0], ["Keybinds", 0], ["Quality of Life", 0, "ar"], ["Help", 0], ["Community", 0], ["Dev", 0],
+];
+
+/* ---------- settings rows ---------- */
+const TEXT = () => [{ h: "Text", rows: [
+  { l: "Font", pick: "font" },
+  { l: "Size", slide: [50, 200, 100, "%"] }, { l: "Outline", chips: ["None", "Thin", "Thick"], pick: 1 } ] },
+  { h: "Color", rows: [{ l: "Color", chips: ["Reaction", "Class", "White", "My own"], pick: 0 }] }];
+const BAR = () => [{ h: "Bar", rows: [
+  { l: "Texture", pick: "texture" },
+  { l: "Color", note: "From the main theme." } ] },
+  { h: "Size", rows: [{ l: "Width", slide: [60, 200, 100, "%"] }, { l: "Height", slide: [50, 200, 100, "%"] }] }];
+const BORDER = () => [{ h: "Border", rows: [{ l: "Edge", chips: ["Theme's", "The game's", "Thin", "None"], pick: 0 }, { l: "Thickness", slide: [0, 6, 1, " px", 1] }] }];
+const ICON = () => [{ h: "Icon", rows: [{ l: "Shown", chips: ["Yes", "No"], pick: 0 }, { l: "Shape", chips: ["Square", "Round", "Trimmed"], pick: 2 }] }];
+// Bar: the plate's bar in one part (was Plate + Health bar). Theme is the starting point; the rest
+// say "Theme's" until changed.
+const PLATE = () => [{ h: "Theme", hint: "Texture and border in one pick. Change either below on its own.", rows: [
+  { l: "Theme", pick: "theme" } ] },
+  { h: "Bar", rows: [
+    { l: "Texture", pick: "texture" },
+    { l: "Border", chips: ["Theme's", "The game's", "None", "Thin", "Thick", "My own"], pick: 0 } ] },
+  { h: "Size", rows: [{ l: "Width", slide: [60, 200, 100, "%"] }, { l: "Height", slide: [50, 200, 100, "%"] }] }];
+// The Layout tab's parts (Plates/PlateLayout.lua PARTS): id, label, drawing, place [x, y], has a size, tip.
+const ICO = (bg, bd = "#000") => `<i style="display:inline-block;width:14px;height:14px;border-radius:2px;border:1px solid ${bd};background:${bg}"></i>`;
+const LAYOUT_PARTS = [
+  ["health", "Health bar", '<div class="hp" style="width:170px"><b></b></div>', [0, 0], false, "The bar and what hangs on it: the name, level box, marker and debuffs move with it."],
+  ["name", "Name", '<span class="pname">Gnoll Brute</span>', [0, -22], false, "The unit's name. Debuffs hang on it."],
+  ["level", "Level box", '<span class="lvl">24</span>', [101, 0], true, "The level box at the bar's end. Crowd control hangs on it."],
+  ["marker", "Raid marker", '<span class="rmark"></span>', [-102, 0], true, "A raid marker left of the bar. The elite mark hangs on it."],
+  ["elite", "Elite mark", '<span class="rank" style="color:#e8b84a;font-size:15px">◆</span>', [-122, 0], true, "The elite, rare or boss mark."],
+  ["debuffs", "Debuffs", `<span class="auras">${ICO("radial-gradient(#8a64bb,#2a1840)", "#b33").repeat(3)}</span>`, [0, -44], true, "Your debuffs over the name."],
+  ["buffs", "Buffs", `<span class="auras">${ICO("radial-gradient(#d9c46b,#4a3a12)", "#3a3").repeat(2)}</span>`, [-135, -18], true, "The unit's buffs, left of the elite mark."],
+  ["crowd", "Crowd control", ICO("radial-gradient(#9ad,#235)"), [124, 0], true, "Roots, stuns and the like, right of the level box."],
+  ["cast", "Cast bar", '<div class="castbar" style="width:150px"><b></b></div>', [0, 16], false, "The cast bar under the health bar."],
+  ["castIcon", "Spell icon", '<span class="spell"><i></i></span>', [-84, 16], true, "The cast's spell icon. In most plate styles the cast bar and spell name hang on it."],
+  ["castText", "Spell name", '<span class="spell">Fireball</span>', [0, 30], false, "The name of the spell being cast."],
+  ["castShield", "Can't interrupt", '<span style="color:#c8c8c8;font-size:13px">⛨</span>', [-100, 16], true, "The shield shown for a cast you can't interrupt."],
+  ["softTarget", "Soft target icon", '<span class="qmark" style="font-size:18px">!</span>', [0, -68], true, "The interact or quest icon over your soft target."],
+];
+// The sides a part can hang on another by (PlateLayout.lua SIDES).
+const LAYOUT_SIDES = [["right", "Right of", "Its left edge against the other's right"], ["left", "Left of", "Its right edge against the other's left"],
+  ["above", "Above", "Centered over the other"], ["below", "Below", "Centered under the other"],
+  ["inleft", "Inside left", "Inside the other, at its left end"], ["inright", "Inside right", "Inside the other, at its right end"],
+  ["center", "On its center", "Centered on the other"]];
+// Name (the real part: Font, Size, Outline, Shadow) + one Color line from the palette. (Level box: the Layout tab.)
+const NAMEPART = () => [{ h: "Text", rows: [
+  { l: "Font", pick: "font" },
+  { l: "Size", slide: [50, 200, 100, "%"] },
+  { l: "Outline", chips: ["None", "Thin", "Thick"], pick: 1 },
+  { l: "Shadow", chips: ["The game's", "On", "None"], pick: 0 } ] },
+  { h: "Color", hint: "Same as the bar: each name takes its unit's color from Colors (class colors for players, if picked there).",
+    rows: [{ l: "Color", pick: "namecolor" }] }];
+// Cast Bars (Style/PlateCastStyle.lua's settings, in the same grammar as Nameplates).
+// (Showing the icon, spell name and can't-interrupt shield: the Layout tab, as every plate part.)
+const CASTBAR = () => [
+  { h: "Bar", rows: [
+    { l: "Texture", pick: "texture" },
+    { l: "Border", chips: ["Theme's", "The game's", "None", "Thin", "Thick", "My own"], pick: 0 },
+    { l: "Ground", chips: ["The game's", "Dark"], pick: 0, set: i => { state.val.castground = i; } } ] },
+  { h: "Size", hint: "Next to the game's cast bar.", rows: [{ l: "Width", slide: [50, 200, 100, "%"] }, { l: "Height", slide: [50, 200, 100, "%"] }] },
+  { h: "Extras", hint: "Small things on the bar; the icon, spell name and shield are shown or hidden on the Layout tab.", rows: [
+    { l: "Spark", sw: "spark", tip: "The spark at the fill's end" },
+    { l: "Important mark", sw: "important", tip: "The mark on important casts" },
+    { l: "Seconds left", sw: "seconds", off: true, tip: "Seconds left at its right end" },
+    { l: "Who it's cast at", sw: "who", off: true, tip: "The name of whoever the spell is cast at" } ] }];
+const CAST_WHO = [["castCasting", "Casting"], ["castChannel", "Channeling"], ["castLocked", "Can't be interrupted"], ["castInterrupted", "Interrupted"]];
+const CASTCOLORS = () => [{ h: "Colors", hint: "Each kind of cast's bar color, and how it fades along the bar.", cols: 2,
+  rows: CAST_WHO.map(([w, n]) => ({ l: n, pick: "color", who: w, compact: true })) }];
+const CASTTEXT = () => [{ h: "Text", rows: [
+  { l: "Font", pick: "font" }, { l: "Size", slide: [50, 200, 100, "%"] },
+  { l: "Outline", chips: ["None", "Thin", "Thick"], pick: 1 }, { l: "Shadow", chips: ["The game's", "On", "None"], pick: 0 } ] },
+  { h: "Color", rows: [{ l: "Color", pick: "spellcolor" }] }];
+const CASTICON = () => [{ h: "Icon", hint: "Shown or hidden on the Layout tab (Spell icon).", rows: [
+  { l: "Size", slide: [50, 200, 100, "%"], set: v => { state.val.castisz = v; } } ] }];
+// Rows with more than 3 choices become pickers ("list"); each row's choices kept here by id.
+const CHIPLISTS = {}; let chipSeq = 0;
+// Border styles drawn as small bars.
+const borderSw = (w, c = "#000") => `<div class="mp"><div class="bar" style="height:12px;--edgec:${c};--bw:${w}px"><i style="background:#c0201c;inset:0 22% 0 0"></i></div></div>`;
+const BORDER_SW = { "Theme's": () => mini(TALL.find(t => t[0] === themeKey())), "The game's": () => borderSw(1), "None": () => borderSw(0),
+  "Thin": () => borderSw(1), "Thick": () => borderSw(3), "My own": () => borderSw(2, "#8fd3ff"), "Default's": () => borderSw(1), "Glow": () => borderSw(1, "#ffd45c") };
+// Colors: its own part, two compact lines a row.
+const COLORS = () => [{ h: "Colors", hint: "Each kind of unit's plate color, and how it fades along the bar. Smart rows can change it.", cols: 2,
+  rows: WHO.map(([w, n]) => ({ l: n, pick: "color", who: w, compact: true })) }];
+// A Smart row's Bar: only what a row changes; everything else comes from Default.
+const SMARTBAR = () => [{ h: "Bar", rows: [
+  { l: "Plate color", pick: "rowcolor" },
+  { l: "Border", chips: ["Default's", "Thin", "Thick", "Glow"], pick: 0 } ] },
+  { h: "Size", rows: [{ l: "Plate size", slide: [50, 200, 110, "%"] }] }];
+// (Mark size greys while Mark is None: picking a mark brings it back)
+const SMARTLOOK = () => { const g = [{ h: "Mark", rows: [{ l: "Mark", chips: ["Arrow", "Glow", "Ring", "None"], pick: 0 }] }];
+  g[0].rows.push({ l: "Mark size", slide: [50, 200, 100, "%"], greyIf: () => { const r = g[0].rows[0]; return ((r.id && state.val["list:" + r.id]) || r.chips[r.pick]) === "None"; } });
+  return g; };
+const PLAIN = (h, l, chips) => () => [{ h, rows: [{ l, chips, pick: 0 }] }];
+
+const ART = {
+  plate: (mark) => {
+    const s = state.states, cast = s.casting || CAST_KEYS.some(k => s[k]);
+    const rank = s.elite ? '<span class="rank" style="color:#e8b84a">◆</span>' : s.rareelite ? '<span class="rank" style="color:#d8dde6">◆</span>'
+      : s.rare ? '<span class="rank" style="color:#d8dde6">★</span>' : "";
+    // (mark: the Smart row's mark, Arrow / Glow / Ring, or None for no mark)
+    const mk = mark === true ? "Arrow" : mark;
+    return `<div class="plate">${mk && mk !== "None" ? `<span class="mark">${mk === "Ring" ? "◯" : mk === "Glow" ? "✦" : "▼"}</span>` : ""}
+    ${s.quest ? '<span class="qmark">!</span>' : ""}
+    ${s.debuffs || s.buffs ? `<div class="auras">${s.buffs ? '<i class="buff"></i><i class="buff"></i>' : ""}${s.debuffs ? "<i></i><i></i><i></i>" : ""}</div>` : ""}
+    <div class="nmrow">${s.marker ? '<span class="rmark"></span>' : ""}<div class="hot" data-part="name"><span class="tag">Name</span><span class="pname">Gnoll Brute</span></div></div>
+    <div class="hprow"><div class="hot" data-part="bar" style="flex:1"><span class="tag">Bar</span><div class="hp ${s.target ? "tgt" : ""} ${s.focus ? "foc" : ""} ${s.aggro ? "agg" : ""} ${s.gaining ? "gain" : ""}"><b class="hpfill ${s.tapped ? "tap" : ""}"></b></div></div>
+      ${rank}<span class="lvl">${s.boss ? "☠" : "24"}</span>${s.crowd ? '<span class="cc"></span>' : ""}</div>
+    ${cast ? `<div class="cast ${s.important ? "imp" : ""}"><div class="castbar ${s.locked ? "lock" : ""} ${s.channel ? "chan" : ""} ${s.interrupted ? "intr" : ""}"><b></b></div>
+      <span class="spell"><i></i>${s.interrupted ? "Interrupted" : s.channel ? "Drain Life" : "Fireball"}${s.atyou ? " <em>› You</em>" : ""}${s.locked ? " <small>can't interrupt</small>" : ""}</span></div>` : ""}</div>`;
+  },
+  // (the Cast Bars tab's stage: a plate casting, the cast bar's parts clickable; what it casts from the Preview list)
+  castplate: () => {
+    const s = state.states, kind = s.interrupted ? "interrupted" : s.locked ? "locked" : s.channel ? "channel" : "casting";
+    const x = state.val.castx || {};
+    return `<div class="plate"><span class="pname cname">Gnoll Brute</span>
+    <div class="hprow"><div class="hp" style="flex:1"><b></b></div><span class="lvl">24</span></div>
+    <div class="cast ${s.important && x.important !== false ? "imp" : ""}" style="width:96%;position:relative">
+      <div class="hot castbar cfill" data-part="bar" data-kind="${kind}" style="height:11px;position:relative"><span class="tag">Bar</span><b style="width:${kind === "interrupted" ? 100 : kind === "channel" ? 70 : 55}%"></b>
+        ${x.spark !== false && kind !== "interrupted" ? `<i class="spark" style="left:${kind === "channel" ? 70 : 55}%"></i>` : ""}
+        ${x.seconds ? `<span class="secs">1.4</span>` : ""}</div>
+      <span class="spell"><i class="hot" data-part="icon" style="width:calc(13px * var(--isz,1));height:calc(13px * var(--isz,1))"><span class="tag">Icon</span></i>
+        <span class="hot ctext" data-part="text"><span class="tag">Spell name</span>${kind === "interrupted" ? "Interrupted" : kind === "channel" ? "Drain Life" : "Fireball"}</span>
+        ${kind === "locked" ? '<small>⛨</small>' : ""}${s.atyou && x.who ? ' <em>› Elandra</em>' : ""}</span></div></div>`;
+  },
+  names: () => `<div class="hot namefr" data-part="band"><span class="tag">Band</span>
+    <span class="hot big" data-part="text"><span class="tag">Text</span>Gnoll Brute</span>
+    <span class="hot sub2" data-part="line2"><span class="tag">Second line</span>&lt;Mudsnout Clan&gt;</span></div>`,
+};
+const HP = { Hostile: "linear-gradient(#c22,#7a0d0d)", Neutral: "linear-gradient(#e2c33a,#8a7210)", Friendly: "linear-gradient(#3fbf4a,#1d6b24)" };
+
+/* ---------- the two icons and their tabs ---------- */
+const PAGES = {
+  plates: { tabs: [
+    { id: "default", label: "Default" }, { id: "layout", label: "Layout" }, { id: "smart", label: "Smart" }, { id: "cast", label: "Cast Bars" } ], first: "default" },
+  names: { tabs: [], first: "nstyle" },
+};
+let page = "plates", tab = "default";
+const state = { tabsOn: {}, rows: {}, changed: {}, part: {}, previewAs: "Hostile NPC", redo: {}, casting: true, smartOpen: "target", variant: {} };
+
+/* ---------- editor (one build, used by Default, Smart rows, Cast Bars, Name Style) ---------- */
+function editor(host, key, cfg) {
+  // cfg: { art, parts:[[id,label,fn]], previewToggles, variants, note }
+  const part = state.part[key] || cfg.parts[0][0];
+  const vkey = cfg.variants ? (state.variant[key] ?? 0) : 0;
+  host.innerHTML = `<div class="ed">
+    <div class="stage">
+      <div class="art">${cfg.art()}</div>
+      <div class="stagefoot">
+        ${cfg.variants ? `<span class="hint">Applies to</span><div class="seg vrow">${cfg.variants.map((v, i) => `<button aria-pressed="${i === vkey}" data-i="${i}">${v}</button>`).join("")}</div>
+          <span class="hint">${vkey === 0 ? "Editing all of them" : `Editing ${cfg.variants[vkey]} only; the rest follow ${cfg.variants[0]}`}</span>` : ""}
+        ${cfg.previewToggles ? statePicker() : ""}
+        ${cfg.note ? `<span class="hint">${cfg.note}</span>` : ""}
+      </div>
+    </div>
+    <div>
+      <div class="parts" role="tablist">${cfg.parts.map(p => `<button role="tab" aria-selected="${p[0] === part}" data-part="${p[0]}" class="${state.changed[key + "/" + p[0]] ? "changed" : ""}">${cfg.follow ? `<span class="pip ${partSet(key, vkey, p, cfg) ? "" : "off"}" title="${partSet(key, vkey, p, cfg) ? "This row changes something here" : "This row changes nothing here"}"></span>` : ""}${p[1]}</button>`).join("")}</div>
+      <div class="settings"></div>
+      <div class="foot"><span>${state.changed[key] ? `<b>${state.changed[key]}</b> change${state.changed[key] > 1 ? "s" : ""} here <button class="txtbtn undobtn">Undo</button>${state.redo[key] ? `<button class="txtbtn redobtn">Redo</button>` : ""}`
+        : state.redo[key] ? `Nothing changed here <button class="txtbtn redobtn">Redo</button>` : "Nothing changed here"}</span></div>
+    </div></div>`;
+  const redraw = () => editor(host, key, cfg);
+  host.querySelectorAll(".art .hot").forEach(h => {
+    h.classList.toggle("picked", h.dataset.part === part);
+    h.addEventListener("click", e => { e.stopPropagation(); state.part[key] = h.dataset.part; redraw(); });
+  });
+  host.querySelectorAll(".parts button").forEach(b => b.onclick = () => { state.part[key] = b.dataset.part; redraw(); });
+  host.querySelectorAll(".vrow button").forEach(b => b.onclick = () => { state.variant[key] = +b.dataset.i; redraw(); });
+  host.querySelectorAll(".prev button").forEach(b => b.onclick = () => { state.previewAs = b.dataset.v; redraw(); });
+  wireStatePicker(host, redraw);
+  applyTheme();
+  // (Undo / Redo: one step each, shown only when there's a step to take; the mock counts steps, it doesn't restore values)
+  const ub = host.querySelector(".undobtn"); if (ub) ub.onclick = () => { state.changed[key]--; state.redo[key] = (state.redo[key] || 0) + 1; redraw(); };
+  const rb = host.querySelector(".redobtn"); if (rb) rb.onclick = () => { state.redo[key]--; state.changed[key] = (state.changed[key] || 0) + 1; redraw(); };
+  const rkey = `${key}/${vkey}/${part}`;
+  if (!state.rows[rkey]) state.rows[rkey] = cfg.parts.find(p => p[0] === part)[2]();
+  const setBox = host.querySelector(".settings");
+  // (a Smart row's Bar and Name: every setting follows Default till changed; Mark is the row's own)
+  rows(setBox, state.rows[rkey], () => { state.changed[key] = (state.changed[key] || 0) + 1; state.changed[key + "/" + part] = 1; redraw(); },
+    cfg.follow && part !== "mark" ? key : null);
+}
+// Following Default (Smart rows): a setting's own key in a scope; "inherit"/unset = Default's.
+const rowKey = r => r.pick ? (r.who ? `${r.pick}:${r.who}` : r.pick) : "r:" + r.l;
+const scopedKey = (scope, r) => scope + "|" + (r.chips && r.id ? "list:" + r.id : rowKey(r));
+const ownOf = (scope, r) => { const v = state.val[scopedKey(scope, r)]; return v !== undefined && v !== "inherit"; };
+// Whether a row sets anything in a part (its tab's dot): Mark when it shows one, else any setting of its own.
+function partSet(key, vkey, p, cfg) {
+  if (p[0] === "mark") return markOf(key, vkey) !== "None";
+  const groups = state.rows[`${key}/${vkey}/${p[0]}`];
+  return !!groups && groups.some(g => g.rows.some(r => ownOf(key, r)));
+}
+// A row's mark (its picker's value, else its first choice).
+function markOf(key, vkey) {
+  const g = state.rows[`${key}/${vkey}/mark`], r = g && g[0].rows[0];
+  return !r ? "Arrow" : (r.id && state.val["list:" + r.id]) || r.chips[r.pick];
+}
+function rows(box, groups, bump, scope) {
+  groups.forEach(g => {
+    const sec = document.createElement("div"); sec.className = "group"; // (a group's description: a tooltip on its header, never a line of text on the page)
+    sec.innerHTML = `<h3 ${g.hint ? `class="tip" title="${g.hint}"` : ""}>${g.h}</h3>`;
+    if (g.cols) sec.classList.add("grid2");
+    g.rows.forEach((r, ri) => {
+      if (r.showIf && !r.showIf()) return; // (a row that only means something with another on: hidden till then)
+      const row = document.createElement("div"); row.className = "row";
+      const own = scope && ownOf(scope, r);
+      // (following Default: a row's own value marked by a gold dot by its name; picking Default's again follows again)
+      const lab = () => { const l = row.querySelector(".l"); if (l && own) { l.classList.add("own"); l.title = "Set on this row. Pick Default's to follow Default again."; } };
+      if (scope && r.chips) {
+        // (in a row, a choice row has Default's as its first choice: a picker)
+        if (!r.id) { r.id = "c" + (++chipSeq); CHIPLISTS[r.id] = r; }
+        if (state.val["list:" + r.id] === undefined) state.val["list:" + r.id] = r.chips[r.pick];
+        row.innerHTML = `<span class="l">${r.l}</span><div class="tpick"></div>`;
+        drawPick(row.querySelector(".tpick"), "list", bump, r.id, scope);
+      } else if (scope && r.slide) {
+        const [mn, mx, v, u, st] = r.slide, sk = scopedKey(scope, r), cur = own ? state.val[sk] : v;
+        row.innerHTML = `<span class="l">${r.l}</span><div class="slide"><input type="range" min="${mn}" max="${mx}" step="${st || 5}" value="${cur}" aria-label="${r.l}"><output>${own ? cur + u : "Default's"}</output>${own ? `<button class="link back" title="Follow Default again">Default's</button>` : ""}</div>`;
+        const inp = row.querySelector("input"), out = row.querySelector("output");
+        inp.oninput = () => { state.val[sk] = +inp.value; out.textContent = inp.value + u; };
+        inp.onchange = bump;
+        const back = row.querySelector(".back"); if (back) back.onclick = () => { delete state.val[sk]; bump(); };
+      } else if (scope && r.pick) {
+        row.innerHTML = `<span class="l">${r.l}</span><div class="tpick"></div>`;
+        if (r.pick === "namecolor") drawColorPick(row.querySelector(".tpick"), r.pick, bump, r.who, scope);
+        else if (r.pick === "rowcolor") drawColorPick(row.querySelector(".tpick"), r.pick, bump, r.who);
+        else drawPick(row.querySelector(".tpick"), r.pick, bump, r.who, scope);
+      } else if (r.chips && r.chips.length <= 3) {
+        // (3 choices or fewer: one segmented switch, one line)
+        row.innerHTML = `<span class="l">${r.l}</span><div><div class="seg">${r.chips.map((c, i) => `<button aria-pressed="${i === r.pick}" data-i="${i}">${c}</button>`).join("")}</div></div>`;
+        row.querySelectorAll(".seg button").forEach(b => b.onclick = () => { r.pick = +b.dataset.i; if (r.set) r.set(r.pick); bump(); });
+      } else if (r.chips) {
+        // (more: the same picker as Theme, Texture and Font)
+        if (!r.id) { r.id = "c" + (++chipSeq); CHIPLISTS[r.id] = r; }
+        if (state.val["list:" + r.id] === undefined) state.val["list:" + r.id] = r.chips[r.pick];
+        row.innerHTML = `<span class="l">${r.l}</span><div class="tpick"></div>`;
+        drawPick(row.querySelector(".tpick"), "list", bump, r.id);
+      } else if (r.slide) {
+        const [mn, mx, v, u, st] = r.slide;
+        row.innerHTML = `<span class="l">${r.l}</span><div class="slide"><input type="range" min="${mn}" max="${mx}" step="${st || 5}" value="${v}" aria-label="${r.l}"><output>${v}${u}</output></div>`;
+        const inp = row.querySelector("input"), out = row.querySelector("output");
+        inp.oninput = () => { r.slide[2] = +inp.value; out.textContent = inp.value + u; if (r.set) { r.set(+inp.value); applyTheme(); } };
+        inp.onchange = bump;
+      } else if (r.pick) {
+        row.innerHTML = `<span class="l">${r.l}</span><div class="tpick ${r.compact ? "compact" : ""}"></div>`;
+        if (r.pick === "color" || r.pick === "rowcolor" || r.pick === "namecolor" || r.pick === "spellcolor") drawColorPick(row.querySelector(".tpick"), r.pick, bump, r.who);
+        else drawPick(row.querySelector(".tpick"), r.pick, bump, r.who);
+      } else if (r.sw) {
+        // (a thing shown or not: the small switch)
+        const x = state.val.castx = state.val.castx || {}, on = x[r.sw] ?? !r.off;
+        row.innerHTML = `<span class="l" title="${r.tip || ""}">${r.l}</span><div><button class="switch" aria-pressed="${on}"><i></i>${on ? "Shown" : "Hidden"}</button></div>`;
+        row.querySelector(".switch").onclick = () => { x[r.sw] = !on; bump(); };
+      } else if (r.note) {
+        row.innerHTML = `<span class="l">${r.l}</span><span class="note">${r.note} <button class="link">Pick my own</button></span>`;
+        row.querySelector("button").onclick = () => { g.rows[ri] = { l: r.l, chips: ["Reaction", "Class", "Health", "My own"], pick: 0 }; bump(); };
+      }
+      lab();
+      if (r.greyIf && r.greyIf()) { row.classList.add("grey"); row.title = "Pick a mark to size it."; }
+      sec.appendChild(row);
+    });
+    box.appendChild(sec);
+  });
+}
+// A tab's head: its title and On switch, nothing under it (no description, no "Shown in CineMode" line).
+function head(title, _shown, switchKey) {
+  const on = state.tabsOn[switchKey] !== false;
+  return `<div class="pagehead" style="margin-bottom:12px"><h2>${title}</h2><button class="switch" data-sw="${switchKey}" aria-pressed="${on}"><i></i>${on ? "On" : "Off"}</button></div>`;
+}
+
+/* ---------- what the preview shows (Plates/PlateRowLook.lua STATE_PILLS, EXCLUSIVE, NEEDS_CAST) ---------- */
+const STATES = [
+  ["target", "Target", "Selected"], ["focus", "Focus", "Selected"],
+  ["casting", "Casting", "Cast"], ["locked", "Can't interrupt", "Cast"], ["channel", "Channeling", "Cast"], ["interrupted", "Interrupted", "Cast"],
+  ["important", "Important cast", "Cast"], ["atyou", "Casting at you", "Cast"],
+  ["elite", "Elite", "Rank"], ["rare", "Rare", "Rank"], ["rareelite", "Rare elite", "Rank"], ["boss", "Boss", "Rank"],
+  ["aggro", "Aggro", "Threat"], ["gaining", "Pulling threat", "Threat"],
+  ["marker", "Marker", "More"], ["tapped", "Tapped", "More"], ["debuffs", "Debuffs", "More"], ["buffs", "Buffs", "More"],
+  ["crowd", "Crowd control", "More"], ["quest", "Quest giver", "More"],
+];
+const EXCLUSIVE = [["target", "focus"], ["locked", "channel", "interrupted"], ["elite", "rare", "rareelite", "boss"], ["aggro", "gaining"]];
+const CAST_KEYS = ["locked", "channel", "interrupted", "important", "atyou"];
+const ONE_AT_A_TIME = new Set(EXCLUSIVE.flat());
+state.states = { casting: true };
+function pickState(key) {
+  const s = state.states, on = !s[key];
+  if (on) s[key] = true; else delete s[key];
+  if (on) {
+    const set = EXCLUSIVE.find(e => e.includes(key));
+    if (set) set.forEach(k => { if (k !== key) delete s[k]; });
+    if (CAST_KEYS.includes(key)) s.casting = true;
+  } else if (key === "casting") CAST_KEYS.forEach(k => delete s[k]);
+}
+// One dropdown: the unit first (one at a time), then everything the plate can show.
+function statePicker() {
+  const s = state.states, on = STATES.filter(x => s[x[0]]);
+  const groups = ["Selected", "Cast", "Rank", "Threat", "More"];
+  const summary = [state.previewAs, ...on.map(x => x[1])].join(", ");
+  return `<div class="spick"><button class="cur pv" aria-expanded="${!!state.statesOpen}"><span class="ct"><span style="font-size:12px">Preview</span><span style="color:var(--text);font-size:13.5px">${summary}</span></span><span>▾</span></button>
+    ${state.statesOpen ? `<div class="spop"><div class="list">
+      <div class="grp">Unit <small>· one at a time</small></div>
+      ${UNITS.map(v => `<button class="sopt one" data-u="${v}" aria-pressed="${state.previewAs === v}"><span class="bx">${state.previewAs === v ? "●" : ""}</span>${v}</button>`).join("")}
+      ${groups.map(g => `<div class="grp">${g}${["Selected", "Rank", "Threat"].includes(g) ? " <small>· one at a time</small>" : ""}</div>` +
+      STATES.filter(x => x[2] === g).map(x => `<button class="sopt ${ONE_AT_A_TIME.has(x[0]) ? "one" : ""}" data-k="${x[0]}" aria-pressed="${!!s[x[0]]}"><span class="bx">${s[x[0]] ? "✓" : ""}</span>${x[1]}</button>`).join("")).join("")}
+    </div><div class="count"><span>${on.length} shown on the plate</span><button class="clear">Clear all</button></div></div>` : ""}</div>`;
+}
+function wireStatePicker(host, redraw) {
+  const add = host.querySelector(".cur.pv"); if (add) add.onclick = () => { state.statesOpen = !state.statesOpen; redraw(); };
+  host.querySelectorAll(".sopt").forEach(o => o.onclick = () => {
+    const list = host.querySelector(".spop .list"), top = list.scrollTop;
+    if (o.dataset.u) state.previewAs = o.dataset.u; else pickState(o.dataset.k);
+    redraw();
+    const again = host.querySelector(".spop .list"); if (again) again.scrollTop = top;
+  });
+  const clear = host.querySelector(".spop .clear"); if (clear) clear.onclick = () => { state.states = {}; redraw(); };
+}
+document.addEventListener("mousedown", e => { if (state.statesOpen && !e.target.closest(".spick")) { state.statesOpen = false; draw(); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && state.statesOpen) { state.statesOpen = false; draw(); } });
+
+/* ---------- theme picker ---------- */
+// Real themes (Style/StyleThemes.lua, Plates/PlateThemes.lua): key, name, accent, edge, panel, fill, shape, what it is.
+const TH = [
+  ["reel", "Silver Screen", [.9,.9,.93], [.52,.53,.58], [.045,.045,.055], "stripe", "", "Black and silver, like an old movie."],
+  ["codex", "Gilded Codex", [.95,.76,.36], [.58,.44,.22], [.15,.1,.07], "gilt", "", "Dark vellum, gold leaf and filigree."],
+  ["forge", "Emberforge", [1,.55,.16], [.56,.36,.22], [.135,.115,.1], "forged", "", "Blackened iron, rivets and molten light."],
+  ["glade", "Moonlit Glade", [.34,.7,.62], [.1,.31,.29], [.055,.12,.13], "lunar", "", "Deep teal, silver and vines."],
+  ["rime", "Frostbound", [.66,.86,1], [.36,.48,.6], [.075,.11,.155], "rime", "", "Cut ice over cold slate."],
+  ["vanguard", "Crimson Vanguard", [.95,.27,.27], [.5,.2,.22], [.075,.055,.065], "flat", "cut", "Blades and cut bars in crimson and ivory."],
+  ["hearth", "Hearthside", [.97,.76,.44], [.6,.38,.2], [.17,.115,.085], "soft", "capsule", "Soft round panels and capsule bars."],
+  ["open", "Adventurer", [1,.82,.2], [.5,.4,.2], [.07,.06,.05], "soft", "", "Gold rings, slim bars, nothing around them."],
+  ["cathedral", "Cathedral", [.95,.76,.34], [.32,.34,.58], [.06,.06,.14], "glass", "pointed", "Stained glass and pointed bars."],
+  ["rune", "Runestone", [.5,.9,.76], [.42,.44,.4], [.125,.13,.12], "forged", "hex", "Cut stone, chiseled bars, a faint glow."],
+  ["fel", "Fel Pact", [.56,.92,.3], [.2,.32,.16], [.03,.04,.028], "forged", "", "Near black, lit by fel green."],
+  ["void", "Void Whisper", [.72,.54,1], [.26,.18,.42], [.02,.015,.035], "lunar", "", "Black, with violet moving in it."],
+  ["slate", "Slate", [.78,.84,.92], [.3,.33,.38], [.085,.09,.1], "satin", "", "One flat bar, clean type."],
+  ["obsidian", "Obsidian", [.3,.88,.97], [.14,.32,.38], [.02,.025,.03], "satin", "", "Black on black, one line of cold light."],
+  ["carbon", "Carbon", [1,.72,.26], [.34,.31,.26], [.075,.075,.08], "stripe", "", "Amber gauges on charcoal."],
+  ["neon", "Neon Coast", [1,.38,.68], [.44,.16,.52], [.07,.03,.1], "sunset", "", "Blue, magenta and gold dusk sky."],
+];
+const TPLAIN = [
+  ["clean", "Clean", [1,1,1], [0,0,0], [0,0,0], "flat", "", "A flat bar with a thin black border."],
+  ["minimal", "Minimal", [1,1,1], null, [0,0,0], "flat", "", "A flat bar with no border."],
+  ["game", "The game's", [1,.82,0], [0,0,0], [.08,.08,.08], "game", "", "The game's own bars, unchanged."],
+];
+const TALL = [...TH, ...TPLAIN], MAIN = "codex"; // (main theme on Style › General: an example)
+const rgbA = (c, a = 1) => `rgba(${c.map(x => Math.round(x * 255)).join(",")},${a})`;
+const FILL = {
+  flat: "#c0201c", stripe: "repeating-linear-gradient(0deg,#c22 0 2px,#a51a17 2px 3px)",
+  gilt: "linear-gradient(#e8573c,#b01c14 55%,#7d120c)", forged: "radial-gradient(circle at 30% 40%,#d93a2a,#8a150f 70%)",
+  lunar: "linear-gradient(90deg,#8a140f,#d8382b 70%,#ff7a62)", rime: "linear-gradient(135deg,#d8402f 0 40%,#b52018 40% 70%,#e05040 70%)",
+  soft: "linear-gradient(#f06a55,#c0201c 50%,#9a1612)", glass: "linear-gradient(#ff8c78 0,#d02a20 45%,#8a0f0a 55%,#c0201c)",
+  satin: "linear-gradient(#d8352a,#a51a14)", sunset: "linear-gradient(90deg,#3a3cff,#e03a9a 55%,#ffb347)", game: "linear-gradient(#e02a1e,#9a1410)",
+};
+const CLIP = { pointed: "polygon(6px 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 6px 100%, 0 50%)",
+  hex: "polygon(6px 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 6px 100%, 0 50%)", cut: "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)" };
+const tileBg = th => `linear-gradient(${rgbA(th[4].map(x => Math.min(1, x * 1.6 + .03)))}, ${rgbA(th[4])})`;
+const mini = th => `<div class="mp ${th[6] ? "sh-" + th[6] : ""}" style="--fill:${FILL[th[5]]};--edgec:${th[3] ? rgbA(th[3]) : "transparent"};--pan:${rgbA(th[4], .75)};--bw:${th[3] ? "1.5px" : "0"}"><div class="bar"><i></i></div></div>`;
+/* ---------- bar textures and fonts (Style/StylePages.lua TEXTURES, Style/StyleFonts.lua) ---------- */
+// Cinematic's own bar textures (Textures/Bars, as PNG) and fonts (Fonts/, OFL). The game's own files
+// are drawn with stand-ins: they're the game's art, not ours to copy into a page.
+const OWN_TEX = [
+  ["Cinematic's", [["glass", "Glass"], ["soft", "Soft"], ["striped", "Striped"], ["minimal", "Minimal"], ["rounded", "Rounded"]]],
+  ["The themes' art", [["gilt", "Gilt"], ["forged", "Forged"], ["lunar", "Lunar"], ["rime", "Rime"], ["reel", "Reel"], ["tile", "Tile"]]],
+  ["Quiet", [["brushed", "Brushed"], ["worn", "Worn"], ["linen", "Linen"], ["satin", "Satin"], ["hammered", "Hammered"]]],
+  ["Full color", [["sunset", "Sunset"], ["sunsettall", "Sunset (tall)"]]],
+];
+const TEXFILE = { glass: "Glass", soft: "Soft", striped: "Striped", minimal: "Minimal", rounded: "Rounded", gilt: "Gilt", forged: "Forged",
+  lunar: "Lunar", rime: "Rime", reel: "Reel", tile: "Tile", brushed: "Brushed", worn: "Worn", linen: "Linen", satin: "Satin",
+  hammered: "Hammered", sunset: "Sunset", sunsettall: "SunsetTall" };
+const GAME_TEX = [["flat", "Flat", "#c0201c"], ["smooth", "Smooth", "linear-gradient(#e0392c,#b51d16 45%,#8c140f 55%,#b51d16)"],
+  ["raid", "Raid frame", "linear-gradient(#d23226,#9a1712)"], ["raidpower", "Raid frame power", "linear-gradient(#c22a20,#8a120d)"],
+  ["oldtarget", "Old target frame", "linear-gradient(#e64a3a,#a51a12 60%)"], ["skills", "Skill bar", "linear-gradient(#d33,#911 50%,#c22)"]];
+const THEME_TEX = { codex: "gilt", reel: "reel", forge: "forged", glade: "lunar", rime: "rime", vanguard: "minimal", hearth: "soft", open: "soft",
+  cathedral: "glass", rune: "forged", fel: "forged", void: "lunar", slate: "satin", obsidian: "satin", carbon: "brushed", neon: "sunset" };
+const texName = k => (OWN_TEX.flatMap(g => g[1]).find(t => t[0] === k) || GAME_TEX.find(t => t[0] === k) || [k, k])[1];
+// A bar fill: our texture tinted the bar's color (as the game tints a white texture), or a stand-in.
+function texFill(k, color = "#c0201c") {
+  if (TEXFILE[k]) return k.startsWith("sunset") && k === "sunset" ? `url(assets/bars/${TEXFILE[k]}.png) 0 0/100% 100%`
+    : `url(assets/bars/${TEXFILE[k]}.png) 0 0/100% 100%, ${color}`;
+  const g = GAME_TEX.find(t => t[0] === k); return g ? g[2] : FILL.game;
+}
+const texSw = k => `<div class="mp"><div class="bar" style="height:12px;--edgec:#000"><i style="background:${texFill(k)};background-blend-mode:multiply;inset:0 22% 0 0"></i></div></div>`;
+const FONTS_OWN = [["marcellus", "Marcellus"], ["almendra", "Almendra"], ["philosopher", "Philosopher"], ["cinzel", "Cinzel Decorative"],
+  ["germania", "Germania One"], ["barlow", "Barlow Condensed"], ["bebas", "Bebas Neue"], ["rajdhani", "Rajdhani"], ["outfit", "Outfit"],
+  ["outfitbold", "Outfit Bold"], ["lilita", "Lilita One"], ["titan", "Titan One"], ["archivoblack", "Archivo Black"], ["damion", "Damion"]];
+const FONTS_GAME = [["friz", "Friz Quadrata", "Georgia, serif"], ["arial", "Arial Narrow", "'Arial Narrow', Arial, sans-serif"],
+  ["morpheus", "Morpheus", "'Times New Roman', serif"], ["skurri", "Skurri", "Impact, sans-serif"]];
+const THEME_FONT = { codex: "marcellus", reel: "barlow", forge: "germania", glade: "philosopher", rime: "rajdhani", vanguard: "rajdhani",
+  hearth: "philosopher", open: "friz", cathedral: "marcellus", rune: "marcellus", fel: "philosopher", void: "marcellus", slate: "barlow",
+  obsidian: "rajdhani", carbon: "rajdhani", neon: "outfit", clean: "friz", minimal: "friz", game: "friz" };
+const fontCss = k => FONTS_OWN.some(f => f[0] === k) ? `cf-${k}, Georgia, serif` : (FONTS_GAME.find(f => f[0] === k) || [0, 0, "Georgia, serif"])[2];
+const fontName = k => (FONTS_OWN.find(f => f[0] === k) || FONTS_GAME.find(f => f[0] === k) || [k, k])[1];
+
+state.val = { theme: "main", texture: "theme", font: "theme" };
+state.hover = {};
+const mainTheme = () => state.val.theme === "main" ? MAIN : state.val.theme;
+const themeKey = () => state.hover.theme || mainTheme();
+// "Theme's": what the plate's theme (or the main theme) gives.
+const texNow = () => { const k = state.hover.texture || state.val.texture; return k === "theme" ? THEME_TEX[themeKey()] || "game" : k; };
+const fontNow = () => { const k = state.hover.font || state.val.font; return k === "theme" ? THEME_FONT[themeKey()] || "friz" : k; };
+
+// Each picker: its list, grouped. { k, g (group), name, sub, sw (swatch html), bg, nameCss }
+const PICKERS = {
+  theme: { find: "Find a theme", items: () => {
+    const m = TALL.find(t => t[0] === MAIN);
+    const it = t => ({ k: t[0], g: TH.includes(t) ? "Themes" : "Plain", name: t[1], sub: t[7], sw: mini(t), bg: tileBg(t), color: rgbA(t[2]) });
+    return [{ k: "main", g: "", name: "Follow main theme", short: `Main theme (${m[1]})`, sub: `Now ${m[1]}, from Style › General`, sw: mini(m), bg: tileBg(m), color: rgbA(m[2]) }, ...TALL.map(it)];
+  } },
+  texture: { find: "Find a texture", items: () => [
+    { k: "theme", g: "", name: "Theme's", short: `Theme's (${texName(THEME_TEX[themeKey()] || "smooth")})`, sub: `Now ${texName(THEME_TEX[themeKey()] || "smooth")}, from ${TALL.find(t => t[0] === themeKey())[1]}`, sw: texSw(THEME_TEX[themeKey()] || "smooth") },
+    { k: "game", g: "", name: "The game's", sub: "The bar's own, left alone.", sw: texSw("smooth") },
+    ...OWN_TEX.flatMap(([g, list]) => list.map(([k, n]) => ({ k, g, name: n, sub: "", sw: texSw(k) }))),
+    ...GAME_TEX.map(([k, n]) => ({ k, g: "The game's files", sub: "", name: n, sw: texSw(k) })),
+  ] },
+  font: { find: "Find a font", items: () => [
+    { k: "theme", g: "", name: "Theme's", short: `Theme's (${fontName(THEME_FONT[themeKey()])})`, sub: `Now ${fontName(THEME_FONT[themeKey()])}, from ${TALL.find(t => t[0] === themeKey())[1]}`, nameCss: fontCss(THEME_FONT[themeKey()]) },
+    { k: "game", g: "", name: "The game's", sub: "The text's own font, left alone.", nameCss: fontCss("friz") },
+    ...FONTS_GAME.map(([k, n]) => ({ k, g: "The game's fonts", name: n, sub: "Gnoll Brute  24", nameCss: fontCss(k) })),
+    ...FONTS_OWN.map(([k, n]) => ({ k, g: "Cinematic's fonts", name: n, sub: "Gnoll Brute  24", nameCss: fontCss(k) })),
+  ] },
+};
+
+/* ---------- plate colors: one line per kind of unit (Default), a short override (Smart rows) ---------- */
+const WHO = [["enemyPlayers", "Enemy players", true], ["friendlyPlayers", "Friendly players", true], ["hostileNpcs", "Hostile NPCs"],
+  ["neutralNpcs", "Neutral NPCs"], ["friendlyNpcs", "Friendly NPCs"], ["tapped", "Not your kill"]];
+const UNITS = ["Hostile NPC", "Neutral NPC", "Friendly NPC", "Enemy player", "Friendly player"];
+const UNIT_WHO = { "Hostile NPC": "hostileNpcs", "Neutral NPC": "neutralNpcs", "Friendly NPC": "friendlyNpcs", "Enemy player": "enemyPlayers", "Friendly player": "friendlyPlayers" };
+const WHO_UNIT = Object.fromEntries(Object.entries(UNIT_WHO).map(([u, w]) => [w, u]));
+const UNIT_NAME = { "Hostile NPC": "Gnoll Brute", "Neutral NPC": "Plainstrider", "Friendly NPC": "Innkeeper Farley", "Enemy player": "Thrallson", "Friendly player": "Elandra" };
+const UNIT_CLASS = { "Enemy player": ["Mage", "#3fc7eb"], "Friendly player": ["Paladin", "#f48cba"] };
+const GAME_COLOR = { enemyPlayers: ["Red", "#cc2a1f"], friendlyPlayers: ["Blue", "#2f6fd6"], hostileNpcs: ["Red", "#cc2a1f"],
+  neutralNpcs: ["Yellow", "#e6c619"], friendlyNpcs: ["Green", "#2fb52f"], tapped: ["Grey", "#8a8a8a"] };
+const NAMED = [["red", "Red", "#d8352a"], ["orange", "Orange", "#f08a24"], ["yellow", "Yellow", "#e8cf3a"], ["green", "Green", "#3fbf4a"],
+  ["teal", "Teal", "#2fc2b0"], ["blue", "Blue", "#3b7fe6"], ["purple", "Purple", "#9a6ae6"], ["pink", "Pink", "#ef6fb0"], ["white", "White", "#eeeeee"], ["grey", "Grey", "#8a8a8a"]];
+const colorSw = c => `<div class="mp"><div class="bar" style="height:12px;--edgec:#000"><i style="background:${c};inset:0 22% 0 0"></i></div></div>`;
+const CLASS_SW = `<div class="mp"><div class="bar" style="height:12px;--edgec:#000"><i style="inset:0;background:linear-gradient(90deg,#c69b6d 0 14%,#f48cba 14% 28%,#aad372 28% 42%,#fff468 42% 56%,#3fc7eb 56% 70%,#8788ee 70% 84%,#ff7c0a 84%)"></i></div></div>`;
+for (const [w] of WHO) state.val["color:" + w] = w === "enemyPlayers" || w === "friendlyPlayers" ? "class" : "game";
+state.val.rowcolor = "keep";
+PICKERS.color = { find: "Find a color", items: who => {
+  const g = GAME_COLOR[who], acc = rgbA(TALL.find(t => t[0] === themeKey())[2]);
+  return [
+    { k: "game", g: "", name: "The game's", sub: g[0], sw: colorSw(g[1]) },
+    ...(WHO.find(x => x[0] === who)[2] ? [{ k: "class", g: "", name: "Class", sub: "Each player's class color", sw: CLASS_SW }] : []),
+    { k: "theme", g: "", name: "Theme's accent", sub: `${TALL.find(t => t[0] === themeKey())[1]}'s`, sw: colorSw(acc) },
+    ...NAMED.map(([k, n, c]) => ({ k, g: "Colors", name: n, sub: "", sw: colorSw(c) })),
+    { k: "custom", g: "Colors", name: "My own", sub: "Pick any color", sw: colorSw("linear-gradient(90deg,#f33,#fd3,#3f6,#3cf,#a6f)") },
+  ];
+} };
+// Fade: the bar's color across its length. None = one color; else it fades, left to right, into the pick.
+// (Replaces the Gradient on/off + Fades to pair: the keys stay, None = gradient off.)
+state.val.fade = "none";
+PICKERS.fade = { find: "Find a color", items: () => [
+  { k: "none", g: "", name: "None", sub: "One color all along the bar", sw: colorSw("#c0201c") },
+  { k: "darker", g: "", name: "Darker", sub: "Fades to a darker shade of its color", sw: colorSw("linear-gradient(90deg,#c0201c,#3a0806)") },
+  { k: "lighter", g: "", name: "Lighter", sub: "Fades to a lighter shade of its color", sw: colorSw("linear-gradient(90deg,#c0201c,#f6a49c)") },
+  { k: "black", g: "", name: "Black", sub: "Fades to black", sw: colorSw("linear-gradient(90deg,#c0201c,#000)") },
+  ...NAMED.map(([k, n, c]) => ({ k, g: "Fades into a color", name: n, sub: "", sw: colorSw(`linear-gradient(90deg,#c0201c,${c})`) })),
+  { k: "custom", g: "Fades into a color", name: "My own", sub: "Pick any color", sw: colorSw("linear-gradient(90deg,#f33,#fd3,#3f6,#3cf,#a6f)") },
+] };
+// The fill: the bar's color on the left, fading by that kind of unit's Fade on the right.
+function gradientOf(base, fw, noHover) {
+  const k = state.val["fade:" + fw] || "none";
+  if (k === "none") return base;
+  const tk = "fadeto:" + fw, t = (!noHover && state.hover[tk]) || state.val[tk] || "pal:Blackrock";
+  const to = k === "darker" ? `color-mix(in srgb, ${base} 30%, #000)` : k === "lighter" ? `color-mix(in srgb, ${base} 40%, #fff)`
+    : t === "custom" ? (state.val[tk + "#"] || "#8fd3ff") : PALHEX[t.slice(4)] || "#000";
+  return `linear-gradient(90deg, ${base}, ${to})`;
+}
+PICKERS.list = { find: "Find", items: id => {
+  const r = CHIPLISTS[id], isBorder = /Border|Edge/.test(r.l);
+  return r.chips.map(c => ({ k: c, g: "", name: c, sub: "", sw: isBorder && BORDER_SW[c] ? BORDER_SW[c]() : "" }));
+} };
+PICKERS.rowcolor = { find: "Find", items: () => [
+  { k: "keep", g: "", name: "Don't change", sub: "The plate keeps the color it has", sw: colorSw("repeating-linear-gradient(45deg,#3a3631 0 4px,#24211d 4px 8px)") },
+  { k: "default", g: "", name: "Default's colors", sub: "By kind of unit, from Default › Plate › Colors", sw: CLASS_SW },
+  { k: "mark", g: "", name: "Mark's color", sub: "The same color as this row's mark", sw: colorSw("#ff5b4a") },
+  { k: "gold", g: "One color", name: "Gold", sub: "", sw: colorSw("#e8b84a") },
+  ...NAMED.filter(n => n[0] !== "yellow").map(([k, n, c]) => ({ k, g: "One color", name: n, sub: "", sw: colorSw(c) })),
+  { k: "custom", g: "One color", name: "My own", sub: "Pick any color", sw: colorSw("linear-gradient(90deg,#f33,#fd3,#3f6,#3cf,#a6f)") },
+] };
+/* ---------- the named palette (Style/ColorPalette.lua: families of five shades, the quick row, Recent) ---------- */
+const PAL = [
+  ["Blood", [["Rosethorn", "F4A3A3"], ["Phoenix", "FF4D3B"], ["Bloodfang", "C62828"], ["Horde Crimson", "8E1B1B"], ["Bloodmoon", "5A1010"]]],
+  ["Fire", [["Sunfruit", "FFC48A"], ["Firebloom", "FF9E1A"], ["Ragefire", "E86A10"], ["Molten Core", "A8480C"], ["Searing Gorge", "6B2E08"]]],
+  ["Light", [["Holy Light", "FFF1B8"], ["Sunwell", "FFE04D"], ["Alliance Gold", "E0A800"], ["Goblin Gold", "A87A10"], ["Bronzebeard", "6B4E0A"]]],
+  ["Nature", [["Nagrand", "C8EE9A"], ["Elwynn", "5EE05E"], ["Ashenvale", "4E9A2A"], ["Feralas", "2E6B1C"], ["Duskwood", "1B4012"]]],
+  ["Fel", [["Felspark", "D4FF7A"], ["Felfire", "9EF01A"], ["Fel", "5FC80A"], ["Legion", "3A8A06"], ["Shadowmoon", "1F4A04"]]],
+  ["Tide", [["Sea Spray", "9EF0D8"], ["Zangarmarsh", "3ECFA0"], ["Murloc", "1A9E86"], ["Vashj'ir", "0E6B66"], ["Abyssal Maw", "08403F"]]],
+  ["Frost", [["Winterspring", "C8EEFF"], ["Frostbolt", "40C7EB"], ["Northrend", "2A8AE0"], ["Stormwind", "1A5AA8"], ["Kul Tiras", "0E3566"]]],
+  ["Arcane", [["Mana Pearl", "D5C8FF"], ["Dalaran", "8F7DFF"], ["Arcane", "6E48D8"], ["Karazhan", "4A2C9A"], ["Twisting Nether", "2A1858"]]],
+  ["Bloom", [["Peacebloom", "FFC8E8"], ["Kingsblood", "FF70D9"], ["Netherbloom", "D63A9A"], ["Bloodvine", "93216A"], ["Nightmare Vine", "5A1240"]]],
+  ["Earth", [["Westfall", "EAD9B0"], ["Tanaris", "C8A86A"], ["Kodo Hide", "8E6A3A"], ["Durotar", "5E4224"], ["Deepholm", "3A2814"]]],
+  ["Stone", [["Elune", "FFFFFF"], ["Mithril", "BDBDB8"], ["Ironforge", "808080"], ["Thorium", "4A4A4E"], ["Blackrock", "1E1E22"]]],
+];
+const QUICK = ["Phoenix", "Firebloom", "Sunwell", "Elwynn", "Felfire", "Zangarmarsh", "Frostbolt", "Dalaran", "Kingsblood", "Elune"];
+const PALHEX = Object.fromEntries(PAL.flatMap(f => f[1]).map(([n, h]) => [n, "#" + h]));
+state.recent = [];
+state.val.namecolor = "same";
+// (cast colors: the game's own, per kind of cast; the spell's name: the game's white)
+Object.assign(GAME_COLOR, { castCasting: ["Gold", "#e8b21c"], castChannel: ["Green", "#3fbf4a"], castLocked: ["Grey", "#9a9a9a"], castInterrupted: ["Red", "#d8352a"] });
+for (const w of ["castCasting", "castChannel", "castLocked", "castInterrupted"]) state.val["color:" + w] = "game";
+state.val.spellcolor = "game";
+const FADES = [["none", "None"], ["darker", "Darker"], ["lighter", "Lighter"], ["into", "Into a color"]];
+
+// A colors line: its top choices (not palette ones), then the palette.
+function topChoices(kind, who) {
+  if (kind === "spellcolor") return [["same", "Same as the bar", "The spell's name in its cast's color"], ["game", "The game's", "White, as the game draws it"]];
+  if (kind === "namecolor") return [["same", "Same as the bar", "Each name in its unit's color from Colors"], ["game", "The game's", "White or yellow, as the game draws it"]];
+  if (kind === "rowcolor") return [["keep", "Don't change", "The plate keeps the color it has"], ["default", "Default's colors", "By kind of unit, from Default › Colors"],
+    ["mark", "Mark's color", "The same color as this row's mark"]];
+  return [["game", "The game's", GAME_COLOR[who][0]], ...(WHO.find(x => x[0] === who)?.[2] ? [["class", "Class", "Each player's class color"]] : []),
+    ["theme", "Theme's accent", `${TALL.find(t => t[0] === themeKey())[1]}'s`]];
+}
+const choiceName = (v, kind, who) => v?.startsWith("pal:") ? v.slice(4) : v === "custom" ? "Custom" : (topChoices(kind, who).find(c => c[0] === v) || [0, v])[1];
+// A line's swatch: its color, faded as it will be.
+function lineCss(kind, who, scope) {
+  if (kind === "namecolor" || kind === "spellcolor") {
+    const own = scope && state.val[scope + "|" + kind], v = own && own !== "inherit" ? own : state.val[kind];
+    if (kind === "spellcolor" && v === "same") return colorOf(state.val["color:castCasting"], "castCasting", "color:castCasting");
+    return v === "same" ? CLASS_SW_CSS : v === "game" ? "#f2f2f2" : colorOf(v, "hostileNpcs", "namecolor");
+  }
+  const key = kind === "color" ? "color:" + who : "rowcolor";
+  if (kind === "rowcolor" && (state.val.rowcolor === "keep" || state.val.rowcolor === "default"))
+    return state.val.rowcolor === "keep" ? "repeating-linear-gradient(45deg,#3a3631 0 4px,#24211d 4px 8px)" : CLASS_SW_CSS;
+  if (state.val[key] === "class") return CLASS_SW_CSS;
+  return gradientOf(colorOf(state.val[key], who || "hostileNpcs", key), kind === "color" ? who : "row", true);
+}
+const CLASS_SW_CSS = "linear-gradient(90deg,#c69b6d 0 14%,#f48cba 14% 28%,#aad372 28% 42%,#fff468 42% 56%,#3fc7eb 56% 70%,#8788ee 70% 84%,#ff7c0a 84%)";
+function drawColorPick(box, kind, bump, who, scope) {
+  // (scope: a Smart row's own name color; Default's first and picked till changed)
+  const key = scope ? scope + "|" + kind : kind === "color" ? "color:" + who : kind, fw = kind === "color" ? who : "row";
+  const fkey = "fade:" + fw, tkey = "fadeto:" + fw, val = state.val[key] ?? (scope ? "inherit" : undefined), fade = state.val[fkey] || "none";
+  const open = state.openPick === key, editTo = fade === "into" && state.editFadeTo;
+  const setKey = editTo ? tkey : key, picked = state.val[setKey];
+  const fadeLabel = fade === "none" ? "" : fade === "into" ? ` → ${choiceName(state.val[tkey] || "pal:Blackrock")}` : ` · ${fade}`;
+  const top = scope ? [["inherit", "Default's", `Follows Default: ${choiceName(state.val[kind], kind, who)}`], ...topChoices(kind, who)] : topChoices(kind, who);
+  const curName = val === "inherit" ? `Default's (${choiceName(state.val[kind], kind, who)})` : choiceName(val, kind, who);
+  const psw = n => `<button class="psw" data-c="${n}" title="${n}" aria-pressed="${picked === "pal:" + n}" style="background:${PALHEX[n]}"></button>`;
+  box.innerHTML = `<button class="cur" aria-expanded="${open}"><span class="sw"><div class="mp"><div class="bar" style="height:12px;--edgec:#000"><i style="inset:0 22% 0 0;background:${lineCss(kind, who, scope)}"></i></div></div></span>
+      <span class="ct"><span style="color:var(--text);font-size:14px">${curName}${fadeLabel}</span><span></span></span><span>▾</span></button>
+    ${open ? `<div class="pop cpop">
+      ${editTo ? "" : top.map(([k, n, s]) => `<button class="opt nosw" data-k="${k}" aria-selected="${val === k}"><span class="ot"><span style="font-size:14px">${n}</span><span>${s}</span></span><span class="ck">${val === k ? "✓" : ""}</span></button>`).join("")}
+      ${kind === "namecolor" || kind === "spellcolor" ? "" : `<div class="frow"><span>Fade</span><div class="seg fseg">${FADES.map(([k, n]) => `<button data-f="${k}" aria-pressed="${fade === k}">${n}</button>`).join("")}</div></div>`}
+      ${fade === "into" ? `<div class="frow"><span>Picking</span><div class="seg eseg"><button data-e="0" aria-pressed="${!editTo}">Bar color</button><button data-e="1" aria-pressed="${!!editTo}">Fades into</button></div></div>` : ""}
+      <div class="pal">
+        <div class="prow"><span>Quick</span><div class="sws">${QUICK.map(psw).join("")}</div></div>
+        ${state.recent.length ? `<div class="prow"><span>Recent</span><div class="sws">${state.recent.map(psw).join("")}</div></div>` : ""}
+        ${PAL.map(([f, shades]) => `<div class="prow"><span>${f}</span><div class="sws">${shades.map(s => psw(s[0])).join("")}</div></div>`).join("")}
+        <div class="prow"><span>Custom</span><div class="sws"><input type="color" class="cwell" aria-label="Custom color" value="${state.val[setKey + "#"] || "#8fd3ff"}"><span class="muted">${picked === "custom" ? "Picked" : "Any color"}</span></div></div>
+      </div>
+      <div class="count"><span class="hovname">${picked?.startsWith("pal:") ? picked.slice(4) : "&nbsp;"}</span></div></div>` : ""}`;
+  box.querySelector(".cur").onclick = () => {
+    state.openPick = open ? null : key; state.hover = {}; state.editFadeTo = false;
+    if (!open && who && WHO_UNIT[who]) { state.previewAs = WHO_UNIT[who]; delete state.states.tapped; }
+    if (!open && who === "tapped") state.states.tapped = true;
+    // (a cast color opened: the preview casts that kind)
+    const CK = { castCasting: null, castChannel: "channel", castLocked: "locked", castInterrupted: "interrupted" };
+    if (!open && who in CK) { ["locked", "channel", "interrupted"].forEach(k => delete state.states[k]); state.states.casting = true; if (CK[who]) state.states[CK[who]] = true; }
+    draw();
+  };
+  if (!open) return;
+  const name = box.querySelector(".hovname");
+  box.querySelectorAll(".opt").forEach(o => {
+    o.onmouseenter = () => { state.hover = { [key]: o.dataset.k }; state.hoverName = o.querySelector(".ot span").textContent; applyTheme(); };
+    o.onmouseleave = () => { state.hover = {}; applyTheme(); };
+    o.onclick = () => { state.val[key] = o.dataset.k; state.openPick = null; state.hover = {}; bump(); };
+  });
+  box.querySelectorAll(".fseg button").forEach(b => b.onclick = () => {
+    state.val[fkey] = b.dataset.f; if (b.dataset.f === "into" && !state.val[tkey]) state.val[tkey] = "pal:Blackrock";
+    state.editFadeTo = b.dataset.f === "into"; bump();
+  });
+  box.querySelectorAll(".eseg button").forEach(b => b.onclick = () => { state.editFadeTo = b.dataset.e === "1"; draw(); });
+  box.querySelectorAll(".psw").forEach(s => {
+    s.onmouseenter = () => { state.hover = { [setKey]: "pal:" + s.dataset.c }; state.hoverName = s.dataset.c; name.textContent = s.dataset.c; applyTheme(); };
+    s.onmouseleave = () => { state.hover = {}; name.innerHTML = picked?.startsWith("pal:") ? picked.slice(4) : "&nbsp;"; applyTheme(); };
+    s.onclick = () => {
+      state.val[setKey] = "pal:" + s.dataset.c; state.hover = {};
+      state.recent = [s.dataset.c, ...state.recent.filter(n => n !== s.dataset.c)].slice(0, 10);
+      if (fade !== "into") state.openPick = null; // (a fade into a color: stays open to pick the second)
+      bump();
+    };
+  });
+  const well = box.querySelector(".cwell");
+  well.oninput = () => { state.val[setKey] = "custom"; state.val[setKey + "#"] = well.value; applyTheme(); };
+  well.onchange = () => bump();
+}
+
+// The plate's fill color for the unit being previewed (inSmart: a Smart row's override on top).
+function colorOf(choice, who, key) {
+  if (choice?.startsWith?.("pal:")) return PALHEX[choice.slice(4)] || "#c0201c";
+  if (choice === "game") return GAME_COLOR[who][1];
+  if (choice === "class") return (UNIT_CLASS[WHO_UNIT[who]] || [0, GAME_COLOR[who][1]])[1];
+  if (choice === "theme") return rgbA(TALL.find(t => t[0] === themeKey())[2]);
+  if (choice === "custom") return state.val[key + "#"] || "#8fd3ff";
+  if (choice === "gold") return "#e8b84a"; if (choice === "mark") return "#ff5b4a";
+  return (NAMED.find(n => n[0] === choice) || [0, 0, "#c0201c"])[2];
+}
+function fillColor(inSmart) {
+  const who = state.states.tapped ? "tapped" : UNIT_WHO[state.previewAs], key = "color:" + who;
+  const base = colorOf(state.hover[key] || state.val[key], who, key);
+  if (!inSmart) return base;
+  const rc = state.hover.rowcolor || state.val.rowcolor;
+  return rc === "keep" || rc === "default" ? base : colorOf(rc, who, "rowcolor");
+}
+
+// The big plate on the stage takes the look being shown (hovered, else picked).
+function applyTheme() {
+  const th = TALL.find(t => t[0] === themeKey());
+  document.querySelectorAll("#body .art .hp").forEach(hp => {
+    hp.style.borderColor = th[3] ? rgbA(th[3]) : "transparent";
+    hp.style.borderWidth = th[3] ? "1.5px" : "0";
+    hp.style.background = rgbA(th[4], .75);
+    hp.style.borderRadius = th[6] === "capsule" ? "99px" : "3px";
+    hp.style.clipPath = CLIP[th[6]] || "";
+    const b = hp.querySelector("b");
+    if (b) {
+      const inSmart = !!hp.closest("#sed"), who = state.states.tapped ? "tapped" : UNIT_WHO[state.previewAs];
+      const rc = state.val.rowcolor, rowOwn = inSmart && rc !== "keep" && rc !== "default";
+      b.style.background = texFill(texNow(), gradientOf(fillColor(inSmart), rowOwn ? "row" : who));
+      b.style.backgroundBlendMode = "multiply";
+    }
+  });
+  document.querySelectorAll("#body .art .pname").forEach(n => {
+    n.textContent = UNIT_NAME[state.previewAs];
+    // (name color: same as the bar = its unit's color from Colors; the game's = white; else the palette pick.
+    //  In a Smart row's preview, the row's own value when it has one, else Default's.)
+    const inSmart = !!n.closest("#sed"), sc = inSmart ? "smart-" + state.smartOpen + "|" : "";
+    const pickOf = k => { const h = state.hover[sc + k] ?? state.hover[k], o = sc && state.val[sc + k];
+      return h && h !== "inherit" ? h : o && o !== "inherit" ? o : state.val[k]; };
+    const v = pickOf("namecolor");
+    n.style.color = v === "same" ? fillColor(inSmart) : v === "game" ? "#fff" : colorOf(v, "hostileNpcs", "namecolor");
+    if (inSmart) { const f = pickOf("font"); n.style.fontFamily = fontCss(f === "theme" ? THEME_FONT[themeKey()] || "friz" : f); }
+  });
+  // (the Cast Bars stage: the bar in its cast's color, texture and fade; the ground; the spell's name; the icon's size)
+  const CAST_OF = { casting: "castCasting", channel: "castChannel", locked: "castLocked", interrupted: "castInterrupted" };
+  document.querySelectorAll("#body .art .cfill").forEach(bar => {
+    const w = CAST_OF[bar.dataset.kind], k = "color:" + w, base = colorOf(state.hover[k] || state.val[k], w, k);
+    const b = bar.querySelector("b"); b.style.background = texFill(texNow(), gradientOf(base, w)); b.style.backgroundBlendMode = "multiply";
+    bar.style.background = state.val.castground === 1 ? "#000" : "#1a1a1a";
+    const t = bar.closest(".cast").querySelector(".ctext"), sv = state.hover.spellcolor || state.val.spellcolor;
+    if (t) { t.style.color = sv === "same" ? base : sv === "game" ? "#fff" : colorOf(sv, w, "spellcolor"); t.style.fontFamily = fontCss(fontNow()); }
+    bar.closest(".cast").style.setProperty("--isz", (state.val.castisz || 100) / 100);
+    if (state.lhidden?.castIcon) bar.closest(".cast").querySelector("[data-part=icon]").style.display = "none";
+    if (state.lhidden?.castText) t.style.display = "none";
+  });
+  // (a part hidden on the Layout tab is hidden on every preview)
+  document.querySelectorAll("#body .art .lvl").forEach(l => l.style.display = state.lhidden?.level ? "none" : "");
+  document.querySelectorAll("#body .art .pname").forEach(n => { if (!n.closest("#sed")) n.style.fontFamily = fontCss(fontNow()); });
+  document.querySelectorAll("#body .stagefoot").forEach(f => {
+    let s = f.querySelector(".thint");
+    if (!s) { s = document.createElement("span"); s.className = "hint thint"; f.prepend(s); }
+    const kind = Object.keys(state.hover).find(k => state.hover[k]);
+    s.innerHTML = kind ? `Previewing <b style="color:var(--gold);font-weight:400">${state.hoverName}</b>` : "";
+    s.hidden = !kind;
+  });
+}
+// One picker for every list (theme, bar texture, font): a line that opens a floating list.
+function drawPick(box, kind, bump, who, scope) {
+  // (key: where its value lives; the Colors list has one per kind of unit: "color:friendlyPlayers")
+  // (scope: a Smart row's own value, Default's ("inherit") first and picked till changed)
+  const base = who ? (kind === "list" ? `list:${who}` : `${kind}:${who}`) : kind, key = scope ? scope + "|" + base : base;
+  const P = PICKERS[kind];
+  let items = P.items(who), val = state.val[key];
+  if (scope) {
+    const d = items.find(i => i.k === state.val[base]) || items[0];
+    const dn = (d.short || d.name).replace(/^[^(]*\((.*)\)$/, "$1"); // ("Theme's (Marcellus)" → "Marcellus")
+    items = [{ k: "inherit", g: "", name: "Default's", short: `Default's (${dn})`, sub: "Follows Default", sw: d.sw, bg: d.bg, nameCss: d.nameCss }, ...items];
+    if (val === undefined) val = "inherit";
+  }
+  const cur = items.find(i => i.k === val) || items[0];
+  const q = (state.pickQ || "").toLowerCase(), open = state.openPick === key;
+  const sw = i => i.sw ? `<span class="sw" style="${i.bg ? "background:" + i.bg : "background:#0b0a09"}">${i.sw}</span>`
+    : i.nameCss ? `<span class="sw fsw" style="font-family:${i.nameCss}">Aa</span>` : "";
+  const name = i => `<span style="font-size:14px;${i.color ? "color:" + i.color + ";" : ""}${i.nameCss ? "font-family:" + i.nameCss + ";font-size:16px;" : ""}">${i.name}</span>`;
+  const opt = i => `<button class="opt ${sw(i) ? "" : "nosw"}" role="option" data-k="${i.k}" aria-selected="${val === i.k}">${sw(i)}<span class="ot">${name(i)}${i.sub ? `<span${i.nameCss && i.g ? ` style="font-family:${i.nameCss};font-size:13.5px"` : ""}>${i.sub}</span>` : ""}</span><span class="ck">${val === i.k ? "✓" : ""}</span></button>`;
+  const shown = items.filter(i => !q || i.name.toLowerCase().includes(q));
+  const groups = [...new Set(shown.map(i => i.g))];
+  box.innerHTML = `<button class="cur" aria-expanded="${open}">${sw(cur)}<span class="ct">${name({ ...cur, name: cur.short || cur.name, color: cur.k === "main" || cur.k === "theme" ? "var(--text)" : cur.color })}<span></span></span><span>▾</span></button>
+    ${open ? `<div class="pop">${items.length > 8 ? `<input class="find" placeholder="${P.find}" aria-label="${P.find}" value="${state.pickQ || ""}">` : ""}<div class="list" role="listbox">
+      ${groups.map(g => (g ? `<div class="grp">${g}</div>` : "") + shown.filter(i => i.g === g).map(opt).join("")).join("")}
+      ${!shown.length ? `<div class="grp" style="text-transform:none;letter-spacing:0">Nothing called "${state.pickQ}"</div>` : ""}
+    </div><div class="count">Esc or click outside to close</div></div>` : ""}`;
+  box.querySelector(".cur").onclick = () => {
+    state.openPick = open ? null : key; state.pickQ = ""; state.hover = {};
+    // (a Colors line opened: the preview shows that kind of unit)
+    if (!open && who && WHO_UNIT[who]) state.previewAs = WHO_UNIT[who];
+    if (!open && who === "tapped") state.states.tapped = true;
+    if (who) { draw(); return; }
+    drawPick(box, kind, bump, who, scope); applyTheme(); const f = box.querySelector(".find"); if (f) f.focus();
+  };
+  if (open) { const f0 = box.querySelector(".find"); if (f0 && document.activeElement?.className !== "find") setTimeout(() => f0.focus()); }
+  const f = box.querySelector(".find");
+  if (f) f.oninput = () => { state.pickQ = f.value; const pos = f.selectionStart; drawPick(box, kind, bump, who, scope); const g = box.querySelector(".find"); g.focus(); g.setSelectionRange(pos, pos); };
+  box.querySelectorAll(".opt").forEach(o => {
+    const item = items.find(i => i.k === o.dataset.k);
+    o.onmouseenter = () => { state.hover = { [key]: kind === "theme" && o.dataset.k === "main" ? MAIN : o.dataset.k }; state.hoverName = item.name; applyTheme(); };
+    o.onmouseleave = () => { state.hover = {}; applyTheme(); };
+    o.onclick = () => { state.val[key] = o.dataset.k; state.openPick = null; state.hover = {}; bump(); };
+  });
+  // (My own: a color well beside the line)
+  if (val === "custom") {
+    const well = document.createElement("input"); well.type = "color"; well.className = "well"; well.value = state.val[key + "#"] || "#8fd3ff";
+    well.setAttribute("aria-label", "My own color");
+    well.oninput = () => { state.val[key + "#"] = well.value; applyTheme(); };
+    box.querySelector(".cur").after(well);
+  }
+}
+function closePick() { if (state.openPick) { state.openPick = null; state.hover = {}; draw(); } }
+document.addEventListener("mousedown", e => { if (state.openPick && !e.target.closest(".tpick")) closePick(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePick(); });
+
+/* ---------- each tab ---------- */
+const TABS = {
+  default(b) {
+    b.innerHTML = head("Nameplate Style", `How every plate looks, before Smart's rows. Shown in CineMode: <button>Always ▾</button>`, "default") + `<div id="ed"></div>`;
+    editor($("#ed"), "default", { art: () => ART.plate(false), previewToggles: true,
+      parts: [["bar", "Bar", PLATE], ["colors", "Colors", COLORS], ["name", "Name", NAMEPART]] });
+  },
+  smart(b) {
+    const R = [["target", "Target", "▼ Arrow", "Size 110%", "Always"], ["mouseover", "Mouseover", "Glow", "—", "Always"],
+               ["focus", "Focus", "▼ Arrow", "Purple", "Always"], ["aggro", "Aggro on you", "Ring", "Red", "In combat"]];
+    b.innerHTML = head("Smart Style", "Each plate takes its look from the first row that fits it, top to bottom.", "smart") +
+      `<table class="tbl"><thead><tr><th></th><th>Row</th><th>Mark</th><th>Look</th><th>When</th></tr></thead><tbody>` +
+      R.map(r => `<tr class="rowclick ${state.smartOpen === r[0] ? "pick" : ""}" data-r="${r[0]}"><td class="grip">⋮⋮</td><td>${r[1]}</td>
+        <td><span class="cell">${r[2]}</span></td><td><span class="cell ${r[3] === "—" ? "none" : ""}">${r[3] === "—" ? "Default's" : r[3]}</span></td><td><span class="cell">${r[4]} ▾</span></td></tr>` +
+        (state.smartOpen === r[0] ? `<tr class="drawer"><td colspan="5"><div id="sed"></div></td></tr>` : "")).join("") +
+      `</tbody></table><button class="txtbtn addrow">+ Add row</button>`;
+    b.querySelectorAll("tr.rowclick").forEach(tr => tr.onclick = () => { state.smartOpen = state.smartOpen === tr.dataset.r ? null : tr.dataset.r; TABS.smart(b); });
+    const host = $("#sed");
+    if (host) editor(host, "smart-" + state.smartOpen, { art: () => ART.plate(markOf("smart-" + state.smartOpen, 0)), previewToggles: true, follow: true,
+      parts: [["mark", "Mark", SMARTLOOK], ["bar", "Bar", SMARTBAR], ["name", "Name", NAMEPART]] });
+  },
+  cast(b) {
+    b.innerHTML = head("Cast Bar Style", "", "cast") + `<div id="ced"></div>`;
+    editor($("#ced"), "cast", { art: ART.castplate, previewToggles: true, parts: [["bar", "Bar", CASTBAR], ["colors", "Colors", CASTCOLORS], ["text", "Spell name", CASTTEXT], ["icon", "Icon", CASTICON]] });
+  },
+  layout(b) {
+    const V = ["All plates", "Hostile", "Neutral", "Friendly NPCs", "Players"];
+    const v = state.variant.layout ?? 0;
+    // (each part: where it hangs [to, side, gap] (PlateLayout.lua's to/side/gap), then a nudge [x, y] from there)
+    state.pos = state.pos || Object.fromEntries(LAYOUT_PARTS.map(p => [p[0], [0, 0]]));
+    state.lhang = state.lhang || {
+      health: ["plate", "center", 0], name: ["health", "above", 4], level: ["health", "right", 4], crowd: ["level", "right", 4],
+      marker: ["health", "left", 6], elite: ["marker", "left", 4], buffs: ["elite", "left", 4], debuffs: ["name", "above", 4],
+      cast: ["health", "below", 6], castIcon: ["cast", "left", 4], castText: ["cast", "below", 2], castShield: ["castIcon", "center", 0],
+      softTarget: ["debuffs", "above", 4] };
+    const partName = id => id === "plate" ? "The plate (its anchor)" : LAYOUT_PARTS.find(p => p[0] === id)[1];
+    // (what a part may hang on: the plate or any part that doesn't, in the end, hang on it)
+    const hangsOn = (id, on) => { for (let t = state.lhang[id]?.[0]; t && t !== "plate"; t = state.lhang[t][0]) if (t === on) return true; return false; };
+    PICKERS.lto = { find: "Find a part", items: () => [{ k: "plate", g: "", name: partName("plate"), sub: "Centered on the anchor, moved by Whole plate" },
+      ...LAYOUT_PARTS.filter(p => p[0] !== pick && !hangsOn(p[0], pick)).map(p => ({ k: p[0], g: "Parts", name: p[1], sub: p[5] }))] };
+    PICKERS.lside = PICKERS.lside || { find: "Find", items: () => LAYOUT_SIDES.map(([k, n, s]) => ({ k, g: "", name: n, sub: s })) };
+    state.lhidden = state.lhidden || {}; state.lsize = state.lsize || {}; state.lwhole = state.lwhole || [0, 0];
+    PICKERS.lpart = PICKERS.lpart || { find: "Find a part", items: () => [
+      { k: "plate", g: "", name: "Whole plate", sub: "Every part together, from its anchor" },
+      ...LAYOUT_PARTS.map(p => ({ k: p[0], g: "Parts", name: p[1] + (state.lhidden[p[0]] ? " (hidden)" : ""), sub: p[5] }))] };
+    // (pick: a part, or "plate" = the whole plate; each shows only its own settings)
+    const pick = state.layoutPick || "level", P = LAYOUT_PARTS.find(p => p[0] === pick), whole = pick === "plate";
+    state.val.lpart = pick;
+    const seg = (id, opts, on) => `<div class="seg" id="${id}">${opts.map((o, i) => `<button aria-pressed="${i === on}" data-i="${i}">${o}</button>`).join("")}</div>`;
+    b.innerHTML = head("Nameplate Layout", "", "layout") +
+      `<div class="cols2"><div><div class="arr" id="arr">
+        <div class="guide" style="left:50%;top:0;bottom:0;width:1px"></div><div class="guide" style="top:92px;left:0;right:0;height:1px"></div>
+        <div class="unitdot"></div><div class="anchor ${whole ? "picked" : ""}" title="Whole plate: click to pick it, drag to move every part together"></div>
+        ${LAYOUT_PARTS.map(([id, , html]) => `<div class="drag ${pick === id ? "picked" : ""} ${state.lhidden[id] ? "off" : ""}" data-id="${id}" title="${LAYOUT_PARTS.find(p => p[0] === id)[1]}">${html}</div>`).join("")}
+      </div>
+      <div class="stagefoot"><div class="tpick" id="lfor"></div>
+        <div style="display:flex;justify-content:flex-end"><button class="switch" id="lguides" aria-pressed="${state.lguides !== false}"><i></i>Guides</button></div></div></div>
+      <div class="settings" style="margin-top:0">
+        <div class="group"><h3 class="tip" title="Click a part on the plate, or the crosshair for the whole plate, or pick it here. Hidden parts stay faint on the stage so you can pick them again.">${whole ? "Whole plate" : "Part"}</h3>
+          <div class="row"><span class="l">Part</span><div class="tpick" id="lpart"></div></div>
+          ${whole ? `<div class="row"><span class="l">Centered on</span><div>${seg("lcenter", ["Plate's middle", "Unit's middle"], state.lcenter || 0)}</div></div>
+          <div class="row"><span class="l">Left / right</span><div class="slide"><input type="range" min="-100" max="100" value="${state.lwhole[0]}" id="wx" aria-label="Whole plate left/right"><output id="wxo">${state.lwhole[0]} px</output></div></div>
+          <div class="row"><span class="l">Down / up</span><div class="slide"><input type="range" min="-60" max="60" value="${-state.lwhole[1]}" id="wy" aria-label="Whole plate down/up"><output id="wyo">${-state.lwhole[1]} px</output></div></div></div>` : `
+          <div class="row"><span class="l">Shown</span><div><button class="switch" id="lshown" aria-pressed="${!state.lhidden[pick]}"><i></i>${state.lhidden[pick] ? "Hidden" : "Shown"}</button></div></div>
+          <div class="row"><span class="l">Attached to</span><div class="tpick" id="lto"></div></div>
+          ${state.lhang[pick][0] === "plate" ? "" : `<div class="row"><span class="l">Side</span><div class="tpick" id="lside"></div></div>
+          <div class="row"><span class="l">Gap</span><div class="slide"><input type="range" min="0" max="30" value="${state.lhang[pick][2]}" id="lgap" aria-label="Gap"><output id="lgapo">${state.lhang[pick][2]} px</output></div></div>`}
+          <div class="row"><span class="l">Left / right</span><div class="slide"><input type="range" min="-140" max="140" value="${state.pos[pick][0]}" id="lx" aria-label="Left/right"><output id="lxo">${state.pos[pick][0]} px</output></div></div>
+          <div class="row"><span class="l">Down / up</span><div class="slide"><input type="range" min="-80" max="80" value="${-state.pos[pick][1]}" id="ly" aria-label="Down/up"><output id="lyo">${-state.pos[pick][1]} px</output></div></div>
+          ${P[4] ? `<div class="row"><span class="l">Size</span><div class="slide"><input type="range" min="50" max="200" step="5" value="${state.lsize[pick] || 100}" id="lsz" aria-label="Size"><output id="lszo">${state.lsize[pick] || 100}%</output></div></div>` : ""}</div>`}
+      </div></div>`;
+    const arr = $("#arr");
+    // Place every part: the ones hung on the plate at the anchor (+ Whole plate), then each on its parent's side, gap away, + its nudge.
+    const place = () => {
+      const [wx, wy] = state.lwhole, ax = arr.clientWidth / 2 + wx, ay = (state.lcenter === 1 ? 157 : 92) + wy;
+      const order = [], seen = new Set();
+      const visit = id => { if (seen.has(id)) return; seen.add(id); const to = state.lhang[id][0]; if (to !== "plate") visit(to); order.push(id); };
+      LAYOUT_PARTS.forEach(p => visit(p[0]));
+      const rect = {};
+      for (const id of order) {
+        const d = arr.querySelector(`.drag[data-id="${id}"]`), s = (state.lsize[id] || 100) / 100;
+        const w = d.offsetWidth * s, h = d.offsetHeight * s, [to, side, gap] = state.lhang[id], [ox, oy] = state.pos[id];
+        let cx = ax, cy = ay;
+        if (to !== "plate") {
+          const p = rect[to], mx = (p.l + p.r) / 2, my = (p.t + p.b) / 2;
+          ({ right: () => { cx = p.r + gap + w / 2; cy = my; }, left: () => { cx = p.l - gap - w / 2; cy = my; },
+             above: () => { cx = mx; cy = p.t - gap - h / 2; }, below: () => { cx = mx; cy = p.b + gap + h / 2; },
+             inleft: () => { cx = p.l + gap + w / 2; cy = my; }, inright: () => { cx = p.r - gap - w / 2; cy = my; },
+             center: () => { cx = mx; cy = my; } })[side]();
+        }
+        cx += ox; cy += oy;
+        rect[id] = { l: cx - w / 2, r: cx + w / 2, t: cy - h / 2, b: cy + h / 2 };
+        d.style.left = cx + "px"; d.style.top = cy + "px"; d.style.transform = `translate(-50%,-50%) scale(${s})`;
+      }
+    };
+    if (!whole) { state.val.lto = state.lhang[pick][0]; state.val.lside = state.lhang[pick][1]; }
+    if ($("#lto")) drawPick($("#lto"), "lto", () => {
+      state.lhang[pick][0] = state.val.lto; state.pos[pick] = [0, 0];
+      if (state.val.lto === "plate") state.lhang[pick][1] = "center";
+      TABS.layout(b);
+    });
+    if ($("#lside")) drawPick($("#lside"), "lside", () => { state.lhang[pick][1] = state.val.lside; state.pos[pick] = [0, 0]; TABS.layout(b); });
+    const gp = $("#lgap"); if (gp) gp.oninput = () => { state.lhang[pick][2] = +gp.value; $("#lgapo").textContent = gp.value + " px"; place(); };
+    drawPick($("#lpart"), "lpart", () => { state.layoutPick = state.val.lpart; TABS.layout(b); });
+    if ($("#lshown")) $("#lshown").onclick = () => { state.lhidden[pick] = !state.lhidden[pick]; TABS.layout(b); };
+    const sz = $("#lsz"); if (sz) sz.oninput = () => { state.lsize[pick] = +sz.value; $("#lszo").textContent = sz.value + "%"; place(); };
+    // (Centered on: where the anchor sits, the plate's middle or the unit's)
+    if ($("#lcenter")) $("#lcenter").querySelectorAll("button").forEach(x => x.onclick = () => { state.lcenter = +x.dataset.i; TABS.layout(b); });
+    const anc = arr.querySelector(".anchor");
+    const placeAnchor = () => { anc.style.top = ((state.lcenter === 1 ? 157 : 92) + state.lwhole[1]) + "px"; anc.style.left = `calc(50% + ${state.lwhole[0]}px)`; };
+    placeAnchor();
+    // (the crosshair: click picks Whole plate, drag moves every part together)
+    anc.onpointerdown = e => {
+      state.layoutPick = "plate"; anc.setPointerCapture(e.pointerId);
+      const sx = e.clientX, sy = e.clientY, [ox, oy] = state.lwhole, sc = scale();
+      anc.onpointermove = m => { state.lwhole = [Math.round(ox + (m.clientX - sx) / sc), Math.round(oy + (m.clientY - sy) / sc)]; placeAnchor(); place(); };
+      anc.onpointerup = () => { anc.onpointermove = null; TABS.layout(b); };
+    };
+    // (Guides: a view switch under the stage, not a plate setting)
+    arr.querySelectorAll(".guide").forEach(g => g.hidden = state.lguides === false);
+    $("#lguides").onclick = () => { state.lguides = state.lguides === false; TABS.layout(b); };
+    place();
+    arr.querySelectorAll(".drag").forEach(d => {
+      d.onpointerdown = e => {
+        state.layoutPick = d.dataset.id; d.setPointerCapture(e.pointerId);
+        const s = state.pos[d.dataset.id], sx = e.clientX, sy = e.clientY, ox = s[0], oy = s[1], sc = scale();
+        arr.querySelectorAll(".drag").forEach(x => x.classList.toggle("picked", x === d));
+        d.onpointermove = m => { s[0] = Math.round(ox + (m.clientX - sx) / sc); s[1] = Math.round(oy + (m.clientY - sy) / sc); place(); };
+        d.onpointerup = () => { d.onpointermove = null; TABS.layout(b); };
+      };
+    });
+    if ($("#lx")) $("#lx").oninput = e => { state.pos[pick][0] = +e.target.value; $("#lxo").textContent = e.target.value + " px"; place(); };
+    if ($("#ly")) $("#ly").oninput = e => { state.pos[pick][1] = -e.target.value; $("#lyo").textContent = e.target.value + " px"; place(); };
+    // (Layout for: 5 choices, so the picker; each line says what it means)
+    PICKERS.lfor = PICKERS.lfor || { find: "Find", items: () => V.map((x, i) => ({ k: String(i), g: "", name: "Layout for " + x,
+      sub: i === 0 ? "Every plate, unless a kind below has its own" : `${x} get a layout of their own` })) };
+    state.val.lfor = String(v);
+    drawPick($("#lfor"), "lfor", () => { state.variant.layout = +state.val.lfor; TABS.layout(b); });
+    // (Whole plate: every part moves together from the anchor)
+    if ($("#wx")) $("#wx").oninput = e => { state.lwhole[0] = +e.target.value; $("#wxo").textContent = e.target.value + " px"; placeAnchor(); place(); };
+    if ($("#wy")) $("#wy").oninput = e => { state.lwhole[1] = -e.target.value; $("#wyo").textContent = e.target.value + " px"; placeAnchor(); place(); };
+  },
+  show(b) { showTable(b, "Nameplates", "CineMode hides nameplates: pick which show, and when.", "show",
+    ["Enemies", "Enemy players", "Friendly NPCs", "Friendly players", "Your pet"]); },
+  nshow(b) { showTable(b, "Names", "CineMode hides names over heads: pick which show, and when.", "nshow",
+    ["Friends", "Hostile NPCs", "Friendly NPCs", "Service NPCs", "Guild"]); },
+  icons(b) {
+    b.innerHTML = head("Nameplate Icons", "Icons beside players' health bars on their nameplates.", "icons") +
+      `<div class="cols2"><div class="stage" style="position:relative"><div class="plate"><span class="pname">Thrallson</span>
+        <div class="hprow"><span class="cicon"></span><div class="hp" style="flex:1"><b style="background:linear-gradient(#c22,#7a0d0d)"></b></div><span class="lvl">70</span></div></div>
+        <div class="stagefoot"><span class="hint">An enemy player, with their class icon.</span></div></div>
+      <div class="settings" style="margin-top:0"><div class="group"><h3>Which icons</h3>
+        ${["Enemy class", "Friendly class", "Tanks", "Healers", "Damage"].map((x, i) => `<div class="row"><span class="l">${x}</span><div class="chips"><button class="chip" aria-pressed="${i < 2}">Shown</button><button class="chip" aria-pressed="${i >= 2}">Hidden</button></div></div>`).join("")}
+      </div><div class="group"><h3>Look</h3><div class="row"><span class="l">Size</span><div class="slide"><input type="range" min="50" max="200" value="100" aria-label="Size"><output>100%</output></div></div></div></div></div>`;
+    b.querySelectorAll(".row .chips").forEach(c => c.querySelectorAll(".chip").forEach(x => x.onclick = () => c.querySelectorAll(".chip").forEach(y => y.setAttribute("aria-pressed", y === x))));
+  },
+  nstyle(b) {
+    b.innerHTML = head("Name Style", "How names over heads look. Shown in CineMode: <button>Always ▾</button>", "nstyle") + `<div id="ned"></div>`;
+    editor($("#ned"), "names", { art: ART.names,
+      variants: ["Default", "Friends", "Hostile NPCs", "Friendly NPCs", "Service NPCs", "Guild", "Your target"],
+      parts: [["text", "Text", TEXT], ["glow", "Glow", PLAIN("Glow", "Glow", ["None", "Soft", "Strong"])], ["band", "Band", PLAIN("Band", "Band", ["None", "Dark fade", "Theme's"])],
+        ["line2", "Second line", TEXT], ["titles", "NPC titles", PLAIN("Titles", "Titles", ["Shown", "Hidden", "Target only"])],
+        ["distance", "Distance", () => [{ h: "Distance", rows: [{ l: "Hide after", slide: [0, 10, 3, " s", 0.5] }, { l: "Far size", slide: [50, 150, 80, "%"] }] }]]] });
+  },
+};
+function showTable(b, title, sub, key, rowsList) {
+  const COLS = ["Always", "In combat", "Target", "Location"];
+  state.show = state.show || {};
+  b.innerHTML = head(title, sub, key) + `<table class="tbl"><thead><tr><th>Row</th>${COLS.map(c => `<th>${c}</th>`).join("")}</tr></thead><tbody>` +
+    rowsList.map((r, i) => `<tr><td>${r}</td>
+      <td><span class="check" data-k="${key}${i}">${(state.show[key + i] ?? i < 2) ? "✓" : ""}</span></td>
+      <td><span class="cell ${i === 2 ? "" : "none"}">${i === 2 ? "Shown" : "—"}</span></td>
+      <td><span class="cell ${i === 0 ? "" : "none"}">${i === 0 ? "Hostile only" : "—"}</span></td>
+      <td><span class="cell ${i === 3 ? "" : "none"}">${i === 3 ? "Cities" : "—"}</span></td></tr>`).join("") + `</tbody></table>`;
+  b.querySelectorAll(".check").forEach(c => c.onclick = () => { state.show[c.dataset.k] = !c.textContent; showTable(b, title, sub, key, rowsList); });
+}
+
+/* ---------- chrome ---------- */
+function drawTree() {
+  $("#tree").innerHTML = TREE.map(([t, d, cls = "", go]) => `<div style="--d:${d}" class="${cls} ${go === page ? "sel" : ""}" ${go ? `data-go="${go}"` : ""}>${t}</div>`).join("");
+  $("#tree").querySelectorAll("[data-go]").forEach(el => el.onclick = () => go(el.dataset.go));
+}
+function drawHub() {
+  const G = [["Interface", "#d8b968", [["Combat", "#7fa6e0", [["C", "Unit frames"]]], ["Nameplates", "#d8b968", [["N", "Nameplates", "plates"], ["n", "Names", "names"]]], ["Info", "#8fc28a", [["I", "Info"]]]]],
+             ["Visions", "#d98a80", [["", "", [["V", "Visions"]]]]], ["Atmosphere", "#b9a3e0", [["", "", [["A", "Atmosphere"]]]]]];
+  $("#hub").innerHTML = G.map(([g, c, subs]) => `<div class="hgroup"><span class="lbl" style="color:${c}">${g}</span><div style="display:flex;gap:10px">` +
+    subs.map(([s, sc, icons]) => `<div class="hgroup">${s ? `<span class="lbl" style="color:${sc};font-size:11px">${s}</span>` : ""}<div class="hicons">` +
+      icons.map(([ch, tip, p]) => `<div class="hicon ${p === page ? "on" : ""}" title="${tip}" ${p ? `data-go="${p}"` : ""}>${ch}</div>`).join("") + `</div></div>`).join("") + `</div></div>`).join("");
+  $("#hub").querySelectorAll("[data-go]").forEach(el => el.onclick = () => go(el.dataset.go));
+}
+function drawTabs() {
+  $("#ptabs").style.borderBottomColor = PAGES[page].tabs.length ? "" : "transparent";
+  $("#ptabs").innerHTML = PAGES[page].tabs.map(t => `<button role="tab" aria-selected="${t.id === tab}" data-t="${t.id}"><span class="pip ${state.tabsOn[t.id] === false ? "off" : ""}"></span>${t.label}</button>`).join("") +
+    `<span class="search">Search this page</span>`;
+  $("#ptabs").querySelectorAll("button").forEach(b => {
+    b.onclick = () => { tab = b.dataset.t; draw(); };
+    b.oncontextmenu = e => { e.preventDefault(); state.tabsOn[b.dataset.t] = state.tabsOn[b.dataset.t] === false; draw(); };
+  });
+}
+function draw() {
+  drawTree(); drawHub(); drawTabs();
+  const body = $("#body"); TABS[tab](body);
+  body.querySelectorAll(".switch[data-sw]").forEach(s => s.onclick = () => { state.tabsOn[s.dataset.sw] = state.tabsOn[s.dataset.sw] === false; draw(); });
+}
+function go(p) { if (page !== p) { page = p; tab = PAGES[p].first; $("#body").scrollTop = 0; draw(); } }
+
+/* ---------- fit to screen ---------- */
+function scale() { return Math.min(1, $("#vp").clientWidth / 1062); }
+function fit() {
+  const s = scale();
+  ["#win", ".nowimg"].forEach(q => { const el = $(q); el.style.transform = `scale(${s})`; el.style.transformOrigin = "0 0"; });
+  $("#vp").style.height = 851 * s + "px";
+}
+window.addEventListener("resize", fit);
+$("#view").querySelectorAll("button").forEach(b => b.onclick = () => {
+  $("#view").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  $("#nowview").hidden = b.dataset.v !== "now"; $("#win").hidden = b.dataset.v === "now"; fit();
+});
+draw(); fit();
+</script>

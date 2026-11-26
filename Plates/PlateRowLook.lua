@@ -33,9 +33,11 @@ end
 -- Custom (its drawer's Look line, PlateColor): the quick colors have none.
 -- The Default row's always (2026-11-16): the Default Plate Style tab's
 -- Customize sets it, the plates' own look under every row.
+-- (Any row's, whatever its Plate color, since 2026-11-25: its looks follow Default
+-- setting by setting, the mock's "change just the name's color". It was only while
+-- Custom; the rows that weren't had theirs cleared, Migrations.lua rowLookFollowsV1.)
 local function Own(key, kind)
 	if not ns.TargetMarkOwn then return nil end
-	if kind ~= "others" and ns.TargetMarkOwn("PlateColor", kind) ~= "custom" then return nil end
 	if ns.MarkRowBase(kind) == "aggro" and ns.TargetMarkOwn("AlsoSame", kind) then return nil end
 	local value = ns.TargetMarkOwn(key, kind)
 	if IsDefault(key, value) then return nil end
@@ -151,6 +153,8 @@ function ns.PlateRowLookFor(kind, over)
 	local gradient = Get("LookGradient")
 	if gradient ~= nil then
 		look.gradient = false
+		-- (Fade's Darker and Lighter, the mock 2026-11-25: from the bar's own color, PlateHealthStyle's Shade.)
+		if gradient == "darker" or gradient == "lighter" then look.gradient = { mode = gradient } end
 		if gradient == "on" then
 			local from = Mine("LookGradient") ~= nil and kind or "others"
 			local function Part(key)
@@ -203,7 +207,7 @@ local nameBefore = setmetatable({}, { __mode = "k" }) -- [fontstring] = { object
 local function Signature(look)
 	if not look then return "" end
 	local border = look.border and table.concat(look.border, ",") or ""
-	local gradient = look.gradient and table.concat(look.gradient, ",") or tostring(look.gradient)
+	local gradient = look.gradient and (look.gradient.mode or table.concat(look.gradient, ",")) or tostring(look.gradient)
 	local shadowAt = look.shadowAt and table.concat(look.shadowAt, ",") or ""
 	return table.concat({ tostring(look.texture), border, tostring(look.fontValue), tostring(look.size),
 		tostring(look.outline), tostring(look.shadow), tostring(look.level), gradient, shadowAt }, "|")
@@ -624,7 +628,8 @@ end
 -- row is picked; holder.hoverTheme: a plate theme pointed at, not saved;
 -- holder.gameScale, gameShift, gameLift: the game plate bigger (moved left, its
 -- bottom this high), that page's.)
-function ns.MakePlateRowLookPreview(parent, width, startKind)
+-- (opts: { oneList = true }: the unit and the states in one Preview list.)
+function ns.MakePlateRowLookPreview(parent, width, startKind, opts)
 	local L = ns.L
 	local holder = CreateFrame("Frame", nil, parent)
 	holder.kind = startKind
@@ -712,7 +717,10 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 	local ROW_H = 28
 	local okUnit, unitDrop = ns.MenuDropdown(holder)
 	if not (okUnit and unitDrop and unitDrop.SetupMenu) then unitDrop = nil end
-	local stateDrop = unitDrop and game and ns.MakePlateStateDropdown(holder, 170, StatesChanged) or nil
+	-- (opts.oneList, Nameplate Style's (the mock, 2026-11-25: "why not just one dropdown? has
+	-- unit type and all plate parts?"): the unit and every state in one list, Unit first.)
+	local oneList = opts and opts.oneList and unitDrop and game
+	local stateDrop = unitDrop and game and not oneList and ns.MakePlateStateDropdown(holder, 170, StatesChanged) or nil
 	local picks = {}
 	local sceneButton = Pill(holder, L["Scene"], function()
 		if not ns.db then return end
@@ -724,6 +732,7 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 	-- squeezes State, and past that Scene takes the row above (confirm run 8:
 	-- at 300 wide State reached past the edge, at 480 Scene sat alone).)
 	local unitW, stateW = 130, 170
+	if oneList then unitW = math.max(120, width - 12) end
 	if stateDrop and unitW + 6 + stateW > width - 12 then
 		unitW = 120
 		stateW = math.max(120, width - 12 - unitW - 6)
@@ -734,14 +743,49 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		unitDrop:SetWidth(unitW)
 		unitDrop:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 6, 6)
 		unitDrop:SetupMenu(function(_, root)
+			if oneList then ns.MenuTitle(root, L["Unit"]) end
 			for i, sample in ipairs(SAMPLES) do
-				root:CreateRadio(L[sample[1]], function() return holder.sample == i end, function() PickSample(i) end)
+				root:CreateRadio(L[sample[1]], function() return holder.sample == i end, function()
+					PickSample(i)
+					return oneList and MenuResponse and MenuResponse.Refresh or nil -- (kept open: a state next)
+				end)
+			end
+			if oneList then
+				-- (then the State list's groups and ticks, as MakePlateStateDropdown's)
+				local group
+				for _, info in ipairs(STATE_PILLS) do
+					if info[4] ~= group then
+						group = info[4]
+						ns.MenuTitle(root, L[group])
+					end
+					local box = root:CreateCheckbox(L[info[2]], function()
+						local statesNow = StatesOf(holder) -- luacheck: ignore 431
+						return statesNow[info[1]] or (info[1] == "casting" and statesNow.locked) or false
+					end, function()
+						ToggleState(info[1])
+						return MenuResponse and MenuResponse.Refresh
+					end)
+					local setTitle = _G.GameTooltip_SetTitle
+					if box and box.SetTooltip and setTitle then
+						box:SetTooltip(function(tooltip) setTitle(tooltip, L[info[3]]) end)
+					end
+				end
 			end
 		end)
 		if unitDrop.SetSelectionText then
-			unitDrop:SetSelectionText(function() return L["Unit: %s"]:format(L[SAMPLES[holder.sample][1]]) end)
+			unitDrop:SetSelectionText(function()
+				local name = L[SAMPLES[holder.sample][1]]
+				if not oneList then return L["Unit: %s"]:format(name) end
+				-- (one list: what the plate shows, the unit first, then what's ticked)
+				local on, states = { name }, StatesOf(holder)
+				for _, info in ipairs(STATE_PILLS) do
+					if states[info[1]] then on[#on + 1] = L[info[2]] end
+				end
+				return L["Preview: %s"]:format(table.concat(on, ", "))
+			end)
 		end
-		ns.lowHealthKit.Tooltip(unitDrop, L["The kind of unit the plate is for."])
+		ns.lowHealthKit.Tooltip(unitDrop, oneList and L["What the plate shows: the kind of unit, then your target, a cast, a marker... Tick any."]
+			or L["The kind of unit the plate is for."])
 		rowRight = rowRight + unitW
 		if stateDrop then
 			stateDrop:SetWidth(stateW)
@@ -778,6 +822,8 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		game:SetPoint("BOTTOM", holder, "BOTTOM", 0, holder.plateLift)
 	end
 	holder.unitDropdown, holder.stateDropdown, holder.sceneButton = unitDrop, stateDrop, sceneButton
+	holder.oneList = oneList and true or false -- (the unit and states in one list: Nameplate Style's)
+	if oneList then sceneButton:Hide() end
 
 	-- (Over the scene's top right while a choice is only pointed at.)
 	local tag = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -802,6 +848,9 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		for i, pill in ipairs(picks) do pill:SetOn(i == self.sample) end
 		sceneButton:SetOn(db.stylePreviewBack == "scene")
 		-- (The shared backdrop, the lake or the dark panel: StyleScene draws either.)
+		-- (Every preview's backdrop, Nameplate Style's tabs too: their plain black stage
+		-- (the mock's) looked wrong in the framed panel, the user 2026-11-25: "black
+		-- background....". The shaded panel, or the painted scene where it's picked.)
 		ns.StyleScene(self, 0.55, 0.85)
 		self.styleScene:Show()
 		dark:Hide()
@@ -818,12 +867,25 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 			level = UnitLevel("player")
 		end
 		local look = ns.PlateRowLookFor(kind, over) or {}
+		-- (Default's colors and Fade for the sample's kind of unit (Nameplate Style's Colors,
+		-- the mock 2026-11-25), under the row's own: Not your kill when Tapped is ticked.)
+		local sampleKind = ({ "hostileNpcs", "neutralNpcs", "friendlyNpcs", "friendlyPlayers" })[self.sample] or "hostileNpcs"
+		if StatesOf(self).tapped then sampleKind = "tapped" end
+		local sampleUnit = sample[1] == "Player" and "player" or nil
+		local defaultBar, defaultName
+		if ns.PlateDefaultColoursOn and ns.PlateDefaultColoursOn() then
+			local r, g, b = ns.PlateKindColour(sampleUnit, sampleKind)
+			if r then defaultBar = { r, g, b } barColor = defaultBar end
+			local nr, ng, nb = ns.PlateNameColour(sampleUnit, sampleKind)
+			if nr then defaultName = { nr, ng, nb } nameColor = defaultName end
+		end
+		if look.gradient == nil and ns.PlateKindFade then look.gradient = ns.PlateKindFade(sampleUnit, sampleKind) end
 		-- (The row's color, where it paints the bar or the name.)
 		local paint = ns.TargetMarkOwn and ns.TargetMarkOwn("PlateColor", kind) == "custom"
 		local color = paint and { ns.TargetMarkOwn("PlateR", kind) or 1, ns.TargetMarkOwn("PlateG", kind) or 1,
 			ns.TargetMarkOwn("PlateB", kind) or 1 }
-		local paintBar = color and ns.TargetMarkOwn("ColorBar", kind) and color or nil
-		local paintName = color and ns.TargetMarkOwn("ColorName", kind) and color or nil
+		local paintBar = color and ns.TargetMarkOwn("ColorBar", kind) and color or defaultBar
+		local paintName = color and ns.TargetMarkOwn("ColorName", kind) and color or defaultName
 		if paintBar then barColor = paintBar end
 		if paintName then nameColor = paintName end
 
@@ -885,8 +947,14 @@ function ns.MakePlateRowLookPreview(parent, width, startKind)
 		-- same doesn't clear a gradient drawn before.)
 		local fill = health:GetStatusBarTexture()
 		if look.gradient and fill and fill.SetGradient and CreateColor then
+			local to = look.gradient
+			if to.mode == "darker" then
+				to = { barColor[1] * 0.3, barColor[2] * 0.3, barColor[3] * 0.3 }
+			elseif to.mode == "lighter" then
+				to = { barColor[1] + (1 - barColor[1]) * 0.6, barColor[2] + (1 - barColor[2]) * 0.6, barColor[3] + (1 - barColor[3]) * 0.6 }
+			end
 			pcall(fill.SetGradient, fill, "HORIZONTAL", CreateColor(barColor[1], barColor[2], barColor[3], 1),
-				CreateColor(look.gradient[1], look.gradient[2], look.gradient[3], 1))
+				CreateColor(to[1], to[2], to[3], 1))
 		elseif fill then
 			fill:SetVertexColor(barColor[1], barColor[2], barColor[3], 1)
 		end
@@ -1018,8 +1086,13 @@ function ns.PlatePreviewFit(holder, width, height, lift)
 	local game = holder.gamePlate
 	local copy = game and game.gameCopy
 	local room = height - lift
+	-- (holder.oneList, Nameplate Style's stage (the mock, 2026-11-25: "visually not good",
+	-- a small plate low in a tall empty stage): the plate as big as the stage is wide, and
+	-- the stage only as tall as what shows (holder.fitHeight), no room kept for debuffs.)
+	local wide, floor = 360, 89.1
+	if holder.oneList then wide, floor = 280, 1 end -- (230 cut the level box at the stage's edge, run q3e95)
 	-- (A first draw at the size that fits its debuffs, to measure.)
-	local scale = math.max(0.6, math.min(1.6, (room - 8) / 89.1, (width - 12) / 360))
+	local scale = math.max(0.6, math.min(1.6, (room - 8) / 89.1, (width - 12) / wide))
 	holder.gameShift, holder.gameScale, holder.gameLift = nil, scale, lift
 	holder:Refresh()
 	if not copy then return end
@@ -1063,8 +1136,14 @@ function ns.PlatePreviewFit(holder, width, height, lift)
 	end
 	if not (low and high and high - low > 4) then return end
 	-- (Steady as debuffs come and go: never sized for less than the plate with its debuffs.)
-	local tall = math.max(high - low, 89.1)
-	scale = math.max(0.6, math.min(1.6, (room - 8) / tall, (width - 12) / 360))
+	local tall = math.max(high - low, floor)
+	if holder.oneList then
+		scale = math.max(0.6, math.min(1.6, (width - 12) / wide))
+		holder.fitHeight = math.ceil(lift + tall * scale + 22)
+		room = tall * scale + 22 -- (the stage it's sized to: centered in that, not the old room)
+	else
+		scale = math.max(0.6, math.min(1.6, (room - 8) / tall, (width - 12) / wide))
+	end
 	holder.gameScale = scale
 	holder.gameLift = lift + (room - (high - low) * scale) / 2 - low * scale
 	holder:Refresh()

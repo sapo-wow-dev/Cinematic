@@ -233,6 +233,14 @@ local FRAME_LOOK = {
 	plateCastShadow = function(frame) return frame.ufShadow end,
 }
 local FRAME_IDS = { PLAYER = true, TARGET = true }
+-- (The cast editor's (Style/Studio/Frames/CombatBand.lua) ways in: it asked for these and
+-- nothing gave them, so on the Cast Bars tab every setting stayed greyed and Look from
+-- empty, run qb407 2026-11-25.)
+ns.CastSwitchFor, ns.CastActive = SwitchFor, Active
+function ns.CastFillOurs(fill)
+	if ns.IsGeneralStyle and ns.IsGeneralStyle(fill) then fill = ns.GeneralStyleValue("plateCastFill") end
+	return FILLS[fill] ~= nil
+end
 local function FrameLooked(id, db)
 	db = db or ns.db
 	return FRAME_IDS[id] and db and db["plateCastFrame_" .. id] and Active(id, db) and ns.UnitFrameLook and true
@@ -840,6 +848,7 @@ local function PlayerBarPixels()
 	local px = width and width > 0 and ns.UnitsToPixels and ns.UnitsToPixels(bar, width)
 	return px and math.floor(px + 0.5)
 end
+ns.CastPlayerBarPixels = PlayerBarPixels -- (the cast editor's px width)
 
 -- Puts the look on a bar (the game's where a setting says the game's). The
 -- preview's bars too (sample: no game fill to put back). sized: a
@@ -1976,22 +1985,38 @@ local function BuildCastPage(kit, spec)
 
 	local switch = kit.PageSwitch(content, spec.switch, L["Enable Page"],
 		L["When on, the cast bars look the way this page sets them. When off, they use the game's own look."], intro, Changed)
+	-- (The nameplates' Cast Bars tab under Nameplate Style's mock chrome (Tools/style-studio/
+	-- page-mock.html, 2026-11-25): its title and switch the chrome's, one plate casting on a
+	-- plain stage, the cast editor's parts beside it as the Default tab's.)
+	local mock = spec.tabs == "plates" and content.mockHead ~= nil and ns.StyleEditorPage ~= nil
+	if mock then ns.MockPageHeader(content, spec.page, title, intro, switch) end
 	local stack = kit.Stack(switch, "check")
 	local rows = ns.StyleRows(kit, content, stack, Changed, spec.switch)
 
 	-- The preview: a cast, a channel and one that can't be interrupted, filling
 	-- again and again, over the Style pages' scene.
 	local PREVIEW_W, PREVIEW_H = 480, 150
+	if mock then PREVIEW_W, PREVIEW_H = 268, 170 end
 	preview = CreateFrame("Frame", nil, content)
 	preview:SetSize(PREVIEW_W, PREVIEW_H)
+	if mock then
+		preview.fixedWidth, preview.minHeight = 268, 170 -- (beside the settings, as the Default tab's)
+	end
 	ns.castPreviews = ns.castPreviews or {} -- (by page: the offline checks find it, Tools/offline/castframe.lua)
 	ns.castPreviews[spec.page] = preview
 	stack:Add(preview, "label")
 	ns.StylePopout(preview, kit.Tooltip) -- (StylePages.lua)
-	ns.StyleScene(preview, 0.6, 0.8) -- (StylePages.lua)
 	local caption = kit.Label(preview, "GameFontDisableSmall", L["Preview"])
 	caption:SetPoint("TOPLEFT", 6, -5)
 	caption.searchSkip = true
+	ns.StyleScene(preview, 0.6, 0.8) -- (StylePages.lua; Nameplate Style's tabs too, not black: the user 2026-11-25)
+	if mock then
+		caption:Hide()
+		-- (No scene button on its stage: it sat on the Preview list, the user 2026-11-25 "hide scenic
+		-- button". The Default tab's has none either.)
+		if preview.backButton then preview.backButton:Hide() end
+		preview.backButton = nil
+	end
 	local samples = {}
 	preview.samples = samples
 	-- Three samples, each the game's own bar (MakeSample), as the game lays
@@ -2012,6 +2037,7 @@ local function BuildCastPage(kit, spec)
 	local units = spec.tabs == "units"
 	local SLOTS = spec.slots or { { "PLATE", "plate", 1 }, { "PLATE", "plate", 2 }, { "PLATE", "plate", 3 } }
 	local SPOTS = spec.spots or { { 0.24, 0.3 }, { 0.5, 0.58 }, { 0.76, 0.3 } }
+	if mock then SLOTS, SPOTS = { { "PLATE", "plate", 1 } }, { { 0.5, 0.48 } } end -- (one plate casting)
 	if spec.previewH then
 		PREVIEW_H = spec.previewH
 		preview:SetHeight(PREVIEW_H)
@@ -2048,6 +2074,9 @@ local function BuildCastPage(kit, spec)
 		end
 		local most = 0.5 * width / ns.PlateCastLayout().container
 		local scale = math.max(0.7, math.min(1.6, width / 340, most))
+		-- (One plate on the narrow stage: as big as fits with a margin. 1.4 ran past its left
+		-- edge, run q1a4c.)
+		if mock and plates[1] then scale = math.min(1.4, 0.86 * width / math.max(plates[1]:GetWidth() or 1, 1)) end
 		for i, plate in ipairs(plates) do
 			plate:SetScale(scale)
 			plate:ClearAllPoints()
@@ -2070,6 +2099,7 @@ local function BuildCastPage(kit, spec)
 		local health = CreateFrame("StatusBar", nil, plate)
 		health:SetSize(barW, 13)
 		health:SetPoint("TOP", plate, "TOP", 0, 0)
+		plate.plateHealth = health -- (sized to its cast bar on the nameplates' page: preview:Refresh)
 		health:SetStatusBarTexture(FILLS.flat)
 		health:SetStatusBarColor(0.8, 0.1, 0.1)
 		health:SetMinMaxValues(0, 1)
@@ -2281,6 +2311,13 @@ local function BuildCastPage(kit, spec)
 			local id = SlotId(bar)
 			Dress(bar, bar.info or SAMPLES[i], Look(id), not id or SizedAs(id, db))
 			DressFrameBars(bar, FrameLooked(id, db), id)
+			-- (A plate's health bar as wide as its cast bar, as the game's plates have them:
+			-- left at the game's width, the two weren't even, the user 2026-11-25.)
+			local plate = not units and plates[i]
+			if plate and plate.plateHealth then
+				local w = bar:GetWidth()
+				if w and w > 1 then plate.plateHealth:SetWidth(w) end
+			end
 		end
 		-- (Sized to their frames now: placed and fitted again.)
 		if units then PlaceSamples(nil, self:GetWidth(), self:GetHeight()) end
@@ -2325,6 +2362,7 @@ local function BuildCastPage(kit, spec)
 		if FRAME_IDS[id] and db["plateCastFrame_" .. id] then return "frame" end
 		return db["plateCastOwn_" .. id] and "own" or "default"
 	end
+	ns.CastLookPick = ns.CastLookPick or LookPick
 	local function PickLook(id, value)
 		local db = ns.GetDB()
 		if id ~= "PLATE" then db["plateCastOn_" .. id] = value ~= "game" end
@@ -2342,6 +2380,7 @@ local function BuildCastPage(kit, spec)
 		end
 		db["plateCastOwn_" .. id] = value == "own"
 	end
+	ns.CastPickLook = ns.CastPickLook or PickLook
 
 	-- A row's settings: Default's plain keys, a kind's own copy (<key>_<ID>).
 	local fieldsOf = {}
@@ -2562,6 +2601,61 @@ local function BuildCastPage(kit, spec)
 		return pop
 	end
 
+	if mock then
+		-- (The editor beside the stage: the cast frame's Nameplates variant alone, in the
+		-- pickers look (parts as tabs, long lists one line, notes as tooltips).)
+		-- (The stage: the game's own plate, casting, as the Default tab's (the user 2026-11-25:
+		-- "real plate"; the drawn health bar over the game's cast bar wasn't as wide as it). Its
+		-- cast bar dressed by StylePlateCast as every plate's is; the drawn plates stay where
+		-- the game's plate can't be built (retail).)
+		local inner = not ns.isRetail and ns.MakeGamePlate and ns.MakePlateRowLookPreview
+			and ns.MakePlateRowLookPreview(preview, PREVIEW_W, "others", { oneList = true }) or nil
+		-- (Its copy is built as it first shows (GamePlateReady): the stage switches over then.
+		-- Checked at build time, it never did, run q023f.)
+		if inner and inner.gamePlate then
+			inner:ClearAllPoints()
+			inner:SetAllPoints(preview)
+			inner.zoomSkip = true
+			inner:Hide()
+			if not ns.PlatePreviewStates(inner).casting then ns.TogglePlatePreviewState("casting", inner) end
+			local drawnRefresh = preview.Refresh
+			local function CastBar()
+				local game = inner.gamePlate
+				if not (ns.GamePlateReady and ns.GamePlateReady(game)) then return nil end
+				local copy = game.gameCopy
+				return copy and copy.CastBarsContainer and copy.CastBarsContainer.castBar
+			end
+			local function Fit()
+				local castBar = CastBar()
+				inner:SetShown(castBar ~= nil)
+				for _, plate in ipairs(plates) do plate:SetShown(castBar == nil) end
+				if not castBar then return end
+				preview.minHeight = nil
+				preview.samples = { castBar } -- (the editor's parts: its bar, icon and spell name)
+				preview.lookPreview = inner -- (the tests read it)
+				ns.PlatePreviewFit(inner, PREVIEW_W, preview:GetHeight() or 170, inner.plateLift or 38)
+				if ns.StylePlateCast then ns.StylePlateCast(inner.gamePlate) end
+				if inner.fitHeight and math.abs(inner.fitHeight - (preview.fixedHeight or 0)) > 1.5 then -- (not for a pixel: run q85bc)
+					preview.fixedHeight = inner.fitHeight
+					if ns.FitStylePreview then C_Timer.After(0, function() ns.FitStylePreview(preview) end) end
+				end
+			end
+			function preview.Refresh(self, ...)
+				drawnRefresh(self, ...)
+				ns.Guard(Fit)
+			end
+			inner.onStates = function() preview:Refresh() end
+			preview:HookScript("OnShow", function() C_Timer.After(0, function() preview:Refresh() end) end)
+		end
+		local editor = ns.StyleEditorPage(kit, content, stack, "cast", { preview = preview, canvas = canvas, variant = "PLATE",
+			only = true, side = true, pickers = true })
+		-- (Its variant the one the cast frame's lists and tests read: Look from's choices.)
+		if ns.StudioPageHost then ns.StudioPageHost("cast", editor) end
+		canvas:SetScript("OnShow", kit.PageShown(kit.Refresh, content))
+		canvas:Hide()
+		kit.RegisterSubpage(canvas, spec.page, L[spec.title])
+		return
+	end
 	-- The rows: Default first (where it's this page's), then each kind of bar.
 	stack:Header(content, L["Cast bars"])
 	local ids = spec.default and { false } or {}

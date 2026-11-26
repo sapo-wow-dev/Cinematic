@@ -33,6 +33,7 @@ ns.LAZY_PAGE_DEFAULTS = {
 		["tabOn:Nameplates:NamesService"] = true,
 		["tabOn:Nameplates:NamesTarget"] = true,
 		["tabOn:Nameplates:Parts"] = true,
+		["tabOn:Nameplates:PlateStyleShow"] = true,
 		["tabOn:Nameplates:Target"] = true,
 	},
 	-- forever: end
@@ -62,6 +63,7 @@ ns.LAZY_PAGE_DEFAULTS = {
 		["tabOn:Nameplates:NamesService"] = true,
 		["tabOn:Nameplates:NamesTarget"] = true,
 		["tabOn:Nameplates:Parts"] = true,
+		["tabOn:Nameplates:PlateStyleShow"] = true,
 		["tabOn:Nameplates:Target"] = true,
 	},
 	-- retail: end
@@ -214,6 +216,7 @@ ns.LAZY_PAGE_SWITCHES = {
 		["tabOn:Nameplates:NamesService"] = "handleNames",
 		["tabOn:Nameplates:NamesTarget"] = "handleNames",
 		["tabOn:Nameplates:Parts"] = "handlePlates",
+		["tabOn:Nameplates:PlateStyleShow"] = "handlePlates",
 		["tabOn:Nameplates:Target"] = "handlePlates",
 		["timeOfDayChange"] = "tabOn:Card Vision/events:4",
 		["updateNotice"] = "tabOn:Chat/page:5",
@@ -354,6 +357,7 @@ ns.LAZY_PAGE_SWITCHES = {
 		["tabOn:Nameplates:NamesService"] = "handleNames",
 		["tabOn:Nameplates:NamesTarget"] = "handleNames",
 		["tabOn:Nameplates:Parts"] = "handlePlates",
+		["tabOn:Nameplates:PlateStyleShow"] = "handlePlates",
 		["tabOn:Nameplates:Target"] = "handlePlates",
 		["timeOfDayChange"] = "tabOn:Card Vision/events:4",
 		["updateNotice"] = "tabOn:Chat/page:5",

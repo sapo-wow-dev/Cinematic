@@ -215,7 +215,14 @@ local function Shade(bar, r, g, b)
 	if not (Known(r) and Known(g) and Known(b) and r) then return end
 	local fill = bar:GetStatusBarTexture()
 	if not (fill and fill.SetGradient and CreateColor) then return end
-	pcall(fill.SetGradient, fill, "HORIZONTAL", CreateColor(r, g, b, 1), CreateColor(fade[1], fade[2], fade[3], 1))
+	-- (Fade's Darker and Lighter (the mock, 2026-11-25): worked out from the bar's own color.)
+	local fr, fg, fb = fade[1], fade[2], fade[3]
+	if fade.mode == "darker" then
+		fr, fg, fb = r * 0.3, g * 0.3, b * 0.3
+	elseif fade.mode == "lighter" then
+		fr, fg, fb = r + (1 - r) * 0.6, g + (1 - g) * 0.6, b + (1 - b) * 0.6
+	end
+	pcall(fill.SetGradient, fill, "HORIZONTAL", CreateColor(r, g, b, 1), CreateColor(fr, fg, fb, 1))
 end
 local colorHooked = setmetatable({}, { __mode = "k" })
 local function ColorSet(bar, r, g, b)
@@ -288,6 +295,9 @@ end
 local function Gradient(bar, state)
 	local own = overrides[bar]
 	local fade = own and own.gradient or nil
+	-- (No row's: Default's Fade for the unit's kind, Nameplate Style's Colors. A row's own
+	-- "off" (false) keeps it flat.)
+	if fade == nil and (not own or own.gradient == nil) and ns.PlateKindFade then fade = ns.PlateKindFade(state.unit) end
 	if fade then
 		if not colorHooked[bar] then
 			colorHooked[bar] = true
@@ -326,17 +336,21 @@ local function StylePlate(plate)
 	local bar = BarOf(plate)
 	if not bar then return end
 	local texture, kind = Look(bar)
-	-- (Left quite alone until there's something to do.)
-	if not (texture or kind ~= "game" or states[bar] or (overrides[bar] and overrides[bar].gradient)) then return end
+	local unitFrame = plate.UnitFrame
+	local unit = unitFrame and unitFrame.unit
+	unit = Known(unit) and unit or nil
+	-- (Left quite alone until there's something to do: a look, a row's gradient, or
+	-- Default's Fade for this unit's kind.)
+	local kindFade = ns.PlateKindFade and unit and ns.PlateKindFade(unit)
+	if not (texture or kind ~= "game" or states[bar] or (overrides[bar] and overrides[bar].gradient) or kindFade) then return end
 	if not hooked[bar] then
 		hooked[bar] = true
 		hooksecurefunc(bar, "SetStatusBarTexture", GameSet)
 	end
 	Dress(bar)
+	-- (Its unit first: Gradient reads Default's Fade by it.)
+	states[bar].unit = unit
 	Gradient(bar, states[bar])
-	local unitFrame = plate.UnitFrame
-	local unit = unitFrame and unitFrame.unit
-	states[bar].unit = Known(unit) and unit or nil
 	Full(bar, states[bar], states[bar].unit)
 end
 
