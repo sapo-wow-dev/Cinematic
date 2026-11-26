@@ -6511,8 +6511,12 @@ local function AuraHold(aura)
 end
 
 -- Any debuff on you that isn't on the ignore list? (Yes when unsure: secret
--- values. The fight clears the hold anyway.)
+-- values. The fight's end checks again: ns.RecheckDebuffHold.)
+-- (ns.debuffHoldTestHas: the peekdebuffs test's stand-in answer, nil otherwise.)
 local function HasDebuff()
+	if ns.debuffHoldTestHas ~= nil then
+		return ns.debuffHoldTestHas
+	end
 	for i = 1, 40 do
 		local aura
 		if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
@@ -6536,6 +6540,21 @@ local function HasDebuff()
 		end
 	end
 	return false
+end
+
+-- The hold lets go once no debuff that counts is left (or the setting is off).
+-- On every aura change, and after a fight: in one, every debuff icon counts
+-- (what they are is secret), so an ignored or long one left on you kept the
+-- hold past the fight until some aura next changed.
+function ns.RecheckDebuffHold()
+	if debuffHeld and not (ns.db and ns.db.debuffPeekUntilGone and HasDebuff()) then
+		debuffHeld = false
+	end
+end
+
+-- Whether a debuff holds them up now (the peekdebuffs test reads it).
+function ns.DebuffHeld()
+	return debuffHeld
 end
 
 -- How many debuffs are on you, or nil when that can't be told. (The count
@@ -6606,7 +6625,7 @@ function ns.CheckDebuffIcons(peek)
 		end
 		-- (The last one gone: the hold lets go. The game's frame has caught up
 		-- by now, which it may not have at the aura change itself.)
-		if icons == 0 then
+		if icons == 0 and ns.debuffHoldTestHas == nil then
 			debuffHeld = false
 		end
 		if ns.auraDebug then
@@ -6739,7 +6758,17 @@ do
 	local auraWatcher = CreateFrame("Frame")
 	auraWatcher:RegisterUnitEvent("UNIT_AURA", "player")
 	auraWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+	auraWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 	auraWatcher:SetScript("OnEvent", ns.Profiled("UNIT_AURA (peeks)", function(_, event, isLogin, updateInfo)
+		-- A fight over: the debuffs readable again, the hold checked (twice:
+		-- the auras may still be secret in the first moment after it).
+		if event == "PLAYER_REGEN_ENABLED" then
+			if debuffHeld then
+				C_Timer.After(0.5, ns.RecheckDebuffHold)
+				C_Timer.After(2, ns.RecheckDebuffHold)
+			end
+			return
+		end
 		-- Logging in or a /reload with a debuff already on you (a zone's, say):
 		-- with debuffPeekUntilGone the hold picks up where it was, since nothing
 		-- will be gained to start it. (updateInfo here: PLAYER_ENTERING_WORLD's
@@ -6755,9 +6784,7 @@ do
 			return
 		end
 		-- (Removals count here: the last debuff going lets them fade.)
-		if debuffHeld and not (ns.db and ns.db.debuffPeekUntilGone and HasDebuff()) then
-			debuffHeld = false
-		end
+		ns.RecheckDebuffHold()
 		if not (ns.db and (PeekAllowed(false) or PeekAllowed(true))) then
 			return
 		end

@@ -1825,10 +1825,6 @@ local function HandleSlash(msg)
 	elseif cmd == "debug" and arg == "mappin" then
 		-- (Dev copy: the map pin follows the Minimap page's Map pin boxes in the cursor sweep, MapPinTest.lua.)
 		if ns.MapPinTest then ns.MapPinTest() else ns.Print("/cine debug mappin is in the dev copy only.") end
-	elseif cmd == "debug" and arg == "peekdebuffs" then
-		-- (Dev copy: a buff peek leaves the debuffs faded, a debuff peek brings them, BuffPeekDebuffTest.lua.)
-		if ns.BuffPeekDebuffTest then ns.BuffPeekDebuffTest() else
-			ns.Print("/cine debug peekdebuffs is in the dev copy only.") end
 	elseif cmd == "debug" and arg:find("^bufftest") then
 		-- (Dev copy: one run recording buff pictures left hidden after a "Just the new one" peek, BuffFadeTest.lua.)
 		if ns.BuffFadeTest then ns.BuffFadeTest(arg:match("^bufftest%s*(.*)$")) else

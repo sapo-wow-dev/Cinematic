@@ -39,7 +39,6 @@ local OLD = {
 	{ cmd = "shoulder", fn = "ShoulderTest", file = "ShoulderCamTest.lua", category = "shoulder" },
 	{ cmd = "dueltarget", fn = "DuelTargetTest", file = "DuelTargetTest.lua", log = "duelTargetLog" },
 	{ cmd = "mappin", fn = "MapPinTest", file = "MapPinTest.lua", log = "mapPinLog" },
-	{ cmd = "peekdebuffs", fn = "BuffPeekDebuffTest", file = "BuffPeekDebuffTest.lua", log = "peekDebuffLog" },
 	{ cmd = "bufftest", fn = "BuffFadeTest", file = "BuffFadeTest.lua", log = "buffTestLog" },
 	{ cmd = "spokentest", fn = "SpokenTest", file = "SpokenTest.lua", log = "spokenTestLog" },
 	{ cmd = "lowmana", fn = "LowManaTest", file = "LowManaTest.lua", category = "lowmana" },
