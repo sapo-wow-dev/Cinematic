@@ -795,6 +795,7 @@ local SHOW_IN_TABS = {
 	range = {
 		{ "Show", "HUD:rangehint", "CineMode hides the range hint: pick when it shows." },
 		{ "Settings", "Range hint", "Which spell's range it checks." },
+		{ "Style", "Range Hint Style", "How the mark looks, comes and goes." }, -- (RangeHintStyle.lua)
 	},
 	-- (The Nameplates hub's two icons, 2026-11-16: Nameplates (the Nameplates
 	-- page's grids but Names, then its icons and looks) and Names (that page's

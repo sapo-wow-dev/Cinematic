@@ -194,6 +194,7 @@ Style\TooltipStyle.lua
 Style\ActionBarStyle.lua
 Style\MinimapStyle.lua
 Style\CdmStyle.lua
+Style\RangeHintStyle.lua
 Style\QuestTrackerStyle.lua
 Style\SwingTimerStyle.lua
 Style\XpBarStyle.lua

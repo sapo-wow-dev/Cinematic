@@ -3286,6 +3286,11 @@ do
 			-- (Its own page since 2026-11-23: the square minimap, then Interface Recolor's ring rows. MinimapStyle.lua.)
 			{ "Minimap Style", "Interface\\Icons\\INV_Misc_Map02", label = "Minimap", section = "Interface",
 				sub = "Info" },
+			-- (Range Hint's mark, 2026-11-25: Style/RangeHintStyle.lua; also the Range Hint icon's Style tab.
+			-- Here, in the Info list: placed among Combat's it split Combat in two bands drawn over
+			-- each other, icons outside their boxes. The user's screenshot, 2026-11-25.)
+			{ "Range Hint Style", "Interface\\Icons\\INV_Misc_Spyglass_03", label = "Range Hint",
+				section = "Interface", sub = "Info", dev = true }, -- (Info, as its Interface icon: the user, 2026-11-25)
 			-- (Visions: the look they share (VisionsStyle.lua), in no group, then each Vision's in its Visions hub group.)
 			-- (The Visions hub's General icon, not Style General's gear: 2026-11-19.)
 			{ "Visions Style", "Interface\\Icons\\INV_Misc_Book_11", label = "All Visions", section = "Visions" },
@@ -9713,7 +9718,9 @@ local function CreateCombatPanel()
 		-- label or the page.)
 		-- (Each section's frames' Style page, a palette by its heading: ns.StyleIcon.)
 		local SECTION_STYLES = { units = "Unit Style", prd = "Personal Style", playercast = "Player Cast Style",
-			bars = "Action Style", raid = "Raid Style" }
+			bars = "Action Style", raid = "Raid Style",
+			-- (Range Hint's Show tab: a palette to its look, the user 2026-11-25.)
+			rangehint = "Range Hint Style" }
 		local function Section(page, heading, tab, link)
 			local sectionRows = {}
 			for _, item in ipairs(ns.COMBAT_SHOW) do
@@ -22068,6 +22075,10 @@ ns.OnLanguage(function()
 	if ns.CreateActionBarStylePanel then -- (ActionBarStyle.lua)
 		ns.CreateActionBarStylePanel(ns.lowHealthKit)
 		Lap("CreateActionBarStylePanel")
+	end
+	if ns.CreateRangeHintStylePanel then -- (RangeHintStyle.lua)
+		ns.CreateRangeHintStylePanel(ns.lowHealthKit)
+		Lap("CreateRangeHintStylePanel")
 	end
 	if ns.CreateCdmStylePanel then -- (CdmStyle.lua)
 		ns.CreateCdmStylePanel(ns.lowHealthKit)

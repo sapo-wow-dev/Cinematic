@@ -110,6 +110,8 @@ end
 -- theme leaves them as the profile has them.)
 local SWITCHES = { "ufStyle", "rfStyle", "prdStyle", "tooltipStyle", "bubblesStyle", "abStyle", "plateCastStyle",
 	"questTalkStyled", "questItemStyle", "rollStyle" }
+-- (Range Hint's: dev copy only, its settings there alone, UI/RangeHint.lua.)
+if ns.DEFAULTS.rangeHintColorBy ~= nil then SWITCHES[#SWITCHES + 1] = "rangeHintStyle" end
 
 -- A table and every table in it, copied (a theme of yours is made from one of ours).
 local function Copy(value)
@@ -166,6 +168,18 @@ local function Theme(info)
 	Panels(s, info.panel, info.panelAlpha)
 	Casts(s, info.cast, info.channel, info.locked, info.stop)
 	Line(s, info.lineSize, info.line)
+	-- (Range Hint's mark, UI/RangeHint.lua, 2026-11-25: in the theme's cast
+	-- color, its words in the theme's font, a shade lighter.)
+	local mark = info.cast or (info.menu and info.menu.accent)
+	-- (Dev copy only: the player copy has no Range Hint settings.)
+	if mark and s.rangeHintColorBy == nil and ns.DEFAULTS.rangeHintColorBy ~= nil then
+		s.rangeHintColorBy, s.rangeHintR, s.rangeHintG, s.rangeHintB = "custom", mark[1], mark[2], mark[3]
+		s.rangeHintTextColor = "custom"
+		s.rangeHintTextR = math.min(1, mark[1] * 0.6 + 0.4)
+		s.rangeHintTextG = math.min(1, mark[2] * 0.6 + 0.4)
+		s.rangeHintTextB = math.min(1, mark[3] * 0.6 + 0.4)
+		s.rangeHintFont = "general"
+	end
 	return info
 end
 
