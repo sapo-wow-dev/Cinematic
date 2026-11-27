@@ -198,6 +198,17 @@ for _, info in ipairs(BARS) do
 		end
 	end
 end
+-- The nameplates' own copy of a setting's default for profiles, sharing and backups (Core's
+-- MarkRowDefault): Default's default, so one of its kind is kept and a shared one comes in;
+-- nil for any other key. (2026-11-26: with no default of their own (above), a profile switch
+-- left them behind and carried them into the next profile, an export left them out, an older
+-- string's were skipped "from a newer Cinematic", and Profiles' "(changed)" missed them.)
+function ns.CastPlateDefault(key)
+	if type(key) ~= "string" or key:sub(-6) ~= "_PLATE" then return nil end
+	local base = key:sub(1, -7)
+	if not OWN_KEY[base] then return nil end
+	return DEFAULTS[base]
+end
 
 -- Whether a kind of bar is restyled: the page on, and for any but the
 -- nameplates', its tab's Restyle these bars ticked. (db: the settings to

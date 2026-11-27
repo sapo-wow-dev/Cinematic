@@ -1130,6 +1130,9 @@ function ns.MarkRowDefault(key)
 	-- (Combat Text Style's spells' settings too: CombatTextTexts.lua.)
 	local spellDefault = ns.CombatTextSpellDefault and ns.CombatTextSpellDefault(key)
 	if spellDefault ~= nil then return spellDefault end
+	-- (The nameplates' own cast bar settings too: PlateCastStyle.lua, 2026-11-26.)
+	local castDefault = ns.CastPlateDefault and ns.CastPlateDefault(key)
+	if castDefault ~= nil then return castDefault end
 	local split = markRowSplit[key]
 	if split == nil then
 		local id, rest = key:match("^(%l[%a%d]-)(Mark%u%a*)$")

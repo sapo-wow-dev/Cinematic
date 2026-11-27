@@ -1116,7 +1116,11 @@ function ns.ResetAddon(settingsOnly)
 				for _, k in ipairs(RESET_PROFILE_KEEPS) do
 					if type(saved[k]) == "table" and next(saved[k]) ~= nil then mine[k] = saved[k] end
 				end
-				EachRowSetting(saved, function(k, v) mine[k] = v end) -- (Nameplates rows you added)
+				-- (Nameplates rows you added. Not the nameplates' own cast bar settings: settings,
+				-- reset with the rest, 2026-11-26.)
+				EachRowSetting(saved, function(k, v)
+					if not (ns.CastPlateDefault and ns.CastPlateDefault(k) ~= nil) then mine[k] = v end
+				end)
 				if next(mine) then
 					-- (With the once-only marks, as below: some updates mark each
 					-- profile, Core.lua's TargetUpgrades. Built-ins' saved changes
@@ -1162,6 +1166,22 @@ function ns.ResetAddon(settingsOnly)
 	ns.Reload() -- (Forever: the popup's secure Reload button does it, QoL/Reload.lua)
 end
 
+-- (2026-11-26: the nameplates' own cast bar settings, <key>_PLATE (PlateCastStyle.lua's
+-- CastPlateDefault): no defaults, so not in the DEFAULTS loops below. fn(key) for each the
+-- live settings have otherwise than the base.)
+local function CastPlateChanges(base, fn)
+	if not ns.CastPlateDefault then return end
+	local seen = {}
+	for _, t in ipairs({ ns.db, base }) do
+		for k in pairs(t) do
+			if not seen[k] and ns.CastPlateDefault(k) ~= nil then
+				seen[k] = true
+				if ns.db[k] ~= base[k] then fn(k) end
+			end
+		end
+	end
+end
+
 -- Settings changed from the active profile's base, for the Profiles page's
 -- "(changed)". (Not the lists: those are tables whatever's in them. Nor what
 -- the Vitals theme put on: LowHealth.lua's SyncThemeLook, not the player.)
@@ -1173,7 +1193,9 @@ function ns.ProfileChanged()
 			return true
 		end
 	end
-	return false
+	local changed = false
+	CastPlateChanges(base, function() changed = true end)
+	return changed
 end
 
 -- /cine debug changed: what makes the Profiles page say "(changed)", each
@@ -1187,6 +1209,7 @@ function ns.ProfileChangedDebug()
 			keys[#keys + 1] = k
 		end
 	end
+	CastPlateChanges(base, function(k) keys[#keys + 1] = k end)
 	table.sort(keys)
 	local head = ("profile %s, changed %s, picked %s, new install %s, Vitals theme %s: %d setting(s) differ")
 		:format(tostring(ns.ActiveProfile()), tostring(ns.ProfileChanged()), tostring(ns.db.profileChosen), tostring(ns.newInstall),
