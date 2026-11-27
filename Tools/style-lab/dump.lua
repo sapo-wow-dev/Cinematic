@@ -162,6 +162,7 @@ local PAGES = {
 	{ id = "page-names", name = "Style: Name Style page", group = "Menu", page = "Style > Interface > Name Style", pageName = "Name Style" },
 	{ id = "page-plates", name = "Style: Nameplate Style page", group = "Menu", page = "Style > Interface > Nameplate Style", pageName = "Nameplate Style" },
 	{ id = "page-damage", name = "Damage Vision: Style page", group = "Menu", page = "Style > Visions > Damage Style", pageName = "Damage Vision Look" },
+	{ id = "page-controls", name = "Dev: Control Gallery page", group = "Menu", page = "Dev > Control Gallery", pageName = "Control Gallery" },
 }
 -- Look panels, open: the page they're on, and words in the panel's title.
 local LOOKS = {
