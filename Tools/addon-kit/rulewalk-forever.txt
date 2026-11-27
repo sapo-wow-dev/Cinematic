@@ -91,6 +91,12 @@ CELL addon:euiTotemBar none=----- always=+++++ combat=-+--- enemy=---+- friendly
 CELL addon:fecm none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
 CELL addon:fecmAuras none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=addon:fecm+
 CELL addon:flareBoss none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:flareLootFeed none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:flareReminders none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:glArrow none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
+CELL addon:glGuide none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=quests+
+CELL addon:glOngoing none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+ follows=quests+
+CELL addon:gxivPrompt none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
 CELL addon:healbot1 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
 CELL addon:healbot10 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+
 CELL addon:healbot2 none=----- always=+++++ combat=-+--- enemy=---+- friendly=----+

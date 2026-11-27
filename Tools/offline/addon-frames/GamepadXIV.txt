@@ -1,0 +1,36 @@
+# Gamepad XIV's named frames that Support/GamepadXIV.lua doesn't name, each
+# with why it needs no line there (Tools/addon-check.py check 3). A new frame
+# of its that's in neither = a MISS: decide it (a row, a fade, or here with
+# why). One per line: name or glob (*), a space, why. Checked against
+# v0.1.28, 2026-11-25 (addon kit run qe788: every frame on screen covered).
+
+GamepadXIVSide* a row of its cross hotbars, inside GamepadXIVFrame: fades with it (Bar.lua:77)
+GamepadXIVContent* a row's secure holder, inside GamepadXIVFrame: fades with it (Bar.lua:80)
+GamepadXIVBtn* its hotbar buttons, inside GamepadXIVFrame: fade with it (Bar.lua:162)
+GamepadXIVChatBox* its chat box's parts (input, menu, whispers, key buttons), inside GamepadXIVChatBox: fade with it (ChatBox.lua:2374-2578)
+GamepadXIVChatFeed its chat box's lines, inside GamepadXIVChatBox (ChatBox.lua:2334, 2370)
+GamepadXIVChatConversation its chat box's whisper lines, inside GamepadXIVChatBox (ChatBox.lua:2334, 2371)
+GamepadXIVChatItemTip a tooltip for a link in its chat (ChatBox.lua:1203)
+GamepadXIVChatCompare* tooltips beside that one (ChatBox.lua:1203)
+GamepadXIVRollTip a tooltip for a loot roll item (Input.lua:2007)
+GamepadXIVRollCompare* tooltips beside that one (Input.lua:2007)
+GamepadXIVChatOpenKey a key button, draws nothing (LfgFilter.lua:5085)
+GamepadXIVLfgFilterOpenKey a key button, draws nothing (LfgFilter.lua:5232)
+GamepadXIVLfgFilter* parts of its LFG and Chat window, opened on purpose (LfgFilter.lua:3880-4768)
+GamepadXIVConfig* parts of its settings window (Config.lua:1498-2683)
+GamepadXIVRingPickSearch a search box in its settings (Config.lua:1732)
+GamepadXIVMessages* its ready-made messages editor and its parts (MessagesEditor.lua:657-782)
+GamepadXIVNewsNav* buttons of its What's new window (News.lua:181)
+GamepadXIVConfigNav* buttons of its settings window (Config.lua:1498)
+GamepadXIVLfgFilterNav* buttons of its LFG and Chat window (LfgFilter.lua:4690)
+GamepadXIVMessagesNav* buttons of its messages editor (MessagesEditor.lua:782)
+GamepadXIVTutorial* its tutorial window's parts (Tutorial.lua:1340-1828)
+GamepadXIVRingLaunchAnchor a hidden 1x1 anchor for addon launchers (Ring.lua:579)
+GamepadXIVDriver its secure input driver, draws nothing (Input.lua:2091)
+GamepadXIVHoldTicker a secure clock under the driver, draws nothing (Input.lua:2228)
+GamepadXIVCrossAttack a secure click button, draws nothing (Input.lua:330)
+GamepadXIVCrossShoot a secure click button, draws nothing (Input.lua:336)
+GamepadXIVInviteRole* secure click buttons for its invite popups, draw nothing (Input.lua:449)
+GamepadXIVItemMove a hidden secure button for moving bag items (Items.lua:223)
+GamepadXIVLfgCancel a secure click button, draws nothing (Lfg.lua:500)
+GamepadXIVMinimapButton a child of the Minimap: fades with it (Minimap.lua:202)

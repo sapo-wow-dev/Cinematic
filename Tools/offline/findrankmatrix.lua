@@ -159,7 +159,7 @@ local PINS = {
 	{ "query=tracker", "Quest Tracker [Quest tracker] (page)" },
 	{ "query=xp", "Experience [Chat]" },
 	-- (Retail: no Gamepad Frames page, its own rows.)
-	{ "client=retail query=gamepad", "Gamepad action bars [Mouseover groups]" },
+	{ "client=retail query=gamepad", "Gamepad XIV prompt [Advanced Frames]" }, -- (was Gamepad action bars; OK'd by the user 2026-11-26)
 	{ "client=retail query=controller", "Game's window with a controller [Quest Vision]" },
 	{ "client=retail query=xp", "XP bars [Mouseover groups]" },
 }

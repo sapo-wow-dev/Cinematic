@@ -11,6 +11,9 @@
 local _, ns = ...
 
 ns.CHANGELOG_FEATURES = {
+	{ date = "2026-11-26", page = "Advanced Frames", client = "forever", title = "Gamepad XIV support",
+		text = "Gamepad XIV's cross hotbars fade with the Gamepad action bars row, its chat box fades with your " ..
+			"chat, and its interact prompt gets a row of its own." },
 	{ date = "2026-11-25", page = "Combat Text Style", title = "Combat text by spell",
 		text = "A new Spells tab on Combat Text Style gives any of your spells its own color, size and look, its " ..
 			"crits and DoT ticks too." },

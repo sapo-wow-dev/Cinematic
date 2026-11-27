@@ -70,6 +70,7 @@ Support\LoreForever.lua
 Support\DynamicCam.lua
 Support\RareScanner.lua
 Support\Glass.lua
+Support\GamepadXIV.lua
 Support\Prat.lua
 Support\MinimapButtonButton.lua
 Support\LeatrixPlus.lua
@@ -392,6 +393,7 @@ Dev\ElvUISupportTest.lua
 Dev\MikScrollingBattleText_ForeverSupportTest.lua
 Dev\PlatynatorSupportTest.lua
 Dev\RXPGuidesSupportTest.lua
+Dev\GamepadXIVSupportTest.lua
 Dev\AddonTest.lua
 Dev\EuiCooldownTest.lua
 Dev\BuffFadeTest.lua

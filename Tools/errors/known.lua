@@ -27,6 +27,32 @@ error: Interface/AddOns/Questie/Modules/QuestieInit.lua:428: attempt to call a n
     source = "the dev error window, 2026-11-25 (addon kit run for Guidelime, then every reload after)",
   },
   {
+    id = "gamepad-ui-cvar-blocked",
+    status = "fixed",
+    title = "A test turning the gamepad UI on (or back off) by its CVar: ADDON_ACTION_BLOCKED, out of a fight too (Forever)",
+    match = {
+      all = { "SetCVar" },
+      any = { "GamepadXIVSupportTest.lua", "InputDeviceInterfaceStyle" },
+    },
+    why = {
+      call = "SetCVar(\"InputDeviceInterfaceStyle\", ...) from addon code: protected, so ADDON_ACTION_BLOCKED (resume() when inside a test's coroutine, UNKNOWN() from its put back)",
+      caller = "Gamepad XIV's ready recipe (Dev/GamepadXIVSupportTest.lua make and putBack), copying what the game's Enable Gamepad UI box does (Blizzard_SettingsDefinitions_Shared/Gamepad.lua:280-286)",
+      path = "the recipe saw the gamepad UI off -> SetCVar from our code -> blocked; its putBack setting it back -> blocked again",
+      rule = "the gamepad UI's CVar (InputDeviceInterfaceStyle) can only be set by the game's own settings (engine rule forever.gamepad.interface-style-protected)",
+      pattern = "any of our code (tests, recipes, features) setting InputDeviceInterfaceStyle",
+    },
+    dont = "Don't set InputDeviceInterfaceStyle from our code: a test asks for the game's Enable Gamepad UI box in its guide.",
+    check = { pattern = [[SetCVar\W[^)]*InputDeviceInterfaceStyle]] },
+    fix = "2026-11-25: the recipe no longer sets it; its guide's first lines ask for the box (Escape, Options, Gamepad, Enable Gamepad UI)",
+    engine = { "forever.gamepad.interface-style-protected" },
+    seen = { "2026-11-25" },
+    example = [[BLOCKED: ADDON_ACTION_BLOCKED: resume()
+by [C]: in function 'resume' < [CinematicDev/Dev/TestKit.lua]:1082: in function 'Resume'
+BLOCKED: ADDON_ACTION_BLOCKED: UNKNOWN()
+by [C]: in function 'SetCVar' < [Blizzard_SharedXMLBase/CvarUtil.lua]:13 < ...[CinematicDev/Dev/GamepadXIVSupportTest.lua]:133]],
+    source = "test queue run q6ff9 (gamepadxiv) and the first addon kit try for GamepadXIV, 2026-11-25",
+  },
+  {
     id = "studio-tip-not-words",
     status = "fixed",
     title = "Hovering a choice on a Style editor page: SetText's bad argument #1 in C.Tip (a tip that isn't words)",

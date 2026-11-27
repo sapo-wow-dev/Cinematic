@@ -1,0 +1,79 @@
+# version v0.1.28
+EnableMouse(false or a variable) in GamepadXIV/ChatBox.lua
+EnableMouse(false or a variable) in GamepadXIV/Crosshair.lua
+EnableMouse(false or a variable) in GamepadXIV/Input.lua
+EnableMouse(false or a variable) in GamepadXIV/LfgFilter.lua
+EnableMouse(false or a variable) in GamepadXIV/Tutorial.lua
+SetAlpha hook in GamepadXIV/LfgFilter.lua
+SetIgnoreParentAlpha(true) in GamepadXIV/Input.lua
+frame GamepadXIVAssignPanel
+frame GamepadXIVBtn
+frame GamepadXIVBtn*
+frame GamepadXIVChatBox
+frame GamepadXIVChatBox*
+frame GamepadXIVChatBoxInput
+frame GamepadXIVChatBoxMacro
+frame GamepadXIVChatBoxMenu
+frame GamepadXIVChatBoxWhispers
+frame GamepadXIVChatOpenKey
+frame GamepadXIVClearPanel
+frame GamepadXIVConfigFrame
+frame GamepadXIVConfigListSearch
+frame GamepadXIVConfigNav
+frame GamepadXIVConfigNav*
+frame GamepadXIVConfigSearch
+frame GamepadXIVContent
+frame GamepadXIVContent*
+frame GamepadXIVCrossAttack
+frame GamepadXIVCrossShoot
+frame GamepadXIVDriver
+frame GamepadXIVEditor
+frame GamepadXIVFlyoutPanel
+frame GamepadXIVFrame
+frame GamepadXIVHoldTicker
+frame GamepadXIVInviteRole
+frame GamepadXIVInviteRole*
+frame GamepadXIVItemMove
+frame GamepadXIVLfgCancel
+frame GamepadXIVLfgFilterFind
+frame GamepadXIVLfgFilterFrame
+frame GamepadXIVLfgFilterGameWindow
+frame GamepadXIVLfgFilterInput
+frame GamepadXIVLfgFilterMessageInput
+frame GamepadXIVLfgFilterNav
+frame GamepadXIVLfgFilterNav*
+frame GamepadXIVLfgFilterNoteInput
+frame GamepadXIVLfgFilterOpenKey
+frame GamepadXIVLfgFilterSearch
+frame GamepadXIVLfgFilterTakeBack
+frame GamepadXIVMenu
+frame GamepadXIVMessagesFrame
+frame GamepadXIVMessagesInput
+frame GamepadXIVMessagesNav
+frame GamepadXIVMessagesNav*
+frame GamepadXIVMinimapButton
+frame GamepadXIVNewsFrame
+frame GamepadXIVNewsNav
+frame GamepadXIVNewsNav*
+frame GamepadXIVPopupHint
+frame GamepadXIVRing
+frame GamepadXIVRingLaunchAnchor
+frame GamepadXIVRingPickSearch
+frame GamepadXIVRollPicker
+frame GamepadXIVSide
+frame GamepadXIVSide*
+frame GamepadXIVSpellbookPick
+frame GamepadXIVTutorial
+frame GamepadXIVTutorialChapterList
+frame GamepadXIVTutorialParty
+hooks ChatEdit_ActivateChat
+hooks ChatFrame1:AddMessage
+hooks ChatFrameUtil:TryInsertChatLink
+hooks HandleModifiedItemClick
+hooks JumpOrAscendStart
+hooks LFGBrowseFrame:CreateSearchEntryMenu
+hooks NamePlateDriverFrame:UpdateSoftTargetIconInternal
+hooks StaticPopup_Show
+hooks ToggleAutoRun
+sets CVar alwaysCompareItems
+state driver in GamepadXIV/Input.lua
