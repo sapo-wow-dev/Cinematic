@@ -52,12 +52,18 @@ end
 -- "hide", "show" or nil (the row says). key: the row's: unitPart<frame><part>,
 -- platePart<part>. Only with Style and this tab on (styleOverrides, under
 -- styleGeneral: ns.PageOn): off, everything's as the rows say.
-function ns.StyleOverride(key)
+-- (Whether a key's override is used at all now: the gate alone, for the editors that show
+-- one elsewhere (Nameplate Layout's Shown rows), audit 2026-11-26.)
+function ns.StyleOverrideOn(key)
 	local db = ns.db
-	if not (db and key and db.enabled ~= false and ns.PageOn("styleOverrides")) then return nil end
+	if not (db and key and db.enabled ~= false and ns.PageOn("styleOverrides")) then return false end
 	local tab = TabOf(key)
-	if tab and not ns.PageOn(tab) then return nil end -- (its tab off)
-	return Own(db, key)
+	if tab and not ns.PageOn(tab) then return false end -- (its tab off)
+	return true
+end
+function ns.StyleOverride(key)
+	if not ns.StyleOverrideOn(key) then return nil end
+	return Own(ns.db, key)
 end
 
 -- What an Interface row says in place of its ticks (nil: nothing's overriding it).

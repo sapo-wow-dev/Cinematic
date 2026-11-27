@@ -413,6 +413,9 @@ end
 function Studio.ResetWrites(scope, f, variant, partId, prop)
 	local writes = {}
 	local function Add(frame, p, v)
+		-- (p.otherPage: another page's setting shown here too (Nameplate Layout's Shown rows, the
+		-- Overrides tab's): only its own row resets it, never a wider scope here. Audit 2026-11-26.)
+		if p.otherPage and scope ~= "prop" then return end
 		if p.kind == "swatch" then
 			if Studio.SourceOf(frame, p, v) == "yours" then
 				for _, rk in ipairs(Studio.RGB(p, v) or {}) do writes[#writes + 1] = { rk, ResetTo(rk, KeyDefault(rk)) } end
@@ -563,14 +566,19 @@ function Studio.Find(text, limit)
 end
 
 -- Whether a frame's look is live in the game now, and if not why: text, kind, action label, action.
-function Studio.Status(f)
+-- (variant, partId: the ones drawn, for f.partStatus(db, variant, partId): a line of the picked
+-- part's own, under the frame's (Nameplate Layout's Shown rows, the Overrides tab's). 2026-11-26.)
+function Studio.Status(f, variant, partId)
 	local db = ns.GetDB() or {}
+	local partText = f.partStatus and f.partStatus(db, variant, partId) or nil
 	if f.switch and not ns.StyleOn(f.switch, db) then
 		local chain = {}
 		if not db.styleGeneral then chain[#chain + 1] = L["Enable Style"] end
 		if not db[f.switch] then chain[#chain + 1] = f.label end
 		if #chain == 0 then chain[1] = L["a switch above it"] end
-		return L["Off: %s. Nothing here shows in the game."]:format(table.concat(chain, " > ")), "off", L["Turn on"],
+		local text = L["Off: %s. Nothing here shows in the game."]:format(table.concat(chain, " > "))
+		if partText then text = text .. "\n" .. partText end
+		return text, "off", L["Turn on"],
 			function()
 				local writes = {}
 				if not db.styleGeneral then writes[#writes + 1] = { "styleGeneral", true } end
@@ -588,6 +596,7 @@ function Studio.Status(f)
 		local text, kind, label, fn = f.status(db)
 		if text then return text, kind or "warn", label, fn end
 	end
+	if partText then return partText, "warn" end
 	return nil
 end
 end) -- (ns.Module "style")

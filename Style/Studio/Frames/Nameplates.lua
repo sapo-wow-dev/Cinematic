@@ -570,10 +570,33 @@ local layoutParts = {
 local SHOWN_ROW = { health = "platePartHealth", name = "platePartName", level = "platePartLevel",
 	debuffs = "platePartDebuffs", buffs = "platePartBuffs", marker = "platePartRaidMarker",
 	elite = "platePartClassification", cast = "platePartCastBar" }
+-- (Audit 2026-11-26: a Shown row is the Overrides tab's setting (ns.StyleOverride), one for every
+-- plate: on All only (no kind has its own; on each kind it looked like that kind's), live by the
+-- Overrides' own gate, not Layout's switch (greyed yet used, or live yet not, before), and left
+-- out of Layout's wider resets (part, kind, page): only its own row resets it.)
+local function ShownGateOn(key)
+	return not ns.StyleOverrideOn or ns.StyleOverrideOn(key)
+end
+local function LayoutShown(rowKey)
+	return R.Shown(rowKey, { free = true, otherPage = true,
+		shown = function(_, v) return LNote(v) == "all" end,
+		test = function() return ShownGateOn(rowKey) end })
+end
+local function ShownStatus(db, v, partId)
+	local rowKey = SHOWN_ROW[partId or ""]
+	if not rowKey or LNote(v) ~= "all" then return nil end
+	if not ShownGateOn(rowKey) then
+		return L["Shown belongs to the Style hub's Overrides tab, which is off, so it doesn't change your plates."]
+	end
+	if not ns.StyleOn("plateLayout", db) then
+		return L["Shown belongs to the Style hub's Overrides tab: it changes your plates with Nameplate Layout off too."]
+	end
+	return nil
+end
 for _, part in ipairs(ns.PLATE_LAYOUT_PARTS or {}) do
 	local key = part.key
 	local props = {}
-	if SHOWN_ROW[key] then props[1] = R.Shown(SHOWN_ROW[key]) end
+	if SHOWN_ROW[key] then props[1] = LayoutShown(SHOWN_ROW[key]) end
 	if part.hang then
 		props[#props + 1] = R.Drop(LField(key, "to", "game"), L["Hang on"], function()
 			local choices = { { "game", L["Where the game hangs it"] } }
@@ -672,6 +695,7 @@ ns.StyleFrame("platelayout", {
 	pickers = true, -- (the mock's grammar, as Nameplate Style's)
 	variants = FOR,
 	variantsLabel = L["Layout for"], -- (its variants dropdown's name)
+	partStatus = ShownStatus, -- (a part's Shown row: whether the Overrides use it now)
 	looks = {
 		Preset("game", L["Game's"], L["Every part where the game puts it."]),
 		Preset("balanced", L["Balanced"], L["The game's places, the plate centered on its unit."]),

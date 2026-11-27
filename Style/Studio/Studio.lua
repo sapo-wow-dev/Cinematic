@@ -357,7 +357,7 @@ function Studio.Body(parent, width, host)
 			y = y + (h or frame:GetHeight()) + (gap or 4)
 		end
 		-- Status: why it isn't showing.
-		local text, kind, label, fn = Studio.Status(f)
+		local text, kind, label, fn = Studio.Status(f, variant, part and part.id)
 		if text then
 			self.status.text:SetText(text)
 			local red = kind == "off"

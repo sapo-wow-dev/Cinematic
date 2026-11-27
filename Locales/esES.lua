@@ -5610,6 +5610,9 @@ L["Clear overrides"] = "Quitar excepciones"
 L["Every part back to what its row on the Interface hub's pages says."] = "Todas las partes vuelven a lo que dice su fila en las páginas del centro Interfaz."
 L["Interface page"] = "Página Interfaz"
 L["Hide"] = "Ocultar"
+-- (Style/Studio/Frames/Nameplates.lua: Nameplate Layout's Shown rows)
+L["Shown belongs to the Style hub's Overrides tab, which is off, so it doesn't change your plates."] = "Visibles pertenece a la pestaña Excepciones del centro Estilo, que está desactivada, así que no cambia tus placas de nombre."
+L["Shown belongs to the Style hub's Overrides tab: it changes your plates with Nameplate Layout off too."] = "Visibles pertenece a la pestaña Excepciones del centro Estilo: cambia tus placas de nombre también con Disposición de placas desactivada."
 
 -- Style/VisionsStyle.lua
 L["The look every Vision shares."] = "El aspecto que comparten todas las Visiones."
