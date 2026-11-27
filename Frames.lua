@@ -1609,6 +1609,32 @@ do
 	-- and not a pin: GatherMate's GatherMatePin<n> are named Buttons on the
 	-- map too; unnamed buttons can't be told from pins at all. (Asked once per
 	-- frame: the map's children include every pin an addon put on it.)
+	-- (Audit 2026-11-25: nor a pooled pin, a name ending in its number, as
+	-- Questie's QuestieFrame<n>: Questie's quest icons faded with the Addon
+	-- buttons row. A name ending Button<n> still says it's a button. Nor a pin
+	-- a HereBeDragons copy keeps on the minimap, by whatever name: IsMapPin.
+	-- No real button's name ends in a number, the installed addons' read
+	-- 2026-11-25. Only a "no" is kept: a button's pin record is asked again,
+	-- it can be made a pin later.)
+	local PIN_LIBS = { "HereBeDragons-Pins-2.0", "HereBeDragonsQuestie-Pins-2.0" }
+	local function InPins(lib, frame)
+		local pins = type(lib) == "table" and rawget(lib, "minimapPins")
+		return type(pins) == "table" and rawget(pins, frame) ~= nil
+	end
+	local function IsMapPin(frame)
+		local libStub = _G.LibStub
+		if libStub then
+			for _, major in ipairs(PIN_LIBS) do
+				local ok, lib = pcall(libStub, major, true)
+				if ok and InPins(lib, frame) then return true end
+			end
+		end
+		-- (Newer Questie keeps its copy as its own module, no LibStub name:
+		-- Support/QuestieMinimap.lua.)
+		local loader = _G.QuestieLoader
+		local modules = type(loader) == "table" and rawget(loader, "_modules")
+		return type(modules) == "table" and InPins(rawget(modules, "HBDPins"), frame)
+	end
 	local addonButtonVerdict = setmetatable({}, { __mode = "k" })
 	local function IsAddonMapButton(frame)
 		local verdict = addonButtonVerdict[frame]
@@ -1619,13 +1645,15 @@ do
 			if name:find("^LibDBIcon10_") then
 				verdict = true
 			elseif name ~= "CinematicMinimapButton" and not name:find("Pins?%d*$")
+				and not (name:find("%d$") and not name:find("Button%d+$"))
 				and type(issecurevariable) == "function" and not IsForbidden(frame) then
 				local okKind, kind = pcall(frame.GetObjectType, frame)
 				local okSecure, secure = pcall(issecurevariable, name)
 				verdict = okKind and kind == "Button" and okSecure and secure == false
+				if verdict and IsMapPin(frame) then verdict = false end
 			end
 		end
-		addonButtonVerdict[frame] = verdict
+		if not verdict then addonButtonVerdict[frame] = verdict end
 		return verdict
 	end
 	ns.IsAddonMapButton = IsAddonMapButton

@@ -6,7 +6,7 @@ Version read: 12.14.0 (_forever_), 2026-11-25 (the tracker recipe proven q7fb4: 
 A quest helper: it marks where each quest's objectives, givers and turn-ins are.
 - Its quest tracker (`Questie_BaseFrame`, with `Questie_HeaderFrame` "Questie Tracker: n/40" and pooled lines `linePool1..250`), standing in for the game's.
 - Quest item buttons `Questie_ItemButton1..40`, beside or in the tracker lines.
-- Map icons: `QuestieFrame*` on the world map and on the minimap (in `QuestieFrameGroup`, a child of the Minimap). Our Minimap Reveal ("Use Questie DB") reads the minimap ones (Support/QuestieMinimap.lua).
+- Map icons: `QuestieFrame*` on the world map and on the minimap (named Buttons straight on the Minimap, through its HereBeDragons copy; `QuestieFrameGroup` is made but unused). They're pins, not addon buttons: they fade with the Minimap row. Our Minimap Reveal ("Use Questie DB") reads the minimap ones (Support/QuestieMinimap.lua).
 - Objective icons on nameplates and on the target frame (`nameplateEnabled`, `nameplateTargetFrameEnabled`, both on to start with).
 - Extra lines in mob and item tooltips (its QuestieTooltips module).
 

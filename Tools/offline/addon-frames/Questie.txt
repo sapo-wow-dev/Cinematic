@@ -6,8 +6,8 @@
 # v12.14.0, 2026-11-25 (addon-check).
 
 # On screen, covered through a frame that is faded.
-QuestieFrame* its map icons: minimap ones in QuestieFrameGroup (on the Minimap), others on the world map
-QuestieFrameGroup holder of its minimap icons, a child of the Minimap (fades with the Minimap row)
+QuestieFrame* its map icons: minimap ones are named Buttons straight on the Minimap (fade with the Minimap row, not Addon buttons), others on the world map
+QuestieFrameGroup made by Questie but unused (its minimap icons sit on the Minimap itself)
 Questie_HeaderFrame inside Questie_BaseFrame (Quest tracker row)
 Questie_AutoComplete_Frame inside Questie_BaseFrame (Quest tracker row)
 Questie_Sizer inside Questie_BaseFrame, kept at alpha 0 (its resize grip)
