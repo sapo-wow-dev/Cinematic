@@ -374,6 +374,15 @@ function Studio.Redo()
 	hist[#hist + 1] = step
 	return step.desc
 end
+-- (Audit 2026-11-25: other settings loaded under the editor (a profile switched, loaded or
+-- reset: Profiles.lua's SettingsChanged; yours put back over a style demo) start a new
+-- history: Undo wrote the profile left's value into the new one.)
+function Studio.ClearHistory()
+	if #hist == 0 and #fut == 0 then return end
+	for i = #hist, 1, -1 do hist[i] = nil end
+	for i = #fut, 1, -1 do fut[i] = nil end
+	Notify(nil)
+end
 function Studio.CanUndo() return hist[#hist] and hist[#hist].desc end
 function Studio.CanRedo() return fut[#fut] and fut[#fut].desc end
 

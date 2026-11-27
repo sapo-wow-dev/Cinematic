@@ -495,6 +495,8 @@ end)
 local optionsMs = 0
 local function SettingsChanged()
 	ns.letterboxDirty = true
+	-- (Audit 2026-11-25: the style editor's Undo/Redo were the settings left's.)
+	if ns.Studio and ns.Studio.ClearHistory then ns.Guard(ns.Studio.ClearHistory) end
 	if ns.RestartTimers then ns.RestartTimers() end
 	if ns.RefreshTint then ns.RefreshTint() end
 	if ns.BuildManagedList then ns.BuildManagedList() end

@@ -164,6 +164,7 @@ All through the game's own code (read in the Forever export), each as your game 
 | Q4 | A layout saved, Nameplate Style off, /reload, then Nameplate Style on: do live plates take the layout within a second (and let go within a second when turned off)? | open | Tools/audits/2026-11-25-plate-layout-switch-back.md |
 | Q5 | Cast bars tab: pointing at Look from's "Its own look" (not clicked): the preview stays as saved and plateCastStarted_PLATE stays unset? | open | Tools/audits/2026-11-25-style-editor-hover.md |
 | Q6 | Reset > Everything in Style with a unit frame and a raid group on Its own look: both follow Default on screen right after, the next Reset counts 0 for them, Undo gives their look back? | open | Tools/audits/2026-11-25-style-reset-own.md |
+| Q7 | A change on Nameplate Style, then a profile switch with the page open: the footer's Undo/Redo words gone at once, and nothing to undo? | open | Tools/audits/2026-11-25-style-undo-profile.md |
 
 ## Runs
 | Run | Date | Command | Answered | Still open |

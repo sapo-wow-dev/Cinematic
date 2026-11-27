@@ -121,6 +121,8 @@ local function PutBack()
 		db["styleThemeReach" .. part] = value ~= "nil" and value or nil
 	end
 	ns.RestoreStyleSnapshot(kept)
+	-- (Audit 2026-11-25: the style editor's steps were made over the demo's look.)
+	if ns.Studio and ns.Studio.ClearHistory then ns.Guard(ns.Studio.ClearHistory) end
 	return true
 end
 
