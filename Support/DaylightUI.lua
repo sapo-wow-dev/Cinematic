@@ -510,7 +510,16 @@ end
 -- Without it, nothing's registered, so nothing here runs: noaddons.lua.)
 if ns.AddonWillLoad("DaylightUI_Chat") then
 	ns.AddPageGone("Bubble Style", function() return true end)
-	ns.AddStyleYield("bubblesStyle", function() return LABEL end)
+	-- (2026-11-26: its own Chat bubbles toggle off (DaylightUI_Chat/Options.lua's
+	-- "bubbles", read live as its Bubbles.lua does), it draws none: our look
+	-- applies, as before c65bdfc. Not loaded yet or not read yet (its module
+	-- comes on at login): aside. The page can't follow: it's made as we load,
+	-- before its saved settings are there. Tools/offline/dlbubblesmatrix.lua.)
+	ns.AddStyleYield("bubblesStyle", function()
+		local dui = DUI()
+		if dui and dui.Get and dui:Get("Chat", "bubbles") == false then return nil end
+		return LABEL
+	end)
 end
 ns.WhenAddonLoads("DaylightUI_Chat", function()
 	if ns.RefreshBubbleStyle then ns.RefreshBubbleStyle() end
