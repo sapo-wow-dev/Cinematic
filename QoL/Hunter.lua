@@ -35,8 +35,22 @@ local BOTH_BUTTONS_WINDOW = 0.25 -- seconds: a left-click this close before the 
 local leftDownAt = -math.huge
 local bound = false -- right-click is ours
 
+-- (Audit 2026-11-25: hunters only. The Hunter page's switch and every profile
+-- switch or Reset run ns.RefreshHunterPull on every class; on a warrior it
+-- registered the fight's state driver, binding right-click over enemies to a
+-- button with no macro: right-click on an enemy in a fight did nothing till
+-- /reload. Fix card Tools/audits/2026-11-25-hunter-class.md.)
+local isHunter -- (nil till the game says the class)
+local function IsHunter()
+	if isHunter == nil then
+		local _, class = UnitClass("player")
+		if type(class) == "string" then isHunter = class == "HUNTER" end
+	end
+	return isHunter == true
+end
+
 local function Wanted()
-	return ns.Setting("hunterRightClickShot") and true or false
+	return IsHunter() and ns.Setting("hunterRightClickShot") and true or false
 end
 
 local function SetPull(on)
@@ -112,14 +126,15 @@ watcher:SetScript("OnEvent", function(_, event, mouseButton)
 	elseif event == "PLAYER_REGEN_DISABLED" then
 		SetPull(false) -- a fight: the state driver's binding takes over (let go just before lockdown)
 	elseif event == "PLAYER_LOGIN" then
-		if select(2, UnitClass("player")) ~= "HUNTER" then
+		if not IsHunter() then
 			watcher:UnregisterAllEvents()
 			return
 		end
 		pullButton:SetAttribute("macrotext", "/target mouseover\n/startattack\n/cast !" .. AutoShotName())
 		ApplyDriver()
 		-- (Audit 2026-11-25: only while the setting's on, or till what it bound is let go.
-		-- It ran every frame for every Classic Era hunter, the setting off by default.)
+		-- It ran every frame for every Classic Era hunter, with the Hunter page off,
+		-- its default; the setting itself is on by default.)
 		ns.FeatureLoop(watcher, ns.Profiled("Hunter right-click watch", function()
 			-- Right button held: the binding stays as it was pressed (swapping it
 			-- mid-press would leave a right-drag turning stuck).
@@ -136,6 +151,7 @@ end)
 -- The Hunter page's switch, a profile or Reset: the watch started or let go at once
 -- (the feature loops are synced once a second anyway). (Audit 2026-11-25.)
 function ns.RefreshHunterPull()
+	if not IsHunter() then return end -- (Audit 2026-11-25: never on another class)
 	ApplyDriver()
 	ns.WakeFeatureLoop(watcher)
 end
