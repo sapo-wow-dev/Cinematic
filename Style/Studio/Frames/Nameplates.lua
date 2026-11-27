@@ -276,11 +276,19 @@ local function MarkShown(_, v) local s = LookValueRow(v, "Style") return s ~= ni
 local markPart = { id = "mark", label = L["Mark"], shown = function(v) return Note(v) ~= FIRST end, groups = {
 	Group("Look", "Mark", nil,
 		R.Choice(function(v) return RowKey(Note(v), "Style") end, L["Mark"], MarkStyles, { tip = L["The row's mark over the plate."] }),
-		R.Color(function(v) return RowKey(Note(v), "Color") end, L["Color"], {
-			{ value = "gold", text = L["Gold"], color = { 0.91, 0.72, 0.29 } },
-			{ value = "reaction", text = L["By reaction"], sub = L["Red, yellow or green by how the unit sees you"] },
-			{ value = "class", text = L["Class colors"], sub = L["Players in their class color; NPCs by reaction"] },
-			{ value = "custom", text = L["My own"], sub = L["From the palette"] } },
+		-- (An aggro row's first: Your target's ("same"), as its drawer's AGGRO_COLORS had it;
+		-- PlateParts' ArrowSetting then takes your target's Color and R, G, B. 2026-11-26.)
+		R.Color(function(v) return RowKey(Note(v), "Color") end, L["Color"], function(v)
+			local list = {}
+			if ns.MarkRowBase and ns.MarkRowBase(Note(v)) == "aggro" then
+				list[1] = { value = "same", text = L["Your target's"] }
+			end
+			list[#list + 1] = { value = "gold", text = L["Gold"], color = { 0.91, 0.72, 0.29 } }
+			list[#list + 1] = { value = "reaction", text = L["By reaction"], sub = L["Red, yellow or green by how the unit sees you"] }
+			list[#list + 1] = { value = "class", text = L["Class colors"], sub = L["Players in their class color; NPCs by reaction"] }
+			list[#list + 1] = { value = "custom", text = L["My own"], sub = L["From the palette"] }
+			return list
+		end,
 			function(v) v = Note(v) return { RowKey(v, "R"), RowKey(v, "G"), RowKey(v, "B") } end, "custom",
 			{ shown = MarkShown, tip = L["The mark's color."] }),
 		R.Slider(function(v) return RowKey(Note(v), "Size") end, L["Size"], 50, 200, 5, "%", { scale = 100, shown = MarkShown,
