@@ -14633,6 +14633,18 @@ do
 			ns.PageBuildStep(true) -- (made ahead: the next frame from here)
 			-- (The All marks line, its two raises (targetArrowY, targetArrowBareY): the Layout
 			-- tab's Smart marks part since 2026-11-25, the user "why not layout?".)
+			-- (2026-11-26: retail has no Layout tab (Nameplate Layout is Forever's), so the line
+			-- stays here on retail, as before: retail players had no way to the raises.)
+			if ns.isRetail then
+				stack:Header(content, L["All marks"])
+				-- (Two raises: on a showing plate, and with none; the marks move
+				-- between them as the plate fades, as the quest mark does.)
+				local marks = stack:Add(BoxLine(content), "label")
+				marks:Box(L["Raise with a plate"], "targetArrowY", -40, 40, 1, "%d", 1,
+					L["Moves the marks up or down while the plate shows."], Changed)
+				marks:Box(L["without a plate"], "targetArrowBareY", -40, 40, 1, "%d", 1,
+					L["Moves the marks up or down while the plate is hidden."], Changed)
+			end
 
 			-- The two parts on frames of their own, each at the top where Show in
 			-- was; the preview (and its spot) on the page, shown with both.
