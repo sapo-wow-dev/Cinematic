@@ -3396,6 +3396,7 @@ do
 		{ name = "Dev", pages = {
 			{ "Held Game Settings", "Interface\\Icons\\INV_Gizmo_02", dev = true }, -- (HeldSettingsPage.lua)
 			{ "Plate Switches", "Interface\\Icons\\INV_Misc_Spyglass_03", dev = true }, -- (PlateSwitchesPage.lua)
+			{ "Control Gallery", "Interface\\Icons\\INV_Misc_Note_01", dev = true }, -- (ControlGallery.lua)
 			{ "Demo Commands", "Interface\\Icons\\INV_Misc_Film_01", dev = true }, -- (DemoHub.lua)
 			{ "Minimap Copy", "Interface\\Icons\\INV_Misc_Map_01", dev = true }, -- (MinimapCopy.lua)
 		} },
@@ -22216,6 +22217,10 @@ ns.OnLanguage(function()
 	if ns.isDev and ns.CreatePlateSwitchesPage then -- (PlateSwitchesPage.lua: the Dev hub)
 		ns.CreatePlateSwitchesPage(ns.lowHealthKit)
 		Lap("CreatePlateSwitchesPage")
+	end
+	if ns.isDev and ns.CreateControlGalleryPage then -- (ControlGallery.lua: the Dev hub)
+		ns.CreateControlGalleryPage(ns.lowHealthKit)
+		Lap("CreateControlGalleryPage")
 	end
 	if ns.isDev and ns.CreateDemoHubPage then -- (DemoHub.lua: the Dev hub)
 		ns.CreateDemoHubPage(ns.lowHealthKit)

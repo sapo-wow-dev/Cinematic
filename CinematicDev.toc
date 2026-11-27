@@ -267,6 +267,7 @@ Profiles\FollowHud.lua
 Dev\ModuleEditor.lua
 Dev\HeldSettingsPage.lua
 Dev\PlateSwitchesPage.lua
+Dev\ControlGallery.lua
 Dev\DemoHub.lua
 Dev\MinimapTiles.lua
 Dev\MinimapCopy.lua
