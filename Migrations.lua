@@ -6010,6 +6010,12 @@ end
 -- change just the name's color?"): a row's own Look settings count whatever its Plate
 -- color, not only while it's Custom (PlateRowLook.lua's Own). A row that wasn't Custom
 -- had its Look settings unused: cleared now, so no plate changes. Audit 2026-11-25.
+-- (2026-11-26: a row's settings, its Plate color too, come from its parent where it has
+-- none (npcEnemy2 -> npcEnemy -> npc: PlateParts' OwnSetting), so each row's look is
+-- worked out through that chain, as it showed, before anything is cleared; then a row
+-- whose look would now come from its parent's (a copy not Custom under a Custom row, a
+-- Custom row under one cleared) gets the values that keep it as it was: the default's
+-- for one that wasn't Custom. Fix card Tools/audits/2026-11-26-row-look-follows.md.)
 STEPS[#STEPS + 1] = function()
 	local db = ns.db
 	if db.rowLookFollowsV1 then return end
@@ -6017,17 +6023,75 @@ STEPS[#STEPS + 1] = function()
 	local keys = ns.PLATE_LOOK_KEYS or { "LookTexture", "LookBorder", "LookBorderSize", "LookBorderR", "LookBorderG",
 		"LookBorderB", "LookFont", "LookTextSize", "LookOutline", "LookShadow", "LookLevel", "LookGradient", "LookGradR",
 		"LookGradG", "LookGradB" }
+	-- (Each key's "the Default row's" value: PlateRowLook.lua's DEFAULT_VALUE.)
+	local plain = ns.PLATE_LOOK_DEFAULTS or { LookTexture = "default", LookBorder = "default", LookFont = "default",
+		LookTextSize = 1, LookOutline = -1, LookShadow = "default", LookLevel = "default", LookBorderSize = 1,
+		LookBorderR = 0, LookBorderG = 0, LookBorderB = 0, LookGradient = "default", LookGradR = 0.1, LookGradG = 0.1,
+		LookGradB = 0.1 }
 	local function MarkKey(kind, key) return kind == "target" and "targetArrow" .. key or kind .. "Mark" .. key end
+	-- (PlateParts' MarkParent: without its number, then its Distance, then its Who.)
+	local function Parent(kind)
+		local base, reaction, copy, distance = ns.MarkRowBase(kind)
+		if copy then return base .. (reaction or "") .. (distance or "") end
+		if distance then return base .. (reaction or "") end
+		return reaction and base or nil
+	end
+	-- (PlateParts' OwnSetting, on a store: the row's, else its parent's, up the chain.)
+	local function Chain(store, kind, key)
+		for _ = 1, 8 do
+			if not kind then return nil end
+			local value = store[MarkKey(kind, key)]
+			if value == nil then value = DEFAULTS[MarkKey(kind, key)] end
+			if value ~= nil then return value end
+			kind = Parent(kind)
+		end
+	end
+	-- (PlateRowLook.lua's Own: nil = the Default row's. custom: as it was till now, only
+	-- while the row's Plate color is Custom.)
+	local function Shown(store, kind, key, onlyCustom)
+		if ns.MarkRowBase(kind) == "aggro" and Chain(store, kind, "AlsoSame") then return nil end
+		if onlyCustom and Chain(store, kind, "PlateColor") ~= "custom" then return nil end
+		local value = Chain(store, kind, key)
+		if value == nil or value == plain[key] then return nil end
+		return value
+	end
+	local function Depth(kind)
+		local n = 0
+		kind = Parent(kind)
+		while kind and n < 8 do n, kind = n + 1, Parent(kind) end
+		return n
+	end
 	local function Clear(store)
 		if type(store) ~= "table" then return end
 		local order = type(store.markOrder) == "string" and store.markOrder or DEFAULTS.markOrder or ""
+		local ids, seen, was, custom = {}, {}, {}, {}
 		for id in order:gmatch("[^,]+") do
-			if id ~= "others" then
-				local colorKey = MarkKey(id, "PlateColor")
-				local how = store[colorKey]
-				if how == nil then how = DEFAULTS[colorKey] end
-				if how ~= "custom" then
-					for _, key in ipairs(keys) do store[MarkKey(id, key)] = nil end
+			if id ~= "others" and not seen[id] then
+				seen[id] = true
+				ids[#ids + 1] = id
+				custom[id] = Chain(store, id, "PlateColor") == "custom"
+				was[id] = {}
+				for _, key in ipairs(keys) do was[id][key] = Shown(store, id, key, true) end
+			end
+		end
+		-- (Not Custom: its own were unused.)
+		for _, id in ipairs(ids) do
+			if not custom[id] then
+				for _, key in ipairs(keys) do store[MarkKey(id, key)] = nil end
+			end
+		end
+		-- (Parents first: a row's chain then reads its parent as it ends up.)
+		table.sort(ids, function(a, b)
+			local da, dbb = Depth(a), Depth(b)
+			if da ~= dbb then return da < dbb end
+			return a < b
+		end)
+		for _, id in ipairs(ids) do
+			for _, key in ipairs(keys) do
+				local want = was[id][key]
+				if Shown(store, id, key) ~= want then
+					if want == nil then want = plain[key] end
+					store[MarkKey(id, key)] = want
 				end
 			end
 		end
