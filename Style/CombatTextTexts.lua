@@ -679,6 +679,11 @@ function CT.NoteSeen(from, kind)
 		if not info.school and (entry.school or entry.tickSchool) then info.school = entry.school or entry.tickSchool end
 		if from.tick then info.ticks = true end
 		if not info.icon and from.icon then info.icon = from.icon end
+		-- (Audit 2026-11-25: its kind too. One added from the spellbook is a
+		-- damage spell till seen, so a heal stayed one: under its school,
+		-- previewed and colored as damage. Seen as a heal or your pet's, it's
+		-- that; one listed as either stays so.)
+		if info.kind == "damage" and (entry.kind == "heal" or entry.kind == "pet") then info.kind = entry.kind end
 	end
 end
 function CT.Seen()
