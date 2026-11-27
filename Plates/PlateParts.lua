@@ -3039,7 +3039,10 @@ local function PlateLook(plate, unit)
 		local tintKind = TintKind(colorRow)
 		local how = PlateHow(tintKind)
 		if how ~= "-" then
-			decided = true
+			-- (2026-11-26: a row overrides only the parts it colors, Default's colors
+			-- the rest; The game's still the game's look whole. Every row that colored
+			-- nothing (mouseover's, aggro's "same" with no ticks) took Default's away.)
+			decided = how == "game"
 			if how ~= "game" then
 				for part, key in pairs(PART_KEYS) do
 					if ArrowSetting(key, tintKind) then
@@ -3052,7 +3055,7 @@ local function PlateLook(plate, unit)
 		if not at then break end
 		colorRow, at = FittingRow(plate, unit, at + 1)
 	end
-	-- (No row said: Default's colors, the bottom of them all.)
+	-- (Default's colors under the row's, the bottom of them all: the parts no row colored.)
 	if not decided then ns.PlateKinds.Parts(unit) end
 	return mark, partKinds, ns.MarkRowBase(mark or kind) == "mouseover", alpha < 1 and alpha or nil,
 		(math.abs(width - 1) > 0.001 or math.abs(height - 1) > 0.001) and { width = width, height = height } or nil
