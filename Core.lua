@@ -1923,7 +1923,8 @@ function ns.RefreshOutsideCine(force)
 	if not any then return end
 	for _, name in ipairs({ "RefreshNameCVars", "ApplyHealVisionFrames", "ApplyHealVisionPlates", "RefreshPlateNameStyle",
 		"RefreshTargetQuestIcon", "UpdateQuestGlow", "RefreshQuestItemButton", "RefreshRollWindow",
-		"WakeQuestTalkLoops" }) do -- (Quest Talk's loops, by Allow outside CineMode: Audit 2026-11-25)
+		"WakeQuestTalkLoops", -- (Quest Talk's loops, by Allow outside CineMode: Audit 2026-11-25)
+		"RefreshLowHealth" }) do -- (Vitals: asleep with secret health its edges stayed up. Audit 2026-11-25)
 		if ns[name] then ns.Guard(ns[name]) end
 	end
 end

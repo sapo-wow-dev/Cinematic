@@ -2140,7 +2140,7 @@ events:SetScript("OnEvent", function(_, event, _, action, _, amount)
 		if Secret(max) or type(max) ~= "number" or max <= 0 then return end
 		if action == "HEAL" then
 			if healthGuess then healthGuess = math.min(1, healthGuess + amount / max) end
-			if ns.Setting(ns.VITALS_HEALTH_TAB) or test or glimpse then Wake() end -- (as below, Audit 2026-11-25)
+			if ns.Setting(ns.VITALS_HEALTH_TAB) or test or glimpse or (screen and screen.wasShown) then Wake() end -- (as below, Audit 2026-11-25)
 			return
 		end
 		if healthGuess then healthGuess = math.max(0, healthGuess - amount / max) end
@@ -2156,6 +2156,11 @@ events:SetScript("OnEvent", function(_, event, _, action, _, amount)
 		end
 		Create()
 		ns.SetOnUpdate(driver, ns.Profiled("Vitals", Update), ClearVitals)
+		-- (Its Health and Mana tabs' right-click: settled at once, as its page's
+		-- switch does. Asleep with secret health, the edges stayed. Audit 2026-11-25.)
+		if ns.tabSwitchHooks then
+			ns.tabSwitchHooks["tabOn:VitalsVision:"] = function() ns.RefreshLowHealth() end
+		end
 		events:RegisterUnitEvent("UNIT_HEALTH", "player")
 		events:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
 		events:RegisterUnitEvent("UNIT_COMBAT", "player")
@@ -2174,7 +2179,13 @@ events:SetScript("OnEvent", function(_, event, _, action, _, amount)
 	-- it), or a test or quick look: off, every hit ran a whole update for
 	-- nothing. Turned off live, ns.RefreshLowHealth wakes it to settle; a test
 	-- wakes it itself. Audit 2026-11-25.)
-	if event == "PLAYER_LOGIN" or ns.Setting(ns.VITALS_HEALTH_TAB) or test or glimpse then Wake() end
+	-- (Audit 2026-11-25: and while its edges are still up, off or not: with
+	-- secret health it sleeps with them shown, so turned off by something that
+	-- doesn't call ns.RefreshLowHealth they stayed, the game's flash hidden,
+	-- till it was wanted again. Settled, wasShown is false: hits rest it again.)
+	if event == "PLAYER_LOGIN" or ns.Setting(ns.VITALS_HEALTH_TAB) or test or glimpse or (screen and screen.wasShown) then
+		Wake()
+	end
 end)
 
 -- Is it showing now? (The minimap button's Minimap Glow Helper.) Only once your

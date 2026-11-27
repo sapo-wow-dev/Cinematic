@@ -499,6 +499,7 @@ local function SettingsChanged()
 	if ns.Studio and ns.Studio.ClearHistory then ns.Guard(ns.Studio.ClearHistory) end
 	if ns.RestartTimers then ns.RestartTimers() end
 	if ns.RefreshTint then ns.RefreshTint() end
+	if ns.RefreshLowHealth then ns.RefreshLowHealth() end -- (Vitals: asleep with secret health, its edges stayed up. Audit 2026-11-25)
 	if ns.BuildManagedList then ns.BuildManagedList() end
 	if ns.ForgetCombatShown then ns.ForgetCombatShown() end -- (the kept Show in list: Frames.lua)
 	if ns.plates and ns.plates.seen then ns.plates.seen.at = nil end -- (the plates' pass in full next: Effects.lua)
