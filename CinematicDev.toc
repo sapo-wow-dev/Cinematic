@@ -308,6 +308,9 @@ Dev\DetachedFadeTest.lua
 Dev\XpRelogTest.lua
 Dev\ListFoldTest.lua
 Dev\KitCheckTest.lua
+Dev\SimEvents.lua
+Dev\SimCore.lua
+Dev\SimProbeTest.lua
 Dev\ShieldProbeTest.lua
 Dev\SpellScanTest.lua
 Dev\CdmRingTest.lua

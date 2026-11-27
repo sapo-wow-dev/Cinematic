@@ -63,6 +63,11 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
 - `testkit.lua`: the test kit (Dev/TestKit.lua) through `/cine debug kitcheck` with pretend time, both clients: every
   step passes, context and probe lines (mana secret on Forever), the undo put back at the end, on a stop and at the
   next login after a cut-off run, CineMode kept off and back after. Copy it for a kit test's own offline run.
+- `simprobe.lua`: the simulation recorder's probe (Dev/SimProbeTest.lua, `/cine debug simprobe`, ledger
+  Tools/tests/sim-probe.md) on a small pretend world: game settings that hold their values, plates sent while plates
+  are on, soft target events while soft targeting is on, city chat, fights with secret reads and the combat log.
+  Every step runs on Forever and retail, the A/B finds the settings that change what's sent and no others, everything
+  is put back and Cinematic resumed; a third run has RegisterAllEvents blocked and checks the fallback (way B).
 - `testqueue.lua`: the test queue (Dev/TestQueue.lua) with kitcheck as the queued test, both clients: the offer at
   login, Run all with a result line and a log copy per id, a name that isn't a kit test passed over, Stop queue,
   a test's Reload button carrying the queue over, a /reload of your own cutting it off, tidy and clear. The

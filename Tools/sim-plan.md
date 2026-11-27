@@ -202,7 +202,9 @@ Forever first. Retail next, for secret values and its newer events.
 
 ## Steps
 
-1. **Probe** (one in-game run, `/test`): on Forever and retail,
+1. **Probe** (one in-game run, `/test`; built 2026-11-27: `/cine debug
+   simprobe`, Dev/SimProbeTest.lua on the recorder's core Dev/SimCore.lua,
+   ledger Tools/tests/sim-probe.md): on Forever and retail,
    every setting in the list set and read back (and which change what's
    sent), `RegisterAllEvents` and its cost, the combat log on Forever, how big
    60 s in a city is, what reads as secret in a fight. Engine rules for the
