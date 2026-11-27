@@ -637,7 +637,26 @@ function ns.CreatePlateLayoutPage(kit)
 			Changed()
 		end)
 		if not ok then KeysOff() end
+		-- (Audit 2026-11-25: keys passed on again a frame after each nudge. Held till the
+		-- next key before, so a fight starting then kept every key from the game till it
+		-- ended: the keyboard can't be passed on again in a fight.)
+		C_Timer.After(0, function()
+			if not InCombatLockdown() then pcall(self.SetPropagateKeyboardInput, self, true) end
+		end)
 	end
+	-- (Audit 2026-11-25: out of sight for the fight, so it never holds a key there;
+	-- PLAYER_REGEN_DISABLED comes just before the lockdown. Back after it, still armed:
+	-- an unprotected frame shows and hides in a fight.)
+	keys:RegisterEvent("PLAYER_REGEN_DISABLED")
+	keys:RegisterEvent("PLAYER_REGEN_ENABLED")
+	keys:SetScript("OnEvent", function(self, event)
+		if event == "PLAYER_REGEN_DISABLED" then
+			pcall(self.SetPropagateKeyboardInput, self, true)
+			self:Hide()
+		else
+			self:Show()
+		end
+	end)
 
 	-- (Two toggles in the stage's top right: every part up, and the lines.)
 	local ALL_UP = { "casting", "marker", "debuffs", "buffs", "crowd", "quest" }
