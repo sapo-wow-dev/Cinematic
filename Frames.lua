@@ -2667,8 +2667,9 @@ ns.COMBAT_SHOW = {
 		-- row's list, so Always on this row never brought it up, 2026-11-16.)
 		groups = { "swing" } },
 	-- Range Hint's mark (UI/RangeHint.lua), its own icon after Swing Timer's
-	-- (2026-11-25): In combat ticked to start with.
-	{ key = "rangehint", label = L["Range hint"], default = true, morePage = "Range hint",
+	-- (2026-11-25): In combat ticked to start with. Dev copy only (devOnly:
+	-- taken out below in the player copy).
+	{ key = "rangehint", label = L["Range hint"], default = true, morePage = "Range hint", devOnly = true,
 		tip = L["A small mark under your character while your target is out of your spell's range."],
 		frames = FRAME_GROUPS.rangehint, groups = { "rangehint" } },
 	-- Always ticked to start with (CINE_SHOW_DEFAULT), as before it had a row,
@@ -2792,6 +2793,14 @@ ns.COMBAT_SHOW = {
 		"StatusTrackingBarManager",
 	} },
 }
+-- (Audit 2026-11-25: the dev copy's rows, Range Hint's (UI/RangeHint.lua is
+-- only in CinematicDev.toc), were in the player copy too: a row for a frame
+-- it hasn't, in every list built from these. Taken out there.)
+if not ns.isDev then
+	for i = #ns.COMBAT_SHOW, 1, -1 do
+		if ns.COMBAT_SHOW[i].devOnly then table.remove(ns.COMBAT_SHOW, i) end
+	end
+end
 -- The Action bars tab's Show while the spellbook is open (barsWithSpellbook):
 -- these rows come up in CineMode while one of these windows is open, so new
 -- spells can be dragged onto the bars. (Not the bar art: buttons only.)
