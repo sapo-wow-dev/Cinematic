@@ -34,9 +34,34 @@ None of it ships: `.pkgmeta` leaves `Tools/` out.
 ## 1. Recorder
 
 A small addon of its own (`CinematicRecorder`), not part of Cinematic.
-Cinematic changes the game while it runs (in CineMode it switches every
-nameplate on, so more plate events fire); a separate recorder can record with
-Cinematic on or off, and says which.
+
+**Recorded with no other addons loaded** (the user, 2026-11-27): only the
+recorder, so the recording is the game alone, the same for every profile
+and every version of Cinematic, and also a baseline of how much the game
+itself sends in each situation.
+
+**But with the game settings Cinematic would have there.** What the game
+sends depends on its settings, not on which addons are loaded: in CineMode
+away from instances Cinematic switches every nameplate on
+(`FORCED_PLATE_CVARS`, Effects.lua), so plate events fire for units whose
+plates you'd normally have off; Quest Vision switches interact soft
+targeting on (QuestGlow.lua), which sends its own events. So:
+
+- Every game setting Cinematic changes is registered with `ns.CVarSet`
+  (Core.lua:3459, listed in `ns.cvarSets`). `Tools/sim/cvars.lua` loads
+  Cinematic on the stand-in and writes each set's values per client to
+  `Tools/sim/recorder/CVars.lua`, so the list can't drift from the code; its
+  check fails when they differ.
+- Each scenario names the sets Cinematic would have on there with the
+  default profile (plates forced in the open world and cities, not in a
+  dungeon). The recorder sets them at `/simrec start` and notes them in the
+  header.
+- At `/simrec stop` your own values come back. They're kept in the
+  recorder's SavedVariables first, so a crash or disconnect mid-recording
+  puts them back at the next login, as Cinematic does.
+
+Settings that change no events (camera follow, combat text look) are set
+too, for a recording that matches; they're listed, not reasoned about.
 
 Only watches: `RegisterAllEvents` and reads. It never replaces or wraps a
 game function (that would taint the UI).
@@ -56,8 +81,9 @@ Recorded:
     windows are shown, chat input open
 - **Frame times:** each frame's length, so the replay can run at the real
   frame rate.
-- **A header:** client and build, date, length, average frame rate, whether
-  Cinematic was loaded, its profile and CineMode state, and a note you type.
+- **A header:** client and build, date, length, average frame rate, the
+  game settings set (which sets, and the values), the addons loaded (should
+  be the recorder alone: a warning if not), and a note you type.
 
 Secret values (fights on retail and Forever) are recorded as "secret", so the
 replay hands back secret values in the same places.
@@ -124,8 +150,12 @@ per-frame loop"), they become checks that fail.
 
 ## 5. Calibration
 
-Each scenario recorded once with Cinematic's profiler on as well. The
-profiler counts calls per section; the bench counts the same sections. Where
+The scenarios are recorded without Cinematic, so calibration is a second,
+separate run: the same situation played again with Cinematic (and its
+profiler) on, as close as can be (same place, same time of day). The
+profiler counts calls per section; the bench, replaying the recorded
+scenario, counts the same sections. The two runs aren't the same minute,
+so it's rates (calls per second) that are compared, not totals. Where
 the counts disagree by more than a few percent, the bench is wrong and gets
 fixed before its numbers are used. A scenario that hasn't passed this isn't
 used for decisions.
@@ -139,7 +169,6 @@ used for decisions.
 | quest-solo | Open-world questing, a few solo fights | 120 s |
 | dungeon-pull | One group pull, start to finish | 60 s |
 | flight | Mount and fly across a zone | 90 s |
-| city-still-off | city-still with Cinematic switched off (the game alone) | 60 s |
 
 Forever first. Retail next, for secret values and its newer events.
 
@@ -157,7 +186,8 @@ Forever first. Retail next, for secret values and its newer events.
    `RegisterAllEvents` and its cost, the combat log on Forever, how big
    60 s in a city is, what reads as secret in a fight. Engine rules for the
    answers.
-2. **Recorder** and **converter**: the six scenarios recorded on Forever.
+2. **Settings list** (`Tools/sim/cvars.lua`), **recorder** and
+   **converter**: the five scenarios recorded on Forever, no other addons.
 3. **Clock, frame driver, timers** on the stand-in: Cinematic runs a
    recorded minute with no world (everything asked is listed).
 4. **World and plates** from the snapshots, the asked-not-modelled list
@@ -173,6 +203,9 @@ Forever first. Retail next, for secret values and its newer events.
 
 - Does Forever have `RegisterAllEvents` and `CombatLogGetCurrentEventInfo`?
   (Step 1.)
-- Record with Cinematic on, off, or both for each scenario? (Both for
-  city-still; on for the rest, its profile noted.)
+- ~~Record with Cinematic on, off, or both?~~ No other addons, with
+  Cinematic's game settings for the scenario (the user, 2026-11-27).
+- Which settings apply in each scenario follows the default profile. Is
+  that the profile to measure, or should a second set (another built-in
+  profile) be recorded for some scenarios?
 - The bench on both offline runtimes (`lua5.1` and `run.py`'s lupa), or one?
