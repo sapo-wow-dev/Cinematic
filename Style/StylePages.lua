@@ -2217,6 +2217,14 @@ function ns.PopPreviewOut(preview, title)
 			win.docked = not win.docked
 			win.Place()
 		end)
+		-- (2026-11-26: closing the settings, any way, or Escape closes it too, the preview back
+		-- on its row's page, as the pages' window does: it stayed over the game, its plate
+		-- preview still drawing. Hidden any way, the preview goes back.)
+		tinsert(UISpecialFrames, "CinematicRowPreviewWindow")
+		ns.CloseWithSettings(win)
+		win:SetScript("OnHide", function(self)
+			if self.held then ns.PopPreviewOut(self.held) end
+		end)
 	end
 	if win.held == preview then
 		-- (back where it was)
