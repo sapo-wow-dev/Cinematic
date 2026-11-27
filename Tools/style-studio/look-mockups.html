@@ -1,0 +1,302 @@
+<title>Style Studio Looks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Cinzel:wght@500;600&family=Inter:wght@400;500;600&family=Archivo+Narrow:wght@400;600&display=swap">
+<!-- Three looks for the Style Studio window (Tools/style-studio), 2026-11-25: the same frame
+     (Nameplates, Name part, Target variant) and the same settings in each; only the look differs.
+     Fonts approximate the game's (Friz Quadrata ~ Marcellus, Arial Narrow ~ Archivo Narrow). -->
+<style>
+/* One long page; each look a 960 x 640 window on its own in-game backdrop, in a scroll box. */
+:root {
+  --page: #0d0c0b; --ink: #e9e3d6; --dim: #a39a88; --gold: #ffd100; --line: #2a241c;
+  --friz: "Marcellus", Georgia, serif; --body: "Inter", system-ui, sans-serif; --narrow: "Archivo Narrow", "Arial Narrow", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1060px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; }
+h1 { font: 400 2.4rem/1.1 var(--friz); color: var(--gold); margin: 0 0 8px; }
+h2 { font: 400 1.5rem/1.2 var(--friz); color: var(--gold); margin: 0; }
+.lede { color: #cfc6b4; max-width: 70ch; margin: 0 0 8px; }
+.look { margin-top: 44px; }
+.look header { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.tag { font: 600 11px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.why { color: #bdb4a2; max-width: 75ch; margin: 4px 0 12px; font-size: 14px; }
+.why b { color: var(--ink); }
+.scroller { overflow-x: auto; border-radius: 6px; }
+.world { width: 1000px; padding: 20px; background: radial-gradient(ellipse at 30% 30%, #5a3d22 0%, #2b1c10 45%, #120b06 100%); border-radius: 6px; }
+.win { width: 960px; height: 640px; position: relative; display: grid; }
+
+/* ---------- A: game-native ---------- */
+.a { grid-template-columns: 196px 1fr 318px; grid-template-rows: 40px 1fr 46px;
+  background: #0f0d0c url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .4 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  border: 3px solid #6b5326; box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px #b8922f, 0 0 0 1px #000, 0 14px 40px rgba(0,0,0,.8);
+  font: 13px/1.35 "Trebuchet MS", system-ui, sans-serif; color: #e9e3d6; border-radius: 3px; }
+.a .corner { position: absolute; width: 22px; height: 22px; border: 2px solid #d8ad3c; z-index: 3; }
+.a .c1 { top: -5px; left: -5px; border-right: 0; border-bottom: 0; } .a .c2 { top: -5px; right: -5px; border-left: 0; border-bottom: 0; }
+.a .c3 { bottom: -5px; left: -5px; border-right: 0; border-top: 0; } .a .c4 { bottom: -5px; right: -5px; border-left: 0; border-top: 0; }
+.a .title { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; position: relative;
+  background: linear-gradient(#2b2118, #15100b); border-bottom: 1px solid #6b5326; }
+.a .title h3 { margin: 0; font: 400 17px var(--friz); color: var(--gold); text-shadow: 0 1px 0 #000; letter-spacing: .02em; }
+.a .title .x { position: absolute; right: 8px; top: 9px; width: 22px; height: 22px; border-radius: 3px;
+  background: radial-gradient(circle at 50% 35%, #b22, #600); border: 1px solid #c9a24a; color: #ffd; font-weight: bold; display: grid; place-items: center; font-size: 12px; }
+.a .title .find { position: absolute; left: 12px; top: 8px; width: 170px; height: 23px; border-radius: 12px; background: #050505;
+  border: 1px solid #5b4a2b; color: #777; padding: 3px 12px; font-size: 12px; }
+.a .rail { padding: 10px 0; border-right: 1px solid #3c2f1c; background: rgba(0,0,0,.25); }
+.a .rail .grp { font: 400 13px var(--friz); color: var(--gold); padding: 8px 14px 3px; }
+.a .rail .it { padding: 3px 14px 3px 24px; color: #e9e3d6; font-size: 13px; position: relative; }
+.a .rail .it.on { background: linear-gradient(90deg, rgba(255,209,0,.22), rgba(255,209,0,0)); color: #fff; }
+.a .rail .it.on::before { content: ""; position: absolute; left: 10px; top: 9px; width: 6px; height: 6px; background: var(--gold); transform: rotate(45deg); }
+.a .rail .it .mine { color: var(--gold); margin-left: 4px; }
+.a .rail .it.off { color: #7d766a; }
+.a .stage { display: grid; grid-template-rows: 1fr auto; border-right: 1px solid #3c2f1c; }
+.a .well { margin: 12px; border: 1px solid #000; box-shadow: inset 0 0 0 1px #5b4a2b, inset 0 0 30px rgba(0,0,0,.9);
+  background: radial-gradient(ellipse at 50% 40%, #4b5a39, #1c2414 60%, #0a0d07); display: grid; place-items: center; position: relative; }
+.a .well .cap { position: absolute; left: 10px; top: 8px; font: 400 13px var(--friz); color: var(--gold); }
+.a .stagebar { display: flex; gap: 8px; padding: 0 12px 12px; align-items: center; }
+.btnA { background: linear-gradient(#a3190f, #5c0a05); border: 1px solid #000; box-shadow: inset 0 0 0 1px #d6a33a; color: var(--gold);
+  font: 13px "Trebuchet MS", sans-serif; padding: 4px 14px; border-radius: 3px; text-shadow: 0 1px 0 #000; white-space: nowrap; }
+.btnA.grey { background: linear-gradient(#3b342b, #1c1814); box-shadow: inset 0 0 0 1px #7b6a4a; color: #ddd; }
+.a .insp { padding: 12px 16px; overflow: hidden; }
+.a .ihead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.a .ihead h4 { margin: 0; font: 400 19px var(--friz); color: var(--gold); }
+.a .ihead span { color: #a39a88; font-size: 12px; }
+.a .sec { font: 400 14px var(--friz); color: var(--gold); margin: 14px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #3c2f1c; }
+.a .row { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; min-height: 30px; }
+.a .row label { color: #e9e3d6; }
+.a .row label.mine::after { content: " \2022"; color: var(--gold); }
+.ddA { height: 24px; background: linear-gradient(#1b1712, #0b0907); border: 1px solid #000; box-shadow: inset 0 0 0 1px #6b5a3a;
+  border-radius: 3px; display: flex; align-items: center; padding: 0 0 0 8px; color: #fff; font-size: 12.5px; }
+.ddA span { flex: 1; }
+.ddA i { width: 22px; height: 22px; display: grid; place-items: center; background: linear-gradient(#a3190f, #5c0a05); border-left: 1px solid #000; color: var(--gold); font-style: normal; font-size: 10px; border-radius: 0 3px 3px 0; }
+.slA { display: flex; align-items: center; gap: 8px; }
+.slA .tr { flex: 1; height: 8px; border-radius: 4px; background: #050505; border: 1px solid #5b4a2b; position: relative; }
+.slA .tr::after { content: ""; position: absolute; left: var(--p); top: -5px; width: 10px; height: 16px; border-radius: 2px; background: linear-gradient(#ffe270, #b8922f); border: 1px solid #000; transform: translateX(-5px); }
+.slA .v { width: 50px; text-align: right; color: #fff; font-size: 12.5px; }
+.cbA { display: flex; gap: 14px; flex-wrap: wrap; }
+.cbA span { display: inline-flex; gap: 6px; align-items: center; }
+.cbA b { width: 15px; height: 15px; border: 1px solid #000; box-shadow: inset 0 0 0 1px #7b6a4a; background: #0b0907; border-radius: 2px; display: grid; place-items: center; color: var(--gold); font-size: 13px; line-height: 1; }
+.a .foot { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; padding: 0 14px; border-top: 1px solid #3c2f1c; background: linear-gradient(#15100b, #0d0a07); }
+.a .foot .sum { flex: 1; color: #a39a88; font-size: 12.5px; }
+.a .variant { display: flex; gap: 0; margin-bottom: 4px; }
+.tabA { padding: 4px 12px; background: linear-gradient(#2a221a, #120e0a); border: 1px solid #5b4a2b; border-bottom: 0; color: #bbb; font-size: 12.5px; border-radius: 4px 4px 0 0; margin-right: -1px; }
+.tabA.on { background: linear-gradient(#4a3a20, #1e170e); color: var(--gold); }
+
+/* ---------- B: CQL clean ---------- */
+.b { grid-template-columns: 170px 1fr 330px; grid-template-rows: 34px 1fr 44px; background: rgba(12,10,8,.98);
+  border: 1px solid #3a332a; box-shadow: 0 0 0 1px #000, 0 12px 44px rgba(0,0,0,.7); border-radius: 4px; font: 13px/1.4 "Trebuchet MS", system-ui, sans-serif; color: #e8e2d4; }
+.b .title { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+.b .title .nm { color: var(--gold); font-weight: bold; }
+.b .title .where { flex: 1; text-align: center; color: #e8e2d4; }
+.b .title .find { width: 180px; background: #050505; border: 1px solid #3a332a; color: #777; padding: 3px 8px; font-size: 12px; border-radius: 3px; }
+.btnB { background: #1b1814; border: 1px solid #3a332a; color: #e8e2d4; font: 12px "Trebuchet MS", sans-serif; padding: 3px 10px; border-radius: 3px; white-space: nowrap; }
+.btnB.act { background: linear-gradient(#3a0d0b, #240706); border-color: #5a1d18; color: var(--gold); }
+.b .rail { padding: 8px 0; border-right: 1px solid #241f19; }
+.b .rail .grp { color: #8a826f; font-size: 11.5px; padding: 8px 12px 2px; display: flex; gap: 6px; align-items: center; }
+.b .rail .grp i { width: 8px; height: 8px; display: inline-block; }
+.b .rail .it { padding: 3px 12px 3px 15px; border-left: 3px solid transparent; display: flex; gap: 6px; }
+.b .rail .it.on { background: #2a241b; border-left-color: var(--gold); }
+.b .rail .it .d { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); align-self: center; }
+.b .stage { display: grid; grid-template-rows: 1fr auto; }
+.b .well { margin: 10px; border-radius: 3px; background: radial-gradient(ellipse at 50% 40%, #3b4a2c, #1c2414 60%, #0a0d07); display: grid; place-items: center; }
+.b .stagebar { display: flex; gap: 6px; padding: 0 10px 10px; }
+.b .insp { padding: 12px 14px; border-left: 1px solid #241f19; display: grid; align-content: start; gap: 12px; }
+.b .who { font-size: 16px; } .b .who small { color: #9a9080; font-size: 12px; display: block; }
+.b .pills { display: flex; gap: 4px; flex-wrap: wrap; }
+.pillB { border: 1px solid #4a4438; border-radius: 3px; padding: 3px 9px; font-size: 12.5px; color: #c9c0ae; background: #15120e; }
+.pillB.on { border-color: #8a7330; color: var(--gold); background: #2a2414; }
+.b .row { display: grid; grid-template-columns: 82px 1fr; gap: 10px; align-items: center; }
+.b .row label { color: #b9b0a0; }
+.segB { display: inline-flex; border: 1px solid #4a4438; border-radius: 3px; overflow: hidden; }
+.segB span { padding: 3px 12px; font-size: 12.5px; border-right: 1px solid #4a4438; color: #bbb; background: #15120e; }
+.segB span:last-child { border-right: 0; } .segB span.on { background: #3a2f17; color: var(--gold); }
+.slB { display: flex; gap: 10px; align-items: center; } .slB .tr { flex: 1; height: 3px; background: #4a4438; position: relative; }
+.slB .tr::before { content: ""; position: absolute; left: 0; width: var(--p); top: 0; bottom: 0; background: var(--gold); }
+.slB .tr::after { content: ""; position: absolute; left: var(--p); top: -6px; width: 8px; height: 15px; background: var(--gold); transform: translateX(-4px); border-radius: 1px; }
+.slB .v { color: #e8e2d4; font-size: 12.5px; width: 46px; text-align: right; }
+.b .foot { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; padding: 0 12px; border-top: 1px solid #241f19; }
+.b .foot .sum { flex: 1; color: #9a9080; }
+
+/* ---------- C: theme-dressed (Gilded Codex) ---------- */
+.c { grid-template-columns: 210px 1fr 330px; grid-template-rows: 54px 1fr 50px;
+  background: linear-gradient(160deg, #241a10, #120c07 60%, #1a120a); border-radius: 10px;
+  box-shadow: 0 0 0 1px #000, 0 0 0 3px #7a5a22, 0 0 0 4px #000, 0 16px 50px rgba(0,0,0,.85); color: #f1e4c4; font: 13.5px/1.4 "Trebuchet MS", system-ui, sans-serif; }
+.c .orn { position: absolute; width: 46px; height: 46px; z-index: 3;
+  background: radial-gradient(circle at 30% 30%, #ffe8a0 0 3px, transparent 4px), conic-gradient(from 45deg, #c9a24a, #fff0b0, #8a6420, #c9a24a);
+  -webkit-mask: radial-gradient(circle at 100% 100%, transparent 26px, #000 27px); mask: radial-gradient(circle at 100% 100%, transparent 26px, #000 27px); }
+.c .o1 { top: -6px; left: -6px; } .c .o2 { top: -6px; right: -6px; transform: scaleX(-1); }
+.c .o3 { bottom: -6px; left: -6px; transform: scaleY(-1); } .c .o4 { bottom: -6px; right: -6px; transform: scale(-1); }
+.c .title { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 26px; border-bottom: 1px solid #5a4220;
+  background: linear-gradient(#2e2213, #1a1209); border-radius: 10px 10px 0 0; }
+.c .title h3 { margin: 0; font: 600 18px "Cinzel", var(--friz); color: #f0c860; letter-spacing: .06em; }
+.c .title .crumbs { flex: 1; color: #c2a978; font: 400 14px var(--friz); }
+.c .title .find { width: 200px; border-radius: 14px; background: rgba(0,0,0,.45); border: 1px solid #6a4e22; color: #9c8a66; padding: 4px 12px; font-size: 12.5px; }
+.c .rail { padding: 14px 10px; border-right: 1px solid #3e2d16; }
+.c .rail .grp { font: 400 13px var(--friz); color: #c9a24a; padding: 10px 8px 4px; border-bottom: 1px solid #3e2d16; margin-bottom: 4px; }
+.c .rail .it { padding: 5px 10px; border-radius: 6px; display: flex; gap: 8px; align-items: center; color: #e6d6b0; }
+.c .rail .it.on { background: linear-gradient(90deg, rgba(240,200,96,.25), rgba(240,200,96,.05)); box-shadow: inset 0 0 0 1px rgba(240,200,96,.45); color: #fff3cf; }
+.c .rail .it .ic { width: 20px; height: 20px; border-radius: 4px; background: linear-gradient(135deg, #6b4c1f, #2a1d0c); box-shadow: inset 0 0 0 1px #c9a24a; flex: none; }
+.c .rail .it .d { margin-left: auto; width: 6px; height: 6px; transform: rotate(45deg); background: #f0c860; }
+.c .stage { display: grid; grid-template-rows: 1fr auto; }
+.c .well { margin: 16px; border-radius: 8px; position: relative; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 35%, #5d6b45 0%, #26301a 55%, #0c1008 100%); box-shadow: inset 0 0 0 1px #8a6a2a, inset 0 0 60px rgba(0,0,0,.85); display: grid; place-items: center; }
+.c .well::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,.55)); pointer-events: none; }
+.c .stagebar { display: flex; gap: 8px; padding: 0 16px 14px; }
+.btnC { border-radius: 16px; padding: 5px 16px; font: 13px "Trebuchet MS", sans-serif; color: #2a1a06; background: linear-gradient(#ffe08a, #c9962e); box-shadow: inset 0 1px 0 #fff3c4, 0 0 0 1px #5a3c10; white-space: nowrap; }
+.btnC.ghost { background: rgba(0,0,0,.35); color: #e6d6b0; box-shadow: inset 0 0 0 1px #7a5a22; }
+.c .insp { padding: 16px 18px; display: grid; align-content: start; gap: 12px; border-left: 1px solid #3e2d16; }
+.c .who h4 { margin: 0; font: 600 20px "Cinzel", var(--friz); color: #f0c860; }
+.c .who small { color: #b8a27a; }
+.c .card { border-radius: 8px; background: rgba(255,240,200,.04); box-shadow: inset 0 0 0 1px #4a3618; padding: 10px 12px; display: grid; gap: 9px; }
+.c .card .h { font: 400 14px var(--friz); color: #e0b955; }
+.c .row { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: center; }
+.c .row label { color: #d8c69c; }
+.tilesC { display: flex; gap: 6px; } .tilesC span { width: 46px; height: 34px; border-radius: 6px; display: grid; place-items: center; background: rgba(0,0,0,.4); box-shadow: inset 0 0 0 1px #5a4220; font-size: 16px; color: #f1e4c4; }
+.tilesC span.on { box-shadow: inset 0 0 0 2px #f0c860; color: #fff; }
+.segC { display: inline-flex; background: rgba(0,0,0,.4); border-radius: 14px; padding: 2px; box-shadow: inset 0 0 0 1px #5a4220; }
+.segC span { padding: 3px 12px; border-radius: 12px; font-size: 12.5px; color: #cdb88d; } .segC span.on { background: linear-gradient(#ffe08a, #c9962e); color: #2a1a06; }
+.slC { display: flex; gap: 10px; align-items: center; } .slC .tr { flex: 1; height: 4px; border-radius: 2px; background: rgba(0,0,0,.55); position: relative; box-shadow: inset 0 0 0 1px #5a4220; }
+.slC .tr::before { content: ""; position: absolute; left: 0; width: var(--p); top: 0; bottom: 0; border-radius: 2px; background: linear-gradient(90deg, #8a6420, #f0c860); }
+.slC .tr::after { content: ""; position: absolute; left: var(--p); top: -6px; width: 16px; height: 16px; border-radius: 50%; transform: translateX(-8px); background: radial-gradient(circle at 35% 30%, #fff3c4, #c9962e); box-shadow: 0 0 0 1px #5a3c10; }
+.slC .v { width: 46px; text-align: right; color: #fff3cf; }
+.c .foot { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; padding: 0 22px; border-top: 1px solid #5a4220; background: linear-gradient(#1a1209, #120c07); border-radius: 0 0 10px 10px; }
+.c .foot .sum { flex: 1; color: #b8a27a; }
+
+/* The plate (shared) */
+.plate { display: grid; justify-items: center; gap: 4px; transform: scale(1.55); }
+.debuffs { display: flex; gap: 2px; } .debuffs b { width: 20px; height: 20px; border-radius: 2px; color: #fff; font: bold 10px var(--narrow); display: grid; place-items: end center; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.pname { font: 400 15px var(--friz); color: #ff4a35; text-shadow: 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 0 2px 3px rgba(0,0,0,.6); outline: 1px dashed rgba(255,209,0,.75); outline-offset: 3px; }
+.hrow { display: flex; gap: 4px; align-items: center; }
+.hbar { width: 150px; height: 12px; background: #000; box-shadow: 0 0 0 1px #1a1a1a; position: relative; }
+.hbar::before { content: ""; position: absolute; inset: 1px 40% 1px 1px; background: linear-gradient(#e2412f, #8c1810); }
+.lvl { font: bold 11px var(--narrow); color: var(--gold); background: #000; padding: 0 4px; height: 16px; display: grid; place-items: center; box-shadow: 0 0 0 1px #6b5326; }
+.cast { width: 150px; height: 8px; background: #000; position: relative; } .cast::before { content: ""; position: absolute; inset: 1px 30% 1px 1px; background: linear-gradient(#ffcf40, #b88a10); }
+.spell { font: 10px var(--narrow); color: #fff; display: flex; gap: 3px; align-items: center; } .spell i { width: 9px; height: 9px; background: linear-gradient(135deg, #ff9a2a, #8a2a00); }
+.picklabel { position: absolute; font: 11px "Trebuchet MS"; background: var(--gold); color: #111; padding: 0 5px; border-radius: 2px; }
+
+.compare { margin-top: 44px; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #1d1914; vertical-align: top; }
+th { color: var(--dim); font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .06em; }
+@media (max-width: 640px) { h1 { font-size: 1.9rem; } }
+</style>
+
+<div class="wrap">
+  <h1>Style Studio: three looks</h1>
+  <p class="lede">The same window three ways: Nameplates › Target, the Name part picked, the same settings and preview. Only the look changes, and the editor underneath stays as built. Pick one, or name what to take from each.</p>
+
+  <!-- ============ A ============ -->
+  <section class="look">
+    <header><span class="tag">Look A</span><h2>Game-native</h2></header>
+    <p class="why"><b>Looks like part of WoW.</b> The game's own dialog frame with a gold edge, Friz headings in gold sentence case, red-and-gold game buttons, the game's dropdowns, sliders and check boxes, and the left list styled like the game's Settings tree. Text is bigger and there are fewer boxes: each setting is a label beside its control. With a theme picked, the frame wears that theme's edge and corners.</p>
+    <div class="scroller"><div class="world"><div class="win a">
+      <i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i>
+      <div class="title"><span class="find">Find a setting…</span><h3>Style Studio</h3><span class="x">✕</span></div>
+      <div class="rail">
+        <div class="grp">General</div><div class="it">Everything</div><div class="it">Overrides</div>
+        <div class="grp">Interface</div><div class="it">Unit frames <span class="mine">•</span></div><div class="it">Raid frames</div><div class="it">Cast bars</div><div class="it">Personal resources</div><div class="it off">Action bars</div>
+        <div class="it on">Nameplates <span class="mine">•</span></div><div class="it">Names</div><div class="it">Chat bubbles</div><div class="it">Tooltips</div><div class="it">Minimap</div>
+        <div class="grp">Visions</div><div class="it">All Visions</div><div class="it">Damage</div><div class="it">Vitals</div>
+      </div>
+      <div class="stage">
+        <div class="well"><span class="cap">Hostile · Casting</span>
+          <div class="plate"><div class="debuffs"><b style="background:linear-gradient(135deg,#7a2a8a,#111)">3</b><b style="background:linear-gradient(135deg,#2a6a2a,#111)">16</b><b style="background:linear-gradient(135deg,#8a5a1a,#111)">10</b></div>
+            <div class="pname">Gnoll Brute</div><div class="hrow"><div class="hbar"></div><div class="lvl">14</div></div><div class="cast"></div><div class="spell"><i></i>Fireball</div></div></div>
+        <div class="stagebar"><span class="btnA">Test</span><span class="btnA grey">Hold to compare</span><span class="btnA grey">Peek</span><span class="btnA grey">2x</span></div>
+      </div>
+      <div class="insp">
+        <div class="variant"><span class="tabA">Default</span><span class="tabA on">Target</span><span class="tabA">Focus</span><span class="tabA">Mouseover</span></div>
+        <div class="ihead"><h4>Name</h4><span>follows Default except 2 settings</span></div>
+        <div class="sec">Text</div>
+        <div class="row"><label class="mine">Font</label><div class="ddA"><span>Friz Quadrata</span><i>▼</i></div></div>
+        <div class="row"><label class="mine">Size</label><div class="slA" style="--p:46%"><div class="tr"></div><span class="v">120 %</span></div></div>
+        <div class="row"><label>Color</label><div class="ddA"><span>Reaction</span><i>▼</i></div></div>
+        <div class="row"><label>Outline</label><div class="cbA"><span><b></b>None</span><span><b>✓</b>Thin</span><span><b></b>Thick</span></div></div>
+        <div class="row"><label>Shadow</label><div class="cbA"><span><b>✓</b>Soft shadow</span></div></div>
+        <div class="sec">Place</div>
+        <div class="row"><label>Hang on</label><div class="ddA"><span>Health bar</span><i>▼</i></div></div>
+        <div class="row"><label>Up</label><div class="slA" style="--p:55%"><div class="tr"></div><span class="v">4 px</span></div></div>
+      </div>
+      <div class="foot"><span class="sum">2 changes on Nameplates › Target</span><span class="btnA grey">Undo</span><span class="btnA grey">Copy look</span><span class="btnA grey">Reset…</span><span class="btnA">Done</span></div>
+    </div></div></div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="look">
+    <header><span class="tag">Look B</span><h2>CQL editor, calmer</h2></header>
+    <p class="why"><b>The CQL editor you liked, with half the clutter.</b> The same flat panel and colored band squares. No all-caps headers: the picked part's name is the heading. Each choice is one segmented control, nothing is outlined twice, and the type is bigger with more air between rows. It's the closest to what's built now, minus the noise.</p>
+    <div class="scroller"><div class="world"><div class="win b">
+      <div class="title"><span class="nm">Style</span><span class="where">Interface › Nameplates › Target</span><span class="find">Find a setting…</span><span class="btnB">↶</span><span class="btnB">Pop out</span><span class="btnB">✕</span></div>
+      <div class="rail">
+        <div class="it">Changed (14)</div>
+        <div class="grp"><i style="background:#ffd100"></i>General</div><div class="it">Everything</div>
+        <div class="grp"><i style="background:#5a99e6"></i>Interface</div><div class="it">Unit frames <span class="d"></span></div><div class="it">Raid frames</div><div class="it">Cast bars</div><div class="it">Personal resources</div>
+        <div class="it on">Nameplates <span class="d"></span></div><div class="it">Names</div><div class="it">Chat bubbles</div><div class="it">Tooltips</div>
+        <div class="grp"><i style="background:#d94c40"></i>Visions</div><div class="it">All Visions</div><div class="it">Damage</div>
+      </div>
+      <div class="stage">
+        <div class="well"><div class="plate"><div class="debuffs"><b style="background:linear-gradient(135deg,#7a2a8a,#111)">3</b><b style="background:linear-gradient(135deg,#2a6a2a,#111)">16</b><b style="background:linear-gradient(135deg,#8a5a1a,#111)">10</b></div>
+          <div class="pname">Gnoll Brute</div><div class="hrow"><div class="hbar"></div><div class="lvl">14</div></div><div class="cast"></div><div class="spell"><i></i>Fireball</div></div></div>
+        <div class="stagebar"><span class="btnB act">Test</span><span class="btnB">Hold to compare</span><span class="btnB">Peek</span><span class="btnB">2x</span></div>
+      </div>
+      <div class="insp">
+        <div class="pills"><span class="pillB">Default</span><span class="pillB on">Target</span><span class="pillB">Focus</span><span class="pillB">Mouseover</span></div>
+        <div class="pills"><span class="pillB">Plate</span><span class="pillB">Health bar</span><span class="pillB on">Name</span><span class="pillB">Level box</span><span class="pillB">Debuffs</span><span class="pillB">Cast bar</span></div>
+        <div class="who">Name<small>Target follows Default except 2 settings</small></div>
+        <div class="row"><label>Font</label><div class="segB"><span class="on">Friz</span><span>Morpheus</span><span>Marcellus</span><span>More…</span></div></div>
+        <div class="row"><label>Size</label><div class="slB" style="--p:46%"><div class="tr"></div><span class="v">120 %</span></div></div>
+        <div class="row"><label>Color</label><div class="segB"><span>Game's</span><span>Theme</span><span>Class</span><span class="on">Reaction</span></div></div>
+        <div class="row"><label>Outline</label><div class="segB"><span>None</span><span class="on">Thin</span><span>Thick</span></div></div>
+        <div class="row"><label>Shadow</label><div class="segB"><span>Game's</span><span class="on">On</span><span>None</span></div></div>
+        <div class="row"><label>Hang on</label><div class="segB"><span class="on">Health bar</span><span>The plate</span></div></div>
+        <div class="row"><label>Up</label><div class="slB" style="--p:55%"><div class="tr"></div><span class="v">4 px</span></div></div>
+      </div>
+      <div class="foot"><span class="sum">2 changes on Nameplates › Target</span><span class="btnB">Copy look</span><span class="btnB">Reset ▾</span><span class="btnB act">Done</span></div>
+    </div></div></div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="look">
+    <header><span class="tag">Look C</span><h2>Dressed in your theme</h2></header>
+    <p class="why"><b>The Studio wears the theme you picked</b>, shown here as Gilded Codex, using the corner and panel art the themes already have. Rounded cards, gold pill buttons, a big vignetted stage and large tiles for fonts. It's the most decorative of the three: each theme changes it, and with "The game's" theme it falls back to Look A.</p>
+    <div class="scroller"><div class="world"><div class="win c">
+      <i class="orn o1"></i><i class="orn o2"></i><i class="orn o3"></i><i class="orn o4"></i>
+      <div class="title"><h3>Style Studio</h3><span class="crumbs">Nameplates · Target</span><span class="find">Find a setting…</span><span class="btnC ghost">↶ Undo</span></div>
+      <div class="rail">
+        <div class="grp">Interface</div><div class="it"><span class="ic"></span>Unit frames <span class="d"></span></div><div class="it"><span class="ic"></span>Raid frames</div><div class="it"><span class="ic"></span>Cast bars</div>
+        <div class="it on"><span class="ic"></span>Nameplates <span class="d"></span></div><div class="it"><span class="ic"></span>Names</div><div class="it"><span class="ic"></span>Tooltips</div>
+        <div class="grp">Visions</div><div class="it"><span class="ic"></span>All Visions</div><div class="it"><span class="ic"></span>Vitals</div>
+      </div>
+      <div class="stage">
+        <div class="well"><div class="plate"><div class="debuffs"><b style="background:linear-gradient(135deg,#7a2a8a,#111)">3</b><b style="background:linear-gradient(135deg,#2a6a2a,#111)">16</b><b style="background:linear-gradient(135deg,#8a5a1a,#111)">10</b></div>
+          <div class="pname">Gnoll Brute</div><div class="hrow"><div class="hbar"></div><div class="lvl">14</div></div><div class="cast"></div><div class="spell"><i></i>Fireball</div></div></div>
+        <div class="stagebar"><span class="btnC">Test</span><span class="btnC ghost">Hold to compare</span><span class="btnC ghost">Peek</span></div>
+      </div>
+      <div class="insp">
+        <div class="who"><h4>Name</h4><small>Target · follows Default except 2</small></div>
+        <div class="card"><div class="h">Text</div>
+          <div class="row"><label>Font</label><div class="tilesC"><span class="on" style="font-family:'Marcellus'">Aa</span><span style="font-family:'Cinzel'">Aa</span><span style="font-family:Georgia">Aa</span><span style="font-size:12px">More</span></div></div>
+          <div class="row"><label>Size</label><div class="slC" style="--p:46%"><div class="tr"></div><span class="v">120 %</span></div></div>
+          <div class="row"><label>Outline</label><div class="segC"><span>None</span><span class="on">Thin</span><span>Thick</span></div></div>
+        </div>
+        <div class="card"><div class="h">Place</div>
+          <div class="row"><label>Hang on</label><div class="segC"><span class="on">Health bar</span><span>Plate</span></div></div>
+          <div class="row"><label>Up</label><div class="slC" style="--p:55%"><div class="tr"></div><span class="v">4 px</span></div></div>
+        </div>
+      </div>
+      <div class="foot"><span class="sum">2 changes on Nameplates · Target</span><span class="btnC ghost">Copy look</span><span class="btnC ghost">Reset…</span><span class="btnC">Done</span></div>
+    </div></div></div>
+  </section>
+
+  <section class="compare">
+    <h2>Side by side</h2>
+    <div class="tbl"><table>
+      <tr><th></th><th>A · Game-native</th><th>B · CQL, calmer</th><th>C · Your theme</th></tr>
+      <tr><td>Feels like</td><td>Part of WoW's own UI</td><td>The CQL editor</td><td>A themed showpiece</td></tr>
+      <tr><td>Controls</td><td>The game's dropdowns, check boxes and sliders</td><td>Flat segmented buttons</td><td>Pills, big tiles, round knobs</td></tr>
+      <tr><td>Type</td><td>Friz headings in gold, 13 px body</td><td>Trebuchet, 13 px, no caps</td><td>Cinzel headings, 13.5 px</td></tr>
+      <tr><td>Changes with the theme</td><td>The edge and corners only</td><td>The accent color only</td><td>Everything</td></tr>
+      <tr><td>Work to build</td><td>Medium (game templates)</td><td>Small (restyle what's built)</td><td>Large (per-theme art)</td></tr>
+    </table></div>
+  </section>
+</div>

@@ -1,0 +1,1190 @@
+<title>Style Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Inter:wght@400;500;600&family=Archivo+Narrow:wght@400;600&family=Philosopher:wght@400;700&family=Almendra&family=Germania+One&family=Outfit:wght@500;700&display=swap">
+<!-- Style Studio: the plan and a working mock-up (Tools/style-studio/plan.md), 2026-11-25. Dev only.
+     Real frames, parts, labels and file:line findings from the four band audits. Fonts approximate the game's. -->
+<style>
+/* Layout: a long plan page; the Studio mock is a fixed 960 px game window in a scroll box, as in game. */
+:root {
+  --ground: #0b0a09; --panel: #14110e; --well: #070605; --edge: #3a332a; --edge2: #241f19; --sel: #2a241b;
+  --gold: #ffd100; --gold2: #c9a24a; --text: #e8e2d4; --dim: #9a9080; --faint: #6b6357;
+  --blue: #6aa8ff; --green: #5fe05f; --amber: #f0a030; --red: #ff6161; --btn1: #3a0d0b; --btn2: #240706; --btnEdge: #5a1d18;
+  --display: "Marcellus", Georgia, serif; --body: "Inter", system-ui, "Segoe UI", sans-serif;
+  --ui: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; --narrow: "Archivo Narrow", "Arial Narrow", sans-serif;
+  --mono: Consolas, "Courier New", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--text); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1200px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); color: var(--gold); letter-spacing: .01em; }
+h2 { font-size: 1.75rem; color: var(--gold); margin-bottom: 6px; }
+h3 { font-size: 1.15rem; color: var(--text); margin: 18px 0 6px; }
+p { max-width: 70ch; margin: 8px 0; }
+.lede { color: #cfc6b4; font-size: 1.08rem; }
+.eyebrow { font: 600 11px/1 var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+section { padding-top: 56px; }
+code, .k { font-family: var(--mono); font-size: .86em; color: #e9d9a6; background: #17130e; padding: 1px 5px; border-radius: 3px; }
+a { color: var(--gold); }
+.hero { padding-block: 48px 8px; display: grid; gap: 14px; }
+.hero .meta { color: var(--dim); font-size: 13px; }
+.nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
+.num { border: 1px solid var(--edge2); border-radius: 4px; padding: 12px 14px; background: #100e0c; }
+.num b { display: block; font: 400 2rem/1 var(--display); color: var(--gold); font-variant-numeric: tabular-nums; }
+.num span { color: var(--dim); font-size: 13px; }
+nav.toc { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: rgba(11,10,9,.94); backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--edge2); margin-top: 26px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 31; background: var(--ground); }
+nav.toc .in { display: flex; gap: 4px; overflow-x: auto; padding: 8px 0; }
+nav.toc a { color: var(--dim); text-decoration: none; font-size: 13px; padding: 4px 10px; border-radius: 3px; white-space: nowrap; }
+nav.toc a:hover { color: var(--gold); background: #17130e; }
+
+/* ---------- The Studio mock ---------- */
+.mockbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 10px; }
+.seg { display: inline-flex; border: 1px solid #4a4438; border-radius: 3px; overflow: hidden; }
+.seg button { background: #15120e; color: #bbb; border: 0; border-right: 1px solid #4a4438; font: 12px var(--ui); padding: 4px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: #3a2f17; color: var(--gold); }
+.seg button:hover:not(.on) { background: #1f1a14; color: #ddd; }
+.seg button:focus-visible, .tile:focus-visible, .btn:focus-visible, .chip:focus-visible, .railItem:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.hint { color: var(--dim); font-size: 13px; }
+.scroller { overflow-x: auto; padding-bottom: 8px; }
+.world { width: max-content; min-width: 100%; padding: 22px; border-radius: 6px; position: relative;
+  background: radial-gradient(ellipse at 30% 25%, #4a3420 0%, #2a1c10 40%, #120c07 100%); }
+.world::after { content: "Lion's Pride Inn"; position: absolute; right: 14px; bottom: 8px; font: 11px var(--ui); color: rgba(255,230,180,.25); }
+.studio { width: 960px; height: 640px; display: grid; grid-template-columns: 176px 1fr 300px; grid-template-rows: 32px 1fr 40px;
+  background: rgba(12,10,8,.97); border: 1px solid var(--edge); border-radius: 4px; box-shadow: 0 0 0 1px #000, 0 12px 44px rgba(0,0,0,.7);
+  font: 12.5px/1.35 var(--ui); color: var(--text); position: relative; transition: opacity .18s; user-select: none; }
+.studio.peek { opacity: .06; }
+.tbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--edge2); }
+.tbar .brand { color: var(--gold); font-weight: bold; letter-spacing: .06em; }
+.crumbs { flex: 1; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crumbs span { cursor: pointer; } .crumbs span:hover { color: var(--gold); } .crumbs .last { color: var(--gold); }
+.find { position: relative; }
+.find input, .inp { background: #050505; border: 1px solid var(--edge); color: var(--text); padding: 3px 7px; font: 12px var(--ui); border-radius: 3px; outline: none; width: 168px; }
+.find input:focus, .inp:focus { border-color: #6b5a2a; }
+.findRes { position: absolute; top: 25px; right: 0; width: 330px; max-height: 320px; overflow: auto; background: #1a1612; border: 1px solid #6b5a2a; border-radius: 3px; z-index: 40; box-shadow: 0 6px 20px rgba(0,0,0,.7); }
+.findRes .grp { color: #8a826f; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; padding: 5px 8px 2px; }
+.findRes div.r { padding: 3px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+.findRes div.r:hover, .findRes div.r.on { background: var(--sel); }
+.findRes .p { color: var(--dim); font-size: 11px; }
+.btn { background: linear-gradient(var(--btn1), var(--btn2)); border: 1px solid var(--btnEdge); color: var(--gold); font: 12px var(--ui); padding: 3px 10px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.btn.plain { background: #1b1814; border-color: var(--edge); color: var(--text); }
+.btn:hover { filter: brightness(1.25); } .btn:disabled { opacity: .4; cursor: default; filter: none; }
+.btn.icon { padding: 2px 7px; }
+.rail { border-right: 1px solid var(--edge2); overflow-y: auto; padding: 6px 0; }
+.railSpecial, .railItem { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 6px; cursor: pointer; border-left: 3px solid transparent; }
+.railSpecial:hover, .railItem:hover { background: #15120e; }
+.railSpecial.on, .railItem.on { background: var(--sel); border-left-color: var(--gold); }
+.railSpecial { font-style: italic; } .railSpecial .n { margin-left: auto; font-size: 10px; color: #888; font-style: normal; }
+.band { color: #8a826f; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 8px 10px 2px; display: flex; gap: 6px; align-items: center; }
+.band i { width: 7px; height: 7px; display: inline-block; }
+.sub { color: #6f675a; font-size: 10.5px; padding: 3px 12px 0; }
+.railItem .sq { width: 7px; height: 7px; flex: none; }
+.railItem .nm { flex: 1; } .railItem.off .nm { color: #6b6357; }
+.pip { width: 18px; height: 10px; border-radius: 5px; background: #2a2620; position: relative; flex: none; border: 1px solid #4a4438; }
+.pip::after { content: ""; position: absolute; top: 1px; left: 1px; width: 6px; height: 6px; border-radius: 50%; background: #777; transition: left .12s; }
+.pip.on { background: #3a2f17; border-color: #6b5a2a; } .pip.on::after { left: 9px; background: var(--gold); }
+.gdot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 4px var(--gold); flex: none; }
+.stageCol { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--edge2); }
+.stage { flex: 1; position: relative; overflow: hidden; display: grid; place-items: center; }
+.stage.g-scene { background: radial-gradient(ellipse at 50% 40%, #3b4a2c 0%, #1c2414 55%, #0a0d07 100%); }
+.stage.g-dark { background: linear-gradient(#111, #050505); }
+.stage.g-light { background: linear-gradient(#8f8a80, #5b574f); }
+.stage .badge { position: absolute; top: 8px; left: 10px; font-size: 11px; color: var(--amber); background: rgba(0,0,0,.6); padding: 1px 7px; border-radius: 9px; }
+.stage .modeSw { position: absolute; top: 8px; right: 10px; }
+.stage .help { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,.35); font-size: 11px; }
+.canvas { transition: transform .15s; position: relative; transform: scale(1.3); }
+.stage.zoom2 .canvas { transform: scale(2.1); }
+[data-part] { position: relative; cursor: pointer; border-radius: 2px; }
+[data-part]:hover { outline: 1px dashed rgba(255,209,0,.7); outline-offset: 3px; }
+[data-part].picked { outline: 1px solid var(--gold); outline-offset: 3px; }
+[data-part]:hover::before { content: attr(data-label); position: absolute; left: 0; top: -19px; font: 10.5px var(--ui); color: #111; background: var(--gold); padding: 0 5px; border-radius: 2px; white-space: nowrap; z-index: 5; text-shadow: none; }
+.arrange [data-part] { cursor: move; }
+.statebar { border-top: 1px solid var(--edge2); padding: 6px 10px 8px; display: grid; gap: 5px; background: #0b0a09; }
+.statebar .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.statebar .lab { width: 46px; color: #8a826f; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.tog { background: #16130f; border: 1px solid #3a342b; color: #aaa; border-radius: 3px; font: 11.5px var(--ui); padding: 1px 8px; cursor: pointer; }
+.tog.on { border-color: #6b5a2a; color: var(--gold); background: #2a2414; }
+.status { margin: 0 10px 6px; padding: 5px 8px; border: 1px solid #5a4a20; background: #1f1a0e; color: #e8d9a6; border-radius: 3px; display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.status.err { border-color: #5a2020; background: #1f0e0e; color: #f0b0a8; }
+.status .sp { flex: 1; }
+.insp { overflow-y: auto; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.insp > *, .stageCol > * { flex-shrink: 0; }
+.stageCol > .stage { flex-shrink: 1; }
+.sec { color: #8a826f; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; display: flex; align-items: center; gap: 6px; }
+.sec::after { content: ""; flex: 1; height: 1px; background: #241f19; }
+.looks { display: flex; gap: 5px; flex-wrap: wrap; }
+.look { width: 51px; border: 1px solid #3a342b; border-radius: 3px; background: #100e0b; cursor: pointer; padding: 3px; text-align: center; font-size: 10.5px; color: #bbb; }
+.look .sw { height: 22px; border-radius: 2px; margin-bottom: 2px; display: grid; place-items: center; font-size: 11px; color: #fff; }
+.look:hover { border-color: #6b5a2a; } .look.on { border-color: var(--gold); color: var(--gold); }
+.look.add .sw { border: 1px dashed #555; color: #888; }
+.chain { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.chain .ar { color: #555; }
+.note { color: var(--dim); font-size: 11.5px; }
+.parts { display: flex; gap: 4px; flex-wrap: wrap; }
+.prow { display: grid; grid-template-columns: 14px 62px 1fr 14px; gap: 6px; align-items: center; min-height: 24px; border-radius: 3px; padding: 1px 2px; }
+.prow.flash { animation: flash 1.2s; }
+@keyframes flash { 0%, 40% { background: rgba(255,209,0,.18); } 100% { background: transparent; } }
+.prow .lab { color: #cfc6b4; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.src { font-size: 11px; text-align: center; cursor: help; line-height: 1; }
+.src.game { color: #777; } .src.theme { color: var(--gold2); } .src.follows { color: var(--blue); cursor: pointer; } .src.yours { color: var(--gold); } .src.general { color: #d9b0ff; } .src.preview { color: var(--amber); }
+.rs { color: #887; cursor: pointer; font-size: 13px; text-align: center; visibility: hidden; } .rs.v { visibility: visible; } .rs:hover { color: var(--gold); }
+.prow .ctl { min-width: 0; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.prow .seg button { padding: 2px 8px; font-size: 11.5px; }
+.tiles { display: flex; gap: 3px; flex-wrap: wrap; }
+.tile { min-width: 40px; height: 26px; border: 1px solid #3a342b; border-radius: 3px; background: #100e0b; cursor: pointer; color: #ddd; font-size: 12px; padding: 0 6px; display: grid; place-items: center; }
+.tile.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; } .tile:hover { border-color: #8a7330; }
+.tile.tex { width: 40px; padding: 0; }
+.tile.tex i { display: block; width: 32px; height: 10px; border-radius: 1px; }
+.slider { display: flex; align-items: center; gap: 6px; width: 100%; }
+.slider input[type=range] { flex: 1; accent-color: var(--gold); min-width: 0; }
+.slider .val { width: 52px; background: #050505; border: 1px solid var(--edge); color: var(--text); font: 11.5px var(--ui); padding: 1px 4px; border-radius: 3px; text-align: right; }
+.chips { display: flex; gap: 3px; flex-wrap: wrap; }
+.chip { border: 1px solid #3a342b; border-radius: 9px; padding: 0 7px; font-size: 11px; background: #100e0b; color: #bbb; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; height: 20px; }
+.chip.on { border-color: var(--gold); color: var(--gold); background: #2a2414; }
+.chip .dot { width: 9px; height: 9px; border-radius: 2px; border: 1px solid rgba(255,255,255,.3); }
+.lowc { color: var(--amber); font-size: 10px; cursor: help; }
+.swRow { display: flex; gap: 3px; margin-top: 4px; flex-wrap: wrap; }
+.swRow .s { width: 16px; height: 16px; border-radius: 2px; cursor: pointer; border: 1px solid rgba(255,255,255,.25); }
+.swRow input { width: 26px; height: 18px; padding: 0; border: 0; background: none; }
+.switch { width: 34px; height: 18px; border-radius: 9px; background: #2a2620; border: 1px solid #4a4438; position: relative; cursor: pointer; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #888; transition: left .12s; }
+.switch.on { background: #3a2f17; border-color: #8a7330; } .switch.on::after { left: 18px; background: var(--gold); }
+select.dd { background: #050505; border: 1px solid var(--edge); color: var(--text); font: 12px var(--ui); padding: 2px 4px; border-radius: 3px; max-width: 100%; }
+.foot { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; padding: 0 12px; border-top: 1px solid var(--edge2); }
+.foot .sum { flex: 1; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop { position: absolute; z-index: 50; background: #1a1612; border: 1px solid #6b5a2a; border-radius: 3px; box-shadow: 0 6px 20px rgba(0,0,0,.7); padding: 4px 0; min-width: 230px; }
+.pop div.i { padding: 4px 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 14px; }
+.pop div.i:hover { background: var(--sel); } .pop div.i.dis { color: #666; cursor: default; background: none; }
+.pop .t { color: var(--gold); padding: 3px 12px 5px; font-size: 11.5px; }
+.pop .c { color: var(--dim); font-size: 11px; }
+.pop .conf { padding: 6px 12px; display: grid; gap: 6px; } .pop .conf .bt { display: flex; gap: 6px; }
+.toast { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); background: #1d1913; border: 1px solid #6b5a2a; color: var(--text); padding: 5px 10px; border-radius: 3px; display: flex; gap: 10px; align-items: center; z-index: 60; box-shadow: 0 4px 16px rgba(0,0,0,.6); font-size: 12px; }
+.toast a { color: var(--gold); cursor: pointer; text-decoration: underline; }
+.tip { position: fixed; z-index: 100; max-width: 260px; background: #0d1018; border: 1px solid #5a6a8a; border-radius: 4px; padding: 6px 9px; font: 12px var(--ui); pointer-events: none; color: #ddd; box-shadow: 0 4px 16px rgba(0,0,0,.6); }
+/* compact host: the same editor, one column, the Settings page's 480 px */
+.studio.compact { width: 480px; height: auto; grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; }
+.studio.compact .rail { display: none; }
+.studio.compact .stageCol { border-right: 0; }
+.studio.compact .stage { height: 230px; flex: none; }
+.studio.compact .insp { overflow: visible; }
+.studio.compact .tbar { display: none; }
+.pageHead { display: none; padding: 10px 12px 4px; gap: 6px; }
+.studio.compact .pageHead { display: grid; }
+.pageHead .tt { display: flex; align-items: center; gap: 10px; }
+.pageHead .tt h4 { margin: 0; font: 400 20px var(--display); color: var(--gold); flex: 1; }
+.pageHead .tabs { display: flex; gap: 2px; border-bottom: 1px solid #3a342b; }
+.pageHead .tabs span { padding: 3px 10px; font-size: 11.5px; color: #aaa; border: 1px solid #3a342b; border-bottom: 0; border-radius: 3px 3px 0 0; background: #15120e; }
+.pageHead .tabs span.on { color: var(--gold); background: #2a2414; }
+.pageHead .en { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+/* stage art */
+.plate { display: grid; justify-items: center; gap: 3px; width: 240px; }
+.debuffs { display: flex; gap: 2px; }
+.debuffs b { width: 22px; height: 22px; border-radius: 2px; display: grid; place-items: end center; font: bold 11px var(--ui); color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; padding-bottom: 1px; }
+.hrow { display: flex; gap: 5px; align-items: center; }
+.bar { width: 170px; height: 14px; position: relative; overflow: hidden; }
+.bar .fill { position: absolute; inset: 0 auto 0 0; }
+.bar .tex { position: absolute; inset: 0; pointer-events: none; }
+.bar .spark { position: absolute; top: -2px; bottom: -2px; width: 6px; background: radial-gradient(closest-side, #fff, transparent); }
+.lvl { min-width: 24px; height: 18px; display: grid; place-items: center; font: bold 12px var(--ui); color: var(--gold); background: #000; }
+.castbar { width: 170px; height: 10px; position: relative; overflow: hidden; }
+.castbar .fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #b88a10, #ffcf40); width: 68%; }
+.castbar.run .fill { animation: cast 1.6s linear; }
+@keyframes cast { from { width: 0; } to { width: 100%; } }
+.spell { font-size: 12px; display: flex; gap: 4px; align-items: center; margin-top: 1px; }
+.spell i { width: 12px; height: 12px; background: linear-gradient(135deg, #ff9a2a, #8a2a00); display: inline-block; border-radius: 1px; }
+.uf { display: flex; align-items: center; gap: 0; }
+.portrait { width: 66px; height: 66px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8f6ad6, #3b2266 60%, #1a0f30); display: grid; place-items: center; color: #e7dcff; font-size: 26px; position: relative; z-index: 2; }
+.ufRows { display: grid; gap: 2px; margin-left: -8px; padding: 3px 6px 3px 12px; background: rgba(0,0,0,.55); }
+.ufName { font-size: 12px; padding: 1px 4px; background: rgba(0,0,0,.4); }
+.ufRows .bar { width: 150px; height: 16px; }
+.ufRows .bar.pw { height: 8px; }
+.bar .num { position: absolute; right: 4px; top: 0; font: bold 11px/16px var(--ui); color: #fff; text-shadow: 0 0 2px #000; }
+.ufLvl { position: absolute; left: -4px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #1a140a; color: var(--gold); font: bold 11px var(--ui); z-index: 3; border: 1px solid #6b5a2a; }
+.ttp { width: 230px; padding: 8px 10px; display: grid; gap: 2px; }
+.ttp .l2 { color: #ddd; } .ttp .gray { color: #9a9a9a; }
+.ttp .bar { width: 100%; height: 6px; margin-top: 5px; }
+.bubble { max-width: 230px; padding: 10px 14px; position: relative; border-radius: 10px; }
+.tail { position: absolute; left: 26px; bottom: -10px; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; }
+.bubble.pop { animation: pop .3s ease-out; }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.generic { display: grid; gap: 10px; justify-items: center; }
+.generic .gp { display: grid; justify-items: center; gap: 3px; }
+.generic .cap { font-size: 10px; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: .06em; }
+.panelS { width: 200px; height: 46px; display: grid; place-items: center; }
+.themeCards { display: grid; grid-template-columns: repeat(2, 190px); gap: 10px; }
+.tc { border: 1px solid #3a342b; border-radius: 4px; padding: 10px; cursor: pointer; background: rgba(0,0,0,.45); display: grid; gap: 6px; }
+.tc.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.tc .nmm { font-size: 13px; }
+.tc .pal { display: flex; gap: 2px; } .tc .pal i { width: 16px; height: 8px; display: block; }
+.changedList { width: 92%; height: 92%; overflow: auto; background: rgba(0,0,0,.55); border: 1px solid #241f19; border-radius: 3px; padding: 8px 12px; align-self: stretch; }
+.changedList .fr { color: var(--gold); margin-top: 8px; cursor: pointer; } .changedList .fr:first-child { margin-top: 0; }
+.changedList .ln { display: flex; gap: 8px; padding: 2px 0 2px 10px; color: #cfc6b4; } .changedList .ln .v { color: var(--dim); flex: 1; }
+.changedList .ln .x { cursor: pointer; color: #887; } .changedList .ln .x:hover { color: var(--gold); }
+
+/* ---------- Doc parts ---------- */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.box { border: 1px solid var(--edge2); border-radius: 4px; padding: 14px 16px; background: #100e0c; min-width: 0; }
+.box h3 { margin-top: 0; }
+.box ul { padding-left: 18px; margin: 6px 0; } .box li { margin: 4px 0; }
+.tbl { overflow-x: auto; border: 1px solid var(--edge2); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #1d1914; vertical-align: top; }
+th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; background: #110f0c; position: sticky; top: 0; cursor: pointer; white-space: nowrap; }
+tr:hover td { background: #121009; }
+td.c { text-align: center; }
+.pv { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.pv.full { background: var(--green); } .pv.part { background: var(--amber); } .pv.none { background: #4a2a2a; border: 1px solid var(--red); }
+.sys { font-size: 11px; padding: 1px 7px; border-radius: 9px; border: 1px solid #4a4438; white-space: nowrap; }
+.n { font-variant-numeric: tabular-nums; }
+.sev { font: 600 10px/1 var(--body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 9px; white-space: nowrap; }
+.sev.broken { background: #3a1212; color: #ff9a9a; } .sev.silent { background: #3a2a10; color: #ffc870; } .sev.confusing { background: #162238; color: #9cc4ff; } .sev.dead { background: #222; color: #aaa; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+.gram { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.gram .box { font: 12.5px var(--ui); }
+.gram .ex { margin: 10px 0 6px; padding: 10px; background: #0b0a09; border: 1px solid #1d1914; border-radius: 3px; }
+.gram .rule { color: var(--dim); font: 12.5px/1.45 var(--body); }
+.srcKey { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0; font: 13px var(--ui); }
+.dec { display: grid; gap: 10px; }
+.dec .box { display: grid; gap: 6px; }
+.dec .q { font-weight: 600; }
+.opt { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+.opt .rec { color: var(--green); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.steps { counter-reset: s; display: grid; gap: 8px; padding: 0; list-style: none; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 28px 1fr; gap: 8px; }
+.steps li::before { content: counter(s); font: 400 1.2rem var(--display); color: var(--gold); }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+@media (max-width: 640px) { body { font-size: 14px; } .world { padding: 10px; } }
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Cinematic · Style hub · plan and mock-up · 2026-11-25</div>
+  <h1>Style Studio</h1>
+  <p class="lede">Every Style page gets one editor with one set of controls. You click the part of the frame you want to change, and every setting tells you where its value comes from. Undo covers everything, Reset has one meaning, and nothing changes silently. It's the CQL editor's approach, applied to looks.</p>
+  <div class="nums">
+    <div class="num"><b>38</b><span>Style page ids, on 29 frames</span></div>
+    <div class="num"><b>5</b><span>different UI systems building them</span></div>
+    <div class="num"><b>7</b><span>ways to set a text outline</span></div>
+    <div class="num"><b>14</b><span>controls that are broken or silently do nothing</span></div>
+    <div class="num"><b>0</b><span>pages with undo</span></div>
+  </div>
+  <p class="meta">This is a plan only; nothing in the addon is built. Plan text: <code>Tools/style-studio/plan.md</code>. All findings come from reading the code (four band audits, with file:line) and today's Plate Layout shots on Forever.</p>
+</header>
+
+<nav class="toc"><div class="in">
+  <a href="#mock">The Studio</a><a href="#audit">Audit</a><a href="#fixes">What's broken</a><a href="#grammar">Controls</a>
+  <a href="#utilities">Tools</a><a href="#pages">Every page</a><a href="#depth">Depth</a><a href="#build">Build &amp; tests</a><a href="#decide">Decisions</a>
+</div></nav>
+
+<section id="mock">
+  <div class="eyebrow">Working mock-up</div>
+  <h2>The Studio</h2>
+  <p>Try it. Click a frame on the left, click a part on the preview, change a setting, then press Undo (Ctrl+Z). On Nameplates, switch to <b>Arrange</b> and drag the name. Hold <b>Compare</b> or <b>Peek</b>. Type "outline" into Find a setting. Use <b>Style page</b> to see the same editor in the Settings window's 480 px.</p>
+  <div class="mockbar">
+    <div class="seg" id="hostSeg"><button class="on" data-h="wide">Studio window (960 × 640)</button><button data-h="compact">Style page in Settings (480)</button></div>
+    <span class="hint" id="hostHint">One editor, two hosts. A fix lands in both.</span>
+  </div>
+  <div class="scroller"><div class="world"><div class="studio" id="studio"></div></div></div>
+</section>
+
+<section id="audit">
+  <div class="eyebrow">Audit · every Style frame</div>
+  <h2>Where each page stands today</h2>
+  <p>One row per frame. <span class="pv full"></span> full preview, <span class="pv part"></span> partial, <span class="pv none"></span> none. "Hover" means pointing at a choice shows it before you pick it. Click a column to sort.</p>
+  <div class="tbl"><table id="auditT"></table></div>
+</section>
+
+<section id="fixes">
+  <div class="eyebrow">Fixed as part of the build</div>
+  <h2>What's broken, silent or confusing</h2>
+  <div class="filters" id="fixF"></div>
+  <div class="tbl"><table id="fixT"></table></div>
+</section>
+
+<section id="grammar">
+  <div class="eyebrow">The grammar</div>
+  <h2>One control per kind of choice</h2>
+  <p>Every property row has the same four parts: where its value comes from, its label, its control, and ↺ when the value is yours. Right-clicking a row gives Reset, Copy, Paste and "Show on other frames".</p>
+  <div class="srcKey"><span><b class="src game">○</b> the game's</span><span><b class="src theme">◆</b> the theme</span><span><b class="src general">◇</b> Everything (General)</span><span><b class="src follows">↑</b> follows the variant above (click to go there)</span><span><b class="src yours">●</b> yours</span><span><b class="src preview">◌</b> previewing, not saved</span></div>
+  <div class="gram" id="gram"></div>
+  <h3>Recipes: the same set of settings wherever the thing appears</h3>
+  <div class="tbl"><table>
+    <tr><th>Recipe</th><th>Properties, always in this order</th><th>Replaces</th></tr>
+    <tr><td><b>Text</b></td><td>Font · Size % · Color · Outline (None / Thin / Thick) · Shadow (None / Soft / Strong)</td><td>7 outline models; "Edge"; "Thick + shadow"; Range Hint 0/1/2; multipliers on Text on You</td></tr>
+    <tr><td><b>Bar</b></td><td>Texture · Color · Gradient · Background · Spark · Smooth</td><td>Background / Behind the bar / Dark ground</td></tr>
+    <tr><td><b>Icon</b></td><td>Shape · Zoom · Size · Border</td><td>Action, CDM, cast icon, Quest Item, Damage type tiles</td></tr>
+    <tr><td><b>Border</b></td><td>Style · Size px · Color</td><td>border dropdowns, Minimap's named colors</td></tr>
+    <tr><td><b>Background</b></td><td>Color · Opacity % · Panel shape</td><td>"Panels" Look buttons that always read "The game's"</td></tr>
+    <tr><td><b>Place</b></td><td>Hang on · Side · Left/right · Down/up · Size · Gap (drag on the stage in Arrange)</td><td>Shift / Up, X/Y boxes, Move buttons, Layout's own panel</td></tr>
+    <tr><td><b>Motion</b></td><td>Fade in · Stay · Fade out · Rise / Grow · Pulse</td><td>Range Hint, Combat Text, Text on You, Emote motion rows</td></tr>
+  </table></div>
+  <h3>Words</h3>
+  <p><b>Background</b> (Raid: Bar background, Tile background) · <b>Custom</b>, never "Your own" · <b>Test</b>, never "Play" · <b>Follow main theme</b> for plates and names alike · <b>Follows Default</b> · Vision and Atmosphere icons use the tabs <b>Vision | Style</b> · page titles match their hub label ("Cast Bars", not "Cast Style").</p>
+</section>
+
+<section id="utilities">
+  <div class="eyebrow">Same on every frame</div>
+  <h2>Tools</h2>
+  <div class="cols">
+    <div class="box"><h3>Undo / Redo</h3><p>One history per session, Ctrl+Z / Ctrl+Y and the title bar arrows. Each step is named ("Target · Name font → Friz Quadrata"). Resets, looks and theme picks are steps too. It replaces <code>db.styleThemeKept</code>, which is written on every pick and read only by a test.</p></div>
+    <div class="box"><h3>Reset, one meaning</h3><p>Reset means back to what the value follows: the variant above, then the theme, then the game's. Scopes are one menu: setting, part, variant, frame, everything. The menu shows how many settings each scope touches, and an Undo toast follows. This replaces eight reset buttons with five different meanings.</p></div>
+    <div class="box"><h3>Find a setting</h3><p>Searches every property by name, recipe, part, frame and synonym (thickness → Border size, see-through → Opacity). Enter jumps there and flashes the row. The same index answers <code>/cine find</code>.</p></div>
+    <div class="box"><h3>Changed</h3><p>A rail view of everything you set, grouped by frame, each with ↺. It does for Style what "In this rule" does for CQL. A gold dot on each frame in the rail marks a look that differs from the theme.</p></div>
+    <div class="box"><h3>Compare, Peek, Test</h3><p>Hold Compare to see the frame as it was when you opened the Studio. Hold Peek to fade the Studio and Settings so you can see the real frames. Test plays the frame's motion (casts, numbers, letterbox, cards) and honors its timing settings.</p></div>
+    <div class="box"><h3>Why isn't it showing?</h3><p>When the frame can't be seen live, a status line under the stage says why: "Off: Enable Style › Nameplates [Turn on]", "Dominos draws your action bars", "Needs Chat › Behind bubbles [Open]". This covers every silent no-op the audit found.</p></div>
+    <div class="box"><h3>Copy look / Paste</h3><p>Works per recipe, so a tooltip's Text can go to Names. Paste shows only when there is somewhere it can go. Today it shows on single-look pages where it can't paste anywhere.</p></div>
+    <div class="box"><h3>Looks</h3><p>Every frame has a strip of looks: the theme's, the game's, built-in looks and your saved ones, shareable as <code>CINEL1:</code>. It replaces Preset dropdowns, Layout's destructive Preset and the never-wired "Start from a theme".</p></div>
+  </div>
+</section>
+
+<section id="pages">
+  <div class="eyebrow">29 frames · 38 page ids</div>
+  <h2>Every page, what it becomes</h2>
+  <p>Saved settings keep their keys. The hub, its icons, tabs and switches stay where they are, so the layout is still the switch tree. Each page id opens the editor on its frame and variant. Rows marked <b>moves</b> change where a control lives and need your OK (Decision 2).</p>
+  <div class="tbl"><table id="pagesT"></table></div>
+</section>
+
+<section id="depth">
+  <div class="eyebrow">Beyond the fixes</div>
+  <h2>Depth: what players gain</h2>
+  <div class="cols" id="depthC"></div>
+</section>
+
+<section id="build">
+  <div class="eyebrow">One build, one test run</div>
+  <h2>Build &amp; tests</h2>
+  <div class="cols">
+    <div class="box"><h3>Build order (inside one build)</h3><ol class="steps">
+      <li><span><code>Style/Studio/</code>: Editor (frames, variants, parts, recipes, where each value comes from), History, Find, Controls, Recipes, the Window host, the Page host, and Stages.</span></li>
+      <li><span>Frame specs for all 29 frames. These are data, not hand-built pages. Every property names its existing db key.</span></li>
+      <li><span>Each Style page calls <code>ns.StyleEditor(page, "compact")</code>. Remove the old builders: PresetMenu, Sub, themeLook, VisionRows on Style pages, and the hand-made widgets in Combat Text, Text on You, Plate Layout and Tint.</span></li>
+      <li><span>The fixes on the list above, each with its audit card.</span></li>
+    </ol></div>
+    <div class="box"><h3>Tests</h3><ul>
+      <li><b>Offline</b> <code>stylestudio.lua</code> checks that:<ul>
+        <li>every spec key is in DEFAULTS and is read at runtime;</li>
+        <li>every frame fits 300 px and 480 px on both clients;</li>
+        <li>no raw kit widget is left on a Style page;</li>
+        <li>Reset counts are right and Undo restores every value;</li>
+        <li>Find reaches every property;</li>
+        <li>the switch-tree sweep gives 0 warnings.</li>
+      </ul></li>
+      <li><b>Style Lab</b>: <code>studio-*</code> frames for every theme, as <code>cql-*</code>.</li>
+      <li><b>Audit kit</b>: a card and an old/new matrix for each changed behavior: the Card Types switch, the Visions reset scope, the hidden Name settings, the four value adapters, the greying fixes and Minimap's border color.</li>
+      <li><b>In game, one run</b>: the TestKit test <code>stylestudio</code> on Forever, then retail. It walks every frame, every hotspot and every Looks tile, then Reset → Undo, then Find. One shot per frame, and no deverror or BLOCKED lines.</li>
+    </ul></div>
+    <div class="box"><h3>Risks</h3><ul>
+      <li><b>Size.</b> This is the biggest UI change the addon has had: about 7–9k lines touched and about 4k removed. Two things contain it: the keys don't move, and both hosts share one editor.</li>
+      <li><b>Taint.</b> The Studio is our own frame and never parents a secure frame. Docking reuses the CQL editor's dock, so there's no more SettingsPanel sliding.</li>
+      <li><b>Speed.</b> Stages redraw only when something changes, at most once a frame. Rail dots come from History's changed-index, not from scanning db.</li>
+      <li><b>Secrets.</b> Stages use the preview-match copies and never read live secret values.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="decide">
+  <div class="eyebrow">Your call</div>
+  <h2>Decisions</h2>
+  <div class="dec" id="decC"></div>
+</section>
+</div>
+
+<div class="tip" id="tip" hidden></div>
+
+<script>
+(() => {
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------- Data ----------
+const FONTS = {
+  friz: { label: "Friz Quadrata", css: "'Trebuchet MS', sans-serif" },
+  marcellus: { label: "Marcellus", css: "'Marcellus', serif" },
+  philosopher: { label: "Philosopher", css: "'Philosopher', sans-serif" },
+  almendra: { label: "Almendra", css: "'Almendra', serif" },
+  germania: { label: "Germania One", css: "'Germania One', serif" },
+  outfit: { label: "Outfit", css: "'Outfit', sans-serif" },
+  narrow: { label: "Arial Narrow", css: "'Archivo Narrow', sans-serif" },
+};
+const TEX = {
+  blizzard: { label: "Blizzard", css: "linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,0) 45%, rgba(0,0,0,.3))" },
+  flat: { label: "Flat", css: "none" },
+  satin: { label: "Satin", css: "linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,.04) 50%, rgba(0,0,0,.22))" },
+  brushed: { label: "Brushed", css: "repeating-linear-gradient(90deg, rgba(255,255,255,.09) 0 1px, transparent 1px 3px), linear-gradient(180deg, rgba(255,255,255,.15), rgba(0,0,0,.2))" },
+  linen: { label: "Linen", css: "repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 2px, transparent 2px 4px), repeating-linear-gradient(-45deg, rgba(0,0,0,.12) 0 2px, transparent 2px 4px)" },
+};
+const BORDERS = { none: "None", line: "Line", gilt: "Gilt", rune: "Rune" };
+const THEMES = {
+  game: { name: "The game's", accent: "#ffd100", font: "friz", tex: "blizzard", border: "line", line: "#7a6a4a", text: "#ffffff", panel: "#000000", pal: ["#ffd100", "#000000", "#7a6a4a", "#c9a24a", "#1fbf1f", "#2a6cff", "#ffb000"] },
+  codex: { name: "Gilded Codex", accent: "#e0b354", font: "marcellus", tex: "satin", border: "gilt", line: "#c9a24a", text: "#f3e6c4", panel: "#1a130b", pal: ["#e0b354", "#1a130b", "#c9a24a", "#f3d58a", "#8fbf4a", "#4a7adf", "#ff9a3a"] },
+  glade: { name: "Moonlit Glade", accent: "#9fd4c0", font: "philosopher", tex: "linen", border: "line", line: "#6fa894", text: "#e6f4ee", panel: "#0d1714", pal: ["#9fd4c0", "#0d1714", "#6fa894", "#d6f0e4", "#5fd08a", "#5aa0e0", "#e0c070"] },
+  slate: { name: "Slate", accent: "#c8ccd2", font: "outfit", tex: "flat", border: "line", line: "#000000", text: "#ffffff", panel: "#15171a", pal: ["#c8ccd2", "#15171a", "#000000", "#8a9099", "#3fbf6a", "#4a8aff", "#ff8a3a"] },
+};
+const CLASS = "#9482c9"; // (Sapo Lock: warlock)
+const REACT = { Hostile: "#d23a2a", Neutral: "#e8c020", Friendly: "#3ab83a", Player: "#3a7aff" };
+
+const RECIPES = {
+  Text: [
+    { id: "font", label: "Font", kind: "tiles", opts: () => Object.keys(FONTS).slice(0, 5), lab: v => FONTS[v].label, theme: t => t.font, game: "friz", syn: "typeface letters" },
+    { id: "size", label: "Size", kind: "slider", min: 50, max: 200, unit: "%", theme: () => 100, game: 100, syn: "scale bigger smaller" },
+    { id: "color", label: "Color", kind: "color", chips: ["game", "theme", "class", "reaction", "custom"], theme: () => "theme", game: "game", syn: "colour tint" },
+    { id: "outline", label: "Outline", kind: "seg", opts: () => ["None", "Thin", "Thick"], theme: () => "None", game: "Thin", syn: "edge stroke" },
+    { id: "shadow", label: "Shadow", kind: "seg", opts: () => ["None", "Soft", "Strong"], theme: () => "Soft", game: "Soft", syn: "drop shadow" },
+  ],
+  Bar: [
+    { id: "tex", label: "Texture", kind: "tiles", tex: true, opts: () => Object.keys(TEX), lab: v => TEX[v].label, theme: t => t.tex, game: "blizzard", syn: "statusbar fill art" },
+    { id: "bcolor", label: "Color", kind: "color", chips: ["game", "theme", "class", "reaction", "custom"], theme: () => "game", game: "game", syn: "colour health color" },
+    { id: "back", label: "Background", kind: "slider", min: 0, max: 100, unit: "%", theme: () => 60, game: 50, syn: "behind the bar dark ground see-through transparency" },
+    { id: "spark", label: "Spark", kind: "switch", theme: () => true, game: false, syn: "glow edge" },
+  ],
+  Border: [
+    { id: "bstyle", label: "Style", kind: "tiles", opts: () => Object.keys(BORDERS), lab: v => BORDERS[v], theme: t => t.border, game: "line", syn: "frame edge art" },
+    { id: "bsize", label: "Size", kind: "slider", min: 0, max: 4, unit: "px", theme: () => 1, game: 1, syn: "thickness width" },
+    { id: "bcol", label: "Color", kind: "color", chips: ["game", "theme", "class", "custom"], theme: () => "theme", game: "game", syn: "colour" },
+  ],
+  Background: [
+    { id: "pcol", label: "Color", kind: "color", chips: ["game", "theme", "custom"], theme: () => "theme", game: "game", syn: "panel colour" },
+    { id: "pop", label: "Opacity", kind: "slider", min: 0, max: 100, unit: "%", theme: () => 90, game: 80, syn: "see-through transparency alpha" },
+  ],
+  Place: [
+    { id: "hang", label: "Hang on", kind: "drop", opts: p => p.hang || ["The plate", "Health bar", "Name"], game: p => (p.hang || ["The plate"])[0], syn: "anchor attach" },
+    { id: "side", label: "Side", kind: "seg", opts: () => ["Top", "Bottom", "Left", "Right"], game: p => p.side || "Top", syn: "anchor side" },
+    { id: "x", label: "Left/right", kind: "slider", min: -40, max: 40, unit: "px", game: 0, syn: "offset x shift move horizontal" },
+    { id: "y", label: "Down/up", kind: "slider", min: -40, max: 40, unit: "px", game: 0, syn: "offset y move vertical" },
+  ],
+  Icon: [
+    { id: "shape", label: "Shape", kind: "seg", opts: () => ["Square", "Round", "Rounded"], theme: () => "Rounded", game: "Square", syn: "mask" },
+    { id: "isize", label: "Size", kind: "slider", min: 50, max: 200, unit: "%", game: 100, syn: "scale" },
+    { id: "zoom", label: "Zoom", kind: "switch", theme: () => true, game: false, syn: "crop trim" },
+  ],
+  Motion: [
+    { id: "fin", label: "Fade in", kind: "slider", min: 0, max: 20, unit: "s", div: 10, game: 3, syn: "time appear" },
+    { id: "rise", label: "Rise", kind: "switch", game: true, syn: "float grow motion" },
+  ],
+};
+const P = (id, label, recipes, extra = {}) => ({ id, label, recipes, ...extra });
+const V1 = ["All"];
+const FRAMES = [
+  { id: "unit", label: "Unit frames", band: "Interface", sub: "Combat", page: "Unit Style", stage: "unit", variants: ["Default", "Player", "Target", "Focus", "Pet", "Target of target", "Party"],
+    parts: [P("portrait", "Portrait", ["Icon", "Border"]), P("name", "Name", ["Text", "Background"]), P("health", "Health bar", ["Bar", "Border"]), P("power", "Power bar", ["Bar"]), P("level", "Level", ["Text"])] },
+  { id: "cast", label: "Cast bars", band: "Interface", sub: "Combat", page: "Unit Cast Style · Player Cast Style · Cast Bar Style", stage: "cast", variants: ["Default", "Your cast bar", "Target & focus", "Boss & arena", "Nameplates"],
+    parts: [P("bar", "Bar", ["Bar", "Border"]), P("icon", "Spell icon", ["Icon"]), P("spell", "Spell name", ["Text"]), P("timer", "Timer", ["Text"])] },
+  { id: "prd", label: "Personal resources", band: "Interface", sub: "Combat", page: "Personal Style", stage: "generic", variants: V1,
+    parts: [P("health", "Health", ["Bar"]), P("power", "Power", ["Bar"]), P("res", "Class resource", ["Icon"]), P("border", "Border", ["Border"])] },
+  { id: "raid", label: "Raid frames", band: "Interface", sub: "Combat", page: "Raid Style", stage: "generic", variants: ["Default", "Raid", "Party", "Arena"],
+    parts: [P("bar", "Health", ["Bar"]), P("name", "Name", ["Text"]), P("tile", "Tile background", ["Background", "Border"])] },
+  { id: "action", label: "Action bars", band: "Interface", sub: "Combat", page: "Action Style", stage: "generic", variants: V1, status: { kind: "warn", text: "Dominos draws your action bars, so this look stays off while it's loaded." },
+    parts: [P("icon", "Button icon", ["Icon", "Border"]), P("hotkey", "Hotkey text", ["Text"], { isNew: true }), P("empty", "Empty slot", ["Background"])] },
+  { id: "cdm", label: "Cooldown Manager", band: "Interface", sub: "Combat", page: "Cooldown Manager Style", stage: "generic", variants: V1,
+    parts: [P("ring", "Drain ring", ["Bar"]), P("icons", "Icons", ["Icon", "Border"]), P("dot", "Cooldown + DoT", ["Text"])] },
+  { id: "range", label: "Range Hint", band: "Interface", sub: "Combat", page: "Range Hint Style", stage: "generic", variants: V1,
+    parts: [P("mark", "Mark", ["Icon"]), P("text", "Text", ["Text"]), P("back", "Background", ["Background"]), P("motion", "Motion", ["Motion"])] },
+  { id: "ct", label: "Combat text", band: "Interface", sub: "Combat", page: "Combat Text Style", stage: "generic", variants: ["Default", "Your damage", "Your crits", "Heals", "Incoming", "Misses", "XP"],
+    parts: [P("num", "Numbers", ["Text"]), P("motion", "Motion", ["Motion"])] },
+  { id: "self", label: "Text on you", band: "Interface", sub: "Combat", page: "Self Text Style", stage: "generic", variants: ["Default", "Damage taken", "Heals", "Auras", "Resources"],
+    parts: [P("num", "Text", ["Text"]), P("motion", "Motion", ["Motion"])] },
+  { id: "plates", label: "Nameplates", band: "Interface", sub: "Nameplates", page: "Nameplate Style · Layout · Smart · Cast Bars", stage: "plates", arrange: true, variants: ["Default", "Target", "Focus", "Mouseover", "Elite"],
+    parts: [P("debuffs", "Debuffs", ["Icon", "Place"], { hang: ["Name", "Health bar", "The plate"], side: "Top" }), P("name", "Name", ["Text", "Place"], { hang: ["Health bar", "The plate"] }),
+      P("health", "Health bar", ["Bar", "Border"]), P("level", "Level box", ["Text", "Border", "Place"], { hang: ["Health bar", "The plate"], side: "Right" }),
+      P("cast", "Cast bar", ["Bar", "Place"], { hang: ["Health bar", "The plate"], side: "Bottom" })] },
+  { id: "names", label: "Names", band: "Interface", sub: "Nameplates", page: "Name Style", stage: "generic", variants: ["All names", "Target", "Enemy players", "Friendly NPCs", "Quest givers", "Pets"],
+    parts: [P("name", "Name", ["Text"]), P("glow", "Glow", ["Background"]), P("second", "Second line", ["Text"])] },
+  { id: "bubbles", label: "Chat bubbles", band: "Interface", sub: "Info", page: "Bubble Style", stage: "bubble", variants: V1, status: { kind: "warn", text: "Behind bubbles needs Chat › Bubbles › Show the words behind bubbles.", action: "Open" },
+    parts: [P("bubble", "Bubble", ["Background", "Border"]), P("text", "Words", ["Text"])] },
+  { id: "tooltips", label: "Tooltips", band: "Interface", sub: "Info", page: "Tooltip Style", stage: "tooltip", variants: V1,
+    parts: [P("panel", "Panel", ["Background", "Border"]), P("name", "Name", ["Text"]), P("text", "Lines", ["Text"]), P("health", "Health bar", ["Bar"])] },
+  { id: "minimap", label: "Minimap", band: "Interface", sub: "Info", page: "Minimap Style", stage: "generic", variants: V1,
+    parts: [P("map", "Map", ["Border"]), P("ring", "Ring buttons", ["Border"]), P("zone", "Zone bar", ["Text", "Background"])] },
+  { id: "recolor", label: "Trackers & bars", band: "Interface", sub: "Info", page: "Interface Recolor", stage: "generic", variants: V1,
+    parts: [P("quest", "Quest tracker", ["Text"]), P("meter", "Damage meter", ["Bar"]), P("swing", "Swing timer", ["Bar"]), P("xp", "XP / reputation", ["Bar"])] },
+  { id: "visions", label: "All Visions", band: "Visions", page: "Visions Style", stage: "generic", variants: V1, parts: [P("text", "Shared words", ["Text"]), P("border", "Shared border", ["Border"])] },
+  { id: "damage", label: "Damage", band: "Visions", sub: "Combat", page: "Damage Vision Look", stage: "generic", variants: V1, parts: [P("bar", "Bars", ["Bar", "Border"]), P("words", "Words", ["Text"]), P("back", "See-through", ["Background"])] },
+  { id: "vitals", label: "Vitals", band: "Visions", sub: "Combat", page: "Vitals Style", stage: "generic", variants: V1, parts: [P("edge", "Screen edge", ["Background"]), P("swirl", "Swirl", ["Motion"])] },
+  { id: "quest", label: "Quest", band: "Visions", sub: "World", page: "Quest Talk Style", stage: "generic", variants: V1, parts: [P("panels", "Panels", ["Background", "Border"]), P("words", "Words", ["Text"])] },
+  { id: "qitem", label: "Quest Item Button", band: "Visions", sub: "World", page: "Quest Item Style", stage: "generic", variants: V1, parts: [P("button", "Button", ["Icon", "Border"]), P("key", "Key text", ["Text"])] },
+  { id: "roll", label: "Roll", band: "Visions", sub: "World", page: "Roll Style", stage: "generic", variants: V1, parts: [P("cards", "Cards", ["Background", "Border"]), P("text", "Text", ["Text"]), P("time", "Time left", ["Bar"])] },
+  { id: "emote", label: "Emote", band: "Visions", sub: "RP", page: "Emote Vision Style", stage: "generic", variants: V1, parts: [P("frame", "Frame", ["Background", "Border"]), P("words", "Words", ["Text"])] },
+  { id: "cards", label: "Cards", band: "Visions", sub: "RP", page: "Card Styles", stage: "generic", variants: ["Default", "Zone", "Level up", "Death", "Discovery", "Milestone"], parts: [P("title", "Title", ["Text"]), P("small", "Small line", ["Text"]), P("panel", "Panel", ["Background", "Border"])] },
+  { id: "tint", label: "Tint", band: "Atmosphere", page: "Tint Style", stage: "generic", variants: ["Look", "Zones", "Time of day"], parts: [P("wash", "Wash", ["Background"])] },
+  { id: "letterbox", label: "Letterbox", band: "Atmosphere", page: "Letterbox Style", stage: "generic", variants: V1, parts: [P("bars", "Bars", ["Background"]), P("line", "Line", ["Border"]), P("motion", "Coming in and going", ["Motion"])] },
+  { id: "weather", label: "Weather", band: "Atmosphere", page: "Weather Style", stage: "generic", variants: ["Rain", "Snow", "Sandstorm", "Fog"], parts: [P("wash", "Wash", ["Background"])] },
+];
+const BAND_C = { Interface: "#5a99e6", Visions: "#d94c40", Atmosphere: "#a673e6" };
+const LOOKS = [
+  { id: "theme", label: "Theme's", sw: t => `background:${t.panel};border:1px solid ${t.line};color:${t.accent}`, set: {} },
+  { id: "game", label: "The game's", sw: () => "background:#000;border:1px solid #7a6a4a;color:#ffd100", game: true },
+  { id: "bold", label: "Bold", sw: () => "background:#200;color:#fff;font-weight:bold", set: { size: 130, outline: "Thick", shadow: "Strong", bsize: 2, tex: "flat" } },
+  { id: "clean", label: "Clean", sw: () => "background:#15171a;color:#ddd", set: { outline: "None", shadow: "Soft", bstyle: "line", bsize: 1, tex: "satin", spark: false } },
+];
+
+// ---------- State ----------
+const S = { theme: "codex", frame: "plates", variant: "Default", part: "name", mode: "style", host: "wide",
+  unit: "Hostile", states: { Casting: true, Debuffs: true }, ground: "scene", zoom: false, view: "frame",
+  on: Object.fromEntries(FRAMES.map(f => [f.id, true])), myLooks: [] };
+let ov = {}; // overrides: "frame|variant|part|prop" -> value (the player's settings)
+let hist = [], fut = [], hover = null, compare = null, clip = null, openSnap = {};
+const K = (f, v, p, r) => `${f}|${v}|${p}|${r}`;
+const frameOf = id => FRAMES.find(f => f.id === id);
+const F = () => frameOf(S.frame);
+const partOf = (f, id) => f.parts.find(p => p.id === id) || f.parts[0];
+const propsOf = part => part.recipes.flatMap(r => RECIPES[r].map(pr => ({ ...pr, recipe: r })));
+
+function resolve(f, v, part, pr, src = ov) {
+  const k = K(f.id, v, part.id, pr.id);
+  if (hover && hover.k === k) return { v: hover.v, src: "preview" };
+  if (k in src) return { v: src[k], src: "yours" };
+  if (v !== f.variants[0]) { const kd = K(f.id, f.variants[0], part.id, pr.id); if (kd in src) return { v: src[kd], src: "follows" }; }
+  const gk = K("everything", "All", pr.recipe, pr.id);
+  if (gk in src) return { v: src[gk], src: "general" };
+  const t = THEMES[S.theme];
+  if (S.theme !== "game" && pr.theme) return { v: pr.theme(t, part), src: "theme" };
+  return { v: typeof pr.game === "function" ? pr.game(part) : pr.game, src: "game" };
+}
+function val(partId, propId, f = F(), src) {
+  const part = partOf(f, partId);
+  const pr = propsOf(part).find(x => x.id === propId);
+  if (!pr) return undefined;
+  return resolve(f, S.variant, part, pr, src || (compare || ov)).v;
+}
+const snap = () => ({ ov: { ...ov }, theme: S.theme });
+function commit(desc, mutate) {
+  const before = snap();
+  mutate();
+  if (JSON.stringify(before) === JSON.stringify(snap())) return;
+  hist.push({ desc, before, after: snap() }); fut = [];
+  if (hist.length > 100) hist.shift();
+  render();
+}
+function undo() { const h = hist.pop(); if (!h) return; fut.push(h); ov = { ...h.before.ov }; S.theme = h.before.theme; toast(`Undid: ${h.desc}`); render(); }
+function redo() { const h = fut.pop(); if (!h) return; hist.push(h); ov = { ...h.after.ov }; S.theme = h.after.theme; toast(`Redid: ${h.desc}`); render(); }
+const changedIn = fid => Object.keys(ov).filter(k => k.startsWith(fid + "|"));
+
+// ---------- CSS from values ----------
+function colorCss(v, ctx = {}) {
+  const t = THEMES[S.theme];
+  if (!v || v === "game") return ctx.game || "#ffffff";
+  if (v === "theme") return ctx.theme || t.accent;
+  if (v === "class") return CLASS;
+  if (v === "reaction") return REACT[S.unit];
+  return v;
+}
+function textCss(pid, base, ctx, f) {
+  const font = FONTS[val(pid, "font", f)] || FONTS.friz;
+  const size = (val(pid, "size", f) ?? 100) / 100 * base;
+  const ol = val(pid, "outline", f), sh = val(pid, "shadow", f);
+  const sh1 = [];
+  if (ol === "Thin") sh1.push("1px 0 0 #000", "-1px 0 0 #000", "0 1px 0 #000", "0 -1px 0 #000");
+  if (ol === "Thick") sh1.push("2px 0 0 #000", "-2px 0 0 #000", "0 2px 0 #000", "0 -2px 0 #000", "2px 2px 0 #000", "-2px -2px 0 #000", "2px -2px 0 #000", "-2px 2px 0 #000");
+  if (sh === "Soft") sh1.push("1px 1px 3px rgba(0,0,0,.85)");
+  if (sh === "Strong") sh1.push("2px 2px 0 #000");
+  return `font-family:${font.css};font-size:${size.toFixed(1)}px;color:${colorCss(val(pid, "color", f), ctx)};text-shadow:${sh1.join(",") || "none"}`;
+}
+function borderCss(pid, ctx = {}, f) {
+  const st = val(pid, "bstyle", f), sz = val(pid, "bsize", f) ?? 1;
+  const c = colorCss(val(pid, "bcol", f), { game: "#5a4e38", theme: THEMES[S.theme].line, ...ctx });
+  if (st === "none" || sz === 0) return "box-shadow:none";
+  if (st === "gilt") return `box-shadow:0 0 0 ${sz}px ${c},0 0 0 ${sz + 1}px #000,inset 0 0 0 1px rgba(255,255,255,.18)`;
+  if (st === "rune") return `outline:${sz}px dashed ${c};outline-offset:1px`;
+  return `box-shadow:0 0 0 ${sz}px ${c}`;
+}
+function barHtml(pid, fillPct, ctx, f, cls = "bar", inner = "") {
+  const tex = TEX[val(pid, "tex", f)] || TEX.blizzard;
+  const c = colorCss(val(pid, "bcolor", f), ctx);
+  const back = val(pid, "back", f) ?? 50;
+  const spark = val(pid, "spark", f);
+  return `<i style="position:absolute;inset:0;background:rgba(0,0,0,${back / 100})"></i><div class="fill" style="width:${fillPct}%;background:${c}"></div><div class="tex" style="background:${tex.css}"></div>${spark ? `<div class="spark" style="left:calc(${fillPct}% - 3px)"></div>` : ""}${inner}`;
+}
+function placeCss(pid, f) {
+  const p = partOf(f, pid);
+  if (!p.recipes.includes("Place")) return "";
+  return `transform:translate(${val(pid, "x", f) || 0}px,${-(val(pid, "y", f) || 0)}px)`;
+}
+function iconCss(pid, f) {
+  const sh = val(pid, "shape", f), s = (val(pid, "isize", f) ?? 100) / 100;
+  return `border-radius:${sh === "Round" ? "50%" : sh === "Rounded" ? "5px" : "1px"};width:${22 * s}px;height:${22 * s}px`;
+}
+
+// ---------- Stages ----------
+const pa = (f, id) => `data-part="${id}" data-label="${esc(partOf(f, id).label)}"`;
+function markPicked() { if (S.view === "frame") root.querySelectorAll(`#stage [data-part="${S.part}"]`).forEach(el => el.classList.add("picked")); }
+const STAGES = {
+  plates(f) {
+    const cast = S.states.Casting, deb = S.states.Debuffs;
+    const nameColor = { game: REACT[S.unit] === REACT.Hostile ? "#ff3a2a" : REACT[S.unit], theme: THEMES[S.theme].text };
+    const dcol = ["#7a2a8a", "#2a6a2a", "#8a5a1a"];
+    const icons = deb ? `<div ${pa(f, "debuffs")} style="${placeCss("debuffs", f)}"><div class="debuffs">${[3, 16, 10].map((n, i) => `<b style="background:linear-gradient(135deg,${dcol[i]},#111);${iconCss("debuffs", f)}">${n}</b>`).join("")}</div></div>` : "";
+    return `<div class="plate">${icons}
+      <div ${pa(f, "name")} style="${placeCss("name", f)};${textCss("name", 16, nameColor, f)}">Gnoll Brute</div>
+      <div class="hrow"><div class="bar" ${pa(f, "health")} style="${borderCss("health", {}, f)}">${barHtml("health", 62, { game: REACT[S.unit], theme: THEMES[S.theme].pal[4] }, f)}</div>
+      <div ${pa(f, "level")} class="lvl" style="${placeCss("level", f)};${borderCss("level", {}, f)}"><span style="${textCss("level", 12, { game: "#ffd100" }, f)}">14</span></div></div>
+      ${cast ? `<div ${pa(f, "cast")} style="${placeCss("cast", f)}"><div class="castbar bar" style="height:10px">${barHtml("cast", 68, { game: "#e8a820", theme: THEMES[S.theme].pal[6] }, f)}</div><div class="spell" style="${textCss("name", 11, { game: "#fff", theme: THEMES[S.theme].text }, f)}"><i></i>Fireball</div></div>` : ""}</div>`;
+  },
+  unit(f) {
+    const t = THEMES[S.theme];
+    return `<div class="uf" style="position:relative"><div class="portrait" ${pa(f, "portrait")} style="${borderCss("portrait", {}, f)};${val("portrait", "shape", f) === "Square" ? "border-radius:4px" : ""}">✦<div class="ufLvl" ${pa(f, "level")}><span style="${textCss("level", 11, { game: "#ffd100" }, f)}">25</span></div></div>
+      <div class="ufRows"><div class="ufName" ${pa(f, "name")} style="${textCss("name", 12, { game: "#ffd100", theme: t.text }, f)};background:${colorCss(val("name", "pcol", f), { game: "rgba(0,0,0,.4)", theme: t.panel })};opacity:${(val("name", "pop", f) ?? 80) / 100 + .2}">Sapo Lock</div>
+      <div class="bar" ${pa(f, "health")} style="${borderCss("health", {}, f)}">${barHtml("health", 74, { game: "#1fbf1f", theme: t.pal[4] }, f, "bar", '<span class="num">648</span>')}</div>
+      <div class="bar pw" ${pa(f, "power")}>${barHtml("power", 55, { game: "#2a6cff", theme: t.pal[5] }, f)}</div></div></div>`;
+  },
+  tooltip(f) {
+    const t = THEMES[S.theme];
+    const bg = colorCss(val("panel", "pcol", f), { game: "#05081a", theme: t.panel });
+    return `<div class="ttp" ${pa(f, "panel")} style="background:${bg};opacity:${(val("panel", "pop", f) ?? 80) / 100 * .6 + .4};${borderCss("panel", { game: "#8a8a9a" }, f)}">
+      <div ${pa(f, "name")} style="${textCss("name", 14, { game: "#ff3a2a", theme: t.accent }, f)}">Gnoll Brute</div>
+      <div ${pa(f, "text")}><div class="l2" style="${textCss("text", 12, { game: "#fff", theme: t.text }, f)}">Level 14 Humanoid (Elite)</div><div class="gray" style="${textCss("text", 12, { game: "#9a9a9a", theme: "#9a9a9a" }, f)}">Riverpaw Gnolls</div></div>
+      <div class="bar" ${pa(f, "health")}>${barHtml("health", 70, { game: "#1fbf1f", theme: t.pal[4] }, f)}</div></div>`;
+  },
+  bubble(f) {
+    const t = THEMES[S.theme];
+    const bg = colorCss(val("bubble", "pcol", f), { game: "#f4ecd8", theme: t.panel });
+    const op = (val("bubble", "pop", f) ?? 80) / 100;
+    return `<div class="bubble ${S.testing ? "pop" : ""}" ${pa(f, "bubble")} style="background:${bg};opacity:${op * .7 + .3};${borderCss("bubble", { game: "#6a5a3a" }, f)}">
+      <div ${pa(f, "text")} style="${textCss("text", 13, { game: "#2a1a08", theme: t.text }, f)}">The invisibility liquor is ready for you, Healmeta.</div><div class="tail" style="border-top:10px solid ${bg}"></div></div>`;
+  },
+  cast(f) {
+    const t = THEMES[S.theme];
+    return `<div style="display:grid;gap:4px;justify-items:start"><div class="hrow"><div ${pa(f, "icon")} style="${iconCss("icon", f)};background:linear-gradient(135deg,#ff9a2a,#8a2a00)"></div>
+      <div class="castbar bar ${S.testing ? "run" : ""}" ${pa(f, "bar")} style="width:200px;height:16px;${borderCss("bar", {}, f)}">${barHtml("bar", 68, { game: "#e8a820", theme: t.pal[6] }, f)}
+      <span ${pa(f, "spell")} style="position:absolute;left:6px;top:0;line-height:16px;${textCss("spell", 11, { game: "#fff", theme: t.text }, f)}">Fireball</span>
+      <span ${pa(f, "timer")} style="position:absolute;right:5px;top:0;line-height:16px;${textCss("timer", 11, { game: "#fff", theme: t.text }, f)}">1.2</span></div></div>
+      <div class="note" style="color:rgba(255,255,255,.4)">${esc(S.variant)}</div></div>`;
+  },
+  generic(f) {
+    const t = THEMES[S.theme];
+    return `<div class="generic">${f.parts.map(p => {
+      const r = p.recipes[0]; let inner = "";
+      if (r === "Text") inner = `<div style="${textCss(p.id, 15, { game: "#ffd100", theme: t.text }, f)}">${f.id === "ct" ? "−1,248" : f.id === "cards" ? "Elwynn Forest" : esc(p.label)}</div>`;
+      else if (r === "Bar") inner = `<div class="bar" style="width:180px;${p.recipes.includes("Border") ? borderCss(p.id, {}, f) : ""}">${barHtml(p.id, 66, { game: "#1fbf1f", theme: t.pal[4] }, f)}</div>`;
+      else if (r === "Icon") inner = `<div style="${iconCss(p.id, f)};background:linear-gradient(135deg,#6a9adf,#1a2a5a);${p.recipes.includes("Border") ? borderCss(p.id, {}, f) : ""}"></div>`;
+      else if (r === "Background") inner = `<div class="panelS" style="background:${colorCss(val(p.id, "pcol", f), { game: "#000", theme: t.panel })};opacity:${(val(p.id, "pop", f) ?? 80) / 100};${p.recipes.includes("Border") ? borderCss(p.id, {}, f) : ""}"></div>`;
+      else if (r === "Border") inner = `<div class="panelS" style="background:#0005;${borderCss(p.id, {}, f)}"></div>`;
+      else if (r === "Motion") inner = `<div style="color:#ffd100;font-size:13px;${S.testing ? "animation:pop .4s" : ""}">↑ ${((val(p.id, "fin", f) ?? 3) / 10).toFixed(1)} s</div>`;
+      return `<div class="gp"><div ${pa(f, p.id)}>${inner}</div><div class="cap">${esc(p.label)}</div></div>`;
+    }).join("")}</div>`;
+  },
+};
+
+// ---------- Render ----------
+const root = $("#studio");
+function render() {
+  const f = F();
+  if (!f.variants.includes(S.variant)) S.variant = f.variants[0];
+  if (!f.parts.some(p => p.id === S.part)) S.part = f.parts[0].id;
+  root.className = "studio" + (S.host === "compact" ? " compact" : "");
+  const crumbs = S.view === "frame" ? [f.band, f.sub, f.label, f.variants.length > 1 ? S.variant : null].filter(Boolean) : [S.view === "everything" ? "Everything" : "Changed"];
+  root.innerHTML = `
+  <div class="tbar"><span class="brand">STYLE</span>
+    <span class="crumbs">${crumbs.map((c, i) => `<span class="${i === crumbs.length - 1 ? "last" : ""}">${esc(c)}</span>`).join(" › ")}</span>
+    <span class="find"><input id="findIn" placeholder="Find a setting…  ( / )" autocomplete="off"><div class="findRes" id="findRes" hidden></div></span>
+    <button class="btn plain icon" id="undoB" ${hist.length ? "" : "disabled"} data-tip="${hist.length ? "Undo: " + esc(hist[hist.length - 1].desc) : "Nothing to undo"} (Ctrl+Z)">↶</button>
+    <button class="btn plain icon" id="redoB" ${fut.length ? "" : "disabled"} data-tip="${fut.length ? "Redo: " + esc(fut[fut.length - 1].desc) : "Nothing to redo"} (Ctrl+Y)">↷</button>
+    <button class="btn plain" id="themeB" data-tip="The main theme. Every frame starts from it.">Theme: ${esc(THEMES[S.theme].name)} ▾</button>
+    <button class="btn plain" data-tip="Docks the Studio beside Settings, or pops it out to move anywhere.">Dock</button>
+    <button class="btn icon" data-tip="Closes the Studio. Everything is already saved.">✕</button>
+  </div>
+  <div class="rail">${railHtml()}</div>
+  <div class="stageCol">
+    <div class="pageHead"><div class="tt"><h4>${esc(f.label)}</h4><button class="btn plain" id="toWide" data-tip="Opens this frame in the Studio window, docked beside Settings.">Open in Studio</button><button class="btn plain" data-tip="Back to what each setting follows: this frame's settings only.">Reset page</button></div>
+      <div class="tabs">${f.id === "plates" ? "<span>Show</span><span>Icons</span><span class=on>Default</span><span>Layout</span><span>Smart</span><span>Cast Bars</span>" : "<span>Show</span><span class=on>Style</span>"}</div>
+      <div class="en"><span class="switch ${S.on[f.id] ? "on" : ""}" id="enSw"></span> Enable Page</div></div>
+    <div class="stage g-${S.ground} ${S.zoom ? "zoom2" : ""} ${S.mode === "arrange" ? "arrange" : ""}" id="stage">
+      ${hover ? '<span class="badge">Preview: not saved</span>' : compare ? '<span class="badge" style="color:#9cc4ff">As it was when you opened the Studio</span>' : ""}
+      ${S.view === "frame" && f.arrange ? `<span class="modeSw seg"><button class="${S.mode === "style" ? "on" : ""}" data-mode="style">Style</button><button class="${S.mode === "arrange" ? "on" : ""}" data-mode="arrange">Arrange</button></span>` : ""}
+      <div class="canvas" style="${S.on[f.id] || S.view !== "frame" ? "" : "filter:grayscale(1);opacity:.45"}">${stageHtml(f)}</div>
+      ${S.view === "frame" ? `<div class="help">${S.mode === "arrange" ? "Drag a part, or pick one and nudge it with the arrow keys" : "Click a part to edit it"}</div>` : ""}
+    </div>
+    ${S.view === "frame" ? statusHtml(f) + statebarHtml(f) : ""}
+  </div>
+  <div class="insp" id="insp">${S.view === "frame" ? inspHtml(f) : S.view === "everything" ? everythingInsp() : changedInsp()}</div>
+  <div class="foot"><span class="sum">${footSum(f)}</span>
+    ${S.view === "frame" ? `<button class="btn plain" id="copyB" data-tip="Copies this part's look (its recipes).">Copy look</button>
+    ${clip && partOf(f, S.part).recipes.some(r => clip.recipes.includes(r)) ? `<button class="btn plain" id="pasteB" data-tip="Pastes ${esc(clip.from)} onto ${esc(partOf(f, S.part).label)}.">Paste</button>` : ""}` : ""}
+    <button class="btn plain" id="resetB">Reset ▾</button><button class="btn" data-tip="Closes the Studio.">Done</button></div>`;
+  wire();
+}
+function railHtml() {
+  let h = `<div class="railSpecial ${S.view === "everything" ? "on" : ""}" data-view="everything" tabindex="0">◆ Everything</div>
+    <div class="railSpecial ${S.view === "changed" ? "on" : ""}" data-view="changed" tabindex="0">● Changed <span class="n">${Object.keys(ov).length}</span></div>`;
+  let band = "", sub = "";
+  for (const f of FRAMES) {
+    if (f.band !== band) { band = f.band; sub = ""; h += `<div class="band"><i style="background:${BAND_C[band]}"></i>${band}</div>`; }
+    if (f.sub && f.sub !== sub) { sub = f.sub; h += `<div class="sub">${sub}</div>`; }
+    const ch = changedIn(f.id).length;
+    h += `<div class="railItem ${S.view === "frame" && S.frame === f.id ? "on" : ""} ${S.on[f.id] ? "" : "off"}" data-frame="${f.id}" tabindex="0" data-tip="${esc(f.label)}: the ${esc(f.page)} page.${ch ? ` ${ch} changed.` : ""} Right-click the switch to turn it off.">
+      <span class="sq" style="background:${BAND_C[f.band]}"></span><span class="nm">${esc(f.label)}</span>${ch ? '<span class="gdot"></span>' : ""}<span class="pip ${S.on[f.id] ? "on" : ""}" data-pip="${f.id}"></span></div>`;
+  }
+  return h;
+}
+function stageHtml(f) {
+  if (S.view === "everything") {
+    return `<div class="themeCards">${Object.entries(THEMES).map(([id, t]) => `<div class="tc ${S.theme === id ? "on" : ""}" data-th="${id}" style="background:${t.panel}cc">
+      <div class="nmm" style="font-family:${FONTS[t.font].css};color:${t.accent}">${esc(t.name)}</div>
+      <div style="height:9px;background:${t.pal[4]};box-shadow:0 0 0 1px ${t.line}"></div><div class="pal">${t.pal.map(c => `<i style="background:${c}"></i>`).join("")}</div></div>`).join("")}</div>`;
+  }
+  if (S.view === "changed") {
+    const keys = Object.keys(ov).sort();
+    if (!keys.length) return `<div style="color:rgba(255,255,255,.5);text-align:center;max-width:260px">Nothing changed yet. Settings you change on any frame are listed here, each with ↺.</div>`;
+    let h = "", last = "";
+    for (const k of keys) {
+      const [fid, v, pid, rid] = k.split("|");
+      const fr = fid === "everything" ? { label: "Everything", parts: [] } : frameOf(fid);
+      if (fid !== last) { last = fid; h += `<div class="fr" data-jump="${fid}">${esc(fr.label)}</div>`; }
+      const part = fr.parts.find(p => p.id === pid);
+      const pr = Object.values(RECIPES).flat().find(x => x.id === rid);
+      h += `<div class="ln"><span>${esc(v !== "All" && v !== "Default" ? v + " · " : "")}${esc(part ? part.label : pid)} · ${esc(pr ? pr.label : rid)}</span><span class="v">${esc(showVal(pr, ov[k]))}</span><span class="x" data-unset="${esc(k)}" data-tip="Back to what it follows">↺</span></div>`;
+    }
+    return `<div class="changedList">${h}</div>`;
+  }
+  return (STAGES[f.stage] || STAGES.generic)(f);
+}
+function statusHtml(f) {
+  if (!S.on[f.id]) return `<div class="status err">Off: Enable Style › ${esc(f.label)}. Nothing here shows in the game.<span class="sp"></span><button class="btn" data-turnon="${f.id}">Turn on</button></div>`;
+  if (f.status) return `<div class="status">${esc(f.status.text)}<span class="sp"></span>${f.status.action ? `<button class="btn plain" data-toast="Opens Chat › Bubbles, with the switch flashing">${f.status.action}</button>` : ""}</div>`;
+  return "";
+}
+function statebarHtml(f) {
+  const rows = [];
+  if (f.stage === "plates") {
+    rows.push(`<div class="row"><span class="lab">Unit</span>${Object.keys(REACT).map(u => `<button class="tog ${S.unit === u ? "on" : ""}" data-unit="${u}">${u}</button>`).join("")}</div>`);
+    rows.push(`<div class="row"><span class="lab">Show</span>${["Casting", "Debuffs"].map(s => `<button class="tog ${S.states[s] ? "on" : ""}" data-state="${s}">${s}</button>`).join("")}</div>`);
+  }
+  rows.push(`<div class="row"><span class="lab">Ground</span>${["scene", "dark", "light"].map(g => `<button class="tog ${S.ground === g ? "on" : ""}" data-ground="${g}">${g[0].toUpperCase() + g.slice(1)}</button>`).join("")}
+    <button class="tog ${S.zoom ? "on" : ""}" id="zoomB">2x</button></div>`);
+  rows.push(`<div class="row"><button class="btn" id="testB" data-tip="Plays this frame's motion once.">Test</button>
+    <button class="btn plain" id="cmpB" data-tip="Hold: the frame as it was when you opened the Studio.">Hold to compare</button>
+    <button class="btn plain" id="peekB" data-tip="Hold: fades the Studio and Settings so you see the real frames in the world.">Peek</button></div>`);
+  return `<div class="statebar">${rows.join("")}</div>`;
+}
+function inspHtml(f) {
+  const part = partOf(f, S.part);
+  const t = THEMES[S.theme];
+  let h = `<div class="sec">Looks</div><div class="looks">${[...LOOKS, ...S.myLooks].map(l => `<div class="look" data-look="${l.id}" data-tip="${l.id === "theme" ? "Back to the theme's look for this variant." : l.mine ? "Your saved look." : "Hover to preview, click to use. Undo puts it back."}"><div class="sw" style="${l.sw ? l.sw(t) : "background:#2a2414;color:#ffd100"}">Aa</div>${esc(l.label)}</div>`).join("")}
+    <div class="look add" id="saveLook" data-tip="Saves this frame's look under a name. Shareable."><div class="sw">+</div>Save</div></div>`;
+  if (f.variants.length > 1) {
+    const v0 = f.variants[0];
+    const own = S.variant === v0 ? 0 : changedIn(f.id).filter(k => k.split("|")[1] === S.variant).length;
+    h += `<div class="sec">Applies to</div><div class="chain">${f.variants.map((v, i) => `${i === 1 ? '<span class="ar">›</span>' : ""}<button class="tog ${S.variant === v ? "on" : ""}" data-variant="${esc(v)}">${esc(v)}</button>`).join("")}</div>
+      <div class="note">${S.variant === v0 ? `Every ${esc(f.label.toLowerCase())} variant follows ${esc(v0)} unless it sets its own.` : `${esc(S.variant)} follows ${esc(v0)}${own ? ` except ${own} setting${own > 1 ? "s" : ""}` : " for everything"}.`}
+      ${f.id === "plates" && S.variant !== v0 ? ' <a class="whenL" href="#" data-toast="Opens the CQL editor for this row\'s When rule">When: target ✎</a>' : ""}</div>`;
+  }
+  h += `<div class="sec">Part</div><div class="parts">${f.parts.map(p => `<button class="tog ${p.id === part.id ? "on" : ""}" data-part-pick="${p.id}">${esc(p.label)}${p.isNew ? " ✚" : ""}</button>`).join("")}</div>`;
+  if (["unit", "plates"].includes(f.id)) h += `<div class="prow"><span class="src game">○</span><span class="lab">Shown</span><span class="ctl"><select class="dd"><option>Follow Interface page</option><option>Always</option><option>Never</option></select></span><span></span></div>`;
+  for (const r of part.recipes) {
+    h += `<div class="sec">${r}</div>`;
+    for (const pr of RECIPES[r]) h += propRow(f, part, { ...pr, recipe: r });
+  }
+  return h;
+}
+const SRC_TIP = { game: "The game's value", theme: "From the theme", follows: "Follows the variant above: click to go there", yours: "Yours", general: "Set on Everything", preview: "Previewing: not saved" };
+const SRC_MARK = { game: "○", theme: "◆", follows: "↑", yours: "●", general: "◇", preview: "◌" };
+function showVal(pr, v) {
+  if (!pr) return String(v);
+  if (pr.kind === "tiles") return pr.lab(v);
+  if (pr.kind === "slider") return (pr.div ? (v / pr.div).toFixed(1) : v) + " " + pr.unit;
+  if (pr.kind === "switch") return v ? "On" : "Off";
+  if (pr.kind === "color") return ({ game: "The game's", theme: "Theme", class: "Class", reaction: "Reaction" })[v] || v;
+  return String(v);
+}
+function lum(hex) { const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255].map(x => { x /= 255; return x <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4; }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; }
+function propRow(f, part, pr) {
+  const r = resolve(f, S.variant, part, pr);
+  const k = K(f.id, S.variant, part.id, pr.id);
+  const v = r.v;
+  let ctl = "";
+  const da = `data-k="${esc(k)}" data-desc="${esc(`${S.variant !== "All" && f.variants.length > 1 ? S.variant + " · " : ""}${part.label} ${pr.label.toLowerCase()}`)}"`;
+  if (pr.kind === "tiles") ctl = `<div class="tiles">${pr.opts(part).map(o => `<button class="tile ${pr.tex ? "tex" : ""} ${o === v ? "on" : ""}" ${da} data-v="${o}" data-tip="${esc(pr.lab(o))}" ${pr.id === "font" ? `style="font-family:${FONTS[o].css}"` : ""}>${pr.tex ? `<i style="background:#3a9a3a;background-image:${TEX[o].css}"></i>` : pr.id === "font" ? "Aa" : esc(pr.lab(o))}</button>`).join("")}${pr.id === "font" ? `<button class="tile" data-toast="Opens every font, large, on the stage">More…</button>` : ""}</div>`;
+  else if (pr.kind === "seg") ctl = `<div class="seg">${pr.opts(part).map(o => `<button class="${o === v ? "on" : ""}" ${da} data-v="${o}">${o}</button>`).join("")}</div>`;
+  else if (pr.kind === "slider") ctl = `<div class="slider"><input type="range" id="r-${esc(k)}" min="${pr.min}" max="${pr.max}" value="${v}" ${da} data-slider="1"><input class="val" value="${pr.div ? (v / pr.div).toFixed(1) : v} ${pr.unit}" ${da} data-box="${pr.div || 1}"></div>`;
+  else if (pr.kind === "switch") ctl = `<span class="switch ${v ? "on" : ""}" ${da} data-sw="1" tabindex="0"></span>`;
+  else if (pr.kind === "drop") ctl = `<select class="dd" ${da} data-drop="1">${pr.opts(part).map(o => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select>`;
+  else if (pr.kind === "color") {
+    const custom = typeof v === "string" && v.startsWith("#");
+    const lc = custom && lum(v) < .03 && pr.recipe === "Text";
+    ctl = `<div class="chips">${pr.chips.map(c => c === "custom"
+      ? `<button class="chip ${custom ? "on" : ""}" ${da} data-custom="1"><span class="dot" style="background:${custom ? v : "#c33"}"></span>Custom</button>`
+      : `<button class="chip ${v === c ? "on" : ""}" ${da} data-v="${c}">${({ game: "The game's", theme: "Theme", class: "Class", reaction: "Reaction" })[c]}</button>`).join("")}
+      ${lc ? '<span class="lowc" data-tip="Hard to read: this color is close to the background behind it.">▲ low contrast</span>' : ""}</div>
+      ${custom ? `<div class="swRow">${THEMES[S.theme].pal.map(c => `<span class="s" style="background:${c}" ${da} data-v="${c}" data-tip="The theme's color"></span>`).join("")}<input type="color" value="${v}" ${da} data-picker="1" data-tip="Any color"></div>` : ""}`;
+  }
+  return `<div class="prow" data-row="${esc(k)}"><span class="src ${r.src}" data-tip="${SRC_TIP[r.src]}" ${r.src === "follows" ? `data-goto="${esc(F().variants[0])}"` : ""}>${SRC_MARK[r.src]}</span><span class="lab" data-tip="${esc(pr.label)}: ${esc(pr.recipe)} recipe. Right-click for Reset, Copy, Paste.">${esc(pr.label)}</span><span class="ctl">${ctl}</span><span class="rs ${r.src === "yours" ? "v" : ""}" data-unset="${esc(k)}" data-tip="Back to what it follows">↺</span></div>`;
+}
+function everythingInsp() {
+  const fake = { id: "everything", variants: ["All"], parts: [] };
+  let h = `<div class="note">Settings here reach every frame that doesn't set its own. The theme sits under them.</div>`;
+  for (const r of ["Text", "Bar", "Border"]) {
+    h += `<div class="sec">${r} everywhere</div>`;
+    for (const pr of RECIPES[r].filter(x => ["font", "outline", "shadow", "tex", "bstyle", "bsize"].includes(x.id))) {
+      const k = K("everything", "All", r, pr.id);
+      const has = k in ov; const v = has ? ov[k] : (S.theme !== "game" && pr.theme ? pr.theme(THEMES[S.theme], {}) : pr.game);
+      const da = `data-k="${k}" data-desc="Everything ${pr.label.toLowerCase()}"`;
+      let ctl = pr.kind === "tiles" ? `<div class="tiles">${pr.opts({}).map(o => `<button class="tile ${pr.tex ? "tex" : ""} ${o === v ? "on" : ""}" ${da} data-v="${o}" ${pr.id === "font" ? `style="font-family:${FONTS[o].css}"` : ""}>${pr.tex ? `<i style="background:#3a9a3a;background-image:${TEX[o].css}"></i>` : pr.id === "font" ? "Aa" : esc(pr.lab(o))}</button>`).join("")}</div>`
+        : pr.kind === "seg" ? `<div class="seg">${pr.opts().map(o => `<button class="${o === v ? "on" : ""}" ${da} data-v="${o}">${o}</button>`).join("")}</div>`
+        : `<div class="slider"><input type="range" min="${pr.min}" max="${pr.max}" value="${v}" ${da} data-slider="1"><input class="val" value="${v} ${pr.unit}" ${da} data-box="1"></div>`;
+      h += `<div class="prow"><span class="src ${has ? "general" : S.theme === "game" ? "game" : "theme"}">${has ? "◇" : S.theme === "game" ? "○" : "◆"}</span><span class="lab">${esc(pr.label)}</span><span class="ctl">${ctl}</span><span class="rs ${has ? "v" : ""}" data-unset="${k}">↺</span></div>`;
+    }
+  }
+  return h;
+}
+function changedInsp() {
+  const n = Object.keys(ov).length;
+  return `<div class="note">${n ? `${n} setting${n > 1 ? "s" : ""} of yours across ${new Set(Object.keys(ov).map(k => k.split("|")[0])).size} frame(s). Click a frame's name to go there.` : "You haven't changed anything yet."}</div>
+    ${n ? `<button class="btn plain" id="resetAllB">Reset everything in Style…</button>` : ""}`;
+}
+function footSum(f) {
+  if (S.view !== "frame") return S.view === "everything" ? "Everything: the theme and what every frame shares" : "Everything you've changed";
+  const n = changedIn(f.id).length;
+  return n ? `${n} change${n > 1 ? "s" : ""} on ${f.label}` : `${f.label} looks as the theme draws it`;
+}
+
+// ---------- Interaction ----------
+function setVal(k, v, desc) { commit(`${desc} → ${typeof v === "string" && FONTS[v] ? FONTS[v].label : typeof v === "string" && TEX[v] ? TEX[v].label : v}`, () => { ov[k] = v; }); }
+function wire() {
+  const f = F();
+  markPicked();
+  root.querySelectorAll("[data-frame]").forEach(el => el.onclick = e => { if (e.target.dataset.pip) return; S.view = "frame"; S.frame = el.dataset.frame; S.mode = "style"; openSnap = { ...ov }; render(); });
+  root.querySelectorAll("[data-frame]").forEach(el => el.onkeydown = e => { if (e.key === "Enter") el.click(); });
+  root.querySelectorAll("[data-pip]").forEach(el => { const t = () => { S.on[el.dataset.pip] = !S.on[el.dataset.pip]; render(); }; el.onclick = t; el.oncontextmenu = e => { e.preventDefault(); t(); }; });
+  root.querySelectorAll("[data-view]").forEach(el => el.onclick = () => { S.view = el.dataset.view; render(); });
+  root.querySelectorAll("[data-jump]").forEach(el => el.onclick = () => { if (el.dataset.jump === "everything") S.view = "everything"; else { S.view = "frame"; S.frame = el.dataset.jump; } render(); });
+  root.querySelectorAll("[data-th]").forEach(el => el.onclick = () => commit(`Theme → ${THEMES[el.dataset.th].name}`, () => { S.theme = el.dataset.th; }));
+  root.querySelectorAll("[data-part]").forEach(el => el.onclick = e => { e.stopPropagation(); if (S.dragged) { S.dragged = false; return; } S.part = el.dataset.part; render(); });
+  root.querySelectorAll("[data-part-pick]").forEach(el => el.onclick = () => { S.part = el.dataset.partPick; render(); });
+  root.querySelectorAll("[data-variant]").forEach(el => el.onclick = () => { S.variant = el.dataset.variant; render(); });
+  root.querySelectorAll("[data-goto]").forEach(el => el.onclick = () => { S.variant = el.dataset.goto; render(); });
+  root.querySelectorAll("[data-unit]").forEach(el => el.onclick = () => { S.unit = el.dataset.unit; render(); });
+  root.querySelectorAll("[data-state]").forEach(el => el.onclick = () => { S.states[el.dataset.state] = !S.states[el.dataset.state]; render(); });
+  root.querySelectorAll("[data-ground]").forEach(el => el.onclick = () => { S.ground = el.dataset.ground; render(); });
+  root.querySelectorAll("[data-mode]").forEach(el => el.onclick = () => { S.mode = el.dataset.mode; if (S.mode === "arrange" && !partOf(f, S.part).recipes.includes("Place")) S.part = "name"; render(); });
+  root.querySelectorAll("[data-turnon]").forEach(el => el.onclick = () => { S.on[el.dataset.turnon] = true; toast(`${frameOf(el.dataset.turnon).label} on`); render(); });
+  root.querySelectorAll("[data-toast]").forEach(el => el.onclick = e => { e.preventDefault(); toast(el.dataset.toast + " (in the addon)"); });
+  const en = $("#enSw", root); if (en) en.onclick = () => { S.on[f.id] = !S.on[f.id]; render(); };
+  const zb = $("#zoomB", root); if (zb) zb.onclick = () => { S.zoom = !S.zoom; render(); };
+  const tb = $("#testB", root); if (tb) tb.onclick = () => { S.testing = true; render(); setTimeout(() => { S.testing = false; render(); }, 1700); };
+  hold($("#cmpB", root), () => { compare = openSnap; render(); }, () => { compare = null; render(); });
+  hold($("#peekB", root), () => root.classList.add("peek"), () => root.classList.remove("peek"));
+  $("#undoB", root).onclick = undo; $("#redoB", root).onclick = redo;
+  $("#themeB", root).onclick = () => { S.view = "everything"; render(); };
+  const tw = $("#toWide", root); if (tw) tw.onclick = () => setHost("wide");
+  // value controls
+  root.querySelectorAll("[data-k][data-v]").forEach(el => {
+    el.onclick = () => setVal(el.dataset.k, el.dataset.v, el.dataset.desc);
+    el.onmouseenter = () => { if (el.classList.contains("on")) return; hover = { k: el.dataset.k, v: el.dataset.v }; paintStage(); };
+    el.onmouseleave = () => { if (hover) { hover = null; paintStage(); } };
+  });
+  root.querySelectorAll("[data-slider]").forEach(el => {
+    el.oninput = () => { hover = { k: el.dataset.k, v: +el.value }; paintStage(); const b = el.parentNode.querySelector(".val"); const d = +(b.dataset.box || 1); b.value = (d > 1 ? (el.value / d).toFixed(1) : el.value) + " " + b.value.split(" ").pop(); };
+    el.onchange = () => { hover = null; setVal(el.dataset.k, +el.value, el.dataset.desc); };
+  });
+  root.querySelectorAll("[data-box]").forEach(el => el.onchange = () => { const d = +el.dataset.box; const n = parseFloat(el.value); if (!isNaN(n)) setVal(el.dataset.k, Math.round(n * d), el.dataset.desc); });
+  root.querySelectorAll("[data-sw]").forEach(el => { el.onclick = () => setVal(el.dataset.k, !el.classList.contains("on"), el.dataset.desc); el.onkeydown = e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); el.click(); } }; });
+  root.querySelectorAll("[data-drop]").forEach(el => el.onchange = () => setVal(el.dataset.k, el.value, el.dataset.desc));
+  root.querySelectorAll("[data-custom]").forEach(el => el.onclick = () => { if (!String(resolveK(el.dataset.k)).startsWith("#")) setVal(el.dataset.k, THEMES[S.theme].pal[3], el.dataset.desc); });
+  root.querySelectorAll("[data-picker]").forEach(el => el.onchange = () => setVal(el.dataset.k, el.value, el.dataset.desc));
+  root.querySelectorAll("[data-unset]").forEach(el => el.onclick = e => { e.stopPropagation(); const k = el.dataset.unset; commit(`Reset ${k.split("|").slice(1).filter(x => x !== "All").join(" · ")}`, () => { delete ov[k]; }); });
+  root.querySelectorAll(".prow[data-row]").forEach(el => el.oncontextmenu = e => { e.preventDefault(); rowMenu(e, el.dataset.row); });
+  // looks
+  root.querySelectorAll("[data-look]").forEach(el => {
+    const look = [...LOOKS, ...S.myLooks].find(l => l.id === el.dataset.look);
+    el.onclick = () => commit(`${f.label} look → ${look.label}`, () => applyLook(f, look, ov));
+    el.onmouseenter = () => { const tmp = { ...ov }; applyLook(f, look, tmp); compare = tmp; paintStage(true); };
+    el.onmouseleave = () => { compare = null; paintStage(); };
+  });
+  const sl = $("#saveLook", root); if (sl) sl.onclick = () => { const n = S.myLooks.length + 1; const snap = {}; changedIn(f.id).forEach(k => snap[k.split("|").slice(2).join("|")] = ov[k]); S.myLooks.push({ id: "mine" + n, label: "Mine " + n, mine: true, snap }); toast(`Saved as "Mine ${n}". Share it as a CINEL1: string.`); render(); };
+  // copy / paste / reset
+  const cb = $("#copyB", root); if (cb) cb.onclick = () => { const part = partOf(f, S.part); const vals = {}; propsOf(part).forEach(pr => vals[pr.id] = resolve(f, S.variant, part, pr).v); clip = { from: `${f.label} · ${part.label}`, recipes: part.recipes, vals }; toast(`Copied the look of ${clip.from}`); render(); };
+  const pb = $("#pasteB", root); if (pb) pb.onclick = () => { const part = partOf(f, S.part); commit(`Paste ${clip.from} → ${part.label}`, () => propsOf(part).forEach(pr => { if (pr.id in clip.vals) ov[K(f.id, S.variant, part.id, pr.id)] = clip.vals[pr.id]; })); };
+  $("#resetB", root).onclick = e => resetMenu(e.currentTarget);
+  const ra = $("#resetAllB", root); if (ra) ra.onclick = e => resetMenu(e.currentTarget);
+  // find
+  const fi = $("#findIn", root), fr = $("#findRes", root);
+  fi.oninput = () => findShow(fi.value, fr);
+  fi.onkeydown = e => { if (e.key === "Enter") { const first = fr.querySelector(".r"); if (first) first.click(); } if (e.key === "Escape") { fi.value = ""; fr.hidden = true; } };
+  // arrange: drag
+  if (S.mode === "arrange") root.querySelectorAll("#stage [data-part]").forEach(el => {
+    const part = partOf(f, el.dataset.part);
+    if (!part.recipes.includes("Place")) return;
+    el.onpointerdown = e => {
+      e.preventDefault(); S.part = part.id; const sx = e.clientX, sy = e.clientY;
+      const x0 = val(part.id, "x") || 0, y0 = val(part.id, "y") || 0; const before = snap(); let moved = false;
+      el.setPointerCapture(e.pointerId);
+      el.onpointermove = m => { moved = true; ov[K(f.id, S.variant, part.id, "x")] = clamp(Math.round(x0 + (m.clientX - sx)), -40, 40); ov[K(f.id, S.variant, part.id, "y")] = clamp(Math.round(y0 - (m.clientY - sy)), -40, 40); el.style.transform = `translate(${val(part.id, "x")}px,${-val(part.id, "y")}px)`; };
+      el.onpointerup = () => { el.onpointermove = null; if (moved) { S.dragged = true; hist.push({ desc: `Move ${part.label}`, before, after: snap() }); fut = []; } render(); };
+    };
+  });
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function resolveK(k) { const [fid, v, pid, rid] = k.split("|"); const f = frameOf(fid); const part = partOf(f, pid); const pr = propsOf(part).find(x => x.id === rid); return resolve(f, v, part, pr).v; }
+function applyLook(f, look, target) {
+  changedIn(f.id).filter(k => k.split("|")[1] === S.variant).forEach(k => delete target[k]);
+  if (look.game) f.parts.forEach(p => propsOf(p).forEach(pr => { target[K(f.id, S.variant, p.id, pr.id)] = typeof pr.game === "function" ? pr.game(p) : pr.game; }));
+  if (look.set) f.parts.forEach(p => propsOf(p).forEach(pr => { if (pr.id in look.set) target[K(f.id, S.variant, p.id, pr.id)] = look.set[pr.id]; }));
+  if (look.snap) for (const [rest, v] of Object.entries(look.snap)) target[`${f.id}|${S.variant}|${rest}`] = v;
+}
+function paintStage(previewBadge) {
+  const st = $("#stage .canvas", root); if (!st) return;
+  st.innerHTML = stageHtml(F());
+  const b = $("#stage .badge", root); if (b) b.remove();
+  if (hover || previewBadge) $("#stage", root).insertAdjacentHTML("afterbegin", '<span class="badge">Preview: not saved</span>');
+  markPicked();
+  st.querySelectorAll("[data-part]").forEach(el => el.onclick = e => { e.stopPropagation(); S.part = el.dataset.part; render(); });
+}
+function hold(el, down, up) { if (!el) return; el.onpointerdown = down; el.onpointerup = el.onpointerleave = () => up(); el.onkeydown = e => { if (e.key === " " && !e.repeat) { e.preventDefault(); down(); } }; el.onkeyup = e => { if (e.key === " ") up(); }; }
+function closePops() { root.querySelectorAll(".pop").forEach(p => p.remove()); }
+function popAt(anchor, html, up = true) {
+  closePops();
+  const p = document.createElement("div"); p.className = "pop"; p.innerHTML = html; root.appendChild(p);
+  const r = anchor.getBoundingClientRect(), rr = root.getBoundingClientRect();
+  p.style.left = Math.min(r.left - rr.left, rr.width - 250) + "px";
+  p.style[up ? "bottom" : "top"] = up ? (rr.bottom - r.top + 4) + "px" : (r.bottom - rr.top + 4) + "px";
+  setTimeout(() => document.addEventListener("pointerdown", function off(e) { if (!p.contains(e.target)) { p.remove(); document.removeEventListener("pointerdown", off); } }), 0);
+  return p;
+}
+function resetMenu(anchor) {
+  const f = F(), part = partOf(f, S.part);
+  const scopes = S.view === "frame" ? [
+    { l: `This part: ${part.label}`, keys: changedIn(f.id).filter(k => { const s = k.split("|"); return s[1] === S.variant && s[2] === part.id; }) },
+    ...(f.variants.length > 1 ? [{ l: `This variant: ${S.variant}`, keys: changedIn(f.id).filter(k => k.split("|")[1] === S.variant) }] : []),
+    { l: `This frame: ${f.label}`, keys: changedIn(f.id) },
+    { l: "Everything in Style", keys: Object.keys(ov) }] : [{ l: "Everything in Style", keys: Object.keys(ov) }];
+  const p = popAt(anchor, `<div class="t">Reset: back to what each setting follows</div>${scopes.map((s, i) => `<div class="i ${s.keys.length ? "" : "dis"}" data-i="${i}"><span>${esc(s.l)}</span><span class="c">${s.keys.length || "nothing"}</span></div>`).join("")}`);
+  p.querySelectorAll(".i:not(.dis)").forEach(el => el.onclick = () => {
+    const s = scopes[+el.dataset.i];
+    p.innerHTML = `<div class="conf">Reset ${s.keys.length} setting${s.keys.length > 1 ? "s" : ""} (${esc(s.l.toLowerCase())})?<div class="bt"><button class="btn">Reset</button><button class="btn plain">Cancel</button></div></div>`;
+    p.querySelector(".btn").onclick = () => { closePops(); commit(`Reset ${s.l.toLowerCase()}`, () => s.keys.forEach(k => delete ov[k])); toast(`Reset ${s.keys.length} setting${s.keys.length > 1 ? "s" : ""}`, true); };
+    p.querySelector(".btn.plain").onclick = closePops;
+  });
+}
+function rowMenu(e, k) {
+  const anchor = e.currentTarget.querySelector(".lab");
+  const p = popAt(anchor, `<div class="t">${esc(k.split("|").slice(1).filter(x => x !== "All").join(" · "))}</div>
+    <div class="i ${k in ov ? "" : "dis"}" data-a="reset"><span>Reset</span><span class="c">back to what it follows</span></div>
+    <div class="i" data-a="copy"><span>Copy</span></div><div class="i ${S.rowClip ? "" : "dis"}" data-a="paste"><span>Paste</span><span class="c">${S.rowClip ? esc(String(S.rowClip.v)) : ""}</span></div>
+    <div class="i" data-a="find"><span>Show on other frames</span></div>`, false);
+  p.querySelectorAll(".i:not(.dis)").forEach(el => el.onclick = () => {
+    closePops(); const a = el.dataset.a;
+    if (a === "reset") commit("Reset " + k.split("|")[3], () => delete ov[k]);
+    if (a === "copy") { S.rowClip = { v: resolveK(k) }; toast("Copied " + showVal(null, S.rowClip.v)); }
+    if (a === "paste") setVal(k, S.rowClip.v, "Paste");
+    if (a === "find") { const fi = $("#findIn", root); const pr = Object.values(RECIPES).flat().find(x => x.id === k.split("|")[3]); fi.value = pr.label; fi.focus(); findShow(fi.value, $("#findRes", root)); }
+  });
+}
+let INDEX = null;
+function buildIndex() {
+  INDEX = [];
+  for (const f of FRAMES) for (const p of f.parts) for (const r of p.recipes) for (const pr of RECIPES[r])
+    INDEX.push({ f, p, pr, r, hay: `${pr.label} ${r} ${p.label} ${f.label} ${pr.syn || ""}`.toLowerCase() });
+}
+function findShow(q, box) {
+  q = q.trim().toLowerCase();
+  if (!q) { box.hidden = true; return; }
+  if (!INDEX) buildIndex();
+  const words = q.split(/\s+/);
+  const hits = INDEX.filter(x => words.every(w => x.hay.includes(w)));
+  hits.sort((a, b) => (b.pr.label.toLowerCase().startsWith(q) ? 1 : 0) - (a.pr.label.toLowerCase().startsWith(q) ? 1 : 0));
+  let h = "", last = "";
+  for (const x of hits.slice(0, 40)) {
+    if (x.f.id !== last) { last = x.f.id; h += `<div class="grp">${esc(x.f.label)}</div>`; }
+    h += `<div class="r" data-f="${x.f.id}" data-p="${x.p.id}" data-pr="${x.pr.id}"><span>${esc(x.pr.label)}</span><span class="p">${esc(x.p.label)} · ${x.r}</span></div>`;
+  }
+  box.innerHTML = h || `<div class="grp" style="text-transform:none">No setting matches "${esc(q)}"</div>`;
+  box.hidden = false;
+  box.querySelectorAll(".r").forEach(el => el.onclick = () => {
+    S.view = "frame"; S.frame = el.dataset.f; S.part = el.dataset.p; S.mode = "style"; render();
+    const row = [...root.querySelectorAll(".prow")].find(r => r.dataset.row && r.dataset.row.endsWith("|" + el.dataset.p + "|" + el.dataset.pr));
+    if (row) { row.scrollIntoView({ block: "nearest" }); row.classList.add("flash"); }
+  });
+}
+let toastT;
+function toast(msg, withUndo) {
+  root.querySelectorAll(".toast").forEach(t => t.remove());
+  const t = document.createElement("div"); t.className = "toast"; t.innerHTML = esc(msg) + (withUndo ? ' <a>Undo</a>' : ""); root.appendChild(t);
+  if (withUndo) t.querySelector("a").onclick = () => { undo(); t.remove(); };
+  clearTimeout(toastT); toastT = setTimeout(() => t.remove(), 3200);
+}
+function setHost(h) {
+  S.host = h; document.querySelectorAll("#hostSeg button").forEach(b => b.classList.toggle("on", b.dataset.h === h));
+  $("#hostHint").textContent = h === "wide" ? "One editor, two hosts. A fix lands in both." : "Nameplates › Default as the Settings page shows it: the same editor in one column, with Open in Studio.";
+  if (h === "compact") { S.view = "frame"; }
+  render();
+}
+document.querySelectorAll("#hostSeg button").forEach(b => b.onclick = () => setHost(b.dataset.h));
+document.addEventListener("keydown", e => {
+  const inField = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== "range";
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !inField) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y" && !inField) { e.preventDefault(); redo(); }
+  else if (e.key === "/" && !inField && root.matches(":hover")) { e.preventDefault(); $("#findIn", root).focus(); }
+  else if (S.mode === "arrange" && !inField && e.key.startsWith("Arrow") && root.matches(":hover")) {
+    e.preventDefault(); const f = F(); const step = e.shiftKey ? 5 : 1;
+    const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0, dy = e.key === "ArrowUp" ? step : e.key === "ArrowDown" ? -step : 0;
+    commit(`Nudge ${partOf(f, S.part).label}`, () => { if (dx) ov[K(f.id, S.variant, S.part, "x")] = clamp((val(S.part, "x") || 0) + dx, -40, 40); if (dy) ov[K(f.id, S.variant, S.part, "y")] = clamp((val(S.part, "y") || 0) + dy, -40, 40); });
+  }
+});
+// tooltips (one short sentence each)
+const tip = $("#tip");
+document.addEventListener("mouseover", e => { const t = e.target.closest("[data-tip]"); if (!t) { tip.hidden = true; return; } tip.textContent = t.dataset.tip; tip.hidden = false; const r = t.getBoundingClientRect(); tip.style.left = Math.min(r.left, innerWidth - 270) + "px"; tip.style.top = (r.bottom + 6) + "px"; });
+document.addEventListener("scroll", () => tip.hidden = true, true);
+
+// seed a little history so the mock opens in a realistic working state (marked as examples)
+ov[K("plates", "Target", "name", "size")] = 120; ov[K("plates", "Target", "name", "outline")] = "Thick"; ov[K("plates", "Default", "health", "tex")] = "brushed";
+ov[K("unit", "Default", "health", "spark")] = true;
+openSnap = { ...ov };
+render();
+
+// ---------- Doc tables ----------
+const AUDIT = [
+  ["Style General", "Theme editor", "part", "no", 4, "Reset page skips fonts, bar texture and shapes (field-table keys)", "Options 53; StyleThemes 1682"],
+  ["Themes", "Theme editor", "part", "yes", 3, "Undo was taken out of the UI, but every pick still writes styleThemeKept", "StyleThemes 1282, 2004"],
+  ["Overrides", "PanelButton triples", "none", "no", 4, "No preview unless popped out, and the preview never shows hide/show", "StylePages 1804"],
+  ["Interface Recolor", "Flat rows", "none", "no", 3, "None of its 23 settings is previewed", "InterfaceRecolor 789"],
+  ["Minimap", "Hand-made rows", "none", "no", 4, "Border color is greyed but still tints the ring buttons", "MinimapStyle 703, 549"],
+  ["Unit frames", "Look panel", "full", "no", 4, "Hover previews do nothing", "UnitStyle 4108"],
+  ["Cast bars (3 pages)", "Look panel", "full", "yes", 6, "The nameplates' Default row lives on another hub", "PlateCastStyle 2551, 2580"],
+  ["Personal resources", "Inline Look", "part", "no", 4, "Heights run 0–100% with a 100% default", "PersonalStyle 900"],
+  ["Raid frames", "Look panel", "full", "no", 4, "Arena row shows on Classic Era", "RaidStyle 662"],
+  ["Action bars", "Inline Look", "full", "no", 2, "Does nothing with Dominos or Masque, and doesn't say so", "ActionBarStyle 55, 996"],
+  ["Cooldown Manager", "Mixed", "part", "no", 3, "Two control systems and two previews on one page", "CdmStyle 190, 260"],
+  ["Range Hint", "Flat rows", "part", "no", 4, "Preview ignores Delay, Hide after and Sound", "RangeHintStyle 18"],
+  ["Combat text", "Hand-built", "part", "no", 6, "Look tab can stay greyed forever (combatTextNumbers)", "CombatTextPage 102"],
+  ["Text on you", "Hand-built", "full", "no", 5, "Quick-look tile stays lit after you edit", "SelfTextPage 171"],
+  ["Nameplates + Layout + Smart", "Look panel + hand-built", "part", "partial", 10, "Preview ignores Layout, so debuffs sit on the name", "Options 13298"],
+  ["Names", "Look panel", "part", "no", 4, "Distance settings are hidden but still read", "Options 12781"],
+  ["Chat bubbles", "Inline Look", "part", "no", 4, "Behind Bubbles greyed by four Chat switches, with no hint", "BubbleStyle 117"],
+  ["Tooltips", "Inline Look", "full", "no", 2, "3 outline levels here, 4 on Bubbles", "TooltipStyle 582"],
+  ["All Visions", "Flat rows", "part", "no", 5, "Reset page resets six other pages", "VisionsStyle 169"],
+  ["Damage", "VisionRows", "none", "no", 6, "No preview, and Test says to close Settings", "DamageVision 1601"],
+  ["Vitals", "Theme editor", "full", "no", 5, "Sound on a Style page", "LowHealth 2992"],
+  ["Quest", "Flat rows", "full", "no", 4, "Panels button always reads \"The game's\"", "StylePages 4593"],
+  ["Quest Item Button", "Flat rows", "full", "no", 2, "Frame summary always reads \"The game's\"", "QuestItemStyle 108"],
+  ["Roll", "Flat rows", "full", "no", 4, "Cards summary always reads \"The game's\"", "RollStyle 56"],
+  ["Emote", "VisionRows", "none", "no", 4, "Greys on the Vision's switch, not Style's", "EmoteVision 4367"],
+  ["Cards", "LookGrid", "full", "no", 3, "Enable Page turns all cards off", "CardsPage 1779"],
+  ["Tint", "Hand-built", "full", "no", 3, "Its own tabs, chips and greying overlay", "TintStyle 302, 1420"],
+  ["Letterbox", "Flat rows", "full", "no", 2, "Greying ignores Enable Style", "LetterboxStyle 400"],
+  ["Weather", "Flat rows", "part", "no", 2, "No Test or pop-out; strength 0 previews at 50%", "LetterboxStyle 548, 578"],
+];
+const auditT = $("#auditT");
+let sortCol = 4, sortDir = -1;
+function drawAudit() {
+  const rows = [...AUDIT].sort((a, b) => (a[sortCol] > b[sortCol] ? 1 : a[sortCol] < b[sortCol] ? -1 : 0) * sortDir);
+  auditT.innerHTML = `<tr>${["Frame", "Built with", "Preview", "Hover", "Issues", "Worst", "Where"].map((h, i) => `<th data-c="${i}">${h}${i === sortCol ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr>`
+    + rows.map(r => `<tr><td><b>${esc(r[0])}</b></td><td><span class="sys">${esc(r[1])}</span></td><td class="c"><span class="pv ${r[2]}" title="${r[2]}"></span></td><td class="c">${r[3]}</td><td class="c n">${r[4]}</td><td>${esc(r[5])}</td><td><code>${esc(r[6])}</code></td></tr>`).join("");
+  auditT.querySelectorAll("th").forEach(th => th.onclick = () => { const c = +th.dataset.c; sortDir = c === sortCol ? -sortDir : 1; sortCol = c; drawAudit(); });
+}
+drawAudit();
+
+const FIX = [
+  ["broken", "Card Types", "Enable Page on a Style page is the cards key, so it turns every card off", "CardsPage 1779"],
+  ["broken", "Quest · Quest Item · Roll", "\"Look:\" buttons always read \"The game's\" whatever you pick (Summary reads only texture/font/outline/border)", "StylePages 4593"],
+  ["broken", "Minimap", "Border color is greyed but still colors the round map's button rings", "MinimapStyle 703, 549"],
+  ["broken", "Nameplates", "Preview never applies Layout and fits parts by fixed numbers, so debuffs cover the name", "Options 13298; PlateLayoutPage 468"],
+  ["broken", "Nameplates › Layout", "Preset is a dropdown with no state that wipes the layout with no confirm or undo", "PlateLayoutPage 152, 857"],
+  ["broken", "Names", "Distance settings are hidden but still read; retail can never change plateNameY / fixed size", "Options 12781; PlateParts 535"],
+  ["broken", "Personal resources", "Heights 0–100% with a 100% default: bars can only shrink, and 0% hides them", "PersonalStyle 900"],
+  ["broken", "Combat text", "combatTextNumbers greys the whole Look tab and no control writes it", "CombatTextPage 102; Core 5527"],
+  ["broken", "All Visions", "Reset page silently resets Font/Outline/Shadow on six other pages", "VisionsStyle 169"],
+  ["broken", "Style General", "Reset page doesn't reset the fonts, bar texture or shapes", "Options 53; StyleThemes 1682"],
+  ["broken", "Combat text", "Reset page leaves Who draws alone (raw cells never recorded)", "CombatTextPage 274, 1061"],
+  ["broken", "Emote · Quest · Letterbox · Damage", "Greying uses the wrong switch, so rows stay live with Enable Style off", "EmoteVision 4367; QuestTalkStyle 51; LetterboxStyle 400; DamageVision 1735"],
+  ["silent", "Action bars", "Every control does nothing with Dominos or Masque loaded, and the page says nothing", "ActionBarStyle 55, 996"],
+  ["silent", "Chat bubbles", "Behind Bubbles is greyed by four switches on the Chat pages, with no hint; Test/Move stay clickable", "BubbleStyle 106, 117"],
+  ["silent", "Unit · Raid · inline pages", "Hover previews do nothing; Hold to compare does nothing on inline panels", "UnitStyle 4108; RaidStyle 561; StylePages 4018"],
+  ["silent", "Range Hint", "Preview ignores Delay, Hide after and Sound", "RangeHintStyle 18, 60"],
+  ["silent", "Raid frames", "Arena row shows on Classic Era, which has no arena frames", "RaidStyle 662"],
+  ["silent", "Unit · Raid", "Party buttons stay live while the other page draws party frames", "UnitStyle 4293; RaidStyle 720"],
+  ["silent", "Minimap", "Shade/Zone rows go stale after a theme change while the page is open (only OnShow)", "MinimapStyle 746"],
+  ["silent", "Damage", "Built on clients without C_DamageMeter: a full page for a feature that can't run", "DamageVision 106; Options 22520"],
+  ["silent", "Weather", "Strength 0 previews at 50%; no Test", "LetterboxStyle 578"],
+  ["confusing", "Everywhere", "Outline has 7 models; colors 3 controls; choices 5 controls", "StylePages 2741–3044"],
+  ["confusing", "Everywhere", "Reset in 8 places with 5 meanings; no undo", "StylePages 4196, 4230; Options 1578"],
+  ["confusing", "Everywhere", "Buttons that look like text: Visions names, grey cast buttons, Scene pill, Flat toggles", "VisionsStyle 128; PlateCastStyle 2531; PlateRowLook 574"],
+  ["confusing", "Everywhere", "Background / Behind the bar / Dark ground; Custom / Your own; Test / Play", "RaidStyle 620; DamageVision 1695; SelfTextPage 446"],
+  ["confusing", "Nameplates", "Plate width/height/change time sit on the Smart tab; Customize fake-clicks a hidden button", "Options 15192, 13454"],
+  ["confusing", "Nameplates · Names", "Theme is a dropdown on one page and tiles on the other; \"Follow General\" vs \"Follow main theme\"", "Options 13414, 12220"],
+  ["confusing", "Cast bars", "Page title \"Cast Style\", hub label \"Cast Bars\"; nameplate row can't pick The game's", "PlateCastStyle 2552, 2375"],
+  ["confusing", "Vitals · Quest · Range · Text on you", "Behavior settings on look pages (sound, controls, Show in)", "LowHealth 2992; QuestTalkStyle 115"],
+  ["dead", "StylePages", "rows.PresetMenu, rows.Sub, tabbed.themeLook: never called", "StylePages 3823, 2682, 4161"],
+  ["dead", "Themes", "db.styleThemeKept written on every pick; ns.UndoStyleTheme called only by a test", "StyleThemes 1282, 1314"],
+  ["dead", "Cast bars", "spec.defaultName passed, never read", "PlateCastStyle 2567"],
+];
+const fixT = $("#fixT"), fixF = $("#fixF");
+const SEV = { all: "All", broken: "Broken", silent: "Silent", confusing: "Confusing", dead: "Dead code" };
+let fsel = "all";
+function drawFix() {
+  fixF.innerHTML = Object.entries(SEV).map(([k, l]) => `<button class="tog ${fsel === k ? "on" : ""}" data-s="${k}">${l} <span class="n" style="opacity:.6">${k === "all" ? FIX.length : FIX.filter(x => x[0] === k).length}</span></button>`).join("");
+  fixF.querySelectorAll("button").forEach(b => b.onclick = () => { fsel = b.dataset.s; drawFix(); });
+  fixT.innerHTML = `<tr><th>Kind</th><th>Where</th><th>Problem</th><th>Code</th></tr>` + FIX.filter(x => fsel === "all" || x[0] === fsel)
+    .map(x => `<tr><td><span class="sev ${x[0]}">${SEV[x[0]]}</span></td><td>${esc(x[1])}</td><td>${esc(x[2])}</td><td><code>${esc(x[3])}</code></td></tr>`).join("");
+}
+drawFix();
+
+// grammar examples (static, same classes as the Studio)
+const GRAM = [
+  ["Segments", "2–5 words", `<div class="seg"><button class="on">None</button><button>Thin</button><button>Thick</button></div>`, "Never radio boxes, and never three PanelButtons."],
+  ["Tiles", "Looks you judge by eye", `<div class="tiles">${Object.keys(TEX).map((t, i) => `<button class="tile tex ${i === 3 ? "on" : ""}"><i style="background:#3a9a3a;background-image:${TEX[t].css}"></i></button>`).join("")}</div>`, "Hovering shows it on the stage before you pick. More… opens the full gallery."],
+  ["Slider", "Amounts", `<div class="slider"><input type="range" value="120" min="50" max="200"><input class="val" value="120 %"></div>`, "Always shows its unit. Sizes run 50–200% with 100 in the middle. Double-click to type, right-click to reset."],
+  ["Color chips", "Every color", `<div class="chips"><button class="chip">The game's</button><button class="chip on">Theme</button><button class="chip">Class</button><button class="chip">Reaction</button><button class="chip"><span class="dot" style="background:#9482c9"></span>Custom</button></div>`, "Shows only the chips that apply. Custom opens with the theme's 7 colors first."],
+  ["Switch", "On / off", `<span class="switch on" style="display:inline-block"></span>`, "The label says what On does."],
+  ["Button", "Actions", `<button class="btn">Test</button> <button class="btn plain">Move</button>`, "An action never sits in a dropdown or looks like text."],
+];
+$("#gram").innerHTML = GRAM.map(g => `<div class="box"><b>${g[0]}</b> <span class="hint">· ${g[1]}</span><div class="ex">${g[2]}</div><div class="rule">${g[3]}</div></div>`).join("");
+
+const PAGES = [
+  ["Style General", "Everything: the theme gallery, fonts (title, body, small), bar texture, shapes, and outline & border inline", "Reset covers fonts, texture and shapes; RefreshAll gets Combat Text and Text on You"],
+  ["Style Themes", "Theme gallery and your-theme editor on the stage; card actions on a visible ⋯", "Undo through History"],
+  ["Style Overrides", "Each unit, plate and bar part's Shown, plus an Overrides list in Changed", "Previews show hide/show"],
+  ["Interface Recolor", "Trackers & bars: quest tracker, damage meter, swing, XP; each color as chips", "Greyed with a reason while the theme is the game's"],
+  ["Minimap Style", "Minimap: Map, Border, Ring buttons, Zone bar, with a new stage", "Border color greying; refresh on theme change"],
+  ["Unit Style", "Unit frames · Default, Player, Target, Focus, Pet, ToT, Party", "Party → \"Raid frames draw your party\" link"],
+  ["Unit Cast · Player Cast · Cast Bar Style", "Cast bars · Default, Yours, Target & focus, Boss & arena, Nameplates (each tab opens on its variant)", "Nameplates can pick The game's; defaultName removed"],
+  ["Personal Style", "Personal resources · Health, Power, Mana (retail), Class resource", "Heights 50–200% (1.0 stays 100%)"],
+  ["Raid Style", "Raid frames · Default, Raid, Party, Arena (clients with arena)", "Bar background / Tile background"],
+  ["Action Style", "Action bars · Icon, Empty slot, Border (+ Hotkey text: Depth 6)", "Dominos/Masque status line"],
+  ["Cooldown Manager Style", "Cooldown Manager · Drain ring, Icons, Cooldown + DoT on one stage", "Colors as chips"],
+  ["Range Hint Style", "Range Hint · Mark, Text, Background, Motion", "Test honors timing; <b>moves</b> Sound to the Range Hint page"],
+  ["Combat Text Style", "Floating text · ~20 texts as variants · Numbers, Miss words, Motion", "Who draws recorded; <b>moves</b> Who draws to Show"],
+  ["Self Text Style", "Floating text (on you) · kinds as variants · board place on the stage", "% not multipliers; <b>moves</b> Show in"],
+  ["Nameplate Style · Layout · Smart", "Nameplates · Default + Smart rows (each with When) · 11 parts · Layout tab = Arrange mode (its switch stays)", "Width/height to Default; Preset → Looks"],
+  ["Name Style", "Names · All names + kinds · Text, Glow, Band, Second line · Distance slider on the stage", "Theme tiles on both pages; Decision 3"],
+  ["Bubble Style", "Chat bubbles · Bubble, Words, Tail, Behind bubbles", "Status + Open; Test greys with it"],
+  ["Tooltip Style", "Tooltips · Panel, Border, Health bar, Name, Lines", "The game's name color"],
+  ["Visions Style", "All Visions: shared Text, Border, Texture; each Vision's follow chip", "Reset stays on its own page"],
+  ["Damage Vision Look", "Damage · Bars, Words, See-through + new stage", "Only where C_DamageMeter exists; <b>moves</b> type tiles"],
+  ["Vitals Style", "Vitals · its themes are the Looks strip · General, Blizzard, Cinematic art, Swirl, Mana", "<b>moves</b> Sound + volume"],
+  ["Quest Talk Style", "Quest · Panels, Words, Layout", "Summary bug; <b>moves</b> Controls"],
+  ["Quest Item Style", "Quest Item Button · Button, Ready glow, Cooldown, Text", "Hub label; summary bug"],
+  ["Roll Style", "Roll · Cards, Text, Time left, Picks, Winner", "Hidden without a loot history"],
+  ["Emote Vision Style", "Emote · Style tiles, Words, Frame + new stage", "Greys on emoteStyle"],
+  ["Card Styles", "Cards · card types as variants · LookGrid groups as recipes", "Enable Page = the style switch"],
+  ["Tint Style", "Tint · Look, Zones, Time of day as stage modes", "Greying through the kit"],
+  ["Letterbox Style", "Letterbox · Bars, Edge, Line, Coming in and going", "Greys on Enable Style"],
+  ["Weather Style", "Weather · one part per weather", "Test + stage; strength 0"],
+];
+$("#pagesT").innerHTML = `<tr><th>Page id</th><th>In the editor</th><th>Fixed on the way</th></tr>` + PAGES.map(p => `<tr><td><b>${esc(p[0])}</b></td><td>${esc(p[1])}</td><td>${p[2]}</td></tr>`).join("");
+
+const DEPTH = [
+  ["1 · Look rules", "Any variant can carry a When rule in CQL: \"names look like this in dungeons\", \"unit frames go quiet out of combat\". Today only plate Smart rows can. Uses ns.OpenRuleEditor and the plates' compiled rule cache."],
+  ["2 · Saved looks", "Name a frame's look, keep it account-wide, and share it as CINEL1:, next to theme sharing."],
+  ["3 · Contrast check", "A text color too close to what's behind it gets a small amber mark on its row. Try a near-black Custom on a Name."],
+  ["4 · Theme palette in the picker", "The theme's 7 colors come first, so custom colors stay on-theme."],
+  ["5 · Depth on every bar", "The Bar recipe's gradient and sheen go wherever a bar is drawn (the \"nothing one color\" rule)."],
+  ["6 · Action bar text", "Hotkey and count text get the Text recipe: font, size, outline. This is the styling book's open item."],
+  ["7 · Peek and 2x zoom", "On every stage: hold to see the world, or zoom in to check a 1 px line."],
+];
+$("#depthC").innerHTML = DEPTH.map(d => `<div class="box"><h3>${esc(d[0])}</h3><p>${esc(d[1])}</p></div>`).join("");
+
+const DEC = [
+  ["Where does the editor live?", [["Studio window and the same editor compact on each page", 1], ["Pages only, redone on the grammar"], ["Studio only; pages become launchers"]]],
+  ["Move behavior settings off look pages? (keys don't change)", [["All six: Vitals sound, Quest Controls, Text on You's Show in, Range Hint sound, Combat Text's Who draws, Damage type tiles", 1], ["Some (tell me which)"], ["Keep them where they are"]]],
+  ["The hidden Name distance settings", [["Show them again in Names › Distance, so players' values are back in view", 1], ["Reset them once to defaults and keep them hidden"]]],
+  ["Cast bars", [["One Studio frame with five variants; each hub tab opens on its own", 1], ["Three separate frames"]]],
+  ["Overrides", [["Each part's Shown setting, with an Overrides list in Changed", 1], ["Keep the Overrides tab as it is"]]],
+  ["Depth items", [["All seven", 1], ["Some of them"], ["None for now"]]],
+];
+$("#decC").innerHTML = DEC.map((d, i) => `<div class="box"><div class="q">${i + 1}. ${esc(d[0])}</div>${d[1].map(o => `<div class="opt">${o[1] ? '<span class="rec">Recommended</span>' : '<span class="rec" style="color:var(--faint)">or</span>'}<span>${esc(o[0])}</span></div>`).join("")}</div>`).join("");
+})();
+</script>

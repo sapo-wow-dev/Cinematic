@@ -1,0 +1,13 @@
+Expectation-changed: Tools/offline/gameplate.lua: what it shows in the middle of the room over its lists (debuffs off/on): 29/29 -> 40.49/49.73, within 0.5 (OK'd by the user 2026-11-25)
+Expectation-changed: Tools/offline/selftextpage.lua: three tabs (now "two tabs"): 3 -> 2 (OK'd by the user 2026-11-25)
+Expectation-changed: Tools/offline/selftextpage.lua: many controls: over 40 -> at least 20 (21 now) (OK'd by the user 2026-11-25)
+Expectation-changed: Tools/offline/selftextpage.lua: stopped: Play (now "stopped: Test"): "Play" -> "Test" (OK'd by the user 2026-11-25)
+Expectation-changed: Tools/offline/manavision.lua: Health, Mana and Style's Mana are tab containers (now "Health and Mana are tab containers"): 3 -> 2 (OK'd by the user 2026-11-25)
+Expectation-changed: Dev/AtmosphereTest.lua: stylepage 3 weather panes tinted: at default strength 0 -> sets weatherTintStrength 0.5 with r:Set first, still 3 (OK'd by the user 2026-11-25)
+Expectation-changed: Tools/offline/findrankmatrix.lua: letterbox_size: Size [Letterbox Style] -> Letterbox [Letterbox] (page) (OK'd by the user 2026-11-25)
+Expectation-changed: Tools/offline/findrankmatrix.lua: nameplate_color: Nameplates [Nameplates] (page) -> Color [Cast Bar Style] (OK'd by the user 2026-11-25)
+Expectation-changed: Tools/offline/check.lua: Card Types bar settings (Align, Bar scale, No letterbox) without a bar: hidden -> greyed (OK'd by the user 2026-11-25)
+Expectation-changed: Tools/offline/platematch.lua: plain: the off pass, the state loop and Customize left out: 3 "proven, not checked again" -> 2 (OK'd by the user 2026-11-25)
+
+# Pending the user's confirmation (Plate Layout session, closed): include its bottom-row hunks (PlateLayoutPage.lua BottomRow/LayoutBottomRow/Unit's middle, PlateRowLook.lua sceneButton, Dev/PlateMatchTest.lua bottom-row + guide size + keyboard checks, platematch.lua +6 -> +7) with:
+Expectation-changed: Tools/offline/platematch.lua: a shot per sample, per state, ... and the layout: 65 -> 66 shots (the Layout tab's Hostile bottom-row shot) (OK'd by the user 2026-11-25: "Yes, commit")

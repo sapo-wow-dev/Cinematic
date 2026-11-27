@@ -1,6 +1,8 @@
-# version v1.37.1
+# version v1.43.0
 frame BattleTextForever
 frame BattleTextForever*
 frame BattleTextForeverConfirm
 frame BattleTextForeverMinimapButton
+frame BattleTextForeverNudge
+frame BattleTextForeverPlates
 frame BattleTextForeverStart

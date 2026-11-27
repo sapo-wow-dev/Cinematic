@@ -8,12 +8,13 @@
 --     sticky preview lifted, dropped, held or let go; each with the state;
 --   - every half second with our settings up, the page's text measured
 --     (PageShots.lua's ns.PageLayoutFindings): text under a preview starts an
---     OVERLAP: what's covered, the full state, and a screenshot; "gone" when
---     it ends.
+--     OVERLAP: what's covered and the full state; a screenshot only once it
+--     has stayed STAYS seconds with the preview still; "gone" when it ends.
 -- Dev copy only.
 local _, ns = ...
 
 local CHECK, KEEP = 0.5, 400
+local STAYS = 1.5 -- (seconds an overlap lasts, the preview still, before its screenshot)
 
 local function Say(text)
 	local log = CinematicDB and CinematicDB.previewWatchLog
@@ -100,9 +101,16 @@ local function Check()
 		local preview = popped or PreviewsOn(canvas)[1]
 		Say(("OVERLAP on %s: under a preview: %s"):format(page, table.concat(covered, "; ")))
 		Say("  state: " .. State(preview))
+	elseif covered and overlap and not overlap.shot and GetTime() - overlap.since >= STAYS
+		and not (ns.StickyPreviewMoving and ns.StickyPreviewMoving()) then
+		-- (Only one that stays gets a screenshot: the sticky preview crosses the
+		-- rows for a moment as it slides, every scroll past it, 2026-11-25's
+		-- "Screen captured" out of nowhere on the Names page.)
+		overlap.shot = true
 		local ok = pcall(Screenshot)
-		Say(("  screenshot at %s%s"):format(date("%m%d%y_%H%M%S"), ok and "" or " (failed)"))
-		ns.Print("preview watch: caught a preview over the rows (logged, screenshot taken)")
+		Say(("  still there after %.1f sec, screenshot at %s%s | %s"):format(GetTime() - overlap.since,
+			date("%m%d%y_%H%M%S"), ok and "" or " (failed)", State()))
+		ns.Print("preview watch: caught a preview staying over the rows (logged, screenshot taken)")
 	elseif overlap and not covered then
 		Say(("overlap on %s gone after %.1f sec | %s"):format(overlap.page, GetTime() - overlap.since, State()))
 		overlap = nil

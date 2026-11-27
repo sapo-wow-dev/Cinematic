@@ -7,7 +7,25 @@
 -- (numbers as #), steps skipped when the last run on the same version showed
 -- no new kind in them ("full" asks again), and the frames our support names
 -- that were never made. Says PASS or FAIL per check.
-local ns, wow = dofile("Tools/offline/load.lua")("forever", "CinematicDev.toc")
+-- (An addon list the solo check reads, empty while loading: filled below.
+-- { name, state (0 off, 2 on), loaded }.)
+local addons = {}
+local function Find(name)
+	for i, a in ipairs(addons) do if a.name == name or i == name then return a end end
+end
+local ns, wow = dofile("Tools/offline/load.lua")("forever", "CinematicDev.toc", function()
+	local A = _G.C_AddOns
+	A.GetNumAddOns = function() return #addons end
+	A.GetAddOnInfo = function(i)
+		local a = Find(i)
+		if a then return a.name, a.name, "", true, a.state > 0 and "" or "DISABLED" end
+	end
+	A.GetAddOnEnableState = function(name) local a = Find(name) return a and a.state or 0 end
+	A.IsAddOnLoaded = function(name) local a = Find(name) return a and a.loaded or false end
+	A.EnableAddOn = function(name) local a = Find(name) if a then a.state = 2 end end
+	A.DisableAddOn = function(name) local a = Find(name) if a then a.state = 0 end end
+	A.SaveAddOns = function() end
+end)
 
 local fails = 0
 local function Check(name, ok, detail)
@@ -99,6 +117,49 @@ Check("its own minimap button's row is tested (Addon buttons)", table.concat(row
 	table.concat(rowKeys, ","))
 Check("no other addon's rows come with it", #ns.AddonTestRows("Panorama") == 0)
 button:SetParent(UIParent)
+
+-- The solo check (known error solo-split-companion, 2026-11-25): Guidelime's
+-- solo kept Questie but turned QuestieDB off, and Questie errored every reload.
+local entries = {}
+ns.DevErrorEntries = function() return entries end
+addons[1] = { name = "Guidelime", state = 2, loaded = true }
+addons[2] = { name = "Questie", state = 2, loaded = true }
+addons[3] = { name = "QuestieDB", state = 0, loaded = false }
+addons[4] = { name = "Auctionator", state = 0, loaded = false }
+local solo = { keep = { "CinematicDev", "Guidelime", "Questie" }, turnedOff = { QuestieDB = 2, Auctionator = 2 } }
+entries[1] = { kind = "error", source = "Questie", message = "QuestieDB.lua:130: attempt to index global 'LibQuestieDB'", count = 1 }
+local problems = table.concat(ns.SoloCheck(solo), " / ")
+Check("solo check: Questie loaded with its QuestieDB off is a SPLIT",
+	problems:find("SPLIT: Questie is loaded but its QuestieDB is off", 1, true) ~= nil, problems)
+Check("solo check: Questie's load errors named", problems:find("LOAD ERRORS: Questie had 1 error", 1, true) ~= nil, problems)
+Check("solo check: an addon solo turned off on purpose isn't a split", problems:find("Auctionator", 1, true) == nil, problems)
+addons[3].state, addons[3].loaded = 2, true
+entries[1] = nil
+Check("solo check: both on, no errors: nothing", #ns.SoloCheck(solo) == 0, table.concat(ns.SoloCheck(solo), " / "))
+-- After solo off: QuestieDB and Auctionator were turned off by the solo, so on again; Guidelime was turned on, so off.
+local back = { on = { "QuestieDB", "Auctionator" }, off = { "Guidelime" } }
+addons[3].state, addons[3].loaded, addons[4].state = 0, false, 2 -- (after the reload: off is not loaded)
+problems = table.concat(ns.SoloCheck(nil, back), " / ")
+Check("solo off check: QuestieDB still off and Guidelime still on are NOT BACK",
+	problems == "NOT BACK: Guidelime is still on / NOT BACK: QuestieDB is still off", problems)
+addons[3].state, addons[3].loaded, addons[1].state, addons[1].loaded = 2, true, 0, false
+Check("solo off check: all back: nothing", #ns.SoloCheck(nil, back) == 0, table.concat(ns.SoloCheck(nil, back), " / "))
+-- Fixed by itself (2026-11-25, "do stuff for me"): QuestieDB back on, Guidelime back off.
+addons[3].state, addons[3].loaded, addons[1].state, addons[1].loaded = 0, false, 2, true
+local _, fixes = ns.SoloCheck(nil, back)
+local fixed = table.concat(ns.SoloRepair(fixes), ", ")
+Check("repair: QuestieDB on, Guidelime off", fixed == "QuestieDB on, Guidelime off" and addons[3].state == 2
+	and addons[1].state == 0, fixed)
+-- Any login, no solo: Questie loaded and erroring with QuestieDB off (the list a solo split before this check).
+addons[3].state, addons[3].loaded = 0, false
+entries[1] = { kind = "error", source = "Questie", message = "attempt to index global 'LibQuestieDB'", count = 7 }
+local lines, fix2 = ns.SoloCheck(nil, nil)
+Check("any login: an erroring addon with a part off is a SPLIT, fixed by turning it on",
+	table.concat(lines, " / ") == "SPLIT: Questie errored at load and its QuestieDB is off"
+	and table.concat(fix2.enable, ",") == "QuestieDB", table.concat(lines, " / "))
+entries[1] = nil
+Check("any login: no errors, nothing (a part off on purpose is left alone)", #ns.SoloCheck(nil, nil) == 0)
+ns.DevErrorEntries = nil
 
 -- Row fades: while the rows run, both fades take ns.testFadeTime (0.2 s, not
 -- the player's 1.5 s), and the player's own come back once it's cleared.

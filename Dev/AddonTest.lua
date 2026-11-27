@@ -98,7 +98,7 @@ end
 
 local function AddOns()
 	local out = {}
-	for i = 1, (GetNum and GetNum() or 0) do
+	for i = 1, (GetNum and tonumber((GetNum())) or 0) do -- (a stand-in game's stub answers a table)
 		local name, _, _, _, reason = GetInfo(i)
 		if name then
 			-- (On or off by its enable state: GetAddOnInfo's reason stays
@@ -230,6 +230,12 @@ function ns.SoloAddons(words, noReload)
 			ns.Print("solo off: these didn't switch back: " .. table.concat(unconfirmed, ", "))
 		end
 		db.soloOffUnconfirmed = #unconfirmed > 0 and unconfirmed or nil
+		-- (What the list must be after the reload: checked at login, ns.SoloCheck.
+		-- A stale read once left Questie on without QuestieDB after this.)
+		local back = { on = {}, off = {} }
+		for name in pairs(solo.turnedOff or {}) do back.on[#back.on + 1] = name end
+		for name, state in pairs(solo.turnedOn or {}) do if state == 0 then back.off[#back.off + 1] = name end end
+		db.soloBack = back
 		db.soloAddons = nil
 		SaveAddOns()
 		ns.Print("solo off: your addon list is back. Reloading.")
@@ -341,17 +347,145 @@ local function Others(keep)
 	return out
 end
 
+-- After a solo or solo off reload: is the addon list what it should be?
+-- (Known error solo-split-companion, Tools/errors/known.lua: Guidelime's solo
+-- kept Questie but not QuestieDB, and Questie threw 7 errors every reload,
+-- after solo off too, 2026-11-25.) Returns a list of problem lines:
+--   SPLIT: a kept addon loaded while a part of it (a folder starting with its
+--          name) that solo turned off is still off;
+--   LOAD ERRORS: a kept addon (not ours) errored at load;
+--   NOT BACK: after solo off, an addon that isn't as it was before the solo.
+--   (no solo, no solo off) SPLIT: any loaded addon that errored since login
+--          while a part of it is off (the list a solo left before this check).
+-- Second return: the fixes, { enable = { names }, disable = { names } }:
+-- ns.SoloRepair applies them (the user, 2026-11-25: "do stuff for me").
+function ns.SoloCheck(solo, back)
+	local problems, byName = {}, {}
+	local fixes, fixing = { enable = {}, disable = {} }, {}
+	local function Fix(list, name)
+		if not fixing[name] then fixing[name] = true; list[#list + 1] = name end
+	end
+	local all = AddOns()
+	for _, each in ipairs(all) do byName[each.name] = each end
+	if type(solo) == "table" then
+		for name in pairs(solo.turnedOff or {}) do
+			local part = byName[name]
+			for _, each in ipairs(all) do
+				if part and not part.enabled and each.loaded and each.name ~= name and not IsLib(each.name)
+					and Belongs(name, each.name) then
+					problems[#problems + 1] = ("SPLIT: %s is loaded but its %s is off"):format(each.name, name)
+					Fix(fixes.enable, name)
+				end
+			end
+		end
+		local kept = {}
+		for _, name in ipairs(solo.keep or {}) do if name ~= addonName then kept[#kept + 1] = name end end
+		local errors = {}
+		for _, entry in ipairs(ns.DevErrorEntries and ns.DevErrorEntries() or {}) do
+			for _, name in ipairs(kept) do
+				if type(entry.source) == "string" and Belongs(entry.source, name) then
+					errors[name] = (errors[name] or 0) + 1
+				end
+			end
+		end
+		for name, n in pairs(errors) do
+			problems[#problems + 1] = ("LOAD ERRORS: %s had %d error(s) since login (a part of it off?)"):format(name, n)
+		end
+	end
+	if type(back) == "table" then
+		for _, name in ipairs(back.on or {}) do
+			local each = byName[name]
+			if each and not each.enabled then
+				problems[#problems + 1] = ("NOT BACK: %s is still off"):format(name)
+				Fix(fixes.enable, name)
+			end
+		end
+		for _, name in ipairs(back.off or {}) do
+			local each = byName[name]
+			if each and each.enabled then
+				problems[#problems + 1] = ("NOT BACK: %s is still on"):format(name)
+				Fix(fixes.disable, name)
+			end
+		end
+	end
+	if type(solo) ~= "table" then
+		-- Any loaded addon that errored since login with a part of it off.
+		local errored = {}
+		for _, entry in ipairs(ns.DevErrorEntries and ns.DevErrorEntries() or {}) do
+			if type(entry.source) == "string" then errored[entry.source] = true end
+		end
+		for _, each in ipairs(all) do
+			if each.loaded and errored[each.name] and each.name ~= addonName and not IsLib(each.name) then
+				for _, part in ipairs(all) do
+					if part.name ~= each.name and not part.enabled and Belongs(part.name, each.name) then
+						problems[#problems + 1] = ("SPLIT: %s errored at load and its %s is off"):format(each.name, part.name)
+						Fix(fixes.enable, part.name)
+					end
+				end
+			end
+		end
+	end
+	table.sort(problems)
+	return problems, fixes
+end
+
+-- Puts the addon list right (the fixes ns.SoloCheck found) and saves it;
+-- returns what it changed. The reload loads it.
+function ns.SoloRepair(fixes)
+	local done = {}
+	for _, name in ipairs(fixes and fixes.enable or {}) do
+		if Switch(name, true) then done[#done + 1] = name .. " on" end
+	end
+	for _, name in ipairs(fixes and fixes.disable or {}) do
+		if Switch(name, false) then done[#done + 1] = name .. " off" end
+	end
+	if #done > 0 then pcall(SaveAddOns) end
+	return done
+end
+
 do
 	local login = CreateFrame("Frame")
 	login:RegisterEvent("PLAYER_LOGIN")
 	login:SetScript("OnEvent", function()
 		local solo = CinematicDB and CinematicDB.soloAddons
-		if type(solo) ~= "table" then return end
+		local back = CinematicDB and CinematicDB.soloBack
+		-- (Every login, not only after a solo: a list a solo split before this
+		-- check, Questie on with QuestieDB off, is caught by its load errors.)
+		-- (Late enough for the kept addons' load errors to be in the error window.)
 		C_Timer.After(3, function()
-			local others = Others(solo.keep)
-			local msg = "SOLO: only " .. table.concat(solo.keep or {}, ", ") .. " (/cine debug solo off brings the rest back)"
-			if #others > 0 then msg = msg .. "\nStill loaded too: " .. table.concat(others, ", ") end
-			ns.TestPrompt(msg, 12)
+			local problems, fixes = ns.SoloCheck(solo, back)
+			if CinematicDB then CinematicDB.soloBack = nil end
+			for _, line in ipairs(problems) do if ns.Log then ns.Log("solo", line) end end
+			ns.soloProblems = problems
+			-- Fixed by itself, not asked: the list put right, a Reload button.
+			local fixed = #problems > 0 and ns.SoloRepair(fixes) or {}
+			if #fixed > 0 and ns.Log then ns.Log("solo", "fixed the addon list: " .. table.concat(fixed, ", ")) end
+			local msg
+			if type(solo) == "table" then
+				local others = Others(solo.keep)
+				msg = "SOLO: only " .. table.concat(solo.keep or {}, ", ") .. " (/cine debug solo off brings the rest back)"
+				if #others > 0 then msg = msg .. "\nStill loaded too: " .. table.concat(others, ", ") end
+			elseif #problems > 0 then
+				msg = "Your addon list was split."
+			end
+			if #problems > 0 then
+				msg = msg .. "\n|cffff6060" .. table.concat(problems, "\n") .. "|r"
+				ns.Print("solo check: " .. table.concat(problems, "; "))
+			end
+			if #fixed > 0 then
+				msg = msg .. "\n|cff5fdf6eFixed: " .. table.concat(fixed, ", ") .. "|r"
+				ns.Print("solo check fixed it: " .. table.concat(fixed, ", ") .. ". Reload to load it.")
+				-- (A big Reload button, unless a test is going: its own buttons stay,
+				-- and its next reload loads the fix.)
+				local kit = ns.TestKit
+				if kit and kit.ShowButtons and not (kit.Running and kit.Running() and not kit.Running().stopped) then
+					msg = msg .. "\nClick Reload below to load it."
+					kit.ShowButtons({ { kind = "reload" }, { label = "Not now", fn = function() kit.HideButtons() end } })
+				else
+					msg = msg .. "\nThe next reload loads it."
+				end
+			end
+			if msg then ns.TestPrompt(msg, #problems > 0 and 30 or 12) end
 		end)
 	end)
 end
@@ -362,6 +496,10 @@ local SETTLE = 4 -- seconds a row gets to reach its alpha
 local HOLD = 1.5 -- seconds it must stay there (an addon setting its own back)
 local MADE_WAIT = 20 -- seconds given to frames it makes late (Questie's tracker, seconds after a /reload)
 local MADE_SETTLE = 3 -- then seconds for them to settle (Questie hides and shows its tracker once more)
+-- Fade in and out while the rows run: a row checks it hides, stays hidden and
+-- comes back, not the fade (the player's 1.5 s each way was 3 of a row's 7 s).
+local ROW_FADE = 0.2
+local ROW_GAP = 0.2 -- seconds between rows (one shot a row, already seconds apart)
 local run
 
 local function Log(text)
@@ -753,7 +891,7 @@ local function TestRow(index)
 				#down > 0 and ("still down: " .. table.concat(down, ", ")) or
 				(unclear > 0 and (unclear .. " hidden or at alpha 0 by the addon itself") or nil))
 			Force(item.key, run.forceBefore[item.key])
-			C_Timer.After(1, function() TestRow(index + 1) end)
+			C_Timer.After(ROW_GAP, function() TestRow(index + 1) end)
 		end)
 	end)
 end
@@ -845,6 +983,8 @@ StartRows = function()
 		for _, item in ipairs(run.rows) do keys[#keys + 1] = item.key end
 		return table.concat(keys, ", ")
 	end)()))
+	ns.testFadeTime = ROW_FADE
+	Log(("fades at %.1fs while the rows run"):format(ROW_FADE))
 	TestRow(1)
 end
 
@@ -899,6 +1039,7 @@ Finish = function(done)
 	if not run then return end
 	run.ticker:Cancel()
 	events:UnregisterAllEvents()
+	ns.testFadeTime = nil -- (before the rows go back: they fade at the player's own speed)
 	-- (Rows still forced by the test go back to what they were.)
 	for _, item in ipairs(run.forceBefore and run.rows or {}) do
 		if ns.db.frameForce[item.key] ~= run.forceBefore[item.key] then Force(item.key, run.forceBefore[item.key]) end

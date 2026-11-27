@@ -1,4 +1,4 @@
-# version v4.11.39
+# version v4.11.40
 EnableMouse(false or a variable) in RXPGuides/GuideWindow.lua
 EnableMouse(false or a variable) in RXPGuides/InventoryManager.lua
 EnableMouse(false or a variable) in RXPGuides/LevelingTracker.lua
