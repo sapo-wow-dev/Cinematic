@@ -2221,6 +2221,8 @@ ns.PlateNameColour = ns.PlateKinds.Name
 -- (Whether any of them is set: none, and nothing of this runs.)
 function ns.PlateKinds.On()
 	if not ns.db or not ns.StyleOn or not ns.StyleOn("handlePlateStyle") then return false end
+	-- (The Nameplates page's Style tab off: none, a tab is a container. 2026-11-26.)
+	if ns.PlateStyleTabOff and ns.PlateStyleTabOff() then return false end
 	if (Style("plateNameColor") or "game") ~= "game" then return true end
 	for _, kind in ipairs(ns.PLATE_UNIT_KINDS) do
 		if (Style("plateKindColor_" .. kind) or "game") ~= "game" then return true end

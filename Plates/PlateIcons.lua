@@ -37,6 +37,14 @@ end
 -- works out the facts each time.)
 local READ_EVERY = 0.25
 local readAt, readNow = -1, {}
+-- (2026-11-26: the Nameplates page's Style tab, where the Show in row is: a tab
+-- is a container, so off, neither Smart's marks nor Default's colors show. Read
+-- as the Nameplates page's other tabs are, ns.PlateTabOff: the page's own switch
+-- is the callers'.)
+local STYLE_TAB = "tabOn:Nameplates:PlateStyleShow"
+function ns.PlateStyleTabOff()
+	return ns.db ~= nil and ns.db[STYLE_TAB] == false
+end
 local function Wanted(part, cinematic)
 	-- (KindColors: Default's colors, by the same Show in row as the marks, 2026-11-26.)
 	local colours = part == "KindColors"
@@ -52,6 +60,7 @@ local function Wanted(part, cinematic)
 	-- wanted, so their When loop rests too. The in-game gating test saw it run
 	-- with Style off. Audit 2026-11-25.)
 	if part == "TargetArrow" and not ns.StyleOn("plateMarks") then return false end
+	if (colours or part == "TargetArrow") and ns.PlateStyleTabOff() then return false end
 	if db[ALWAYS_KEY[colours and "TargetArrow" or part]] then return true end
 	if not cinematic then return false end
 	local now = GetTime()
