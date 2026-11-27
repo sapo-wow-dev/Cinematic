@@ -274,7 +274,10 @@ local function UpdateDeathScreen(elapsed)
 	if test and GetTime() >= test.endsAt then
 		ns.deathVisionTest, test = nil, nil
 	end
-	if test and db.deathScreen then -- (page off: none, its Test too)
+	-- (Page off: none, its Test too. ns.PageSetting, not the raw value: with
+	-- Enable Visions off its Test ran. Not Allow outside CineMode: a Test is
+	-- started out of it. Audit 2026-11-25.)
+	if test and ns.PageSetting("deathScreen") then
 		want, run = true, nil
 	end
 	local target = want and 1 or 0
