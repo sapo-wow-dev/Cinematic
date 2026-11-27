@@ -40,28 +40,48 @@ recorder, so the recording is the game alone, the same for every profile
 and every version of Cinematic, and also a baseline of how much the game
 itself sends in each situation.
 
-**But with the game settings Cinematic would have there.** What the game
-sends depends on its settings, not on which addons are loaded: in CineMode
-away from instances Cinematic switches every nameplate on
-(`FORCED_PLATE_CVARS`, Effects.lua), so plate events fire for units whose
-plates you'd normally have off; Quest Vision switches interact soft
-targeting on (QuestGlow.lua), which sends its own events. So:
+**With every game setting Cinematic can turn on, on** (the user,
+2026-11-27). What the game sends depends on its settings, not on which
+addons are loaded: in CineMode away from instances Cinematic switches every
+nameplate on (`FORCED_PLATE_CVARS`, Effects.lua), so plate events fire for
+units you'd normally have no plate for; Quest Vision switches interact soft
+targeting on (QuestGlow.lua), which sends events of its own. A recording
+with more events can be cut down in the replay; one with fewer can't be
+filled in. So each recording has them all on, whatever the profile or the
+place:
 
-- Every game setting Cinematic changes is registered with `ns.CVarSet`
-  (Core.lua:3459, listed in `ns.cvarSets`). `Tools/sim/cvars.lua` loads
-  Cinematic on the stand-in and writes each set's values per client to
-  `Tools/sim/recorder/CVars.lua`, so the list can't drift from the code; its
-  check fails when they differ.
-- Each scenario names the sets Cinematic would have on there with the
-  default profile (plates forced in the open world and cities, not in a
-  dungeon). The recorder sets them at `/simrec start` and notes them in the
-  header.
-- At `/simrec stop` your own values come back. They're kept in the
-  recorder's SavedVariables first, so a crash or disconnect mid-recording
-  puts them back at the next login, as Cinematic does.
-
-Settings that change no events (camera follow, combat text look) are set
-too, for a recording that matches; they're listed, not reasoned about.
+- **The list comes from the code.** Every game setting Cinematic changes is
+  registered with `ns.CVarSet` (Core.lua:3459, `ns.cvarSets`: about 30 sets,
+  some made per kind or per client). `Tools/sim/cvars.lua` loads Cinematic
+  on the stand-in and writes each client's to `Tools/sim/recorder/CVars.lua`;
+  its check fails when they differ, so the list can't drift.
+- **Opposite sets: the side that sends more.** Some sets undo others ("All
+  plates on" / "Plates off", "Quest soft targeting" / "Object icons hidden",
+  "Offscreen plates on" / "off", combat text "on" / "off"). For a setting
+  that changes what the game sends, the recorder takes the value that sends
+  more (plates on, soft targeting on, offscreen plates on, floating combat
+  text on). Settings that change nothing sent (camera follow, max zoom, the
+  cursor, plate looks) are set to Cinematic's value too, so the game looks as
+  it would; `cvars.lua` marks which is which, and a new set with no mark
+  fails its check until someone decides.
+- **Made sure of, not just set.** After setting each one the recorder reads
+  it back. It holds them: on `CVAR_UPDATE` (the game or a key changing one)
+  it sets it again and notes it. Secure ones can't change in a fight, so
+  `/simrec start` refuses there. A setting this client doesn't have is
+  skipped and listed. The header lists every setting with the value it held
+  through the recording, and any that didn't take; a recording with one that
+  didn't take is flagged, not used.
+- **Yours back after.** Your own values are kept in the recorder's
+  SavedVariables at `/simrec start` and put back at `/simrec stop`, or at the
+  next login after a crash or disconnect, as Cinematic does.
+- **The replay cuts down.** On the bench, `SetCVar` from Cinematic is
+  recorded; where Cinematic would have a setting at the "send less" side
+  (plates switched off once all are faded, plates for one kind off in an
+  instance), the bench drops the events the game wouldn't have sent
+  (`NAME_PLATE_UNIT_ADDED/REMOVED` for those units, soft target events).
+  Each such rule is written down with the setting it follows; a setting
+  that changes what's sent with no rule yet is on the asked-not-modelled
+  list.
 
 Only watches: `RegisterAllEvents` and reads. It never replaces or wraps a
 game function (that would taint the UI).
@@ -183,7 +203,8 @@ Forever first. Retail next, for secret values and its newer events.
 ## Steps
 
 1. **Probe** (one in-game run, `/test`): on Forever and retail,
-   `RegisterAllEvents` and its cost, the combat log on Forever, how big
+   every setting in the list set and read back (and which change what's
+   sent), `RegisterAllEvents` and its cost, the combat log on Forever, how big
    60 s in a city is, what reads as secret in a fight. Engine rules for the
    answers.
 2. **Settings list** (`Tools/sim/cvars.lua`), **recorder** and
@@ -205,7 +226,8 @@ Forever first. Retail next, for secret values and its newer events.
   (Step 1.)
 - ~~Record with Cinematic on, off, or both?~~ No other addons, with
   Cinematic's game settings for the scenario (the user, 2026-11-27).
-- Which settings apply in each scenario follows the default profile. Is
-  that the profile to measure, or should a second set (another built-in
-  profile) be recorded for some scenarios?
+- ~~Which profile's settings?~~ All of them on, the side that sends more;
+  the replay cuts down to the profile being measured (the user, 2026-11-27).
+- Which settings change what the game sends (beyond plates and soft
+  targeting)? Step 1's probe checks the ones `cvars.lua` can't decide.
 - The bench on both offline runtimes (`lua5.1` and `run.py`'s lupa), or one?
