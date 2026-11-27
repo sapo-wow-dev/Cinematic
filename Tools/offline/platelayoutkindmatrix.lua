@@ -28,7 +28,7 @@ Matrix.Run({
 	fixed = { client = "forever" },
 	dims = { { "all", { "empty", "levelRight" } }, { "action", { "nudge", "tick" } } },
 	cell = function(c)
-		if not page then return "no page" end
+		if not page then error("no Layout tab in this code") end -- (v2.1.34 had none: old code errors, a NOTE. OK'd by the user 2026-11-26)
 		ns.db.plateLayout = true
 		ns.db.plateLayoutData = c.all == "levelRight" and { all = { center = "balanced", parts = { level = { x = 10 } } } }
 			or nil

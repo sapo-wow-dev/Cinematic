@@ -108,9 +108,14 @@ Matrix.Run({
 	pins = {
 		-- (Left on: off, put away once.)
 		{ "then=stayon", "cleared=1 runs=0" },
-		-- (Resumed or started over: all 8 when fixed; 5 and put away again when not.)
+		-- (Resumed or started over: all 8 when fixed; 5 and put away again when not.
+		-- The matrix resumes through ns.Suspend, a safety stop: since 177dde2 that
+		-- puts every loop's things away once more, so one clean-up more. OK'd by
+		-- the user 2026-11-26.)
 		{ "fixed=yes", "cleared=1 runs=8" },
 		{ "fixed=no", "cleared=2 runs=5" },
+		{ "then=resume fixed=yes", "cleared=2 runs=8" },
+		{ "then=resume fixed=no", "cleared=3 runs=5" },
 		{ "then=stayon", "cleared=1 runs=0" }, -- (later pins win)
 	},
 })
