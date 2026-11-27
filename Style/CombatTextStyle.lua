@@ -1728,6 +1728,18 @@ for _, event in ipairs({ "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_START", "UN
 end
 local function OnCastEvent(_, event, _, _, spell)
 	if not (Plain(spell) and spell) then return end
+	-- (Audit 2026-11-25: our numbers off (the page, its General tab, the
+	-- numbers switch, Forever Combat Text): no cast kept. Hits reach TakeCast
+	-- only while on, so two casts made while off were counted as no hit's and
+	-- the spell waited for none till /reload. Any still waiting are let go
+	-- uncounted, so turning on starts clean.)
+	if not On() then
+		if casts[1] or channel or next(castStarts) then
+			wipe(casts) wipe(castStarts)
+			channel = nil
+		end
+		return
+	end
 	local now = GetTime()
 	if event == "UNIT_SPELLCAST_START" then
 		castStarts[spell] = now
