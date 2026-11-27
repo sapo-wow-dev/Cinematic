@@ -410,6 +410,7 @@ Dev\CorpseTest.lua
 Dev\MapPinTest.lua
 Dev\PaceTest.lua
 Dev\RuleWordsTest.lua
+Dev\EventFactsTest.lua
 Dev\RuleCheckTest.lua
 Dev\ApiDocsDump.lua
 Dev\TotemHitTest.lua
