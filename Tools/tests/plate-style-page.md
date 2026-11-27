@@ -162,6 +162,7 @@ All through the game's own code (read in the Forever export), each as your game 
 | Q2 | Can a dropdown entry's hover drive the preview (the Look panel's "not saved" preview)? | YES: menu entries take SetOnEnter / SetOnLeave (Blizzard_Menu/Menu.lua:758, MenuTemplates.lua:341) | game source, Forever export |
 | Q3 | Layout tab: an arrow nudge, the options left open, a fight: do movement and casting keys reach the game in it (the key frame hidden on PLAYER_REGEN_DISABLED), and do the arrows nudge again after? Does a held arrow still repeat-nudge? | open | Tools/audits/2026-11-25-plate-layout-fight-keys.md |
 | Q4 | A layout saved, Nameplate Style off, /reload, then Nameplate Style on: do live plates take the layout within a second (and let go within a second when turned off)? | open | Tools/audits/2026-11-25-plate-layout-switch-back.md |
+| Q5 | Cast bars tab: pointing at Look from's "Its own look" (not clicked): the preview stays as saved and plateCastStarted_PLATE stays unset? | open | Tools/audits/2026-11-25-style-editor-hover.md |
 
 ## Runs
 | Run | Date | Command | Answered | Still open |

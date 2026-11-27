@@ -159,7 +159,11 @@ end
 local unitOwnFields = {}
 local function UnitOwnField(v)
 	if not unitOwnFields[v] then
-		unitOwnFields[v] = { default = "default",
+		-- (Audit 2026-11-25: noHover, as every field whose set writes more than a preview can put
+		-- back. Its set the switch itself, as the Unit Frames page's dropdown: ns.UnitStyleSetOwn
+		-- is gone, so Reset everything counted it and wrote nothing. Its first-time copy of
+		-- Default's look stays the page's; Reset and Undo only give a look it had.)
+		unitOwnFields[v] = { default = "default", noHover = true,
 			get = function() local db = ns.GetDB() return db and db["ufOwn_" .. v] and "own" or "default" end,
 			set = function(value) if ns.UnitStyleSetOwn then ns.UnitStyleSetOwn(v, value == "own") end end }
 	end
@@ -343,7 +347,8 @@ end
 local raidOwnFields = {}
 local function RaidOwnField(v)
 	if not raidOwnFields[v] then
-		raidOwnFields[v] = { default = "default",
+		-- (Audit 2026-11-25: as the unit frames' above, the Raid Frames page's switch.)
+		raidOwnFields[v] = { default = "default", noHover = true,
 			get = function() local db = ns.GetDB() return db and db["rfOwn_" .. v] and "own" or "default" end,
 			set = function(value) if ns.RaidStyleSetOwn then ns.RaidStyleSetOwn(v, value == "own") end end }
 	end
@@ -496,7 +501,9 @@ local CastFilled = CastWith(function(_, v) return ns.CastFillOurs and ns.CastFil
 local castLookFields = {}
 local function CastLookField(v)
 	if not castLookFields[v] then
-		castLookFields[v] = { default = v == "PLATE" and "default" or "game",
+		-- (Audit 2026-11-25: noHover: "Its own look" hovered started the bars' own copy of
+		-- Default's settings for real, and only the switch was put back.)
+		castLookFields[v] = { default = v == "PLATE" and "default" or "game", noHover = true,
 			get = function() return ns.CastLookPick and ns.CastLookPick(v) end,
 			set = function(value) if ns.CastPickLook then ns.CastPickLook(v, value) end end }
 	end
@@ -530,7 +537,8 @@ local function OnlyOn(...)
 	end)
 end
 -- (Your bar's width unit: px picked empty, it's filled with the bar's width now.)
-local playerWidthUnit = { default = "pct",
+-- (Audit 2026-11-25: noHover: Pixels hovered filled the width for real.)
+local playerWidthUnit = { default = "pct", noHover = true,
 	get = function() local db = ns.GetDB() return db and db.plateCastPlayerWidthUnit end,
 	set = function(value)
 		local db = ns.GetDB()
@@ -637,7 +645,7 @@ ns.StyleFrame("cast", {
 local function ManaOn(db) return db.prdMana and true or false end
 local function PrdWidth(label, key, which, tip, test)
 	local unit = key .. "Unit"
-	local field = { default = "pct",
+	local field = { default = "pct", noHover = true, -- (Audit 2026-11-25: as Your cast bar's Width in)
 		get = function() local db = ns.GetDB() return db and db[unit] end,
 		set = function(value)
 			local db = ns.GetDB()

@@ -152,6 +152,61 @@ do
 	Check(#Studio.Find("zzzz no such") == 0, "find nothing")
 end
 
+-- 2b. Pointing at a choice saves nothing (Audit 2026-11-25, Tools/audits/2026-11-25-style-editor-hover.md):
+-- every field on Nameplate Style, Range Hint and the frames whose fields that card fixed (Cast bars,
+-- Nameplate Style's tab; Unit, Raid frames; Personal resources), each choice hovered on each variant,
+-- the settings as they were after it. (A setting read as its default when unsaved: nil and its default
+-- the same.) Not yet Name Style (Letters > Its own copies the name's font to line 2) nor Nameplate
+-- Layout (Forever: plateLayoutData written): open, reported with the card.
+do
+	local function Now(k, v) if v == nil then return ns.DEFAULTS[k] end return v end
+	local function Same(a, b, depth)
+		if a == b then return true end
+		if type(a) ~= "table" or type(b) ~= "table" or (depth or 0) > 6 then return false end
+		for k, v in pairs(a) do if not Same(v, b[k], (depth or 0) + 1) then return false end end
+		for k in pairs(b) do if a[k] == nil then return false end end
+		return true
+	end
+	local function Deep(v, depth)
+		if type(v) ~= "table" or (depth or 0) > 6 then return v end
+		local out = {}
+		for k, x in pairs(v) do out[k] = Deep(x, (depth or 0) + 1) end
+		return out
+	end
+	local function Copy() local out = {} for k, v in pairs(db) do out[k] = Deep(v) end return out end
+	local preview = { Refresh = function() end }
+	local list = {}
+	for _, id in ipairs({ "plates", "range", "cast", "unit", "raid", "prd" }) do
+		if Studio.frames[id] then list[#list + 1] = Studio.frames[id] end
+	end
+	for _, f in ipairs(list) do
+		if not only or f.id == only then
+			for _, v in ipairs(Studio.Variants(f)) do
+				for _, each in ipairs(Studio.Props(f)) do
+					local key = Studio.KeyOf(each.prop, v.id)
+					if type(key) == "table" and (each.prop.kind == "seg" or each.prop.kind == "drop" or each.prop.kind == "tiles") then
+						for _, o in ipairs(Opts(each.prop)) do
+							local before = Copy()
+							Studio.ShowFor(preview, key, ValueOf(o))
+							local moved
+							for k in pairs(ns.DEFAULTS) do
+								if not Same(Now(k, before[k]), Now(k, db[k])) then moved = k break end
+							end
+							for k, value in pairs(db) do
+								if moved == nil and ns.DEFAULTS[k] == nil and not Same(before[k], value) then moved = k end
+							end
+							Check(moved == nil, ("hover %s %s %s > %s: saved %s"):format(f.id, tostring(v.id),
+								tostring(each.prop.label), tostring(ValueOf(o)), tostring(moved)))
+							for k in pairs(db) do db[k] = nil end
+							for k, value in pairs(before) do db[k] = value end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
 -- 3. Hosts: the window on every frame, every variant and part. Each opened right after a
 -- frame with no variants (the in-game run qe98e: a frame drew once with the last one's
 -- variant, false, and Unit, Raid and Cast errored).
