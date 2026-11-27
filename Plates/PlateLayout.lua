@@ -550,11 +550,9 @@ local layoutHooked = setmetatable({}, { __mode = "k" })
 -- (A switch over the page turned off elsewhere (Style, Nameplate Style) puts the
 -- plates back within a second: asked in the feature loops' own once-a-second look,
 -- below, not a ticker of its own. The gating audit, 2026-11-25.)
-local anyHooked = false
 local function HookLayout(plate, unitFrame)
 	if layoutHooked[unitFrame] then return end
 	layoutHooked[unitFrame] = true
-	if not plate.gameCopy then anyHooked = true end
 	-- (After each of the game's layout passes: ours on at once, no frame of the game's.)
 	for _, method in ipairs({ "UpdateAnchors", "UpdateControlAnchors" }) do
 		if type(unitFrame[method]) == "function" then
@@ -821,16 +819,17 @@ local function FlushDirty()
 end
 local switchWas
 ns.FeatureLoop(driver, FlushDirty, function()
-	if anyHooked then
-		-- (The page's switches, and Style's own: a hidden level box's crowd control put back
-		-- with Style off too. Gating run 2, 2026-11-25.)
-		local on = (SwitchOn() and "layout" or "") .. (ns.StyleOn and ns.StyleOn() and "+style" or "")
-		if switchWas ~= nil and on ~= switchWas and ns.PlateLayoutChanged then
-			switchWas = on
-			ns.PlateLayoutChanged()
-		end
+	-- (The page's switches, and Style's own: a hidden level box's crowd control put back
+	-- with Style off too. Gating run 2, 2026-11-25.)
+	-- (Audit 2026-11-25: asked with no plate hooked too. Only while one was, a layout saved
+	-- with a switch off at the first plate stayed off once the switch came on, till a
+	-- loading screen or a change on the page. Two switch reads a second: nothing per frame.)
+	local on = (SwitchOn() and "layout" or "") .. (ns.StyleOn and ns.StyleOn() and "+style" or "")
+	if switchWas ~= nil and on ~= switchWas and ns.PlateLayoutChanged then
 		switchWas = on
+		ns.PlateLayoutChanged()
 	end
+	switchWas = on
 	return next(dirty) ~= nil
 end)
 
