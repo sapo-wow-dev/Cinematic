@@ -3875,8 +3875,9 @@ local function GiveBackForLogout()
 	local yours = ns.db and ns.db.shoulderCamYours
 	if not yours then return end
 	for _, cvar in ipairs(ACCESSIBILITY) do
+		-- (Each on its own: a refused one mustn't stop the rest. Audit 2026-11-25: no pcall.)
 		if yours[cvar] ~= nil and not Same(GetCVar(cvar), yours[cvar]) then
-			SetCVar(cvar, yours[cvar])
+			pcall(SetCVar, cvar, yours[cvar])
 		end
 	end
 	-- (The soft target too: a logout mid-glide mustn't keep it on.)
@@ -3894,12 +3895,17 @@ local function GiveBackForLogout()
 	-- offset fresh or give anything back, so all the rest goes back now: the
 	-- offset and the focus too. Audit 2026-11-25.)
 	if ns.ModuleWanted("cameras") then return end
+	-- (Each on its own: one refused (a Lua error, or a write that doesn't take)
+	-- is kept for when Cameras loads again, the rest still go back. Audit
+	-- 2026-11-25: no pcall, so one refused stopped the loop.)
+	local back = {}
 	for cvar, value in pairs(yours) do
 		if aim.soft[cvar] == nil and aim.outline[cvar] == nil then
-			if not Same(GetCVar(cvar), value) then SetCVar(cvar, value) end
-			yours[cvar] = nil
+			if not Same(GetCVar(cvar), value) then pcall(SetCVar, cvar, value) end
+			if Same(GetCVar(cvar), value) then back[#back + 1] = cvar end
 		end
 	end
+	for _, cvar in ipairs(back) do yours[cvar] = nil end
 	if next(yours) == nil then ns.db.shoulderCamYours = nil end
 end
 
