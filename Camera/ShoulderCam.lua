@@ -199,7 +199,9 @@ local function PauseReason()
 	local camera = ns.ActiveEvent and select(2, ns.ActiveEvent())
 	if camera then
 		local key = CameraKey(camera)
-		if not db[ALLOW_OF[key] or ALLOW_OF.yours] then
+		-- (Through ns.Setting as flight and death: their tab off allows nothing.
+		-- Audit 2026-11-25: read raw.)
+		if not ns.Setting(ALLOW_OF[key] or ALLOW_OF.yours) then
 			return camera
 		end
 	end
@@ -209,7 +211,7 @@ local function PauseReason()
 	-- never paused.)
 	local playing = ns.activeCam
 	local playingKey = type(playing) == "string" and CameraKey(playing)
-	if PLAYING_CAMS[playingKey] and not db[ALLOW_OF[playingKey]] then
+	if PLAYING_CAMS[playingKey] and not ns.Setting(ALLOW_OF[playingKey]) then -- (the same. Audit 2026-11-25: raw.)
 		return playing
 	end
 	if YouAreTarget() then
