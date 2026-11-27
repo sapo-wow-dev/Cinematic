@@ -1,0 +1,5 @@
+# addon-kit miss, format 1
+fix 58c1c5a6
+test Tools/offline/minimappinsmatrix.lua
+addon Questie
+what Questie's minimap quest icons (QuestieFrame<n>) faded with the Addon buttons row while the minimap showed
