@@ -186,7 +186,7 @@ local function RaidPartyNote()
 		R.Button(L["Open Raid Style"], function() ns.OpenStylePage("Raid Style", "raid", "PARTY") end, { shown = shown })
 end
 local function UnitFollowsNote()
-	return R.Note(L["Follows Default. Bar's Look from gives it a look of its own."], {
+	return R.Note(L["Follows Default. To give it a look of its own, change Look from in the Bar part."], {
 		shown = ByVariant("unit", function(db, v)
 			return v ~= "default" and not (v == "PARTY" and RaidDrawsParty()) and not db["ufOwn_" .. v]
 		end) })
@@ -350,7 +350,7 @@ local function RaidOwnField(v)
 	return raidOwnFields[v]
 end
 local function RaidFollowsNote()
-	return R.Note(L["Follows Default. Bar's Look from gives it a look of its own."], {
+	return R.Note(L["Follows Default. To give it a look of its own, change Look from in the Bar part."], {
 		shown = ByVariant("raid", function(db, v)
 			return v ~= "default" and not (v == "PARTY" and UnitDrawsParty()) and not db["rfOwn_" .. v]
 		end) })

@@ -457,7 +457,7 @@ if CT then
 			{ id = "text", label = L["Text"], region = function(p) return p.plate end, groups = {
 				R.Group("Look",
 					R.Switch(function(v) return CT.Key(v or "all", "Show") end, L["Shown"],
-						{ tip = L["Shows it or not; off hides the texts under it too, but crits, which have their own."] })),
+						{ tip = L["Shows or hides it. Turning it off hides the texts under it too, except crits, which have their own."] })),
 				R.Group("Text",
 					R.Font(F("Font"), { first = { "game", L["The game's"] }, tip = L["The font for it."] }),
 					R.Slider(F("Size"), L["Size"], 50, 300, 5, "%", { scale = 100, tip = L["How big it is compared to the game's."] }),
