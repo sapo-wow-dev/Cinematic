@@ -165,7 +165,7 @@ local function UnitOwnField(v)
 		-- Default's look stays the page's; Reset and Undo only give a look it had.)
 		unitOwnFields[v] = { default = "default", noHover = true,
 			get = function() local db = ns.GetDB() return db and db["ufOwn_" .. v] and "own" or "default" end,
-			set = function(value) if ns.UnitStyleSetOwn then ns.UnitStyleSetOwn(v, value == "own") end end }
+			set = function(value) local db = ns.GetDB() if db then db["ufOwn_" .. v] = value == "own" end end }
 	end
 	return unitOwnFields[v]
 end
@@ -350,7 +350,7 @@ local function RaidOwnField(v)
 		-- (Audit 2026-11-25: as the unit frames' above, the Raid Frames page's switch.)
 		raidOwnFields[v] = { default = "default", noHover = true,
 			get = function() local db = ns.GetDB() return db and db["rfOwn_" .. v] and "own" or "default" end,
-			set = function(value) if ns.RaidStyleSetOwn then ns.RaidStyleSetOwn(v, value == "own") end end }
+			set = function(value) local db = ns.GetDB() if db then db["rfOwn_" .. v] = value == "own" end end }
 	end
 	return raidOwnFields[v]
 end
