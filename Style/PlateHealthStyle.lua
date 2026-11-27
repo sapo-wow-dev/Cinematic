@@ -292,12 +292,25 @@ local function Full(bar, state, unit)
 	state.stripFrom = from .. (done and " set" or r == nil and " none" or " refused")
 end
 
+-- A preview's kind of unit for Default's Fade (nil: a real plate, its unit's): its sample's
+-- (PlateCopy.lua's ns.SetGamePlateUnit, plate.kind), Not your kill with its Tapped state on.
+-- (2026-11-26: a preview has no unit, and PlateKindFade(nil) is the hostile NPCs': a friendly
+-- player's or neutral NPC's sample faded as a hostile NPC.)
+local PREVIEW_KINDS = { hostile = "hostileNpcs", neutral = "neutralNpcs", friendly = "friendlyNpcs",
+	player = "friendlyPlayers", ["enemy player"] = "enemyPlayers", ["friendly player"] = "friendlyPlayers" }
+local function PreviewKind(plate)
+	if not (plate and plate.gamePlate) then return nil end
+	if plate.states and plate.states.tapped then return "tapped" end
+	return PREVIEW_KINDS[plate.kind] or "hostileNpcs"
+end
+
 local function Gradient(bar, state)
 	local own = overrides[bar]
 	local fade = own and own.gradient or nil
 	-- (No row's: Default's Fade for the unit's kind, Nameplate Style's Colors. A row's own
 	-- "off" (false) keeps it flat.)
-	if fade == nil and (not own or own.gradient == nil) and ns.PlateKindFade then fade = ns.PlateKindFade(state.unit) end
+	-- (A preview: its sample's kind, state.kind, as it has no unit.)
+	if fade == nil and (not own or own.gradient == nil) and ns.PlateKindFade then fade = ns.PlateKindFade(state.unit, state.kind) end
 	if fade then
 		if not colorHooked[bar] then
 			colorHooked[bar] = true
@@ -340,16 +353,17 @@ local function StylePlate(plate)
 	local unit = unitFrame and unitFrame.unit
 	unit = Known(unit) and unit or nil
 	-- (Left quite alone until there's something to do: a look, a row's gradient, or
-	-- Default's Fade for this unit's kind.)
-	local kindFade = ns.PlateKindFade and unit and ns.PlateKindFade(unit)
+	-- Default's Fade for this unit's kind; a preview's, its sample's kind.)
+	local previewKind = not unit and PreviewKind(plate) or nil
+	local kindFade = ns.PlateKindFade and (unit or previewKind) and ns.PlateKindFade(unit, previewKind)
 	if not (texture or kind ~= "game" or states[bar] or (overrides[bar] and overrides[bar].gradient) or kindFade) then return end
 	if not hooked[bar] then
 		hooked[bar] = true
 		hooksecurefunc(bar, "SetStatusBarTexture", GameSet)
 	end
 	Dress(bar)
-	-- (Its unit first: Gradient reads Default's Fade by it.)
-	states[bar].unit = unit
+	-- (Its unit first: Gradient reads Default's Fade by it, a preview's by its kind.)
+	states[bar].unit, states[bar].kind = unit, previewKind
 	Gradient(bar, states[bar])
 	Full(bar, states[bar], states[bar].unit)
 end
@@ -383,8 +397,12 @@ function ns.StylePlateBar(plate, look, theme)
 	local bar = BarOf(plate)
 	if not bar then return end
 	local has = look and (look.texture or look.border or look.gradient ~= nil)
+	-- (A row's Fade off (false) kept, as a live plate's (SetPlateBarOverride): "has and
+	-- look.gradient or nil" made it nil, and the preview faded as Default's for its kind. 2026-11-26.)
+	local gradient
+	if has then gradient = look.gradient end
 	overrides[bar] = (has or theme) and { texture = has and look.texture or nil, border = has and look.border or nil,
-		gradient = has and look.gradient or nil, theme = theme } or nil
+		gradient = gradient, theme = theme } or nil
 	TryPlate(plate)
 end
 
