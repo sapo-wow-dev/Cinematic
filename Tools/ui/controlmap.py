@@ -1,4 +1,10 @@
-"""First pass: find every function that builds a control (scratch prototype)."""
+"""Every function that builds a menu control: python -I Tools/ui/controlmap.py
+
+Lists each Lua function (outside Tools, Dev and Locales) that calls CreateFrame for a Button, CheckButton, Slider,
+EditBox or DropdownButton and returns something: "file line name [widgets]". It over-finds (pages and helpers next to
+a control show too); Tools/ui/control-map.md is the sorted result, read by hand from this list on 2026-11-27. Run it
+after adding controls and look for names the map doesn't have.
+"""
 import os, re, sys, collections
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WIDGET = re.compile(r'CreateFrame,?\s*\(?\s*"(Button|CheckButton|Slider|EditBox|DropdownButton)"')
