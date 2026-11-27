@@ -167,6 +167,15 @@ local function KeyDefault(k)
 	if type(k) == "table" then return k.default end
 end
 Studio.KeyDefault = KeyDefault
+-- (A field that follows another setting while it has no value of its own: key.follows() says
+-- whether it does now (Cast bars' Nameplates, Default's). It's yours while it has one, even
+-- one equal to the other's now: 2026-11-26, compared by value, following Default showed edited
+-- with Default's changed, and one of its own equal to Default's was left by every Reset.)
+local function Moved(k)
+	if type(k) == "table" and k.follows then return not k.follows() end
+	local value = Get(k)
+	return value ~= nil and value ~= KeyDefault(k)
+end
 
 -- Where a property's value comes from now: "game", "theme", "general",
 -- "follows", "yours"; and the value.
@@ -178,7 +187,7 @@ function Studio.SourceOf(f, prop, variant)
 	if prop.kind == "swatch" then
 		-- (A color with no choice of its own: its swatch's keys alone.)
 		for _, rk in ipairs(Studio.RGB(prop, variant) or {}) do
-			if Get(rk) ~= nil and Get(rk) ~= KeyDefault(rk) then return "yours", nil end
+			if Moved(rk) then return "yours", nil end
 		end
 		return "game", nil
 	end
@@ -191,11 +200,15 @@ function Studio.SourceOf(f, prop, variant)
 	if themed == nil and prop.theme and ns.ActiveStyleTheme and ns.ActiveStyleTheme() then themed = prop.theme() end
 	if themed ~= nil and themed == value then return "theme", value end
 	local default = Studio.DefaultOf(prop, key)
-	if value == nil or value == default then
+	local unmoved
+	if type(key) == "table" and key.follows then unmoved = key.follows() else unmoved = value == nil or value == default end
+	if unmoved then
 		-- (A color: the swatch's keys count too, while its mode is Custom.)
 		if prop.rgb and prop.custom ~= nil and value == prop.custom then
 			for _, rk in ipairs(Studio.RGB(prop, variant) or {}) do
-				if Get(rk) ~= KeyDefault(rk) then return "yours", value end
+				if type(rk) == "table" and rk.follows then
+					if not rk.follows() then return "yours", value end
+				elseif Get(rk) ~= KeyDefault(rk) then return "yours", value end
 			end
 		end
 		return "game", value
@@ -386,6 +399,15 @@ end
 function Studio.CanUndo() return hist[#hist] and hist[#hist].desc end
 function Studio.CanRedo() return fut[#fut] and fut[#fut].desc end
 
+-- What Reset writes to a key: its reset value; a field that follows another setting while it
+-- has no value of its own (key.follows, Moved above) gets nil, which its set clears, so it
+-- follows again. (2026-11-26: it got the other's value as it was, and Reset everything
+-- reset Default first in the same step: that old value stayed as the nameplates' own.)
+local function ResetTo(k, value)
+	if type(k) == "table" and k.follows then return nil end
+	return value
+end
+
 -- Reset by scope: "prop" (one), "part", "variant", "frame", "all". Gives the
 -- writes it would make (to count them first) or makes them (apply = true).
 function Studio.ResetWrites(scope, f, variant, partId, prop)
@@ -393,15 +415,15 @@ function Studio.ResetWrites(scope, f, variant, partId, prop)
 	local function Add(frame, p, v)
 		if p.kind == "swatch" then
 			if Studio.SourceOf(frame, p, v) == "yours" then
-				for _, rk in ipairs(Studio.RGB(p, v) or {}) do writes[#writes + 1] = { rk, KeyDefault(rk) } end
+				for _, rk in ipairs(Studio.RGB(p, v) or {}) do writes[#writes + 1] = { rk, ResetTo(rk, KeyDefault(rk)) } end
 			end
 			return
 		end
 		local key = Studio.KeyOf(p, v)
 		if key == nil or p.kind == "button" or p.kind == "text" then return end
 		if Studio.SourceOf(frame, p, v) ~= "yours" then return end
-		writes[#writes + 1] = { key, Studio.ResetValue(frame, p, v) }
-		for _, rk in ipairs(Studio.RGB(p, v) or {}) do writes[#writes + 1] = { rk, KeyDefault(rk) } end
+		writes[#writes + 1] = { key, ResetTo(key, Studio.ResetValue(frame, p, v)) }
+		for _, rk in ipairs(Studio.RGB(p, v) or {}) do writes[#writes + 1] = { rk, ResetTo(rk, KeyDefault(rk)) } end
 	end
 	local db = ns.GetDB() or {}
 	local list = scope == "all" and Studio.Ordered() or { f }

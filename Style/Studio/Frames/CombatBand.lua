@@ -457,7 +457,13 @@ local plateFields = {}
 local function PlateField(base)
 	if not plateFields[base] then
 		local own = base .. "_PLATE"
-		plateFields[base] = {
+		-- (follows(): no value of its own, so it isn't edited (Editor.lua's Moved), and Reset
+		-- writes nil, which set clears: following Default again, whatever Default is by then
+		-- (Reset everything resets Default in the same step). Its default, Default's value now
+		-- (the metatable), is the slider's reset mark. 2026-11-26: it was
+		-- Default's default, so with Default's changed every one showed edited, and its x or
+		-- Reset page wrote that default as the nameplates' own: it stopped following Default.)
+		plateFields[base] = setmetatable({
 			get = function()
 				local db = ns.GetDB()
 				local mine = db and db[own]
@@ -469,9 +475,9 @@ local function PlateField(base)
 				if not db then return end
 				if value == ns.StyleKeyGet(base) then db[own] = nil else db[own] = value end
 			end,
-			default = ns.DEFAULTS[base],
 			plateOwn = own,
-		}
+			follows = function() local db = ns.GetDB() return not (db and db[own] ~= nil) end,
+		}, { __index = function(_, k) if k == "default" then return ns.StyleKeyGet(base) end end })
 	end
 	return plateFields[base]
 end
