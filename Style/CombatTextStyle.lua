@@ -1816,8 +1816,14 @@ TakeCast = function(school, now, heal)
 		return last.secs, From(last, school)
 	end
 	DropOld(now)
+	-- (Audit 2026-11-25: a physical hit here is an ability's, landing in its
+	-- cast's frame (Physical): the newest cast first. Oldest first, a Mortal
+	-- Strike just after a Charge (no hit of its own) took the Charge's.)
+	local from, to, step = 1, #casts, 1
+	if school == 1 then from, to, step = #casts, 1, -1 end
 	for pass = 1, 2 do
-		for i, cast in ipairs(casts) do
+		for i = from, to, step do
+			local cast = casts[i]
 			if CastFits(cast, school, pass, heal) then
 				table.remove(casts, i)
 				Learn(cast.spell, school)
@@ -2021,7 +2027,10 @@ local function OnHit(unit, action, flag, amount, school, spot)
 				-- next swing, comes as two hits in one instant with one line, the
 				-- second its own number, which went with the first only as swings
 				-- do: left out as an ability's, 2026-11-18.)
-				Claim(plate, unit, amount, crit and CritText(hit) or hit, hit, true, flag)
+				-- (Audit 2026-11-25: an ability's hit comes with its school, so it
+				-- takes its cast (CastOf) and draws in its Spells tab look; with
+				-- none, Mortal Strike never did. A swing's: none, no cast.)
+				Claim(plate, unit, amount, crit and CritText(hit) or hit, hit, true, flag, ability and 1 or nil)
 			end)
 		end
 		local hit = HitText(school)
