@@ -6069,6 +6069,21 @@ STEPS[#STEPS + 1] = function()
 	end
 end
 
+-- DaylightUI's Loot roll window row on Addon Conflicts (Support/DaylightUI.lua, 3da7a12):
+-- unpicked, its window plays and Roll Vision's stands aside at rolls. Setups from before
+-- keep Roll Vision's window: the row starts at Ours (db.conflictPicks, the account's),
+-- unless a pick is there already. Fresh installs and Reset get the row's default. Once.
+-- (2026-11-26: Tools/offline/dlrollsmatrix.lua, fix card 2026-11-26-daylight-rolls-update.md.)
+function ns.DaylightRollsOursForOld(db)
+	if type(db.conflictPicks) ~= "table" then db.conflictPicks = {} end
+	if db.conflictPicks["DaylightUI:rolls"] == nil then db.conflictPicks["DaylightUI:rolls"] = "ours" end
+end
+STEPS[#STEPS + 1] = function()
+	if ns.db.daylightRollsOursV1 then return end
+	if not ns.newInstall then ns.DaylightRollsOursForOld(ns.db) end
+	ns.db.daylightRollsOursV1 = true
+end
+
 -- Runs them all, each on its own: an error is logged and reported (the
 -- addon's error net, Diagnostics.lua), and the steps after it still run.
 -- (A new step that reads Visions code, ns.CARD_STYLES and the like: only
