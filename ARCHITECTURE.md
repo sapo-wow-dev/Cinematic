@@ -46,24 +46,50 @@ without checking first has a do-nothing stand-in in `Modules.lua`.
 
 ## What runs while you play
 
-- **The tick** (`Core.lua`, its OnUpdate): works out whether CineMode should be
-  on (`ShouldBeCinematic`), runs the effects (letterbox, tint, CVars, music,
-  plates, tooltip, taxi), each through `Step` so one error doesn't stop the
-  rest, and decides whether a **frame pass** is due.
-- **The frame pass** (`Frames.lua`, `ns.UpdateFrames`): for every faded frame
-  (`ns.managed`), its row's Show in rules are asked (`ns.RuleShows`), and it
-  fades to the answer with `SetAlpha`. It runs only when something it
-  depends on changes (`ns.framesWake`, the mouse, a fight) or on a timer, and
-  `ns.UpdateFadingFrames` runs alone while frames are only still fading.
-  A part that ignores its parent's alpha is kept in step by
-  `ns.SyncDetached` (FadeDetached.lua).
-- **The camera director** (`Director.lua`): about 10 times a second, and at
-  once when something it goes by changes, asks `ns.DecideScene` (Camera.lua)
-  for the scene (standing still, travel, an event, death...).
-  `Camera.lua` and the camera files run it, and every zoom goes through
-  `ns.CameraCall` (`ZoomGuard.lua` watches it).
+No single main loop: several update loops run side by side, each on its own
+frame, each only as often as it needs.
+
+- **The update tick** (`Core.lua`, its OnUpdate). Called every frame, it
+  works at most every 0.03 s (`TICK`), and with nothing changing only every
+  0.1 s in CineMode and 1 s out of it (`ns.Pace`, `idleTick`); a fight
+  starting skips the wait. It's split over two frames. On a tick it looks
+  for new frames (a piece at a time), decides CineMode
+  (`ShouldBeCinematic`), runs the **frame pass** if one is due, and leaves
+  the rest (`tickRest`). At the top of the next frame that rest runs: the
+  calm timer, the effects (letterbox, tint, CVars, music, plates, tooltip,
+  taxi) and `ns.lastCinematic`, so that changes a frame after the decision.
+  Every step goes through `Step`, so one error doesn't stop the others.
+- **The frame pass** (`Frames.lua`, `ns.UpdateFrames`). Runs at once when
+  CineMode, a fight or immersive changes, the mouse goes on or off a faded
+  frame (`ns.HoverProbe`), a modifier key is down, you're typing, or
+  `ns.framesWake` is set; otherwise on a timer (0.5 s out of CineMode, 0.25 s
+  in it or 1 s with `ns.SlowChecks`, 0.125 s in a fight, 0.5 s once its fades
+  are done). With frames still fading and nothing else changed,
+  `ns.UpdateFadingFrames` moves only those on. A full pass asks each Show in
+  row's rule (`ns.RuleShows`, ticks if it has none) for the list of shown
+  frames (kept 0.2 s at least, worked out again at once on a fight, target,
+  cast...), gives each frame in `ns.managed` a target alpha from that, the
+  mouse, peeks, chat, death and immersive, and steps it there with
+  `ns.SetEntryAlpha`, which then calls `ns.SyncDetached` (FadeDetached.lua).
+- **The camera motion loop** (`Core.lua`'s `ns.orbitFrame`, "the orbit";
+  not the `/cine orbit` script). Every frame while one of our cameras has
+  something to do, since it changes camera speed smoothly; with nothing to do
+  it takes its OnUpdate off (`ns.OrbitQuiet`, Camera.lua) until the director
+  wakes it (`ns.WakeOrbit`). Not started with Cameras left out.
+- **The camera director** (`Director.lua`, its own frame). Looks at a few
+  cheap things 30 times a second (4 when quiet), or every frame through the
+  motion loop while that's awake, and works out the scene (`ns.DecideScene`,
+  Camera.lua) when one changes or an event wakes it, otherwise every 0.1 s.
+  Moves go through `ns.CameraCall`, which lets one camera hold the view at a
+  time and never while you're moving it (`ns.ClaimCamera`); `ZoomGuard.lua`
+  holds our zooms if they swing in and out.
 - **Feature loops** (`ns.FeatureLoop`, Diagnostics.lua): a feature's own
-  OnUpdate, there only while `wanted()` says so.
+  OnUpdate, there only while its `wanted()` says so (asked once a second and
+  on the feature's wakes). Many other loops are set with `ns.SetOnUpdate`,
+  some at load and most only while something animates.
+
+The tick, the motion loop and the director start together at PLAYER_LOGIN
+and stop together on a safety stop (`ns.Suspend`), till `/cine resume`.
 
 ## Building blocks to reuse
 
