@@ -301,7 +301,10 @@ local tints = {}
 
 -- A color blended into a part's (name, bar or border), as far as it's in.
 local function Blend(r, g, b, tint, part)
-	local level, colour = tint.level, tint[part]
+	-- (A part's own level first: Default's colors go by their Show in row's, the
+	-- rows' parts by the marks'. 2026-11-26.)
+	local colour = tint[part]
+	local level = colour.level or tint.level
 	return r + (colour[1] - r) * level, g + (colour[2] - g) * level, b + (colour[3] - b) * level
 end
 
@@ -2678,12 +2681,22 @@ do
 	end
 
 	local TINT_PARTS = { "name", "bar", "border" }
-	function TintTarget(plate, level, unit, kinds)
+	-- (kindLevel: Default's colors' own ("@kind", "@name"), their Show in row's; the
+	-- rows' parts go by level, the marks'. A part at 0 is the game's. 2026-11-26.)
+	function TintTarget(plate, level, unit, kinds, kindLevel)
 		local unitFrame = plate.UnitFrame
 		if not Usable(unitFrame) then
 			return
 		end
-		if not (kinds and level > 0) then
+		level, kindLevel = level or 0, kindLevel or 0
+		if kinds then
+			for _, part in ipairs(TINT_PARTS) do
+				local kind = kinds[part]
+				if kind and ((kind == "@kind" or kind == "@name") and kindLevel or level) <= 0 then
+					kinds[part] = nil
+				end
+			end
+		else
 			kinds = {}
 		end
 		local tint = tints[unitFrame]
@@ -2708,7 +2721,12 @@ do
 		tint.level = level
 		for _, part in ipairs(TINT_PARTS) do
 			local kind = kinds[part]
-			tint[part] = kind and { PlateColour(unit, kind) } or nil
+			local colour = kind and { PlateColour(unit, kind) } or nil
+			if colour then
+				colour.kind = kind
+				colour.level = (kind == "@kind" or kind == "@name") and kindLevel or level
+			end
+			tint[part] = colour
 		end
 		painter:Show()
 	end
@@ -3341,11 +3359,14 @@ local function RefreshTargetArrow(plate)
 	local arrow = arrows[plate]
 	-- (Its own colors, each part in its row's, as their Also colors say. Smart's rows off:
 	-- Default's colors alone, while Nameplate Style's on and any is set.)
-	local tintLevel = level
-	if level <= 0 and plate ~= PersonalPlate() and ns.PlateKinds.On() then
-		kinds, tintLevel = ns.PlateKinds.Only(unit), 1
+	-- (2026-11-26: Default's colors at their own level, the Show in row's eased in and
+	-- out at CineMode's fade times (UpdatePlateParts): they painted at full outside it
+	-- and snapped as CineMode came and went.)
+	local kindLevel = plate ~= PersonalPlate() and levels.KindColors or 0
+	if level <= 0 and kindLevel > 0 then
+		kinds = ns.PlateKinds.Only(unit)
 	end
-	TintTarget(plate, tintLevel, unit, kinds)
+	TintTarget(plate, level, unit, kinds, kindLevel)
 	if not kind then
 		level = 0
 	end
@@ -3689,7 +3710,8 @@ watcher:SetScript("OnEvent", function(_, event, unit)
 	kindParts.kinds[plate] = nil
 	if AnyClassIcons() or icons[plate] or roleIcons[plate] or questIcons[plate] or arrows[plate]
 		or opacities[plate] or nows.width[plate] or nows.height[plate]
-		or ((levels.TargetArrow or 0) > 0 and (OthersOn() or TypeRowsOn() or MasterSizeOn())) then
+		or ((levels.TargetArrow or 0) > 0 and (OthersOn() or TypeRowsOn() or MasterSizeOn()))
+		or (levels.KindColors or 0) > 0 then -- (Default's colors on every plate they show on. 2026-11-26)
 		ns.RefreshPlateLook(plate)
 	end
 	-- (Looked at or not, a plate's settled now: from here on it moves.)
@@ -4071,6 +4093,21 @@ function ns.UpdatePlateParts(active, elapsed, cinematic)
 			levels[part] = ns.Approach(level, target, elapsed, target > level and ns.FadeInTime() or ns.FadeOutTime())
 			iconsChanged = true
 		end
+	end
+	-- Default's colors (Nameplate Style's Colors): by the same Show in row as the marks,
+	-- eased at CineMode's fade times like them, never a snap. (2026-11-26: they
+	-- painted at full strength wherever the marks' level was 0.)
+	local colours = ns.PlateKindColoursWanted and ns.PlateKindColoursWanted(cinematic) and 1 or 0
+	local coloursLevel = levels.KindColors
+	if coloursLevel == nil then
+		levels.KindColors = colours -- (logging in: no fade)
+		coloursLevel = colours > 0 and -1 or colours
+	elseif coloursLevel ~= colours then
+		levels.KindColors = ns.Approach(coloursLevel, colours, elapsed,
+			colours > coloursLevel and ns.FadeInTime() or ns.FadeOutTime())
+	end
+	if coloursLevel ~= levels.KindColors and not iconsChanged then
+		RefreshMarks()
 	end
 	-- (Settled with the page off: the next passes may skip the loops above. Audit 2026-11-25)
 	kindParts.idle = pageOff and not anyOver and not changed and not iconsChanged

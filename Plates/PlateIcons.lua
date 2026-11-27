@@ -37,29 +37,44 @@ end
 -- works out the facts each time.)
 local READ_EVERY = 0.25
 local readAt, readNow = -1, {}
-function ns.PlateIconWanted(part, cinematic)
-	local key = ROW_KEY[part]
+local function Wanted(part, cinematic)
+	-- (KindColors: Default's colors, by the same Show in row as the marks, 2026-11-26.)
+	local colours = part == "KindColors"
+	local key = ROW_KEY[colours and "TargetArrow" or part]
 	if not key then return nil end
 	local db = ns.db
-	if part ~= "TargetArrow" and not (db.handlePlateIcons and not ns.MasterOff("handlePlateIcons", db)) then return false end
+	if colours then
+		if not (ns.PlateKinds and ns.PlateKinds.On()) then return false end
+	elseif part ~= "TargetArrow" and not (db.handlePlateIcons and not ns.MasterOff("handlePlateIcons", db)) then
+		return false
+	end
 	-- (The target marks draw only with Nameplate Style's Smart page on: off, none
 	-- wanted, so their When loop rests too. The in-game gating test saw it run
 	-- with Style off. Audit 2026-11-25.)
 	if part == "TargetArrow" and not ns.StyleOn("plateMarks") then return false end
-	if db[ALWAYS_KEY[part]] then return true end
+	if db[ALWAYS_KEY[colours and "TargetArrow" or part]] then return true end
 	if not cinematic then return false end
 	local now = GetTime()
 	if now - readAt >= READ_EVERY then
 		readAt = now
 		wipe(readNow)
 	end
-	local shows = readNow[part]
+	-- (By the row, not the part: the marks and Default's colors read it once.)
+	local shows = readNow[key]
 	if shows == nil then
 		local ok, on = pcall(ns.RowOnNow, key, false, true)
 		shows = ok and on and true or false
-		readNow[part] = shows
+		readNow[key] = shows
 	end
 	return shows
+end
+ns.PlateIconWanted = Wanted
+-- Whether Default's colors (Nameplate Style's Colors) show now: any set, Nameplate
+-- Style on, the Style tab on, and the Show in row (its Always, or in CineMode the
+-- rest of it), as the marks. (2026-11-26: they painted outside the row, and
+-- snapped in and out of CineMode.)
+function ns.PlateKindColoursWanted(cinematic)
+	return Wanted("KindColors", cinematic)
 end
 
 -- The old choices to the rows, once (live settings and saved profiles). A
