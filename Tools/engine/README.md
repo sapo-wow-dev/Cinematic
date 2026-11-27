@@ -75,6 +75,16 @@ are there (lines found only in one are listed), and then:
 `/cine debug apidocs clear` drops the saved copy (it's big). Checks: `python -I Tools/engine/apidocs.py --selftest`
 and `python -I Tools/offline/run.py Tools/offline/apidocs.lua`.
 
+## The console's settings (per client)
+
+`python -I Tools/engine/cvars.py` reads the console's settings list the simulation probe saves
+(`/cine debug simprobe 1`: `ConsoleGetAllCommands` and `C_CVar.GetCVarInfo`, into `CinematicDB.simCVarsLog`; then
+/reload) and writes `api/<client>-cvars.txt`, git-ignored like the API docs: every setting's value, default and flags
+(account, character, locked, secure, read-only) and help, and every console command. It prints SECURE lines for the
+settings Cinematic's own sets write that are secure there (blocked in a fight) and ABSENT lines for ones the client
+doesn't list. The replay bench (Tools/sim/gamedata.lua) reads it for defaults and secure settings. Check:
+`--selftest`.
+
 ## A rule
 
 ```lua

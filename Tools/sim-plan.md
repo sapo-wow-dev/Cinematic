@@ -213,6 +213,17 @@ Forever first. Retail next, for secret values and its newer events.
    **converter**: the five scenarios recorded on Forever, no other addons.
 3. **Clock, frame driver, timers** on the stand-in: Cinematic runs a
    recorded minute with no world (everything asked is listed).
+   Built 2026-11-27, ahead of the recordings: `Tools/sim/bench.lua`
+   (`lua5.1 Tools/sim/run.lua <scenario> [client] [fps] [profile]`), on the
+   repo's game data (`Tools/sim/gamedata.lua`: the engine rules, each
+   client's API docs and console settings, the last two from the user's PC).
+   Each behaviour names its engine rule and how far it's tested; the rest are
+   listed as assumptions with the probe that settles them (simprobe step 1
+   tests the frame ones). Synthetic scenarios (`Tools/sim/synthetic.lua`:
+   idle, city, fight) test the bench until recordings exist; their numbers
+   aren't findings. Check: `Tools/offline/simbench.lua`. Plates, chat
+   windows, camera zoom and a minimal Edit Mode are modelled; the rest of
+   step 4's world comes with the recordings.
 4. **World and plates** from the snapshots, the asked-not-modelled list
    worked down.
 5. **Report** and baselines.

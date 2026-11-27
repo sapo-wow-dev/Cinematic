@@ -80,6 +80,16 @@ local function RunClient(client, blockAll)
 	UnitName = function(unit) return unit end
 	UnitGUID = function(unit) return "guid-" .. unit end
 	CombatLogGetCurrentEventInfo = function() return now, "SWING_DAMAGE", false, "src", SECRET end
+	-- The console: every setting above, plus a command and a secure one.
+	ConsoleGetAllCommands = function()
+		local list = { { command = "reloadui", commandType = 1, help = "Reloads the UI" } }
+		for name in pairs(cvars) do list[#list + 1] = { command = name, commandType = 0, help = "help\tfor " .. name } end
+		return list
+	end
+	C_CVar.GetCVarInfo = function(name)
+		if cvars[name] == nil then return nil end
+		return cvars[name], "0", false, false, false, name:find("^SoftTarget") ~= nil, false
+	end
 
 	-- What the game sends, by the settings.
 	local function World(dt)
@@ -98,11 +108,30 @@ local function RunClient(client, blockAll)
 			if math.random() < 8 * dt then wow.Fire("COMBAT_LOG_EVENT_UNFILTERED") end
 		end
 	end
+	-- The frames the test makes get their OnUpdate each step while shown up
+	-- their parent chain (Cinematic's own are left alone here: the replay
+	-- bench, Tools/sim/bench.lua, is what runs those).
+	local firstOwn = math.huge
+	local function Visible(frame)
+		while type(frame) == "table" do
+			if rawget(frame, "_shown") == false then return false end
+			frame = rawget(frame, "_parent")
+		end
+		return true
+	end
+	local function Frames(dt)
+		for i = firstOwn, #wow.frames do
+			local frame = wow.frames[i]
+			local fn = frame._scripts.OnUpdate
+			if fn and Visible(frame) then fn(frame, dt) end
+		end
+	end
 	local function Advance(seconds)
 		local stop = now + seconds
 		while now < stop do
 			now = now + 0.1
 			World(0.1)
+			Frames(0.1)
 			local due = {}
 			for i = #timers, 1, -1 do
 				if timers[i].at <= now then due[#due + 1] = table.remove(timers, i) end
@@ -126,6 +155,7 @@ local function RunClient(client, blockAll)
 
 	-- You: answer what the box asks.
 	local function Click(button) button:GetScript("OnClick")(button, "LeftButton") end
+	firstOwn = #wow.frames + 1
 	ns.HandleSlash("debug simprobe")
 	local asked = {}
 	for _ = 1, 4000 do
@@ -154,6 +184,22 @@ local function RunClient(client, blockAll)
 	local done = Has(log, "DONE: ")
 	Check("finished DONE", done ~= nil, done or tostring(ns.TestKit.Running() and ns.TestKit.Running().step
 		and ns.TestKit.Running().step.key))
+	local vis = Has(log, "simprobe engine|onupdate|")
+	Check("engine: OnUpdate only up a shown chain", vis and vis:find("hidden parent 0|hidden itself 0|", 1, true) ~= nil
+		and not vis:find("|shown 0|", 1, true), vis)
+	local order = Has(log, "simprobe engine|order|")
+	Check("engine: OnUpdate order logged", order and order:find("ABC", 1, true) ~= nil, order)
+	Check("engine: After(0) placed", Has(log, "simprobe engine|after0|same frame") ~= nil, Has(log, "after0"))
+	local console = Has(log, "simprobe engine|console|")
+	Check("engine: console settings saved", console and CinematicDB.simCVarsLog and #CinematicDB.simCVarsLog > 50, console)
+	local secureLine
+	for _, line in ipairs(CinematicDB.simCVarsLog or {}) do
+		if line:find("^cvar\tSoftTargetInteract\t") then secureLine = line end
+	end
+	Check("engine: a secure setting's line: value, default, flags, help without tabs",
+		secureLine and secureLine:find("\tsecure\thelp for SoftTargetInteract$") ~= nil, secureLine)
+	Check("engine: header names the client", (CinematicDB.simCVarsLog or {})[1] and CinematicDB.simCVarsLog[1]:find("^client " .. client) ~= nil,
+		(CinematicDB.simCVarsLog or {})[1])
 	local events = Has(log, "simprobe events|all")
 	Check("step 1: the events line", events ~= nil, events)
 	if blockAll then

@@ -68,6 +68,11 @@ looks for `lua5.1`. (Don't put a `lua5.1` stand-in on PATH: Windows asks what to
   are on, soft target events while soft targeting is on, city chat, fights with secret reads and the combat log.
   Every step runs on Forever and retail, the A/B finds the settings that change what's sent and no others, everything
   is put back and Cinematic resumed; a third run has RegisterAllEvents blocked and checks the fallback (way B).
+- `simbench.lua`: the replay bench (Tools/sim/bench.lua) checked: its game behaviours one by one (OnUpdate only up a
+  shown chain, timers, unit-filtered events, the combat log forbidden by name on Forever, SoftTarget settings blocked
+  in a fight, secrets erroring on arithmetic, plates made and gone), then Cinematic through the synthetic scenarios in
+  Balanced, Cinema and Subtle on both clients: no errors, no safety stop, every loop named, CineMode as each profile
+  says in a fight, and the same report twice.
 - `testqueue.lua`: the test queue (Dev/TestQueue.lua) with kitcheck as the queued test, both clients: the offer at
   login, Run all with a result line and a log copy per id, a name that isn't a kit test passed over, Stop queue,
   a test's Reload button carrying the queue over, a /reload of your own cutting it off, tidy and clear. The

@@ -20,6 +20,9 @@ Tools/offline/simprobe.lua (offline proof).
 | Q8 | In a fight: which reads Cinematic makes are secret (player, target, plate units), which events carry secret arguments | forever | partly known (rules forever.unithealth.group-secret, forever.unitpower.mana-secret, forever.unit_aura.payload-secret-in-combat...); a full table per read is open | run 1 step 6 |
 | Q9 | Does something set a setting back while Cinematic is paused (a feature loop holding one)? | forever | open | every A/B step: read back each 0.5 s |
 | Q10 | SoftTarget settings in a fight | forever, retail | NO: protected, BLOCKED even writing the same value | rule forever.softtarget.cvars-protected-combat: secure sets switched out of fights only |
+| Q11 | OnUpdate on a frame shown under a hidden parent? Hidden itself? No parent? | forever | inferred: only up a shown chain (wiki) | rule all.frame.onupdate-visible-only; run 1 step 1 |
+| Q12 | Within a frame: OnUpdates in the order made? C_Timer.After(0) from an OnUpdate: same frame or next? Tickers, events: before or after the OnUpdates? GetTime fixed through a frame? | forever | unknown | rule all.frame.in-frame-order; run 1 step 1 |
+| Q13 | The console's whole settings list: each setting's default and flags, which are secure (for the bench's defaults and fight blocks) | forever | open (the kit's consoleWords logs a few, never all) | run 1 step 1 -> simCVarsLog -> Tools/engine/cvars.py |
 
 ## Plan tree
 - Q1/Q2 (step 1): all events heard and no BLOCKED -> the recorder uses
@@ -50,10 +53,11 @@ branch, **restart the game** (new files in CinematicDev.toc), then
 `python -I Tools/testqueue.py add simprobe --session sim --needs "a busy city, quest objects or NPCs, mobs"`).
 The log is `CinematicDB.simProbeTestLog` (`read_log.py simProbeTest`).
 
-What it asks (Tools/testscan.py): steps 1-3 hands off (about a minute, out of
-fights, anywhere); 4 a busy city, stand still about 7 min (10 A/B units, then
-the minute weighed); 5 walk slowly among quest objects or NPCs about 2 min;
-6 fight about 4 min (mobs one after another or a training dummy).
+What it asks (Tools/testscan.py): steps 1-4 hands off (about a minute, out of
+fights, anywhere; step 1 is the engine step for the replay bench: frame
+timing and the console's settings list); 5 a busy city, stand still about 7 min (10 A/B units, then
+the minute weighed); 6 walk slowly among quest objects or NPCs about 2 min;
+7 fight about 4 min (mobs one after another or a training dummy).
 
 Proven offline (Tools/offline/simprobe.lua, Forever, retail, and with
 RegisterAllEvents blocked): every step runs and passes; the settings that
@@ -72,6 +76,11 @@ Learned building it (no game needed):
   are tested together (Names over heads 13, Instance plates off 3, Plate
   looks 3; Game's numbers on 3, off 3). A bundle that changes what's sent is
   split in run 2, with `r:Proven` on the rest.
+
+After the run: `python -I Tools/engine/cvars.py` (the settings list into
+Tools/engine/api/forever-cvars.txt for the bench), the frame answers into
+rules all.frame.onupdate-visible-only and all.frame.in-frame-order (tested,
+or changed), and the bench's ASSUMPTIONS list trimmed to match.
 
 ## Runs
 | Run | Date | Command | Answered | Still open, and why this run couldn't |

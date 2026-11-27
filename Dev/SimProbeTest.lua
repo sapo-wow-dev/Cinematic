@@ -4,19 +4,26 @@
 -- Cinematic is paused for the run (ns.Suspend, quietly: it lets go of every
 -- game setting it holds), so the settings switched are the test's alone.
 -- Steps:
---   1 events    every event heard (RegisterAllEvents) for 8 s: kinds, the
+--   1 engine    how the game runs a frame, for the replay bench
+--               (Tools/sim/bench.lua): OnUpdate on a shown frame under a
+--               hidden parent, the order of OnUpdates, C_Timer.After(0), a
+--               ticker and events within a frame, GetTime within a frame;
+--               and every console setting with its value, default and flags
+--               saved into CinematicDB.simCVarsLog (Tools/engine/cvars.py
+--               makes Tools/engine/api/<client>-cvars.txt from it)
+--   2 events    every event heard (RegisterAllEvents) for 8 s: kinds, the
 --               combat log, BLOCKED? If it's blocked or hears nothing, the
 --               steps after use way B: each event Cinematic's code names,
 --               registered on its own (Dev/SimEvents.lua)
---   2 settings  every set in ns.cvarSets: on this client, takes, read back,
+--   3 settings  every set in ns.cvarSets: on this client, takes, read back,
 --               CVAR_UPDATE from our own write, put back
---   3 bulk      the sets expected to change nothing sent, all on vs yours:
+--   4 bulk      the sets expected to change nothing sent, all on vs yours:
 --               3 rounds of 6 s each way, events counted
---   4 city      in a busy city: each plate set alone, on vs yours (A/B, 3
+--   5 city      in a busy city: each plate set alone, on vs yours (A/B, 3
 --               rounds), then a minute with every set that sent more on:
 --               events a second by kind, bytes a minute, the recorder's cost
---   5 soft      by quest objects and NPCs: the soft targeting sets, A/B
---   6 fight     in fights: what reads as secret (player, target, a plate),
+--   6 soft      by quest objects and NPCs: the soft targeting sets, A/B
+--   7 fight     in fights: what reads as secret (player, target, a plate),
 --               the fight sets A/B, events with secret arguments, the
 --               combat log's payload
 -- Each A/B set gets one line "simprobe set|label|group|verdict|changes" for
@@ -425,6 +432,148 @@ local function SecretReads(r, samples)
 	r:Log("  (each: plain/secret/nil/error counts over " .. samples .. " looks)")
 end
 
+-- How the game runs a frame (for the replay bench) -------------------------------
+-- OnUpdate on a frame shown itself under a hidden parent, hidden itself,
+-- shown, and with no parent, for 1 s: which run.
+local function EngineVisibility(r)
+	local counts = { under = 0, self = 0, shown = 0, orphan = 0 }
+	local parent = CreateFrame("Frame", nil, UIParent)
+	parent:Hide()
+	local frames = {
+		under = CreateFrame("Frame", nil, parent),
+		self = CreateFrame("Frame", nil, UIParent),
+		shown = CreateFrame("Frame", nil, UIParent),
+		orphan = CreateFrame("Frame"),
+	}
+	frames.self:Hide()
+	for key, frame in pairs(frames) do
+		frame:SetScript("OnUpdate", function() counts[key] = counts[key] + 1 end)
+	end
+	r:Sleep(1)
+	for _, frame in pairs(frames) do frame:SetScript("OnUpdate", nil) end
+	r:Log(("simprobe engine|onupdate|shown under a hidden parent %d|hidden itself %d|shown %d|no parent %d|in 1 s")
+		:format(counts.under, counts.self, counts.shown, counts.orphan))
+	r:Verdict(counts.shown > 0, "a shown frame's OnUpdate ran " .. counts.shown .. " times in 1 s")
+end
+
+-- Within a frame: the order of three OnUpdates (made A, B, C), a
+-- C_Timer.After(0) asked from A, a fast ticker and the game's events, each
+-- placed by GetTime: the same as the frame's OnUpdates (after them) or a new
+-- one (the next frame, before its OnUpdates).
+local ORDER_EVENTS = { "UNIT_AURA", "UNIT_POWER_UPDATE", "UNIT_HEALTH", "UPDATE_MOUSEOVER_UNIT", "CURSOR_CHANGED",
+	"WORLD_CURSOR_TOOLTIP_UPDATE", "CHAT_MSG_CHANNEL", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
+	"MODIFIER_STATE_CHANGED", "UNIT_COMBAT", "PLAYER_STARTED_MOVING", "PLAYER_STOPPED_MOVING" }
+local function EngineOrder(r)
+	local frameNo, frameTime, insideOnUpdates = 0, -1, false
+	local orders, frames, sameTime, timeAsks = {}, 0, 0, 0
+	local placed = { after0 = { same = 0, next = 0, inside = 0 }, ticker = { same = 0, next = 0, inside = 0 },
+		event = { same = 0, next = 0, inside = 0 } }
+	local order = ""
+	local function Place(kind)
+		local t = GetTime()
+		local p = placed[kind]
+		if insideOnUpdates and t == frameTime then p.inside = p.inside + 1
+		elseif t == frameTime then p.same = p.same + 1
+		else p.next = p.next + 1 end
+	end
+	local made = {}
+	for i, name in ipairs({ "A", "B", "C" }) do
+		local f = CreateFrame("Frame", nil, UIParent)
+		made[i] = f
+		f:SetScript("OnUpdate", function()
+			if name == "A" then
+				if order ~= "" then orders[order] = (orders[order] or 0) + 1 end
+				order, frameNo, frames = "", frameNo + 1, frames + 1
+				frameTime = GetTime()
+				insideOnUpdates = true
+				local t2 = GetTime()
+				timeAsks = timeAsks + 1
+				if t2 == frameTime then sameTime = sameTime + 1 end
+				if frameNo >= 3 and frameNo <= 30 then C_Timer.After(0, function() Place("after0") end) end
+			end
+			order = order .. name
+			if name == "C" then insideOnUpdates = false end
+		end)
+	end
+	local ticker = C_Timer.NewTicker(0.001, function() Place("ticker") end)
+	local listener = CreateFrame("Frame")
+	for _, event in ipairs(ORDER_EVENTS) do pcall(listener.RegisterEvent, listener, event) end
+	listener:SetScript("OnEvent", function() Place("event") end)
+	r:Sleep(1.5)
+	ticker:Cancel()
+	listener:UnregisterAllEvents()
+	for _, f in ipairs(made) do f:SetScript("OnUpdate", nil) end
+	local parts = {}
+	for o, n in pairs(orders) do parts[#parts + 1] = o .. " " .. n end
+	table.sort(parts)
+	local function P(p) return ("same frame after the OnUpdates %d, among them %d, next frame before them %d")
+		:format(p.same, p.inside, p.next) end
+	r:Log(("simprobe engine|order|%d frames|OnUpdate orders: %s|GetTime the same twice in one OnUpdate %d of %d")
+		:format(frames, table.concat(parts, ", "), sameTime, timeAsks))
+	r:Log("simprobe engine|after0|" .. P(placed.after0))
+	r:Log("simprobe engine|ticker|" .. P(placed.ticker))
+	r:Log("simprobe engine|events|" .. P(placed.event))
+	r:Verdict(frames > 0, frames .. " frames seen in 1.5 s")
+end
+
+-- Every console command and setting, each setting with its value, default
+-- and flags (C_CVar.GetCVarInfo) and help, into CinematicDB.simCVarsLog (one
+-- tab-separated line each; Tools/engine/cvars.py reads it).
+local function ClientName()
+	local toc = select(4, GetBuildInfo()) or 0
+	if ns.isRetail then return "retail" end
+	if toc >= 16000 and toc < 17000 then return "forever" end
+	if toc < 20000 then return "classic_era" end
+	return "classic"
+end
+local function Clean(text)
+	return (tostring(text or ""):gsub("[\t\r\n]", " "))
+end
+local function EngineConsole(r)
+	local all = _G.ConsoleGetAllCommands or (C_Console and C_Console.GetAllCommands)
+	local info = (C_CVar and C_CVar.GetCVarInfo) or _G.GetCVarInfo
+	if not all then
+		r:Log("simprobe engine|console|no ConsoleGetAllCommands on this client")
+		return r:Skip("no console list on this client")
+	end
+	local ok, list = pcall(all)
+	if not ok or type(list) ~= "table" then
+		return r:Fail("ConsoleGetAllCommands failed: " .. tostring(list))
+	end
+	table.sort(list, function(a, b) return tostring(a.command):lower() < tostring(b.command):lower() end)
+	local version, build, _, toc = GetBuildInfo()
+	local out = { ("client %s|version %s|build %s|toc %s|at %s"):format(ClientName(), tostring(version), tostring(build),
+		tostring(toc), date("%Y-%m-%d %H:%M")) }
+	local settings, commands, secure, readOnly, failed = 0, 0, 0, 0, 0
+	local names = { "account", "character", "locked", "secure", "readonly" }
+	for _, c in ipairs(list) do
+		if type(c) == "table" and type(c.command) == "string" then
+			if c.commandType == 0 then
+				settings = settings + 1
+				local got = info and { pcall(info, c.command) } or { false }
+				if got[1] then
+					local flags = {}
+					for k = 4, 8 do if got[k] then flags[#flags + 1] = names[k - 3] end end
+					if got[7] then secure = secure + 1 end
+					if got[8] then readOnly = readOnly + 1 end
+					out[#out + 1] = table.concat({ "cvar", c.command, Clean(got[2]), Clean(got[3]), table.concat(flags, ","),
+						Clean(c.help) }, "\t")
+				else
+					failed = failed + 1
+					out[#out + 1] = table.concat({ "cvar", c.command, "", "", "noinfo", Clean(c.help) }, "\t")
+				end
+			else
+				commands = commands + 1
+				out[#out + 1] = table.concat({ "cmd", c.command, "", "", "", Clean(c.help) }, "\t")
+			end
+		end
+	end
+	CinematicDB.simCVarsLog = out
+	r:Log(("simprobe engine|console|%d settings (%d secure, %d read-only, %d without info), %d commands, saved in simCVarsLog")
+		:format(settings, secure, readOnly, failed, commands))
+	r:Verdict(settings > 0, settings .. " console settings listed")
+end
+
 -- The test -------------------------------------------------------------------------
 ns.TestKit.Define({
 	name = "simprobe",
@@ -474,6 +623,12 @@ ns.TestKit.Define({
 			waiting > 0 and (", " .. waiting .. " after the fight") or "", resumed and ", Cinematic resumed" or "")
 	end,
 	steps = {
+		{ key = "engine", title = "how the game runs a frame; every console setting saved", seconds = 5,
+			run = function(r)
+				EngineVisibility(r)
+				EngineOrder(r)
+				EngineConsole(r)
+			end },
 		{ key = "events", title = "every event heard, the combat log, blocked?", blockedOk = true, seconds = 10,
 			run = function(r)
 				if InCombatLockdown() then

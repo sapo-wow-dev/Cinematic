@@ -58,6 +58,31 @@ return {
     source = "memory: lua-multireturn-traps",
   },
 
+  -- How a frame is run (the replay bench, Tools/sim/bench.lua, runs these) -
+  {
+    id = "all.frame.onupdate-visible-only",
+    area = "frames",
+    clients = { "forever", "retail", "classic_era" },
+    api = { "OnUpdate", "Frame:SetScript", "Frame:Hide", "Frame:IsVisible" },
+    when = "always",
+    rule = "A frame's OnUpdate runs once a frame only while the frame is visible: shown itself and every parent shown. A frame shown under a hidden parent gets none; a frame with no parent, shown, gets it.",
+    works = { "hide a frame (or its parent) to stop its OnUpdate at no cost" },
+    status = "inferred",
+    proof = "warcraft.wiki.gg UIHANDLER_OnUpdate; to test: /cine debug simprobe step 1 (simprobe engine|onupdate line)",
+    source = "Tools/sim-plan.md (the bench's frame driver)",
+  },
+  {
+    id = "all.frame.in-frame-order",
+    area = "frames",
+    clients = { "forever", "retail", "classic_era" },
+    api = { "OnUpdate", "C_Timer.After", "C_Timer.NewTicker", "GetTime", "OnEvent" },
+    when = "always",
+    rule = "Unknown: within one frame, the order of OnUpdates (made first, run first?), a C_Timer.After(0) asked from an OnUpdate (same frame or the next?), tickers and the game's events, and whether GetTime stays the same through a frame. The replay bench assumes: events, then timers, then OnUpdates in the order the frames were made, GetTime fixed for the frame.",
+    status = "unknown",
+    proof = "to test: /cine debug simprobe step 1 (simprobe engine|order, after0, ticker, events lines)",
+    source = "Tools/sim-plan.md (the bench's frame driver)",
+  },
+
   -- Textures, models, frame sizes -----------------------------------------
   {
     id = "retail.texture.settexture-filter-crash",
