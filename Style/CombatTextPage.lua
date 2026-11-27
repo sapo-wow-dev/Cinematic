@@ -254,7 +254,7 @@ function ns.CreateCombatTextStylePanel(kit)
 	-- while it's set, and picking it with a row on The game's asks first.
 	-- How ours look: the Look tab.
 	local general = stack:Header(content, L["Who draws the numbers"])
-	stack:Note(content, L["Ours follow the Look tab. The game's look the way the game normally draws them."], 560)
+	stack:Note(content, L["Ours look the way the Look tab sets them. The game's look as they always do."], 560)
 	-- (group: your pet's fourth cell, Game's in groups, 110 wide; the row
 	-- ends at 620, inside the page's 600-plus width.)
 	local COL = { ours = 210, game = 310, none = 410, group = 510 }

@@ -125,7 +125,7 @@ local rangeShows = {
 -- (Too close needs the interact distance in fights: blocked on retail, so the choice isn't there.)
 if not ns.isRetail then
 	table.insert(rangeShows, 3, { "farclose", L["Too far / Too close"],
-		L["Too far, or Too close for a spell with a least range, like a hunter's shots up close."] })
+		L["Too far, or Too close for a spell with a minimum range, like a hunter's shots up close."] })
 end
 local function ShapeTile(value, text, tip)
 	local entry = { value = value, text = text, tip = tip }

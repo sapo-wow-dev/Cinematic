@@ -11700,7 +11700,7 @@ local function CreatePlatesPanel()
 		-- (Its value beside it, on the row's line, not above it under Show.)
 		serviceFar.title:ClearAllPoints()
 		serviceFar.title:SetPoint("LEFT", serviceFar, "RIGHT", 10, 0)
-		Tooltip(serviceFar, L["Past 28 yards, how much a title the game dims as behind a wall still shows."])
+		Tooltip(serviceFar, L["Past 28 yards, how much of a title still shows when the game thinks it's behind a wall. 0 hides it."])
 		-- How their titles look (brackets, icons in place of titles): Name
 		-- Style's Service NPCs row, Second line tab. Its link here.
 		local serviceLookLabel = Label(content, "GameFontHighlight", L["Their look"])

@@ -554,7 +554,7 @@ ns.StyleFrame("cast", {
 		local v = VariantNow("cast")
 		local switch = CastSwitch(v)
 		if ns.StyleOn(switch, db) then return nil end
-		return L["Off: this cast bar page's Enable Page. Nothing here shows in the game."], "off", L["Turn on"], function()
+		return L["Off: this cast bar page's Enable Page is off, so nothing here shows in the game."], "off", L["Turn on"], function()
 			local writes = {}
 			if not db.styleGeneral then writes[#writes + 1] = { "styleGeneral", true } end
 			if not db[switch] then writes[#writes + 1] = { switch, true } end
