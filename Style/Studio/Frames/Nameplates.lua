@@ -248,11 +248,12 @@ local function Group(recipe, label, tip, ...)
 end
 
 -- A Smart row's mark (Options.lua's MARK_STYLES; the drawer's Mark line before the mock):
--- its style, color, size, opacity and movement. Rows only.
+-- its style, color, size, opacity and movement. Default's too (othersMark<key>).
 local function MarkStyles(v)
 	v = Note(v)
 	local base = ns.MarkRowBase and ns.MarkRowBase(v)
-	local list = { { "none", L["None"] } }
+	-- (Default's: no mark is the game's own look, as its drawer's OTHERS_STYLES said. 2026-11-26.)
+	local list = { { "none", v == FIRST and L["The game's"] or L["None"] } }
 	if base == "aggro" then list[#list + 1] = { "same", L["Your target's"] } end
 	for _, each in ipairs({ { "arrow", "Arrow" }, { "chevron", "Chevron" }, { "diamond", "Diamond" }, { "glow", "Glow" },
 		{ "brackets", "Brackets" }, { "carets", "Carets" }, { "corners", "Corners" }, { "underline", "Underline" } }) do
@@ -273,7 +274,9 @@ local function LookValueRow(v, key)
 	return value
 end
 local function MarkShown(_, v) local s = LookValueRow(v, "Style") return s ~= nil and s ~= "none" end
-local markPart = { id = "mark", label = L["Mark"], shown = function(v) return Note(v) ~= FIRST end, groups = {
+-- (Default's too, 2026-11-26: its drawer had a Mark line; without the part a mark set on
+-- Default (othersMark*) showed on every plate with no way to change or remove it.)
+local markPart = { id = "mark", label = L["Mark"], groups = {
 	Group("Look", "Mark", nil,
 		R.Choice(function(v) return RowKey(Note(v), "Style") end, L["Mark"], MarkStyles, { tip = L["The row's mark over the plate."] }),
 		-- (An aggro row's first: Your target's ("same"), as its drawer's AGGRO_COLORS had it;
