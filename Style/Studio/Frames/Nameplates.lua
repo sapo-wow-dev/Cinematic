@@ -104,7 +104,10 @@ local function PlateColorField(kind)
 	if fields[id] then return fields[id] end
 	local plateKey, sameKey = MarkKey(kind, "PlateColor"), MarkKey(kind, "AlsoSame")
 	local function Aggro() return ns.MarkRowBase(kind) == "aggro" end
-	local made = { default = ns.DEFAULTS[plateKey] or (ns.MarkRowDefault and ns.MarkRowDefault(plateKey)) or "-" }
+	-- (noHover, 2026-11-26: its set ticks Bar in it, which setting the saved color back
+	-- doesn't untick: pointing at a color left Bar in it saved. Tools/audits/2026-11-26-plate-hover.md.)
+	local made = { default = ns.DEFAULTS[plateKey] or (ns.MarkRowDefault and ns.MarkRowDefault(plateKey)) or "-",
+		noHover = true }
 	function made.get()
 		if not DB() then return made.default end
 		if Aggro() and ns.TargetMarkOwn("AlsoSame", kind) then return "target" end
@@ -492,7 +495,12 @@ local layoutFields = {}
 local function LayoutField(kind, partKey, field, default)
 	local id = kind .. "|" .. tostring(partKey) .. "|" .. field
 	if layoutFields[id] then return layoutFields[id] end
-	local made = { default = default }
+	-- (The choices (Center, Balance, Hang on, Side) noHover, 2026-11-26: their set starts a
+	-- kind's own layout (a copy of All plates') and the part's table in plateLayoutData,
+	-- which setting the saved value back leaves: pointing at one saved that. The sliders
+	-- aren't hovered. Tools/audits/2026-11-26-plate-hover.md.)
+	local made = { default = default, noHover = (field == "center" or field == "count" or field == "to"
+		or field == "side") or nil }
 	function made.get()
 		local layout = ns.PlateLayoutShown(kind)
 		local p = partKey and ns.PlateLayoutPart(layout, partKey) or layout

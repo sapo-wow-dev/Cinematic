@@ -63,7 +63,10 @@ local function Field(row, setting)
 	local id = row .. "|" .. setting
 	if fields[id] then return fields[id] end
 	local dbKey = ns.NameLookKey(row, setting)
-	local field = { dbKey = dbKey }
+	-- (Letters noHover, 2026-11-26: Its own copies the name's font, outline and shadow to the
+	-- second line, which setting Match the name back leaves: pointing at it saved the copy.
+	-- Tools/audits/2026-11-26-plate-hover.md.)
+	local field = { dbKey = dbKey, noHover = setting == "Line2Match" or nil }
 	function field.get() return (ns.NameLookValue(row, setting)) end
 	function field.own()
 		local db = ns.GetDB()

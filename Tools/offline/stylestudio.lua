@@ -156,8 +156,9 @@ end
 -- every field on Nameplate Style, Range Hint and the frames whose fields that card fixed (Cast bars,
 -- Nameplate Style's tab; Unit, Raid frames; Personal resources), each choice hovered on each variant,
 -- the settings as they were after it. (A setting read as its default when unsaved: nil and its default
--- the same.) Not yet Name Style (Letters > Its own copies the name's font to line 2) nor Nameplate
--- Layout (Forever: plateLayoutData written): open, reported with the card.
+-- the same.) Name Style and Nameplate Layout too since 2026-11-26 (Letters > Its own copied the name's
+-- font to line 2; Layout's choices wrote plateLayoutData: Tools/audits/2026-11-26-plate-hover.md).
+-- (Choices only: a color line's (Nameplate Style's Plate color) is in Tools/offline/platehovermatrix.lua.)
 do
 	local function Now(k, v) if v == nil then return ns.DEFAULTS[k] end return v end
 	local function Same(a, b, depth)
@@ -176,7 +177,7 @@ do
 	local function Copy() local out = {} for k, v in pairs(db) do out[k] = Deep(v) end return out end
 	local preview = { Refresh = function() end }
 	local list = {}
-	for _, id in ipairs({ "plates", "range", "cast", "unit", "raid", "prd" }) do
+	for _, id in ipairs({ "plates", "range", "cast", "unit", "raid", "prd", "names", "platelayout" }) do
 		if Studio.frames[id] then list[#list + 1] = Studio.frames[id] end
 	end
 	for _, f in ipairs(list) do
