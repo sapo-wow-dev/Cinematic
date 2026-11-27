@@ -165,6 +165,7 @@ All through the game's own code (read in the Forever export), each as your game 
 | Q5 | Cast bars tab: pointing at Look from's "Its own look" (not clicked): the preview stays as saved and plateCastStarted_PLATE stays unset? | open | Tools/audits/2026-11-25-style-editor-hover.md |
 | Q6 | Reset > Everything in Style with a unit frame and a raid group on Its own look: both follow Default on screen right after, the next Reset counts 0 for them, Undo gives their look back? | open | Tools/audits/2026-11-25-style-reset-own.md |
 | Q7 | A change on Nameplate Style, then a profile switch with the page open: the footer's Undo/Redo words gone at once, and nothing to undo? | open | Tools/audits/2026-11-25-style-undo-profile.md |
+| Q8 | Name Style's Reset menu (and Range Hint's page): its last row reads "Everything on this page (N)", no "This frame" or "Everything in Style"; picked with a Tooltips look changed, the Tooltips look stays? | open | Tools/audits/2026-11-26-style-reset-scope.md |
 
 ## Runs
 | Run | Date | Command | Answered | Still open |

@@ -829,28 +829,39 @@ function Host:LooksMenu(anchor)
 	end)
 end
 -- Reset ▾: the scopes, each with its count; a second pick confirms.
+-- (2026-11-26: on a Style page (self.pageScope, ns.StyleEditorPage) the widest is the page's
+-- own, what its editor shows and its Reset page resets: "Everything in Style" there reset
+-- Tooltips, Minimap, Combat Text and every other Style page too. The Studio window keeps it.)
 function Host:ResetMenu(anchor)
 	local f, part = self.f, self.body.part
 	local scopes = { { "part", L["This part: %s"]:format(part and part.label or "") } }
-	if f.variants and #f.variants > 1 then
+	if f.variants and #f.variants > 1 and self.pageScope ~= "variant" then
 		local name = ""
 		for _, v in ipairs(f.variants) do if v.id == self.variant then name = v.label end end
 		scopes[#scopes + 1] = { "variant", L["This variant: %s"]:format(name) }
 	end
-	scopes[#scopes + 1] = { "frame", L["This frame: %s"]:format(f.label) }
-	scopes[#scopes + 1] = { "all", L["Everything in Style"] }
+	if self.pageScope then
+		-- (One row for the page: its frame, or its own variant where the frame is on several pages.)
+		scopes[#scopes + 1] = { "page", L["Everything on this page"], scope = self.pageScope,
+			variant = self.pageVariant }
+	else
+		scopes[#scopes + 1] = { "frame", L["This frame: %s"]:format(f.label) }
+		scopes[#scopes + 1] = { "all", L["Everything in Style"] }
+	end
 	local opts = {}
 	for _, s in ipairs(scopes) do
-		local n = #Studio.ResetWrites(s[1], f, self.variant, part and part.id)
-		opts[#opts + 1] = { s[1], ("%s  (%d)"):format(s[2], n), n = n, name = s[2] }
+		local scope, variant = s.scope or s[1], s.variant
+		if variant == nil then variant = self.variant end
+		local n = #Studio.ResetWrites(scope, f, variant, part and part.id)
+		opts[#opts + 1] = { s[1], ("%s  (%d)"):format(s[2], n), n = n, name = s[2], scope = scope, variant = variant }
 	end
-	C.OpenList(anchor, opts, nil, function(scope)
-		local n, name = 0, ""
-		for _, o in ipairs(opts) do if o[1] == scope then n, name = o.n, o.name end end
+	C.OpenList(anchor, opts, nil, function(id)
+		local n, name, scope, variant = 0, "", nil, nil
+		for _, o in ipairs(opts) do if o[1] == id then n, name, scope, variant = o.n, o.name, o.scope, o.variant end end
 		if n == 0 then return end
 		C.OpenList(anchor, { { "yes", L["Reset %d settings (%s)"]:format(n, name) }, { "no", L["Cancel"] } }, nil, function(answer)
 			if answer ~= "yes" then return end
-			Studio.Reset(scope, f, self.variant, part and part.id, nil, L["Reset"] .. ": " .. name)
+			Studio.Reset(scope, f, variant, part and part.id, nil, L["Reset"] .. ": " .. name)
 			if self.Toast then self:Toast(L["Reset %d settings."]:format(n), true) end
 		end)
 	end)
@@ -1111,6 +1122,8 @@ function ns.StyleEditorPage(kit, content, stack, frameId, opts)
 	-- (A frame on several pages (f.pages: Cast bars): each page resets and counts only its
 	-- own variant, as it did before.)
 	local onlyVariant = f.pages and opts.variant ~= nil
+	-- (2026-11-26: Reset's widest on this page is what Reset page resets: Host:ResetMenu.)
+	host.pageScope, host.pageVariant = onlyVariant and "variant" or "frame", onlyVariant and opts.variant or nil
 	local pageCanvas = opts.canvas or content
 	if kit.OnReset and not opts.ownReset then
 		kit.OnReset(content, function()
