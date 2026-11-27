@@ -2230,6 +2230,10 @@ function ns.PlateKinds.On()
 	return false
 end
 ns.PlateDefaultColoursOn = ns.PlateKinds.On
+-- (Plates whose game colors changed under Default's colors (a mob tagged by someone
+-- else: the game's grey), looked at again next frame for their kind: [unit frame] =
+-- true. TintTarget's hooks and painter. 2026-11-26.)
+ns.PlateKinds.recheck = {}
 -- A kind's Fade (nil: none): { r, g, b } it fades into, or { mode = "darker"/"lighter" }.
 function ns.PlateKindFade(unit, kind)
 	if not (ns.db and ns.StyleOn and ns.StyleOn("handlePlateStyle")) then return nil end
@@ -2536,6 +2540,13 @@ do
 				first[1], first[2], first[3] = r, g, b
 			end
 			Paint(self, first[4], first[5], first[6], first[7])
+			-- (A part in Default's colors: the game painting it anew can mean the unit's
+			-- kind changed (tagged by someone else: Not your kill). Asked again next
+			-- frame, by the painter. 2026-11-26.)
+			local colour = tints[first[6]] and tints[first[6]][first[7]]
+			if colour and (colour.kind == "@kind" or colour.kind == "@name") then
+				ns.PlateKinds.recheck[first[6]] = true
+			end
 		end)
 		-- (Retail's name went white for a frame or two as the mouse came onto
 		-- your target, logged, with no SetTextColor: a new font or vertex color
@@ -2643,9 +2654,23 @@ do
 					end
 					local text = texts[unitFrame]
 					if text and text.baseR then
-						local alpha = text:GetAlpha()
-						Fill.Colour(text, Blend(text.baseR, text.baseG, text.baseB, tint, "name"))
-						text:SetAlpha(alpha)
+						-- (Still the color we last gave it, its fill as it was: left alone.
+						-- It was painted every frame, every tinted plate. DrawName paints the
+						-- same blend itself; the half-second wipe above for the rest. 2026-11-26.)
+						local r, g, b = Blend(text.baseR, text.baseG, text.baseB, tint, "name")
+						local fill = Fill.texts[text]
+						local lit = fill and fill.bar:IsShown() and true or false
+						local last = done[text]
+						if not (last and last[1] == r and last[2] == g and last[3] == b and last[4] == lit) then
+							local alpha = text:GetAlpha()
+							Fill.Colour(text, r, g, b)
+							text:SetAlpha(alpha)
+							if last then
+								last[1], last[2], last[3], last[4] = r, g, b, lit
+							else
+								done[text] = { r, g, b, lit }
+							end
+						end
 					end
 				end
 				if tint.bar and Usable(unitFrame.healthBar) then
@@ -2654,6 +2679,14 @@ do
 				if tint.border then
 					PaintBorder(unitFrame)
 				end
+			end
+		end
+		-- (Plates the game painted anew under Default's colors: their kind asked again.)
+		local recheck = ns.PlateKinds.recheck
+		if next(recheck) then
+			for unitFrame in pairs(recheck) do
+				recheck[unitFrame] = nil
+				if ns.PlateKinds.Recheck then ns.PlateKinds.Recheck(unitFrame) end
 			end
 		end
 	end))
@@ -2676,6 +2709,8 @@ do
 			Fill.Colour(text, text.baseR, text.baseG, text.baseB)
 			text:SetAlpha(alpha)
 		end
+		if text then done[text] = nil end
+		ns.PlateKinds.recheck[unitFrame] = nil
 		tints[unitFrame] = nil
 		if not next(tints) then
 			painter:Hide()
@@ -3387,6 +3422,15 @@ local function RefreshTargetArrow(plate)
 		-- (At its own opacity: Opacity, the mark's; Alpha is the plate's.)
 		arrow:SetAlpha(level * (ArrowSetting("Opacity", kind) or 1))
 		arrow:Show()
+	end
+end
+
+-- (A plate the game painted anew under Default's colors, by its unit frame: looked
+-- at again. 2026-11-26.)
+function ns.PlateKinds.Recheck(unitFrame)
+	local ok, plate = pcall(unitFrame.GetParent, unitFrame)
+	if ok and plate and plate.UnitFrame == unitFrame then
+		RefreshTargetArrow(plate)
 	end
 end
 
