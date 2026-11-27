@@ -451,7 +451,7 @@ if CT then
 				local by = db[key]
 				if by == nil or by == "ours" or (key == "combatTextPetBy" and by == "group") then ours = true end
 			end
-			if not ours then return L["The game draws every kind, or none: see Who draws on the General tab."], "warn" end
+			if not ours then return L["The game draws every kind, or none: see Who draws the numbers on the General tab."], "warn" end
 		end,
 		parts = {
 			{ id = "text", label = L["Text"], region = function(p) return p.plate end, groups = {

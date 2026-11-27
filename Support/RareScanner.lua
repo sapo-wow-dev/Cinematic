@@ -14,7 +14,7 @@ local L = ns.L
 table.insert(ns.ADDON_FRAMES, {
 	key = "rarescanner", addon = "RareScanner", label = "RareScanner",
 	about = L["its alert button"],
-	note = L["For rares, the Rare spotted card can show in its place (Card Settings > Rare spotted)."],
+	note = L["For rares, the Rare spotted card can show in its place (Card Vision > Settings > Rare spotted)."],
 	names = { "RARESCANNER_BUTTON" },
 })
 
